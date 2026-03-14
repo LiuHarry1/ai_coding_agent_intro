@@ -1,34 +1,61 @@
-import { generateText, stepCountIs } from "ai";
+import { streamText } from "ai";
 import { createProvider } from "./provider.js";
 
 const provider = createProvider();
 
-export async function runAgent(message, { tools, systemPrompt, onEvent, maxSteps = 30 }) {
-  onEvent({ type: "thinking" });
+export async function runAgent(message, { tools, systemPrompt, sendSSE, maxSteps = 30 }) {
+  sendSSE("thinking", {});
 
+  let stream;
   try {
-    const { text, steps } = await generateText({
+    stream = streamText({
       model: provider.chatModel("gpt-4"),
       system: systemPrompt,
       prompt: message,
       tools,
-      stopWhen: stepCountIs(maxSteps),
-      onStepFinish: ({ toolCalls, toolResults }) => {
-        if (toolCalls && toolCalls.length > 0) {
-          for (let i = 0; i < toolCalls.length; i++) {
-            const tc = toolCalls[i];
-            onEvent({ type: "tool_call", name: tc.toolName, args: tc.args });
-            if (toolResults && toolResults[i]) {
-              onEvent({ type: "tool_result", name: tc.toolName, result: String(toolResults[i].result) });
-            }
-          }
-          onEvent({ type: "thinking" });
-        }
-      },
+      maxSteps,
     });
-
-    onEvent({ type: "response", text, stepCount: steps.length });
   } catch (err) {
-    onEvent({ type: "error", message: err.message });
+    sendSSE("error", { message: err.message });
+    return;
   }
+
+  let stepCount = 0;
+
+  try {
+    for await (const event of stream.fullStream) {
+      switch (event.type) {
+        case "start-step":
+          stepCount++;
+          break;
+
+        case "text-delta":
+          sendSSE("text_delta", { delta: event.text });
+          break;
+
+        case "tool-call":
+          sendSSE("tool_call", {
+            name: event.toolName,
+            args: event.input ?? event.args,
+          });
+          break;
+
+        case "tool-result":
+          sendSSE("tool_result", {
+            name: event.toolName,
+            result: typeof event.result === "string" ? event.result : JSON.stringify(event.result),
+          });
+          sendSSE("thinking", {});
+          break;
+
+        case "error":
+          sendSSE("error", { message: String(event.error) });
+          break;
+      }
+    }
+  } catch (err) {
+    sendSSE("error", { message: err.message });
+  }
+
+  sendSSE("done", { stepCount });
 }

@@ -1,4 +1,4 @@
-// Console UI Client — connects to agent server via WebSocket
+// Console UI Client — connects to agent server via HTTP + SSE
 //
 // Usage:
 //   node client/console.js                           # basic mode
@@ -10,18 +10,20 @@ import {
   showWelcome,
   showToolCall,
   showToolResult,
-  showAgentResponse,
   showStats,
   showError,
   startThinking,
   stopThinking,
+  beginStreamingResponse,
+  writeStreamDelta,
+  endStreamingResponse,
   createMultilineREPL,
 } from "./ui/display.js";
 
 // ── Parse CLI args ─────────────────────────────────────────
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { project: null, server: "ws://localhost:4567" };
+  const opts = { project: null, server: "http://localhost:4567" };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--project" && args[i + 1]) opts.project = args[++i];
     if (args[i] === "--server" && args[i + 1]) opts.server = args[++i];
@@ -34,20 +36,24 @@ async function main() {
   const mode = opts.project ? "refactor" : "basic";
   const conn = createConnection(opts.server);
 
-  let resolveReady;
-  const ready = new Promise((r) => { resolveReady = r; });
+  try {
+    await conn.connect();
+  } catch (err) {
+    showError(`Cannot connect to server: ${err.message}`);
+    showError("Start the server first: node server/index.js");
+    process.exit(1);
+  }
 
-  let stepCount = 0;
   let chatResolve = null;
+  let streamStarted = false;
 
   conn.onEvent((event) => {
     switch (event.type) {
-      case "connected":
-      case "config_ack":
-        resolveReady();
-        break;
-
       case "thinking":
+        if (streamStarted) {
+          endStreamingResponse();
+          streamStarted = false;
+        }
         startThinking("LLM 思考中...");
         break;
 
@@ -61,40 +67,33 @@ async function main() {
         startThinking("继续思考...");
         break;
 
-      case "response":
+      case "text_delta":
         stopThinking();
-        showAgentResponse(event.text);
+        if (!streamStarted) {
+          beginStreamingResponse();
+          streamStarted = true;
+        }
+        writeStreamDelta(event.delta);
+        break;
+
+      case "done":
+        if (streamStarted) {
+          endStreamingResponse();
+          streamStarted = false;
+        }
+        stopThinking();
         showStats(event.stepCount);
         if (chatResolve) { chatResolve(); chatResolve = null; }
         break;
 
       case "error":
         stopThinking();
+        if (streamStarted) { endStreamingResponse(); streamStarted = false; }
         showError(event.message);
         if (chatResolve) { chatResolve(); chatResolve = null; }
         break;
-
-      case "disconnected":
-        stopThinking();
-        showError("Server disconnected");
-        process.exit(1);
-        break;
     }
   });
-
-  try {
-    await conn.connect();
-  } catch (err) {
-    showError(`Cannot connect to server: ${err.message}`);
-    showError("Start the server first: node server/index.js");
-    process.exit(1);
-  }
-
-  if (opts.project) {
-    conn.configure({ mode: "refactor", projectDir: opts.project });
-  }
-
-  await ready;
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -107,15 +106,18 @@ async function main() {
     ...(opts.project ? { 项目目录: opts.project } : {}),
   });
 
+  const chatOpts = { mode };
+  if (opts.project) chatOpts.projectDir = opts.project;
+
   createMultilineREPL(rl, async (input) => {
     await new Promise((resolve) => {
       chatResolve = resolve;
-      conn.chat(input);
+      conn.chat(input, chatOpts);
     });
   });
 
   rl.on("close", () => {
-    conn.disconnect();
+    conn.abort();
     process.exit(0);
   });
 }

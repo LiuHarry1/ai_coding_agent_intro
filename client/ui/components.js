@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Box, Text, useInput, useApp } from "ink";
 import { Spinner } from "@inkjs/ui";
-import TextInput from "ink-text-input";
 
 const h = React.createElement;
 
@@ -15,13 +14,13 @@ export function Welcome({ title, info = {} }) {
     h(Text, { key: "top-border", dimColor: true }, "═".repeat(56)),
     h(Text, { key: "title", bold: true, color: "cyan" }, `  ${title}`),
     ...infoLines,
-    h(Text, { key: "exit-hint", dimColor: true }, '  输入 "exit" 退出'),
+    h(Text, { key: "exit-hint", dimColor: true }, "  输入 exit 退出；粘贴多行后按 Ctrl+Enter 发送"),
     h(Text, { key: "bottom-border", dimColor: true }, "═".repeat(56)),
   );
 }
 
 // ── Tool Call Display ───────────────────────────────────────
-export function ToolCallView({ name, args, result, isLast }) {
+export function ToolCallView({ name, args, result }) {
   const argsStr = JSON.stringify(args ?? {});
   const short = argsStr.length > 100 ? argsStr.substring(0, 100) + "…" : argsStr;
 
@@ -64,60 +63,186 @@ export function StepView({ step, index }) {
           name: tc.name,
           args: tc.args,
           result: tc.result,
-          isLast: i === toolCalls.length - 1,
         })
       )
     ),
   );
 }
 
-// ── Agent Response ──────────────────────────────────────────
-export function AgentResponse({ text, stepCount }) {
-  if (!text) return null;
+// ── Streaming Agent Response ────────────────────────────────
+export function AgentResponse({ text, streaming, stepCount }) {
+  if (!text && !streaming) return null;
 
   return h(Box, { flexDirection: "column", marginTop: 1 },
     h(Text, { key: "r-top", dimColor: true }, "─".repeat(56)),
     h(Text, { key: "r-label", color: "green", bold: true }, "🤖 Agent:"),
     h(Box, { key: "r-body", marginLeft: 2 },
-      h(Text, { wrap: "wrap" }, text),
+      h(Text, { wrap: "wrap" }, text || ""),
+      streaming && h(Text, { color: "cyan" }, "▊"),
     ),
-    h(Text, { key: "r-bottom", dimColor: true }, "─".repeat(56)),
-    stepCount != null && h(Text, { key: "r-stats", dimColor: true }, `  ✓ 共 ${stepCount} 步完成`),
+    !streaming && h(Text, { key: "r-bottom", dimColor: true }, "─".repeat(56)),
+    !streaming && stepCount != null && h(Text, { key: "r-stats", dimColor: true }, `  ✓ 共 ${stepCount} 步完成`),
   );
 }
 
-// ── Input Prompt ────────────────────────────────────────────
+// 括号粘贴序列：部分终端粘贴时发送 \e[200~ 内容 \e[201~
+const BRACKET_PASTE_START = "\u001b[200~";
+const BRACKET_PASTE_END = "\u001b[201~";
+
+// ── Multi-line input: Enter = newline, Ctrl+Enter = submit (paste-friendly) ──
+// ref 存内容 + 防抖 flush + 括号粘贴检测，减少快速粘贴丢字
+function MultilineInput({ value, onChange, onSubmit }) {
+  const valueRef = React.useRef(value);
+  const flushTimerRef = React.useRef(null);
+  const pasteBufRef = React.useRef("");
+  const escBufRef = React.useRef("");
+  const inPasteRef = React.useRef(false);
+
+  if (value === "" && valueRef.current !== "") valueRef.current = "";
+  if (value !== "" && valueRef.current !== value) valueRef.current = value;
+
+  const flush = () => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = null;
+    onChange(valueRef.current);
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimerRef.current) return;
+    flushTimerRef.current = setTimeout(flush, 16);
+  };
+
+  useInput((input, key) => {
+    if (key.ctrl && key.return) {
+      flush();
+      const trimmed = (valueRef.current || "").trim();
+      if (trimmed) {
+        onSubmit(trimmed);
+        valueRef.current = "";
+        onChange("");
+      }
+      return;
+    }
+    if (key.return) {
+      valueRef.current = (valueRef.current || "") + "\n";
+      flush();
+      return;
+    }
+    if (key.backspace) {
+      const s = valueRef.current || "";
+      valueRef.current = s.slice(0, -1);
+      flush();
+      return;
+    }
+    if (!input) return;
+
+    if (inPasteRef.current) {
+      if (input === "\u001b") {
+        escBufRef.current = "\u001b";
+        return;
+      }
+      if (escBufRef.current !== "") {
+        escBufRef.current += input;
+        if (escBufRef.current === BRACKET_PASTE_END) {
+          valueRef.current = (valueRef.current || "") + pasteBufRef.current;
+          pasteBufRef.current = "";
+          escBufRef.current = "";
+          inPasteRef.current = false;
+          flush();
+        } else if (!BRACKET_PASTE_END.startsWith(escBufRef.current)) {
+          valueRef.current = (valueRef.current || "") + pasteBufRef.current + escBufRef.current;
+          pasteBufRef.current = "";
+          escBufRef.current = "";
+          inPasteRef.current = false;
+          scheduleFlush();
+        }
+        return;
+      }
+      pasteBufRef.current += input;
+      scheduleFlush();
+      return;
+    }
+
+    if (input === "\u001b") {
+      escBufRef.current = "\u001b";
+      return;
+    }
+    if (escBufRef.current !== "") {
+      escBufRef.current += input;
+      if (escBufRef.current === BRACKET_PASTE_START) {
+        escBufRef.current = "";
+        inPasteRef.current = true;
+        pasteBufRef.current = "";
+      } else if (!BRACKET_PASTE_START.startsWith(escBufRef.current)) {
+        valueRef.current = (valueRef.current || "") + escBufRef.current;
+        escBufRef.current = "";
+        scheduleFlush();
+      }
+      return;
+    }
+
+    valueRef.current = (valueRef.current || "") + input;
+    scheduleFlush();
+  });
+
+  const displayValue = valueRef.current !== undefined ? valueRef.current : value;
+  const hasContent = displayValue && displayValue.length > 0;
+  const displayLines = hasContent ? displayValue.split("\n") : [];
+
+  return h(Box, { flexDirection: "column" },
+    hasContent
+      ? h(Box, { flexDirection: "column" },
+          ...displayLines.map((line, i) => h(Text, { key: i }, line || " ")),
+          h(Text, { dimColor: true }, "▊"),
+        )
+      : h(Text, { dimColor: true }, " 在此输入或粘贴，Ctrl+Enter 发送 ▊"),
+  );
+}
+
+// ── 输入框：带边框，支持多行粘贴 ─────────────────────────────
 export function InputPrompt({ onSubmit, busy }) {
   const [value, setValue] = useState("");
 
   if (busy) return null;
 
   return h(Box, { marginTop: 1 },
-    h(Text, { bold: true }, "You > "),
-    h(TextInput, {
-      value,
-      onChange: setValue,
-      onSubmit: (v) => {
-        setValue("");
-        onSubmit(v);
-      },
-    }),
+    h(Box, {
+      borderStyle: "single",
+      borderColor: "cyan",
+      flexDirection: "column",
+      minHeight: 2,
+      paddingX: 1,
+      paddingY: 1,
+    },
+      h(MultilineInput, {
+        value,
+        onChange: setValue,
+        onSubmit: (v) => {
+          setValue("");
+          onSubmit(v);
+        },
+      }),
+    ),
   );
 }
 
-// ── Main App (WebSocket-driven) ─────────────────────────────
-export function AgentApp({ title, info, connection }) {
+// ── Main App (HTTP + SSE driven) ────────────────────────────
+export function AgentApp({ title, info, connection, chatOpts }) {
   const { exit } = useApp();
   const [steps, setSteps] = useState([]);
-  const [response, setResponse] = useState(null);
+  const [responseText, setResponseText] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const [stepCount, setStepCount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
-  const pendingInput = React.useRef("");
+  const [currentInput, setCurrentInput] = useState("");
+  const responseRef = React.useRef("");
+  const flushTimer = React.useRef(null);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
-      connection.disconnect();
+      connection.abort();
       exit();
     }
   }, { isActive: process.stdin.isTTY === true });
@@ -154,23 +279,34 @@ export function AgentApp({ title, info, connection }) {
           });
           break;
 
-        case "response":
+        case "text_delta":
+          setStreaming(true);
           setSteps((prev) => prev
             .map((s) => s.status === "thinking" ? { ...s, status: "done" } : s)
             .filter((s) => s.toolCalls && s.toolCalls.length > 0)
           );
-          setResponse({ text: event.text, stepCount: event.stepCount });
-          setHistory((prev) => [...prev, { input: pendingInput.current, response: event.text }]);
+          responseRef.current += event.delta;
+          if (!flushTimer.current) {
+            flushTimer.current = setTimeout(() => {
+              flushTimer.current = null;
+              setResponseText(responseRef.current);
+            }, 50);
+          }
+          break;
+
+        case "done":
+          clearTimeout(flushTimer.current);
+          flushTimer.current = null;
+          setResponseText(responseRef.current);
+          setStreaming(false);
+          setStepCount(event.stepCount);
           setBusy(false);
           break;
 
         case "error":
+          setStreaming(false);
           setError(event.message);
           setBusy(false);
-          break;
-
-        case "disconnected":
-          setError("Server disconnected");
           break;
       }
     });
@@ -180,18 +316,24 @@ export function AgentApp({ title, info, connection }) {
     const trimmed = input.trim();
     if (!trimmed) return;
     if (trimmed === "exit" || trimmed === "quit") {
-      connection.disconnect();
+      connection.abort();
       exit();
       return;
     }
 
-    pendingInput.current = trimmed;
+    if (responseRef.current) {
+      setHistory((prev) => [...prev, { input: currentInput, response: responseRef.current }]);
+    }
+    setCurrentInput(trimmed);
+    responseRef.current = "";
     setBusy(true);
     setSteps([]);
-    setResponse(null);
+    setResponseText("");
+    setStepCount(null);
+    setStreaming(false);
     setError(null);
 
-    connection.chat(trimmed);
+    connection.chat(trimmed, chatOpts);
   };
 
   return h(Box, { flexDirection: "column" },
@@ -204,11 +346,18 @@ export function AgentApp({ title, info, connection }) {
       )
     ),
 
+    currentInput && (busy || responseText) && h(Text, { key: "current-input", bold: true }, `You > ${currentInput}`),
+
     ...steps.map((step, i) =>
       h(StepView, { key: `s-${i}`, step, index: i })
     ),
 
-    response && h(AgentResponse, { key: "response", text: response.text, stepCount: response.stepCount }),
+    (responseText || streaming) && h(AgentResponse, {
+      key: "response",
+      text: responseText,
+      streaming,
+      stepCount,
+    }),
 
     error && h(Box, { key: "error", marginTop: 1 },
       h(Text, { color: "red", bold: true }, `✖ Error: ${error}`),

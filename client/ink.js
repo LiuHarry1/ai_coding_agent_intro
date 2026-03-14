@@ -1,4 +1,4 @@
-// Ink UI Client — connects to agent server via WebSocket
+// Ink UI Client — connects to agent server via HTTP + SSE
 //
 // Usage:
 //   node client/ink.js                           # basic mode
@@ -13,7 +13,7 @@ const h = React.createElement;
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { project: null, server: "ws://localhost:4567" };
+  const opts = { project: null, server: "http://localhost:4567" };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--project" && args[i + 1]) opts.project = args[++i];
     if (args[i] === "--server" && args[i + 1]) opts.server = args[++i];
@@ -34,9 +34,8 @@ async function main() {
     process.exit(1);
   }
 
-  if (opts.project) {
-    conn.configure({ mode: "refactor", projectDir: opts.project });
-  }
+  const chatOpts = { mode };
+  if (opts.project) chatOpts.projectDir = opts.project;
 
   render(
     h(AgentApp, {
@@ -47,6 +46,7 @@ async function main() {
         ...(opts.project ? { 项目目录: opts.project } : {}),
       },
       connection: conn,
+      chatOpts,
     }),
     { patchConsole: false },
   );

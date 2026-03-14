@@ -66,16 +66,19 @@ export function showToolResult(result, maxLen = 500) {
   console.log(colors.dim("  └────────────────────────────────────────"));
 }
 
-export function showAgentResponse(text) {
+export function beginStreamingResponse() {
   console.log();
   console.log(LINE);
   console.log(colors.agent("🤖 Agent:"));
   console.log();
-  if (text) {
-    for (const line of text.split("\n")) {
-      console.log("  " + line);
-    }
-  }
+}
+
+export function writeStreamDelta(delta) {
+  process.stdout.write(delta);
+}
+
+export function endStreamingResponse() {
+  console.log();
   console.log(LINE);
 }
 

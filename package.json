@@ -5,7 +5,10 @@
   "type": "module",
   "main": "agent.js",
   "scripts": {
-    "start": "node agent.js"
+    "server": "node server/index.js",
+    "client": "node client/console.js",
+    "client:ink": "node client/ink.js",
+    "kill-port": "node scripts/kill-port.js"
   },
   "keywords": [],
   "author": "",
@@ -20,7 +23,6 @@
     "openai": "^6.29.0",
     "ora": "^9.3.0",
     "react": "^19.2.4",
-    "ws": "^8.19.0",
     "zod": "^4.3.6"
   }
 }
