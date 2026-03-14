@@ -1,0 +1,26 @@
+{
+  "name": "ai_coding_agent_test",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.35",
+    "@inkjs/ui": "^2.0.0",
+    "ai": "^6.0.116",
+    "chalk": "^5.6.2",
+    "ink": "^6.8.0",
+    "ink-text-input": "^6.0.0",
+    "openai": "^6.29.0",
+    "ora": "^9.3.0",
+    "react": "^19.2.4",
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
+  }
+}
