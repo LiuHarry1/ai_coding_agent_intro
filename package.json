@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
-  "main": "agent.js",
+  "main": "start.js",
   "scripts": {
-    "server": "node server/index.js",
-    "client": "node client/console.js",
-    "client:ink": "node client/ink.js",
-    "kill-port": "node scripts/kill-port.js"
+    "start": "node start.js",
+    "server:stop": "lsof -ti:4567 | xargs kill -9 2>/dev/null; echo 'Server stopped'",
+    "server:restart": "npm run server:stop && npm run start"
   },
   "keywords": [],
   "author": "",

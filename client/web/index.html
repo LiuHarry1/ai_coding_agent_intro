@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Coding Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="icon">&#9670;</div>
+      <span>Coding Agent</span>
+    </div>
+    <div class="workspace-bar" id="workspace-bar">
+      <label class="workspace-label" for="workspace-input">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </label>
+      <input type="text" id="workspace-input" class="workspace-input" placeholder="loading..." spellcheck="false" autocomplete="off">
+      <button class="workspace-browse-btn" id="workspace-browse" title="Browse directories">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      <div class="workspace-dropdown" id="workspace-dropdown"></div>
+    </div>
+    <div class="controls">
+      <button class="btn-clear" id="btn-clear">Clear</button>
+    </div>
+  </header>
+
+  <div id="messages">
+    <div class="welcome" id="welcome">
+      <div class="icon-large">&#9670;</div>
+      <h2>AI Coding Agent</h2>
+      <p>我可以读写文件、运行命令，帮你完成编码任务。告诉我你想做什么。</p>
+      <div class="hint-grid">
+        <div class="hint" data-hint="读取当前目录的文件结构，列出所有文件">&#128193; 查看项目结构</div>
+        <div class="hint" data-hint="读取 package.json 文件内容">&#128196; 读取 package.json</div>
+        <div class="hint" data-hint="帮我写一个简单的 Express 服务器，监听 3000 端口">&#9881;&#65039; 创建 Express 服务器</div>
+        <div class="hint" data-hint="运行 node --version 查看当前 Node 版本">&#128187; 检查 Node 版本</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="input-area">
+    <div id="input-wrapper">
+      <textarea id="input" rows="1" placeholder="描述你的任务..." autofocus></textarea>
+      <button id="send-btn" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+    <div class="input-hint">Enter 发送 &middot; Shift+Enter 换行</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
