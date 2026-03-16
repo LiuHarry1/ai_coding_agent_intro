@@ -17,10 +17,7 @@ const provider = createProvider();
  *
  * This is exactly how Claude Code, Cursor, OpenCode, etc. work under the hood.
  */
-export async function runAgent(
-  userMessage,
-  { tools, systemPrompt, sendSSE, maxSteps = 20 }
-) {
+export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, maxSteps = 40 } ) {
   const messages = [
     { role: "user", content: userMessage },
   ];
@@ -29,7 +26,7 @@ export async function runAgent(
     sendSSE("step_start", { step });
 
     const stream = streamText({
-      model: provider.chatModel("gpt-4"),
+      model: provider.chatModel("gpt-5.2"),
       system: systemPrompt,
       messages,
       tools,

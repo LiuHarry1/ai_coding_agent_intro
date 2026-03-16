@@ -1,7 +1,7 @@
 // ============================================================
 // 阶段 1：手写版 Agent（纯 OpenAI SDK）
 //
-// 教学要点：
+// 要点：
 //   - 理解 Agent 的本质：tool calling + agent loop
 //   - 看清每一步发生了什么：messages 管理、tool 执行、循环判断
 //   - 没有任何框架魔法，所有逻辑透明可见
@@ -17,7 +17,7 @@ import * as readline from "readline";
 // 第 1 步：创建 OpenAI 客户端
 // 指向你的 copilot-proxy，兼容 OpenAI 接口
 const client = new OpenAI({
-  baseURL: "http://localhost:4141/v1",
+  baseURL: "http://localhost:4141",
   apiKey: "not-needed",
 });
 

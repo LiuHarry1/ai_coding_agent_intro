@@ -1,6 +1,6 @@
 import { startServer } from "./shared/server.js";
 
-const example = process.argv[2] || "01-basic";
+const example = process.argv[2] || "02-basic";
 
 console.log(`[start] Loading example: ${example}`);
 

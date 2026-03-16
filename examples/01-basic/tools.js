@@ -18,18 +18,10 @@ export function createTools(cwd) {
   return {
     bash: tool({
       description:
-        "Execute a bash command and return its output. " +
-        "This is the primary tool for interacting with the system. Use it to: " +
-        "run shell commands, write/read files (cat, heredoc), install packages, " +
-        "search code (grep/find), manage git, run tests, start processes, etc.\n\n" +
-        "Guidelines:\n" +
-        "- For file writes, prefer heredoc: cat > file.py << 'EOF'\\n...\\nEOF\n" +
-        "- Commands run non-interactively. For programs requiring stdin, " +
-        "provide input via the `stdin` parameter or use pipe: echo 'input' | cmd\n" +
-        "- Long-running commands (servers, watchers) will be killed after timeout. " +
-        "Start them in background with & and use a short sleep to capture initial output.\n" +
-        "- Output is truncated if it exceeds ~30KB. Use head/tail/grep to limit output.\n" +
-        "- Prefer single compound commands (cmd1 && cmd2) over multiple tool calls when possible.",
+        "Run a bash command. Write files with heredoc (cat > f << 'EOF'). " +
+        "Non-interactive — use `stdin` param or pipe for input. " +
+        "Long-running cmds: background with & and sleep. " +
+        "Output truncated at ~30KB.",
       inputSchema: z.object({
         command: z.string().describe("The bash command to execute"),
         stdin: z

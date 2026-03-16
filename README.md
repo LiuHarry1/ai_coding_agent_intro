@@ -1,4 +1,4 @@
-# AI Coding Agent 教学示例
+# AI Coding Agent 示例
 
 从零开始构建 AI Coding Agent，从单文件到前后端分离架构。使用 OpenAI 兼容接口，无需 API Key。
 
