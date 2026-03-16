@@ -1,29 +1,33 @@
 import { streamText } from "ai";
 import { createProvider } from "../../shared/provider.js";
+import { truncateToolOutputs, summarizeIfNeeded } from "./context.js";
 
 const provider = createProvider();
 
 /**
- * Agent Loop — the core of any coding agent.
+ * Agent Loop with Context Management.
  *
- * Unlike a simple chatbot that calls the model once,
- * an agent LOOPS:
- *   1. Send messages to the model
- *   2. Model returns text OR tool_calls
- *   3. If tool_calls → SDK executes them → we capture results
- *   4. Append assistant message + tool results to conversation
- *   5. Go back to step 1
- *   6. If text only (no tool_calls) → done
+ * Two additions compared to 02-basic:
  *
- * This is exactly how Claude Code, Cursor, OpenCode, etc. work under the hood.
+ *   1. truncateToolOutputs() — before each LLM call, replace old tool
+ *      outputs with one-line summaries (microcompaction).
+ *
+ *   2. summarizeIfNeeded() — when message count exceeds threshold,
+ *      compress old messages into a structured summary (compaction).
  */
-export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, maxSteps = 40 } ) {
+export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, maxSteps = 40 }) {
   const messages = [
     { role: "user", content: userMessage },
   ];
 
   for (let step = 0; step < maxSteps; step++) {
     sendSSE("step_start", { step });
+
+    // ── Context management ────────────────────────────────
+    // 1. Truncate old tool outputs (cheap, every iteration)
+    truncateToolOutputs(messages);
+    // 2. Summarize if conversation is getting long (expensive, rare)
+    await summarizeIfNeeded(messages, sendSSE);
 
     const stream = streamText({
       model: provider.chatModel("gpt-5.2"),

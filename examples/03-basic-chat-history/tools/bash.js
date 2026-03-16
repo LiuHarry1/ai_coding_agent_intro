@@ -28,7 +28,7 @@ export function createBashTool(cwd, { truncate }) {
           resolved = true;
           clearTimeout(timer);
           resolve(truncate(output));
-        };
+        };  
 
         const child = spawn("bash", ["-c", command], {
           cwd,

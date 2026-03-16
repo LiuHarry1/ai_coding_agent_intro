@@ -132,15 +132,116 @@ You > 读一下 package.json 的内容
 
 ---
 
-## Lesson 03 — edit_file + list_directory + search
+## Lesson 03 — 上下文管理（Context Management）
 
-> TODO: 补充 edit_file（str_replace 模式）、list_directory、search 工具的实现和教学笔记
+**目录：** `03-basic-chat-history/`
+
+**核心概念：** Context window 是 agent 最稀缺的资源。工具输出占 80%+ 的上下文空间——不管理它，几轮对话就满了。
+
+**关键文件：**
+
+| 文件 | 内容 |
+|---|---|
+| `context.js` | 两个上下文管理函数：truncateToolOutputs + summarizeIfNeeded |
+| `agent.js` | 在 agent loop 里集成上下文管理（每轮 LLM 调用前执行） |
+| `tools.js` | 复用 02-basic 的工具 |
+| `prompts.js` | 系统提示增加 "[truncated]" 提示 |
+
+### 各家怎么做的？
+
+| 策略 | 复杂度 | 谁在用 |
+|---|---|---|
+| 截断旧消息 | 最低 | 基础实现 |
+| 工具输出裁剪（microcompaction） | 低 | Claude Code、OpenCode |
+| LLM 摘要（compaction） | 中 | Claude Code、Aider、OpenCode |
+| 结构化压缩 + 文件恢复（rehydration） | 高 | Claude Code |
+| 按需拉取（不存上下文，需要时搜） | 高 | Cursor |
+
+### Feature 1：工具输出截断（Microcompaction）
+
+**问题：** Agent 跑 10 次 bash，每次返回几百行。全部留在上下文里，很快就满了。
+
+**做法：** 保留最近 N 次工具输出（"hot tail"），旧的替换成一行摘要。
+
+```
+之前（占上下文）：
+[tool:bash] src/auth.js:42: // TODO: add rate limiting
+             src/db.js:18: // TODO: add connection pooling
+             ... (200 行)
+
+之后（1 行）：
+[tool:bash] [truncated: 4827 chars from bash]
+```
+
+**类比：** 这就是 LRU 缓存——最近的保留，旧的换出。
+
+**模型能"重新获取"吗？** 能。模型看到 `[truncated]` 后，如果需要那个信息，可以再跑一次命令。系统提示里也告诉了它这一点。
+
+**关键参数：**
+
+| 参数 | 含义 | 默认值 |
+|---|---|---|
+| `HOT_TAIL` | 保留最近几次工具输出 | 4 |
+| `MAX_TOOL_OUTPUT_CHARS` | 低于此长度的输出不截断 | 200 |
+
+### Feature 2：对话摘要（Compaction）
+
+**问题：** 即使截断了工具输出，消息数也会越来越多（assistant 的思考、多轮 tool_call/tool_result 对）。
+
+**做法：** 当消息数超过阈值，用一个便宜的模型把旧消息压缩成结构化摘要。
+
+```
+之前：20+ 条消息
+
+之后：
+  [summary message]    ← 压缩后的工作状态
+  [assistant ack]      ← "我理解了，继续"
+  [最近 6 条消息]      ← 保留完整细节
+```
+
+**摘要 prompt 要求包含：** 用户意图、已完成的工作、当前状态、关键决策、遇到的错误。这不是"随便总结一下"，而是有结构化要求的，确保压缩后模型能继续工作。
+
+**关键参数：**
+
+| 参数 | 含义 | 默认值 |
+|---|---|---|
+| `SUMMARIZE_THRESHOLD` | 消息数超过此值触发摘要 | 20 |
+| `KEEP_RECENT` | 保留最近几条消息不压缩 | 6 |
+
+### 两个 feature 的关系
+
+```
+每轮 loop:
+  1. truncateToolOutputs()    ← 便宜，每轮都跑
+  2. summarizeIfNeeded()      ← 贵（调 LLM），偶尔触发
+  3. streamText(messages)     ← 正常调用模型
+```
+
+截断是"治标"（减小单条消息体积），摘要是"治本"（减少消息数量）。两者配合使用。
+
+**演示建议：**
+
+```
+# 给 agent 一个多步任务，观察上下文管理
+You > 创建一个 Node.js 项目，包含 express 服务器、3 个路由、单元测试，然后运行测试
+
+# 在日志中观察：
+# - step 5+ 时开始看到 [truncated] 的工具输出
+# - step 10+ 时可能触发摘要
+```
+
+**教学要点：**
+
+1. Token 是最稀缺的资源——比 CPU、内存都贵
+2. 工具输出是最大的 token 消耗者（81%），优先处理
+3. 用 AI 管理 AI 的记忆——摘要本身也是一次 LLM 调用
+4. 所有策略都是信息和空间的 trade-off——没有完美方案
 
 ---
 
-## Lesson 04 — 上下文管理（Context Management）
+## Lesson 04 — edit_file + list_directory + search
 
-> TODO: 对话历史截断、摘要、token 预算
+> TODO: 补充 edit_file（str_replace 模式）、list_directory、search 工具的实现和教学笔记
 
 ---
 
