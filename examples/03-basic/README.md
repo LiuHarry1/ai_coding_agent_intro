@@ -5,7 +5,7 @@
 ## 和 02-basic 对比：新增了什么？
 
 ```
-02-basic/                          03-basic-chat-history/
+02-basic/                          03-basic/
   agent.js                           agent.js           ← 改了 1 行
   tools.js                           tools.js           ← 复用 02-basic
   prompts.js                         prompts.js         ← 加了 1 条规则

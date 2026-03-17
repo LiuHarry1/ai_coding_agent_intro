@@ -6,7 +6,7 @@
   "main": "start.js",
   "scripts": {
     "start": "node start.js",
-    "server:stop": "lsof -ti:4567 | xargs kill -9 2>/dev/null; echo 'Server stopped'",
+    "server:stop": "node ./shared/kill-port.cjs 4567",
     "server:restart": "npm run server:stop && npm run start"
   },
   "keywords": [],

@@ -26,12 +26,15 @@ export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, mess
 
     // ── Context management ────────────────────────────────
     // 1. Truncate old tool outputs (cheap, every iteration)
-    truncateToolOutputs(messages);
+    // truncateToolOutputs(messages);
     // 2. Summarize if conversation is getting long (expensive, rare)
     await summarizeIfNeeded(messages, sendSSE);
 
     const stream = streamText({
       model: provider.chatModel("gpt-5.2"),
+      //claude-opus-4.6
+      //claude-sonnet-4.6
+      //gpt-5.2-codex
       system: systemPrompt,
       messages,
       tools,

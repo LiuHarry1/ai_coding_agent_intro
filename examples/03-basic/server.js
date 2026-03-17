@@ -117,7 +117,9 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
+        "X-Session-Id": session.id,
       });
+
 
       // Send session_id to client so it can continue the conversation
       const sendSSE = (event, data) => {

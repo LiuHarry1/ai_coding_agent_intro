@@ -11,6 +11,8 @@ const workspaceBrowseBtn = $("#workspace-browse");
 const workspaceDropdown = $("#workspace-dropdown");
 
 let isStreaming = false;
+let sessionId = localStorage.getItem("coding_agent_session_id") || null;
+
 
 // ── Load default workspace ──────────────────────
 fetch("/workspace")
@@ -142,11 +144,16 @@ inputEl.addEventListener("keydown", (e) => {
 
 sendBtn.addEventListener("click", sendMessage);
 
-btnClear.addEventListener("click", () => {
+btnClear.addEventListener("click", async () => {
   messagesEl.innerHTML = "";
   messagesEl.appendChild(welcomeEl);
   welcomeEl.style.display = "flex";
+
+  // New conversation
+  sessionId = null;
+  localStorage.removeItem("coding_agent_session_id");
 });
+
 
 $$(".hint").forEach((el) => {
   el.addEventListener("click", () => {
@@ -261,8 +268,13 @@ async function sendMessage() {
     const res = await fetch("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, workspace: workspaceInput.value.trim() }),
+      body: JSON.stringify({
+        message: text,
+        workspace: workspaceInput.value.trim(),
+        session_id: sessionId,
+      }),
     });
+
 
     if (!res.ok) {
       const errText = await res.text();
@@ -273,8 +285,16 @@ async function sendMessage() {
       return;
     }
 
+    // capture session id if server returns it
+    const newSid = res.headers.get("x-session-id");
+    if (newSid) {
+      sessionId = newSid;
+      localStorage.setItem("coding_agent_session_id", sessionId);
+    }
+
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
+
     let buffer = "";
 
     while (true) {
