@@ -66,7 +66,15 @@ Output only the summary, no preamble.`;
 export async function summarizeIfNeeded(messages, sendSSE) {
   if (messages.length < SUMMARIZE_THRESHOLD) return false;
 
-  const splitAt = messages.length - KEEP_RECENT;
+  let splitAt = messages.length - KEEP_RECENT;
+  // Ensure we never start recentMessages with a "tool" message — the API requires
+  // every tool message to follow an assistant message with tool_calls.
+  while (splitAt < messages.length && messages[splitAt]?.role === "tool") {
+    splitAt--;
+    if (splitAt < 0) break;
+  }
+  splitAt = Math.max(0, splitAt);
+
   const oldMessages = messages.slice(0, splitAt);
 
   sendSSE("context_management", {
@@ -104,7 +112,11 @@ export async function summarizeIfNeeded(messages, sendSSE) {
     maxTokens: 1024,
   });
 
-  const recentMessages = messages.slice(splitAt);
+  let recentMessages = messages.slice(splitAt);
+  // Strip any leading orphaned tool messages (e.g. corrupt state or splitAt=0)
+  while (recentMessages.length > 0 && recentMessages[0]?.role === "tool") {
+    recentMessages = recentMessages.slice(1);
+  }
 
   messages.length = 0;
   messages.push({

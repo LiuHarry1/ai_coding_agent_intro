@@ -26,7 +26,7 @@ export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, mess
 
     // ── Context management ────────────────────────────────
     // 1. Truncate old tool outputs (cheap, every iteration)
-    // truncateToolOutputs(messages);
+    truncateToolOutputs(messages);
     // 2. Summarize if conversation is getting long (expensive, rare)
     await summarizeIfNeeded(messages, sendSSE);
 
