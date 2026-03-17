@@ -1,0 +1,3 @@
+{"type":"session_created","id":"74dee943-7d7d-4e17-bdcb-113256d76be4","createdAt":1773750190275}
+{"type":"message","role":"user","content":"我是刘浩，你是谁","timestamp":1773750194602}
+{"type":"message","role":"assistant","content":[{"type":"text","text":"我是一个AI助理（类似聊天机器人），可以帮你写代码、查资料、解释问题和处理文本等。\n\n刘浩你好！你想让我怎么称呼你？另外你这边主要想让我帮你做什么（比如编程、学习、写作、排错）？"}],"timestamp":1773750194603}

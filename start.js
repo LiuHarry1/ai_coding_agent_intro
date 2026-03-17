@@ -1,4 +1,4 @@
-const example = process.argv[2] || "02-basic";
+const example = process.argv[2] || "03-basic";
 
 console.log(`[start] Loading example: ${example}`);
 

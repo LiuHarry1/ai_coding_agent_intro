@@ -1,0 +1,3 @@
+{"type":"session_created","id":"805b0b1f-a8f6-45b4-9f65-c27287a67f9e","createdAt":1773750207129}
+{"type":"message","role":"user","content":"我是谁","timestamp":1773750209421}
+{"type":"message","role":"assistant","content":[{"type":"text","text":"在我这里你只是“正在和我对话的用户”，我看不到你的真实身份信息（比如姓名、账号、手机号、位置等），也无法通过这次对话推断出你具体是谁。\n\n如果你愿意提供一些线索（例如你希望我用什么称呼你、你的角色/职业、你现在在做什么），我可以按你给的信息来更准确地回答或协助你。"}],"timestamp":1773750209422}
