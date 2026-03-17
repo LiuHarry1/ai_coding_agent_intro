@@ -5,20 +5,21 @@ import { truncateToolOutputs, summarizeIfNeeded } from "./context.js";
 const provider = createProvider();
 
 /**
- * Agent Loop with Context Management.
+ * Agent Loop with Context Management + Multi-Turn Support.
  *
- * Two additions compared to 02-basic:
+ * Three additions compared to 02-basic:
  *
- *   1. truncateToolOutputs() — before each LLM call, replace old tool
+ *   1. Accepts an existing `messages` array (multi-turn history).
+ *      New user message is appended, then the loop runs as usual.
+ *
+ *   2. truncateToolOutputs() — before each LLM call, replace old tool
  *      outputs with one-line summaries (microcompaction).
  *
- *   2. summarizeIfNeeded() — when message count exceeds threshold,
+ *   3. summarizeIfNeeded() — when message count exceeds threshold,
  *      compress old messages into a structured summary (compaction).
  */
-export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, maxSteps = 40 }) {
-  const messages = [
-    { role: "user", content: userMessage },
-  ];
+export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, messages = [], maxSteps = 40 }) {
+  messages.push({ role: "user", content: userMessage });
 
   for (let step = 0; step < maxSteps; step++) {
     sendSSE("step_start", { step });

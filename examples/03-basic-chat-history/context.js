@@ -98,7 +98,7 @@ export async function summarizeIfNeeded(messages, sendSSE) {
     .join("\n");
 
   const { text: summary } = await generateText({
-    model: provider.chatModel("gpt-4.1-nano"),
+    model: provider.chatModel("gpt-4"),
     system: SUMMARIZE_PROMPT,
     messages: [{ role: "user", content: conversationText }],
     maxTokens: 1024,
