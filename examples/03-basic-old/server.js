@@ -35,8 +35,12 @@ function sendJSON(res, status, data) {
 }
 
 /**
- * Server with session management. Main agent uses run_bash_task (Bash subagent);
- * tools are created with runBashSubagent bound to cwd and sendSSE.
+ * Server with session management.
+ *
+ * New endpoints vs shared/server.js:
+ *   POST /chat        — now accepts optional `session_id` for multi-turn
+ *   POST /sessions    — create a new session
+ *   GET  /sessions    — list all sessions
  */
 export function startServer({ runAgent, createTools, systemPrompt }) {
   const PORT = parseInt(process.env.PORT || "4567", 10);
@@ -62,6 +66,7 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
       return;
     }
 
+    // ── Session endpoints ─────────────────────────────────
     if (req.method === "POST" && req.url === "/sessions") {
       const session = createSession();
       console.log(`[server] new session: ${session.id}`);
@@ -74,6 +79,7 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
       return;
     }
 
+    // ── Chat with session support ─────────────────────────
     if (req.method === "POST" && req.url === "/chat") {
       let body;
       try {
@@ -90,8 +96,10 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
       }
 
       const cwd = workspace && fs.existsSync(workspace) ? path.resolve(workspace) : process.cwd();
+      const tools = createTools(cwd);
       const prompt = systemPrompt(cwd);
 
+      // Get or create session
       let session;
       if (session_id) {
         session = getSession(session_id);
@@ -112,6 +120,8 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
         "X-Session-Id": session.id,
       });
 
+
+      // Send session_id to client so it can continue the conversation
       const sendSSE = (event, data) => {
         if (res.writableEnded) return;
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -123,8 +133,6 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
         console.log("[server] client disconnected");
       });
 
-      const tools = createTools(cwd, sendSSE);
-
       const messagesBefore = session.messages.length;
 
       await runAgent(message, {
@@ -132,8 +140,10 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
         systemPrompt: prompt,
         sendSSE,
         messages: session.messages,
+        cwd,
       });
 
+      // Persist new messages to JSONL
       const newMessages = session.messages.slice(messagesBefore);
       for (const msg of newMessages) {
         appendMessage(session.id, msg);
@@ -143,6 +153,7 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
       return;
     }
 
+    // ── Static files ──────────────────────────────────────
     if (req.method === "GET" && req.url.startsWith("/workspace/list")) {
       const params = new URL(req.url, `http://${req.headers.host}`).searchParams;
       let dir = params.get("dir") || process.cwd();

@@ -1,21 +1,40 @@
 import { streamText } from "ai";
 import { createProvider } from "../../shared/provider.js";
+import { truncateToolOutputs, summarizeIfNeeded } from "./context.js";
 
 const provider = createProvider();
 
 /**
- * Agent loop: 02-basic + subagents.
- * - Multi-turn (messages from session)
- * - No direct bash — use run_bash_task (Bash subagent). Explore subagent is a placeholder.
+ * Agent Loop with Context Management + Multi-Turn Support.
+ *
+ * Three additions compared to 02-basic:
+ *
+ *   1. Accepts an existing `messages` array (multi-turn history).
+ *      New user message is appended, then the loop runs as usual.
+ *
+ *   2. truncateToolOutputs() — before each LLM call, replace old tool
+ *      outputs with one-line summaries (microcompaction).
+ *
+ *   3. summarizeIfNeeded() — when message count exceeds threshold,
+ *      compress old messages into a structured summary (compaction).
  */
-export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, messages = [], maxSteps = 60 }) {
+export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, messages = [], maxSteps = 40, cwd = null }) {
   messages.push({ role: "user", content: userMessage });
 
   for (let step = 0; step < maxSteps; step++) {
     sendSSE("step_start", { step });
 
+    // ── Context management ────────────────────────────────
+    // 1. Truncate old tool outputs (cheap, every iteration)
+    truncateToolOutputs(messages);
+    // 2. Summarize if long + rehydrate last read files (so agent doesn't re-read)
+    await summarizeIfNeeded(messages, sendSSE, cwd);
+
     const stream = streamText({
       model: provider.chatModel("gpt-5.2"),
+      //claude-opus-4.6
+      //claude-sonnet-4.6
+      //gpt-5.2-codex
       system: systemPrompt,
       messages,
       tools,

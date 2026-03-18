@@ -1,7 +1,15 @@
+import * as fs from "fs";
+import * as path from "path";
 import { generateText } from "ai";
 import { createProvider } from "../../shared/provider.js";
 
 const provider = createProvider();
+
+function resolvePath(cwd, filePath) {
+  const abs = path.resolve(cwd, filePath);
+  if (!abs.startsWith(cwd)) return null;
+  return abs;
+}
 
 // ── Feature 1: Tool Output Truncation (Microcompaction) ───────────
 //
@@ -11,8 +19,19 @@ const provider = createProvider();
 // Strategy: keep the last `hotTail` tool results fully intact.
 // Older tool results get replaced with a one-line summary.
 
-const HOT_TAIL = 4;
+const HOT_TAIL = 6;
 const MAX_TOOL_OUTPUT_CHARS = 200;
+
+function getToolInputForResult(messages, toolMsgIdx, toolCallId) {
+  for (let i = toolMsgIdx - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+    for (const p of m.content) {
+      if (p.type === "tool-call" && p.toolCallId === toolCallId) return p.input;
+    }
+  }
+  return null;
+}
 
 export function truncateToolOutputs(messages) {
   const toolIndices = [];
@@ -24,7 +43,8 @@ export function truncateToolOutputs(messages) {
   if (coldCount <= 0) return;
 
   for (let k = 0; k < coldCount; k++) {
-    const msg = messages[toolIndices[k]];
+    const idx = toolIndices[k];
+    const msg = messages[idx];
     if (!Array.isArray(msg.content)) continue;
 
     for (const part of msg.content) {
@@ -32,9 +52,18 @@ export function truncateToolOutputs(messages) {
       const val = part.output?.value ?? "";
       if (val.length <= MAX_TOOL_OUTPUT_CHARS) continue;
 
+      const input = getToolInputForResult(messages, idx, part.toolCallId);
+      const hint =
+        part.toolName === "read_file" && input?.file_path
+          ? `read_file("${input.file_path}")`
+          : part.toolName === "bash" && input?.command
+            ? `bash: ${String(input.command).slice(0, 50)}…`
+            : part.toolName;
+
       part.output = {
         type: "text",
-        value: `[truncated: ${val.length} chars from ${part.toolName}]`,
+        value:
+          `[truncated: ${hint} — ${val.length} chars. Use summary and recent context; re-read only with offset/limit if you need a specific section.]`,
       };
     }
   }
@@ -50,6 +79,44 @@ export function truncateToolOutputs(messages) {
 
 const SUMMARIZE_THRESHOLD = 20;
 const KEEP_RECENT = 6;
+const REHYDRATE_MAX_FILES = 4;
+const REHYDRATE_MAX_LINES_PER_FILE = 150;
+
+function getRecentlyReadPaths(messages, limit = REHYDRATE_MAX_FILES) {
+  const paths = [];
+  const seen = new Set();
+  for (let i = messages.length - 1; i >= 0 && paths.length < limit; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+    for (const p of m.content) {
+      if (p.type === "tool-call" && p.toolName === "read_file" && p.input?.file_path) {
+        const fp = p.input.file_path;
+        if (!seen.has(fp)) {
+          seen.add(fp);
+          paths.unshift(fp);
+        }
+      }
+    }
+  }
+  return paths.slice(-limit);
+}
+
+function readFileSafe(cwd, filePath, maxLines = REHYDRATE_MAX_LINES_PER_FILE) {
+  const abs = resolvePath(cwd, filePath);
+  if (!abs || !fs.existsSync(abs)) return null;
+  try {
+    const stat = fs.statSync(abs);
+    if (stat.isDirectory() || stat.size > 512 * 1024) return null;
+    const buf = fs.readFileSync(abs, "utf-8");
+    const lines = buf.split("\n");
+    const slice = lines.slice(0, maxLines);
+    const head = slice.join("\n");
+    const total = lines.length;
+    return total > maxLines ? `${head}\n\n... [${total - maxLines} more lines]` : head;
+  } catch {
+    return null;
+  }
+}
 
 const SUMMARIZE_PROMPT = `You are a conversation summarizer for a coding agent session.
 Summarize the conversation into a concise working state. Your summary MUST include:
@@ -63,7 +130,7 @@ Summarize the conversation into a concise working state. Your summary MUST inclu
 Be specific — include file paths, function names, and exact details.
 Output only the summary, no preamble.`;
 
-export async function summarizeIfNeeded(messages, sendSSE) {
+export async function summarizeIfNeeded(messages, sendSSE, cwd = null) {
   if (messages.length < SUMMARIZE_THRESHOLD) return false;
 
   let splitAt = messages.length - KEEP_RECENT;
@@ -118,14 +185,31 @@ export async function summarizeIfNeeded(messages, sendSSE) {
     recentMessages = recentMessages.slice(1);
   }
 
+  // Rehydrate: re-read the last few files that were read, so the agent has them back without re-calling read_file
+  let rehydratedBlock = "";
+  if (cwd) {
+    const paths = getRecentlyReadPaths(oldMessages);
+    const parts = [];
+    for (const fp of paths) {
+      const content = readFileSafe(cwd, fp);
+      if (content) parts.push(`### ${fp}\n\`\`\`\n${content}\n\`\`\``);
+    }
+    if (parts.length > 0) {
+      rehydratedBlock =
+        `\n\n[Rehydrated — these files were recently read; you have them in context, no need to read_file again]\n\n${parts.join("\n\n")}`;
+      sendSSE("context_management", { action: "rehydrated", fileCount: parts.length, paths });
+    }
+  }
+
   messages.length = 0;
   messages.push({
     role: "user",
     content:
-      `[This conversation was compacted. Summary of earlier messages below]\n\n${summary}\n\n` +
-      `[End of summary — continue from here]`,
+      `[This conversation was compacted. Summary of earlier messages below]\n\n${summary}` +
+      rehydratedBlock +
+      `\n\n[End of summary — continue from here]`,
   });
-  messages.push({ role: "assistant", content: [{ type: "text", text: "Understood. I have the context from the summary. Continuing." }] });
+  messages.push({ role: "assistant", content: [{ type: "text", text: "Understood. I have the context from the summary and the rehydrated files. Continuing." }] });
   messages.push(...recentMessages);
 
   sendSSE("context_management", {

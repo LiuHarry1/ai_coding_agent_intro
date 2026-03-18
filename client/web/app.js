@@ -191,6 +191,7 @@ function formatArgs(name, args) {
   if (!args) return "";
   if (args.path) return args.path;
   if (args.command) return args.command;
+  if (args.task) return args.task.slice(0, 60) + (args.task.length > 60 ? "…" : "");
   if (args.pattern) return args.pattern;
   if (args.directory) return args.directory;
   return JSON.stringify(args).slice(0, 80);
@@ -351,6 +352,7 @@ async function sendMessage() {
                   <summary style="padding:6px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;">Arguments</summary>
                   <pre>${escapeHtml(JSON.stringify(data.args, null, 2))}</pre>
                 </details>
+                <div class="subagent-log"></div>
                 <div class="tool-result-slot"></div>
               </div>
             `;
@@ -363,6 +365,39 @@ async function sendMessage() {
             }
             toolGroup.appendChild(toolEl);
             currentToolEl = toolEl;
+            scrollToBottom();
+            break;
+          }
+
+          case "subagent_bash_tool_call": {
+            if (currentToolEl && data.command) {
+              const logEl = currentToolEl.querySelector(".subagent-log");
+              if (logEl) {
+                const line = document.createElement("div");
+                line.className = "subagent-log-line";
+                line.style.cssText = "padding:6px 14px;font-size:12px;border-top:1px solid var(--border);color:var(--text-muted);";
+                line.innerHTML = `<span style="color:var(--accent);">$</span> <code>${escapeHtml(data.command)}</code>`;
+                logEl.appendChild(line);
+              }
+            }
+            scrollToBottom();
+            break;
+          }
+
+          case "subagent_bash_tool_result": {
+            if (currentToolEl && data.result != null) {
+              const logEl = currentToolEl.querySelector(".subagent-log");
+              if (logEl) {
+                const block = document.createElement("details");
+                block.open = true;
+                block.style.cssText = "border-top:1px solid var(--border);";
+                block.innerHTML = `
+                  <summary style="padding:6px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;">Output${data.length != null ? " (" + data.length + " chars)" : ""}</summary>
+                  <pre style="margin:0;padding:10px 14px;font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;">${escapeHtml(data.result)}</pre>
+                `;
+                logEl.appendChild(block);
+              }
+            }
             scrollToBottom();
             break;
           }
