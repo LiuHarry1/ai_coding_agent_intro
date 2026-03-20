@@ -576,6 +576,127 @@ header .controls {
   40% { opacity: 1; transform: scale(1); }
 }
 
+/* ── Tool body details ─────────────────────── */
+.tool-body details > summary {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  user-select: none;
+}
+.tool-body details > summary:hover { color: var(--text-secondary); }
+
+/* ── Error states ──────────────────────────── */
+.tool-error-badge { color: var(--red); font-size: 13px; }
+.tool-call.has-error { border-color: rgba(248,81,73,0.3); }
+.tool-call.has-error .tool-header .tool-name { color: var(--red); }
+.result-error > summary { color: var(--red) !important; }
+.result-error > pre { color: var(--red); opacity: 0.85; }
+
+/* ── Edit Diff ─────────────────────────────── */
+.edit-diff {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.edit-diff pre {
+  margin: 0;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diff-del {
+  background: rgba(248,81,73,0.1);
+  display: flex;
+}
+.diff-add {
+  background: rgba(63,185,80,0.1);
+  display: flex;
+}
+.diff-label {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  padding-top: 6px;
+  font-weight: 700;
+}
+.diff-del .diff-label { color: var(--red); }
+.diff-add .diff-label { color: var(--green); }
+.diff-meta {
+  padding: 4px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+/* ── Subagent Log ──────────────────────────── */
+.subagent-log-header {
+  padding: 5px 14px;
+  font-size: 11px;
+  color: var(--purple);
+  border-top: 1px solid var(--border);
+  background: var(--purple-dim);
+  font-weight: 500;
+}
+.subagent-log-line {
+  padding: 5px 14px;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Session Badge ─────────────────────────── */
+.session-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: default;
+}
+
+/* ── Compaction Notice ──────────────────────── */
+.compaction-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+}
+
+.compaction-notice.done {
+  border-style: solid;
+  border-color: rgba(88,166,255,0.3);
+  color: var(--accent);
+}
+.compaction-notice.done details > summary {
+  cursor: pointer;
+  user-select: none;
+}
+.compaction-summary {
+  margin: 8px 0 0;
+  padding: 10px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow: auto;
+}
+
 /* ── Input Area ─────────────────────────────── */
 #input-area {
   padding: 12px 20px 16px;

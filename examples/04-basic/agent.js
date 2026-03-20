@@ -1,40 +1,34 @@
 import { streamText } from "ai";
 import { createProvider } from "../../shared/provider.js";
-import { truncateToolOutputs, summarizeIfNeeded } from "./context.js";
+import { summarizeIfNeeded } from "./context.js";
 
 const provider = createProvider();
 
 /**
- * Agent Loop with Context Management + Multi-Turn Support.
+ * Shared agent loop — used by both the primary agent AND subagents.
  *
- * Three additions compared to 02-basic:
+ * Primary agent: called with session messages, full tool set, sendSSE for UI.
+ * Subagent:      called with messages=[] (fresh context), limited tools,
+ *                prefixed sendSSE so UI can distinguish subagent events.
  *
- *   1. Accepts an existing `messages` array (multi-turn history).
- *      New user message is appended, then the loop runs as usual.
- *
- *   2. truncateToolOutputs() — before each LLM call, replace old tool
- *      outputs with one-line summaries (microcompaction).
- *
- *   3. summarizeIfNeeded() — when message count exceeds threshold,
- *      compress old messages into a structured summary (compaction).
+ * Returns the final text response (used by subagents to pass result back).
  */
-export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, messages = [], maxSteps = 40, cwd = null }) {
+export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, messages = [], maxSteps = 40 }) {
   messages.push({ role: "user", content: userMessage });
+
+  let finalText = "";
 
   for (let step = 0; step < maxSteps; step++) {
     sendSSE("step_start", { step });
 
-    // ── Context management ────────────────────────────────
-    // 1. Truncate old tool outputs (cheap, every iteration)
-    truncateToolOutputs(messages);
-    // 2. Summarize if long + rehydrate last read files (so agent doesn't re-read)
-    await summarizeIfNeeded(messages, sendSSE, cwd);
+    const managed = await summarizeIfNeeded(messages, sendSSE);
+    if (managed !== messages) {
+      messages.length = 0;
+      messages.push(...managed);
+    }
 
     const stream = streamText({
       model: provider.chatModel("gpt-5.2"),
-      //claude-opus-4.6
-      //claude-sonnet-4.6
-      //gpt-5.2-codex
       system: systemPrompt,
       messages,
       tools,
@@ -90,6 +84,8 @@ export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, mess
       }
     }
 
+    if (textAccum) finalText = textAccum;
+
     const assistantContent = [];
     if (textAccum) {
       assistantContent.push({ type: "text", text: textAccum });
@@ -106,7 +102,7 @@ export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, mess
 
     if (toolCalls.length === 0) {
       sendSSE("done", { steps: step + 1 });
-      return;
+      return finalText;
     }
 
     for (const tr of toolResults) {
@@ -128,4 +124,5 @@ export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, mess
 
   sendSSE("error", { message: `Reached max steps (${maxSteps})` });
   sendSSE("done", { steps: maxSteps });
+  return finalText;
 }

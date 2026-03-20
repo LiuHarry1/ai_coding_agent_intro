@@ -2,17 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
 
-// ── Session Store ─────────────────────────────────────────────
-//
-// Two layers:
-//   1. In-memory Map for fast access during runtime
-//   2. JSONL files on disk for persistence across restarts
-//
-// This is the same pattern Claude Code uses:
-//   ~/.claude/projects/<project>/sessions/<uuid>.jsonl
-
 const SESSION_DIR = path.resolve(".sessions");
-
 const sessions = new Map();
 
 function sessionPath(id) {
@@ -55,8 +45,6 @@ export function listSessions() {
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }
 
-// ── Persistence: append to JSONL ──────────────────────────────
-
 export function appendMessage(sessionId, message) {
   appendLine(sessionId, { type: "message", ...message, timestamp: Date.now() });
 }
@@ -65,8 +53,6 @@ function appendLine(sessionId, data) {
   fs.mkdirSync(SESSION_DIR, { recursive: true });
   fs.appendFileSync(sessionPath(sessionId), JSON.stringify(data) + "\n");
 }
-
-// ── Restore: rebuild messages from JSONL ──────────────────────
 
 function restoreFromDisk(id) {
   const raw = fs.readFileSync(sessionPath(id), "utf-8").trim();

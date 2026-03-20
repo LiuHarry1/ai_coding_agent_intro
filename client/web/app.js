@@ -12,6 +12,7 @@ const workspaceDropdown = $("#workspace-dropdown");
 
 let isStreaming = false;
 let sessionId = localStorage.getItem("coding_agent_session_id") || null;
+let currentStep = 0;
 
 
 // ── Load default workspace ──────────────────────
@@ -19,6 +20,7 @@ fetch("/workspace")
   .then((r) => r.json())
   .then((d) => { workspaceInput.value = d.workspace; })
   .catch(() => { workspaceInput.value = "."; });
+
 
 // ── Workspace browser ───────────────────────────
 let wsDropdownOpen = false;
@@ -149,11 +151,28 @@ btnClear.addEventListener("click", async () => {
   messagesEl.appendChild(welcomeEl);
   welcomeEl.style.display = "flex";
 
-  // New conversation
   sessionId = null;
   localStorage.removeItem("coding_agent_session_id");
+  updateSessionBadge();
 });
 
+function updateSessionBadge() {
+  let badge = document.getElementById("session-badge");
+  if (!sessionId) {
+    if (badge) badge.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.id = "session-badge";
+    badge.className = "session-badge";
+    document.querySelector("header .controls").prepend(badge);
+  }
+  badge.textContent = `session: ${sessionId.slice(0, 6)}`;
+  badge.title = sessionId;
+}
+
+if (sessionId) updateSessionBadge();
 
 $$(".hint").forEach((el) => {
   el.addEventListener("click", () => {
@@ -170,31 +189,46 @@ function scrollToBottom() {
 
 // ── Tool icon helper ───────────────────────────
 function toolIconClass(name) {
+  if (name.includes("edit")) return "write";
   if (name.includes("read")) return "read";
   if (name.includes("write")) return "write";
-  if (name.includes("command") || name.includes("run")) return "run";
-  if (name.includes("search")) return "search";
+  if (name.includes("bash") || name.includes("command") || name.includes("run")) return "run";
+  if (name.includes("search") || name.includes("explore")) return "search";
   if (name.includes("list")) return "list";
   return "default";
 }
 
 function toolIconChar(name) {
+  if (name.includes("edit")) return "&#9998;";
   if (name.includes("read")) return "&#128196;";
   if (name.includes("write")) return "&#9998;";
-  if (name.includes("command") || name.includes("run")) return "&#9654;";
-  if (name.includes("search")) return "&#128269;";
+  if (name.includes("bash") || name.includes("command") || name.includes("run")) return "&#9654;";
+  if (name.includes("search") || name.includes("explore")) return "&#128269;";
   if (name.includes("list")) return "&#128193;";
   return "&#9881;";
 }
 
 function formatArgs(name, args) {
   if (!args) return "";
+  if (args.file_path) return args.file_path;
   if (args.path) return args.path;
   if (args.command) return args.command;
   if (args.task) return args.task.slice(0, 60) + (args.task.length > 60 ? "…" : "");
   if (args.pattern) return args.pattern;
   if (args.directory) return args.directory;
   return JSON.stringify(args).slice(0, 80);
+}
+
+function renderToolArgs(name, args) {
+  if (!args) return "";
+  if (name === "edit_file" && args.old_string != null && args.new_string != null) {
+    return `<div class="edit-diff">
+      <div class="diff-del"><span class="diff-label">-</span><pre>${escapeHtml(args.old_string)}</pre></div>
+      <div class="diff-add"><span class="diff-label">+</span><pre>${escapeHtml(args.new_string)}</pre></div>
+      ${args.file_path ? `<div class="diff-meta">${escapeHtml(args.file_path)}${args.replace_all ? " (replace all)" : ""}</div>` : ""}
+    </div>`;
+  }
+  return `<pre>${escapeHtml(JSON.stringify(args, null, 2))}</pre>`;
 }
 
 // ── Send message ───────────────────────────────
@@ -225,6 +259,7 @@ async function sendMessage() {
   let contentEl = null;
   let thinkingEl = null;
   let currentToolEl = null;
+  currentStep = 0;
 
   function showThinking() {
     removeThinking();
@@ -232,7 +267,7 @@ async function sendMessage() {
     thinkingEl.className = "thinking";
     thinkingEl.innerHTML = `
       <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-      <span>Thinking...</span>
+      <span>Step ${currentStep + 1}...</span>
     `;
     assistantMsg.appendChild(thinkingEl);
     scrollToBottom();
@@ -320,7 +355,73 @@ async function sendMessage() {
         let data;
         try { data = JSON.parse(dataStr); } catch { continue; }
 
+        // Handle subagent events generically (subagent_*_tool_call, subagent_*_tool_result)
+        if (eventType.startsWith("subagent_") && eventType.endsWith("_tool_call")) {
+          if (currentToolEl) {
+            const logEl = currentToolEl.querySelector(".subagent-log");
+            if (logEl) {
+              const label = data.command ? `<span style="color:var(--accent);">$</span> <code>${escapeHtml(data.command)}</code>`
+                : data.query ? `<code>${escapeHtml(data.query)}</code>`
+                : `<code>${escapeHtml(JSON.stringify(data).slice(0, 100))}</code>`;
+              const line = document.createElement("div");
+              line.className = "subagent-log-line";
+              line.innerHTML = label;
+              logEl.appendChild(line);
+            }
+          }
+          scrollToBottom();
+          continue;
+        }
+
+        if (eventType.startsWith("subagent_") && eventType.endsWith("_tool_result")) {
+          if (currentToolEl && data.result != null) {
+            const logEl = currentToolEl.querySelector(".subagent-log");
+            if (logEl) {
+              const block = document.createElement("details");
+              block.style.cssText = "border-top:1px solid var(--border);";
+              const resultPreview = typeof data.result === "string" ? data.result : JSON.stringify(data.result);
+              const short = resultPreview.length > 1500 ? resultPreview.slice(0, 1500) + "\n..." : resultPreview;
+              block.innerHTML = `
+                <summary style="padding:6px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;">Output${data.length != null ? " (" + data.length + " chars)" : ""}</summary>
+                <pre style="margin:0;padding:10px 14px;font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;">${escapeHtml(short)}</pre>
+              `;
+              logEl.appendChild(block);
+            }
+          }
+          scrollToBottom();
+          continue;
+        }
+
+        // Handle subagent status events (subagent_*)
+        if (eventType.startsWith("subagent_") && !eventType.includes("_tool_")) {
+          if (currentToolEl && data.label) {
+            const logEl = currentToolEl.querySelector(".subagent-log");
+            if (logEl && data.step === 0) {
+              const header = document.createElement("div");
+              header.className = "subagent-log-header";
+              header.innerHTML = `${escapeHtml(data.label)}`;
+              logEl.appendChild(header);
+            }
+          }
+          scrollToBottom();
+          continue;
+        }
+
         switch (eventType) {
+          case "session": {
+            if (data.session_id) {
+              sessionId = data.session_id;
+              localStorage.setItem("coding_agent_session_id", sessionId);
+              updateSessionBadge();
+            }
+            break;
+          }
+
+          case "step_start":
+            currentStep = data.step ?? currentStep;
+            showThinking();
+            break;
+
           case "thinking":
             showThinking();
             break;
@@ -331,6 +432,33 @@ async function sendMessage() {
             ensureContentEl();
             renderMarkdown();
             break;
+
+          case "compaction_start": {
+            removeThinking();
+            const compactEl = document.createElement("div");
+            compactEl.className = "compaction-notice";
+            compactEl.id = "compaction-active";
+            compactEl.innerHTML = `
+              <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+              <span>Compacting context (${data.totalMessages} → ${data.keeping} messages)...</span>
+            `;
+            assistantMsg.appendChild(compactEl);
+            scrollToBottom();
+            break;
+          }
+
+          case "compaction_done": {
+            const activeEl = document.getElementById("compaction-active");
+            if (activeEl) {
+              activeEl.className = "compaction-notice done";
+              const summaryPreview = data.summary
+                ? `<details><summary>&#10003; Context compacted (${data.summaryLength} chars) — click to view summary</summary><pre class="compaction-summary">${escapeHtml(data.summary)}</pre></details>`
+                : `<span>&#10003; Context compacted (summary: ${data.summaryLength} chars)</span>`;
+              activeEl.innerHTML = summaryPreview;
+            }
+            scrollToBottom();
+            break;
+          }
 
           case "tool_call": {
             removeThinking();
@@ -343,14 +471,14 @@ async function sendMessage() {
               <div class="tool-header" onclick="this.parentElement.classList.toggle('open')">
                 <span class="chevron">&#9654;</span>
                 <span class="tool-icon ${toolIconClass(data.name)}">${toolIconChar(data.name)}</span>
-                <span class="tool-name">${data.name}</span>
+                <span class="tool-name">${escapeHtml(data.name)}</span>
                 <span class="tool-args">${escapeHtml(formatArgs(data.name, data.args))}</span>
                 <span class="tool-status"><div class="spinner"></div></span>
               </div>
               <div class="tool-body">
-                <details open>
-                  <summary style="padding:6px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;">Arguments</summary>
-                  <pre>${escapeHtml(JSON.stringify(data.args, null, 2))}</pre>
+                <details>
+                  <summary>Arguments</summary>
+                  ${renderToolArgs(data.name, data.args)}
                 </details>
                 <div class="subagent-log"></div>
                 <div class="tool-result-slot"></div>
@@ -369,56 +497,31 @@ async function sendMessage() {
             break;
           }
 
-          case "subagent_bash_tool_call": {
-            if (currentToolEl && data.command) {
-              const logEl = currentToolEl.querySelector(".subagent-log");
-              if (logEl) {
-                const line = document.createElement("div");
-                line.className = "subagent-log-line";
-                line.style.cssText = "padding:6px 14px;font-size:12px;border-top:1px solid var(--border);color:var(--text-muted);";
-                line.innerHTML = `<span style="color:var(--accent);">$</span> <code>${escapeHtml(data.command)}</code>`;
-                logEl.appendChild(line);
-              }
-            }
-            scrollToBottom();
-            break;
-          }
-
-          case "subagent_bash_tool_result": {
-            if (currentToolEl && data.result != null) {
-              const logEl = currentToolEl.querySelector(".subagent-log");
-              if (logEl) {
-                const block = document.createElement("details");
-                block.open = true;
-                block.style.cssText = "border-top:1px solid var(--border);";
-                block.innerHTML = `
-                  <summary style="padding:6px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;">Output${data.length != null ? " (" + data.length + " chars)" : ""}</summary>
-                  <pre style="margin:0;padding:10px 14px;font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;">${escapeHtml(data.result)}</pre>
-                `;
-                logEl.appendChild(block);
-              }
-            }
-            scrollToBottom();
-            break;
-          }
-
           case "tool_result": {
             if (currentToolEl) {
-              const statusEl = currentToolEl.querySelector(".tool-status");
-              statusEl.innerHTML = `<span class="check">&#10003;</span>`;
-
-              const resultSlot = currentToolEl.querySelector(".tool-result-slot");
               const raw = data.result ?? "";
               const resultStr = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2) ?? "(empty)";
+              const isError = resultStr.startsWith("Error:");
               const truncated = resultStr.length > 2000
                 ? resultStr.slice(0, 2000) + `\n... (${resultStr.length} chars total)`
                 : resultStr;
+
+              const statusEl = currentToolEl.querySelector(".tool-status");
+              statusEl.innerHTML = isError
+                ? `<span class="tool-error-badge">&#10007;</span>`
+                : `<span class="check">&#10003;</span>`;
+
+              const resultSlot = currentToolEl.querySelector(".tool-result-slot");
               resultSlot.innerHTML = `
-                <details>
-                  <summary style="padding:6px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;border-top:1px solid var(--border);">Result (${resultStr.length} chars)</summary>
+                <details${isError ? " open" : ""} class="${isError ? "result-error" : ""}">
+                  <summary>Result (${resultStr.length} chars)</summary>
                   <pre>${escapeHtml(truncated)}</pre>
                 </details>
               `;
+
+              if (isError) {
+                currentToolEl.classList.add("has-error");
+              }
             }
             scrollToBottom();
             break;
@@ -434,6 +537,7 @@ async function sendMessage() {
           case "done":
             removeThinking();
             renderMarkdown();
+            updateSessionBadge();
             break;
         }
       }

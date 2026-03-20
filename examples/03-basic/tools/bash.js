@@ -8,7 +8,7 @@ export function createBashTool(cwd, { truncate }) {
       "Run a bash command. " +
       "Non-interactive — use `stdin` param or pipe for input. " +
       "Long-running cmds: background with & and sleep. " +
-      "Output truncated at ~30KB.",
+      "Output truncated at ~30KB.  for write, read , edit file , prefer to use edit_file, read_file, write_file instead",
     inputSchema: z.object({
       command: z.string().describe("The bash command to execute"),
       stdin: z
@@ -28,7 +28,7 @@ export function createBashTool(cwd, { truncate }) {
           resolved = true;
           clearTimeout(timer);
           resolve(truncate(output));
-        };
+        };  
 
         const child = spawn("bash", ["-c", command], {
           cwd,
@@ -48,19 +48,13 @@ export function createBashTool(cwd, { truncate }) {
           killed = true;
           child.kill("SIGTERM");
           setTimeout(() => {
-            try {
-              child.kill("SIGKILL");
-            } catch {}
+            try { child.kill("SIGKILL"); } catch {}
             buildAndResolve(null);
           }, 3000);
         }, timeout);
 
-        child.stdout.on("data", (d) => {
-          stdout += d;
-        });
-        child.stderr.on("data", (d) => {
-          stderr += d;
-        });
+        child.stdout.on("data", (d) => { stdout += d; });
+        child.stderr.on("data", (d) => { stderr += d; });
 
         function buildAndResolve(code) {
           setTimeout(() => {

@@ -1,18 +1,27 @@
 import { streamText } from "ai";
 import { createProvider } from "../../shared/provider.js";
+import { summarizeIfNeeded } from "./context.js";
 
 const provider = createProvider();
 
 /**
- * Agent loop: 02-basic + subagents.
- * - Multi-turn (messages from session)
- * - No direct bash — use run_bash_task (Bash subagent). Explore subagent is a placeholder.
+ * Agent loop: 02-basic + session (multi-turn) + context management.
+ *
+ * Before each LLM call, runs summarizeIfNeeded() to compress old messages
+ * when the conversation gets long.
  */
-export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, messages = [], maxSteps = 60 }) {
+export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, messages = [], maxSteps = 40 }) {
   messages.push({ role: "user", content: userMessage });
 
   for (let step = 0; step < maxSteps; step++) {
     sendSSE("step_start", { step });
+
+    // --- Context management: summarize if messages are too many ---
+    const managed = await summarizeIfNeeded(messages, sendSSE);
+    if (managed !== messages) {
+      messages.length = 0;
+      messages.push(...managed);
+    }
 
     const stream = streamText({
       model: provider.chatModel("gpt-5.2"),

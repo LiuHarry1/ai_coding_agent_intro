@@ -134,114 +134,155 @@ You > 读一下 package.json 的内容
 
 ## Lesson 03 — 上下文管理（Context Management）
 
-**目录：** `03-basic-chat-history/`
+**目录：** `03-basic/`
 
-**核心概念：** Context window 是 agent 最稀缺的资源。工具输出占 80%+ 的上下文空间——不管理它，几轮对话就满了。
+**核心概念：** 长对话中 messages 数量不断增长。上下文管理的核心是**在模型需要继续工作时，让它拥有足够的信息，但不把整段历史都塞进去**。
 
 **关键文件：**
 
 | 文件 | 内容 |
 |---|---|
-| `context.js` | 两个上下文管理函数：truncateToolOutputs + summarizeIfNeeded |
-| `agent.js` | 在 agent loop 里集成上下文管理（每轮 LLM 调用前执行） |
-| `tools.js` | 复用 02-basic 的工具 |
-| `prompts.js` | 系统提示增加 "[truncated]" 提示 |
+| `context.js` | `summarizeIfNeeded()`——当消息过多时压缩为结构化工作状态摘要 |
+| `agent.js` | 在 agent loop 里集成（每轮 LLM 调用前检查） |
+| `session.js` | Session 持久化——多轮对话基础 |
+| `prompts.js` | 系统提示增加对摘要上下文的说明 |
+
+**引出问题：** 02-basic 的 agent 每次 `/chat` 是新对话。如果我们加了 session 让它支持多轮，跑 20+ 步后 messages 数组就有 40+ 条消息——大量旧的 tool_call 和 tool_result 堆积在上下文里。
+
+### 常见误区：逐个截断工具输出（Truncation）
+
+最直觉的方案是截断旧的工具输出——保留最近 N 个，旧的替换成 `[truncated: 4827 chars]`。
+
+**但这在实践中问题很大：**
+
+| 被截断的工具 | 实际效果 |
+|---|---|
+| `read_file` | 模型忘了文件内容 → 只好重新 `read_file`。但原文件还在，直接重读就好，**截断毫无意义** |
+| `bash` | 模型忘了命令输出 → 大多数命令（`ls`, `grep`）重跑也就几毫秒，成本极低 |
+| `write_file` / `edit_file` | 返回值本身就短（`"Created file.js (42 lines)"`），不需要截断 |
+
+**核心洞察：** 截断的前提是"数据丢了模型拿不回来"。但 coding agent 的工具输出天然是**可重新获取的**——文件可以重读，命令可以重跑。所以逐个截断工具输出不如直接解决根本问题：**消息数量太多。**
 
 ### 各家怎么做的？
 
-| 策略 | 复杂度 | 谁在用 |
+| 策略 | 做法 | 谁在用 |
 |---|---|---|
-| 截断旧消息 | 最低 | 基础实现 |
-| 工具输出裁剪（microcompaction） | 低 | Claude Code、OpenCode |
-| LLM 摘要（compaction） | 中 | Claude Code、Aider、OpenCode |
-| 结构化压缩 + 文件恢复（rehydration） | 高 | Claude Code |
-| 按需拉取（不存上下文，需要时搜） | 高 | Cursor |
+| 长输出写成文件 | 工具输出超过阈值 → 写到磁盘 → 上下文只留引用路径 | Cursor |
+| 工具输出存磁盘 + hot tail | 旧工具输出存磁盘，最近几个保留在上下文 | Claude Code（microcompaction） |
+| LLM 摘要（compaction） | 用便宜模型把旧消息压缩为结构化摘要 | Claude Code、OpenCode |
+| RL 训练自我摘要 | 模型自己学会在上下文快满时保留关键信息 | Cursor（Composer） |
 
-### Feature 1：工具输出截断（Microcompaction）
+Cursor 的做法最简单：长工具输出直接写文件，不做截断。但上下文最终还是会满——这时所有人都得做 **summarization**。
 
-**问题：** Agent 跑 10 次 bash，每次返回几百行。全部留在上下文里，很快就满了。
+### 我们的方案：Summarization
 
-**做法：** 保留最近 N 次工具输出（"hot tail"），旧的替换成一行摘要。
-
-```
-之前（占上下文）：
-[tool:bash] src/auth.js:42: // TODO: add rate limiting
-             src/db.js:18: // TODO: add connection pooling
-             ... (200 行)
-
-之后（1 行）：
-[tool:bash] [truncated: 4827 chars from bash]
-```
-
-**类比：** 这就是 LRU 缓存——最近的保留，旧的换出。
-
-**模型能"重新获取"吗？** 能。模型看到 `[truncated]` 后，如果需要那个信息，可以再跑一次命令。系统提示里也告诉了它这一点。
-
-**关键参数：**
-
-| 参数 | 含义 | 默认值 |
-|---|---|---|
-| `HOT_TAIL` | 保留最近几次工具输出 | 4 |
-| `MAX_TOOL_OUTPUT_CHARS` | 低于此长度的输出不截断 | 200 |
-
-### Feature 2：对话摘要（Compaction）
-
-**问题：** 即使截断了工具输出，消息数也会越来越多（assistant 的思考、多轮 tool_call/tool_result 对）。
-
-**做法：** 当消息数超过阈值，用一个便宜的模型把旧消息压缩成结构化摘要。
+**不做 truncation，只做 summarization。** 当 `messages.length >= 16` 时：
 
 ```
-之前：20+ 条消息
+之前（40+ 条 messages）：
+  [user] 创建 todo app...
+  [assistant] [tool-call: read_file]
+  [tool] package.json 内容...
+  [assistant] [tool-call: write_file]
+  [tool] Created server.js
+  ... (30+ 条更多) ...
 
-之后：
-  [summary message]    ← 压缩后的工作状态
-  [assistant ack]      ← "我理解了，继续"
-  [最近 6 条消息]      ← 保留完整细节
+之后（2 + 最近 4 条）：
+  [user/summary]
+    ## Task
+    创建 todo app with Express + tests.
+    ## Completed Work
+    - Created src/server.js — Express CRUD for /api/todos
+    - Created tests/api.test.js — 4 tests, all passing
+    ## Current State
+    npm test: 4/4 passing
+    ## Key Files
+    - src/server.js — Express app, port 3000
+    - tests/api.test.js — supertest-based tests
+
+  [assistant] 理解了，继续。
+
+  [最近 4 条原始消息]
 ```
 
-**摘要 prompt 要求包含：** 用户意图、已完成的工作、当前状态、关键决策、遇到的错误。这不是"随便总结一下"，而是有结构化要求的，确保压缩后模型能继续工作。
+### 关键设计决策
 
-**关键参数：**
+**1. 总结"工作状态"而不是"对话历史"**
 
-| 参数 | 含义 | 默认值 |
-|---|---|---|
-| `SUMMARIZE_THRESHOLD` | 消息数超过此值触发摘要 | 20 |
-| `KEEP_RECENT` | 保留最近几条消息不压缩 | 6 |
-
-### 两个 feature 的关系
-
+差的摘要（对话流水账）：
 ```
-每轮 loop:
-  1. truncateToolOutputs()    ← 便宜，每轮都跑
-  2. summarizeIfNeeded()      ← 贵（调 LLM），偶尔触发
-  3. streamText(messages)     ← 正常调用模型
+"用户要求创建 todo app。先读了 package.json，然后创建了 server.js，
+然后跑 npm test 失败了，然后装了 express，再跑测试通过了..."
 ```
 
-截断是"治标"（减小单条消息体积），摘要是"治本"（减少消息数量）。两者配合使用。
+好的摘要（工作状态快照）：
+```
+## Task: 创建 todo app
+## Completed: server.js (CRUD), tests (4/4 pass)
+## Key Files: src/server.js, tests/api.test.js
+```
 
-**演示建议：**
+模型不需要知道"之前失败过然后修好了"——它需要知道**现在是什么状态**。
+
+**2. 用便宜模型做摘要**
+
+Summarization 不需要写代码，只需要理解和压缩。用 `gpt-4o-mini` 而不是主模型，既快又省钱。
+
+**3. 给 summarizer 的输入也要截断**
+
+发给 summarizer 的工具输出限制在 500 字符。summarizer 只需知道"创建了 server.js，85 行"，不需要看完整文件内容。
+
+**4. 摘要后模型可以自行重读文件**
+
+系统提示告诉模型："如果看到 summary，可以用 read_file 重新读取任何需要的文件。" 模型自己会判断是否需要重读。
+
+### 代码集成
+
+```javascript
+// agent.js 的 loop 里，在 streamText 之前
+const managed = await summarizeIfNeeded(messages, sendSSE);
+if (managed !== messages) {
+  messages.length = 0;
+  messages.push(...managed);
+}
+```
+
+`summarizeIfNeeded` 在消息数低于阈值时直接返回原数组（引用相同），不做任何工作。
+
+### 演示建议
 
 ```
-# 给 agent 一个多步任务，观察上下文管理
-You > 创建一个 Node.js 项目，包含 express 服务器、3 个路由、单元测试，然后运行测试
+# 给 agent 一个多步任务，触发 summarization
+You > 创建一个 Node.js 项目，包含 express 服务器、3 个 CRUD 路由、
+      用 Jest 写单元测试，然后运行测试
 
-# 在日志中观察：
-# - step 5+ 时开始看到 [truncated] 的工具输出
-# - step 10+ 时可能触发摘要
+# 在 SSE 事件中观察：
+# - step 8+ 时看到 compaction_start 事件
+# - 之后 messages 数量骤降
+# - 模型继续工作，可能会 read_file 重读关键文件
 ```
 
 **教学要点：**
 
-1. Token 是最稀缺的资源——比 CPU、内存都贵
-2. 工具输出是最大的 token 消耗者（81%），优先处理
-3. 用 AI 管理 AI 的记忆——摘要本身也是一次 LLM 调用
-4. 所有策略都是信息和空间的 trade-off——没有完美方案
+1. **上下文的核心问题是消息数量累积，不是单个输出太大** —— 单个输出已经被 `utils.js` 的 `truncate()` 限制在 30KB
+2. **Coding agent 的工具输出天然可重新获取** —— 文件可以重读，命令可以重跑。逐个截断工具输出意义不大
+3. **Summarization 是所有生产级 agent 的共同选择** —— Claude Code、Cursor、OpenCode 都做 compaction
+4. **Summary 的质量取决于 prompt** —— 结构化的"工作状态"比流水账式的"对话总结"好得多
+
+**引出下一课：** "现在单个 agent 能跑长任务了。但有些操作（比如探索代码库）会产生大量中间输出、占用主 agent 的上下文——能不能把它们分到独立的 agent 里？"
 
 ---
 
-## Lesson 04 — edit_file + list_directory + search
+## Lesson 04 — Subagents
 
-> TODO: 补充 edit_file（str_replace 模式）、list_directory、search 工具的实现和教学笔记
+**目录：** `04-basic/`
+
+> TODO: 补充教学笔记。核心内容：
+>
+> - Subagent 的粒度应该是"任务"而非"工具"
+> - Bash subagent（当前实现）的问题：每个 shell 命令多一次 LLM 调用，且主 agent 经常要读回完整输出
+> - 更好的例子：Explore subagent（探索代码库，多步搜索 + 分析，返回结构化报告）
+> - Subagent 设计三原则：任务完整性、结果自足性、上下文收益
 
 ---
 

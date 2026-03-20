@@ -35,8 +35,7 @@ function sendJSON(res, status, data) {
 }
 
 /**
- * Server with session management. Main agent uses run_bash_task (Bash subagent);
- * tools are created with runBashSubagent bound to cwd and sendSSE.
+ * Server with session management + context management (summarization).
  */
 export function startServer({ runAgent, createTools, systemPrompt }) {
   const PORT = parseInt(process.env.PORT || "4567", 10);
@@ -123,7 +122,7 @@ export function startServer({ runAgent, createTools, systemPrompt }) {
         console.log("[server] client disconnected");
       });
 
-      const tools = createTools(cwd, sendSSE);
+      const tools = createTools(cwd);
 
       const messagesBefore = session.messages.length;
 

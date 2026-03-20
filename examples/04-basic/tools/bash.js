@@ -5,10 +5,10 @@ import { spawn } from "child_process";
 export function createBashTool(cwd, { truncate }) {
   return tool({
     description:
-    "Run a bash command. " +
-    "Non-interactive — use `stdin` param or pipe for input. " +
-    "Long-running cmds: background with & and sleep. " +
-    "Output truncated at ~30KB.  for write, read , edit file , prefer to use edit_file, read_file, write_file instead",
+      "Run a bash command. " +
+      "Non-interactive — use `stdin` param or pipe for input. " +
+      "Long-running cmds: background with & and sleep. " +
+      "Output truncated at ~30KB.  for write, read , edit file , prefer to use edit_file, read_file, write_file instead",
     inputSchema: z.object({
       command: z.string().describe("The bash command to execute"),
       stdin: z
