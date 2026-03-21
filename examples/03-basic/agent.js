@@ -74,9 +74,43 @@ export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, mess
           break;
         }
 
+        case "tool-error": {
+          const errRaw = event.error ?? event.message ?? "Tool execution failed";
+          const errText = typeof errRaw === "string" ? errRaw : JSON.stringify(errRaw);
+          const result = `Error: ${errText}`;
+          sendSSE("tool_result", {
+            name: event.toolName,
+            result,
+            toolCallId: event.toolCallId,
+          });
+          toolResults.push({
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            result,
+          });
+          break;
+        }
+
         case "error":
           sendSSE("error", { message: String(event.error) });
           break;
+      }
+    }
+
+    const seenIds = new Set(toolResults.map((tr) => tr.toolCallId));
+    for (const tc of toolCalls) {
+      if (!seenIds.has(tc.toolCallId)) {
+        const result = `Error: Missing tool result for ${tc.toolName} (call ${tc.toolCallId}).`;
+        sendSSE("tool_result", {
+          name: tc.toolName,
+          result,
+          toolCallId: tc.toolCallId,
+        });
+        toolResults.push({
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          result,
+        });
       }
     }
 

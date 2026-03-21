@@ -219,6 +219,20 @@ function formatArgs(name, args) {
   return JSON.stringify(args).slice(0, 80);
 }
 
+/** Nested tools: browsers may auto-open <details> when parent becomes visible — force closed like primary agent. */
+function sealNestedToolDetails(toolEl) {
+  if (
+    !toolEl?.classList.contains("tool-call--nested") &&
+    !toolEl?.classList.contains("tool-call--nested-orphan")
+  ) {
+    return;
+  }
+  toolEl.querySelectorAll("details").forEach((d) => {
+    if (d.classList.contains("result-error")) return;
+    d.removeAttribute("open");
+  });
+}
+
 function renderToolArgs(name, args) {
   if (!args) return "";
   if (name === "edit_file" && args.old_string != null && args.new_string != null) {
@@ -230,6 +244,85 @@ function renderToolArgs(name, args) {
   }
   return `<pre>${escapeHtml(JSON.stringify(args, null, 2))}</pre>`;
 }
+
+/** Subagent tools: same DOM + classes as primary `tool-call`, collapsed by default (no .open). */
+function appendSubagentToolCallRow(logEl, data) {
+  const name = data.name || data.toolName || "";
+  const args = data.args ?? data.input ?? {};
+  const callId = data.toolCallId || "";
+
+  const wrap = document.createElement("div");
+  wrap.className = "tool-call tool-call--nested";
+  if (callId) wrap.dataset.toolCallId = callId;
+
+  wrap.innerHTML = `
+    <div class="tool-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="chevron">&#9654;</span>
+      <span class="tool-icon ${toolIconClass(name)}">${toolIconChar(name)}</span>
+      <span class="tool-name">${escapeHtml(name)}</span>
+      <span class="tool-args">${escapeHtml(formatArgs(name, args))}</span>
+      <span class="tool-status"><div class="spinner"></div></span>
+    </div>
+    <div class="tool-body">
+      <details>
+        <summary>Arguments</summary>
+        ${renderToolArgs(name, args)}
+      </details>
+      <div class="tool-result-slot"></div>
+    </div>
+  `;
+
+  logEl.appendChild(wrap);
+  queueMicrotask(() => sealNestedToolDetails(wrap));
+}
+
+function appendSubagentToolResultBlock(logEl, data) {
+  const name = data.name || data.toolName || "";
+  const raw = data.result ?? "";
+  const resultStr = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2) ?? "(empty)";
+  const isError = resultStr.startsWith("Error:");
+  const truncated = resultStr.length > 2000
+    ? resultStr.slice(0, 2000) + `\n... (${resultStr.length} chars total)`
+    : resultStr;
+  const id = data.toolCallId || "";
+
+  const safeId = id && typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id;
+  let toolEl =
+    (id && logEl.querySelector(`.tool-call--nested[data-tool-call-id="${safeId}"]`)) || null;
+  if (!toolEl) {
+    const pending = logEl.querySelector(".tool-call--nested:not(.tool-call--nested-done)");
+    toolEl = pending || logEl.querySelector(".tool-call--nested:last-of-type");
+  }
+  if (!toolEl || !toolEl.classList.contains("tool-call")) {
+    toolEl = document.createElement("div");
+    toolEl.className = "tool-call tool-call--nested tool-call--nested-orphan";
+    toolEl.innerHTML = `
+      <div class="tool-body">
+        <div class="tool-result-slot"></div>
+      </div>`;
+    logEl.appendChild(toolEl);
+  }
+
+  const statusEl = toolEl.querySelector(".tool-status");
+  if (statusEl) {
+    statusEl.innerHTML = isError
+      ? `<span class="tool-error-badge">&#10007;</span>`
+      : `<span class="check">&#10003;</span>`;
+  }
+
+  const resultSlot = toolEl.querySelector(".tool-result-slot");
+  if (resultSlot) {
+    resultSlot.innerHTML = `
+      <details${isError ? " open" : ""} class="${isError ? "result-error" : ""}">
+        <summary>Result (${resultStr.length} chars)</summary>
+        <pre>${escapeHtml(truncated)}</pre>
+      </details>`;
+  }
+  if (isError) toolEl.classList.add("has-error");
+  toolEl.classList.add("tool-call--nested-done");
+  queueMicrotask(() => sealNestedToolDetails(toolEl));
+}
+
 
 // ── Send message ───────────────────────────────
 async function sendMessage() {
@@ -299,6 +392,28 @@ async function sendMessage() {
     scrollToBottom();
   }
 
+  /** Persist streamed assistant text before the first tool in a step (previously tool_call wiped the buffer and dropped this text). */
+  function flushReasoningBeforeTool() {
+    if (!textBuffer.trim()) return false;
+    removeThinking();
+    if (contentEl) {
+      contentEl.classList.remove("content");
+      contentEl.classList.add("reasoning");
+      contentEl = null;
+    } else {
+      const reasoningEl = document.createElement("div");
+      reasoningEl.className = "reasoning";
+      reasoningEl.innerHTML = marked.parse(textBuffer);
+      reasoningEl.querySelectorAll("pre code").forEach((block) => {
+        hljs.highlightElement(block);
+      });
+      assistantMsg.appendChild(reasoningEl);
+    }
+    textBuffer = "";
+    scrollToBottom();
+    return true;
+  }
+
   // SSE
   try {
     const res = await fetch("/chat", {
@@ -359,15 +474,7 @@ async function sendMessage() {
         if (eventType.startsWith("subagent_") && eventType.endsWith("_tool_call")) {
           if (currentToolEl) {
             const logEl = currentToolEl.querySelector(".subagent-log");
-            if (logEl) {
-              const label = data.command ? `<span style="color:var(--accent);">$</span> <code>${escapeHtml(data.command)}</code>`
-                : data.query ? `<code>${escapeHtml(data.query)}</code>`
-                : `<code>${escapeHtml(JSON.stringify(data).slice(0, 100))}</code>`;
-              const line = document.createElement("div");
-              line.className = "subagent-log-line";
-              line.innerHTML = label;
-              logEl.appendChild(line);
-            }
+            if (logEl) appendSubagentToolCallRow(logEl, data);
           }
           scrollToBottom();
           continue;
@@ -376,17 +483,7 @@ async function sendMessage() {
         if (eventType.startsWith("subagent_") && eventType.endsWith("_tool_result")) {
           if (currentToolEl && data.result != null) {
             const logEl = currentToolEl.querySelector(".subagent-log");
-            if (logEl) {
-              const block = document.createElement("details");
-              block.style.cssText = "border-top:1px solid var(--border);";
-              const resultPreview = typeof data.result === "string" ? data.result : JSON.stringify(data.result);
-              const short = resultPreview.length > 1500 ? resultPreview.slice(0, 1500) + "\n..." : resultPreview;
-              block.innerHTML = `
-                <summary style="padding:6px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;">Output${data.length != null ? " (" + data.length + " chars)" : ""}</summary>
-                <pre style="margin:0;padding:10px 14px;font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;">${escapeHtml(short)}</pre>
-              `;
-              logEl.appendChild(block);
-            }
+            if (logEl) appendSubagentToolResultBlock(logEl, data);
           }
           scrollToBottom();
           continue;
@@ -398,8 +495,8 @@ async function sendMessage() {
             const logEl = currentToolEl.querySelector(".subagent-log");
             if (logEl && data.step === 0) {
               const header = document.createElement("div");
-              header.className = "subagent-log-header";
-              header.innerHTML = `${escapeHtml(data.label)}`;
+              header.className = "subagent-log-banner";
+              header.innerHTML = `<span class="subagent-log-banner-pulse"></span><span>${escapeHtml(data.label)}</span>`;
               logEl.appendChild(header);
             }
           }
@@ -461,13 +558,43 @@ async function sendMessage() {
           }
 
           case "tool_call": {
+            const hadPreface = flushReasoningBeforeTool();
             removeThinking();
-            contentEl = null;
-            textBuffer = "";
+            if (!hadPreface && data.name === "explore") {
+              const fb = document.createElement("div");
+              fb.className = "reasoning reasoning-fallback";
+              fb.innerHTML =
+                "<p>Exploring the codebase to understand structure and relevant files before changing anything.</p>";
+              assistantMsg.appendChild(fb);
+              scrollToBottom();
+            }
 
             const toolEl = document.createElement("div");
-            toolEl.className = "tool-call";
-            toolEl.innerHTML = `
+            const isExplore = data.name === "explore";
+            const exArgs = data.args || {};
+            const taskLine = (exArgs.task || formatArgs(data.name, exArgs) || "").trim();
+            const taskShow = taskLine.length > 220 ? `${taskLine.slice(0, 220)}…` : taskLine;
+
+            toolEl.className = isExplore ? "tool-call tool-call--explore" : "tool-call";
+            toolEl.innerHTML = isExplore
+              ? `
+              <div class="tool-header" onclick="this.parentElement.classList.toggle('open')">
+                <span class="chevron">&#9654;</span>
+                <span class="tool-icon ${toolIconClass(data.name)}">${toolIconChar(data.name)}</span>
+                <span class="tool-name">${escapeHtml(data.name)}</span>
+                <span class="tool-args explore-header-preview">${escapeHtml(formatArgs(data.name, data.args))}</span>
+                <span class="tool-status"><div class="spinner"></div></span>
+              </div>
+              <div class="tool-body tool-body--explore">
+                <div class="explore-lead">
+                  <span class="explore-lead-label">Subagent</span>
+                  <p class="explore-lead-text">${escapeHtml(taskShow || "Codebase exploration")}</p>
+                </div>
+                <div class="subagent-log"></div>
+                <div class="tool-result-slot tool-result-slot--explore"></div>
+              </div>
+            `
+              : `
               <div class="tool-header" onclick="this.parentElement.classList.toggle('open')">
                 <span class="chevron">&#9654;</span>
                 <span class="tool-icon ${toolIconClass(data.name)}">${toolIconChar(data.name)}</span>
@@ -492,6 +619,7 @@ async function sendMessage() {
               assistantMsg.appendChild(toolGroup);
             }
             toolGroup.appendChild(toolEl);
+            if (isExplore) toolEl.classList.add("open");
             currentToolEl = toolEl;
             scrollToBottom();
             break;
@@ -516,8 +644,7 @@ async function sendMessage() {
                 <details${isError ? " open" : ""} class="${isError ? "result-error" : ""}">
                   <summary>Result (${resultStr.length} chars)</summary>
                   <pre>${escapeHtml(truncated)}</pre>
-                </details>
-              `;
+                </details>`;
 
               if (isError) {
                 currentToolEl.classList.add("has-error");

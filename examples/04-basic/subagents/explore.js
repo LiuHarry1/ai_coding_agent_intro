@@ -55,7 +55,8 @@ export function createExploreTool(cwd, runAgent, sendSSE) {
       "Use this for tasks that require reading multiple files or searching across the project, " +
       "e.g. 'understand the project structure', 'find where authentication is implemented', " +
       "'list all API endpoints'. The subagent reads files and runs search commands, " +
-      "then returns a structured summary. Your context stays clean.",
+      "then returns a structured summary. Your context stays clean. " +
+      "In the same assistant turn, briefly explain why you need exploration before invoking this tool.",
     inputSchema: z.object({
       task: z.string().describe(
         "What to explore or search for, e.g. 'analyze the project structure and tech stack' " +

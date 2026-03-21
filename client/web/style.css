@@ -532,7 +532,8 @@ header .controls {
   display: none;
   border-top: 1px solid var(--border);
 }
-.tool-call.open .tool-body { display: block; }
+/* Only the direct body of the opened tool — avoids nested tools inside explore inheriting display:block */
+.tool-call.open > .tool-body { display: block; }
 
 .tool-body pre {
   padding: 10px 14px;
@@ -546,6 +547,25 @@ header .controls {
   word-break: break-all;
   margin: 0;
 }
+
+/* ── Reasoning / pre-tool text (same turn as tool_call) ── */
+.reasoning {
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--accent);
+  background: rgba(88, 166, 255, 0.06);
+  border-radius: 0 8px 8px 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.reasoning p:last-child { margin-bottom: 0; }
+.reasoning-fallback {
+  border-left-color: var(--text-muted);
+  background: rgba(139, 148, 158, 0.08);
+  font-style: normal;
+}
+.reasoning-fallback p { margin: 0; color: var(--text-muted); font-size: 13px; }
 
 /* ── Thinking Indicator ─────────────────────── */
 .thinking {
@@ -630,21 +650,102 @@ header .controls {
   border-top: 1px solid var(--border);
 }
 
-/* ── Subagent Log ──────────────────────────── */
-.subagent-log-header {
-  padding: 5px 14px;
-  font-size: 11px;
-  color: var(--purple);
-  border-top: 1px solid var(--border);
-  background: var(--purple-dim);
-  font-weight: 500;
+/* ── Explore tool (outer shell, Cursor / Claude-like) ─ */
+.tool-call--explore {
+  border-radius: 10px;
+  border-color: rgba(88, 166, 255, 0.22);
+  background: linear-gradient(180deg, rgba(88, 166, 255, 0.06) 0%, var(--bg-secondary) 48px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
 }
-.subagent-log-line {
-  padding: 5px 14px;
+
+.tool-call--explore .tool-header {
+  font-family: var(--font-sans);
+  border-bottom: 1px solid rgba(88, 166, 255, 0.12);
+}
+
+.tool-call--explore .explore-header-preview {
+  font-family: var(--font-sans);
   font-size: 12px;
-  border-top: 1px solid var(--border);
+  opacity: 0.9;
+}
+
+.tool-body--explore {
+  padding: 0;
+}
+
+.explore-lead {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.explore-lead-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  margin-bottom: 6px;
+}
+
+.explore-lead-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+}
+
+.tool-result-slot--explore {
+  padding: 0 12px 12px;
+  border-top: none;
+}
+
+/* ── Subagent log: inner tools = same components as primary agent ─ */
+.subagent-log {
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px 12px;
+  gap: 0;
+  background: transparent;
+  border-top: 1px solid var(--border);
+}
+
+.subagent-log-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(139, 148, 158, 0.08);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.subagent-log-banner-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(88, 166, 255, 0.6);
+  flex-shrink: 0;
+}
+
+.tool-body--explore .subagent-log {
+  border-top: none;
+  padding-top: 8px;
+}
+
+.subagent-log .tool-call--nested {
+  margin: 0;
+}
+
+.subagent-log .tool-call--nested + .tool-call--nested {
+  margin-top: 6px;
 }
 
 /* ── Session Badge ─────────────────────────── */
