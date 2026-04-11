@@ -1,17 +1,25 @@
-const example = process.argv[2] || "04-basic";
+import * as fs from "fs";
+
+const example = process.argv[2] || "05-basic";
 
 console.log(`[start] Loading example: ${example}`);
 
+async function tryImport(base) {
+  const tsPath = `./examples/${example}/${base}.ts`;
+  const jsPath = `./examples/${example}/${base}.js`;
+  const tsExists = fs.existsSync(new URL(tsPath, import.meta.url));
+  return import(tsExists ? tsPath : jsPath);
+}
+
 let runAgent, createTools, systemPrompt, startServer;
 try {
-  ({ runAgent } = await import(`./examples/${example}/agent.js`));
-  ({ createTools } = await import(`./examples/${example}/tools.js`));
-  ({ systemPrompt } = await import(`./examples/${example}/prompts.js`));
+  ({ runAgent } = await tryImport("agent"));
+  ({ createTools } = await tryImport("tools"));
+  ({ systemPrompt } = await tryImport("prompts"));
 
-  // Use example's own server.js if it exists, otherwise fall back to shared
   try {
-    ({ startServer } = await import(`./examples/${example}/server.js`));
-    console.log(`[start] Using custom server from ${example}/server.js`);
+    ({ startServer } = await tryImport("server"));
+    console.log(`[start] Using custom server from ${example}/`);
   } catch {
     ({ startServer } = await import("./shared/server.js"));
   }
@@ -19,10 +27,8 @@ try {
   console.error(`[start] Failed to load example "${example}": ${err.message}`);
   console.error(`[start] Available examples:`);
 
-  import("fs").then(fs => {
-    const dirs = fs.readdirSync(new URL("./examples", import.meta.url));
-    dirs.forEach(d => console.error(`  - ${d}`));
-  });
+  const dirs = fs.readdirSync(new URL("./examples", import.meta.url));
+  dirs.forEach(d => console.error(`  - ${d}`));
   process.exit(1);
 }
 

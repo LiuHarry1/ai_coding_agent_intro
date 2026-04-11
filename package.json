@@ -5,9 +5,11 @@
   "type": "module",
   "main": "start.js",
   "scripts": {
-    "start": "node start.js",
+    "start": "tsx start.js",
+    "start:js": "node start.js",
     "server:stop": "node ./shared/kill-port.cjs 4567",
-    "server:restart": "npm run server:stop && npm run start"
+    "server:restart": "npm run server:stop && npm run start",
+    "typecheck": "tsc --noEmit -p examples/05-basic/tsconfig.json"
   },
   "keywords": [],
   "author": "",
@@ -23,5 +25,10 @@
     "ora": "^9.3.0",
     "react": "^19.2.4",
     "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
   }
 }
