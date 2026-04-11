@@ -634,12 +634,12 @@ async function sendMessage() {
                 ? resultStr.slice(0, 2000) + `\n... (${resultStr.length} chars total)`
                 : resultStr;
 
-              const statusEl = currentToolEl.querySelector(".tool-status");
+              const statusEl = currentToolEl.querySelector(":scope > .tool-header > .tool-status");
               statusEl.innerHTML = isError
                 ? `<span class="tool-error-badge">&#10007;</span>`
                 : `<span class="check">&#10003;</span>`;
 
-              const resultSlot = currentToolEl.querySelector(".tool-result-slot");
+              const resultSlot = currentToolEl.querySelector(":scope > .tool-body > .tool-result-slot");
               resultSlot.innerHTML = `
                 <details${isError ? " open" : ""} class="${isError ? "result-error" : ""}">
                   <summary>Result (${resultStr.length} chars)</summary>
