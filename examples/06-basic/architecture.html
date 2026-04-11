@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05-basic Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface2: #1a2234;
+  --border: #2a3548;
+  --accent: #3b82f6;
+  --accent2: #8b5cf6;
+  --green: #10b981;
+  --orange: #f59e0b;
+  --red: #ef4444;
+  --pink: #ec4899;
+  --cyan: #06b6d4;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #64748b;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+code {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.9em;
+  background: var(--surface2);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.canvas {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 32px 64px;
+}
+
+.title-block {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.title-block h1 {
+  font-family: 'Space Mono', monospace;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+
+.title-block p {
+  color: var(--text3);
+  font-size: 14px;
+  font-family: 'Space Mono', monospace;
+}
+
+.layer {
+  margin-bottom: 24px;
+}
+
+.layer-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+
+.layer-content {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s;
+  cursor: default;
+}
+
+.box:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.box::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+
+.box.blue::before   { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.box.green::before  { background: linear-gradient(90deg, var(--green), #34d399); }
+.box.orange::before { background: linear-gradient(90deg, var(--orange), #fbbf24); }
+.box.purple::before { background: linear-gradient(90deg, var(--accent2), var(--pink)); }
+.box.cyan::before   { background: linear-gradient(90deg, var(--cyan), var(--accent)); }
+.box.red::before    { background: linear-gradient(90deg, var(--red), var(--orange)); }
+
+.box-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.box-title .icon {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.box.blue .box-title .icon   { background: rgba(59,130,246,0.15); color: var(--accent); }
+.box.green .box-title .icon  { background: rgba(16,185,129,0.15); color: var(--green); }
+.box.orange .box-title .icon { background: rgba(245,158,11,0.15); color: var(--orange); }
+.box.purple .box-title .icon { background: rgba(139,92,246,0.15); color: var(--accent2); }
+.box.cyan .box-title .icon   { background: rgba(6,182,212,0.15); color: var(--cyan); }
+.box.red .box-title .icon    { background: rgba(239,68,68,0.15); color: var(--red); }
+
+.box-file {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  margin-bottom: 10px;
+}
+
+.box-desc {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.65;
+}
+
+.box-exports {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.export-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--text2);
+}
+
+.box.full    { flex: 1; min-width: 280px; }
+.box.half    { flex: 1; min-width: 200px; }
+.box.third   { flex: 1; min-width: 160px; }
+.box.quarter { flex: 1; min-width: 140px; }
+
+.flow-section {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.flow-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--text3);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  gap: 4px;
+}
+
+.flow-arrow .arrow {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  position: relative;
+}
+
+.flow-arrow .arrow::after {
+  content: '\25BC';
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: var(--text3);
+}
+
+.flow-label {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 10px;
+  font-family: 'Space Mono', monospace;
+  color: var(--text2);
+}
+
+/* Request Flow */
+.request-flow {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 40px;
+}
+
+.request-flow h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  margin-bottom: 20px;
+  color: var(--accent);
+}
+
+.flow-steps {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.step-box {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 130px;
+  text-align: center;
+}
+
+.step-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.step-name {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.step-detail {
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.5;
+}
+
+.step-arrow {
+  color: var(--text3);
+  font-size: 18px;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+/* Subagent flow */
+.subagent-flow {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 16px;
+}
+
+.subagent-flow h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  margin-bottom: 20px;
+  color: var(--red);
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 32px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.legend-color {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.scaffold-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  background: rgba(245,158,11,0.1);
+  color: var(--orange);
+  border: 1px solid rgba(245,158,11,0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 6px;
+}
+
+/* Dependency map */
+.dep-section {
+  margin-top: 40px;
+}
+
+.dep-section h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  margin-bottom: 16px;
+  color: var(--accent2);
+}
+
+.dep-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dep-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.dep-card-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.dep-list {
+  list-style: none;
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.8;
+}
+
+.dep-list .imports { color: var(--cyan); }
+.dep-list .uses    { color: var(--green); }
+
+@media (max-width: 768px) {
+  .canvas { padding: 24px 16px; }
+  .layer-content { flex-direction: column; }
+  .box { min-width: 0 !important; }
+  .flow-steps { flex-direction: column; align-items: center; }
+  .step-arrow { transform: rotate(90deg); padding: 4px 0; }
+  .dep-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <div class="title-block">
+    <h1>05-basic Architecture</h1>
+    <p>examples/05-basic/ — Modular Coding Agent Framework (TypeScript)</p>
+  </div>
+
+  <!-- ── Entry Point ── -->
+  <div class="layer">
+    <div class="layer-label">Entry Point</div>
+    <div class="layer-content">
+      <div class="box cyan full">
+        <div class="box-title"><span class="icon">▶</span> start.js + tsx</div>
+        <div class="box-file">/ (repo root) — run via <code>tsx start.js</code></div>
+        <div class="box-desc">
+          Auto-detects <code>.ts</code> / <code>.js</code> barrel files via <code>tryImport()</code>.<br>
+          Resolves <strong>runAgent</strong>, <strong>createTools</strong>, <strong>systemPrompt</strong>, <strong>startServer</strong> and boots HTTP server.
+        </div>
+        <div class="box-exports">
+          <span class="export-tag">→ agent.ts</span>
+          <span class="export-tag">→ tools.ts</span>
+          <span class="export-tag">→ prompts.ts</span>
+          <span class="export-tag">→ server.ts</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <div class="flow-arrow"><div class="arrow"></div></div>
+  </div>
+
+  <!-- ── Server Layer ── -->
+  <div class="layer">
+    <div class="layer-label">Server Layer — server/</div>
+    <div class="layer-content">
+      <div class="box blue half">
+        <div class="box-title"><span class="icon">⚡</span> index.ts</div>
+        <div class="box-file">server/index.ts</div>
+        <div class="box-desc">HTTP server. Serves React UI from <code>client2/web/dist/</code>. Wires router.</div>
+        <div class="box-exports"><span class="export-tag">startServer()</span></div>
+      </div>
+      <div class="box blue half">
+        <div class="box-title"><span class="icon">🔀</span> router.ts</div>
+        <div class="box-file">server/router.ts</div>
+        <div class="box-desc"><strong>Composition root.</strong> Handles /chat (SSE), /sessions, /workspace. Creates EventBus, Middleware, tools per request. Registers explore subagent.</div>
+        <div class="box-exports"><span class="export-tag">createRouter()</span></div>
+      </div>
+      <div class="box blue quarter">
+        <div class="box-title"><span class="icon">📡</span> sse-transport.ts</div>
+        <div class="box-file">server/sse-transport.ts</div>
+        <div class="box-desc">Subscribes to EventBus events, writes SSE stream to client.</div>
+        <div class="box-exports"><span class="export-tag">createSSETransport()</span></div>
+      </div>
+      <div class="box blue quarter">
+        <div class="box-title"><span class="icon">💾</span> session.ts</div>
+        <div class="box-file">server/session.ts</div>
+        <div class="box-desc">In-memory sessions + JSONL file persistence.</div>
+        <div class="box-exports">
+          <span class="export-tag">createSession()</span>
+          <span class="export-tag">getSession()</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <div class="flow-arrow">
+      <span class="flow-label">EventBus + Middleware</span>
+      <div class="arrow"></div>
+    </div>
+  </div>
+
+  <!-- ── Core Layer ── -->
+  <div class="layer">
+    <div class="layer-label">Core Layer — core/</div>
+    <div class="layer-content">
+      <div class="box purple half">
+        <div class="box-title"><span class="icon">🧠</span> agent.ts</div>
+        <div class="box-file">core/agent.ts</div>
+        <div class="box-desc">Main ReAct loop: streamText → tool calls → results → repeat. Emits lifecycle events on EventBus. Calls context compaction between steps.</div>
+        <div class="box-exports"><span class="export-tag">runAgent()</span></div>
+      </div>
+      <div class="box purple quarter">
+        <div class="box-title"><span class="icon">📢</span> event-bus.ts</div>
+        <div class="box-file">core/event-bus.ts</div>
+        <div class="box-desc">Typed pub/sub. <code>scoped(prefix)</code> creates isolated bus for subagents.</div>
+        <div class="box-exports"><span class="export-tag">EventBus</span></div>
+      </div>
+      <div class="box purple quarter">
+        <div class="box-title"><span class="icon">🔗</span> middleware.ts</div>
+        <div class="box-file">core/middleware.ts</div>
+        <div class="box-desc">beforeTool / afterTool / onError hooks. Wraps tool execute functions.</div>
+        <div class="box-exports">
+          <span class="export-tag">Middleware</span>
+          <span class="export-tag">createTimingMiddleware()</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer-content" style="margin-top: 12px;">
+      <div class="box purple third">
+        <div class="box-title"><span class="icon">🏷</span> types.ts</div>
+        <div class="box-file">core/types.ts</div>
+        <div class="box-desc">Central type definitions: IEventBus, IMiddleware, IToolRegistry, AgentOptions, Message, Plugin, Session, etc. Shared across all modules.</div>
+        <div class="box-exports">
+          <span class="export-tag">AnyTool</span>
+          <span class="export-tag">interfaces</span>
+        </div>
+      </div>
+      <div class="box purple third">
+        <div class="box-title"><span class="icon">📋</span> tool-registry.ts</div>
+        <div class="box-file">core/tool-registry.ts</div>
+        <div class="box-desc">Central catalog of tool definitions. <code>createAll()</code> builds AI SDK tool instances with optional middleware wrapping.</div>
+        <div class="box-exports">
+          <span class="export-tag">ToolRegistry</span>
+          <span class="export-tag">defaultRegistry</span>
+        </div>
+      </div>
+      <div class="box purple third">
+        <div class="box-title"><span class="icon">🤖</span> provider-manager.ts</div>
+        <div class="box-file">core/provider-manager.ts</div>
+        <div class="box-desc">Multi-provider registry. Default: copilot-proxy → shared/provider.js → localhost:4141</div>
+        <div class="box-exports">
+          <span class="export-tag">ProviderManager</span>
+          <span class="export-tag">defaultManager</span>
+        </div>
+      </div>
+      <div class="box purple third">
+        <div class="box-title"><span class="icon">📦</span> context.ts</div>
+        <div class="box-file">core/context.ts</div>
+        <div class="box-desc">Message compaction. Summarizes old messages when exceeding threshold via gpt-4o-mini.</div>
+        <div class="box-exports"><span class="export-tag">summarizeIfNeeded()</span></div>
+      </div>
+    </div>
+    <div class="layer-content" style="margin-top: 12px;">
+      <div class="box orange third" style="opacity: 0.6;">
+        <div class="box-title"><span class="icon">🔌</span> plugin-manager.ts <span class="scaffold-tag">scaffolding</span></div>
+        <div class="box-file">core/plugin-manager.ts</div>
+        <div class="box-desc">Plugin lifecycle (init/destroy). Registers tools, events, middleware from plugin bundles. Not yet wired into runtime.</div>
+        <div class="box-exports"><span class="export-tag">PluginManager</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-section">
+    <div class="flow-arrow">
+      <span class="flow-label">ToolRegistry.createAll()</span>
+      <div class="arrow"></div>
+    </div>
+  </div>
+
+  <!-- ── Tools Layer ── -->
+  <div class="layer">
+    <div class="layer-label">Tools Layer — tools/</div>
+    <div class="layer-content">
+      <div class="box green quarter">
+        <div class="box-title"><span class="icon">⌨</span> bash</div>
+        <div class="box-file">tools/bash.ts</div>
+        <div class="box-desc">Shell command execution via child_process.spawn. Timeout & output truncation.</div>
+      </div>
+      <div class="box green quarter">
+        <div class="box-title"><span class="icon">📖</span> read_file</div>
+        <div class="box-file">tools/read_file.ts</div>
+        <div class="box-desc">Read files with line numbers, offset/limit support.</div>
+      </div>
+      <div class="box green quarter">
+        <div class="box-title"><span class="icon">✏</span> write_file</div>
+        <div class="box-file">tools/write_file.ts</div>
+        <div class="box-desc">Create new files or full file overwrites.</div>
+      </div>
+      <div class="box green quarter">
+        <div class="box-title"><span class="icon">🔧</span> edit_file</div>
+        <div class="box-file">tools/edit_file.ts</div>
+        <div class="box-desc">Search/replace edits with fuzzy line matching.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Subagents Layer ── -->
+  <div class="layer" style="margin-top: 24px;">
+    <div class="layer-label">Subagents — subagents/</div>
+    <div class="layer-content">
+      <div class="box red half">
+        <div class="box-title"><span class="icon">🏭</span> base.ts</div>
+        <div class="box-file">subagents/base.ts</div>
+        <div class="box-desc">Factory: <code>createSubagentDefinition(config)</code>. Scoped EventBus, subset of registry tools, isolated message history, calls runAgent recursively.</div>
+        <div class="box-exports"><span class="export-tag">createSubagentDefinition()</span></div>
+      </div>
+      <div class="box red half">
+        <div class="box-title"><span class="icon">🔍</span> explore</div>
+        <div class="box-file">subagents/explore.ts</div>
+        <div class="box-desc">Read-only exploration subagent. Tools: read_file + bash only. Fixed system prompt for codebase analysis. Registered in router.ts at boot.</div>
+        <div class="box-exports"><span class="export-tag">definition</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Prompts Layer ── -->
+  <div class="layer" style="margin-top: 24px;">
+    <div class="layer-label">Prompts — prompts/</div>
+    <div class="layer-content">
+      <div class="box orange full">
+        <div class="box-title"><span class="icon">📝</span> system.ts</div>
+        <div class="box-file">prompts/system.ts</div>
+        <div class="box-desc">
+          Dynamic system prompt. Reads tool list from defaultRegistry at call time.<br>
+          Task-complexity-based guidance: <strong>Simple</strong> → just do it, <strong>Medium</strong> → read then edit,
+          <strong>Complex</strong> → explore → plan → implement → verify, <strong>Empty dir</strong> → build immediately.
+        </div>
+        <div class="box-exports"><span class="export-tag">systemPrompt(cwd)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Request Flow ── -->
+  <div class="request-flow">
+    <h3>▸ Request Flow — POST /chat</h3>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">01</div>
+          <div class="step-name">Client</div>
+          <div class="step-detail">POST /chat<br>{ message, cwd }</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">02</div>
+          <div class="step-name">Router</div>
+          <div class="step-detail">Create EventBus<br>+ Middleware<br>+ SSE transport</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">03</div>
+          <div class="step-name">Registry</div>
+          <div class="step-detail">createAll(cwd)<br>Build tool instances<br>Apply middleware</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">04</div>
+          <div class="step-name">Agent Loop</div>
+          <div class="step-detail">streamText → LLM<br>Tool calls → execute<br>Compaction check</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">05</div>
+          <div class="step-name">EventBus</div>
+          <div class="step-detail">Emit events:<br>thinking, text_delta<br>tool_call, done</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">06</div>
+          <div class="step-name">SSE → Client</div>
+          <div class="step-detail">Real-time events<br>stream to React UI</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Subagent Flow ── -->
+  <div class="subagent-flow">
+    <h3>▸ Subagent Flow — explore tool</h3>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">01</div>
+          <div class="step-name">Parent Agent</div>
+          <div class="step-detail">Calls explore<br>tool with { task }</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">02</div>
+          <div class="step-name">Scoped Bus</div>
+          <div class="step-detail">eventBus.scoped<br>('subagent_explore')<br>Prefix isolation</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">03</div>
+          <div class="step-name">Sub-Tools</div>
+          <div class="step-detail">registry.createAll<br>Only: read_file, bash<br>No middleware</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">04</div>
+          <div class="step-name">runAgent</div>
+          <div class="step-detail">Recursive call<br>Isolated messages<br>Own system prompt</div>
+        </div>
+        <span class="step-arrow">→</span>
+      </div>
+      <div class="flow-step">
+        <div class="step-box">
+          <div class="step-num">05</div>
+          <div class="step-name">Return</div>
+          <div class="step-detail">Final text result<br>back to parent</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Dependency Map ── -->
+  <div class="dep-section">
+    <h3>▸ Key Dependencies</h3>
+    <div class="dep-grid">
+      <div class="dep-card">
+        <div class="dep-card-title">router.ts (Composition Root)</div>
+        <ul class="dep-list">
+          <li><span class="imports">imports</span> EventBus, Middleware from core/</li>
+          <li><span class="imports">imports</span> defaultRegistry from tools/</li>
+          <li><span class="imports">imports</span> explore def from subagents/</li>
+          <li><span class="imports">imports</span> session, sse-transport from server/</li>
+          <li><span class="uses">creates</span> per-request context & wires everything</li>
+        </ul>
+      </div>
+      <div class="dep-card">
+        <div class="dep-card-title">agent.ts (Core Loop)</div>
+        <ul class="dep-list">
+          <li><span class="imports">imports</span> streamText from AI SDK (ai)</li>
+          <li><span class="imports">imports</span> defaultManager from provider-manager</li>
+          <li><span class="imports">imports</span> summarizeIfNeeded from context</li>
+          <li><span class="uses">receives</span> tools, eventBus, messages via args</li>
+        </ul>
+      </div>
+      <div class="dep-card">
+        <div class="dep-card-title">system.ts (Prompts)</div>
+        <ul class="dep-list">
+          <li><span class="imports">imports</span> defaultRegistry from tools/</li>
+          <li><span class="uses">reads</span> registry.list() for dynamic tool list</li>
+          <li><span class="uses">generates</span> task-complexity-based guidance</li>
+        </ul>
+      </div>
+      <div class="dep-card">
+        <div class="dep-card-title">External</div>
+        <ul class="dep-list">
+          <li><span class="imports">ai</span> — Vercel AI SDK (streamText, generateText, tool)</li>
+          <li><span class="imports">zod</span> — Schema validation for tool params</li>
+          <li><span class="imports">typescript</span> — Static type checking (<code>tsc --noEmit</code>)</li>
+          <li><span class="imports">tsx</span> — TypeScript executor for Node.js</li>
+          <li><span class="imports">shared/provider.js</span> — OpenAI-compatible client</li>
+          <li><span class="uses">LLM</span> via copilot-proxy @ localhost:4141</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Legend ── -->
+  <div class="legend">
+    <div class="legend-item"><span class="legend-color" style="background: linear-gradient(90deg, var(--cyan), var(--accent))"></span> Entry</div>
+    <div class="legend-item"><span class="legend-color" style="background: linear-gradient(90deg, var(--accent), var(--accent2))"></span> Server</div>
+    <div class="legend-item"><span class="legend-color" style="background: linear-gradient(90deg, var(--accent2), var(--pink))"></span> Core</div>
+    <div class="legend-item"><span class="legend-color" style="background: linear-gradient(90deg, var(--green), #34d399)"></span> Tools</div>
+    <div class="legend-item"><span class="legend-color" style="background: linear-gradient(90deg, var(--red), var(--orange))"></span> Subagents</div>
+    <div class="legend-item"><span class="legend-color" style="background: linear-gradient(90deg, var(--orange), #fbbf24)"></span> Prompts</div>
+    <div class="legend-item"><span class="scaffold-tag" style="margin-left: 0">scaffolding</span> Not yet wired</div>
+  </div>
+
+</div>
+</body>
+</html>
