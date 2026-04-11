@@ -20,12 +20,16 @@ export class EventBus implements IEventBus {
 
   scoped(prefix: string): IEventBus {
     const parent = this as IEventBus;
+    const trackedUnsubs: Array<() => void> = [];
+
     return {
       emit(event: string, data?: unknown) {
         parent.emit(`${prefix}_${event}`, data);
       },
       on(event: string, handler: EventHandler) {
-        return parent.on(`${prefix}_${event}`, handler);
+        const unsub = parent.on(`${prefix}_${event}`, handler);
+        trackedUnsubs.push(unsub);
+        return unsub;
       },
       off(event: string, handler: EventHandler) {
         parent.off(`${prefix}_${event}`, handler);
@@ -34,7 +38,8 @@ export class EventBus implements IEventBus {
         return (parent as EventBus).scoped(`${prefix}_${childPrefix}`);
       },
       removeAllListeners() {
-        (parent as EventBus).removeAllListeners();
+        for (const unsub of trackedUnsubs) unsub();
+        trackedUnsubs.length = 0;
       },
     };
   }

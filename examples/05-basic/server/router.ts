@@ -7,9 +7,22 @@ import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
 import { definition as exploreDef } from "../subagents/explore.js";
-import type { RouterOptions, Message } from "../core/types.js";
+import type { RouterOptions, Message, RunAgentFn } from "../core/types.js";
 
 defaultRegistry.register(exploreDef);
+
+const MIME_TYPES: Record<string, string> = {
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".jsx": "application/javascript",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+};
 
 function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -28,177 +41,156 @@ function sendJSON(res: ServerResponse, status: number, data: unknown): void {
   res.end(JSON.stringify(data));
 }
 
+function setCORS(res: ServerResponse): void {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+function handleWorkspaceList(req: IncomingMessage, res: ServerResponse): void {
+  const params = new URL(req.url!, `http://${req.headers.host}`).searchParams;
+  let dir = params.get("dir") || process.cwd();
+  dir = dir.replace(/^~/, process.env.HOME || "/");
+  dir = path.resolve(dir);
+
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    sendJSON(res, 200, { dir, parent: path.dirname(dir), entries: [] });
+    return;
+  }
+
+  try {
+    const raw = fs.readdirSync(dir, { withFileTypes: true });
+    const entries = raw
+      .filter((d: fs.Dirent) => !d.name.startsWith("."))
+      .map((d: fs.Dirent) => ({ name: d.name, isDir: d.isDirectory(), path: path.join(dir, d.name) }))
+      .sort((a: { isDir: boolean; name: string }, b: { isDir: boolean; name: string }) =>
+        a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name)
+      );
+    sendJSON(res, 200, { dir, parent: path.dirname(dir), entries });
+  } catch {
+    sendJSON(res, 200, { dir, parent: path.dirname(dir), entries: [] });
+  }
+}
+
+function serveStaticFile(req: IncomingMessage, res: ServerResponse, staticDir: string): boolean {
+  const urlPath = req.url === "/" ? "/index.html" : (req.url?.split("?")[0] ?? "/index.html");
+  const filePath = path.join(staticDir, urlPath);
+
+  if (req.method !== "GET" || !filePath.startsWith(staticDir) || !fs.existsSync(filePath)) {
+    return false;
+  }
+
+  const ext = path.extname(filePath);
+  res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+}
+
+async function handleChat(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runAgent: RunAgentFn,
+  systemPrompt: (cwd: string) => string
+): Promise<void> {
+  let body: Record<string, unknown>;
+  try {
+    body = await readBody(req);
+  } catch {
+    sendJSON(res, 400, { error: "Invalid JSON" });
+    return;
+  }
+
+  const { message, workspace, session_id } = body as {
+    message?: string;
+    workspace?: string;
+    session_id?: string;
+  };
+  if (!message) {
+    sendJSON(res, 400, { error: "Missing 'message' field" });
+    return;
+  }
+
+  const cwd = workspace && fs.existsSync(workspace)
+    ? path.resolve(workspace)
+    : process.cwd();
+
+  let session;
+  if (session_id) {
+    session = getSession(session_id);
+    if (!session) {
+      sendJSON(res, 404, { error: `Session not found: ${session_id}` });
+      return;
+    }
+  } else {
+    session = createSession();
+  }
+
+  console.log(`[server] chat [session:${session.id.slice(0, 8)}] [${session.messages.length} prior msgs] ${message.slice(0, 80)}`);
+
+  const eventBus = new EventBus();
+  const middleware = new Middleware();
+  middleware.use("afterTool", createTimingMiddleware(eventBus).afterTool);
+
+  const transport = createSSETransport(res, eventBus, { "X-Session-Id": session.id });
+  transport.send("session", { session_id: session.id });
+
+  req.on("close", () => {
+    console.log("[server] client disconnected");
+    eventBus.removeAllListeners();
+  });
+
+  const tools = defaultRegistry.createAll(cwd, {
+    eventBus,
+    middleware,
+    runAgent,
+    registry: defaultRegistry,
+  });
+
+  const messagesBefore = session.messages.length;
+
+  await runAgent(message, {
+    tools,
+    systemPrompt: systemPrompt(cwd),
+    eventBus,
+    messages: session.messages,
+  });
+
+  for (const msg of session.messages.slice(messagesBefore)) {
+    appendMessage(session.id, msg as Message);
+  }
+
+  transport.end();
+}
+
 export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOptions) {
   return async (req: IncomingMessage, res: ServerResponse) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    setCORS(res);
 
-    if (req.method === "OPTIONS") {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
+    const { method, url } = req;
 
-    if (req.method === "GET" && req.url === "/health") {
-      sendJSON(res, 200, { status: "ok" });
-      return;
-    }
+    if (method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
-    if (req.method === "GET" && req.url === "/workspace") {
-      sendJSON(res, 200, { workspace: process.cwd() });
-      return;
-    }
+    if (method === "GET" && url === "/health") { sendJSON(res, 200, { status: "ok" }); return; }
+    if (method === "GET" && url === "/workspace") { sendJSON(res, 200, { workspace: process.cwd() }); return; }
 
-    // ── Session APIs ──────────────────────────────
-    if (req.method === "POST" && req.url === "/sessions") {
+    if (method === "POST" && url === "/sessions") {
       const session = createSession();
       console.log(`[server] new session: ${session.id}`);
       sendJSON(res, 200, { session_id: session.id });
       return;
     }
-
-    if (req.method === "GET" && req.url === "/sessions") {
-      sendJSON(res, 200, { sessions: listSessions() });
-      return;
-    }
-
-    if (req.method === "DELETE" && req.url?.startsWith("/sessions/")) {
-      const id = req.url.split("/sessions/")[1];
+    if (method === "GET" && url === "/sessions") { sendJSON(res, 200, { sessions: listSessions() }); return; }
+    if (method === "DELETE" && url?.startsWith("/sessions/")) {
+      const id = url.split("/sessions/")[1];
       deleteSession(id);
       sendJSON(res, 200, { deleted: id });
       return;
     }
 
-    // ── Chat (SSE) ────────────────────────────────
-    if (req.method === "POST" && req.url === "/chat") {
-      let body: Record<string, unknown>;
-      try {
-        body = await readBody(req);
-      } catch {
-        sendJSON(res, 400, { error: "Invalid JSON" });
-        return;
-      }
+    if (method === "POST" && url === "/chat") { await handleChat(req, res, runAgent, systemPrompt); return; }
+    if (method === "GET" && url?.startsWith("/workspace/list")) { handleWorkspaceList(req, res); return; }
 
-      const { message, workspace, session_id } = body as {
-        message?: string;
-        workspace?: string;
-        session_id?: string;
-      };
-      if (!message) {
-        sendJSON(res, 400, { error: "Missing 'message' field" });
-        return;
-      }
-
-      const cwd = workspace && fs.existsSync(workspace)
-        ? path.resolve(workspace)
-        : process.cwd();
-      const prompt = systemPrompt(cwd);
-
-      let session;
-      if (session_id) {
-        session = getSession(session_id);
-        if (!session) {
-          sendJSON(res, 404, { error: `Session not found: ${session_id}` });
-          return;
-        }
-      } else {
-        session = createSession();
-      }
-
-      console.log(`[server] chat [session:${session.id.slice(0, 8)}] [${session.messages.length} prior msgs] ${message.slice(0, 80)}`);
-
-      const eventBus = new EventBus();
-      const middleware = new Middleware();
-      const timing = createTimingMiddleware(eventBus);
-      middleware.use("afterTool", timing.afterTool);
-
-      const transport = createSSETransport(res, eventBus, { "X-Session-Id": session.id });
-      transport.send("session", { session_id: session.id });
-
-      req.on("close", () => {
-        console.log("[server] client disconnected");
-        eventBus.removeAllListeners();
-      });
-
-      const tools = defaultRegistry.createAll(cwd, {
-        eventBus,
-        middleware,
-        runAgent,
-        registry: defaultRegistry,
-      });
-
-      const messagesBefore = session.messages.length;
-
-      await runAgent(message, {
-        tools,
-        systemPrompt: prompt,
-        eventBus,
-        messages: session.messages,
-      });
-
-      const newMessages = session.messages.slice(messagesBefore);
-      for (const msg of newMessages) {
-        appendMessage(session.id, msg as Message);
-      }
-
-      transport.end();
-      return;
-    }
-
-    // ── Workspace browser ─────────────────────────
-    if (req.method === "GET" && req.url?.startsWith("/workspace/list")) {
-      const params = new URL(req.url, `http://${req.headers.host}`).searchParams;
-      let dir = params.get("dir") || process.cwd();
-      dir = dir.replace(/^~/, process.env.HOME || "/");
-      dir = path.resolve(dir);
-
-      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-        sendJSON(res, 200, { dir, parent: path.dirname(dir), entries: [] });
-        return;
-      }
-
-      try {
-        const raw = fs.readdirSync(dir, { withFileTypes: true });
-        const entries = raw
-          .filter((d: fs.Dirent) => !d.name.startsWith("."))
-          .map((d: fs.Dirent) => ({ name: d.name, isDir: d.isDirectory(), path: path.join(dir, d.name) }))
-          .sort((a: { isDir: boolean; name: string }, b: { isDir: boolean; name: string }) =>
-            a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name)
-          );
-        sendJSON(res, 200, { dir, parent: path.dirname(dir), entries });
-      } catch {
-        sendJSON(res, 200, { dir, parent: path.dirname(dir), entries: [] });
-      }
-      return;
-    }
-
-    // ── Static files ──────────────────────────────
-    if (staticDir) {
-      const MIME_TYPES: Record<string, string> = {
-        ".html": "text/html",
-        ".css": "text/css",
-        ".js": "application/javascript",
-        ".jsx": "application/javascript",
-        ".json": "application/json",
-        ".png": "image/png",
-        ".svg": "image/svg+xml",
-        ".ico": "image/x-icon",
-        ".woff2": "font/woff2",
-        ".woff": "font/woff",
-      };
-
-      const urlPath = req.url === "/" ? "/index.html" : (req.url?.split("?")[0] ?? "/index.html");
-      const filePath = path.join(staticDir, urlPath);
-
-      if (req.method === "GET" && filePath.startsWith(staticDir) && fs.existsSync(filePath)) {
-        const ext = path.extname(filePath);
-        const mime = MIME_TYPES[ext] || "application/octet-stream";
-        res.writeHead(200, { "Content-Type": mime });
-        fs.createReadStream(filePath).pipe(res);
-        return;
-      }
-    }
+    if (staticDir && serveStaticFile(req, res, staticDir)) return;
 
     sendJSON(res, 404, { error: "Not found" });
   };

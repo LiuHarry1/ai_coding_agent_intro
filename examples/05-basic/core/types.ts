@@ -161,7 +161,6 @@ export interface SessionInfo {
 
 export interface ServerOptions {
   runAgent: RunAgentFn;
-  createTools: (cwd: string, context: ToolContext) => Record<string, unknown>;
   systemPrompt: (cwd: string) => string;
 }
 

@@ -1,17 +1,7 @@
-import { defaultRegistry } from "../tools/index.js";
-
 export function systemPrompt(cwd: string): string {
-  const toolList = defaultRegistry
-    .list()
-    .map((t) => `- ${t.name}: ${t.description}`)
-    .join("\n");
-
   return `You are an autonomous coding agent. You solve tasks by writing and running code.
 
 Working directory: ${cwd}
-
-# Tools
-${toolList}
 
 # How to approach tasks
 
@@ -38,6 +28,9 @@ Before jumping into code, assess the task complexity:
 # Tool selection
 
 - bash: shell commands — ls, grep, find, npm, git, running scripts. Combine with && to minimize calls.
+  - Long-running commands (npm install, builds, dev servers) auto-background after 10s.
+  - Set block_until_ms: 0 for commands you know will take a while (installs, dev servers).
+  - Check on a backgrounded process: bash({ pid: <pid> }). Kill it: bash({ pid: <pid>, kill: true }).
 - read_file: read a specific file you know the path to. Always read before editing.
 - edit_file: surgical changes to existing files. Provide enough surrounding context in old_string to be unique.
 - write_file: create new files or full rewrites. Do NOT use for small edits — use edit_file instead.

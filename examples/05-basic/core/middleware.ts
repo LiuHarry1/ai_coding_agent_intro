@@ -49,6 +49,7 @@ export class Middleware implements IMiddleware {
 export function createTimingMiddleware(eventBus: IEventBus) {
   return {
     afterTool(ctx: MiddlewareContext): void {
+      console.log("tool_timing", ctx.name, ctx.duration);
       eventBus.emit("tool_timing", { name: ctx.name, duration: ctx.duration });
     },
   };

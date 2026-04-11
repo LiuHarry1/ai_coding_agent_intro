@@ -4,6 +4,7 @@ import type { IEventBus, Message } from "./types.js";
 
 const SUMMARIZE_THRESHOLD = parseInt(process.env.COMPACT_THRESHOLD || "40", 10);
 const KEEP_RECENT = parseInt(process.env.COMPACT_KEEP || "10", 10);
+const COMPACT_MODEL = process.env.COMPACT_MODEL || "gpt-4o-mini";
 
 const SUMMARY_SYSTEM = `You are compacting an AI coding agent's conversation to save context space.
 Analyze the conversation and produce a structured working-state summary.
@@ -46,9 +47,7 @@ export async function summarizeIfNeeded(
   const toSummarize = messages.slice(0, splitPoint);
   const toKeep = messages.slice(splitPoint);
 
-  console.log(`\n${"═".repeat(60)}`);
   console.log(`[compaction] ${messages.length} msgs → summarizing ${toSummarize.length}, keeping ${toKeep.length}`);
-  console.log(`${"─".repeat(60)}`);
 
   eventBus.emit("compaction_start", {
     totalMessages: messages.length,
@@ -62,7 +61,7 @@ export async function summarizeIfNeeded(
   try {
     const provider = defaultManager.get();
     const result = await generateText({
-      model: provider.chatModel("gpt-4o-mini"),
+      model: provider.chatModel(COMPACT_MODEL),
       system: SUMMARY_SYSTEM,
       messages: [
         {
@@ -81,8 +80,7 @@ export async function summarizeIfNeeded(
     return messages;
   }
 
-  console.log(`[compaction] Summary: ${summary.length} chars`);
-  console.log(`${"═".repeat(60)}\n`);
+  console.log(`[compaction] done — ${summary.length} chars`);
 
   eventBus.emit("compaction_done", { summaryLength: summary.length, summary });
 
