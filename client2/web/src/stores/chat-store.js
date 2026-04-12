@@ -69,7 +69,11 @@ export const useChatStore = create((set, get) => ({
   /**
    * Send a message and process the SSE response stream.
    */
-  sendMessage: async (text) => {
+  /**
+   * @param {string} text
+   * @param {string[]} [images] - array of data URLs (data:image/png;base64,...)
+   */
+  sendMessage: async (text, images = []) => {
     if (!text.trim() || get().isStreaming) return;
 
     const abortController = new AbortController();
@@ -80,20 +84,23 @@ export const useChatStore = create((set, get) => ({
       currentStep: 0,
       messages: [
         ...s.messages,
-        { type: "user", content: text },
+        { type: "user", content: text, images: images.length > 0 ? images : undefined },
         { type: "assistant", parts: [], status: "streaming" },
       ],
     }));
+
+    const body = {
+      message: text,
+      workspace: get().workspace,
+      session_id: get().currentSessionId,
+    };
+    if (images.length > 0) body.images = images;
 
     try {
       const res = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          workspace: get().workspace,
-          session_id: get().currentSessionId,
-        }),
+        body: JSON.stringify(body),
         signal: abortController.signal,
       });
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import ToolCallCard from "./ToolCallCard.jsx";
@@ -42,8 +42,26 @@ function ErrorBlock({ message }) {
 }
 
 export default function MessageBubble({ message }) {
+  const [lightbox, setLightbox] = useState(null);
+
   if (message.type === "user") {
-    return <div className="msg msg-user">{message.content}</div>;
+    return (
+      <div className="msg msg-user">
+        {message.images && message.images.length > 0 && (
+          <div className="msg-user-images">
+            {message.images.map((src, i) => (
+              <img key={i} src={src} alt={`Attachment ${i + 1}`} className="msg-user-img" onClick={() => setLightbox(src)} />
+            ))}
+          </div>
+        )}
+        {message.content}
+        {lightbox && (
+          <div className="lightbox" onClick={() => setLightbox(null)}>
+            <img src={lightbox} alt="Preview" />
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (message.type !== "assistant") return null;

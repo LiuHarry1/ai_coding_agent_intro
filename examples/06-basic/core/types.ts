@@ -64,6 +64,12 @@ export interface TextPart {
   text: string;
 }
 
+export interface ImagePart {
+  type: "image";
+  image: string | Buffer | Uint8Array;
+  mediaType?: string;
+}
+
 export interface ToolCallPart {
   type: "tool-call";
   toolCallId: string;
@@ -71,11 +77,12 @@ export interface ToolCallPart {
   input: Record<string, unknown>;
 }
 
+export type UserContentPart = TextPart | ImagePart;
 export type AssistantContentPart = TextPart | ToolCallPart;
 
 export interface UserMessage {
   role: "user";
-  content: string;
+  content: string | UserContentPart[];
 }
 
 export interface AssistantMessage {
@@ -109,6 +116,7 @@ export interface AgentOptions {
   systemPrompt: string;
   eventBus: IEventBus;
   messages?: Message[];
+  images?: string[];
   maxSteps?: number;
   model?: string;
 }
@@ -184,4 +192,31 @@ export interface SubagentConfig {
   tools: string[];
   maxSteps?: number;
   label?: string;
+}
+
+// ── MCP ─────────────────────────────────────────
+
+export interface MCPServerStdio {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+export interface MCPServerHTTP {
+  url: string;
+  transport?: "http" | "sse";
+  headers?: Record<string, string>;
+}
+
+export type MCPServerConfig = MCPServerStdio | MCPServerHTTP;
+
+export interface MCPConfig {
+  mcpServers: Record<string, MCPServerConfig>;
+}
+
+export interface MCPServerStatus {
+  name: string;
+  status: "connected" | "error" | "disconnected";
+  tools: string[];
+  error?: string;
 }

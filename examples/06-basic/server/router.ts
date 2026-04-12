@@ -7,9 +7,12 @@ import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
 import { definition as exploreDef } from "../subagents/explore.js";
-import type { RouterOptions, Message, RunAgentFn } from "../core/types.js";
+import { MCPManager, resolveMCPConfigPath } from "../core/mcp-manager.js";
+import type { RouterOptions, Message, RunAgentFn, MCPServerConfig } from "../core/types.js";
 
 defaultRegistry.register(exploreDef);
+
+const mcpManager = new MCPManager();
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -24,10 +27,17 @@ const MIME_TYPES: Record<string, string> = {
   ".woff": "font/woff",
 };
 
+const MAX_BODY_SIZE = 20 * 1024 * 1024; // 20MB for base64 images
+
 function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
+    let size = 0;
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_BODY_SIZE) { req.destroy(); reject(new Error("Body too large")); return; }
+      chunks.push(c);
+    });
     req.on("end", () => {
       try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
       catch { reject(new Error("Invalid JSON")); }
@@ -100,10 +110,11 @@ async function handleChat(
     return;
   }
 
-  const { message, workspace, session_id } = body as {
+  const { message, workspace, session_id, images } = body as {
     message?: string;
     workspace?: string;
     session_id?: string;
+    images?: string[];
   };
   if (!message) {
     sendJSON(res, 400, { error: "Missing 'message' field" });
@@ -139,12 +150,14 @@ async function handleChat(
     eventBus.removeAllListeners();
   });
 
-  const tools = defaultRegistry.createAll(cwd, {
+  const localTools = defaultRegistry.createAll(cwd, {
     eventBus,
     middleware,
     runAgent,
     registry: defaultRegistry,
   });
+  const mcpTools = mcpManager.getAllTools();
+  const tools = { ...localTools, ...mcpTools };
 
   const messagesBefore = session.messages.length;
 
@@ -153,6 +166,7 @@ async function handleChat(
     systemPrompt: systemPrompt(cwd),
     eventBus,
     messages: session.messages,
+    images: images?.length ? images : undefined,
   });
 
   for (const msg of session.messages.slice(messagesBefore)) {
@@ -162,7 +176,41 @@ async function handleChat(
   transport.end();
 }
 
+async function handleMCPAdd(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let body: Record<string, unknown>;
+  try { body = await readBody(req); } catch { sendJSON(res, 400, { error: "Invalid JSON" }); return; }
+
+  const name = body.name as string;
+  const config = body.config as MCPServerConfig;
+  if (!name || !config) {
+    sendJSON(res, 400, { error: "Missing 'name' and/or 'config'" });
+    return;
+  }
+
+  await mcpManager.addServer(name, config);
+  sendJSON(res, 200, { status: mcpManager.getStatus() });
+}
+
+async function handleMCPRemove(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let body: Record<string, unknown>;
+  try { body = await readBody(req); } catch { sendJSON(res, 400, { error: "Invalid JSON" }); return; }
+
+  const name = body.name as string;
+  if (!name) { sendJSON(res, 400, { error: "Missing 'name'" }); return; }
+
+  await mcpManager.removeServer(name);
+  sendJSON(res, 200, { status: mcpManager.getStatus() });
+}
+
 export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOptions) {
+  // Load MCP config on startup (non-blocking)
+  const configPath = resolveMCPConfigPath(process.cwd());
+  mcpManager.loadConfig(configPath).catch((err) => {
+    console.error(`[mcp] Failed to load config: ${err.message}`);
+  });
+
+  process.on("exit", () => { mcpManager.closeAll().catch(() => {}); });
+
   return async (req: IncomingMessage, res: ServerResponse) => {
     setCORS(res);
 
@@ -184,6 +232,17 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       const id = url.split("/sessions/")[1];
       deleteSession(id);
       sendJSON(res, 200, { deleted: id });
+      return;
+    }
+
+    // ── MCP endpoints ──
+    if (method === "GET" && url === "/mcp") { sendJSON(res, 200, { servers: mcpManager.getStatus() }); return; }
+    if (method === "POST" && url === "/mcp/add") { await handleMCPAdd(req, res); return; }
+    if (method === "POST" && url === "/mcp/remove") { await handleMCPRemove(req, res); return; }
+    if (method === "POST" && url === "/mcp/reload") {
+      await mcpManager.closeAll();
+      await mcpManager.loadConfig(configPath);
+      sendJSON(res, 200, { servers: mcpManager.getStatus() });
       return;
     }
 

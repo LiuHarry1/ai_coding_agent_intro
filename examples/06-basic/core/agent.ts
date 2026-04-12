@@ -4,15 +4,35 @@ import { summarizeIfNeeded } from "./context.js";
 import type {
   AgentOptions,
   Message,
+  UserMessage,
+  UserContentPart,
   AssistantContentPart,
   ToolResultPart,
 } from "./types.js";
 
+function parseDataUrl(dataUrl: string): { buffer: Buffer; mediaType: string } {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error("Invalid data URL");
+  return { mediaType: match[1], buffer: Buffer.from(match[2], "base64") };
+}
+
+function buildUserMessage(text: string, images?: string[]): UserMessage {
+  if (!images || images.length === 0) {
+    return { role: "user", content: text };
+  }
+  const parts: UserContentPart[] = [{ type: "text", text }];
+  for (const dataUrl of images) {
+    const { buffer, mediaType } = parseDataUrl(dataUrl);
+    parts.push({ type: "image", image: buffer, mediaType });
+  }
+  return { role: "user", content: parts };
+}
+
 export async function runAgent(
   userMessage: string,
-  { tools, systemPrompt, eventBus, messages = [], maxSteps = 40, model = "gpt-5.2" }: AgentOptions
+  { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 40, model = "gpt-5.2" }: AgentOptions
 ): Promise<string> {
-  messages.push({ role: "user", content: userMessage });
+  messages.push(buildUserMessage(userMessage, images));
 
   let finalText = "";
   const provider = defaultManager.get();

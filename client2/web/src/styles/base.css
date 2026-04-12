@@ -1,0 +1,128 @@
+/* ── Reset ──────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ── Theme Variables (Dark) ───────────────── */
+:root, [data-theme="dark"] {
+  --bg-primary:    #0d1117;
+  --bg-secondary:  #161b22;
+  --bg-tertiary:   #1c2128;
+  --bg-input:      #0d1117;
+  --border:        #30363d;
+  --border-light:  #484f58;
+  --text-primary:  #e6edf3;
+  --text-secondary:#8b949e;
+  --text-muted:    #6e7681;
+  --accent:        #58a6ff;
+  --accent-dim:    #1f6feb;
+  --green:         #3fb950;
+  --green-dim:     rgba(63,185,80,0.15);
+  --orange:        #d29922;
+  --orange-dim:    rgba(210,153,34,0.15);
+  --red:           #f85149;
+  --purple:        #bc8cff;
+  --purple-dim:    rgba(188,140,255,0.1);
+  --diff-del-bg:   rgba(248,81,73,0.10);
+  --diff-del-text: var(--text-primary);
+  --diff-add-bg:   rgba(63,185,80,0.10);
+  --diff-add-text: var(--text-primary);
+  --radius:        8px;
+  --radius-lg:     12px;
+  --font-sans:     'Inter', -apple-system, sans-serif;
+  --font-mono:     'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --sidebar-width: 280px;
+}
+
+/* ── Theme Variables (Light) ──────────────── */
+[data-theme="light"] {
+  --bg-primary:    #ffffff;
+  --bg-secondary:  #f6f8fa;
+  --bg-tertiary:   #ebeef1;
+  --bg-input:      #ffffff;
+  --border:        #d1d9e0;
+  --border-light:  #b8c0c8;
+  --text-primary:  #1f2328;
+  --text-secondary:#59636e;
+  --text-muted:    #8b949e;
+  --accent:        #0969da;
+  --accent-dim:    #ddf4ff;
+  --green:         #1a7f37;
+  --green-dim:     rgba(26,127,55,0.1);
+  --orange:        #9a6700;
+  --orange-dim:    rgba(154,103,0,0.1);
+  --red:           #d1242f;
+  --purple:        #8250df;
+  --purple-dim:    rgba(130,80,223,0.1);
+  --diff-del-bg:   #ffebe9;
+  --diff-del-text: #82071e;
+  --diff-add-bg:   #dafbe1;
+  --diff-add-text: #116329;
+}
+
+/* ── Global ───────────────────────────────── */
+html, body {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+/* ── App Layout ───────────────────────────── */
+.app {
+  display: flex;
+  height: 100vh;
+  background: var(--bg-primary);
+}
+
+.main-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+}
+
+/* ── Shared keyframes ─────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Shared utilities ─────────────────────── */
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.spinner-sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+
+.hljs {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* ── Responsive ───────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 200;
+    box-shadow: 4px 0 16px rgba(0,0,0,0.3);
+  }
+  .workspace-bar { display: none; }
+  .hint-grid { grid-template-columns: 1fr; }
+  .msg-user { max-width: 90%; }
+}

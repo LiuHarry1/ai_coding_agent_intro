@@ -1,0 +1,230 @@
+/* ── Tool Call Cards ───────────────────────── */
+.tool-group {
+  margin: 6px 0;
+}
+
+.tool-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-secondary);
+  margin-bottom: 4px;
+}
+
+.tool-card--explore {
+  border-radius: 10px;
+  border-color: rgba(88,166,255,0.22);
+  background: linear-gradient(180deg, rgba(88,166,255,0.06) 0%, var(--bg-secondary) 48px);
+}
+
+.tool-card.has-error { border-color: rgba(248,81,73,0.3); }
+.tool-card.has-error .tool-name { color: var(--red); }
+
+.tool-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  transition: background 0.1s;
+}
+.tool-card-header:hover { background: var(--bg-tertiary); }
+
+.tool-card-header .chevron {
+  font-size: 9px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tool-card-header .tool-icon {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.tool-icon.read    { background: var(--green-dim); color: var(--green); }
+.tool-icon.write   { background: var(--orange-dim); color: var(--orange); }
+.tool-icon.run     { background: var(--purple-dim); color: var(--purple); }
+.tool-icon.search  { background: rgba(88,166,255,0.12); color: var(--accent); }
+.tool-icon.list    { background: rgba(88,166,255,0.12); color: var(--accent); }
+.tool-icon.default { background: var(--bg-tertiary); color: var(--text-muted); }
+
+.tool-card-header .tool-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.tool-card-header .tool-args-preview {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.tool-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.tool-duration {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.tool-duration--live { color: var(--green); }
+.tool-check { color: var(--green); font-size: 14px; }
+.tool-error-badge { color: var(--red); font-size: 14px; }
+
+.tool-card-body {
+  display: none;
+  border-top: 1px solid var(--border);
+}
+.tool-card.open .tool-card-body { display: block; }
+
+.tool-card-body details > summary {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  user-select: none;
+}
+.tool-card-body details > summary:first-child { border-top: none; }
+.tool-card-body details > summary:hover { color: var(--text-secondary); }
+
+.tool-args-json,
+.tool-result-pre {
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+.result-error > summary { color: var(--red) !important; }
+.result-error > pre { color: var(--red); opacity: 0.85; }
+
+/* ── Live Terminal (bash wait mode) ──────── */
+.live-terminal {
+  border-bottom: 1px solid var(--border);
+  background: #0a0e14;
+  overflow: hidden;
+}
+
+[data-theme="light"] .live-terminal { background: #1e1e2e; }
+
+.live-terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #8b949e;
+}
+
+.live-terminal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: termPulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes termPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-terminal-title {
+  flex: 1;
+  color: #8b949e;
+}
+
+.live-terminal-output {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #c9d1d9;
+  max-height: 250px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  scroll-behavior: smooth;
+}
+
+.live-terminal-output::-webkit-scrollbar { width: 4px; }
+.live-terminal-output::-webkit-scrollbar-track { background: transparent; }
+.live-terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+/* ── Diff Viewer ───────────────────────────── */
+.diff-viewer {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.diff-viewer pre {
+  margin: 0;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-del { background: var(--diff-del-bg); color: var(--diff-del-text); display: flex; }
+.diff-add { background: var(--diff-add-bg); color: var(--diff-add-text); display: flex; }
+
+.diff-label {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  padding-top: 6px;
+  font-weight: 700;
+}
+
+.diff-del .diff-label { color: var(--red); }
+.diff-add .diff-label { color: var(--green); }
+
+.diff-meta {
+  padding: 4px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+/* ── Light theme ──────────────────────────── */
+[data-theme="light"] .tool-card--explore {
+  border-color: rgba(9,105,218,0.2);
+  background: linear-gradient(180deg, rgba(9,105,218,0.05) 0%, var(--bg-secondary) 48px);
+}
+[data-theme="light"] .tool-card.has-error { border-color: rgba(209,36,47,0.3); }
+[data-theme="light"] .tool-icon.search,
+[data-theme="light"] .tool-icon.list { background: rgba(9,105,218,0.1); }
+[data-theme="light"] .tool-result-pre,
+[data-theme="light"] .tool-args-json { color: var(--text-primary); }
+[data-theme="light"] .diff-del .diff-label { color: #cf222e; }
+[data-theme="light"] .diff-add .diff-label { color: #1a7f37; }
