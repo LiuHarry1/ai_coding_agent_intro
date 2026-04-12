@@ -50,9 +50,20 @@ export const useChatStore = create((set, get) => ({
 
   setSessions: (sessions) => set({ sessions }),
 
-  switchSession: (id) => {
+  switchSession: async (id) => {
     localStorage.setItem("coding_agent_session_id", id);
     set({ currentSessionId: id, messages: [] });
+    if (!id) return;
+    try {
+      const res = await fetch(`/sessions/${id}/messages`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.messages && data.messages.length > 0) {
+        set({ messages: data.messages });
+      }
+    } catch {
+      /* session history unavailable */
+    }
   },
 
   clearSession: () => {

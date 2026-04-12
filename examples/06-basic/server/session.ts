@@ -30,6 +30,20 @@ export function getSession(id: string): Session | null {
   return session;
 }
 
+function extractPreview(session: Session | null): string | undefined {
+  if (!session) return undefined;
+  const firstUser = session.messages.find((m) => m.role === "user");
+  if (!firstUser) return undefined;
+  const text =
+    typeof firstUser.content === "string"
+      ? firstUser.content
+      : (firstUser.content as Array<{ type: string; text?: string }>)
+          .filter((p) => p.type === "text")
+          .map((p) => p.text)
+          .join("");
+  return text.slice(0, 80) || undefined;
+}
+
 export function listSessions(): SessionInfo[] {
   if (!fs.existsSync(SESSION_DIR)) return [];
   return fs
@@ -42,6 +56,7 @@ export function listSessions(): SessionInfo[] {
         id,
         createdAt: session?.createdAt,
         messageCount: session?.messages.length ?? 0,
+        preview: extractPreview(session),
       };
     })
     .sort((a: SessionInfo, b: SessionInfo) => (b.createdAt ?? 0) - (a.createdAt ?? 0));

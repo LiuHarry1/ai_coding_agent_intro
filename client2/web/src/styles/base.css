@@ -42,7 +42,7 @@
   --border-light:  #b8c0c8;
   --text-primary:  #1f2328;
   --text-secondary:#59636e;
-  --text-muted:    #8b949e;
+  --text-muted:    #656d76;
   --accent:        #0969da;
   --accent-dim:    #ddf4ff;
   --green:         #1a7f37;
@@ -124,5 +124,6 @@ html, body {
   }
   .workspace-bar { display: none; }
   .hint-grid { grid-template-columns: 1fr; }
+  .hint-grid--3col { grid-template-columns: 1fr 1fr; }
   .msg-user { max-width: 90%; }
 }

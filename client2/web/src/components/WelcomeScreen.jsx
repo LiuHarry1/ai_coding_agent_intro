@@ -1,11 +1,40 @@
 import React from "react";
 import { useChatStore } from "../stores/chat-store.js";
 
-const HINTS = [
-  { icon: "\u{1F4C1}", label: "View project structure", prompt: "Read the current directory structure and list all files" },
-  { icon: "\u{1F4C4}", label: "Read package.json", prompt: "Read the package.json file and summarize the project" },
-  { icon: "\u2699\uFE0F", label: "Create Express server", prompt: "Create a simple Express server listening on port 3000" },
-  { icon: "\u{1F4BB}", label: "Check Node version", prompt: "Run node --version to check the current Node version" },
+const TOOL_HINTS = [
+  {
+    icon: "\u{1F50D}",
+    label: "Explore codebase",
+    prompt: "Read the current directory structure, find the main entry points, and give me a brief summary of this project's architecture",
+  },
+  {
+    icon: "\u{1F41B}",
+    label: "Debug an error",
+    prompt: "I'm getting an error in my code. Let me describe it — help me find the root cause and fix it",
+  },
+  {
+    icon: "\u{1F4DD}",
+    label: "Refactor code",
+    prompt: "Read the main source files in this project and suggest refactoring improvements for better readability and maintainability",
+  },
+];
+
+const PROJECT_HINTS = [
+  {
+    icon: "\u{1F40D}",
+    label: "Snake",
+    prompt: "Create a Snake game using a single HTML file with embedded CSS and JavaScript. Include: canvas-based rendering, arrow key controls, score display, speed increase per 5 points, game over screen with restart button, and a modern dark-themed UI. Make it immediately playable by opening the HTML file.",
+  },
+  {
+    icon: "\u{1F3AE}",
+    label: "Flappy Bird",
+    prompt: "Create a Flappy Bird clone using a single HTML file with embedded CSS and JavaScript. Include: canvas rendering, click/space to flap, randomly generated pipes, score counter, gravity physics, collision detection, game over with restart, and pixel-art style visuals. Make it immediately playable.",
+  },
+  {
+    icon: "\u{1F3B2}",
+    label: "Tetris",
+    prompt: "Create a Tetris game in a single HTML file with embedded CSS and JavaScript. Include: all 7 tetromino shapes with colors, rotation, soft/hard drop, line clearing with animation, score and level system, next piece preview, and keyboard controls (arrows + up to rotate). Modern neon-style dark UI.",
+  },
 ];
 
 export default function WelcomeScreen() {
@@ -16,15 +45,30 @@ export default function WelcomeScreen() {
       <div className="welcome-icon">&#9670;</div>
       <h2 className="welcome-title">AI Coding Agent</h2>
       <p className="welcome-desc">
-        I can read and write files, run commands, and help you with coding tasks. Tell me what you want to do.
+        Read & write files, run commands, and build complete projects.
       </p>
-      <div className="hint-grid">
-        {HINTS.map((h, i) => (
-          <button key={i} className="hint-card" onClick={() => sendMessage(h.prompt)}>
-            <span className="hint-icon">{h.icon}</span>
-            <span className="hint-label">{h.label}</span>
-          </button>
-        ))}
+
+      <div className="hint-section">
+        <div className="hint-grid hint-grid--3col">
+          {TOOL_HINTS.map((h, i) => (
+            <button key={i} className="hint-card hint-card--compact" onClick={() => sendMessage(h.prompt)}>
+              <span className="hint-icon">{h.icon}</span>
+              <span className="hint-label">{h.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="hint-section">
+        <span className="hint-section-label">Build a mini game</span>
+        <div className="hint-grid hint-grid--3col">
+          {PROJECT_HINTS.map((h, i) => (
+            <button key={i} className="hint-card hint-card--compact" onClick={() => sendMessage(h.prompt)}>
+              <span className="hint-icon">{h.icon}</span>
+              <span className="hint-label">{h.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

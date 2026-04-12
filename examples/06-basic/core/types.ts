@@ -163,6 +163,7 @@ export interface SessionInfo {
   id: string;
   createdAt?: number;
   messageCount: number;
+  preview?: string;
 }
 
 // ── Server ──────────────────────────────────────

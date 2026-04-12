@@ -1,6 +1,20 @@
 import React, { useEffect } from "react";
 import { useChatStore } from "../stores/chat-store.js";
 
+function relativeTime(ts) {
+  if (!ts) return "";
+  const diff = Date.now() - ts;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
 export default function Sidebar() {
   const sessions = useChatStore((s) => s.sessions);
   const currentSessionId = useChatStore((s) => s.currentSessionId);
@@ -39,12 +53,6 @@ export default function Sidebar() {
     } catch {}
   };
 
-  const formatDate = (ts) => {
-    if (!ts) return "";
-    const d = new Date(ts);
-    return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -74,7 +82,9 @@ export default function Sidebar() {
               onClick={() => switchSession(s.id)}
             >
               <div className="sidebar-item-top">
-                <span className="sidebar-item-id">{s.id.slice(0, 8)}</span>
+                <span className={`sidebar-item-title ${!s.preview ? "sidebar-item-title--empty" : ""}`} title={s.preview || "New Chat"}>
+                  {s.preview || "New Chat"}
+                </span>
                 <button className="sidebar-item-delete" onClick={(e) => handleDelete(s.id, e)} title="Delete">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -82,8 +92,13 @@ export default function Sidebar() {
                 </button>
               </div>
               <div className="sidebar-item-meta">
-                <span>{s.messageCount} msgs</span>
-                <span>{formatDate(s.createdAt)}</span>
+                <span className="sidebar-item-msgs">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  {s.messageCount}
+                </span>
+                <span className="sidebar-item-time">{relativeTime(s.createdAt)}</span>
               </div>
             </div>
           ))

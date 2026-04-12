@@ -205,6 +205,56 @@ async function handleMCPRemove(req: IncomingMessage, res: ServerResponse): Promi
   sendJSON(res, 200, { status: mcpManager.getStatus() });
 }
 
+/**
+ * Convert AI SDK messages (user/assistant/tool) into the flat UI format
+ * that the frontend MessageBubble component expects.
+ */
+function sessionToUIMessages(messages: Message[]): unknown[] {
+  const uiMessages: unknown[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      const content = typeof msg.content === "string"
+        ? msg.content
+        : (msg.content as Array<{ type: string; text?: string }>)
+            .filter((p) => p.type === "text")
+            .map((p) => p.text)
+            .join("");
+      uiMessages.push({ type: "user", content });
+    } else if (msg.role === "assistant") {
+      const parts: unknown[] = [];
+      for (const part of msg.content as Array<{ type: string; text?: string; toolCallId?: string; toolName?: string; input?: unknown }>) {
+        if (part.type === "text" && part.text) {
+          parts.push({ type: "text", content: part.text });
+        } else if (part.type === "tool-call") {
+          parts.push({
+            type: "tool_call",
+            name: part.toolName,
+            toolCallId: part.toolCallId,
+            args: part.input,
+            status: "done",
+          });
+        }
+      }
+      uiMessages.push({ type: "assistant", parts, status: "done" });
+    } else if (msg.role === "tool") {
+      const lastAssistant = uiMessages[uiMessages.length - 1] as { type: string; parts: Array<{ type: string; toolCallId?: string; result?: string }> } | undefined;
+      if (lastAssistant?.type === "assistant") {
+        for (const tr of msg.content as Array<{ type: string; toolCallId: string; toolName: string; output: { value: string } }>) {
+          const tc = lastAssistant.parts.find(
+            (p) => p.type === "tool_call" && p.toolCallId === tr.toolCallId
+          );
+          if (tc) {
+            tc.result = tr.output?.value ?? "";
+          }
+        }
+      }
+    }
+  }
+
+  return uiMessages;
+}
+
 export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOptions) {
   // Load MCP config on startup (non-blocking)
   const configPath = resolveMCPConfigPath(process.cwd());
@@ -235,6 +285,13 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       const id = url.split("/sessions/")[1];
       deleteSession(id);
       sendJSON(res, 200, { deleted: id });
+      return;
+    }
+    if (method === "GET" && url?.match(/^\/sessions\/[^/]+\/messages$/)) {
+      const id = url.split("/sessions/")[1].split("/messages")[0];
+      const session = getSession(id);
+      if (!session) { sendJSON(res, 404, { error: "Session not found" }); return; }
+      sendJSON(res, 200, { messages: sessionToUIMessages(session.messages) });
       return;
     }
 

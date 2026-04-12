@@ -9,6 +9,9 @@ export default function App() {
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const theme = useChatStore((s) => s.theme);
 
+  const currentSessionId = useChatStore((s) => s.currentSessionId);
+  const switchSession = useChatStore((s) => s.switchSession);
+
   useEffect(() => {
     const dark = document.getElementById("hljs-dark");
     const light = document.getElementById("hljs-light");
@@ -17,6 +20,12 @@ export default function App() {
       light.disabled = theme === "dark";
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (currentSessionId) {
+      switchSession(currentSessionId);
+    }
+  }, []);
 
   return (
     <div className={`app ${theme}`} data-theme={theme}>

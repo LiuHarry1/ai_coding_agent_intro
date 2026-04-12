@@ -63,6 +63,20 @@
   flex-shrink: 0;
 }
 
+/* ── File badge (shows filename inline) ────── */
+.tool-file-badge {
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(88,166,255,0.1);
+  padding: 1px 7px;
+  border-radius: 4px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
 .tool-card-header .tool-args-preview {
   color: var(--text-muted);
   overflow: hidden;
@@ -102,9 +116,35 @@
   cursor: pointer;
   border-top: 1px solid var(--border);
   user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .tool-card-body details > summary:first-child { border-top: none; }
 .tool-card-body details > summary:hover { color: var(--text-secondary); }
+
+.result-size {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  font-family: var(--font-mono);
+}
+
+/* ── Args & result containers with copy button ── */
+.tool-args-wrap,
+.tool-result-wrap {
+  position: relative;
+}
+
+.tool-args-wrap > .copy-btn,
+.tool-result-wrap > .copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+}
 
 .tool-args-json,
 .tool-result-pre {
@@ -121,7 +161,73 @@
 }
 
 .result-error > summary { color: var(--red) !important; }
-.result-error > pre { color: var(--red); opacity: 0.85; }
+
+.result-error-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--red);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tool-result-wrap--error {
+  background: rgba(248,81,73,0.06);
+  border-top: 2px solid var(--red);
+}
+
+.tool-result-wrap--error .tool-result-pre {
+  color: var(--red);
+}
+
+/* ── Show more / less button ─────────────── */
+.show-more-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  border: none;
+  border-top: 1px dashed var(--border);
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s;
+}
+.show-more-btn:hover { background: var(--bg-secondary); }
+
+/* ── Copy button (shared) ────────────────── */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.copy-btn--inline {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
 
 /* ── Live Terminal (bash wait mode) ──────── */
 .live-terminal {
@@ -183,37 +289,45 @@
 
 /* ── Diff Viewer ───────────────────────────── */
 .diff-viewer {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.55;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.diff-viewer pre {
-  margin: 0;
+.diff-file-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 10px;
-  white-space: pre-wrap;
-  word-break: break-all;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
 }
 
-.diff-del { background: var(--diff-del-bg); color: var(--diff-del-text); display: flex; }
-.diff-add { background: var(--diff-add-bg); color: var(--diff-add-text); display: flex; }
-
-.diff-label {
+.diff-file-icon {
+  font-size: 13px;
   flex-shrink: 0;
-  width: 20px;
-  text-align: center;
-  padding-top: 6px;
-  font-weight: 700;
 }
 
-.diff-del .diff-label { color: var(--red); }
-.diff-add .diff-label { color: var(--green); }
+.diff-file-name {
+  color: var(--accent);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
 
-.diff-meta {
-  padding: 4px 14px;
-  font-size: 11px;
-  color: var(--text-muted);
-  border-top: 1px solid var(--border);
+.diff-replace-all-badge {
+  font-size: 9.5px;
+  color: var(--orange);
+  background: var(--orange-dim);
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 /* ── Light theme ──────────────────────────── */
@@ -221,10 +335,18 @@
   border-color: rgba(9,105,218,0.2);
   background: linear-gradient(180deg, rgba(9,105,218,0.05) 0%, var(--bg-secondary) 48px);
 }
+[data-theme="light"] .tool-card { background: #fff; }
 [data-theme="light"] .tool-card.has-error { border-color: rgba(209,36,47,0.3); }
+[data-theme="light"] .tool-card-header .tool-name { color: #1f2328; }
+[data-theme="light"] .tool-card-header .tool-args-preview { color: #59636e; }
+[data-theme="light"] .tool-card-header .chevron { color: #59636e; }
+[data-theme="light"] .tool-card-body details > summary { color: #59636e; }
 [data-theme="light"] .tool-icon.search,
 [data-theme="light"] .tool-icon.list { background: rgba(9,105,218,0.1); }
 [data-theme="light"] .tool-result-pre,
-[data-theme="light"] .tool-args-json { color: var(--text-primary); }
-[data-theme="light"] .diff-del .diff-label { color: #cf222e; }
-[data-theme="light"] .diff-add .diff-label { color: #1a7f37; }
+[data-theme="light"] .tool-args-json { color: #1f2328; }
+[data-theme="light"] .tool-file-badge { background: rgba(9,105,218,0.08); color: var(--accent); }
+[data-theme="light"] .tool-duration { color: #59636e; }
+[data-theme="light"] .result-size { color: #59636e; background: #ebeef1; }
+[data-theme="light"] .copy-btn { background: #fff; color: #59636e; border-color: #d1d9e0; }
+[data-theme="light"] .diff-file-header { background: #ebeef1; }
