@@ -8,6 +8,7 @@ import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
 import { definition as exploreDef } from "../subagents/explore.js";
 import { MCPManager, resolveMCPConfigPath } from "../core/mcp-manager.js";
+import { loadProjectRules } from "../core/rules-loader.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig } from "../core/types.js";
 
 defaultRegistry.register(exploreDef);
@@ -100,7 +101,7 @@ async function handleChat(
   req: IncomingMessage,
   res: ServerResponse,
   runAgent: RunAgentFn,
-  systemPrompt: (cwd: string) => string
+  systemPrompt: (cwd: string, projectRules?: string) => string
 ): Promise<void> {
   let body: Record<string, unknown>;
   try {
@@ -150,6 +151,8 @@ async function handleChat(
     eventBus.removeAllListeners();
   });
 
+  const projectRules = loadProjectRules(cwd);
+
   const localTools = defaultRegistry.createAll(cwd, {
     eventBus,
     middleware,
@@ -163,7 +166,7 @@ async function handleChat(
 
   await runAgent(message, {
     tools,
-    systemPrompt: systemPrompt(cwd),
+    systemPrompt: systemPrompt(cwd, projectRules || undefined),
     eventBus,
     messages: session.messages,
     images: images?.length ? images : undefined,

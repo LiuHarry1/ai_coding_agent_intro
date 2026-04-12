@@ -169,12 +169,12 @@ export interface SessionInfo {
 
 export interface ServerOptions {
   runAgent: RunAgentFn;
-  systemPrompt: (cwd: string) => string;
+  systemPrompt: (cwd: string, projectRules?: string) => string;
 }
 
 export interface RouterOptions {
   runAgent: RunAgentFn;
-  systemPrompt: (cwd: string) => string;
+  systemPrompt: (cwd: string, projectRules?: string) => string;
   staticDir: string | null;
 }
 
