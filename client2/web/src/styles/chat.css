@@ -137,8 +137,8 @@
 
 .msg-user {
   align-self: flex-end;
-  background: var(--accent-dim);
-  border: 1px solid rgba(88,166,255,0.25);
+  background: rgba(88,166,255,0.12);
+  border: 1px solid rgba(88,166,255,0.18);
   color: var(--text-primary);
   padding: 10px 16px;
   border-radius: 16px 16px 4px 16px;

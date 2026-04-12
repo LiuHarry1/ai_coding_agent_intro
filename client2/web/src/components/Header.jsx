@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useChatStore } from "../stores/chat-store.js";
+import { api } from "../lib/api.js";
 
 export default function Header() {
   const workspace = useChatStore((s) => s.workspace);
@@ -12,11 +13,9 @@ export default function Header() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownData, setDropdownData] = useState(null);
   const dropdownRef = useRef(null);
-  const inputRef = useRef(null);
 
   useEffect(() => {
-    fetch("/workspace")
-      .then((r) => r.json())
+    api.getWorkspace()
       .then((d) => setWorkspace(d.workspace))
       .catch(() => setWorkspace("."));
   }, [setWorkspace]);
@@ -33,8 +32,7 @@ export default function Header() {
 
   const loadDirectory = useCallback(async (dir) => {
     try {
-      const res = await fetch(`/workspace/list?dir=${encodeURIComponent(dir)}`);
-      const data = await res.json();
+      const data = await api.listDir(dir);
       setDropdownData(data);
       setWorkspace(data.dir);
       setDropdownOpen(true);
@@ -82,7 +80,6 @@ export default function Header() {
           </svg>
         </label>
         <input
-          ref={inputRef}
           id="workspace-input"
           className="workspace-input"
           value={workspace}

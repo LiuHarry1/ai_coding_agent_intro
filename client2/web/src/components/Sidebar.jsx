@@ -1,19 +1,7 @@
 import React, { useEffect } from "react";
 import { useChatStore } from "../stores/chat-store.js";
-
-function relativeTime(ts) {
-  if (!ts) return "";
-  const diff = Date.now() - ts;
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return "just now";
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}d ago`;
-  return new Date(ts).toLocaleDateString();
-}
+import { api } from "../lib/api.js";
+import { relativeTime } from "../lib/utils.js";
 
 export default function Sidebar() {
   const sessions = useChatStore((s) => s.sessions);
@@ -23,33 +11,32 @@ export default function Sidebar() {
   const toggleSidebar = useChatStore((s) => s.toggleSidebar);
 
   useEffect(() => {
-    fetch("/sessions")
-      .then((r) => r.json())
+    api.listSessions()
       .then((d) => setSessions(d.sessions || []))
       .catch(() => {});
   }, [setSessions]);
 
+  const refreshList = async () => {
+    try {
+      const data = await api.listSessions();
+      setSessions(data.sessions || []);
+    } catch {}
+  };
+
   const handleNewSession = async () => {
     try {
-      const res = await fetch("/sessions", { method: "POST" });
-      const data = await res.json();
+      const data = await api.createSession();
       switchSession(data.session_id);
-      const listRes = await fetch("/sessions");
-      const listData = await listRes.json();
-      setSessions(listData.sessions || []);
+      await refreshList();
     } catch {}
   };
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();
     try {
-      await fetch(`/sessions/${id}`, { method: "DELETE" });
-      const res = await fetch("/sessions");
-      const data = await res.json();
-      setSessions(data.sessions || []);
-      if (currentSessionId === id) {
-        switchSession(null);
-      }
+      await api.deleteSession(id);
+      await refreshList();
+      if (currentSessionId === id) switchSession(null);
     } catch {}
   };
 

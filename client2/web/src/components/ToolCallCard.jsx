@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import DiffViewer from "./DiffViewer.jsx";
+import CopyButton from "./CopyButton.jsx";
+import { fileName, formatDuration } from "../lib/utils.js";
 
 function toolIconClass(name) {
   if (name?.includes("edit")) return "write";
@@ -42,41 +44,6 @@ function formatArgs(name, args) {
   if (args.pattern) return args.pattern;
   if (args.directory) return args.directory;
   return JSON.stringify(args).slice(0, 80);
-}
-
-function formatDuration(ms) {
-  if (!ms) return null;
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function fileName(filePath) {
-  if (!filePath) return null;
-  const parts = filePath.replace(/\\/g, "/").split("/");
-  return parts[parts.length - 1];
-}
-
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
-  return (
-    <button
-      className="copy-btn"
-      onClick={handleCopy}
-      title="Copy to clipboard"
-      aria-label="Copy to clipboard"
-    >
-      {copied ? "\u2713" : "\u2398"}
-    </button>
-  );
 }
 
 function renderToolArgs(name, args) {
@@ -136,9 +103,7 @@ export default function ToolCallCard({ part }) {
   const truncLen = 3000;
   const isLong = result && result.length > truncLen;
   const [showFull, setShowFull] = useState(false);
-  const displayResult = isLong && !showFull
-    ? result.slice(0, truncLen)
-    : result;
+  const displayResult = isLong && !showFull ? result.slice(0, truncLen) : result;
 
   const filePath = args.file_path || args.path || null;
   const fName = fileName(filePath);
@@ -171,11 +136,7 @@ export default function ToolCallCard({ part }) {
       {expanded && (
         <div className="tool-card-body">
           {hasLiveOutput && !isDone && (
-            <LiveTerminal
-              output={part.liveOutput}
-              elapsed={part.liveElapsed}
-              done={part.liveDone}
-            />
+            <LiveTerminal output={part.liveOutput} elapsed={part.liveElapsed} done={part.liveDone} />
           )}
 
           <details>
@@ -206,13 +167,8 @@ export default function ToolCallCard({ part }) {
                 <CopyButton text={result} />
                 <pre className="tool-result-pre">{displayResult}</pre>
                 {isLong && (
-                  <button
-                    className="show-more-btn"
-                    onClick={() => setShowFull(!showFull)}
-                  >
-                    {showFull
-                      ? "Show less"
-                      : `Show all (${(result.length / 1000).toFixed(1)}k chars)`}
+                  <button className="show-more-btn" onClick={() => setShowFull(!showFull)}>
+                    {showFull ? "Show less" : `Show all (${(result.length / 1000).toFixed(1)}k chars)`}
                   </button>
                 )}
               </div>

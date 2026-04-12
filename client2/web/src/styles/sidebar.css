@@ -70,7 +70,7 @@
   transition: background 0.1s;
 }
 .sidebar-item:hover { background: var(--bg-tertiary); }
-.sidebar-item.active { background: var(--accent-dim); border: 1px solid rgba(88,166,255,0.2); }
+.sidebar-item.active { background: rgba(88,166,255,0.12); border: 1px solid rgba(88,166,255,0.18); }
 
 .sidebar-item-top {
   display: flex;

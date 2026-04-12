@@ -8,23 +8,14 @@ import InputArea from "./components/InputArea.jsx";
 export default function App() {
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const theme = useChatStore((s) => s.theme);
-
+  const syncHljs = useChatStore((s) => s.syncHljs);
   const currentSessionId = useChatStore((s) => s.currentSessionId);
   const switchSession = useChatStore((s) => s.switchSession);
 
-  useEffect(() => {
-    const dark = document.getElementById("hljs-dark");
-    const light = document.getElementById("hljs-light");
-    if (dark && light) {
-      dark.disabled = theme === "light";
-      light.disabled = theme === "dark";
-    }
-  }, [theme]);
+  useEffect(() => { syncHljs(); }, [theme]);
 
   useEffect(() => {
-    if (currentSessionId) {
-      switchSession(currentSessionId);
-    }
+    if (currentSessionId) switchSession(currentSessionId);
   }, []);
 
   return (

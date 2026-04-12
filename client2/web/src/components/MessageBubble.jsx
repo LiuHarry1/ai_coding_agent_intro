@@ -2,12 +2,6 @@ import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import ToolCallCard from "./ToolCallCard.jsx";
-import DiffViewer from "./DiffViewer.jsx";
-
-function escapeHtml(str) {
-  if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function ThinkingDots() {
   return (

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { api } from "../lib/api.js";
 
 /**
  * Central state store for the chat UI.
@@ -30,16 +31,21 @@ export const useChatStore = create((set, get) => ({
 
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
-  toggleTheme: () => {
-    const next = get().theme === "dark" ? "light" : "dark";
-    localStorage.setItem("coding_agent_theme", next);
+  syncHljs: () => {
+    const t = get().theme;
     const dark = document.getElementById("hljs-dark");
     const light = document.getElementById("hljs-light");
     if (dark && light) {
-      dark.disabled = next === "light";
-      light.disabled = next === "dark";
+      dark.disabled = t === "light";
+      light.disabled = t === "dark";
     }
+  },
+
+  toggleTheme: () => {
+    const next = get().theme === "dark" ? "light" : "dark";
+    localStorage.setItem("coding_agent_theme", next);
     set({ theme: next });
+    get().syncHljs();
   },
 
   setSessionId: (id) => {
@@ -55,12 +61,8 @@ export const useChatStore = create((set, get) => ({
     set({ currentSessionId: id, messages: [] });
     if (!id) return;
     try {
-      const res = await fetch(`/sessions/${id}/messages`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.messages && data.messages.length > 0) {
-        set({ messages: data.messages });
-      }
+      const data = await api.getSessionMessages(id);
+      if (data.messages?.length > 0) set({ messages: data.messages });
     } catch {
       /* session history unavailable */
     }
@@ -108,12 +110,7 @@ export const useChatStore = create((set, get) => ({
     if (images.length > 0) body.images = images;
 
     try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: abortController.signal,
-      });
+      const res = await api.postChat(body, abortController.signal);
 
       if (!res.ok) {
         const errText = await res.text();

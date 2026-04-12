@@ -1,35 +1,8 @@
-import React, { useState } from "react";
+import React from "react";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import { useChatStore } from "../stores/chat-store.js";
-
-function CopyButton({ text, label }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
-  return (
-    <button
-      className="copy-btn copy-btn--inline"
-      onClick={handleCopy}
-      title={label || "Copy"}
-      aria-label={label || "Copy"}
-    >
-      {copied ? "\u2713" : "\u2398"}
-    </button>
-  );
-}
-
-function fileName(filePath) {
-  if (!filePath) return null;
-  const parts = filePath.replace(/\\/g, "/").split("/");
-  return parts[parts.length - 1];
-}
+import CopyButton from "./CopyButton.jsx";
+import { fileName } from "../lib/utils.js";
 
 const darkStyles = {
   variables: {
@@ -113,7 +86,7 @@ export default function DiffViewer({ oldStr, newStr, filePath, replaceAll }) {
           <span className="diff-file-icon">{"\u{1F4C4}"}</span>
           <span className="diff-file-name" title={filePath}>{fName}</span>
           {replaceAll && <span className="diff-replace-all-badge">replace all</span>}
-          <CopyButton text={newStr} label="Copy new content" />
+          <CopyButton text={newStr} label="Copy new content" inline />
         </div>
       )}
       <ReactDiffViewer
