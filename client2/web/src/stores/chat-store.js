@@ -162,6 +162,10 @@ export const useChatStore = create((set, get) => ({
       store._updateLastToolTiming(data);
       return;
     }
+    if (event === "process_output") {
+      store._updateProcessOutput(data);
+      return;
+    }
 
     switch (event) {
       case "session":
@@ -295,6 +299,35 @@ export const useChatStore = create((set, get) => ({
       for (let i = parts.length - 1; i >= 0; i--) {
         if (parts[i].type === "tool_call" && parts[i].name === data.name && parts[i].status === "done") {
           parts[i] = { ...parts[i], duration: data.duration };
+          break;
+        }
+      }
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs };
+    });
+  },
+
+  /**
+   * Attach live process output to the last pending bash tool call.
+   * Emitted by the bash tool in wait mode — streams output to UI
+   * without requiring the LLM to poll.
+   */
+  _updateProcessOutput: (data) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return { messages: msgs };
+
+      const parts = [...last.parts];
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        if (p.type === "tool_call" && p.name === "bash" && p.status !== "done") {
+          parts[i] = {
+            ...p,
+            liveOutput: data.output,
+            liveElapsed: data.elapsed,
+            liveDone: data.done,
+          };
           break;
         }
       }

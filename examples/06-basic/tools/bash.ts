@@ -2,11 +2,12 @@ import { tool } from "ai";
 import { z } from "zod";
 import { spawn, type ChildProcess } from "child_process";
 import { truncate } from "./utils.js";
-import type { ToolDefinition } from "../core/types.js";
+import type { ToolDefinition, ToolContext, IEventBus } from "../core/types.js";
 
-// ── Background process tracking ──────────────────
+// ── Background process tracking (dev servers only) ──
 
 const MAX_BUFFER = 100_000;
+const PROGRESS_INTERVAL_MS = 2_000;
 
 interface TrackedProcess {
   pid: number;
@@ -18,8 +19,6 @@ interface TrackedProcess {
   done: boolean;
   killed: boolean;
   startTime: number;
-  timeoutMs: number;
-  hardTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const bgProcs = new Map<number, TrackedProcess>();
@@ -36,32 +35,27 @@ function cappedAppend(buf: string, chunk: string): string {
   return "...[earlier output truncated]\n" + combined.slice(-MAX_BUFFER);
 }
 
-function elapsedSec(proc: TrackedProcess): string {
-  return ((Date.now() - proc.startTime) / 1000).toFixed(1);
+function elapsedSec(start: number): string {
+  return ((Date.now() - start) / 1000).toFixed(1);
 }
 
 function formatOutput(proc: TrackedProcess): string {
   let out = proc.stdout || "";
   if (proc.stderr) out += (out ? "\n" : "") + `<stderr>\n${proc.stderr}</stderr>`;
-
-  if (proc.killed) out += `\n[timed out after ${proc.timeoutMs / 1000}s]`;
-  else if (proc.done && proc.exitCode !== 0 && proc.exitCode !== null) out += `\n[exit code: ${proc.exitCode}]`;
-
+  if (proc.done && proc.exitCode !== 0 && proc.exitCode !== null)
+    out += `\n[exit code: ${proc.exitCode}]`;
   return out || (proc.done
     ? (proc.exitCode === 0 ? "(no output)" : `(no output, exit code ${proc.exitCode})`)
     : "(no output yet)");
 }
 
-function statusHeader(proc: TrackedProcess): string {
-  return proc.done
-    ? `[pid ${proc.pid}] finished (exit code ${proc.exitCode}, ${elapsedSec(proc)}s)`
-    : `[pid ${proc.pid}] still running (${elapsedSec(proc)}s elapsed)`;
-}
-
 function checkProcess(pid: number): string {
   const proc = bgProcs.get(pid);
   if (!proc) return `Error: no background process with pid ${pid}`;
-  const result = truncate(`${statusHeader(proc)}\n\n${formatOutput(proc)}`);
+  const status = proc.done
+    ? `[pid ${pid}] finished (exit ${proc.exitCode}, ${elapsedSec(proc.startTime)}s)`
+    : `[pid ${pid}] running (${elapsedSec(proc.startTime)}s)`;
+  const result = truncate(`${status}\n\n${formatOutput(proc)}`);
   if (proc.done) bgProcs.delete(pid);
   return result;
 }
@@ -69,11 +63,7 @@ function checkProcess(pid: number): string {
 function killProcess(pid: number): string {
   const proc = bgProcs.get(pid);
   if (!proc) return `Error: no background process with pid ${pid}`;
-  if (proc.done) {
-    bgProcs.delete(pid);
-    return `Process ${pid} already finished (exit code ${proc.exitCode})`;
-  }
-  if (proc.hardTimer) clearTimeout(proc.hardTimer);
+  if (proc.done) { bgProcs.delete(pid); return `Process ${pid} already finished.`; }
   proc.killed = true;
   proc.child.kill("SIGTERM");
   setTimeout(() => { try { proc.child.kill("SIGKILL"); } catch {} }, 3000);
@@ -85,120 +75,128 @@ function killProcess(pid: number): string {
 export const definition: ToolDefinition = {
   name: "bash",
   description: "Run shell commands in the workspace",
-  create(cwd) {
+  create(cwd: string, context: ToolContext) {
+    const eventBus: IEventBus | undefined = context?.eventBus;
+
     return tool({
       description:
-        "Run a shell command. Supports background execution for long-running commands.\n\n" +
+        "Run a shell command. Blocks until completion with live output streaming.\n\n" +
         "Modes:\n" +
-        "1. Run command: provide `command`. If it doesn't finish within `block_until_ms`, " +
-        "it moves to background and returns partial output + PID.\n" +
-        "2. Check background process: provide `pid` to get latest output.\n" +
-        "3. Kill background process: provide `pid` + `kill: true`.\n\n" +
+        "1. Run command: provide `command`. Blocks until done, streaming output to UI.\n" +
+        "2. Background mode: set `background: true` for dev servers or commands that never exit. Returns PID immediately.\n" +
+        "3. Check background process: provide `pid`.\n" +
+        "4. Kill background process: provide `pid` + `kill: true`.\n\n" +
         "Tips:\n" +
-        "- For quick commands (ls, grep, cat): default block_until_ms (10s) is fine.\n" +
-        "- For installs/builds: set block_until_ms to 0 to immediately background.\n" +
-        "- For dev servers: set block_until_ms to 0 (they never exit).\n" +
-        "- Non-interactive only (no vim, no prompts). Output truncated at ~30KB.",
+        "- Most commands (ls, grep, npm install, builds, tests): just provide `command`.\n" +
+        "- Dev servers (never exit): set `background: true`.\n" +
+        "- Non-interactive only. Output truncated at ~30KB.",
       inputSchema: z.object({
         command: z.string().optional()
-          .describe("The bash command to execute. Omit when checking on a background process."),
+          .describe("The bash command to execute."),
+        background: z.boolean().optional()
+          .describe("Run in background and return PID immediately. Only for dev servers or commands that never exit."),
         pid: z.number().optional()
-          .describe("PID of a background process to check status or kill"),
+          .describe("PID of a background process to check or kill."),
         kill: z.boolean().optional()
-          .describe("If true with pid, send SIGTERM to the background process"),
+          .describe("If true with pid, send SIGTERM to the process."),
         stdin: z.string().optional()
-          .describe("Optional text to feed to stdin"),
+          .describe("Text to feed to stdin."),
         timeout: z.number().optional()
-          .describe("Total timeout in ms before killing the process. Default 120000 (2 min)"),
-        block_until_ms: z.number().optional()
-          .describe("How long to wait before moving to background. Default 10000 (10s). Set to 0 to immediately background."),
+          .describe("Max time in ms before killing. Default 120000 (2 min). Ignored in background mode."),
       }),
       execute: async (args: {
         command?: string;
+        background?: boolean;
         pid?: number;
         kill?: boolean;
         stdin?: string;
         timeout?: number;
-        block_until_ms?: number;
       }) => {
+        // ── Check / kill a background process ──
         if (args.pid != null) {
           return args.kill ? killProcess(args.pid) : checkProcess(args.pid);
         }
         if (!args.command) {
-          return "Error: provide either `command` to run or `pid` to check a background process";
+          return "Error: provide `command` to run or `pid` to check a background process.";
         }
 
-        const { command, stdin, timeout = 120_000, block_until_ms = 10_000 } = args;
+        const { command, background = false, stdin, timeout = 120_000 } = args;
 
+        const child = spawn("bash", ["-c", command], {
+          cwd,
+          env: { ...process.env, TERM: "dumb" },
+        });
+
+        const proc: TrackedProcess = {
+          pid: child.pid!, command, child,
+          stdout: "", stderr: "",
+          exitCode: null, done: false, killed: false,
+          startTime: Date.now(),
+        };
+
+        child.stdout.on("data", (d: Buffer) => { proc.stdout = cappedAppend(proc.stdout, d.toString()); });
+        child.stderr.on("data", (d: Buffer) => { proc.stderr = cappedAppend(proc.stderr, d.toString()); });
+        if (stdin != null) child.stdin.write(stdin);
+        child.stdin.end();
+
+        // ── Background mode: return PID immediately ──
+        if (background) {
+          bgProcs.set(proc.pid, proc);
+          child.on("close", (code: number | null) => { proc.exitCode = code; proc.done = true; });
+          child.on("error", () => { proc.done = true; });
+          return `[backgrounded — pid: ${proc.pid}]\nUse bash({ pid: ${proc.pid} }) to check, bash({ pid: ${proc.pid}, kill: true }) to stop.`;
+        }
+
+        // ── Default: block until done, stream live output ──
         return new Promise<string>((resolve) => {
-          const child = spawn("bash", ["-c", command], {
-            cwd,
-            env: { ...process.env, TERM: "dumb" },
-          });
+          let progressTimer: ReturnType<typeof setInterval> | null = null;
+          let lastOutputLen = 0;
 
-          const proc: TrackedProcess = {
-            pid: child.pid!,
-            command,
-            child,
-            stdout: "",
-            stderr: "",
-            exitCode: null,
-            done: false,
-            killed: false,
-            startTime: Date.now(),
-            timeoutMs: timeout,
-            hardTimer: null,
-          };
+          if (eventBus) {
+            progressTimer = setInterval(() => {
+              if (proc.done) return;
+              const out = formatOutput(proc);
+              if (out.length !== lastOutputLen) {
+                lastOutputLen = out.length;
+                eventBus.emit("process_output", {
+                  pid: proc.pid, output: out,
+                  elapsed: elapsedSec(proc.startTime), done: false,
+                });
+              }
+            }, PROGRESS_INTERVAL_MS);
+          }
 
-          let settled = false;
-          const settle = (output: string) => {
-            if (settled) return;
-            settled = true;
+          const finish = (output: string) => {
+            if (progressTimer) clearInterval(progressTimer);
             resolve(truncate(output));
           };
 
-          proc.hardTimer = setTimeout(() => {
+          const hardTimer = setTimeout(() => {
             proc.killed = true;
             child.kill("SIGTERM");
             setTimeout(() => {
               try { child.kill("SIGKILL"); } catch {}
               proc.done = true;
-              settle(truncate(`${statusHeader(proc)}\n\n${formatOutput(proc)}`));
+              const out = formatOutput(proc) + `\n[timed out after ${timeout / 1000}s]`;
+              eventBus?.emit("process_output", { pid: proc.pid, output: out, elapsed: elapsedSec(proc.startTime), done: true });
+              finish(out);
             }, 3000);
           }, timeout);
 
-          child.stdout.on("data", (d: Buffer) => { proc.stdout = cappedAppend(proc.stdout, d.toString()); });
-          child.stderr.on("data", (d: Buffer) => { proc.stderr = cappedAppend(proc.stderr, d.toString()); });
-
-          // `close` fires after all stdio streams end — no need for setTimeout delay
           child.on("close", (code: number | null) => {
-            if (proc.hardTimer) clearTimeout(proc.hardTimer);
+            clearTimeout(hardTimer);
             proc.exitCode = code;
             proc.done = true;
-
-            if (!settled) {
-              settle(formatOutput(proc));
-              bgProcs.delete(proc.pid);
-            }
+            const out = formatOutput(proc);
+            eventBus?.emit("process_output", { pid: proc.pid, output: out, elapsed: elapsedSec(proc.startTime), done: true });
+            finish(out);
           });
 
           child.on("error", (err: Error) => {
+            clearTimeout(hardTimer);
             proc.done = true;
-            settle(`[error: ${err.message}]`);
+            finish(`[error: ${err.message}]`);
           });
-
-          if (stdin != null) child.stdin.write(stdin);
-          child.stdin.end();
-
-          setTimeout(() => {
-            if (settled || proc.done) return;
-            bgProcs.set(proc.pid, proc);
-            const out = formatOutput(proc)
-              + `\n\n[backgrounded after ${elapsedSec(proc)}s — pid: ${proc.pid}]`
-              + `\nUse bash({ pid: ${proc.pid} }) to check status.`
-              + `\nUse bash({ pid: ${proc.pid}, kill: true }) to stop.`;
-            settle(out);
-          }, block_until_ms);
         });
       },
     });

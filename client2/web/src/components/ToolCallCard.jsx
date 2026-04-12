@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import DiffViewer from "./DiffViewer.jsx";
 
 function escapeHtml(str) {
@@ -45,8 +45,34 @@ function renderToolArgs(name, args) {
   return <pre className="tool-args-json">{JSON.stringify(args, null, 2)}</pre>;
 }
 
+function LiveTerminal({ output, elapsed, done }) {
+  const termRef = useRef(null);
+
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.scrollTop = termRef.current.scrollHeight;
+    }
+  }, [output]);
+
+  return (
+    <div className="live-terminal">
+      <div className="live-terminal-header">
+        <span className="live-terminal-dot" />
+        <span className="live-terminal-title">
+          {done ? `Finished in ${elapsed}s` : `Running... ${elapsed}s`}
+        </span>
+        {!done && <span className="spinner spinner-sm" />}
+      </div>
+      <pre className="live-terminal-output" ref={termRef}>
+        {output || "(waiting for output...)"}
+      </pre>
+    </div>
+  );
+}
+
 export default function ToolCallCard({ part }) {
-  const [expanded, setExpanded] = useState(part.name === "explore");
+  const hasLiveOutput = part.liveOutput != null;
+  const [expanded, setExpanded] = useState(part.name === "explore" || hasLiveOutput);
   const name = part.name || "";
   const args = part.args || {};
   const result = part.result;
@@ -61,6 +87,10 @@ export default function ToolCallCard({ part }) {
     ? result.slice(0, 3000) + `\n... (${result.length} chars total)`
     : result;
 
+  useEffect(() => {
+    if (hasLiveOutput && !expanded) setExpanded(true);
+  }, [hasLiveOutput]);
+
   return (
     <div className={`tool-card ${expanded ? "open" : ""} ${isExplore ? "tool-card--explore" : ""} ${isError ? "has-error" : ""}`}>
       <div className="tool-card-header" onClick={() => setExpanded(!expanded)}>
@@ -69,6 +99,9 @@ export default function ToolCallCard({ part }) {
         <span className="tool-name">{name}</span>
         <span className="tool-args-preview">{formatArgs(name, args)}</span>
         <span className="tool-meta">
+          {part.liveElapsed && !isDone && (
+            <span className="tool-duration tool-duration--live">{part.liveElapsed}s</span>
+          )}
           {duration && <span className="tool-duration">{duration}</span>}
           {isDone ? (
             isError ? <span className="tool-error-badge">&#10007;</span> : <span className="tool-check">&#10003;</span>
@@ -80,6 +113,14 @@ export default function ToolCallCard({ part }) {
 
       {expanded && (
         <div className="tool-card-body">
+          {hasLiveOutput && !isDone && (
+            <LiveTerminal
+              output={part.liveOutput}
+              elapsed={part.liveElapsed}
+              done={part.liveDone}
+            />
+          )}
+
           <details>
             <summary>Arguments</summary>
             {renderToolArgs(name, args)}

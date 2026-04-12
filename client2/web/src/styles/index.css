@@ -775,6 +775,76 @@ html, body {
 .result-error > summary { color: var(--red) !important; }
 .result-error > pre { color: var(--red); opacity: 0.85; }
 
+/* ── Live Terminal (bash wait mode) ──────── */
+.live-terminal {
+  border-bottom: 1px solid var(--border);
+  background: #0a0e14;
+  overflow: hidden;
+}
+
+[data-theme="light"] .live-terminal {
+  background: #1e1e2e;
+}
+
+.live-terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #8b949e;
+}
+
+.live-terminal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: termPulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes termPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-terminal-title {
+  flex: 1;
+  color: #8b949e;
+}
+
+.spinner-sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+
+.live-terminal-output {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #c9d1d9;
+  max-height: 250px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  scroll-behavior: smooth;
+}
+
+.live-terminal-output::-webkit-scrollbar { width: 4px; }
+.live-terminal-output::-webkit-scrollbar-track { background: transparent; }
+.live-terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+.tool-duration--live {
+  color: var(--green);
+}
+
 /* ── Diff Viewer ───────────────────────────── */
 .diff-viewer {
   font-family: var(--font-mono);
