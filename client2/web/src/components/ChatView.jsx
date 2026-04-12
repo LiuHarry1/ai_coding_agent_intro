@@ -1,7 +1,8 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, Suspense, lazy } from "react";
 import { useChatStore } from "../stores/chat-store.js";
-import MessageBubble from "./MessageBubble.jsx";
 import WelcomeScreen from "./WelcomeScreen.jsx";
+
+const MessageBubble = lazy(() => import("./MessageBubble.jsx"));
 
 export default function ChatView() {
   const messages = useChatStore((s) => s.messages);
@@ -18,11 +19,13 @@ export default function ChatView() {
       {messages.length === 0 ? (
         <WelcomeScreen />
       ) : (
-        <div className="messages">
-          {messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} isLast={i === messages.length - 1} />
-          ))}
-        </div>
+        <Suspense fallback={<div className="messages" aria-busy="true" />}>
+          <div className="messages">
+            {messages.map((msg, i) => (
+              <MessageBubble key={i} message={msg} isLast={i === messages.length - 1} />
+            ))}
+          </div>
+        </Suspense>
       )}
     </div>
   );
