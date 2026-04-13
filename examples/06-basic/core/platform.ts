@@ -1,5 +1,5 @@
 import * as path from "path";
-import { execSync, spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 
 export const isWindows = process.platform === "win32";
 
@@ -28,14 +28,7 @@ const powershellShell: ShellConfig = {
 
 function detectShell(): ShellConfig {
   if (!isWindows) return bashShell;
-  // On Windows: prefer Git Bash (LLMs generate better bash than PowerShell),
-  // fall back to PowerShell if bash is not available.
-  try {
-    execSync("bash --version", { stdio: "ignore" });
-    return bashShell;
-  } catch {
-    return powershellShell;
-  }
+  return powershellShell;
 }
 
 export const shell: ShellConfig = detectShell();
