@@ -1,10 +1,7 @@
 import * as path from "path";
-import { spawn, type ChildProcess } from "child_process";
+import { execSync, spawn, type ChildProcess } from "child_process";
 
 export const isWindows = process.platform === "win32";
-
-/** One-line platform summary for system prompts. */
-export const platformLabel = `${process.platform} (${process.arch}) — shell: ${isWindows ? "PowerShell" : "bash"}`;
 
 // ── Shell configuration ──
 
@@ -29,7 +26,22 @@ const powershellShell: ShellConfig = {
   spawnEnv: () => ({ ...process.env }),
 };
 
-export const shell: ShellConfig = isWindows ? powershellShell : bashShell;
+function detectShell(): ShellConfig {
+  if (!isWindows) return bashShell;
+  // On Windows: prefer Git Bash (LLMs generate better bash than PowerShell),
+  // fall back to PowerShell if bash is not available.
+  try {
+    execSync("bash --version", { stdio: "ignore" });
+    return bashShell;
+  } catch {
+    return powershellShell;
+  }
+}
+
+export const shell: ShellConfig = detectShell();
+
+/** One-line platform summary for system prompts. */
+export const platformLabel = `${process.platform} (${process.arch}) — shell: ${shell.name}`;
 
 // ── Process management ──
 
