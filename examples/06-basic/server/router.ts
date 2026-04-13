@@ -7,7 +7,8 @@ import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
 import { definition as exploreDef } from "../subagents/explore.js";
-import { MCPManager, resolveMCPConfigPath } from "../core/mcp-manager.js";
+import { MCPManager } from "../core/mcp-manager.js";
+import { configManager } from "../core/config-manager.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig } from "../core/types.js";
 
@@ -54,7 +55,7 @@ function sendJSON(res: ServerResponse, status: number, data: unknown): void {
 
 function setCORS(res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
@@ -179,32 +180,6 @@ async function handleChat(
   transport.end();
 }
 
-async function handleMCPAdd(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  let body: Record<string, unknown>;
-  try { body = await readBody(req); } catch { sendJSON(res, 400, { error: "Invalid JSON" }); return; }
-
-  const name = body.name as string;
-  const config = body.config as MCPServerConfig;
-  if (!name || !config) {
-    sendJSON(res, 400, { error: "Missing 'name' and/or 'config'" });
-    return;
-  }
-
-  await mcpManager.addServer(name, config);
-  sendJSON(res, 200, { status: mcpManager.getStatus() });
-}
-
-async function handleMCPRemove(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  let body: Record<string, unknown>;
-  try { body = await readBody(req); } catch { sendJSON(res, 400, { error: "Invalid JSON" }); return; }
-
-  const name = body.name as string;
-  if (!name) { sendJSON(res, 400, { error: "Missing 'name'" }); return; }
-
-  await mcpManager.removeServer(name);
-  sendJSON(res, 200, { status: mcpManager.getStatus() });
-}
-
 /**
  * Convert AI SDK messages (user/assistant/tool) into the flat UI format
  * that the frontend MessageBubble component expects.
@@ -255,11 +230,27 @@ function sessionToUIMessages(messages: Message[]): unknown[] {
   return uiMessages;
 }
 
+// ── MCP ↔ ConfigManager sync ──
+
+async function syncMCPFromConfig(): Promise<void> {
+  await mcpManager.closeAll();
+  const servers = configManager.get("mcpServers");
+  for (const [name, config] of Object.entries(servers)) {
+    await mcpManager.addServer(name, config);
+  }
+}
+
 export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOptions) {
-  // Load MCP config on startup (non-blocking)
-  const configPath = resolveMCPConfigPath(process.cwd());
-  mcpManager.loadConfig(configPath).catch((err) => {
-    console.error(`[mcp] Failed to load config: ${err.message}`);
+  // Load config, then connect MCP servers from config
+  configManager.load();
+  syncMCPFromConfig().catch((err) => {
+    console.error(`[mcp] Failed to sync from config: ${err.message}`);
+  });
+
+  configManager.onChange("mcpServers", () => {
+    syncMCPFromConfig().catch((err) => {
+      console.error(`[mcp] Failed to re-sync after config change: ${err.message}`);
+    });
   });
 
   process.on("exit", () => { mcpManager.closeAll().catch(() => {}); });
@@ -295,16 +286,56 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       return;
     }
 
-    // ── MCP endpoints ──
-    if (method === "GET" && url === "/mcp") { sendJSON(res, 200, { servers: mcpManager.getStatus() }); return; }
-    if (method === "POST" && url === "/mcp/add") { await handleMCPAdd(req, res); return; }
-    if (method === "POST" && url === "/mcp/remove") { await handleMCPRemove(req, res); return; }
-    if (method === "POST" && url === "/mcp/reload") {
-      await mcpManager.closeAll();
-      await mcpManager.loadConfig(configPath);
-      sendJSON(res, 200, { servers: mcpManager.getStatus() });
+    // ── Settings endpoints ──
+    if (method === "GET" && url === "/settings") {
+      sendJSON(res, 200, {
+        ...configManager.getSafe(),
+        mcpStatus: mcpManager.getStatus(),
+        configPath: configManager.configPath,
+      });
       return;
     }
+    if (method === "PATCH" && url === "/settings/provider") {
+      try {
+        const body = await readBody(req);
+        configManager.patch("provider", body as Partial<{ name: string; baseURL: string; apiKey: string; model: string }>);
+        sendJSON(res, 200, { provider: configManager.getSafe().provider });
+      } catch { sendJSON(res, 400, { error: "Invalid JSON" }); }
+      return;
+    }
+    if (method === "PATCH" && url === "/settings/mcp") {
+      try {
+        const body = await readBody(req);
+        const action = body.action as string;
+
+        if (action === "add") {
+          const name = body.name as string;
+          const config = body.config as MCPServerConfig;
+          if (!name || !config) { sendJSON(res, 400, { error: "Missing 'name' and/or 'config'" }); return; }
+          const servers = configManager.get("mcpServers");
+          servers[name] = config;
+          configManager.set("mcpServers", servers);
+        } else if (action === "remove") {
+          const name = body.name as string;
+          if (!name) { sendJSON(res, 400, { error: "Missing 'name'" }); return; }
+          const servers = configManager.get("mcpServers");
+          delete servers[name];
+          configManager.set("mcpServers", servers);
+        } else {
+          sendJSON(res, 400, { error: "action must be 'add' or 'remove'" });
+          return;
+        }
+
+        sendJSON(res, 200, {
+          mcpServers: configManager.get("mcpServers"),
+          mcpStatus: mcpManager.getStatus(),
+        });
+      } catch { sendJSON(res, 400, { error: "Invalid JSON" }); }
+      return;
+    }
+
+    // ── Legacy MCP endpoints (backward compatible) ──
+    if (method === "GET" && url === "/mcp") { sendJSON(res, 200, { servers: mcpManager.getStatus() }); return; }
 
     if (method === "POST" && url === "/chat") { await handleChat(req, res, runAgent, systemPrompt); return; }
     if (method === "GET" && url?.startsWith("/workspace/list")) { handleWorkspaceList(req, res); return; }

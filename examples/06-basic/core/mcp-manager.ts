@@ -1,8 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { AnyTool, MCPConfig, MCPServerConfig, MCPServerStatus } from "./types.js";
+import type { AnyTool, MCPServerConfig, MCPServerStatus } from "./types.js";
 
 interface ManagedServer {
   name: string;
@@ -18,27 +16,6 @@ function isStdio(c: MCPServerConfig): c is { command: string; args?: string[]; e
 
 export class MCPManager {
   #servers = new Map<string, ManagedServer>();
-
-  /** Load config from a JSON file. Merges with any previously loaded config. */
-  async loadConfig(configPath: string): Promise<void> {
-    if (!fs.existsSync(configPath)) {
-      console.log(`[mcp] No config found at ${configPath}, skipping.`);
-      return;
-    }
-
-    const raw = fs.readFileSync(configPath, "utf-8");
-    const config: MCPConfig = JSON.parse(raw);
-
-    if (!config.mcpServers || typeof config.mcpServers !== "object") {
-      console.warn("[mcp] Config missing 'mcpServers' field.");
-      return;
-    }
-
-    const connectPromises = Object.entries(config.mcpServers).map(
-      ([name, serverConfig]) => this.addServer(name, serverConfig)
-    );
-    await Promise.allSettled(connectPromises);
-  }
 
   /** Add and connect a single MCP server. */
   async addServer(name: string, config: MCPServerConfig): Promise<void> {
@@ -115,9 +92,4 @@ export class MCPManager {
   get connectedCount(): number {
     return [...this.#servers.values()].filter((m) => m.status.status === "connected").length;
   }
-}
-
-/** Resolve MCP config path: looks for mcp.json in the given directory. */
-export function resolveMCPConfigPath(cwd: string): string {
-  return path.join(cwd, "mcp.json");
 }

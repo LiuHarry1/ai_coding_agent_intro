@@ -1,5 +1,6 @@
 import { streamText } from "ai";
 import { defaultManager } from "./provider-manager.js";
+import { configManager } from "./config-manager.js";
 import { summarizeIfNeeded } from "./context.js";
 import type {
   AgentOptions,
@@ -30,8 +31,9 @@ function buildUserMessage(text: string, images?: string[]): UserMessage {
 
 export async function runAgent(
   userMessage: string,
-  { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 40, model = "gpt-5.2" }: AgentOptions
+  { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 40, model }: AgentOptions
 ): Promise<string> {
+  const resolvedModel = model ?? configManager.get("provider").model;
   messages.push(buildUserMessage(userMessage, images));
 
   let finalText = "";
@@ -47,7 +49,7 @@ export async function runAgent(
     }
 
     const stream = streamText({
-      model: provider.chatModel(model),
+      model: provider.chatModel(resolvedModel),
       system: systemPrompt,
       messages,
       tools,

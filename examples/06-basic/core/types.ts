@@ -211,13 +211,21 @@ export interface MCPServerHTTP {
 
 export type MCPServerConfig = MCPServerStdio | MCPServerHTTP;
 
-export interface MCPConfig {
-  mcpServers: Record<string, MCPServerConfig>;
-}
-
 export interface MCPServerStatus {
   name: string;
   status: "connected" | "error" | "disconnected";
   tools: string[];
   error?: string;
+}
+
+// ── App Config ──────────────────────────────────
+
+export interface AppConfig {
+  provider: {
+    name: string;
+    baseURL: string;
+    apiKey: string;
+    model: string;
+  };
+  mcpServers: Record<string, MCPServerConfig>;
 }

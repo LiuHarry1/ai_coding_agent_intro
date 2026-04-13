@@ -1,5 +1,14 @@
-import type { IProvider, ProviderConfig } from "./types.js";
-import { createProvider } from "../../../shared/provider.js";
+import { createOpenAI } from "@ai-sdk/openai";
+import { configManager } from "./config-manager.js";
+import type { IProvider } from "./types.js";
+
+function createProviderFromConfig(): IProvider {
+  const { name, baseURL, apiKey } = configManager.get("provider");
+  const openai = createOpenAI({ name, baseURL, apiKey });
+  return {
+    chatModel: (modelId) => openai.chat(modelId),
+  };
+}
 
 interface ProviderEntry {
   name: string;
@@ -19,6 +28,16 @@ export class ProviderManager {
     this.#providers.set(name, { name, factory });
     if (options.default || this.#providers.size === 1) {
       this.#default = name;
+    }
+  }
+
+  /** Drop cached instance so next get() rebuilds with fresh config. */
+  invalidate(name?: string): void {
+    if (name) {
+      const entry = this.#providers.get(name);
+      if (entry) entry.instance = undefined;
+    } else {
+      for (const entry of this.#providers.values()) entry.instance = undefined;
     }
   }
 
@@ -47,7 +66,12 @@ export class ProviderManager {
 export const defaultManager = new ProviderManager();
 
 defaultManager.register(
-  "copilot-proxy",
-  () => createProvider({ name: "copilot-proxy" }) as IProvider,
+  "default",
+  () => createProviderFromConfig(),
   { default: true }
 );
+
+configManager.onChange("provider", () => {
+  defaultManager.invalidate();
+  console.log("[provider] Config changed, provider will be rebuilt on next request.");
+});
