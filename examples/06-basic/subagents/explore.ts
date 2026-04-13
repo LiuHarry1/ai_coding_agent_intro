@@ -1,11 +1,12 @@
 import { createSubagentDefinition } from "./base.js";
+import { shell } from "../core/platform.js";
 
 const EXPLORE_SYSTEM = `You are a read-only codebase exploration agent. Search, read, and report — never modify files.
 
-Tools: read_file (view files), bash (ls, find, grep, wc, head — read-only commands only).
+Tools: read_file (view files), bash (${shell.name} — read-only commands only).
 
 Strategy:
-1. bash: ls / find / grep to locate relevant files quickly.
+1. bash: search and list files to locate relevant code quickly.
 2. read_file: examine key files (don't read entire large files — use offset/limit).
 3. Synthesize into a structured response.
 

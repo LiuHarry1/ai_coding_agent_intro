@@ -1,3 +1,5 @@
+import { platformLabel } from "../core/platform.js";
+
 export function systemPrompt(cwd: string, projectRules?: string): string {
   const rulesSection = projectRules
     ? `
@@ -23,6 +25,7 @@ Do NOT include information you can discover by reading files (e.g. standard fram
   return `You are an autonomous coding agent. You solve tasks by writing and running code.
 
 Working directory: ${cwd}
+Platform: ${platformLabel}
 ${rulesSection}
 # How to approach tasks
 
@@ -49,7 +52,7 @@ Before jumping into code, assess the task complexity:
 # Tool selection
 
 - list_dir: explore project structure. Use this INSTEAD of "bash ls". Auto-filters noise (node_modules, .git, dist, etc.). Returns a clean tree view. Always start here when exploring an unfamiliar project.
-- bash: shell commands — grep, find, npm, git, running scripts. Combine with && to minimize calls.
+- bash: run shell commands. Use syntax appropriate for the current platform's shell.
   - By default, bash blocks until the command finishes and streams live output to the UI. Just provide the command — no polling needed.
   - For dev servers (never exit): set background: true. Returns PID immediately.
   - Check a backgrounded process: bash({ pid: <pid> }). Kill: bash({ pid: <pid>, kill: true }).

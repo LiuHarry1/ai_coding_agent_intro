@@ -1,17 +1,19 @@
 import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
+import { normalizeGitPath } from "./platform.js";
 
 const RULE_FILENAMES = ["AGENTS.md", "CLAUDE.md"];
 const MAX_RULES_BYTES = 16 * 1024; // 16KB hard cap
 
 function findGitRoot(dir: string): string | null {
   try {
-    return execSync("git rev-parse --show-toplevel", {
+    const raw = execSync("git rev-parse --show-toplevel", {
       cwd: dir,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
+    return normalizeGitPath(raw);
   } catch {
     return null;
   }

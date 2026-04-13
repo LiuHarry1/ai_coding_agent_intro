@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { spawn, type ChildProcess } from "child_process";
 import { truncate } from "./utils.js";
+import { shell, killChild, forceKillChild } from "../core/platform.js";
 import type { ToolDefinition, ToolContext, IEventBus } from "../core/types.js";
 
 // ── Background process tracking (dev servers only) ──
@@ -25,7 +26,7 @@ const bgProcs = new Map<number, TrackedProcess>();
 
 process.on("exit", () => {
   for (const p of bgProcs.values()) {
-    if (!p.done) try { p.child.kill("SIGKILL"); } catch {}
+    if (!p.done) try { forceKillChild(p.child); } catch {}
   }
 });
 
@@ -65,40 +66,38 @@ function killProcess(pid: number): string {
   if (!proc) return `Error: no background process with pid ${pid}`;
   if (proc.done) { bgProcs.delete(pid); return `Process ${pid} already finished.`; }
   proc.killed = true;
-  proc.child.kill("SIGTERM");
-  setTimeout(() => { try { proc.child.kill("SIGKILL"); } catch {} }, 3000);
-  return `Sent SIGTERM to process ${pid}`;
+  killChild(proc.child);
+  return `Sent kill signal to process ${pid}`;
 }
 
 // ── Tool definition ──────────────────────────────
 
 export const definition: ToolDefinition = {
   name: "bash",
-  description: "Run shell commands in the workspace",
+  description: `Run shell commands in the workspace (${shell.name})`,
   create(cwd: string, context: ToolContext) {
     const eventBus: IEventBus | undefined = context?.eventBus;
 
     return tool({
       description:
-        "Run a shell command. Blocks until completion with live output streaming.\n\n" +
+        `Run a shell command (${shell.name}). Blocks until completion with live output streaming.\n\n` +
         "Modes:\n" +
         "1. Run command: provide `command`. Blocks until done, streaming output to UI.\n" +
         "2. Background mode: set `background: true` for dev servers or commands that never exit. Returns PID immediately.\n" +
         "3. Check background process: provide `pid`.\n" +
         "4. Kill background process: provide `pid` + `kill: true`.\n\n" +
         "Tips:\n" +
-        "- Most commands (ls, grep, npm install, builds, tests): just provide `command`.\n" +
         "- Dev servers (never exit): set `background: true`.\n" +
         "- Non-interactive only. Output truncated at ~30KB.",
       inputSchema: z.object({
         command: z.string().optional()
-          .describe("The bash command to execute."),
+          .describe(`The ${shell.name} command to execute.`),
         background: z.boolean().optional()
           .describe("Run in background and return PID immediately. Only for dev servers or commands that never exit."),
         pid: z.number().optional()
           .describe("PID of a background process to check or kill."),
         kill: z.boolean().optional()
-          .describe("If true with pid, send SIGTERM to the process."),
+          .describe("If true with pid, send kill signal to the process."),
         stdin: z.string().optional()
           .describe("Text to feed to stdin."),
         timeout: z.number().optional()
@@ -122,9 +121,9 @@ export const definition: ToolDefinition = {
 
         const { command, background = false, stdin, timeout = 120_000 } = args;
 
-        const child = spawn("bash", ["-c", command], {
+        const child = spawn(shell.command, shell.buildArgs(command), {
           cwd,
-          env: { ...process.env, TERM: "dumb" },
+          env: shell.spawnEnv(),
         });
 
         const proc: TrackedProcess = {
@@ -173,9 +172,9 @@ export const definition: ToolDefinition = {
 
           const hardTimer = setTimeout(() => {
             proc.killed = true;
-            child.kill("SIGTERM");
+            killChild(child);
             setTimeout(() => {
-              try { child.kill("SIGKILL"); } catch {}
+              forceKillChild(child);
               proc.done = true;
               const out = formatOutput(proc) + `\n[timed out after ${timeout / 1000}s]`;
               eventBus?.emit("process_output", { pid: proc.pid, output: out, elapsed: elapsedSec(proc.startTime), done: true });
