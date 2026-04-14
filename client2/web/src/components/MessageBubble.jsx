@@ -12,6 +12,41 @@ function ThinkingDots() {
   );
 }
 
+function ReasoningBlock({ part }) {
+  const [open, setOpen] = useState(false);
+  const isStreaming = part.status === "streaming";
+
+  const label = isStreaming
+    ? "Thinking..."
+    : `Thought for ${part.duration ?? 0}s`;
+
+  return (
+    <div className={`reasoning-block ${isStreaming ? "streaming" : "done"}`}>
+      <button className="reasoning-toggle" onClick={() => setOpen((v) => !v)}>
+        <svg
+          className={`reasoning-arrow ${open ? "open" : ""}`}
+          width="12" height="12" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" strokeWidth="2.5"
+          strokeLinecap="round" strokeLinejoin="round"
+        >
+          <polyline points="9 6 15 12 9 18" />
+        </svg>
+        <span className="reasoning-label">
+          {isStreaming && <span className="reasoning-pulse" />}
+          {label}
+        </span>
+      </button>
+      {(open || isStreaming) && part.content && (
+        <div className="reasoning-content">
+          <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+            {part.content}
+          </ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CompactionNotice({ part }) {
   if (part.type === "compaction_start") {
     return (
@@ -27,6 +62,64 @@ function CompactionNotice({ part }) {
         <summary>&#10003; Context compacted ({part.summaryLength} chars)</summary>
         <pre className="compaction-summary">{part.summary}</pre>
       </details>
+    </div>
+  );
+}
+
+const STATUS_ICONS = {
+  pending: "○",
+  in_progress: "◉",
+  completed: "✓",
+  cancelled: "—",
+};
+
+function TodoListCard({ part }) {
+  const { todos = [] } = part;
+  if (todos.length === 0) return null;
+
+  const completed = todos.filter((t) => t.status === "completed").length;
+  const cancelled = todos.filter((t) => t.status === "cancelled").length;
+  const hasActive = todos.some((t) => t.status === "in_progress" || t.status === "pending");
+  const allDone = !hasActive;
+  const total = todos.length;
+  const pct = total > 0 ? Math.round(((completed + cancelled) / total) * 100) : 0;
+
+  const [manualToggle, setManualToggle] = useState(null);
+  const open = manualToggle !== null ? manualToggle : !allDone;
+
+  return (
+    <div className={`todo-card ${allDone ? "todo-done" : ""}`}>
+      <button className="todo-header" onClick={() => setManualToggle((v) => v === null ? !open : !v)}>
+        <div className="todo-header-left">
+          <svg
+            className={`todo-arrow ${open ? "open" : ""}`}
+            width="12" height="12" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round"
+          >
+            <polyline points="9 6 15 12 9 18" />
+          </svg>
+          <span className="todo-title">{allDone ? "Tasks completed" : "Task Progress"}</span>
+        </div>
+        <span className="todo-count">{completed}/{total}</span>
+      </button>
+      {open && (
+        <ul className="todo-list">
+          {todos.map((t) => (
+            <li key={t.id} className={`todo-item todo-${t.status}`}>
+              <span className={`todo-icon todo-icon-${t.status}`}>
+                {STATUS_ICONS[t.status] || "○"}
+              </span>
+              <span className="todo-content">{t.content}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="todo-progress">
+        <div className="todo-progress-bar">
+          <div className="todo-progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -90,6 +183,8 @@ export default function MessageBubble({ message }) {
                 </ReactMarkdown>
               </div>
             );
+          case "reasoning":
+            return <ReasoningBlock key={i} part={part} />;
           case "thinking":
             return <ThinkingDots key={i} step={part.step} />;
           case "tool_group":
@@ -103,6 +198,8 @@ export default function MessageBubble({ message }) {
                 })}
               </div>
             );
+          case "todo_list":
+            return <TodoListCard key={i} part={part} />;
           case "compaction_start":
           case "compaction_done":
             return <CompactionNotice key={i} part={part} />;

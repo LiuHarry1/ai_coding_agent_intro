@@ -15,6 +15,9 @@ export const useChatStore = create((set, get) => ({
   // ── Messages ────────────────────────────────
   messages: [],
 
+  // ── Todos ──────────────────────────────────
+  todos: [],
+
   // ── Streaming state ─────────────────────────
   isStreaming: false,
   currentStep: 0,
@@ -70,7 +73,7 @@ export const useChatStore = create((set, get) => ({
 
   clearSession: () => {
     localStorage.removeItem("coding_agent_session_id");
-    set({ currentSessionId: null, messages: [] });
+    set({ currentSessionId: null, messages: [], todos: [] });
   },
 
   stopStreaming: () => {
@@ -193,9 +196,22 @@ export const useChatStore = create((set, get) => ({
       case "thinking":
         store._setThinking();
         break;
+      case "reasoning_start":
+        store._removeThinking();
+        store._startReasoning();
+        break;
+      case "reasoning_delta":
+        store._appendReasoningDelta(data.delta);
+        break;
+      case "reasoning_end":
+        store._finalizeReasoning();
+        break;
       case "text_delta":
         store._removeThinking();
         store._appendTextDelta(data.delta);
+        break;
+      case "todo_update":
+        store._updateTodos(data.todos);
         break;
       case "tool_call":
         store._removeThinking();
@@ -248,6 +264,72 @@ export const useChatStore = create((set, get) => ({
       if (filtered.length === last.parts.length) return s;
       msgs[msgs.length - 1] = { ...last, parts: filtered };
       return { messages: msgs };
+    });
+  },
+
+  _startReasoning: () => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+      const parts = [...last.parts];
+      parts.push({ type: "reasoning", content: "", status: "streaming", startTime: Date.now() });
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs };
+    });
+  },
+
+  _appendReasoningDelta: (delta) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+
+      const parts = [...last.parts];
+      const lastPart = parts[parts.length - 1];
+
+      if (lastPart?.type === "reasoning" && lastPart.status === "streaming") {
+        parts[parts.length - 1] = { ...lastPart, content: lastPart.content + delta };
+      }
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs };
+    });
+  },
+
+  _finalizeReasoning: () => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+
+      const parts = [...last.parts];
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (parts[i].type === "reasoning" && parts[i].status === "streaming") {
+          const elapsed = Math.round((Date.now() - parts[i].startTime) / 1000);
+          parts[i] = { ...parts[i], status: "done", duration: elapsed };
+          break;
+        }
+      }
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs };
+    });
+  },
+
+  _updateTodos: (todos) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return { todos };
+
+      const parts = [...last.parts];
+      const existingIdx = parts.findLastIndex((p) => p.type === "todo_list");
+      if (existingIdx >= 0) {
+        parts[existingIdx] = { ...parts[existingIdx], todos };
+      } else {
+        parts.push({ type: "todo_list", todos });
+      }
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { todos, messages: msgs };
     });
   },
 

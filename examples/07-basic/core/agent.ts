@@ -2,7 +2,7 @@ import { streamText } from "ai";
 import { defaultManager } from "./provider-manager.js";
 import { configManager } from "./config-manager.js";
 import { summarizeIfNeeded } from "./context.js";
-import type { AgentOptions, Message, UserMessage, UserContentPart,AssistantContentPart, ToolResultPart,} from "./types.js";
+import type { AgentOptions, Message, UserMessage, UserContentPart, AssistantContentPart, ToolResultPart, TodoItem, TodoStatus } from "./types.js";
 
 function parseDataUrl(dataUrl: string): { buffer: Buffer; mediaType: string } {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -22,6 +22,23 @@ function buildUserMessage(text: string, images?: string[]): UserMessage {
   return { role: "user", content: parts };
 }
 
+function autoCompleteTodos(todos: TodoItem[], eventBus: AgentOptions["eventBus"]): void {
+  const hasIncomplete = todos.some((t) => t.status === "pending" || t.status === "in_progress");
+  if (!hasIncomplete) return;
+
+  const updated = todos.map((t) =>
+    t.status === "pending" || t.status === "in_progress"
+      ? { ...t, status: "completed" as TodoStatus }
+      : t
+  );
+  eventBus.emit("todo_update", { todos: updated });
+}
+
+function formatTodoReminder(todos: TodoItem[]): string {
+  const lines = todos.map((t) => `- [${t.status}] ${t.id}: ${t.content}`);
+  return `[Active todo list — update via todo_write(merge=true) as you complete items]\n${lines.join("\n")}`;
+}
+
 export async function runAgent(
   userMessage: string,
   { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 40, model }: AgentOptions
@@ -32,59 +49,83 @@ export async function runAgent(
   let finalText = "";
   const provider = defaultManager.get();
 
-  for (let step = 0; step < maxSteps; step++) {
-    eventBus.emit("step_start", { step });
+  let currentTodos: TodoItem[] = [];
+  const unsubTodo = eventBus.on("todo_update", (data) => {
+    currentTodos = (data as { todos: TodoItem[] }).todos;
+  });
 
-    const managed = await summarizeIfNeeded(messages as Message[], eventBus);
-    if (managed !== messages) {
-      messages.length = 0;
-      messages.push(...managed);
-    }
+  try {
+    for (let step = 0; step < maxSteps; step++) {
+      eventBus.emit("step_start", { step });
 
-    const stream = streamText({
-      model: provider.chatModel(resolvedModel),
-      system: systemPrompt,
-      messages,
-      tools,
-    });
+      const managed = await summarizeIfNeeded(messages as Message[], eventBus);
+      if (managed !== messages) {
+        messages.length = 0;
+        messages.push(...managed);
 
-    const { text, toolCalls, toolResults } = await consumeStream(stream, eventBus);
+        if (currentTodos.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          if (lastMsg.role === "assistant" && Array.isArray(lastMsg.content)) {
+            const existing = lastMsg.content.find((p) => p.type === "text");
+            const reminder = "\n\n" + formatTodoReminder(currentTodos);
+            if (existing && "text" in existing) {
+              existing.text += reminder;
+            } else {
+              lastMsg.content.push({ type: "text", text: reminder });
+            }
+          }
+        }
+      }
 
-    if (text) finalText = text;
-
-    const assistantContent: AssistantContentPart[] = [];
-    if (text) assistantContent.push({ type: "text", text });
-    for (const tc of toolCalls) {
-      assistantContent.push({
-        type: "tool-call",
-        toolCallId: tc.toolCallId,
-        toolName: tc.toolName,
-        input: tc.input,
+      const stream = streamText({
+        model: provider.chatModel(resolvedModel),
+        system: systemPrompt,
+        messages,
+        tools,
       });
-    }
-    messages.push({ role: "assistant", content: assistantContent });
 
-    if (toolCalls.length === 0) {
-      eventBus.emit("done", { steps: step + 1 });
-      return finalText;
+      const { text, toolCalls, toolResults } = await consumeStream(stream, eventBus);
+
+      if (text) finalText = text;
+
+      const assistantContent: AssistantContentPart[] = [];
+      if (text) assistantContent.push({ type: "text", text });
+      for (const tc of toolCalls) {
+        assistantContent.push({
+          type: "tool-call",
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          input: tc.input,
+        });
+      }
+      messages.push({ role: "assistant", content: assistantContent });
+
+      if (toolCalls.length === 0) {
+        autoCompleteTodos(currentTodos, eventBus);
+        eventBus.emit("done", { steps: step + 1 });
+        return finalText;
+      }
+
+      for (const tr of toolResults) {
+        const part: ToolResultPart = {
+          type: "tool-result",
+          toolCallId: tr.toolCallId,
+          toolName: tr.toolName,
+          output: { type: "text", value: tr.result },
+        };
+        messages.push({ role: "tool", content: [part] });
+      }
+
+      eventBus.emit("thinking", {});
     }
 
-    for (const tr of toolResults) {
-      const part: ToolResultPart = {
-        type: "tool-result",
-        toolCallId: tr.toolCallId,
-        toolName: tr.toolName,
-        output: { type: "text", value: tr.result },
-      };
-      messages.push({ role: "tool", content: [part] });
-    }
-
-    eventBus.emit("thinking", {});
+    autoCompleteTodos(currentTodos, eventBus);
+    eventBus.emit("error", { message: `Reached max steps (${maxSteps})` });
+    eventBus.emit("done", { steps: maxSteps });
+    return finalText;
+  } finally {
+    unsubTodo();
   }
-
-  eventBus.emit("error", { message: `Reached max steps (${maxSteps})` });
-  eventBus.emit("done", { steps: maxSteps });
-  return finalText;
 }
 
 interface StreamResult {
