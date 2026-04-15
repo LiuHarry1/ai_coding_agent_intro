@@ -12,6 +12,12 @@ const DEFAULTS: AppConfig = {
     baseURL: "http://localhost:4141/v1",
     apiKey: "not-needed",
     model: "gpt-5.2",
+    reasoningEffort: "medium",
+  },
+  compaction: {
+    threshold: 40,
+    keepRecent: 10,
+    model: "gpt-4o-mini",
   },
   mcpServers: {},
 };
@@ -42,6 +48,9 @@ export class ConfigManager {
       const raw = JSON.parse(fs.readFileSync(this.#userConfigPath, "utf-8"));
       if (raw.provider) {
         Object.assign(this.#config.provider, raw.provider);
+      }
+      if (raw.compaction) {
+        Object.assign(this.#config.compaction, raw.compaction);
       }
       if (raw.mcpServers && typeof raw.mcpServers === "object") {
         this.#config.mcpServers = raw.mcpServers;
@@ -107,6 +116,9 @@ export class ConfigManager {
     const delta: Record<string, unknown> = {};
     if (JSON.stringify(this.#config.provider) !== JSON.stringify(DEFAULTS.provider)) {
       delta.provider = this.#config.provider;
+    }
+    if (JSON.stringify(this.#config.compaction) !== JSON.stringify(DEFAULTS.compaction)) {
+      delta.compaction = this.#config.compaction;
     }
     if (Object.keys(this.#config.mcpServers).length > 0) {
       delta.mcpServers = this.#config.mcpServers;

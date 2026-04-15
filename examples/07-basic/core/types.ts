@@ -230,12 +230,22 @@ export interface TodoItem {
 
 // ── App Config ──────────────────────────────────
 
+export interface CompactionConfig {
+  threshold: number;
+  keepRecent: number;
+  model: string;
+}
+
+export type ReasoningEffort = "none" | "low" | "medium" | "high";
+
 export interface AppConfig {
   provider: {
     name: string;
     baseURL: string;
     apiKey: string;
     model: string;
+    reasoningEffort: ReasoningEffort;
   };
+  compaction: CompactionConfig;
   mcpServers: Record<string, MCPServerConfig>;
 }

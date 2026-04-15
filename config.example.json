@@ -3,7 +3,13 @@
     "name": "copilot-proxy",
     "baseURL": "http://localhost:4141/v1",
     "apiKey": "not-needed",
-    "model": "gpt-5.2"
+    "model": "gpt-5.2",
+    "reasoningEffort": "medium"
+  },
+  "compaction": {
+    "threshold": 60,
+    "keepRecent": 15,
+    "model": "gpt-4o-mini"
   },
   "mcpServers": {
 
@@ -16,6 +22,5 @@
       "command": "npx",
       "args": ["-y", "chrome-devtools-mcp@latest"]
     }
-    
   }
 }

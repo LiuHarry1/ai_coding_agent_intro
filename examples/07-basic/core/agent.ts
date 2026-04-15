@@ -2,7 +2,7 @@ import { streamText } from "ai";
 import { defaultManager } from "./provider-manager.js";
 import { configManager } from "./config-manager.js";
 import { summarizeIfNeeded } from "./context.js";
-import type { AgentOptions, Message, UserMessage, UserContentPart, AssistantContentPart, ToolResultPart, TodoItem, TodoStatus } from "./types.js";
+import type { AgentOptions, Message, UserMessage, UserContentPart, AssistantContentPart, ToolResultPart, TodoItem, TodoStatus, ReasoningEffort } from "./types.js";
 
 function parseDataUrl(dataUrl: string): { buffer: Buffer; mediaType: string } {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -43,7 +43,9 @@ export async function runAgent(
   userMessage: string,
   { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 40, model }: AgentOptions
 ): Promise<string> {
-  const resolvedModel = model ?? configManager.get("provider").model;
+  const providerConfig = configManager.get("provider");
+  const resolvedModel = model ?? providerConfig.model;
+  const reasoningEffort = providerConfig.reasoningEffort ?? "medium";
   messages.push(buildUserMessage(userMessage, images));
 
   let finalText = "";
@@ -82,6 +84,11 @@ export async function runAgent(
         system: systemPrompt,
         messages,
         tools,
+        ...(reasoningEffort !== "none" && {
+          providerOptions: {
+            openai: { reasoningEffort },
+          },
+        }),
       });
 
       const { text, toolCalls, toolResults } = await consumeStream(stream, eventBus);

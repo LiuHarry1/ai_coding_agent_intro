@@ -17,6 +17,16 @@
   background: linear-gradient(180deg, rgba(88,166,255,0.06) 0%, var(--bg-secondary) 48px);
 }
 
+.subagent-steps {
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+}
+.subagent-steps .tool-card {
+  border-color: rgba(88,166,255,0.15);
+  background: var(--bg-primary);
+  font-size: 13px;
+}
+
 .tool-card.has-error { border-color: rgba(248,81,73,0.3); }
 .tool-card.has-error .tool-name { color: var(--red); }
 

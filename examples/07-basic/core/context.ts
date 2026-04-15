@@ -1,10 +1,16 @@
 import { generateText } from "ai";
+import { configManager } from "./config-manager.js";
 import { defaultManager } from "./provider-manager.js";
 import type { IEventBus, Message } from "./types.js";
 
-const SUMMARIZE_THRESHOLD = parseInt(process.env.COMPACT_THRESHOLD || "40", 10);
-const KEEP_RECENT = parseInt(process.env.COMPACT_KEEP || "10", 10);
-const COMPACT_MODEL = process.env.COMPACT_MODEL || "gpt-4o-mini";
+function getCompactionConfig() {
+  const cfg = configManager.get("compaction");
+  return {
+    threshold: process.env.COMPACT_THRESHOLD ? parseInt(process.env.COMPACT_THRESHOLD, 10) : cfg.threshold,
+    keepRecent: process.env.COMPACT_KEEP ? parseInt(process.env.COMPACT_KEEP, 10) : cfg.keepRecent,
+    model: process.env.COMPACT_MODEL || cfg.model,
+  };
+}
 
 const SUMMARY_SYSTEM = `You are compacting an AI coding agent's conversation to save context space.
 Analyze the conversation and produce a structured working-state summary.
@@ -39,9 +45,11 @@ export async function summarizeIfNeeded(
   messages: Message[],
   eventBus: IEventBus
 ): Promise<Message[]> {
-  if (messages.length < SUMMARIZE_THRESHOLD) return messages;
+  const { threshold, keepRecent, model } = getCompactionConfig();
 
-  let splitPoint = messages.length - KEEP_RECENT;
+  if (messages.length < threshold) return messages;
+
+  let splitPoint = messages.length - keepRecent;
   while (splitPoint > 0 && messages[splitPoint].role === "tool") {
     splitPoint--;
   }
@@ -64,7 +72,7 @@ export async function summarizeIfNeeded(
   try {
     const provider = defaultManager.get();
     const result = await generateText({
-      model: provider.chatModel(COMPACT_MODEL),
+      model: provider.chatModel(model),
       system: SUMMARY_SYSTEM,
       messages: [
         {

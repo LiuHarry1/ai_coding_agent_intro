@@ -145,9 +145,9 @@ export default function ToolCallCard({ part }) {
           </details>
 
           {part.subagentParts && part.subagentParts.length > 0 && (
-            <div className="subagent-log">
+            <div className="subagent-steps">
               {part.subagentParts.map((sp, i) => (
-                <div key={i} className="subagent-entry">{JSON.stringify(sp)}</div>
+                <ToolCallCard key={i} part={sp} />
               ))}
             </div>
           )}

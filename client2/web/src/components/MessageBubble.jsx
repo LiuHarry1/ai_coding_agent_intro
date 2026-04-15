@@ -159,7 +159,7 @@ export default function MessageBubble({ message }) {
   let currentToolGroup = null;
 
   for (const part of parts) {
-    if (part.type === "tool_call" || part.type === "subagent_tool_call" || part.type === "subagent_tool_result" || part.type === "subagent_status") {
+    if (part.type === "tool_call") {
       if (!currentToolGroup) {
         currentToolGroup = { type: "tool_group", items: [] };
         groupedParts.push(currentToolGroup);

@@ -147,7 +147,7 @@ export const useChatStore = create((set, get) => ({
           if (!dataStr) continue;
           let data;
           try { data = JSON.parse(dataStr); } catch { continue; }
-          get()._handleSSE(eventType, data);
+          try { get()._handleSSE(eventType, data); } catch (e) { console.error("[SSE] handler error:", eventType, e); }
         }
       }
     } catch (err) {
@@ -166,14 +166,18 @@ export const useChatStore = create((set, get) => ({
     const store = get();
 
     if (event.startsWith("subagent_") && event.endsWith("_tool_call")) {
-      store._appendPart({ type: "subagent_tool_call", event, ...data });
+      store._appendSubagentEvent({ type: "tool_call", ...data });
       return;
     }
     if (event.startsWith("subagent_") && event.endsWith("_tool_result")) {
-      store._appendPart({ type: "subagent_tool_result", event, ...data });
+      store._appendSubagentEvent({ type: "tool_result", ...data });
       return;
     }
-    if (event.startsWith("subagent_") && event.endsWith("_step_start")) {
+    if (event.startsWith("subagent_") && event.endsWith("_text_delta")) {
+      store._appendSubagentEvent({ type: "text_delta", ...data });
+      return;
+    }
+    if (event.startsWith("subagent_") && (event.endsWith("_step_start") || event.endsWith("_thinking") || event.endsWith("_done"))) {
       return;
     }
     if (event === "tool_timing") {
@@ -322,7 +326,10 @@ export const useChatStore = create((set, get) => ({
       if (last?.type !== "assistant") return { todos };
 
       const parts = [...last.parts];
-      const existingIdx = parts.findLastIndex((p) => p.type === "todo_list");
+      let existingIdx = -1;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (parts[i].type === "todo_list") { existingIdx = i; break; }
+      }
       if (existingIdx >= 0) {
         parts[existingIdx] = { ...parts[existingIdx], todos };
       } else {
@@ -340,6 +347,35 @@ export const useChatStore = create((set, get) => ({
       if (last?.type === "assistant") {
         msgs[msgs.length - 1] = { ...last, parts: [...last.parts, part] };
       }
+      return { messages: msgs };
+    });
+  },
+
+  _appendSubagentEvent: (ev) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+
+      const parts = [...last.parts];
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (parts[i].type === "tool_call" && parts[i].status !== "done") {
+          const sub = [...(parts[i].subagentParts || [])];
+          if (ev.type === "tool_call") {
+            sub.push({ type: "tool_call", name: ev.name, args: ev.args, toolCallId: ev.toolCallId });
+          } else if (ev.type === "tool_result") {
+            for (let j = sub.length - 1; j >= 0; j--) {
+              if (sub[j].toolCallId === ev.toolCallId) {
+                sub[j] = { ...sub[j], result: ev.result, status: "done" };
+                break;
+              }
+            }
+          }
+          parts[i] = { ...parts[i], subagentParts: sub };
+          break;
+        }
+      }
+      msgs[msgs.length - 1] = { ...last, parts };
       return { messages: msgs };
     });
   },
