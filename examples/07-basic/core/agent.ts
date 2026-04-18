@@ -41,7 +41,7 @@ function formatTodoReminder(todos: TodoItem[]): string {
 
 export async function runAgent(
   userMessage: string,
-  { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 40, model }: AgentOptions
+  { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 80, model }: AgentOptions
 ): Promise<string> {
   const providerConfig = configManager.get("provider");
   const resolvedModel = model ?? providerConfig.model;

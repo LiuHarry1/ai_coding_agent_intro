@@ -358,23 +358,36 @@ export const useChatStore = create((set, get) => ({
       if (last?.type !== "assistant") return s;
 
       const parts = [...last.parts];
+      let targetIdx = -1;
+
       for (let i = parts.length - 1; i >= 0; i--) {
         if (parts[i].type === "tool_call" && parts[i].status !== "done") {
-          const sub = [...(parts[i].subagentParts || [])];
-          if (ev.type === "tool_call") {
-            sub.push({ type: "tool_call", name: ev.name, args: ev.args, toolCallId: ev.toolCallId });
-          } else if (ev.type === "tool_result") {
-            for (let j = sub.length - 1; j >= 0; j--) {
-              if (sub[j].toolCallId === ev.toolCallId) {
-                sub[j] = { ...sub[j], result: ev.result, status: "done" };
-                break;
-              }
-            }
-          }
-          parts[i] = { ...parts[i], subagentParts: sub };
+          targetIdx = i;
           break;
         }
       }
+      if (targetIdx === -1) {
+        for (let i = parts.length - 1; i >= 0; i--) {
+          if (parts[i].type === "tool_call" && (parts[i].name === "explore" || parts[i].name === "task")) {
+            targetIdx = i;
+            break;
+          }
+        }
+      }
+      if (targetIdx === -1) return s;
+
+      const sub = [...(parts[targetIdx].subagentParts || [])];
+      if (ev.type === "tool_call") {
+        sub.push({ type: "tool_call", name: ev.name, args: ev.args, toolCallId: ev.toolCallId });
+      } else if (ev.type === "tool_result") {
+        for (let j = sub.length - 1; j >= 0; j--) {
+          if (sub[j].toolCallId === ev.toolCallId) {
+            sub[j] = { ...sub[j], result: ev.result, status: "done" };
+            break;
+          }
+        }
+      }
+      parts[targetIdx] = { ...parts[targetIdx], subagentParts: sub };
       msgs[msgs.length - 1] = { ...last, parts };
       return { messages: msgs };
     });

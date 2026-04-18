@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import ToolCallCard from "./ToolCallCard.jsx";
 
@@ -38,7 +39,7 @@ function ReasoningBlock({ part }) {
       </button>
       {(open || isStreaming) && part.content && (
         <div className="reasoning-content">
-          <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
             {part.content}
           </ReactMarkdown>
         </div>
@@ -178,7 +179,7 @@ export default function MessageBubble({ message }) {
           case "text":
             return (
               <div className="content" key={i}>
-                <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                   {part.content}
                 </ReactMarkdown>
               </div>

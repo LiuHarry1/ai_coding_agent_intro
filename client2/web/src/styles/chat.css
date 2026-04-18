@@ -235,6 +235,38 @@
 .msg-assistant .content a { color: var(--accent); text-decoration: none; }
 .msg-assistant .content a:hover { text-decoration: underline; }
 
+/* ── Markdown tables ─────────────────────── */
+.msg-assistant .content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.msg-assistant .content th,
+.msg-assistant .content td {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.msg-assistant .content th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+}
+
+.msg-assistant .content tr:nth-child(even) td {
+  background: var(--bg-secondary);
+}
+
+[data-theme="light"] .msg-assistant .content th { background: #f0f3f6; color: #1f2328; }
+[data-theme="light"] .msg-assistant .content td { border-color: #d1d9e0; }
+[data-theme="light"] .msg-assistant .content tr:nth-child(even) td { background: #f6f8fa; }
+
 /* ── Thinking Indicator ────────────────────── */
 .thinking-indicator,
 .streaming-indicator {
