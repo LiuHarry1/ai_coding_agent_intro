@@ -45,7 +45,7 @@ export async function runAgent(
 ): Promise<string> {
   const providerConfig = configManager.get("provider");
   const resolvedModel = model ?? providerConfig.model;
-  const reasoningEffort = providerConfig.reasoningEffort ?? "medium";
+  const reasoningEffort = providerConfig.reasoningEffort ?? "none";
   messages.push(buildUserMessage(userMessage, images));
 
   let finalText = "";
@@ -84,9 +84,10 @@ export async function runAgent(
         system: systemPrompt,
         messages,
         tools,
+        maxRetries: 3,
         ...(reasoningEffort !== "none" && {
           providerOptions: {
-            openai: { reasoningEffort },
+            openai: { reasoningEffort, reasoningSummary: "auto" },
           },
         }),
       });

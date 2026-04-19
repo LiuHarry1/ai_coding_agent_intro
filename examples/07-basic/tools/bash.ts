@@ -112,7 +112,10 @@ export const definition: ToolDefinition = {
         timeout?: number;
       }) => {
         // ── Check / kill a background process ──
-        if (args.pid != null) {
+        // Prefer `command` if provided. Some providers (OpenAI Responses API
+        // with strict tools) may pass `pid: 0` even when the model wants to
+        // run a command, so we only enter pid-mode when no command is given.
+        if (!args.command && args.pid != null) {
           return args.kill ? killProcess(args.pid) : checkProcess(args.pid);
         }
         if (!args.command) {

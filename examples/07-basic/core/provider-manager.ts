@@ -1,13 +1,33 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { configManager } from "./config-manager.js";
 import type { IProvider } from "./types.js";
 
+/**
+ * Picks the right SDK adapter based on whether reasoning control is requested.
+ *
+ * - reasoningEffort === "none" → `@ai-sdk/openai-compatible` + /chat/completions.
+ *   Maximum compatibility with OpenAI-compatible proxies. No strict-tools quirks,
+ *   no Responses API event protocol, no reasoning summary plumbing.
+ *
+ * - reasoningEffort !== "none" → `@ai-sdk/openai` + /v1/responses.
+ *   Required for gpt-5 family when combining tools + reasoning_effort, and the
+ *   only path that can surface reasoning summary text.
+ */
 function createProviderFromConfig(): IProvider {
-  const { name, baseURL, apiKey } = configManager.get("provider");
-  const openai = createOpenAI({ name, baseURL, apiKey });
-  return {
-    chatModel: (modelId) => openai.chat(modelId),
-  };
+  const { name, baseURL, apiKey, reasoningEffort } = configManager.get("provider");
+
+  if (reasoningEffort && reasoningEffort !== "none") {
+    const openai = createOpenAI({ name, baseURL, apiKey });
+    return { chatModel: (modelId) => openai.responses(modelId) };
+  }
+
+  const compat = createOpenAICompatible({
+    name: name ?? "openai-compatible",
+    baseURL,
+    apiKey,
+  });
+  return { chatModel: (modelId) => compat.chatModel(modelId) };
 }
 
 interface ProviderEntry {
