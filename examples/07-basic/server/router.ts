@@ -201,6 +201,10 @@ function sessionToUIMessages(messages: Message[]): unknown[] {
       for (const part of msg.content as Array<{ type: string; text?: string; toolCallId?: string; toolName?: string; input?: unknown }>) {
         if (part.type === "text" && part.text) {
           parts.push({ type: "text", content: part.text });
+        } else if (part.type === "reasoning" && part.text) {
+          // ReasoningPart was sanitized in agent.ts to only carry the
+          // summary text; surface it to the frontend's <ReasoningBlock>.
+          parts.push({ type: "reasoning", content: part.text, status: "done" });
         } else if (part.type === "tool-call") {
           parts.push({
             type: "tool_call",

@@ -217,9 +217,25 @@ export const useChatStore = create((set, get) => ({
       case "todo_update":
         store._updateTodos(data.todos);
         break;
+      case "tool_input_start":
+        store._removeThinking();
+        store._appendPart({
+          type: "tool_call",
+          name: data.name,
+          toolCallId: data.toolCallId,
+          args: {},
+          status: "streaming-input",
+          liveInputBytes: 0,
+          liveInputStart: Date.now(),
+          startTime: Date.now(),
+        });
+        break;
+      case "tool_input_delta":
+        store._appendToolInputDelta(data);
+        break;
       case "tool_call":
         store._removeThinking();
-        store._appendPart({ type: "tool_call", ...data, startTime: Date.now() });
+        store._upsertToolCall({ ...data, startTime: Date.now() });
         break;
       case "tool_result":
         store._updateToolResult(data);
@@ -347,6 +363,64 @@ export const useChatStore = create((set, get) => ({
       if (last?.type === "assistant") {
         msgs[msgs.length - 1] = { ...last, parts: [...last.parts, part] };
       }
+      return { messages: msgs };
+    });
+  },
+
+  /**
+   * Bump the live byte counter on the in-progress tool_call card matching
+   * `toolCallId`. Used to show "Generating arguments… N chars" while the
+   * model is streaming the tool's argument JSON.
+   */
+  _appendToolInputDelta: (data) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+
+      const parts = [...last.parts];
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        if (p.type === "tool_call" && p.toolCallId === data.toolCallId && p.status !== "done") {
+          parts[i] = { ...p, liveInputBytes: (p.liveInputBytes || 0) + (data.bytes || 0) };
+          break;
+        }
+      }
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs };
+    });
+  },
+
+  /**
+   * Upgrade a streaming-input placeholder (created by tool_input_start) into
+   * a fully-populated tool_call once the SDK has parsed the complete args,
+   * or just append a new card if no placeholder existed (older SDK paths
+   * that skip tool-input-* events).
+   */
+  _upsertToolCall: (data) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+
+      const parts = [...last.parts];
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        if (p.type === "tool_call" && p.toolCallId === data.toolCallId) {
+          parts[i] = {
+            ...p,
+            name: data.name,
+            args: data.args,
+            status: "running",
+            liveInputBytes: undefined,
+            liveInputStart: undefined,
+          };
+          msgs[msgs.length - 1] = { ...last, parts };
+          return { messages: msgs };
+        }
+      }
+      parts.push({ type: "tool_call", ...data });
+      msgs[msgs.length - 1] = { ...last, parts };
       return { messages: msgs };
     });
   },

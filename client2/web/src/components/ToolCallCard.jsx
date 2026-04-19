@@ -60,6 +60,31 @@ function renderToolArgs(name, args) {
   );
 }
 
+function StreamingArgs({ bytes, startTime }) {
+  // Tick once a second so the elapsed counter keeps moving even if the
+  // upstream pauses streaming bytes for a moment (which is exactly the
+  // case we want visible — "still alive, model is thinking between
+  // chunks").
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const elapsed = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
+  const display =
+    bytes >= 1000 ? `${(bytes / 1000).toFixed(1)}k chars` : `${bytes} chars`;
+
+  return (
+    <div className="tool-streaming-input">
+      <span className="spinner spinner-sm" />
+      <span className="tool-streaming-input-label">
+        Generating arguments… {display} ({elapsed}s)
+      </span>
+    </div>
+  );
+}
+
 function LiveTerminal({ output, elapsed, done }) {
   const termRef = useRef(null);
 
@@ -121,6 +146,13 @@ export default function ToolCallCard({ part }) {
         {fName && <span className="tool-file-badge" title={filePath}>{fName}</span>}
         <span className="tool-args-preview">{!fName ? formatArgs(name, args) : ""}</span>
         <span className="tool-meta">
+          {!isDone && part.liveInputBytes != null && (
+            <span className="tool-duration tool-duration--live">
+              {part.liveInputBytes >= 1000
+                ? `${(part.liveInputBytes / 1000).toFixed(1)}k chars`
+                : `${part.liveInputBytes} chars`}
+            </span>
+          )}
           {part.liveElapsed && !isDone && (
             <span className="tool-duration tool-duration--live">{part.liveElapsed}s</span>
           )}
@@ -135,6 +167,10 @@ export default function ToolCallCard({ part }) {
 
       {expanded && (
         <div className="tool-card-body">
+          {!isDone && part.liveInputBytes != null && (
+            <StreamingArgs bytes={part.liveInputBytes} startTime={part.liveInputStart} />
+          )}
+
           {hasLiveOutput && !isDone && (
             <LiveTerminal output={part.liveOutput} elapsed={part.liveElapsed} done={part.liveDone} />
           )}

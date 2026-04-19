@@ -2,7 +2,17 @@ import { streamText } from "ai";
 import { defaultManager } from "./provider-manager.js";
 import { configManager } from "./config-manager.js";
 import { summarizeIfNeeded } from "./context.js";
-import type { AgentOptions, Message, UserMessage, UserContentPart, AssistantContentPart, ToolResultPart, TodoItem, TodoStatus, ReasoningEffort } from "./types.js";
+import type {
+  AgentOptions,
+  AssistantContentPart,
+  Message,
+  ReasoningPart,
+  UserMessage,
+  UserContentPart,
+  ToolResultPart,
+  TodoItem,
+  TodoStatus,
+} from "./types.js";
 
 function parseDataUrl(dataUrl: string): { buffer: Buffer; mediaType: string } {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -39,6 +49,98 @@ function formatTodoReminder(todos: TodoItem[]): string {
   return `[Active todo list — update via todo_write(merge=true) as you complete items]\n${lines.join("\n")}`;
 }
 
+/**
+ * Strip OpenAI Responses-API specific fields from reasoning parts before we
+ * persist them. Concretely we drop `providerOptions.openai.{itemId,
+ * reasoningEncryptedContent}` so the on-disk message only carries the plain
+ * summary text. This makes the JSONL portable across proxies that don't
+ * support encrypted reasoning replay (e.g. copilot-api).
+ */
+function sanitizeReasoningParts(messages: Message[]): void {
+  for (const msg of messages) {
+    if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue;
+    for (const part of msg.content) {
+      if (part.type !== "reasoning") continue;
+      delete (part as ReasoningPart).providerOptions;
+    }
+  }
+}
+
+/**
+ * Maximum number of historical `ReasoningPart`s to inline into the next
+ * request. Older reasoning is dropped from the prompt entirely (it still
+ * lives on disk and renders in the UI on session reload — this only affects
+ * what we resend to the LLM).
+ *
+ * Why bound it: every turn we re-inline the full prior reasoning as plain
+ * text. For deep reasoning models running 5-10 tool steps the prompt grows
+ * super-linearly and quickly trips proxy body-size / timeout limits
+ * (copilot-api, etc.). Keeping just the most recent block preserves the
+ * "what was I just thinking before this tool result" context, which is the
+ * piece that actually matters for the next decision.
+ */
+const KEEP_RECENT_REASONINGS = 1;
+
+/**
+ * Replace every `ReasoningPart` in the conversation with a plain `TextPart`
+ * wrapped in `<thinking>…</thinking>` markers. Used right before we hand the
+ * messages to the SDK so:
+ *   - The Responses API request never contains `{type:"reasoning", id,
+ *     encrypted_content}` items (which require a stateful upstream).
+ *   - chat/completions / copilot-api proxies just see normal assistant text.
+ *   - The model still has visibility into prior chains-of-thought (lossy but
+ *     better than nothing).
+ *
+ * Only the last `KEEP_RECENT_REASONINGS` reasoning parts are inlined; older
+ * ones are silently dropped from the request payload to keep prompt growth
+ * bounded across multi-step agent loops.
+ *
+ * Returns shallow copies; the original `messages` array is not mutated so
+ * sanitized reasoning parts remain in the on-disk session.
+ */
+function inlineReasoningAsText(messages: Message[]): Message[] {
+  // First pass (back-to-front): mark the most recent N reasoning parts to
+  // keep. We use a WeakSet keyed by the part object reference so the second
+  // pass can decide cheaply per-part.
+  const keep = new WeakSet<object>();
+  let remaining = KEEP_RECENT_REASONINGS;
+  for (let i = messages.length - 1; i >= 0 && remaining > 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+    for (let j = m.content.length - 1; j >= 0 && remaining > 0; j--) {
+      const part = m.content[j];
+      if (part.type !== "reasoning") continue;
+      keep.add(part);
+      remaining--;
+    }
+  }
+
+  return messages
+    .map((m): Message | null => {
+      if (m.role !== "assistant" || !Array.isArray(m.content)) return m;
+
+      const newContent: AssistantContentPart[] = [];
+      for (const part of m.content) {
+        if (part.type === "reasoning") {
+          if (!keep.has(part)) continue;
+          const text = (part.text ?? "").trim();
+          if (text) {
+            newContent.push({
+              type: "text",
+              text: `<thinking>\n${text}\n</thinking>`,
+            });
+          }
+          continue;
+        }
+        newContent.push(part);
+      }
+
+      if (newContent.length === 0) return null;
+      return { role: "assistant", content: newContent };
+    })
+    .filter((m): m is Message => m !== null);
+}
+
 export async function runAgent(
   userMessage: string,
   { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 80, model }: AgentOptions
@@ -60,7 +162,14 @@ export async function runAgent(
     for (let step = 0; step < maxSteps; step++) {
       eventBus.emit("step_start", { step });
 
+      const stepStart = Date.now();
+      const compactStart = Date.now();
       const managed = await summarizeIfNeeded(messages as Message[], eventBus);
+      const compactMs = Date.now() - compactStart;
+      console.log(
+        `[agent] step ${step} start — ${messages.length} msgs, model=${resolvedModel}, effort=${reasoningEffort}` +
+          (compactMs > 50 ? `, compaction=${compactMs}ms` : "")
+      );
       if (managed !== messages) {
         messages.length = 0;
         messages.push(...managed);
@@ -79,34 +188,84 @@ export async function runAgent(
         }
       }
 
-      const stream = streamText({
-        model: provider.chatModel(resolvedModel),
-        system: systemPrompt,
-        messages,
-        tools,
-        maxRetries: 3,
-        ...(reasoningEffort !== "none" && {
-          providerOptions: {
-            openai: { reasoningEffort, reasoningSummary: "auto" },
-          },
-        }),
-      });
-
-      const { text, toolCalls, toolResults } = await consumeStream(stream, eventBus);
-
-      if (text) finalText = text;
-
-      const assistantContent: AssistantContentPart[] = [];
-      if (text) assistantContent.push({ type: "text", text });
-      for (const tc of toolCalls) {
-        assistantContent.push({
-          type: "tool-call",
-          toolCallId: tc.toolCallId,
-          toolName: tc.toolName,
-          input: tc.input,
+      let stepResult: { text: string; toolCalls: StreamResult["toolCalls"]; toolResults: StreamResult["toolResults"] };
+      const requestStart = Date.now();
+      try {
+        const stream = streamText({
+          model: provider.chatModel(resolvedModel),
+          system: systemPrompt,
+          // Inline any prior `ReasoningPart` as `<thinking>…</thinking>` text so
+          // we don't depend on `{type:"reasoning", id, encrypted_content}`
+          // round-tripping. This makes the request portable across stateless
+          // proxies (copilot-api, etc.) at the cost of being lossy compared to
+          // OpenAI's native encrypted replay.
+          messages: inlineReasoningAsText(messages),
+          tools,
+          maxRetries: 3,
+          ...(reasoningEffort !== "none" && {
+            providerOptions: {
+              openai: {
+                reasoningEffort,
+                // Surface the human-readable summary so the UI can stream it
+                // and we can persist it as plain text below.
+                reasoningSummary: "auto",
+                // Stateless: never let the upstream try to recall prior items
+                // by id. We carry all required context client-side as text.
+                store: false,
+              },
+            },
+          }),
         });
+
+        const timing = { firstEventMs: 0 };
+        stepResult = await consumeStream(stream, eventBus, timing);
+
+        // Trust the SDK's response.messages for ordering (reasoning → text →
+        // tool-call → tool-result). We then strip the OpenAI-specific
+        // providerOptions from reasoning parts so what we persist is just the
+        // human-readable summary text. The next turn re-inlines those parts as
+        // `<thinking>…</thinking>` text via `inlineReasoningAsText`.
+        const response = await stream.response;
+        const sdkMessages = response.messages as unknown as Message[];
+        sanitizeReasoningParts(sdkMessages);
+        messages.push(...sdkMessages);
+
+        const totalMs = Date.now() - requestStart;
+        const ttfb = timing.firstEventMs ? timing.firstEventMs - requestStart : -1;
+        const reasoningCount = sdkMessages.reduce(
+          (n, m) =>
+            n +
+            (m.role === "assistant" && Array.isArray(m.content)
+              ? m.content.filter((p) => p.type === "reasoning").length
+              : 0),
+          0
+        );
+        const generationMs = ttfb >= 0 ? totalMs - ttfb : -1;
+        console.log(
+          `[agent] step ${step} done — total=${totalMs}ms ` +
+            `(ttfb=${ttfb}ms upstream-wait, gen=${generationMs}ms streaming), ` +
+            `reasoning_blocks=${reasoningCount}, tool_calls=${stepResult.toolCalls.length}, ` +
+            `step_total=${Date.now() - stepStart}ms`
+        );
+      } catch (err) {
+        // Anything thrown here (mid-stream socket close from a flaky proxy,
+        // upstream 5xx, etc.) used to escape as an unhandled rejection and
+        // crash the Node process. Catch it, surface it to the UI, and end
+        // the agent loop gracefully so the SSE stream closes cleanly and the
+        // session stays usable.
+        const message = err instanceof Error ? err.message : String(err);
+        const cause = err instanceof Error && err.cause instanceof Error ? ` (${err.cause.message})` : "";
+        console.error(`[agent] step ${step} failed: ${message}${cause}`);
+        eventBus.emit("error", {
+          message: `Upstream stream failed: ${message}${cause}. Try again or check your proxy logs.`,
+        });
+        autoCompleteTodos(currentTodos, eventBus);
+        eventBus.emit("done", { steps: step + 1 });
+        return finalText;
       }
-      messages.push({ role: "assistant", content: assistantContent });
+
+      const { text, toolCalls, toolResults } = stepResult;
+      if (text) finalText = text;
 
       if (toolCalls.length === 0) {
         autoCompleteTodos(currentTodos, eventBus);
@@ -114,15 +273,10 @@ export async function runAgent(
         return finalText;
       }
 
-      for (const tr of toolResults) {
-        const part: ToolResultPart = {
-          type: "tool-result",
-          toolCallId: tr.toolCallId,
-          toolName: tr.toolName,
-          output: { type: "text", value: tr.result },
-        };
-        messages.push({ role: "tool", content: [part] });
-      }
+      // Safety net: if the SDK didn't emit a tool-result for some tool-call
+      // (e.g. an exception inside execute), append a synthetic error result so
+      // the next turn's request is well-formed.
+      ensureToolResultsPresent(messages, toolCalls, toolResults);
 
       eventBus.emit("thinking", {});
     }
@@ -142,9 +296,22 @@ interface StreamResult {
   toolResults: Array<{ toolCallId: string; toolName: string; result: string }>;
 }
 
+// Event types that represent actual upstream content (not SDK-side
+// bookkeeping like "start" / "start-step"). We tag the first occurrence of
+// any of these as our real time-to-first-byte.
+const CONTENT_EVENT_TYPES = new Set([
+  "reasoning-start",
+  "reasoning-delta",
+  "text-delta",
+  "tool-input-start",
+  "tool-input-delta",
+  "tool-call",
+]);
+
 async function consumeStream(
   stream: ReturnType<typeof streamText>,
-  eventBus: AgentOptions["eventBus"]
+  eventBus: AgentOptions["eventBus"],
+  timing?: { firstEventMs: number }
 ): Promise<StreamResult> {
   const toolCalls: StreamResult["toolCalls"] = [];
   const toolResults: StreamResult["toolResults"] = [];
@@ -152,6 +319,9 @@ async function consumeStream(
   let reasoningStarted = false;
 
   for await (const event of stream.fullStream) {
+    if (timing && !timing.firstEventMs && CONTENT_EVENT_TYPES.has(event.type)) {
+      timing.firstEventMs = Date.now();
+    }
     switch (event.type) {
       case "reasoning-start":
         reasoningStarted = true;
@@ -186,6 +356,41 @@ async function consumeStream(
         if (delta) {
           text += delta;
           eventBus.emit("text_delta", { delta });
+        }
+        break;
+      }
+
+      case "tool-input-start": {
+        // Fired when the model begins streaming a tool-call's argument JSON
+        // (before it's fully parsed). We use it to surface a placeholder card
+        // immediately so the user sees something during long arg generation
+        // (e.g. an edit_file with a 2000-token new_string).
+        if (reasoningStarted) {
+          eventBus.emit("reasoning_end", {});
+          reasoningStarted = false;
+        }
+        const e = event as { id?: string; toolCallId?: string; toolName?: string };
+        const id = e.id ?? e.toolCallId;
+        if (id) {
+          eventBus.emit("tool_input_start", {
+            toolCallId: id,
+            name: e.toolName,
+          });
+        }
+        break;
+      }
+
+      case "tool-input-delta": {
+        // Each delta is a chunk of the partial JSON args. We don't try to
+        // parse it (would need a tolerant JSON parser); we just count bytes
+        // so the UI can show "Generating arguments… 1.2k chars" progress.
+        const e = event as { id?: string; toolCallId?: string; delta?: string };
+        const id = e.id ?? e.toolCallId;
+        if (id && e.delta) {
+          eventBus.emit("tool_input_delta", {
+            toolCallId: id,
+            bytes: e.delta.length,
+          });
         }
         break;
       }
@@ -249,4 +454,42 @@ function backfillMissingResults(
     eventBus.emit("tool_result", { name: tc.toolName, result, toolCallId: tc.toolCallId });
     toolResults.push({ toolCallId: tc.toolCallId, toolName: tc.toolName, result });
   }
+}
+
+/**
+ * Walk the messages we just appended from `response.messages` and make sure
+ * every tool-call has a matching tool-result. If the SDK dropped one (e.g. a
+ * thrown execute that didn't produce a result message), append a synthetic
+ * error result so the next request stays well-formed for the OpenAI
+ * Responses API (which 400s on unmatched tool_call_ids).
+ */
+function ensureToolResultsPresent(
+  messages: Message[],
+  toolCalls: StreamResult["toolCalls"],
+  toolResults: StreamResult["toolResults"]
+): void {
+  const haveResultIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role !== "tool") continue;
+    for (const part of m.content) {
+      if (part.type === "tool-result") haveResultIds.add(part.toolCallId);
+    }
+  }
+
+  const missing = toolCalls.filter((tc) => !haveResultIds.has(tc.toolCallId));
+  if (missing.length === 0) return;
+
+  const resultById = new Map(toolResults.map((tr) => [tr.toolCallId, tr.result]));
+  const parts: ToolResultPart[] = missing.map((tc) => ({
+    type: "tool-result",
+    toolCallId: tc.toolCallId,
+    toolName: tc.toolName,
+    output: {
+      type: "text",
+      value:
+        resultById.get(tc.toolCallId) ??
+        `Error: Missing tool result for ${tc.toolName} (call ${tc.toolCallId}).`,
+    },
+  }));
+  messages.push({ role: "tool", content: parts });
 }

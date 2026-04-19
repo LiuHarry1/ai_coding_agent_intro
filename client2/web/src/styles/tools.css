@@ -239,6 +239,23 @@
   font-size: 11px;
 }
 
+/* ── Streaming tool-call arguments ──────── */
+.tool-streaming-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--green);
+  background: rgba(40, 167, 69, 0.06);
+}
+
+.tool-streaming-input-label {
+  font-family: var(--font-mono);
+  letter-spacing: 0.2px;
+}
+
 /* ── Live Terminal (bash wait mode) ──────── */
 .live-terminal {
   border-bottom: 1px solid var(--border);

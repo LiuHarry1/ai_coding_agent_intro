@@ -1,4 +1,5 @@
 import type { LanguageModel, Tool } from "ai";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>;
@@ -75,10 +76,23 @@ export interface ToolCallPart {
   toolCallId: string;
   toolName: string;
   input: Record<string, unknown>;
+  providerOptions?: ProviderOptions;
+}
+
+/**
+ * Reasoning part produced by reasoning models (e.g. OpenAI Responses API).
+ * `providerOptions.openai.{ itemId, reasoningEncryptedContent }` carries the
+ * opaque state that MUST be replayed verbatim on the next request, otherwise
+ * the model loses its chain-of-thought across tool-call rounds.
+ */
+export interface ReasoningPart {
+  type: "reasoning";
+  text: string;
+  providerOptions?: ProviderOptions;
 }
 
 export type UserContentPart = TextPart | ImagePart;
-export type AssistantContentPart = TextPart | ToolCallPart;
+export type AssistantContentPart = TextPart | ReasoningPart | ToolCallPart;
 
 export interface UserMessage {
   role: "user";
