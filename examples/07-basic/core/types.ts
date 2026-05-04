@@ -1,5 +1,6 @@
-import type { LanguageModel, Tool } from "ai";
+import type { Tool } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import type { LlmProfile } from "./llm/types.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>;
@@ -137,17 +138,17 @@ export interface AgentOptions {
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;
 
-// ── Provider ────────────────────────────────────
+// ── LLM provider ─────────────────────────────────
+// Profile/strategy types live in `./llm/`. Re-exported here for convenience.
 
-export interface IProvider {
-  chatModel(model: string): LanguageModel;
-}
-
-export interface ProviderConfig {
-  name?: string;
-  baseURL?: string;
-  apiKey?: string;
-}
+export type {
+  LlmProfile,
+  ProviderId,
+  ThinkingConfig,
+  IProvider,
+  AgentStreamTextExtras,
+  ProviderStrategy,
+} from "./llm/types.js";
 
 // ── Plugin ──────────────────────────────────────
 
@@ -250,16 +251,8 @@ export interface CompactionConfig {
   model: string;
 }
 
-export type ReasoningEffort = "none" | "low" | "medium" | "high";
-
 export interface AppConfig {
-  provider: {
-    name: string;
-    baseURL: string;
-    apiKey: string;
-    model: string;
-    reasoningEffort: ReasoningEffort;
-  };
+  provider: LlmProfile;
   compaction: CompactionConfig;
   mcpServers: Record<string, MCPServerConfig>;
 }

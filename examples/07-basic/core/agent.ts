@@ -1,6 +1,5 @@
 import { streamText } from "ai";
 import { defaultManager } from "./provider-manager.js";
-import { configManager } from "./config-manager.js";
 import { summarizeIfNeeded } from "./context.js";
 import type {
   AgentOptions,
@@ -145,13 +144,11 @@ export async function runAgent(
   userMessage: string,
   { tools, systemPrompt, eventBus, messages = [], images, maxSteps = 80, model }: AgentOptions
 ): Promise<string> {
-  const providerConfig = configManager.get("provider");
-  const resolvedModel = model ?? providerConfig.model;
-  const reasoningEffort = providerConfig.reasoningEffort ?? "none";
   messages.push(buildUserMessage(userMessage, images));
 
   let finalText = "";
   const provider = defaultManager.get();
+  const resolvedModel = model ?? provider.defaultModelId();
 
   let currentTodos: TodoItem[] = [];
   const unsubTodo = eventBus.on("todo_update", (data) => {
@@ -167,7 +164,7 @@ export async function runAgent(
       const managed = await summarizeIfNeeded(messages as Message[], eventBus);
       const compactMs = Date.now() - compactStart;
       console.log(
-        `[agent] step ${step} start — ${messages.length} msgs, model=${resolvedModel}, effort=${reasoningEffort}` +
+        `[agent] step ${step} start — ${messages.length} msgs, model=${resolvedModel}, llm=${provider.describe()}` +
           (compactMs > 50 ? `, compaction=${compactMs}ms` : "")
       );
       if (managed !== messages) {
@@ -202,19 +199,7 @@ export async function runAgent(
           messages: inlineReasoningAsText(messages),
           tools,
           maxRetries: 3,
-          ...(reasoningEffort !== "none" && {
-            providerOptions: {
-              openai: {
-                reasoningEffort,
-                // Surface the human-readable summary so the UI can stream it
-                // and we can persist it as plain text below.
-                reasoningSummary: "auto",
-                // Stateless: never let the upstream try to recall prior items
-                // by id. We carry all required context client-side as text.
-                store: false,
-              },
-            },
-          }),
+          ...provider.streamTextExtras(),
         });
 
         const timing = { firstEventMs: 0 };
@@ -308,6 +293,15 @@ const CONTENT_EVENT_TYPES = new Set([
   "tool-call",
 ]);
 
+/** AI SDK maps provider `delta` → `text` in most paths; read both for safety. */
+function streamPartText(e: { text?: string; delta?: string }): string {
+  const t = e.text;
+  const d = e.delta;
+  if (typeof t === "string" && t.length > 0) return t;
+  if (typeof d === "string" && d.length > 0) return d;
+  return typeof t === "string" ? t : typeof d === "string" ? d : "";
+}
+
 async function consumeStream(
   stream: ReturnType<typeof streamText>,
   eventBus: AgentOptions["eventBus"],
@@ -333,7 +327,7 @@ async function consumeStream(
           reasoningStarted = true;
           eventBus.emit("reasoning_start", {});
         }
-        const delta = event.text;
+        const delta = streamPartText(event);
         if (delta) {
           eventBus.emit("reasoning_delta", { delta });
         }
@@ -352,7 +346,7 @@ async function consumeStream(
           eventBus.emit("reasoning_end", {});
           reasoningStarted = false;
         }
-        const delta = event.text;
+        const delta = streamPartText(event);
         if (delta) {
           text += delta;
           eventBus.emit("text_delta", { delta });

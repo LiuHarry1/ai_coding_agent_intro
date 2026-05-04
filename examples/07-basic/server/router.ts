@@ -10,7 +10,7 @@ import { definition as exploreDef } from "../subagents/explore.js";
 import { MCPManager } from "../core/mcp-manager.js";
 import { configManager } from "../core/config-manager.js";
 import { loadProjectRules } from "../core/rules-loader.js";
-import type { RouterOptions, Message, RunAgentFn, MCPServerConfig } from "../core/types.js";
+import type { RouterOptions, Message, RunAgentFn, MCPServerConfig, LlmProfile } from "../core/types.js";
 
 defaultRegistry.register(exploreDef);
 
@@ -302,7 +302,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     if (method === "PATCH" && url === "/settings/provider") {
       try {
         const body = await readBody(req);
-        configManager.patch("provider", body as Partial<{ name: string; baseURL: string; apiKey: string; model: string }>);
+        configManager.patch("provider", body as Partial<LlmProfile>);
         sendJSON(res, 200, { provider: configManager.getSafe().provider });
       } catch { sendJSON(res, 400, { error: "Invalid JSON" }); }
       return;

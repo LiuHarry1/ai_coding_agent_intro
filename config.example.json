@@ -1,10 +1,10 @@
 {
   "provider": {
-    "name": "copilot-proxy",
+    "provider": "anthropic",
     "baseURL": "http://localhost:4141/v1",
     "apiKey": "not-needed",
-    "model": "gpt-5.2",
-    "reasoningEffort": "medium"
+    "model": "claude-opus-4.7",
+    "thinking": { "mode": "medium" }
   },
   "compaction": {
     "threshold": 60,

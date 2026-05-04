@@ -2,18 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import type { AppConfig } from "./types.js";
+import { DEFAULT_PROFILE, resolveProfile, profileToRecord } from "./llm/index.js";
 
 const APP_DIR_NAME = ".ai-agent";
 const CONFIG_FILE = "config.json";
 
 const DEFAULTS: AppConfig = {
-  provider: {
-    name: "copilot-proxy",
-    baseURL: "http://localhost:4141/v1",
-    apiKey: "not-needed",
-    model: "gpt-5.2",
-    reasoningEffort: "medium",
-  },
+  provider: { ...DEFAULT_PROFILE },
   compaction: {
     threshold: 40,
     keepRecent: 10,
@@ -47,7 +42,10 @@ export class ConfigManager {
     try {
       const raw = JSON.parse(fs.readFileSync(this.#userConfigPath, "utf-8"));
       if (raw.provider) {
-        Object.assign(this.#config.provider, raw.provider);
+        this.#config.provider = resolveProfile({
+          ...profileToRecord(DEFAULT_PROFILE),
+          ...(raw.provider as object),
+        });
       }
       if (raw.compaction) {
         Object.assign(this.#config.compaction, raw.compaction);
@@ -73,20 +71,29 @@ export class ConfigManager {
   getSafe(): AppConfig {
     const copy = this.getAll();
     if (copy.provider.apiKey) {
-      copy.provider.apiKey = copy.provider.apiKey.replace(/.(?=.{4})/g, "*");
+      copy.provider = { ...copy.provider, apiKey: copy.provider.apiKey.replace(/.(?=.{4})/g, "*") };
     }
     return copy;
   }
 
   set<K extends ConfigKey>(key: K, value: AppConfig[K]): void {
-    this.#config[key] = value;
+    if (key === "provider") {
+      this.#config.provider = resolveProfile(value as object);
+    } else {
+      this.#config[key] = value;
+    }
     this.#persist();
     this.#notify(key);
   }
 
   /** Partially update a section (e.g. only change baseURL in provider). */
   patch<K extends ConfigKey>(key: K, partial: Partial<AppConfig[K]>): void {
-    if (typeof this.#config[key] === "object" && !Array.isArray(this.#config[key])) {
+    if (key === "provider") {
+      this.#config.provider = resolveProfile({
+        ...profileToRecord(this.#config.provider),
+        ...(partial as object),
+      });
+    } else if (typeof this.#config[key] === "object" && !Array.isArray(this.#config[key])) {
       Object.assign(this.#config[key] as Record<string, unknown>, partial);
     } else {
       this.#config[key] = partial as AppConfig[K];
