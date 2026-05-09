@@ -44,11 +44,17 @@ export interface ToolContext {
   middleware?: IMiddleware;
   runAgent?: RunAgentFn;
   registry?: IToolRegistry;
+  /** MCP tools keyed by merged name from MCPManager (e.g. `web_fetch`). Subagents list these in SubagentConfig.tools */
+  mcpTools?: Record<string, AnyTool>;
+  /** From AppConfig: omit disabled tools in registry.createAll; subagents pass through for MCP merge + filter */
+  toolEnablement?: Pick<AppConfig, "disabledTools">;
 }
 
 export interface ToolDefinition {
   name: string;
   description: string;
+  /** When false, the tool is never exposed to the model */
+  enabled?: boolean;
   create(cwd: string, context: ToolContext): AnyTool;
 }
 
@@ -255,4 +261,6 @@ export interface AppConfig {
   provider: LlmProfile;
   compaction: CompactionConfig;
   mcpServers: Record<string, MCPServerConfig>;
+  /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */
+  disabledTools?: string[];
 }

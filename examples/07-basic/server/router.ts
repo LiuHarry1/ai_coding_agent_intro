@@ -10,6 +10,7 @@ import { definition as exploreDef } from "../subagents/explore.js";
 import { MCPManager } from "../core/mcp-manager.js";
 import { configManager } from "../core/config-manager.js";
 import { loadProjectRules } from "../core/rules-loader.js";
+import { filterToolsByEnablement } from "../core/tool-enablement.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig, LlmProfile } from "../core/types.js";
 
 defaultRegistry.register(exploreDef);
@@ -154,14 +155,20 @@ async function handleChat(
 
   const projectRules = loadProjectRules(cwd);
 
+  const enablement = configManager.getAll();
+  const toolEnablement = { disabledTools: enablement.disabledTools };
+
   const localTools = defaultRegistry.createAll(cwd, {
     eventBus,
     middleware,
     runAgent,
     registry: defaultRegistry,
+    mcpTools: mcpManager.getAllTools(),
+    toolEnablement,
   });
   const mcpTools = mcpManager.getAllTools();
-  const tools = { ...localTools, ...mcpTools };
+  const merged = { ...localTools, ...mcpTools };
+  const tools = filterToolsByEnablement(merged, defaultRegistry, toolEnablement);
 
   const messagesBefore = session.messages.length;
 

@@ -21,6 +21,13 @@
     "chrome-devtools": {
       "command": "npx",
       "args": ["-y", "chrome-devtools-mcp@latest"]
+    },
+
+    "mcp_server": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"]
     }
-  }
+  },
+
+  "disabledTools": ["web_fetch"]
 }

@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { truncate } from "./utils.js";
+import { cleanURL, decodeHtml, fetchWithTimeout, stripHtml } from "./http-utils.js";
 import type { ToolDefinition } from "../core/types.js";
 
 interface SearXNGResult {
@@ -28,33 +29,9 @@ const DEFAULT_TIMEOUT_MS = 10000;
 const MAX_RESULTS = 10;
 const MAX_OUTPUT_CHARS = 12000;
 
-function cleanBaseURL(value: string): string {
-  return value.replace(/\/+$/, "");
-}
-
 function asPositiveInt(value: number | undefined, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;
   return Math.max(1, Math.min(MAX_RESULTS, Math.floor(value!)));
-}
-
-function decodeHtml(value: string): string {
-  const entities: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-  };
-
-  return value
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
-    .replace(/&([a-z]+);/gi, (match, name) => entities[name] ?? match);
-}
-
-function stripHtml(value: string): string {
-  return decodeHtml(value.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 }
 
 function parseHtmlResults(html: string, maxResults: number) {
@@ -120,23 +97,18 @@ export const definition: ToolDefinition = {
         time_range?: "day" | "week" | "month" | "year";
       }) => {
         const maxResults = asPositiveInt(args.max_results, 5);
-        const baseURL = cleanBaseURL(process.env.SEARXNG_URL || process.env.SEARCH_API_URL || DEFAULT_BASE_URL);
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+        const baseURL = cleanURL(process.env.SEARXNG_URL || process.env.SEARCH_API_URL || DEFAULT_BASE_URL);
 
         try {
           const jsonUrl = buildSearchURL(baseURL, args, "json");
-          const jsonRes = await fetch(jsonUrl, {
-            headers: {
-              Accept: "application/json",
-              "User-Agent": "Mozilla/5.0 (compatible; ai-coding-agent/1.0)",
-            },
-            signal: controller.signal,
+          const jsonRes = await fetchWithTimeout({
+            url: jsonUrl,
+            timeoutMs: DEFAULT_TIMEOUT_MS,
+            headers: { Accept: "application/json" },
           });
 
           if (jsonRes.ok) {
-            const data = await jsonRes.json() as SearXNGResponse;
+            const data = JSON.parse(jsonRes.text) as SearXNGResponse;
             const results = (data.results || [])
               .filter((item) => item.title || item.url || item.content)
               .slice(0, maxResults)
@@ -162,20 +134,17 @@ export const definition: ToolDefinition = {
           }
 
           const htmlUrl = buildSearchURL(baseURL, args);
-          const htmlRes = await fetch(htmlUrl, {
-            headers: {
-              Accept: "text/html,application/xhtml+xml",
-              "User-Agent": "Mozilla/5.0 (compatible; ai-coding-agent/1.0)",
-            },
-            signal: controller.signal,
+          const htmlRes = await fetchWithTimeout({
+            url: htmlUrl,
+            timeoutMs: DEFAULT_TIMEOUT_MS,
+            headers: { Accept: "text/html,application/xhtml+xml" },
           });
 
           if (!htmlRes.ok) {
             return `Error: SearXNG search failed: JSON HTTP ${jsonRes.status}; HTML HTTP ${htmlRes.status}. URL: ${baseURL}`;
           }
 
-          const html = await htmlRes.text();
-          const results = parseHtmlResults(html, maxResults);
+          const results = parseHtmlResults(htmlRes.text, maxResults);
 
           return truncate(JSON.stringify({
             query: args.query,
@@ -190,8 +159,6 @@ export const definition: ToolDefinition = {
           }
           const message = err instanceof Error ? err.message : String(err);
           return `Error: SearXNG search failed: ${message}. URL: ${baseURL}`;
-        } finally {
-          clearTimeout(timeout);
         }
       },
     });

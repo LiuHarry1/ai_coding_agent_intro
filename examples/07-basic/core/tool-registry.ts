@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolContext, IToolRegistry, AnyTool } from "./types.js";
+import { computeToolEnabled } from "./tool-enablement.js";
 
 export class ToolRegistry implements IToolRegistry {
   #tools = new Map<string, ToolDefinition>();
@@ -26,6 +27,7 @@ export class ToolRegistry implements IToolRegistry {
     const tools: Record<string, AnyTool> = {};
     for (const [name, def] of this.#tools) {
       if (only && !only.includes(name)) continue;
+      if (!computeToolEnabled(name, def, context.toolEnablement)) continue;
 
       const instance = def.create(cwd, context);
       if (context.middleware && typeof (instance as any).execute === "function") {

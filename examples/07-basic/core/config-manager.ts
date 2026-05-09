@@ -15,6 +15,7 @@ const DEFAULTS: AppConfig = {
     model: "gpt-4o-mini",
   },
   mcpServers: {},
+  disabledTools: [],
 };
 
 type ConfigKey = keyof AppConfig;
@@ -52,6 +53,9 @@ export class ConfigManager {
       }
       if (raw.mcpServers && typeof raw.mcpServers === "object") {
         this.#config.mcpServers = raw.mcpServers;
+      }
+      if (Array.isArray(raw.disabledTools)) {
+        this.#config.disabledTools = raw.disabledTools.filter((x: unknown) => typeof x === "string");
       }
       console.log(`[config] Loaded user config from ${this.#userConfigPath}`);
     } catch (err: any) {
@@ -129,6 +133,10 @@ export class ConfigManager {
     }
     if (Object.keys(this.#config.mcpServers).length > 0) {
       delta.mcpServers = this.#config.mcpServers;
+    }
+    const defaultDisabled = DEFAULTS.disabledTools ?? [];
+    if (JSON.stringify(this.#config.disabledTools ?? []) !== JSON.stringify(defaultDisabled)) {
+      delta.disabledTools = this.#config.disabledTools;
     }
     fs.writeFileSync(this.#userConfigPath, JSON.stringify(delta, null, 2) + "\n");
   }

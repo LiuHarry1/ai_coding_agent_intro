@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
-import type { SubagentConfig, ToolDefinition, ToolContext } from "../core/types.js";
+import { filterToolsByEnablement } from "../core/tool-enablement.js";
+import type { AnyTool, SubagentConfig, ToolDefinition, ToolContext } from "../core/types.js";
 
 export function createSubagentDefinition(config: SubagentConfig): ToolDefinition {
   const {
@@ -33,12 +34,29 @@ export function createSubagentDefinition(config: SubagentConfig): ToolDefinition
             label: label || `${name} subagent`,
           });
 
-          const subTools = registry
-            ? registry.createAll(cwd, { eventBus: subBus }, toolNames)
+          const localTools = registry
+            ? registry.createAll(cwd, {
+              eventBus: subBus,
+              registry,
+              toolEnablement: context.toolEnablement,
+            }, toolNames)
             : {};
 
+          const subTools: Record<string, AnyTool> = { ...localTools };
+          const mcp = context.mcpTools;
+          if (mcp) {
+            for (const name of toolNames) {
+              const t = mcp[name];
+              if (t) subTools[name] = t;
+            }
+          }
+
+          const filteredSubTools = registry
+            ? filterToolsByEnablement(subTools, registry, context.toolEnablement)
+            : subTools;
+
           const result = await runAgent!(task, {
-            tools: subTools,
+            tools: filteredSubTools,
             systemPrompt,
             eventBus: subBus,
             messages: [],
