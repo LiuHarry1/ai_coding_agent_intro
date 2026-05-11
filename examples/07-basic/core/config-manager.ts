@@ -10,8 +10,24 @@ const CONFIG_FILE = "config.json";
 const DEFAULTS: AppConfig = {
   provider: { ...DEFAULT_PROFILE },
   compaction: {
-    threshold: 40,
-    keepRecent: 10,
+    // Defaults mirror Claude Code's autocompact thresholds for a 200K model
+    // (Claude 3.5 Sonnet / Claude 4.x baseline). See:
+    //   src/utils/context.ts:           MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
+    //                                   COMPACT_MAX_OUTPUT_TOKENS    =  20_000
+    //   services/compact/autoCompact.ts: AUTOCOMPACT_BUFFER_TOKENS   =  13_000
+    //   → effectiveWindow = 200K − 20K = 180K
+    //   → autoCompactThreshold = 180K − 13K = 167K
+    tokenThreshold: 167_000,
+    // No direct token-based equivalent in Claude Code (their micro-compact is
+    // count- or time-based). We pick `effectiveWindow − target keep` (40K,
+    // see tailTokenBudget below) ≈ 140K as the "warm zone" where it's cheap
+    // to scan and start clearing.
+    microCompactThreshold: 140_000,
+    // services/compact/apiMicrocompact.ts:17 — DEFAULT_TARGET_INPUT_TOKENS = 40_000
+    //   "Keep last 40k tokens like client-side"
+    tailTokenBudget: 40_000,
+    // services/compact/timeBasedMCConfig.ts: keepRecent = 5
+    microCompactKeepRecent: 5,
     model: "gpt-4o-mini",
   },
   mcpServers: {},
@@ -49,6 +65,20 @@ export class ConfigManager {
         });
       }
       if (raw.compaction) {
+        // Legacy config used message-count fields (`threshold`, `keepRecent`,
+        // `minMessages`); the new compaction is purely token-based. Warn so
+        // users notice their old settings are dead.
+        const deprecated = ["threshold", "keepRecent", "minMessages"].filter(
+          (k) => k in raw.compaction
+        );
+        if (deprecated.length > 0) {
+          console.warn(
+            `[config] compaction.${deprecated.join("/")} is deprecated (message-count based). ` +
+              `Use compaction.tokenThreshold / microCompactThreshold / tailTokenBudget (all tokens) instead. ` +
+              `Old values ignored.`
+          );
+          for (const k of deprecated) delete raw.compaction[k];
+        }
         Object.assign(this.#config.compaction, raw.compaction);
       }
       if (raw.mcpServers && typeof raw.mcpServers === "object") {

@@ -3,13 +3,15 @@
     "provider": "anthropic",
     "baseURL": "http://localhost:4141/v1",
     "apiKey": "not-needed",
-    "model": "claude-opus-4.7",
+    "model": "claude-opus-4.6",
     "thinking": { "mode": "medium" }
   },
   "compaction": {
-    "threshold": 60,
-    "keepRecent": 15,
-    "model": "gpt-4o-mini"
+    "tokenThreshold": 167000,
+    "microCompactThreshold": 140000,
+    "tailTokenBudget": 40000,
+    "microCompactKeepRecent": 5,
+    "model": "claude-opus-4.6"
   },
   "mcpServers": {
 

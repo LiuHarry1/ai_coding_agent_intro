@@ -1,6 +1,13 @@
 import { streamText } from "ai";
 import { defaultManager } from "./provider-manager.js";
-import { summarizeIfNeeded } from "./context.js";
+import {
+  attachTokenUsage,
+  compactIfNeeded,
+  isContextLengthError,
+  isTransientStreamError,
+  tokenCountWithEstimation,
+} from "./context.js";
+import type { AttachedTokenUsage } from "./context.js";
 import type {
   AgentOptions,
   AssistantContentPart,
@@ -49,18 +56,25 @@ function formatTodoReminder(todos: TodoItem[]): string {
 }
 
 /**
- * Strip OpenAI Responses-API specific fields from reasoning parts before we
- * persist them. Concretely we drop `providerOptions.openai.{itemId,
- * reasoningEncryptedContent}` so the on-disk message only carries the plain
- * summary text. This makes the JSONL portable across proxies that don't
- * support encrypted reasoning replay (e.g. copilot-api).
+ * Strip OpenAI Responses-API specific fields from assistant content parts
+ * before we persist them. The Responses API attaches `providerOptions.openai
+ * .{itemId, reasoningEncryptedContent}` to reasoning, text, and tool-call
+ * parts; on the next request the AI SDK serializes any part with an
+ * `itemId` as `{type: "item_reference", id: ...}` instead of inline content.
+ *
+ * Stateless proxies (copilot-api, etc.) don't store those items server-side
+ * → the request 404s on the second turn. We therefore drop providerOptions
+ * from EVERY assistant part (not just reasoning) so the next request always
+ * carries full inline content. Lossy vs OpenAI's native encrypted replay,
+ * but portable.
  */
 function sanitizeReasoningParts(messages: Message[]): void {
   for (const msg of messages) {
     if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue;
     for (const part of msg.content) {
-      if (part.type !== "reasoning") continue;
-      delete (part as ReasoningPart).providerOptions;
+      // All three of TextPart / ReasoningPart / ToolCallPart can carry
+      // providerOptions. Strip them all — `delete` is a no-op when absent.
+      delete (part as { providerOptions?: unknown }).providerOptions;
     }
   }
 }
@@ -116,6 +130,8 @@ function inlineReasoningAsText(messages: Message[]): Message[] {
 
   return messages
     .map((m): Message | null => {
+      // Token usage is held in a WeakMap (not on the message), so non-
+      // assistant messages pass through untouched.
       if (m.role !== "assistant" || !Array.isArray(m.content)) return m;
 
       const newContent: AssistantContentPart[] = [];
@@ -161,10 +177,17 @@ export async function runAgent(
 
       const stepStart = Date.now();
       const compactStart = Date.now();
-      const managed = await summarizeIfNeeded(messages as Message[], eventBus);
+      const managed = await compactIfNeeded(messages as Message[], eventBus);
       const compactMs = Date.now() - compactStart;
+      const counted = tokenCountWithEstimation(messages as Message[]);
+      const tokenLabel =
+        counted.source === "real+est"
+          ? `${counted.total.toLocaleString()} tokens ` +
+            `(${counted.realBaseline?.toLocaleString()} real + ${counted.estimatedDelta?.toLocaleString()} est)`
+          : `~${counted.total.toLocaleString()} tokens (est, no usage cached yet)`;
       console.log(
-        `[agent] step ${step} start — ${messages.length} msgs, model=${resolvedModel}, llm=${provider.describe()}` +
+        `[agent] step ${step} start — ${messages.length} msgs, ${tokenLabel}, ` +
+          `model=${resolvedModel}, llm=${provider.describe()}` +
           (compactMs > 50 ? `, compaction=${compactMs}ms` : "")
       );
       if (managed !== messages) {
@@ -186,67 +209,160 @@ export async function runAgent(
       }
 
       let stepResult: { text: string; toolCalls: StreamResult["toolCalls"]; toolResults: StreamResult["toolResults"] };
-      const requestStart = Date.now();
-      try {
-        const stream = streamText({
-          model: provider.chatModel(resolvedModel),
-          system: systemPrompt,
-          // Inline any prior `ReasoningPart` as `<thinking>…</thinking>` text so
-          // we don't depend on `{type:"reasoning", id, encrypted_content}`
-          // round-tripping. This makes the request portable across stateless
-          // proxies (copilot-api, etc.) at the cost of being lossy compared to
-          // OpenAI's native encrypted replay.
-          messages: inlineReasoningAsText(messages),
-          tools,
-          maxRetries: 3,
-          ...provider.streamTextExtras(),
-        });
+      let reactiveCompacted = false;
+      let ctxLengthAttempt = 0;
+      let transientAttempt = 0;
+      // Two independent retry budgets:
+      //   - ctxLengthAttempt (max 1): on 413 / context_length_exceeded, run
+      //     aggressive compaction (clear tool_results + summarize down to
+      //     the last 5K-token tail) and try once more.
+      //   - transientAttempt (max 2): on socket-closed / 5xx / undici
+      //     "terminated", just resend with backoff (proxy hiccup, no
+      //     compaction needed). These are common with copilot-api on long
+      //     bodies / slow models.
+      const MAX_TRANSIENT_RETRIES = 2;
+      let requestStart = Date.now();
+      retry: while (true) {
+        try {
+          const stream = streamText({
+            model: provider.chatModel(resolvedModel),
+            system: systemPrompt,
+            // Inline any prior `ReasoningPart` as `<thinking>…</thinking>` text so
+            // we don't depend on `{type:"reasoning", id, encrypted_content}`
+            // round-tripping. This makes the request portable across stateless
+            // proxies (copilot-api, etc.) at the cost of being lossy compared to
+            // OpenAI's native encrypted replay.
+            messages: inlineReasoningAsText(messages),
+            tools,
+            maxRetries: 3,
+            ...provider.streamTextExtras(),
+          });
 
-        const timing = { firstEventMs: 0 };
-        stepResult = await consumeStream(stream, eventBus, timing);
+          const timing = { firstEventMs: 0 };
+          stepResult = await consumeStream(stream, eventBus, timing);
 
-        // Trust the SDK's response.messages for ordering (reasoning → text →
-        // tool-call → tool-result). We then strip the OpenAI-specific
-        // providerOptions from reasoning parts so what we persist is just the
-        // human-readable summary text. The next turn re-inlines those parts as
-        // `<thinking>…</thinking>` text via `inlineReasoningAsText`.
-        const response = await stream.response;
-        const sdkMessages = response.messages as unknown as Message[];
-        sanitizeReasoningParts(sdkMessages);
-        messages.push(...sdkMessages);
+          // Trust the SDK's response.messages for ordering (reasoning → text →
+          // tool-call → tool-result). We then strip the OpenAI-specific
+          // providerOptions from reasoning parts so what we persist is just the
+          // human-readable summary text. The next turn re-inlines those parts as
+          // `<thinking>…</thinking>` text via `inlineReasoningAsText`.
+          const response = await stream.response;
+          const sdkMessages = response.messages as unknown as Message[];
+          sanitizeReasoningParts(sdkMessages);
+          messages.push(...sdkMessages);
 
-        const totalMs = Date.now() - requestStart;
-        const ttfb = timing.firstEventMs ? timing.firstEventMs - requestStart : -1;
-        const reasoningCount = sdkMessages.reduce(
-          (n, m) =>
-            n +
-            (m.role === "assistant" && Array.isArray(m.content)
-              ? m.content.filter((p) => p.type === "reasoning").length
-              : 0),
-          0
-        );
-        const generationMs = ttfb >= 0 ? totalMs - ttfb : -1;
-        console.log(
-          `[agent] step ${step} done — total=${totalMs}ms ` +
-            `(ttfb=${ttfb}ms upstream-wait, gen=${generationMs}ms streaming), ` +
-            `reasoning_blocks=${reasoningCount}, tool_calls=${stepResult.toolCalls.length}, ` +
-            `step_total=${Date.now() - stepStart}ms`
-        );
-      } catch (err) {
-        // Anything thrown here (mid-stream socket close from a flaky proxy,
-        // upstream 5xx, etc.) used to escape as an unhandled rejection and
-        // crash the Node process. Catch it, surface it to the UI, and end
-        // the agent loop gracefully so the SSE stream closes cleanly and the
-        // session stays usable.
-        const message = err instanceof Error ? err.message : String(err);
-        const cause = err instanceof Error && err.cause instanceof Error ? ` (${err.cause.message})` : "";
-        console.error(`[agent] step ${step} failed: ${message}${cause}`);
-        eventBus.emit("error", {
-          message: `Upstream stream failed: ${message}${cause}. Try again or check your proxy logs.`,
-        });
-        autoCompleteTodos(currentTodos, eventBus);
-        eventBus.emit("done", { steps: step + 1 });
-        return finalText;
+          // AI SDK exposes usage as a promise that settles after the stream
+          // completes. Some providers (or stateless proxies that drop the
+          // final SSE event) leave fields undefined — guard with `?? "?"`.
+          let usage: AttachedTokenUsage = {};
+          try {
+            usage = (await stream.usage) ?? {};
+          } catch {
+            // Some providers throw on usage access when the stream ended
+            // abruptly (e.g. mid-stream socket close survived by retries).
+            // Don't fail the whole step over a missing telemetry counter.
+          }
+          // Cache the real usage onto the last assistant message of this
+          // step's response. Next step's `tokenCountWithEstimation` walks
+          // back, finds it, and uses it as the precise baseline rather
+          // than guessing the whole prefix from chars/4. Mirrors Claude
+          // Code's pattern in utils/tokens.ts:226.
+          if (usage.inputTokens != null || usage.totalTokens != null) {
+            for (let i = sdkMessages.length - 1; i >= 0; i--) {
+              if (sdkMessages[i].role === "assistant") {
+                attachTokenUsage(sdkMessages[i], usage);
+                break;
+              }
+            }
+          }
+          const fmt = (n: number | undefined): string =>
+            typeof n === "number" ? n.toLocaleString() : "?";
+
+          const totalMs = Date.now() - requestStart;
+          const ttfb = timing.firstEventMs ? timing.firstEventMs - requestStart : -1;
+          const reasoningCount = sdkMessages.reduce(
+            (n, m) =>
+              n +
+              (m.role === "assistant" && Array.isArray(m.content)
+                ? m.content.filter((p) => p.type === "reasoning").length
+                : 0),
+            0
+          );
+          const generationMs = ttfb >= 0 ? totalMs - ttfb : -1;
+          const usageParts = [
+            `in=${fmt(usage.inputTokens)}`,
+            `out=${fmt(usage.outputTokens)}`,
+          ];
+          if (typeof usage.reasoningTokens === "number" && usage.reasoningTokens > 0) {
+            usageParts.push(`reasoning=${fmt(usage.reasoningTokens)}`);
+          }
+          if (typeof usage.cachedInputTokens === "number" && usage.cachedInputTokens > 0) {
+            usageParts.push(`cached=${fmt(usage.cachedInputTokens)}`);
+          }
+          console.log(
+            `[agent] step ${step} done — total=${totalMs}ms ` +
+              `(ttfb=${ttfb}ms upstream-wait, gen=${generationMs}ms streaming), ` +
+              `usage[${usageParts.join(" ")}], ` +
+              `reasoning_blocks=${reasoningCount}, tool_calls=${stepResult.toolCalls.length}, ` +
+              `step_total=${Date.now() - stepStart}ms` +
+              (reactiveCompacted ? ", reactive_compaction=yes" : "")
+          );
+          break retry;
+        } catch (err) {
+          if (ctxLengthAttempt === 0 && isContextLengthError(err)) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.warn(
+              `[agent] step ${step} hit context-length error → reactive aggressive compaction. ${errMsg}`
+            );
+            eventBus.emit("compaction_reactive", { error: errMsg });
+            const recompacted = await compactIfNeeded(messages, eventBus, {
+              force: true,
+              aggressive: true,
+            });
+            if (recompacted !== messages) {
+              messages.length = 0;
+              messages.push(...recompacted);
+            }
+            ctxLengthAttempt++;
+            reactiveCompacted = true;
+            requestStart = Date.now();
+            continue retry;
+          }
+          if (transientAttempt < MAX_TRANSIENT_RETRIES && isTransientStreamError(err)) {
+            transientAttempt++;
+            // Exponential backoff: 500ms, 1500ms. Keeps us under most proxy
+            // idle-timeout windows while giving the upstream a chance to
+            // recover.
+            const backoffMs = 500 * Math.pow(3, transientAttempt - 1);
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.warn(
+              `[agent] step ${step} transient stream error (attempt ${transientAttempt}/${MAX_TRANSIENT_RETRIES}), retrying in ${backoffMs}ms: ${errMsg}`
+            );
+            eventBus.emit("transient_retry", {
+              attempt: transientAttempt,
+              max: MAX_TRANSIENT_RETRIES,
+              backoffMs,
+              error: errMsg,
+            });
+            await new Promise((r) => setTimeout(r, backoffMs));
+            requestStart = Date.now();
+            continue retry;
+          }
+          // Anything thrown here (mid-stream socket close from a flaky proxy,
+          // upstream 5xx, etc.) used to escape as an unhandled rejection and
+          // crash the Node process. Catch it, surface it to the UI, and end
+          // the agent loop gracefully so the SSE stream closes cleanly and the
+          // session stays usable.
+          const message = err instanceof Error ? err.message : String(err);
+          const cause = err instanceof Error && err.cause instanceof Error ? ` (${err.cause.message})` : "";
+          console.error(`[agent] step ${step} failed: ${message}${cause}`);
+          eventBus.emit("error", {
+            message: `Upstream stream failed: ${message}${cause}. Try again or check your proxy logs.`,
+          });
+          autoCompleteTodos(currentTodos, eventBus);
+          eventBus.emit("done", { steps: step + 1 });
+          return finalText;
+        }
       }
 
       const { text, toolCalls, toolResults } = stepResult;

@@ -4,3 +4,5 @@ docker run -d ^
   -p 8888:8080 ^
   -v %cd%/searxng:/etc/searxng ^
   searxng/searxng
+
+docker run -d --name searxng -p 8888:8080 -v ./searxng:/etc/searxng searxng/searxng

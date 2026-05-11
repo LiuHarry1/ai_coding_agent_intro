@@ -7,7 +7,9 @@ import type { ProviderStrategy, ThinkingConfig, AgentStreamTextExtras } from "..
  * @see @ai-sdk/anthropic `anthropicLanguageModelOptions` schema.
  */
 function needsAdaptive(modelId: string): boolean {
-  const m = modelId.toLowerCase();
+  // Normalize dots to dashes so `claude-opus-4.6` matches the same patterns
+  // as the canonical `claude-opus-4-6` form.
+  const m = modelId.toLowerCase().replace(/\./g, "-");
   if (m.includes("opus-4-") || m.includes("sonnet-4-") || m.includes("haiku-4-")) return true;
   if (/claude-[^/]+-4-[6-9]/.test(m)) return true;
   return false;

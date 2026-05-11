@@ -252,8 +252,15 @@ export interface TodoItem {
 // ── App Config ──────────────────────────────────
 
 export interface CompactionConfig {
-  threshold: number;
-  keepRecent: number;
+  /** Run full LLM summarization when total conversation tokens >= this. */
+  tokenThreshold: number;
+  /** Run cheap micro-compaction (clear old tool_result content) when total tokens >= this. */
+  microCompactThreshold: number;
+  /** Token budget for the tail preserved verbatim across a full LLM compaction. */
+  tailTokenBudget: number;
+  /** Number of most-recent tool results to keep verbatim during micro-compaction. */
+  microCompactKeepRecent: number;
+  /** Model used for full LLM summarization. */
   model: string;
 }
 
