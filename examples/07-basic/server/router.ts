@@ -6,14 +6,14 @@ import { createSSETransport } from "./sse-transport.js";
 import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
-import { definition as exploreDef } from "../subagents/explore.js";
+import { registerBuiltinSubagents, getSubagentNames } from "../subagents/index.js";
 import { MCPManager } from "../core/mcp-manager.js";
 import { configManager } from "../core/config-manager.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 import { filterToolsByEnablement } from "../core/tool-enablement.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig, LlmProfile } from "../core/types.js";
 
-defaultRegistry.register(exploreDef);
+registerBuiltinSubagents(defaultRegistry);
 
 const mcpManager = new MCPManager();
 
@@ -178,6 +178,9 @@ async function handleChat(
     eventBus,
     messages: session.messages,
     images: images?.length ? images : undefined,
+    // Forwarded so the agent can tag `tool_call` events with isSubagent:true
+    // for the UI's SubagentCard rendering.
+    subagentNames: getSubagentNames(defaultRegistry),
   });
 
   for (const msg of session.messages.slice(messagesBefore)) {
@@ -193,6 +196,12 @@ async function handleChat(
  */
 function sessionToUIMessages(messages: Message[]): unknown[] {
   const uiMessages: unknown[] = [];
+
+  // Subagent identity is intrinsic to the tool definition, not the per-call
+  // payload — the AI SDK doesn't persist it on disk. Recover it from the
+  // registry. Without this, refreshing the page after a long session
+  // reverts every explore/plan card to the generic ToolCallCard.
+  const subagentNames = getSubagentNames(defaultRegistry);
 
   for (const msg of messages) {
     if (msg.role === "user") {
@@ -219,6 +228,7 @@ function sessionToUIMessages(messages: Message[]): unknown[] {
             toolCallId: part.toolCallId,
             args: part.input,
             status: "done",
+            isSubagent: subagentNames.has(part.toolName ?? ""),
           });
         }
       }

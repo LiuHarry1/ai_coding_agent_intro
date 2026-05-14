@@ -74,14 +74,14 @@ const lightStyles = {
   contentText: { fontFamily: "'JetBrains Mono', 'SF Mono', 'Fira Code', monospace", fontSize: "12px", lineHeight: "1.55" },
 };
 
-export default function DiffViewer({ oldStr, newStr, filePath, replaceAll }) {
+export default function DiffViewer({ oldStr, newStr, filePath, replaceAll, embedded = false }) {
   const theme = useChatStore((s) => s.theme);
   const isDark = theme === "dark";
   const fName = fileName(filePath);
 
   return (
-    <div className="diff-viewer">
-      {filePath && (
+    <div className={`diff-viewer ${embedded ? "diff-viewer--embedded" : ""}`}>
+      {!embedded && filePath && (
         <div className="diff-file-header">
           <span className="diff-file-icon">{"\u{1F4C4}"}</span>
           <span className="diff-file-name" title={filePath}>{fName}</span>
@@ -95,8 +95,14 @@ export default function DiffViewer({ oldStr, newStr, filePath, replaceAll }) {
         splitView={false}
         useDarkTheme={isDark}
         compareMethod={DiffMethod.LINES}
-        showDiffOnly={true}
+        // Show ALL lines, no fold/expand bar. The "🔀 N 🟩🟥" marker that
+        // appears with `showDiffOnly: true` is more visual noise than help
+        // for the small targeted edits this tool produces.
+        showDiffOnly={false}
         extraLinesSurroundingDiff={3}
+        // The library always renders TWO line-number gutters in unified
+        // mode (old | new). We hide the OLD gutter via CSS in tools.css to
+        // keep just the new-side numbers — that's what users care about.
         styles={isDark ? darkStyles : lightStyles}
       />
     </div>

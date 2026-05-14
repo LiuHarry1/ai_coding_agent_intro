@@ -55,6 +55,12 @@ export interface ToolDefinition {
   description: string;
   /** When false, the tool is never exposed to the model */
   enabled?: boolean;
+  /**
+   * Marks tools created via `createSubagentDefinition`. Used to prevent
+   * subagent → subagent recursion: a subagent never inherits other subagents
+   * as tools regardless of allow/deny lists.
+   */
+  isSubagent?: boolean;
   create(cwd: string, context: ToolContext): AnyTool;
 }
 
@@ -140,6 +146,13 @@ export interface AgentOptions {
   images?: string[];
   maxSteps?: number;
   model?: string;
+  /**
+   * Names of tools that are subagent wrappers. Used purely for UI: when
+   * provided, the agent tags `tool_call` / `tool_input_start` events with
+   * `isSubagent: true` so the frontend can render them with the special
+   * "subagent" card style + auto-expanded nested step list.
+   */
+  subagentNames?: Set<string>;
 }
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;
@@ -211,7 +224,18 @@ export interface SubagentConfig {
   name: string;
   description: string;
   systemPrompt: string;
-  tools: string[];
+  /**
+   * Allow-list of tool names. If provided, the subagent only sees these tools.
+   * Mutually exclusive with `disallowedTools`. If neither is set, the subagent
+   * inherits the full registry (and all MCP tools).
+   */
+  tools?: string[];
+  /**
+   * Deny-list of tool names. The subagent inherits all registry + MCP tools
+   * except these. Mirrors Claude Code's explore agent pattern: keep a wide
+   * read-only toolset by only excluding mutating tools.
+   */
+  disallowedTools?: string[];
   maxSteps?: number;
   label?: string;
 }

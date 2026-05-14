@@ -9,13 +9,22 @@ export function createSubagentDefinition(config: SubagentConfig): ToolDefinition
     description,
     systemPrompt,
     tools: toolNames,
+    disallowedTools,
     maxSteps = 20,
     label,
   } = config;
 
+  if (toolNames && disallowedTools) {
+    throw new Error(
+      `Subagent '${name}': specify either 'tools' (allow-list) or 'disallowedTools' (deny-list), not both.`,
+    );
+  }
+  const denySet = new Set(disallowedTools ?? []);
+
   return {
     name,
     description: `Subagent: ${description}`,
+    isSubagent: true,
     create(cwd: string, context: ToolContext) {
       const { runAgent, eventBus } = context;
       const registry = context.registry;
@@ -45,9 +54,31 @@ export function createSubagentDefinition(config: SubagentConfig): ToolDefinition
           const subTools: Record<string, AnyTool> = { ...localTools };
           const mcp = context.mcpTools;
           if (mcp) {
-            for (const name of toolNames) {
-              const t = mcp[name];
-              if (t) subTools[name] = t;
+            if (toolNames) {
+              // Allow-list: only pull explicitly-listed MCP tools.
+              for (const n of toolNames) {
+                const t = mcp[n];
+                if (t) subTools[n] = t;
+              }
+            } else {
+              // Deny-list / inherit-all: include every MCP tool by default.
+              for (const [n, t] of Object.entries(mcp)) {
+                subTools[n] = t;
+              }
+            }
+          }
+
+          for (const denied of denySet) {
+            delete subTools[denied];
+          }
+
+          // Anti-recursion: a subagent never sees other subagents (or itself)
+          // as tools, regardless of allow/deny lists. Mirrors Claude Code's
+          // explicit AGENT_TOOL_NAME deny.
+          if (registry) {
+            for (const n of Object.keys(subTools)) {
+              const def = registry.get(n);
+              if (def?.isSubagent) delete subTools[n];
             }
           }
 

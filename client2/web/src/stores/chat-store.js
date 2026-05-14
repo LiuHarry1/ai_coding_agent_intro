@@ -217,18 +217,31 @@ export const useChatStore = create((set, get) => ({
       case "todo_update":
         store._updateTodos(data.todos);
         break;
-      case "tool_input_start":
+      case "tool_input_start": {
         store._removeThinking();
+        // liveInputStart doubles as the part's overall start time — the
+        // tool_call event will eventually upsert duration based on backend
+        // timestamps, so a single client-side anchor is enough.
+        const t0 = Date.now();
         store._appendPart({
           type: "tool_call",
           name: data.name,
           toolCallId: data.toolCallId,
           args: {},
           status: "streaming-input",
+          // Carry isSubagent through from the start so the placeholder card
+          // already uses subagent styling/dispatch during the streaming-input
+          // window. Without this it briefly renders as a generic tool card,
+          // then flips visual style when tool_call lands → ugly flash.
+          isSubagent: data.isSubagent === true,
           liveInputBytes: 0,
-          liveInputStart: Date.now(),
-          startTime: Date.now(),
+          liveInputStart: t0,
+          startTime: t0,
         });
+        break;
+      }
+      case "tool_input_preview_delta":
+        store._appendToolInputPreviewDelta(data);
         break;
       case "tool_input_delta":
         store._appendToolInputDelta(data);
@@ -368,6 +381,31 @@ export const useChatStore = create((set, get) => ({
   },
 
   /**
+   * Append decoded preview text to the in-progress tool_call card. Server
+   * extracts the value of the tool's main string field (e.g. write_file's
+   * `content`, edit_file's `new_string`) from the partial JSON args and
+   * streams it here so the UI can render the file being typed live.
+   */
+  _appendToolInputPreviewDelta: (data) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+
+      const parts = [...last.parts];
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        if (p.type === "tool_call" && p.toolCallId === data.toolCallId && p.status !== "done") {
+          parts[i] = { ...p, livePreview: (p.livePreview || "") + (data.delta || "") };
+          break;
+        }
+      }
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs };
+    });
+  },
+
+  /**
    * Bump the live byte counter on the in-progress tool_call card matching
    * `toolCallId`. Used to show "Generating arguments… N chars" while the
    * model is streaming the tool's argument JSON.
@@ -412,6 +450,13 @@ export const useChatStore = create((set, get) => ({
             name: data.name,
             args: data.args,
             status: "running",
+            // Re-affirm isSubagent on the upsert. The placeholder created by
+            // tool_input_start already set it, but if the SDK skipped that
+            // event (some providers don't emit tool-input-start) and we land
+            // here directly, this is the only place the flag gets recorded.
+            // Coalesce instead of overwrite: don't lose `true` if the
+            // tool_call payload happens to omit the field.
+            isSubagent: data.isSubagent === true || p.isSubagent === true,
             liveInputBytes: undefined,
             liveInputStart: undefined,
           };
@@ -442,7 +487,7 @@ export const useChatStore = create((set, get) => ({
       }
       if (targetIdx === -1) {
         for (let i = parts.length - 1; i >= 0; i--) {
-          if (parts[i].type === "tool_call" && (parts[i].name === "explore" || parts[i].name === "task")) {
+          if (parts[i].type === "tool_call" && parts[i].isSubagent) {
             targetIdx = i;
             break;
           }

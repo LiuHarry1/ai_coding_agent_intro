@@ -1,20 +1,24 @@
 import React, { useState, useRef, useEffect } from "react";
 import DiffViewer from "./DiffViewer.jsx";
+import FilePreview from "./FilePreview.jsx";
 import CopyButton from "./CopyButton.jsx";
-import { fileName, formatDuration } from "../lib/utils.js";
+import { fileName, formatDuration, formatBytes, detectError } from "../lib/utils.js";
 
 function toolIconClass(name) {
   if (name?.includes("edit")) return "write";
-  if (name?.includes("read")) return "read";
+  if (name?.includes("read") || name?.includes("fetch")) return "read";
   if (name?.includes("write")) return "write";
   if (name?.includes("bash") || name?.includes("command") || name?.includes("run")) return "run";
-  if (name?.includes("search") || name?.includes("explore")) return "search";
+  if (name?.includes("search") || name?.includes("explore") || name?.includes("plan") || name?.includes("general")) return "search";
   if (name?.includes("list")) return "list";
   return "default";
 }
 
+// Use a `$` shell-prompt glyph for bash so it doesn't collide visually with
+// the chevron that toggles the card. (Old icon was `▶`, same as chevron →
+// every bash card looked like "▶ ▶ bash …".)
 const TOOL_ICONS = {
-  read: "\u{1F4C4}", write: "\u270E", run: "\u25B6", search: "\u{1F50D}", list: "\u{1F4C1}", default: "\u2699",
+  read: "\u{1F4C4}", write: "\u270E", run: "$", search: "\u{1F50D}", list: "\u{1F4C1}", default: "\u2699",
 };
 
 const READ_ONLY_TOOLS = new Set(["read_file", "list_dir", "list_directory", "search", "find", "grep"]);
@@ -25,21 +29,17 @@ function isReadOnly(name) {
   return false;
 }
 
-function detectError(name, result) {
-  if (!result || typeof result !== "string") return false;
-  if (result.startsWith("Error:")) return true;
-  const exitMatch = result.match(/\[exit code:\s*(\d+)\]/);
-  if (exitMatch && exitMatch[1] !== "0") return true;
-  if ((name?.includes("bash") || name?.includes("command") || name?.includes("run")) &&
-      /exit code:\s*[1-9]/.test(result)) return true;
-  return false;
-}
-
 function formatArgs(name, args) {
   if (!args) return "";
   if (args.file_path) return args.file_path;
   if (args.path) return args.path;
   if (args.command) return args.command;
+  // bash has 4 modes: run a command (above), check pid, kill pid, background.
+  // Without this branch the mode-2/mode-3 calls render as raw JSON
+  // (`bash {"pid":60090}`), which is gibberish to the user.
+  if (name === "bash" && args.pid != null) {
+    return args.kill ? `kill pid ${args.pid}` : `check pid ${args.pid}`;
+  }
   if (args.task) return args.task.slice(0, 80) + (args.task.length > 80 ? "\u2026" : "");
   if (args.pattern) return args.pattern;
   if (args.directory) return args.directory;
@@ -50,6 +50,9 @@ function renderToolArgs(name, args) {
   if (!args) return null;
   if (name === "edit_file" && args.old_string != null && args.new_string != null) {
     return <DiffViewer oldStr={args.old_string} newStr={args.new_string} filePath={args.file_path} replaceAll={args.replace_all} />;
+  }
+  if (name === "write_file" && typeof args.content === "string") {
+    return <FilePreview content={args.content} filePath={args.file_path} />;
   }
   const json = JSON.stringify(args, null, 2);
   return (
@@ -72,15 +75,46 @@ function StreamingArgs({ bytes, startTime }) {
   }, []);
 
   const elapsed = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
-  const display =
-    bytes >= 1000 ? `${(bytes / 1000).toFixed(1)}k chars` : `${bytes} chars`;
 
   return (
     <div className="tool-streaming-input">
       <span className="spinner spinner-sm" />
       <span className="tool-streaming-input-label">
-        Generating arguments… {display} ({elapsed}s)
+        Generating arguments… {formatBytes(bytes)} ({elapsed}s)
       </span>
+    </div>
+  );
+}
+
+function LivePreview({ text, fileName, startTime }) {
+  const ref = useRef(null);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  }, [text]);
+
+  const elapsed = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
+  const bytes = text?.length ?? 0;
+
+  return (
+    <div className="live-terminal live-preview">
+      <div className="live-terminal-header">
+        <span className="live-terminal-dot" />
+        <span className="live-terminal-title">
+          {fileName ? `Writing ${fileName}…` : "Writing…"}
+        </span>
+        <span className="live-preview-meta">{formatBytes(bytes)} · {elapsed}s</span>
+        <span className="spinner spinner-sm" />
+      </div>
+      <pre className="live-terminal-output" ref={ref}>
+        {text || "(waiting…)"}
+      </pre>
     </div>
   );
 }
@@ -118,11 +152,20 @@ export default function ToolCallCard({ part }) {
   const isError = detectError(name, result);
   const isDone = part.status === "done";
   const duration = formatDuration(part.duration);
-  const isExplore = name === "explore";
+  const hasLivePreview = !isDone && typeof part.livePreview === "string" && part.livePreview.length > 0;
   const cls = toolIconClass(name);
   const icon = TOOL_ICONS[cls] || TOOL_ICONS.default;
 
-  const defaultExpanded = isExplore || hasLiveOutput || (!isReadOnly(name) && !isDone);
+  // Auto-expand: anything producing live output, in-progress writes, AND
+  // errors (so the user doesn't have to click to find out what went wrong).
+  // Successful completed runs collapse by default to keep the conversation
+  // scannable. Subagent tool_calls take a different path (SubagentCard) so
+  // we no longer special-case them here.
+  const defaultExpanded =
+    hasLiveOutput ||
+    hasLivePreview ||
+    (isDone && isError) ||
+    (!isReadOnly(name) && !isDone);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const truncLen = 3000;
@@ -134,23 +177,28 @@ export default function ToolCallCard({ part }) {
   const fName = fileName(filePath);
 
   useEffect(() => {
-    if (hasLiveOutput && !expanded) setExpanded(true);
-  }, [hasLiveOutput]);
+    if ((hasLiveOutput || hasLivePreview) && !expanded) setExpanded(true);
+  }, [hasLiveOutput, hasLivePreview]);
 
   return (
-    <div className={`tool-card ${expanded ? "open" : ""} ${isExplore ? "tool-card--explore" : ""} ${isError ? "has-error" : ""}`}>
+    <div className={`tool-card ${expanded ? "open" : ""} ${isError ? "has-error" : ""}`}>
       <div className="tool-card-header" onClick={() => setExpanded(!expanded)}>
         <span className="chevron">{expanded ? "\u25BC" : "\u25B6"}</span>
         <span className={`tool-icon ${cls}`}>{icon}</span>
         <span className="tool-name">{name}</span>
         {fName && <span className="tool-file-badge" title={filePath}>{fName}</span>}
-        <span className="tool-args-preview">{!fName ? formatArgs(name, args) : ""}</span>
+        {!fName && (
+          <span
+            className="tool-args-preview"
+            title={formatArgs(name, args)}
+          >
+            {formatArgs(name, args)}
+          </span>
+        )}
         <span className="tool-meta">
           {!isDone && part.liveInputBytes != null && (
             <span className="tool-duration tool-duration--live">
-              {part.liveInputBytes >= 1000
-                ? `${(part.liveInputBytes / 1000).toFixed(1)}k chars`
-                : `${part.liveInputBytes} chars`}
+              {formatBytes(part.liveInputBytes)}
             </span>
           )}
           {part.liveElapsed && !isDone && (
@@ -167,44 +215,36 @@ export default function ToolCallCard({ part }) {
 
       {expanded && (
         <div className="tool-card-body">
-          {!isDone && part.liveInputBytes != null && (
-            <StreamingArgs bytes={part.liveInputBytes} startTime={part.liveInputStart} />
+          {hasLivePreview ? (
+            <LivePreview text={part.livePreview} fileName={fName} startTime={part.liveInputStart} />
+          ) : (
+            !isDone && part.liveInputBytes != null && (
+              <StreamingArgs bytes={part.liveInputBytes} startTime={part.liveInputStart} />
+            )
           )}
 
           {hasLiveOutput && !isDone && (
             <LiveTerminal output={part.liveOutput} elapsed={part.liveElapsed} done={part.liveDone} />
           )}
 
-          <details>
+          <details open={name === "edit_file" || name === "write_file"}>
             <summary>Arguments</summary>
             {renderToolArgs(name, args)}
           </details>
-
-          {part.subagentParts && part.subagentParts.length > 0 && (
-            <div className="subagent-steps">
-              {part.subagentParts.map((sp, i) => (
-                <ToolCallCard key={i} part={sp} />
-              ))}
-            </div>
-          )}
 
           {result != null && (
             <details open={isError} className={isError ? "result-error" : ""}>
               <summary>
                 Result
                 {isError && <span className="result-error-label">Failed</span>}
-                <span className="result-size">
-                  {result.length >= 1000
-                    ? `${(result.length / 1000).toFixed(1)}k chars`
-                    : `${result.length} chars`}
-                </span>
+                <span className="result-size">{formatBytes(result.length)}</span>
               </summary>
               <div className={`tool-result-wrap ${isError ? "tool-result-wrap--error" : ""}`}>
                 <CopyButton text={result} />
                 <pre className="tool-result-pre">{displayResult}</pre>
                 {isLong && (
                   <button className="show-more-btn" onClick={() => setShowFull(!showFull)}>
-                    {showFull ? "Show less" : `Show all (${(result.length / 1000).toFixed(1)}k chars)`}
+                    {showFull ? "Show less" : `Show all (${formatBytes(result.length)})`}
                   </button>
                 )}
               </div>
