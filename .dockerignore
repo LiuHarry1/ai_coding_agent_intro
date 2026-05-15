@@ -1,0 +1,10 @@
+node_modules
+client2/web/node_modules
+**/dist
+.git
+.env
+.env.*
+.DS_Store
+coverage
+.nyc_output
+terminals

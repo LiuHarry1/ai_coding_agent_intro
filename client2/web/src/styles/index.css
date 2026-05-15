@@ -1,6 +1,9 @@
 @import './base.css';
 @import './header.css';
-@import './sidebar.css';
+@import './session-switcher.css';
 @import './chat.css';
 @import './tools.css';
 @import './input.css';
+@import './workspace-ide.css';
+@import './file-tree.css';
+@import './editor.css';

@@ -76,6 +76,9 @@
 }
 .btn-clear:hover { border-color: var(--red); color: var(--red); }
 
+/* Flex spacer used when the workspace path input is hidden (IDE open). */
+.header-spacer { flex: 1; min-width: 0; }
+
 .session-badge {
   font-family: var(--font-mono);
   font-size: 11px;

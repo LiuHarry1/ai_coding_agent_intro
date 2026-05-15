@@ -1,0 +1,138 @@
+/* ── Workspace IDE shell + resize handle ─────────────────────────────── */
+
+.workspace-ide {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Width is set inline from useWorkspaceIdeStore; these are safety guards. */
+  min-width: 360px;
+  height: 100vh;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Mirror .header (header.css) so the two top bars line up exactly when
+   the IDE is open: same vertical rhythm, same background, same border. */
+.workspace-ide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  min-height: 50px;          /* matches chat header (10+10+content) */
+  box-sizing: border-box;
+}
+
+.workspace-ide-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-ide-title-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.workspace-ide-title-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+}
+
+.workspace-ide-title-sep {
+  color: var(--text-muted);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.workspace-ide-title-cwd {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-ide-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.workspace-ide-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace-ide-tree {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 8px 0;
+  background: var(--bg-secondary);
+}
+
+/* Tree-only mode (no files open): tree spans the whole IDE panel so the
+   user gets full width to browse instead of half a panel + a giant empty
+   editor placeholder. */
+.workspace-ide-body.tree-only .workspace-ide-tree {
+  width: 100%;
+  border-right: none;
+}
+
+.workspace-ide-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-primary);
+}
+
+/* ── Resize handle (right edge) ─────────────────────────────────────── */
+.workspace-ide-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;            /* center 6px hit area over the 1px border */
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 50;
+  background: transparent;
+  transition: background 0.12s;
+}
+.workspace-ide-resize:hover,
+.workspace-ide-resize:active,
+body.is-resizing-ide .workspace-ide-resize {
+  background: var(--accent);
+}
+
+/* While dragging, lock cursor + suppress text selection page-wide so the
+   chat side doesn't fight us by trying to select text. */
+body.is-resizing-ide {
+  cursor: col-resize !important;
+  user-select: none;
+}
+body.is-resizing-ide * { user-select: none !important; }
+
+/* ── Workspace toggle button (in chat header) ───────────────────────── */
+.icon-btn.workspace-toggle.active {
+  color: var(--accent);
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}

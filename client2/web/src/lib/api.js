@@ -11,6 +11,7 @@ export async function fetchJSON(url, options) {
 export const api = {
   getWorkspace: () => fetchJSON("/workspace"),
   listDir: (dir) => fetchJSON(`/workspace/list?dir=${encodeURIComponent(dir)}`),
+  getFile: (path) => fetchJSON(`/workspace/file?path=${encodeURIComponent(path)}`),
 
   listSessions: () => fetchJSON("/sessions"),
   createSession: () => fetchJSON("/sessions", { method: "POST" }),

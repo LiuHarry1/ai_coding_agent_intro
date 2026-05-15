@@ -1,0 +1,198 @@
+/* ── Editor area (tabs + body + status bar) ──────────────────────────── */
+
+/* Tabs */
+.editor-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.editor-tabs::-webkit-scrollbar { height: 6px; }
+.editor-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: var(--bg-tertiary);
+  position: relative;
+  transition: color 0.12s, background 0.12s;
+}
+.editor-tab:hover {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.editor-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.editor-tab.active::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 1px 6px rgba(88, 166, 255, 0.35);
+}
+/* Make the active tab visually "lift" out of the strip by hiding the
+   bottom 1px border (the editor body's border-top is also 1px so this
+   reads as a continuous surface — VSCode/Cursor pattern). */
+.editor-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 1px;
+  background: var(--bg-primary);
+}
+
+.editor-tab-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.editor-tab-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.12s;
+}
+.editor-tab:hover .editor-tab-close { opacity: 1; }
+.editor-tab-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Body wrap (breadcrumb + scrollable code + status bar) */
+.editor-body-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.editor-breadcrumb-sep { opacity: 0.5; }
+.editor-breadcrumb-item.leaf { color: var(--text-primary); }
+
+.editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.editor-gutter,
+.editor-code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 10px 0;
+  white-space: pre;
+}
+
+.editor-gutter {
+  padding-left: 12px;
+  padding-right: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-primary);
+  opacity: 0.6;
+}
+
+.editor-code {
+  padding-left: 14px;
+  padding-right: 18px;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+/* Status bar */
+.editor-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  min-height: 24px;
+}
+.editor-statusbar-sep { opacity: 0.4; }
+.editor-statusbar-warn { color: var(--orange); }
+.editor-statusbar-spacer { flex: 1; }
+.editor-statusbar-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Empty / loading / error fallbacks */
+.editor-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+  gap: 6px;
+}
+.editor-empty-icon { font-size: 32px; opacity: 0.6; }
+.editor-empty-title {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.editor-empty-hint { font-size: 12px; }
+
+.editor-loading,
+.editor-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  padding: 24px;
+  font-size: 12.5px;
+}
+.editor-error { color: var(--red); }

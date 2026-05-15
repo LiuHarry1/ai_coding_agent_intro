@@ -85,6 +85,58 @@ function handleWorkspaceList(req: IncomingMessage, res: ServerResponse): void {
   }
 }
 
+const MAX_FILE_PREVIEW_BYTES = 2 * 1024 * 1024; // 2 MB cap for file viewer
+
+function isProbablyBinary(buf: Buffer): boolean {
+  // Heuristic: any null byte in the first 8 KB → binary. Cheap and good enough
+  // for the workspace browser (the UI just refuses to render binary as text).
+  const len = Math.min(buf.length, 8192);
+  for (let i = 0; i < len; i++) {
+    if (buf[i] === 0) return true;
+  }
+  return false;
+}
+
+function handleWorkspaceFile(req: IncomingMessage, res: ServerResponse): void {
+  const params = new URL(req.url!, `http://${req.headers.host}`).searchParams;
+  let filePath = params.get("path");
+  if (!filePath) { sendJSON(res, 400, { error: "Missing 'path' query parameter" }); return; }
+
+  filePath = filePath.replace(/^~/, process.env.HOME || "/");
+  filePath = path.resolve(filePath);
+
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    sendJSON(res, 404, { error: "File not found", path: filePath });
+    return;
+  }
+
+  try {
+    const stat = fs.statSync(filePath);
+    const size = stat.size;
+    const truncated = size > MAX_FILE_PREVIEW_BYTES;
+    const fd = fs.openSync(filePath, "r");
+    const toRead = truncated ? MAX_FILE_PREVIEW_BYTES : size;
+    const buf = Buffer.alloc(toRead);
+    fs.readSync(fd, buf, 0, toRead, 0);
+    fs.closeSync(fd);
+
+    if (isProbablyBinary(buf)) {
+      sendJSON(res, 200, { path: filePath, content: "", size, truncated: false, isBinary: true });
+      return;
+    }
+
+    sendJSON(res, 200, {
+      path: filePath,
+      content: buf.toString("utf-8"),
+      size,
+      truncated,
+      isBinary: false,
+    });
+  } catch (err) {
+    sendJSON(res, 500, { error: (err as Error).message });
+  }
+}
+
 function serveStaticFile(req: IncomingMessage, res: ServerResponse, staticDir: string): boolean {
   const urlPath = req.url === "/" ? "/index.html" : (req.url?.split("?")[0] ?? "/index.html");
   const filePath = path.join(staticDir, urlPath);
@@ -360,6 +412,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
 
     if (method === "POST" && url === "/chat") { await handleChat(req, res, runAgent, systemPrompt); return; }
     if (method === "GET" && url?.startsWith("/workspace/list")) { handleWorkspaceList(req, res); return; }
+    if (method === "GET" && url?.startsWith("/workspace/file")) { handleWorkspaceFile(req, res); return; }
 
     if (staticDir && serveStaticFile(req, res, staticDir)) return;
 

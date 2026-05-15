@@ -25,14 +25,11 @@ export const useChatStore = create((set, get) => ({
 
   // ── UI state ────────────────────────────────
   workspace: "",
-  sidebarOpen: false,
   theme: localStorage.getItem("coding_agent_theme") || "dark",
 
   // ── Actions ─────────────────────────────────
 
   setWorkspace: (workspace) => set({ workspace }),
-
-  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
   syncHljs: () => {
     const t = get().theme;

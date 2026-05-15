@@ -1,0 +1,169 @@
+/* ── Session switcher pill + dropdown (in chat header) ───────────────── */
+
+.session-switcher { position: relative; }
+
+.session-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+}
+.session-pill:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+.session-pill.open {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.session-pill-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.session-pill-chevron {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: transform 0.15s;
+}
+.session-pill.open .session-pill-chevron { transform: rotate(180deg); }
+
+.session-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 320px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+  z-index: 200;
+  overflow: hidden;
+  animation: dropIn 0.12s ease;
+}
+
+.session-dropdown-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: background 0.12s, color 0.12s;
+}
+.session-dropdown-new:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+.session-dropdown-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.session-dropdown-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: var(--font-sans);
+}
+.session-dropdown-search input::placeholder { color: var(--text-muted); }
+
+.session-dropdown-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.session-dropdown-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.session-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.session-dropdown-item:last-child { border-bottom: none; }
+.session-dropdown-item:hover { background: var(--bg-tertiary); }
+.session-dropdown-item.active { background: var(--accent-dim); }
+
+.session-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.session-dropdown-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-dropdown-item-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-dropdown-item-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.session-dropdown-item-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+}
+.session-dropdown-item:hover .session-dropdown-item-delete { opacity: 1; }
+.session-dropdown-item-delete:hover {
+  color: var(--red);
+  background: var(--bg-primary);
+}
+
+[data-theme="light"] .session-dropdown {
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+}

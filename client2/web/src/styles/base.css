@@ -114,15 +114,8 @@ html, body {
 
 /* ── Responsive ───────────────────────────── */
 @media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    z-index: 200;
-    box-shadow: 4px 0 16px rgba(0,0,0,0.3);
-  }
   .workspace-bar { display: none; }
+  .workspace-ide { width: 100%; min-width: 0; }
   .hint-grid { grid-template-columns: 1fr; }
   .hint-grid--3col { grid-template-columns: 1fr 1fr; }
   .msg-user { max-width: 90%; }
