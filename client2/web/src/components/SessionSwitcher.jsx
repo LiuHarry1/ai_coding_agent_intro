@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChatStore } from "../stores/chat-store.js";
-import { api } from "../lib/api.js";
+import { agentApi } from "../lib/api/agent.js";
 import { relativeTime } from "../lib/utils.js";
 
 /**
@@ -20,7 +20,7 @@ export default function SessionSwitcher() {
 
   const refresh = async () => {
     try {
-      const data = await api.listSessions();
+      const data = await agentApi.listSessions();
       setSessions(data.sessions || []);
     } catch {}
   };
@@ -42,7 +42,7 @@ export default function SessionSwitcher() {
   const handleNew = async (e) => {
     e.stopPropagation();
     try {
-      const data = await api.createSession();
+      const data = await agentApi.createSession();
       switchSession(data.session_id);
       await refresh();
       setOpen(false);
@@ -52,7 +52,7 @@ export default function SessionSwitcher() {
   const handleDelete = async (id, e) => {
     e.stopPropagation();
     try {
-      await api.deleteSession(id);
+      await agentApi.deleteSession(id);
       await refresh();
       if (currentSessionId === id) switchSession(null);
     } catch {}
@@ -69,21 +69,27 @@ export default function SessionSwitcher() {
       )
     : sessions;
 
+  // Tooltip surfaces the current preview so users still know which session
+  // they're in without taking horizontal space in the header.
+  const buttonTitle = current
+    ? `Sessions · current: ${currentTitle}`
+    : "Sessions";
+
   return (
     <div className="session-switcher" ref={wrapRef}>
       <button
         type="button"
-        className={`session-pill ${open ? "open" : ""}`}
+        className={`icon-btn session-icon-btn ${open ? "active" : ""}`}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        title="Switch session"
+        title={buttonTitle}
+        aria-label={buttonTitle}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
-        <span className="session-pill-title" title={currentTitle}>{currentTitle}</span>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="session-pill-chevron">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        {sessions.length > 0 && (
+          <span className="session-icon-count">{sessions.length}</span>
+        )}
       </button>
 
       {open && (

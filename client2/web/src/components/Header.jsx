@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useChatStore } from "../stores/chat-store.js";
 import { useWorkspaceIdeStore } from "../stores/workspace-ide-store.js";
-import { api } from "../lib/api.js";
+import { workspaceApi } from "../lib/api/workspace.js";
 import SessionSwitcher from "./SessionSwitcher.jsx";
 
 export default function Header() {
@@ -15,10 +15,13 @@ export default function Header() {
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownData, setDropdownData] = useState(null);
+  /** When non-null, the dropdown renders an inline "new folder" input row. */
+  const [newFolderName, setNewFolderName] = useState(null);
+  const [newFolderError, setNewFolderError] = useState(null);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
-    api.getWorkspace()
+    workspaceApi.getRoot()
       .then((d) => setWorkspace(d.workspace))
       .catch(() => setWorkspace("."));
   }, [setWorkspace]);
@@ -35,14 +38,34 @@ export default function Header() {
 
   const loadDirectory = useCallback(async (dir) => {
     try {
-      const data = await api.listDir(dir);
+      const data = await workspaceApi.listDir(dir);
       setDropdownData(data);
       setWorkspace(data.dir);
       setDropdownOpen(true);
+      setNewFolderName(null);
+      setNewFolderError(null);
     } catch {
       setDropdownData(null);
     }
   }, [setWorkspace]);
+
+  const handleCreateFolder = async () => {
+    const name = (newFolderName || "").trim();
+    if (!name || /[\\/]/.test(name) || name === "." || name === "..") {
+      setNewFolderError("Invalid name");
+      return;
+    }
+    const target = `${dropdownData.dir.replace(/\/$/, "")}/${name}`;
+    try {
+      await workspaceApi.createFolder(target);
+      // Reload the current dir so the new folder shows up, then auto-pick it.
+      await loadDirectory(dropdownData.dir);
+      setWorkspace(target);
+      setDropdownOpen(false);
+    } catch (err) {
+      setNewFolderError(err.message || "Create failed");
+    }
+  };
 
   const handleBrowse = (e) => {
     e.stopPropagation();
@@ -105,9 +128,36 @@ export default function Header() {
                 {dropdownData.parent !== dropdownData.dir && (
                   <button className="ws-parent-btn" onClick={(e) => { e.stopPropagation(); loadDirectory(dropdownData.parent); }}>..</button>
                 )}
-                <span className="ws-path">{dropdownData.dir}</span>
+                <span className="ws-path" title={dropdownData.dir}>{dropdownData.dir}</span>
+                <button
+                  className="ws-new-folder-btn"
+                  onClick={(e) => { e.stopPropagation(); setNewFolderName(""); setNewFolderError(null); }}
+                  title="Create new folder here (use as new workspace)"
+                >
+                  + folder
+                </button>
               </div>
-              {dropdownData.entries.filter((e) => e.isDir).length === 0 ? (
+
+              {newFolderName !== null && (
+                <div className={`ws-entry ws-entry--new ${newFolderError ? "ws-entry--error" : ""}`}>
+                  <span className="ws-entry-icon dir">&#128193;</span>
+                  <input
+                    autoFocus
+                    className="ws-new-folder-input"
+                    value={newFolderName}
+                    placeholder="new folder name"
+                    onChange={(e) => { setNewFolderName(e.target.value); setNewFolderError(null); }}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); handleCreateFolder(); }
+                      else if (e.key === "Escape") { e.preventDefault(); setNewFolderName(null); setNewFolderError(null); }
+                    }}
+                  />
+                  {newFolderError && <span className="ws-new-folder-error" title={newFolderError}>{newFolderError}</span>}
+                </div>
+              )}
+
+              {dropdownData.entries.filter((e) => e.isDir).length === 0 && newFolderName === null ? (
                 <div className="ws-empty">No subdirectories</div>
               ) : (
                 dropdownData.entries.filter((e) => e.isDir).map((entry) => (

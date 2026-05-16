@@ -114,6 +114,14 @@ export async function runAgent(
   const provider = defaultManager.get();
   const resolvedModel = model ?? provider.defaultModelId();
 
+  // Debug: dump the system prompt once per chat turn so it's easy to
+  // inspect what the model actually sees (project rules + tool list +
+  // workspace cwd, etc.). Set `DEBUG_SYSTEM_PROMPT=0` to silence.
+  // if (process.env.DEBUG_SYSTEM_PROMPT !== "0") {
+  //   const sep = "─".repeat(60);
+  //   console.log(`\n${sep}\n[agent] system prompt (${systemPrompt.length} chars, model=${resolvedModel}):\n${sep}\n${systemPrompt}\n${sep}\n`);
+  // }
+
   let currentTodos: TodoItem[] = [];
   const unsubTodo = eventBus.on("todo_update", (data) => {
     currentTodos = (data as { todos: TodoItem[] }).todos;

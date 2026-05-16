@@ -979,19 +979,23 @@
 /* Subagent variants of the shared tool-row-header — same DOM, taller
    padding + slightly larger type, plus a per-type label color so the
    user can tell explore / plan / agent apart from across the chat. */
-.subagent-card .tool-row-header {
+/* Only the subagent's OWN header row gets the bigger padding / font.
+   Nested tool cards (BashCard, ReadFileCard, etc.) keep their own
+   compact dimensions — using a descendant selector here is what made
+   the inner rows look spaced out. */
+.subagent-card > .tool-row-header {
   padding: 8px 12px;
   font-size: 12.5px;
   color: var(--text-secondary);
 }
-.subagent-card .tool-row-header:hover { background: rgba(255,255,255,0.03); }
-.subagent-card .tool-row-icon { font-size: 13px; }
-.subagent-card .tool-row-label { color: var(--text-primary); font-weight: 600; }
-.subagent-card--explore .tool-row-label { color: #a371f7; }
-.subagent-card--plan    .tool-row-label { color: #d29922; }
-.subagent-card--agent   .tool-row-label { color: #8b949e; }
+.subagent-card > .tool-row-header:hover { background: rgba(255,255,255,0.03); }
+.subagent-card > .tool-row-header .tool-row-icon { font-size: 13px; }
+.subagent-card > .tool-row-header .tool-row-label { color: var(--text-primary); font-weight: 600; }
+.subagent-card--explore > .tool-row-header .tool-row-label { color: #a371f7; }
+.subagent-card--plan    > .tool-row-header .tool-row-label { color: #d29922; }
+.subagent-card--agent   > .tool-row-header .tool-row-label { color: #8b949e; }
 /* Per-type ✓ check on the right tip when the subagent succeeded. */
-.subagent-card .tool-row-status--ok { color: #3fb950; font-size: 13px; }
+.subagent-card > .tool-row-header .tool-row-status--ok { color: #3fb950; font-size: 13px; }
 
 .subagent-sep { color: var(--text-muted); flex-shrink: 0; }
 .subagent-task {
@@ -1001,7 +1005,33 @@
   text-overflow: ellipsis;
   max-width: 55%;
 }
-.subagent-step-count { font-size: 11px; color: var(--text-muted); }
+/* Clickable step-count chip in the header. Toggles the process list
+   independently of the card-level chevron. */
+.subagent-step-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.subagent-step-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+  background: rgba(255,255,255,0.04);
+}
+.subagent-step-chip-arrow {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform .12s ease;
+}
+.subagent-step-chip.open .subagent-step-chip-arrow { transform: rotate(90deg); }
 
 .subagent-body {
   padding: 8px 12px 12px;
@@ -1021,40 +1051,23 @@
   margin-bottom: 8px;
 }
 
-.subagent-steps-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 4px;
+/* Container for nested tool cards. Reuses the main-agent card components
+   (ReadFileCard / BashCard / ListDirCard / etc.) so each step is fully
+   interactive — expandable, copyable, with its own args + result. The
+   left dashed rail visually anchors the steps to the parent subagent. */
+.subagent-steps {
+  margin: 0 0 4px 4px;
+  padding-left: 10px;
   border-left: 1px dashed var(--border);
-  margin-left: 4px;
-}
-.subagent-step {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0 3px 10px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-secondary);
+  flex-direction: column;
+  gap: 0;
 }
-.subagent-step--error { color: var(--red); }
-.subagent-step-status {
-  width: 12px;
-  font-size: 11px;
-  text-align: center;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-.subagent-step--error .subagent-step-status { color: var(--red); }
-.subagent-step-name {
-  color: var(--accent);
-  flex-shrink: 0;
-}
-.subagent-step-args {
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Tighten the nested cards a touch — they live inside an already-padded
+   subagent body, so they don't need their own outer margin. */
+.subagent-steps > .tool-row,
+.subagent-steps > .tool-card {
+  margin: 0;
 }
 
 .subagent-more {
@@ -1126,8 +1139,8 @@
 [data-theme="light"] .subagent-card { background: #fff; }
 [data-theme="light"] .subagent-body { background: #f6f8fa; }
 [data-theme="light"] .subagent-report { background: #fff; }
-[data-theme="light"] .subagent-card--explore .tool-row-label { color: #8250df; }
-[data-theme="light"] .subagent-card--plan    .tool-row-label { color: #9a6700; }
-[data-theme="light"] .subagent-card--agent   .tool-row-label { color: #59636e; }
+[data-theme="light"] .subagent-card--explore > .tool-row-header .tool-row-label { color: #8250df; }
+[data-theme="light"] .subagent-card--plan    > .tool-row-header .tool-row-label { color: #9a6700; }
+[data-theme="light"] .subagent-card--agent   > .tool-row-header .tool-row-label { color: #59636e; }
 [data-theme="light"] .subagent-step-name { color: var(--accent); }
 [data-theme="light"] .subagent-report code { background: rgba(0,0,0,0.05); }

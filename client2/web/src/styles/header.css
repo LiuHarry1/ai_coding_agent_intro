@@ -237,6 +237,54 @@
   font-size: 12px;
 }
 
+/* "+ folder" affordance in the picker header */
+.ws-new-folder-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+.ws-new-folder-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Inline new-folder input row inside the picker dropdown */
+.ws-entry--new {
+  background: var(--bg-tertiary);
+  cursor: default;
+}
+.ws-entry--new:hover { background: var(--bg-tertiary); }
+
+.ws-new-folder-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 6px;
+  outline: none;
+}
+.ws-entry--error .ws-new-folder-input { border-color: var(--red); }
+.ws-new-folder-error {
+  color: var(--red);
+  font-size: 10.5px;
+  font-style: italic;
+  margin-left: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Light theme overrides ──────────────── */
 [data-theme="light"] .icon-btn { color: var(--text-secondary); }
 [data-theme="light"] .icon-btn:hover { color: var(--text-primary); }

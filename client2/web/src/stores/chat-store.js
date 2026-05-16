@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api } from "../lib/api.js";
+import { agentApi } from "../lib/api/agent.js";
 
 /**
  * Central state store for the chat UI.
@@ -61,7 +61,7 @@ export const useChatStore = create((set, get) => ({
     set({ currentSessionId: id, messages: [] });
     if (!id) return;
     try {
-      const data = await api.getSessionMessages(id);
+      const data = await agentApi.getSessionMessages(id);
       if (data.messages?.length > 0) set({ messages: data.messages });
     } catch {
       /* session history unavailable */
@@ -110,7 +110,7 @@ export const useChatStore = create((set, get) => ({
     if (images.length > 0) body.images = images;
 
     try {
-      const res = await api.postChat(body, abortController.signal);
+      const res = await agentApi.postChat(body, abortController.signal);
 
       if (!res.ok) {
         const errText = await res.text();

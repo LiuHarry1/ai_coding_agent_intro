@@ -13,26 +13,44 @@ export default function EditorTabs() {
   return (
     <div className="editor-tabs" role="tablist">
       {openFiles.map((p) => (
-        <div
+        <Tab
           key={p}
-          role="tab"
-          aria-selected={p === activeFile}
-          className={`editor-tab ${p === activeFile ? "active" : ""}`}
-          onClick={() => setActiveFile(p)}
-          title={p}
-        >
-          <span className="editor-tab-name">{fileName(p)}</span>
-          <button
-            className="editor-tab-close"
-            onClick={(e) => { e.stopPropagation(); closeFile(p); }}
-            title="Close"
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+          path={p}
+          isActive={p === activeFile}
+          onSelect={() => setActiveFile(p)}
+          onClose={() => closeFile(p)}
+        />
       ))}
+    </div>
+  );
+}
+
+function Tab({ path, isActive, onSelect, onClose }) {
+  // Subscribe to per-file dirty state so unsaved tabs render the • dot
+  // even when they're not active.
+  const dirty = useWorkspaceIdeStore((s) => Boolean(s.fileContents[path]?.dirty));
+
+  return (
+    <div
+      role="tab"
+      aria-selected={isActive}
+      className={`editor-tab ${isActive ? "active" : ""} ${dirty ? "dirty" : ""}`}
+      onClick={onSelect}
+      title={path}
+    >
+      <span className="editor-tab-name">
+        {dirty && <span className="editor-tab-dot" aria-hidden="true">●</span>}
+        {fileName(path)}
+      </span>
+      <button
+        className="editor-tab-close"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        title={dirty ? "Close (unsaved changes)" : "Close"}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
     </div>
   );
 }

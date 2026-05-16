@@ -77,3 +77,69 @@
 
 [data-theme="light"] .tree-file.active { background: rgba(9, 105, 218, 0.12); }
 [data-theme="light"] .tree-file.active:hover { background: rgba(9, 105, 218, 0.18); }
+
+/* Hover actions on directory rows (+File / +Folder) */
+.tree-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  flex-shrink: 0;
+  padding-left: 6px;
+}
+.tree-row:hover .tree-actions { opacity: 1; }
+
+.tree-action-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 3px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tree-action-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* Inline "new file/folder" input row */
+.tree-new {
+  cursor: text;
+  background: var(--bg-tertiary);
+}
+.tree-new:hover { background: var(--bg-tertiary); }
+.tree-new-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 6px;
+  outline: none;
+}
+.tree-new--error .tree-new-input { border-color: var(--red); }
+.tree-new-error {
+  color: var(--red);
+  font-size: 10.5px;
+  margin-left: 6px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dirty marker for files in the tree */
+.tree-dirty-dot {
+  color: var(--accent);
+  margin-right: 4px;
+  font-size: 9px;
+  vertical-align: middle;
+}

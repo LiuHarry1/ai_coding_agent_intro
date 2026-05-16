@@ -3,6 +3,7 @@ import * as path from "path";
 import type { IncomingMessage, ServerResponse } from "http";
 import { createSession, getSession, listSessions, deleteSession, appendMessage } from "./session.js";
 import { createSSETransport } from "./sse-transport.js";
+import { createWorkspaceRouter } from "./workspace/router.js";
 import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
@@ -58,83 +59,6 @@ function setCORS(res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
-
-function handleWorkspaceList(req: IncomingMessage, res: ServerResponse): void {
-  const params = new URL(req.url!, `http://${req.headers.host}`).searchParams;
-  let dir = params.get("dir") || process.cwd();
-  dir = dir.replace(/^~/, process.env.HOME || "/");
-  dir = path.resolve(dir);
-
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-    sendJSON(res, 200, { dir, parent: path.dirname(dir), entries: [] });
-    return;
-  }
-
-  try {
-    const raw = fs.readdirSync(dir, { withFileTypes: true });
-    const entries = raw
-      .filter((d: fs.Dirent) => !d.name.startsWith("."))
-      .map((d: fs.Dirent) => ({ name: d.name, isDir: d.isDirectory(), path: path.join(dir, d.name) }))
-      .sort((a: { isDir: boolean; name: string }, b: { isDir: boolean; name: string }) =>
-        a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name)
-      );
-    sendJSON(res, 200, { dir, parent: path.dirname(dir), entries });
-  } catch {
-    sendJSON(res, 200, { dir, parent: path.dirname(dir), entries: [] });
-  }
-}
-
-const MAX_FILE_PREVIEW_BYTES = 2 * 1024 * 1024; // 2 MB cap for file viewer
-
-function isProbablyBinary(buf: Buffer): boolean {
-  // Heuristic: any null byte in the first 8 KB → binary. Cheap and good enough
-  // for the workspace browser (the UI just refuses to render binary as text).
-  const len = Math.min(buf.length, 8192);
-  for (let i = 0; i < len; i++) {
-    if (buf[i] === 0) return true;
-  }
-  return false;
-}
-
-function handleWorkspaceFile(req: IncomingMessage, res: ServerResponse): void {
-  const params = new URL(req.url!, `http://${req.headers.host}`).searchParams;
-  let filePath = params.get("path");
-  if (!filePath) { sendJSON(res, 400, { error: "Missing 'path' query parameter" }); return; }
-
-  filePath = filePath.replace(/^~/, process.env.HOME || "/");
-  filePath = path.resolve(filePath);
-
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    sendJSON(res, 404, { error: "File not found", path: filePath });
-    return;
-  }
-
-  try {
-    const stat = fs.statSync(filePath);
-    const size = stat.size;
-    const truncated = size > MAX_FILE_PREVIEW_BYTES;
-    const fd = fs.openSync(filePath, "r");
-    const toRead = truncated ? MAX_FILE_PREVIEW_BYTES : size;
-    const buf = Buffer.alloc(toRead);
-    fs.readSync(fd, buf, 0, toRead, 0);
-    fs.closeSync(fd);
-
-    if (isProbablyBinary(buf)) {
-      sendJSON(res, 200, { path: filePath, content: "", size, truncated: false, isBinary: true });
-      return;
-    }
-
-    sendJSON(res, 200, {
-      path: filePath,
-      content: buf.toString("utf-8"),
-      size,
-      truncated,
-      isBinary: false,
-    });
-  } catch (err) {
-    sendJSON(res, 500, { error: (err as Error).message });
-  }
 }
 
 function serveStaticFile(req: IncomingMessage, res: ServerResponse, staticDir: string): boolean {
@@ -328,6 +252,10 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
 
   process.on("exit", () => { mcpManager.closeAll().catch(() => {}); });
 
+  // Workspace HTTP module — independent of agent/session/MCP. Composed by
+  // delegation: it returns true iff it handled the request.
+  const workspaceRouter = createWorkspaceRouter({ root: process.cwd() });
+
   return async (req: IncomingMessage, res: ServerResponse) => {
     setCORS(res);
 
@@ -336,7 +264,8 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     if (method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
     if (method === "GET" && url === "/health") { sendJSON(res, 200, { status: "ok" }); return; }
-    if (method === "GET" && url === "/workspace") { sendJSON(res, 200, { workspace: process.cwd() }); return; }
+
+    if (await workspaceRouter(req, res)) return;
 
     if (method === "POST" && url === "/sessions") {
       const session = createSession();
@@ -411,8 +340,6 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     if (method === "GET" && url === "/mcp") { sendJSON(res, 200, { servers: mcpManager.getStatus() }); return; }
 
     if (method === "POST" && url === "/chat") { await handleChat(req, res, runAgent, systemPrompt); return; }
-    if (method === "GET" && url?.startsWith("/workspace/list")) { handleWorkspaceList(req, res); return; }
-    if (method === "GET" && url?.startsWith("/workspace/file")) { handleWorkspaceFile(req, res); return; }
 
     if (staticDir && serveStaticFile(req, res, staticDir)) return;
 

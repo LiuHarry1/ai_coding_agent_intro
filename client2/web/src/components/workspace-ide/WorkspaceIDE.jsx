@@ -1,11 +1,10 @@
 import React from "react";
 import { useWorkspaceIdeStore } from "../../stores/workspace-ide-store.js";
-import { useChatStore } from "../../stores/chat-store.js";
 import FileTree from "./FileTree.jsx";
 import EditorTabs from "./EditorTabs.jsx";
 import EditorView from "./EditorView.jsx";
 import ResizeHandle from "./ResizeHandle.jsx";
-import { FolderIcon } from "./icons.jsx";
+import { FolderIcon, NewFileIcon, NewFolderIcon } from "./icons.jsx";
 
 /**
  * Left-side IDE panel. Header → 2-column body (file tree | editor). When
@@ -20,8 +19,9 @@ export default function WorkspaceIDE() {
   const toggle = useWorkspaceIdeStore((s) => s.toggle);
   const refreshTree = useWorkspaceIdeStore((s) => s.refreshTree);
   const collapseAll = useWorkspaceIdeStore((s) => s.collapseAll);
+  const beginCreate = useWorkspaceIdeStore((s) => s.beginCreate);
   const hasOpenFiles = useWorkspaceIdeStore((s) => s.openFiles.length > 0);
-  const workspace = useChatStore((s) => s.workspace);
+  const workspace = useWorkspaceIdeStore((s) => s.rootPath);
 
   if (!open) return null;
 
@@ -44,6 +44,22 @@ export default function WorkspaceIDE() {
         </div>
 
         <div className="workspace-ide-actions">
+          <button
+            className="icon-btn"
+            onClick={() => workspace && beginCreate(workspace, "file")}
+            title="New file (in workspace root)"
+            disabled={!workspace}
+          >
+            <NewFileIcon size={14} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => workspace && beginCreate(workspace, "folder")}
+            title="New folder (in workspace root)"
+            disabled={!workspace}
+          >
+            <NewFolderIcon size={14} />
+          </button>
           <button
             className="icon-btn"
             onClick={refreshTree}
