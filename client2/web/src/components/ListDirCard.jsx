@@ -28,7 +28,7 @@ export default function ListDirCard({ part }) {
 
   const meta = [];
   if (depth != null) meta.push(`depth ${depth}`);
-  if (ignore) meta.push(`-${ignore.length}`);
+  if (ignore) meta.push(`ignore ${ignore.length}`);
   if (fileCount != null) meta.push(`${fileCount} files`);
 
   return (

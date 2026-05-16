@@ -16,6 +16,7 @@ const TOOL_CARDS = {
   read_file: ReadFileCard,
   list_dir: ListDirCard,
   bash: BashCard,
+  powershell: BashCard,
   web_search: WebSearchCard,
 };
 

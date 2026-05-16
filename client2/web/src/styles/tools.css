@@ -740,8 +740,18 @@
   color: #6e7681;
   font-size: 10.5px;
   font-family: var(--font-mono);
+  /* Reserve a stable slot so the trailing status icon doesn't shift
+     horizontally as the row transitions spinner → ✓ → ✗. */
+  min-width: 38px;
+  text-align: right;
 }
-.tool-row-status { font-size: 12px; flex-shrink: 0; }
+.tool-row-status {
+  font-size: 12px;
+  flex-shrink: 0;
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+}
 .tool-row-status--error { color: var(--red); }
 .tool-row-status--empty { color: var(--text-muted); }
 .tool-row-actions { display: inline-flex; align-items: center; }

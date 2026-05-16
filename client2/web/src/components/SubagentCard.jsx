@@ -44,38 +44,61 @@ function typeMetaFor(name) {
   return { kind: "agent", icon: "\u{1F916}", label: pretty };
 }
 
-/** "Listed 1 dir, read 7 files, ran 14 commands." */
+/**
+ * Compact one-liner summary of what the subagent did, shown both in the
+ * collapsed header (so the user sees scope at a glance) and below the
+ * task line when expanded.
+ *
+ * Examples: "7 reads · 14 searches · 1 dir" / "3 reads · 2 edits".
+ * Lower-case + middot-separated keeps it dense; pluralization is dropped
+ * since the count is already there.
+ */
 function summarizeSteps(steps) {
   const counts = {};
   for (const s of steps) {
     const n = s.name || "other";
     counts[n] = (counts[n] || 0) + 1;
   }
+  const VERBS = [
+    ["read_file", "read", "reads"],
+    ["grep", "search", "searches"],
+    ["list_dir", "dir", "dirs"],
+    ["bash", "cmd", "cmds"],
+    ["powershell", "cmd", "cmds"],
+    ["web_search", "web search", "web searches"],
+    ["web_fetch", "fetch", "fetches"],
+    ["write_file", "write", "writes"],
+    ["edit_file", "edit", "edits"],
+  ];
   const phrases = [];
-  if (counts.list_dir) phrases.push(`listed ${counts.list_dir} dir${counts.list_dir > 1 ? "s" : ""}`);
-  if (counts.read_file) phrases.push(`read ${counts.read_file} file${counts.read_file > 1 ? "s" : ""}`);
-  if (counts.grep) phrases.push(`${counts.grep} search${counts.grep > 1 ? "es" : ""}`);
-  if (counts.bash) phrases.push(`ran ${counts.bash} command${counts.bash > 1 ? "s" : ""}`);
-  if (counts.web_search) phrases.push(`${counts.web_search} web search${counts.web_search > 1 ? "es" : ""}`);
-  if (counts.web_fetch) phrases.push(`${counts.web_fetch} fetch${counts.web_fetch > 1 ? "es" : ""}`);
-  if (counts.write_file) phrases.push(`wrote ${counts.write_file} file${counts.write_file > 1 ? "s" : ""}`);
-  if (counts.edit_file) phrases.push(`edited ${counts.edit_file} file${counts.edit_file > 1 ? "s" : ""}`);
+  for (const [key, sing, plur] of VERBS) {
+    if (counts[key]) phrases.push(`${counts[key]} ${counts[key] > 1 ? plur : sing}`);
+  }
   if (phrases.length === 0) return null;
-  const joined = phrases.join(", ");
-  return joined.charAt(0).toUpperCase() + joined.slice(1) + ".";
+  return phrases.join(" \u00B7 ");
 }
 
 const STEP_PREVIEW_LIMIT = 6;
 
 export default function SubagentCard({ part }) {
-  const name = part.name || "subagent";
   const args = part.args || {};
+  // Single-Task architecture: dispatch tool is always named "task"; the
+  // actual subagent identity is in args.subagent_type. Legacy sessions
+  // (one tool per subagent) stored it in part.name; fall back to that.
+  const subagentType = args.subagent_type || part.name || "subagent";
   const result = part.result;
-  const task = args.task || "";
+  // New schema uses { description, prompt }; legacy used { task }. The
+  // short `description` is the headline; if the user only sent `prompt`
+  // we truncate that as a fallback.
+  const headline =
+    args.description ||
+    args.task ||
+    (typeof args.prompt === "string" ? args.prompt.slice(0, 120) : "");
+  const fullPrompt = args.prompt || args.task || "";
   const isDone = part.status === "done";
   const isError =
     isDone && typeof result === "string" && result.startsWith("Error:");
-  const meta = typeMetaFor(name);
+  const meta = typeMetaFor(subagentType);
 
   const steps = useMemo(() => {
     const raw = Array.isArray(part.subagentParts) ? part.subagentParts : [];
@@ -100,30 +123,41 @@ export default function SubagentCard({ part }) {
   const visibleSteps = showAllSteps ? steps : steps.slice(0, STEP_PREVIEW_LIMIT);
   const hiddenCount = steps.length - visibleSteps.length;
 
-  // Title row: type label + middot + task (truncated to one line via CSS).
-  const titleContent = task ? (
+  // Title row: type label + middot + headline (truncated to one line via CSS).
+  const titleContent = headline ? (
     <>
       <span className="subagent-sep" aria-hidden="true">
         {"\u00B7"}
       </span>
-      <span className="subagent-task" title={task}>
-        {task}
+      <span className="subagent-task" title={fullPrompt || headline}>
+        {headline}
       </span>
     </>
   ) : null;
 
-  // Clickable step-count chip in the header. Toggles only the process
-  // list, independent of the card-level chevron and the report.
+  // Clickable step-count chip in the header. When the card is collapsed,
+  // clicking it pops the card open AND shows the step list (one-click
+  // path to "show me the steps"). When expanded, it just toggles the
+  // step list independently of the card chevron and the report.
+  const handleStepChipClick = (e) => {
+    e.stopPropagation();
+    if (!cardOpen) {
+      setCardOpen(true);
+      setStepsOpen(true);
+      return;
+    }
+    setStepsOpen((v) => !v);
+  };
+  // Visual: when card is collapsed the arrow always points "right" since
+  // the action is "expand"; when expanded it reflects the steps-open state.
+  const stepChipOpen = cardOpen && stepsOpen;
   const stepChip = steps.length > 0 ? (
     <button
       type="button"
-      className={`subagent-step-chip ${stepsOpen ? "open" : ""}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        setStepsOpen((v) => !v);
-      }}
-      aria-expanded={stepsOpen}
-      aria-label={stepsOpen ? "Hide steps" : "Show steps"}
+      className={`subagent-step-chip ${stepChipOpen ? "open" : ""}`}
+      onClick={handleStepChipClick}
+      aria-expanded={stepChipOpen}
+      aria-label={stepChipOpen ? "Hide steps" : "Show steps"}
     >
       <span className="subagent-step-chip-arrow" aria-hidden="true">
         {"\u25B8"}
@@ -142,7 +176,8 @@ export default function SubagentCard({ part }) {
         icon={meta.icon}
         label={meta.label}
         title={titleContent}
-        titleTooltip={task}
+        titleTooltip={fullPrompt || headline}
+        subtitle={summary}
         meta={stepChip}
         duration={part.duration}
         isDone={isDone}
@@ -152,10 +187,6 @@ export default function SubagentCard({ part }) {
 
       {cardOpen && (
         <div className="subagent-body">
-          {summary && (
-            <div className="subagent-summary">{summary}</div>
-          )}
-
           {steps.length > 0 && stepsOpen && (
             <div className="subagent-steps">
               {visibleSteps.map((s, i) => {

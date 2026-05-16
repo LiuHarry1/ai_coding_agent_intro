@@ -220,23 +220,42 @@ export interface SSETransport {
 
 // ── Subagent ────────────────────────────────────
 
-export interface SubagentConfig {
-  name: string;
+/**
+ * Pure-data definition of a subagent. After the single-Task architecture
+ * refactor, subagents are no longer registered as individual tools — they
+ * are entries in the `task` tool's directory. The model picks one via
+ * `subagent_type` parameter.
+ *
+ * Modeled after Claude Code's `BaseAgentDefinition` (loadAgentsDir.ts).
+ */
+export interface AgentDefinition {
+  /** Stable identifier shown to the model as `subagent_type` value. */
+  agentType: string;
+  /**
+   * One-paragraph description rendered in the `task` tool's description
+   * directory. Should include 1-3 user-phrasing examples in quotes so the
+   * model recognizes triggers like "how does X work" / "audit Y".
+   *
+   * Add the literal string "use proactively" here to opt this agent into
+   * the proactive-use protocol surfaced in the main system prompt.
+   */
+  whenToUse: string;
+  /** Brief description for activity logs / UI / events. */
   description: string;
+  /** System prompt the subagent runs with. */
   systemPrompt: string;
   /**
-   * Allow-list of tool names. If provided, the subagent only sees these tools.
-   * Mutually exclusive with `disallowedTools`. If neither is set, the subagent
-   * inherits the full registry (and all MCP tools).
+   * Allow-list of tool names. Mutually exclusive with `disallowedTools`.
+   * If neither set, subagent inherits the full registry + MCP tools.
    */
   tools?: string[];
-  /**
-   * Deny-list of tool names. The subagent inherits all registry + MCP tools
-   * except these. Mirrors Claude Code's explore agent pattern: keep a wide
-   * read-only toolset by only excluding mutating tools.
-   */
+  /** Deny-list of tool names. */
   disallowedTools?: string[];
+  /** Max agentic steps before stopping. Default 20. */
   maxSteps?: number;
+  /** Optional model override (provider-dependent). */
+  model?: string;
+  /** Display label used in the UI's SubagentCard. Defaults to titlecased agentType. */
   label?: string;
 }
 

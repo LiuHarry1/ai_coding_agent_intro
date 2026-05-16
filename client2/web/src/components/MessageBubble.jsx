@@ -69,7 +69,9 @@ function CompactionNotice({ part }) {
 
 const STATUS_ICONS = {
   pending: "□",
-  in_progress: "▸",
+  // Filled square: visually distinct from the card's chevron (▶/▼) so the
+  // in-progress row doesn't read as a nested toggle.
+  in_progress: "▣",
   completed: "☑",
   cancelled: "☒",
 };
@@ -90,15 +92,15 @@ function TodoListCard({ part }) {
   const [manualToggle, setManualToggle] = useState(null);
   const open = manualToggle !== null ? manualToggle : !allDone;
 
+  // Header no longer echoes the in-progress task title — the highlighted row
+  // in the list already shows it, and duplicating it on the header was just
+  // noise (also forced the header to truncate on long task names).
   let headerIcon, headerText;
   if (allDone) {
     headerIcon = "☑";
     headerText = `All ${total} tasks complete`;
-  } else if (inProgress) {
-    headerIcon = "▸";
-    headerText = inProgress.content;
   } else {
-    headerIcon = "□";
+    headerIcon = inProgress ? "▣" : "□";
     headerText = "Tasks";
   }
 
@@ -123,9 +125,15 @@ function TodoListCard({ part }) {
           <span className="todo-title">{headerText}</span>
         </div>
         <span className="todo-count">
-          <span className="todo-count-done">{done}</span>
-          <span className="todo-count-sep">/</span>
-          <span className="todo-count-total">{total}</span>
+          {done === 0 ? (
+            <span className="todo-count-total">{total} tasks</span>
+          ) : (
+            <>
+              <span className="todo-count-done">{done}</span>
+              <span className="todo-count-sep">/</span>
+              <span className="todo-count-total">{total}</span>
+            </>
+          )}
         </span>
       </button>
       {open && (
@@ -209,13 +217,15 @@ export default function MessageBubble({ message }) {
               </div>
             );
           case "reasoning":
-            // Skip empty 0-second reasoning blocks — pure noise. We still
-            // render them while they're streaming (no duration yet) so the
-            // user gets the live "Thinking…" indicator.
+            // Skip short, content-less reasoning blocks — they're pure noise
+            // ("Thought for 1s" rows with nothing inside). We still render
+            // them while they're streaming so the user gets the live
+            // "Thinking…" indicator, and we still render any block that has
+            // actual content regardless of duration.
             if (
               part.status !== "streaming" &&
               (!part.content || part.content.trim() === "") &&
-              (!part.duration || part.duration === 0)
+              (!part.duration || part.duration <= 2)
             ) return null;
             return <ReasoningBlock key={i} part={part} />;
           case "thinking":

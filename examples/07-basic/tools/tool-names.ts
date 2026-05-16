@@ -15,6 +15,7 @@
  */
 
 export const BASH_TOOL_NAME = "bash";
+export const POWERSHELL_TOOL_NAME = "powershell";
 export const READ_FILE_TOOL_NAME = "read_file";
 export const WRITE_FILE_TOOL_NAME = "write_file";
 export const EDIT_FILE_TOOL_NAME = "edit_file";
@@ -22,6 +23,12 @@ export const LIST_DIR_TOOL_NAME = "list_dir";
 export const TODO_WRITE_TOOL_NAME = "todo_write";
 export const WEB_SEARCH_TOOL_NAME = "web_search";
 export const WEB_FETCH_TOOL_NAME = "web_fetch";
+
+/**
+ * Single tool that dispatches to all built-in subagents via a
+ * `subagent_type` parameter. Modeled after Claude Code's `Task` tool.
+ */
+export const TASK_TOOL_NAME = "task";
 
 /**
  * Tools that mutate the filesystem or system state. Used as the deny-list

@@ -583,7 +583,7 @@ export const useChatStore = create((set, get) => ({
       const parts = [...last.parts];
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
-        if (p.type === "tool_call" && p.name === "bash" && p.status !== "done") {
+        if (p.type === "tool_call" && (p.name === "bash" || p.name === "powershell") && p.status !== "done") {
           parts[i] = {
             ...p,
             liveOutput: data.output,

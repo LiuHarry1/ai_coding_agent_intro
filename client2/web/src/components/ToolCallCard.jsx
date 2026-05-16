@@ -37,7 +37,7 @@ function formatArgs(name, args) {
   // bash has 4 modes: run a command (above), check pid, kill pid, background.
   // Without this branch the mode-2/mode-3 calls render as raw JSON
   // (`bash {"pid":60090}`), which is gibberish to the user.
-  if (name === "bash" && args.pid != null) {
+  if ((name === "bash" || name === "powershell") && args.pid != null) {
     return args.kill ? `kill pid ${args.pid}` : `check pid ${args.pid}`;
   }
   if (args.task) return args.task.slice(0, 80) + (args.task.length > 80 ? "\u2026" : "");
