@@ -1,5 +1,6 @@
 import React from "react";
 import { useWorkspaceIdeStore } from "../../stores/workspace-ide-store.js";
+import { fileName } from "../../lib/utils.js";
 import FileTree from "./FileTree.jsx";
 import EditorTabs from "./EditorTabs.jsx";
 import EditorView from "./EditorView.jsx";
@@ -16,6 +17,8 @@ export default function WorkspaceIDE() {
   const open = useWorkspaceIdeStore((s) => s.open);
   const width = useWorkspaceIdeStore((s) => s.width);
   const setWidth = useWorkspaceIdeStore((s) => s.setWidth);
+  const treeWidth = useWorkspaceIdeStore((s) => s.treeWidth);
+  const setTreeWidth = useWorkspaceIdeStore((s) => s.setTreeWidth);
   const toggle = useWorkspaceIdeStore((s) => s.toggle);
   const refreshTree = useWorkspaceIdeStore((s) => s.refreshTree);
   const collapseAll = useWorkspaceIdeStore((s) => s.collapseAll);
@@ -25,7 +28,7 @@ export default function WorkspaceIDE() {
 
   if (!open) return null;
 
-  const cwdLabel = workspace ? workspace.split("/").filter(Boolean).pop() : "Workspace";
+  const cwdLabel = workspace ? fileName(workspace) : "Workspace";
 
   return (
     <aside className="workspace-ide" style={{ width }}>
@@ -96,15 +99,27 @@ export default function WorkspaceIDE() {
       </div>
 
       <div className={`workspace-ide-body ${hasOpenFiles ? "" : "tree-only"}`}>
-        <div className="workspace-ide-tree">
+        <div
+          className="workspace-ide-tree"
+          style={hasOpenFiles ? { width: treeWidth } : undefined}
+        >
           <FileTree rootPath={workspace} />
         </div>
 
         {hasOpenFiles && (
-          <div className="workspace-ide-editor">
-            <EditorTabs />
-            <EditorView />
-          </div>
+          <>
+            <ResizeHandle
+              mode="delta"
+              className="workspace-ide-split-resize"
+              getSize={() => treeWidth}
+              onResize={setTreeWidth}
+              onReset={() => setTreeWidth(260)}
+            />
+            <div className="workspace-ide-editor">
+              <EditorTabs />
+              <EditorView />
+            </div>
+          </>
         )}
       </div>
 

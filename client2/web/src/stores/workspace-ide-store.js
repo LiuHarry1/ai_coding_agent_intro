@@ -1,12 +1,21 @@
 import { create } from "zustand";
 import { workspaceApi } from "../lib/api/workspace.js";
+import { fileName } from "../lib/utils.js";
 
 const STORAGE_KEY_WIDTH = "coding_agent_ide_width";
+const STORAGE_KEY_TREE_WIDTH = "coding_agent_ide_tree_width";
+const DEFAULT_TREE_WIDTH = 260;
 
 function initialWidth() {
   const saved = parseInt(localStorage.getItem(STORAGE_KEY_WIDTH) || "0", 10);
   if (saved && saved > 200) return saved;
   return Math.round((typeof window !== "undefined" ? window.innerWidth : 1400) * 0.6);
+}
+
+function initialTreeWidth() {
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY_TREE_WIDTH) || "0", 10);
+  if (saved && saved >= 120) return saved;
+  return DEFAULT_TREE_WIDTH;
 }
 
 /**
@@ -33,8 +42,19 @@ export const useWorkspaceIdeStore = create((set, get) => ({
   open: false,
   /** Width in pixels — persisted in localStorage. */
   width: initialWidth(),
+  /** File tree column width when editor is open — persisted in localStorage. */
+  treeWidth: initialTreeWidth(),
 
   toggle: () => set((s) => ({ open: !s.open })),
+
+  setTreeWidth: (w) => {
+    const ideW = get().width;
+    const minW = 120;
+    const maxW = Math.max(minW + 120, ideW - 200);
+    const clamped = Math.max(minW, Math.min(maxW, Math.round(w)));
+    localStorage.setItem(STORAGE_KEY_TREE_WIDTH, String(clamped));
+    set({ treeWidth: clamped });
+  },
 
   setWidth: (w) => {
     const minW = 360;
@@ -201,7 +221,7 @@ export const useWorkspaceIdeStore = create((set, get) => ({
     if (cur?.dirty) {
       // eslint-disable-next-line no-alert
       const ok = window.confirm(
-        `"${filePath.split("/").pop()}" has unsaved changes. Discard them?`
+        `"${fileName(filePath)}" has unsaved changes. Discard them?`
       );
       if (!ok) return;
     }

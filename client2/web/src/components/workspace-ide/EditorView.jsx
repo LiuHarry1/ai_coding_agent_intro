@@ -122,7 +122,7 @@ function EditorBody({ filePath, text, gutter, editable, onChangeDraft }) {
   };
 
   return (
-    <div className="editor-body">
+    <div className={`editor-body ${editable ? "editor-body--edit" : "editor-body--readonly"}`}>
       <pre ref={gutterRef} className="editor-gutter" aria-hidden="true">{gutter}</pre>
       {editable ? (
         <textarea

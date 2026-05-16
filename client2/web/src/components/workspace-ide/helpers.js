@@ -1,5 +1,9 @@
 import { fileName } from "../../lib/utils.js";
 
+function normPath(p) {
+  return p ? p.replace(/\\/g, "/") : "";
+}
+
 const EXT_LANG = {
   ts: "TypeScript", tsx: "TypeScript / TSX",
   js: "JavaScript", jsx: "JavaScript / JSX",
@@ -26,9 +30,11 @@ export function languageLabel(filePath) {
  */
 export function buildBreadcrumb(filePath, workspace) {
   if (!filePath) return [];
-  let rel = filePath;
-  if (workspace && filePath.startsWith(workspace)) {
-    rel = filePath.slice(workspace.length).replace(/^\/+/, "");
+  const file = normPath(filePath);
+  const ws = normPath(workspace);
+  let rel = file;
+  if (ws && file.toLowerCase().startsWith(ws.toLowerCase())) {
+    rel = file.slice(ws.length).replace(/^\/+/, "");
   }
   const parts = rel.split("/").filter(Boolean);
   if (parts.length === 0) return [fileName(filePath)];

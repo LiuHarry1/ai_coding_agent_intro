@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useWorkspaceIdeStore } from "../../stores/workspace-ide-store.js";
+import { fileName } from "../../lib/utils.js";
 import { FolderIcon, FileIcon, NewFileIcon, NewFolderIcon } from "./icons.jsx";
 
 /**
@@ -34,7 +35,7 @@ function DirNode({ dirPath, depth }) {
   const beginCreate = useWorkspaceIdeStore((s) => s.beginCreate);
   const pendingNew = useWorkspaceIdeStore((s) => s.pendingNew);
 
-  const name = dirPath.split("/").filter(Boolean).pop() || dirPath;
+  const name = fileName(dirPath) || dirPath;
   const showInlineRow = pendingNew && pendingNew.parentDir === dirPath;
 
   const handleAction = (kind) => (e) => {
