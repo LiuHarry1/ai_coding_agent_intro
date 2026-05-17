@@ -1,6 +1,6 @@
 import * as fs from "fs";
 
-const example = process.argv[2] || "07-basic";
+const example = process.argv[2] || "08-basic";
 
 console.log(`[start] Loading example: ${example}`);
 
