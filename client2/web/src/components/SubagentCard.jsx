@@ -57,7 +57,10 @@ function summarizeSteps(steps) {
   const counts = {};
   for (const s of steps) {
     const n = s.name || "other";
-    counts[n] = (counts[n] || 0) + 1;
+    let bucket = n;
+    if (n.endsWith("_fetch")) bucket = "__fetch__";
+    else if (n.endsWith("_search") || n.endsWith("_web_search")) bucket = "__search__";
+    counts[bucket] = (counts[bucket] || 0) + 1;
   }
   const VERBS = [
     ["read_file", "read", "reads"],
@@ -66,7 +69,9 @@ function summarizeSteps(steps) {
     ["bash", "cmd", "cmds"],
     ["powershell", "cmd", "cmds"],
     ["web_search", "web search", "web searches"],
+    ["__search__", "web search", "web searches"],
     ["web_fetch", "fetch", "fetches"],
+    ["__fetch__", "fetch", "fetches"],
     ["write_file", "write", "writes"],
     ["edit_file", "edit", "edits"],
   ];

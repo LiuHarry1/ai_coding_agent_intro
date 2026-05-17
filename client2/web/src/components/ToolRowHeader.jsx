@@ -3,7 +3,7 @@ import { formatDuration } from "../lib/utils.js";
 
 /**
  * Shared single-row tool header used by every compact card
- * (BashCard, ReadFileCard, ListDirCard, WebSearchCard, SubagentCard).
+ * (BashCard, ReadFileCard, ListDirCard, WebSearchCard, WebFetchCard, SubagentCard).
  *
  * Before this component existed each card hand-rolled the same
  * `chevron → icon → verb → name → spacer → duration → status` row

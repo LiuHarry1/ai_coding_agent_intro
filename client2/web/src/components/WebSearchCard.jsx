@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import CopyButton from "./CopyButton.jsx";
 import ToolRowHeader from "./ToolRowHeader.jsx";
+import { parseMcpToolName } from "../lib/tool-kind.js";
 
 /**
  * Dedicated card for the `web_search` tool. Replaces the generic ToolCallCard's
@@ -71,6 +72,8 @@ function ResultRow({ item }) {
 }
 
 export default function WebSearchCard({ part }) {
+  const toolName = part.name || "";
+  const { server: mcpServer } = parseMcpToolName(toolName);
   const args = part.args || {};
   const result = part.result;
   const isDone = part.status === "done";
@@ -110,7 +113,13 @@ export default function WebSearchCard({ part }) {
         icon={"\u{1F50D}"}
         title={query ? `\u201C${query}\u201D` : "search\u2026"}
         titleTooltip={query}
-        subtitle={filter.length > 0 ? filter.join(" \u00B7 ") : null}
+        subtitle={
+          filter.length > 0
+            ? filter.join(" \u00B7 ")
+            : mcpServer
+              ? `via ${mcpServer}`
+              : null
+        }
         meta={
           isDone && results.length > 0 ? (
             <span className="web-search-meta">

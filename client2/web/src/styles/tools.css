@@ -2,6 +2,10 @@
 .tool-group {
   margin: 6px 0;
 }
+/* Compact row cards (fetch/search/read) stack tighter than full tool-cards */
+.tool-group .tool-row {
+  margin: 1px 0;
+}
 
 .tool-card {
   border: 1px solid var(--border);
@@ -971,6 +975,106 @@
   background: rgba(9,105,218,0.08);
   color: #0969da;
 }
+
+/* ── Web Fetch Card ──────────────────────── */
+.web-fetch-meta { font-size: 11px; color: var(--text-muted); }
+
+.web-fetch-body {
+  margin: 4px 0 6px 18px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.025);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+}
+
+.web-fetch-link {
+  display: block;
+  font-size: 11px;
+  color: #3fb950;
+  font-family: var(--font-mono);
+  text-decoration: none;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+.web-fetch-link:hover { text-decoration: underline; }
+
+.web-fetch-byline {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.web-fetch-excerpt {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.45;
+  margin-bottom: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+.web-fetch-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.web-fetch-text {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.web-fetch-more {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.web-fetch-more:hover { color: var(--accent); border-color: var(--accent); }
+
+.web-fetch-error {
+  padding: 8px;
+  background: rgba(248,81,73,0.08);
+  border-radius: 4px;
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.web-fetch-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.web-fetch-raw {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+
+[data-theme="light"] .web-fetch-body {
+  background: rgba(0,0,0,0.025);
+  border-left-color: #d1d9e0;
+}
+[data-theme="light"] .web-fetch-link { color: #1a7f37; }
 
 /* ── Subagent Card (explore / plan / general_purpose) ─ */
 .subagent-card {

@@ -48,7 +48,7 @@ export function formatBytes(n) {
  * Did this tool call fail? Looks at both the result string conventions our
  * backend uses (`Error:` prefix for thrown errors, `[exit code: N]` for
  * bash) and tool-name-specific heuristics. Single source of truth so
- * BashCard / ReadFileCard / WebSearchCard / SubagentCard / ToolCallCard
+ * BashCard / ReadFileCard / WebSearchCard / WebFetchCard / SubagentCard / ToolCallCard
  * agree on what counts as an error.
  */
 export function detectError(name, result) {
