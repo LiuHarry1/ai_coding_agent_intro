@@ -257,6 +257,15 @@ export interface AgentDefinition {
   model?: string;
   /** Display label used in the UI's SubagentCard. Defaults to titlecased agentType. */
   label?: string;
+  /**
+   * Skip injecting project rules (AGENTS.md / CLAUDE.md / .cursor/rules/*)
+   * into this subagent's system prompt. Set true for fast read-only
+   * exploration agents — the rules carry commit/PR/lint guidance the
+   * subagent will never act on, and the parent already interprets results
+   * with full context. Mirrors Claude Code's `omitClaudeMd: true` on the
+   * Explore agent.
+   */
+  omitProjectRules?: boolean;
 }
 
 // ── MCP ─────────────────────────────────────────

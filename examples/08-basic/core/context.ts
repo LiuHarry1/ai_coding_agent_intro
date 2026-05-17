@@ -28,7 +28,8 @@ const MICRO_COMPACT_INPUT_MARKER = { _cleared: true, note: "Old tool input clear
 const CLEARABLE_TOOL_RESULTS = new Set<string>([
   "bash",
   "shell",
-  "list_dir",
+  "powershell",
+  "glob",
   "grep",
   "read_file",
   "web_fetch",

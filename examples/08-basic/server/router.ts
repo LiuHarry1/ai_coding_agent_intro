@@ -10,6 +10,7 @@ import { defaultRegistry } from "../tools/index.js";
 import { registerBuiltinSubagents, getSubagentNames } from "../subagents/index.js";
 import { MCPManager } from "../core/mcp-manager.js";
 import { configManager } from "../core/config-manager.js";
+import { answerQuestion } from "../core/question-broker.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 import { filterToolsByEnablement } from "../core/tool-enablement.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig, LlmProfile } from "../core/types.js";
@@ -338,6 +339,32 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
 
     // ── Legacy MCP endpoints (backward compatible) ──
     if (method === "GET" && url === "/mcp") { sendJSON(res, 200, { servers: mcpManager.getStatus() }); return; }
+
+    // Answer a pending ask_user_question prompt. Body shape:
+    //   { id, answers: { [questionText]: answerString }, annotations? }
+    // Multi-select answers should be joined by ", " by the client
+    // before posting.
+    if (method === "POST" && url === "/ask_user_question/answer") {
+      try {
+        const body = await readBody(req);
+        const id = body.id as string;
+        const answers = body.answers as Record<string, string> | undefined;
+        const annotations = body.annotations as
+          | Record<string, { preview?: string; notes?: string }>
+          | undefined;
+        if (!id || !answers || typeof answers !== "object") {
+          sendJSON(res, 400, { error: "Missing 'id' or 'answers' object" });
+          return;
+        }
+        const ok = answerQuestion(id, { answers, annotations });
+        sendJSON(
+          res,
+          ok ? 200 : 404,
+          ok ? { ok: true } : { error: "No pending question with that id" }
+        );
+      } catch { sendJSON(res, 400, { error: "Invalid JSON" }); }
+      return;
+    }
 
     if (method === "POST" && url === "/chat") { await handleChat(req, res, runAgent, systemPrompt); return; }
 

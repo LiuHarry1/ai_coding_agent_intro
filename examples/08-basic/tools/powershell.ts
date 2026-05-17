@@ -43,7 +43,7 @@ Modes:
 
 Working directory:
 - The cwd persists across calls — \`Set-Location subdir\` (or \`cd\`) in one call affects the next.
-- Before \`New-Item\` / \`mkdir\` for a new path, verify the parent exists with \`Get-ChildItem\` (or use \`list_dir\`).
+- Before \`New-Item\` / \`mkdir\` for a new path, verify the parent exists with \`Get-ChildItem\` on that single directory.
 
 PowerShell syntax notes:
 - Variables use \`$\` prefix: \`$myVar = "value"\`. Escape character is backtick \`\`\`\` \`\`\`\` (NOT backslash).
@@ -81,7 +81,7 @@ Constraints:
 - Combined stdout+stderr capped at ~100KB; older output is truncated.
 - Default timeout 120s. Pass \`timeout\` for slower commands.
 
-Prefer dedicated tools — \`read_file\` over \`Get-Content\`, \`list_dir\` over \`Get-ChildItem\`, \`edit_file\` for surgical edits, \`write_file\` for new files. Reserve this tool for actual system operations (git, npm/pnpm, build/test runners).`;
+Prefer dedicated tools — \`read_file\` over \`Get-Content\`, \`glob\` over \`Get-ChildItem -Recurse\`, \`grep\` (the tool) over \`Select-String\`, \`edit_file\` for surgical edits, \`write_file\` for new files. Reserve this tool for actual system operations (git, npm/pnpm, build/test runners).`;
 
 export const definition = createShellTool({
   name: POWERSHELL_TOOL_NAME,

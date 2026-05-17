@@ -1,12 +1,12 @@
 import { createAgentDefinition } from "./base.js";
-import { TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { INTERACTIVE_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
 
 const GENERAL_PURPOSE_SYSTEM = `You are a general-purpose research and execution agent running in an isolated context. Complete the task fully — don't gold-plate, don't leave it half-done.
 
-You inherit the parent's full toolset (read, list, bash, search, write, edit, plus MCP tools).
+You inherit the parent's full toolset (read, search, shell, write, edit, plus MCP tools).
 
 Guidelines:
-- Fan out grep / list_dir in parallel when you don't know where something lives. Use \`read_file\` when you know the path.
+- Fan out \`grep\` / \`glob\` calls in parallel when you don't know where something lives. Use \`read_file\` when you know the path.
 - Start broad, then narrow. Try alternate naming conventions if the first search yields nothing.
 - **NEVER create files unless absolutely necessary.** Prefer editing existing files.
 - **NEVER proactively create documentation (\`*.md\`) or README files.** Only if the parent's prompt explicitly asks.
@@ -29,7 +29,7 @@ export const definition = createAgentDefinition({
   description: "General-purpose research / execution",
   systemPrompt: GENERAL_PURPOSE_SYSTEM,
   // Block recursive task calls but otherwise inherit everything.
-  disallowedTools: [TASK_TOOL_NAME],
+  disallowedTools: [...INTERACTIVE_TOOLS, TASK_TOOL_NAME],
   maxSteps: 30,
   label: "Agent",
 });

@@ -6,6 +6,8 @@ import BashCard from "./BashCard.jsx";
 import WebSearchCard from "./WebSearchCard.jsx";
 import WebFetchCard from "./WebFetchCard.jsx";
 import SubagentCard from "./SubagentCard.jsx";
+import GlobCard from "./GlobCard.jsx";
+import GrepCard from "./GrepCard.jsx";
 import { isFetchTool, isSearchTool } from "../lib/tool-kind.js";
 
 // Tool-name → dedicated card component. Subagent dispatch is handled
@@ -21,6 +23,8 @@ const TOOL_CARDS = {
   powershell: BashCard,
   web_search: WebSearchCard,
   web_fetch: WebFetchCard,
+  glob: GlobCard,
+  grep: GrepCard,
 };
 
 // Tools that render via a non-tool-card path elsewhere (e.g. TodoListCard

@@ -4,15 +4,23 @@ import * as fs from "fs";
 import { truncate, resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
 
+// Hard cap on file size for read_file. Files over this throw — the
+// model must use grep to locate the section first, or fall back to
+// shell `sed -n 'A,Bp'`. Equivalent to CC's `FileReadTool/limits.ts`
+// `MAX_OUTPUT_SIZE` (0.25 MB), retained after their A/B test showed
+// "throw on oversize" yields fewer tokens than "truncate and serve".
+const MAX_FILE_SIZE = 256 * 1024;
+
 export const definition: ToolDefinition = {
   name: "read_file",
   description: "Read file contents with line numbers",
   create(cwd) {
     return tool({
       description:
-        "Read a file and return its contents with line numbers. " +
-        "Supports optional offset/limit to read a specific range. " +
-        "Use negative offset to read from the end of the file.",
+        `Read a file and return its contents with line numbers. ` +
+        `Supports optional offset/limit to read a specific range. ` +
+        `Use negative offset to read from the end of the file. ` +
+        `Files over ${Math.round(MAX_FILE_SIZE / 1024)} KB are rejected — use \`grep\` to locate the section first.`,
       inputSchema: z.object({
         file_path: z.string().describe("Path to the file (relative to cwd)"),
         offset: z.number().optional().describe("Line to start from (1-based). Negative counts from end"),
@@ -27,9 +35,11 @@ export const definition: ToolDefinition = {
         const stat = fs.statSync(abs);
         if (stat.isDirectory()) return `Error: ${file_path} is a directory, not a file`;
 
-        const MAX_FILE_SIZE = 2 * 1024 * 1024;
         if (stat.size > MAX_FILE_SIZE) {
-          return `Error: file too large (${(stat.size / 1024 / 1024).toFixed(1)}MB). Use offset/limit or bash: head/tail`;
+          return (
+            `Error: file is ${(stat.size / 1024).toFixed(1)} KB (hard cap ${Math.round(MAX_FILE_SIZE / 1024)} KB). ` +
+            `Use \`grep\` to find the relevant lines first, or use the shell with \`sed -n 'A,Bp'\` / \`head\` / \`tail\`.`
+          );
         }
 
         const buf = fs.readFileSync(abs);

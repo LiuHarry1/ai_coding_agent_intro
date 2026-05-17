@@ -7,6 +7,7 @@ import type {
   ToolDefinition,
 } from "../core/types.js";
 import { TASK_TOOL_NAME } from "./tool-names.js";
+import { loadProjectRules } from "../core/rules-loader.js";
 
 /**
  * Single tool that dispatches to all built-in subagents via a
@@ -186,9 +187,20 @@ User: "Refactor the agent loop to support cancellation."
           // task tool itself must never be in the subagent's toolset.
           delete subTools[TASK_TOOL_NAME];
 
+          // Inject project rules unless the subagent opted out. Read-only
+          // exploration agents (Explore) skip this — rules carry
+          // commit/PR/lint guidance they won't act on, and parent already
+          // interprets the result with full context. General-purpose /
+          // plan agents do receive rules so commits and architectural
+          // designs respect project conventions.
+          const projectRules = def.omitProjectRules ? "" : loadProjectRules(cwd);
+          const subSystemPrompt = projectRules
+            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+            : def.systemPrompt;
+
           const result = await runAgent(prompt, {
             tools: subTools,
-            systemPrompt: def.systemPrompt,
+            systemPrompt: subSystemPrompt,
             eventBus: subBus,
             messages: [],
             maxSteps: def.maxSteps ?? 20,

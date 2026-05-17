@@ -1,5 +1,25 @@
 import * as fs from "fs";
 
+// Load .env (Node 20.12+ built-in, no dotenv dependency needed).
+// Silent when the file doesn't exist.
+try {
+  process.loadEnvFile(".env");
+  console.log("[start] Loaded .env");
+} catch (err) {
+  if (err?.code !== "ENOENT") {
+    console.warn(`[start] Failed to load .env: ${err.message}`);
+  }
+}
+
+// Log the env vars that actually drive glob/grep behavior so a stale
+// server (or a typo in .env) shows up immediately at boot instead of
+// being diagnosed by inspection. Undefined here = ripgrep gets the
+// surprise-permissive defaults baked into utils/glob.ts.
+console.log(
+  `[start] GLOB_NO_IGNORE=${process.env.GLOB_NO_IGNORE ?? "(unset → defaults true)"} ` +
+    `GLOB_HIDDEN=${process.env.GLOB_HIDDEN ?? "(unset → defaults true)"}`
+);
+
 const example = process.argv[2] || "08-basic";
 
 console.log(`[start] Loading example: ${example}`);

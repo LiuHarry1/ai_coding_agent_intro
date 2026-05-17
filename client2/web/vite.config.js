@@ -15,5 +15,19 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
+    // Push heavy markdown / syntax-highlight deps into their own vendor
+    // chunk so MessageBubble itself stays small. highlight.js (pulled in
+    // by rehype-highlight) is what bloated the bundle past 500 kB.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "markdown-vendor": [
+            "react-markdown",
+            "remark-gfm",
+            "rehype-highlight",
+          ],
+        },
+      },
+    },
   },
 });

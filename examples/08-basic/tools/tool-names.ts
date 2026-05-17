@@ -23,6 +23,9 @@ export const LIST_DIR_TOOL_NAME = "list_dir";
 export const TODO_WRITE_TOOL_NAME = "todo_write";
 export const WEB_SEARCH_TOOL_NAME = "web_search";
 export const WEB_FETCH_TOOL_NAME = "web_fetch";
+export const GLOB_TOOL_NAME = "glob";
+export const GREP_TOOL_NAME = "grep";
+export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
 
 /**
  * Single tool that dispatches to all built-in subagents via a
@@ -44,4 +47,13 @@ export const MUTATING_TOOLS: readonly string[] = [
   WRITE_FILE_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
+];
+
+/**
+ * Tools that require user interaction to complete. Subagents have no UI
+ * channel back to the user, so these would block forever. Added to every
+ * subagent deny-list alongside `MUTATING_TOOLS` for read-only agents.
+ */
+export const INTERACTIVE_TOOLS: readonly string[] = [
+  ASK_USER_QUESTION_TOOL_NAME,
 ];

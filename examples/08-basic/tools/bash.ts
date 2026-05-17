@@ -14,7 +14,7 @@ Working directory:
 - Spawned as a login shell (\`-lc\`) so your \`PATH\` / aliases / version-manager init from \`.bash_profile\` / \`.zprofile\` are picked up.
 - The cwd persists across calls — \`cd subdir\` in one call affects the next call.
 - Prefer absolute paths or stay in the project root rather than \`cd\`-hopping; deep \`cd\` chains make later calls hard to reason about.
-- Before \`mkdir\` / \`touch\` for a new path, run \`ls\` (or use \`list_dir\`) to confirm the parent directory exists and is the one you expect.
+- Before \`mkdir\` / \`touch\` for a new path, run \`ls\` on the parent directory to confirm it exists and is the one you expect.
 
 Syntax tips:
 - Chain with \`&&\` (run-if-success), \`||\` (run-if-failure), \`;\` (always run), \`|\` (pipe).
@@ -33,7 +33,7 @@ Constraints:
 - Combined stdout+stderr capped at ~100KB; older output is truncated.
 - Default timeout 120s. Pass \`timeout\` for slower commands.
 
-Prefer dedicated tools when available — \`read_file\` over \`cat\` / \`head\` / \`tail\`, \`list_dir\` over \`ls\`, \`edit_file\` over \`sed\`, \`write_file\` over heredoc redirection. Reserve this tool for actual system operations (git, package managers, build/test runners).`;
+Prefer dedicated tools when available — \`read_file\` over \`cat\` / \`head\` / \`tail\`, \`glob\` over \`find\` / \`ls -R\`, \`grep\` (the tool) over raw \`grep\` / \`rg\`, \`edit_file\` over \`sed\`, \`write_file\` over heredoc redirection. Reserve this tool for actual system operations (git, package managers, build/test runners).`;
 
 export const definition = createShellTool({
   name: BASH_TOOL_NAME,

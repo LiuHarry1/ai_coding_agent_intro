@@ -1,7 +1,8 @@
 import { isWindows } from "../core/platform.js";
 import {
   BASH_TOOL_NAME,
-  LIST_DIR_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
@@ -19,8 +20,8 @@ import {
 export const SHELL_TOOL_NAME = isWindows ? POWERSHELL_TOOL_NAME : BASH_TOOL_NAME;
 
 const SHELL_READ_ONLY_LINE = isWindows
-  ? `- ${POWERSHELL_TOOL_NAME}: read-only cmdlets only — Get-ChildItem, Get-Content, Select-String, git status/log/diff. NEVER write to files (no Set-Content / Out-File / Add-Content / >) or run state-changing commands.`
-  : `- ${BASH_TOOL_NAME}: read-only commands only — ls, cat, head, tail, find, grep, rg, git status/log/diff. NEVER use redirects (\`>\`, \`>>\`) or state-changing commands (mkdir, touch, rm, mv, cp).`;
+  ? `- ${POWERSHELL_TOOL_NAME}: read-only cmdlets only (Get-ChildItem, Get-Content, Select-String, git status/log/diff). NEVER Set-Content / Out-File / Add-Content / redirects, mkdir / New-Item / Remove-Item / Move-Item / Copy-Item, git add/commit, or package installs.`
+  : `- ${BASH_TOOL_NAME}: read-only commands only (ls, cat, head, tail, find, git status/log/diff). NEVER redirects (\`>\`, \`>>\`), mkdir / touch / rm / mv / cp, git add/commit, or package installs.`;
 
 /** Strict read-only restriction. Used by `explore` and `plan`. */
 export const READ_ONLY_MODE = `=== READ-ONLY MODE — STRICTLY ENFORCED ===
@@ -33,8 +34,9 @@ File-mutating tools have been disabled for you; attempting to use them will fail
 /** Read-only tool surface available to subagents that inherit the parent's
  *  toolset minus mutating tools. */
 export const READ_ONLY_TOOLS = `Available tools (inherited from the parent agent, except mutating ones):
-- ${READ_FILE_TOOL_NAME}: read specific files (use offset/limit for large files).
-- ${LIST_DIR_TOOL_NAME}: get a tree view of a directory.
+- ${GLOB_TOOL_NAME}: broad file pattern matching (e.g. "src/**/*.ts").
+- ${GREP_TOOL_NAME}: regex search across file contents.
+- ${READ_FILE_TOOL_NAME}: read a specific file (use offset/limit for windows into large files).
 ${SHELL_READ_ONLY_LINE}
 - ${WEB_SEARCH_TOOL_NAME} / ${WEB_FETCH_TOOL_NAME}: look up external docs when relevant.
 - any read-only MCP tools the parent has configured.`;

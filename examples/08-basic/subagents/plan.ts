@@ -1,6 +1,6 @@
 import { createAgentDefinition } from "./base.js";
 import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "./prompt-fragments.js";
-import { MUTATING_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { INTERACTIVE_TOOLS, MUTATING_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
 
 const PLAN_SYSTEM = `You are a software architect. Explore the codebase and design a concrete implementation plan — NOT to write code.
 
@@ -38,7 +38,12 @@ export const definition = createAgentDefinition({
     'should also execute changes.',
   description: "Implementation planning",
   systemPrompt: PLAN_SYSTEM,
-  disallowedTools: [...MUTATING_TOOLS, TASK_TOOL_NAME],
+  disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, TASK_TOOL_NAME],
   maxSteps: 25,
   label: "Plan",
+  // Mirrors CC's `omitClaudeMd: true` on the Plan agent. Plan is
+  // read-only — if it needs project conventions it can read AGENTS.md /
+  // CLAUDE.md on demand. Dropping rules from context saves tokens
+  // without blocking access.
+  omitProjectRules: true,
 });
