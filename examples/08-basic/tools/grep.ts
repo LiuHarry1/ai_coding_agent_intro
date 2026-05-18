@@ -21,15 +21,7 @@ import { resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
 import { BASH_TOOL_NAME, GREP_TOOL_NAME, POWERSHELL_TOOL_NAME, TASK_TOOL_NAME } from "./tool-names.js";
 import { isWindows } from "../core/platform.js";
-
-const VCS_DIRECTORIES_TO_EXCLUDE = [
-  ".git",
-  ".svn",
-  ".hg",
-  ".bzr",
-  ".jj",
-  ".sl",
-] as const;
+import { buildRgExcludeGlobs } from "../core/file-filters.js";
 
 const DEFAULT_HEAD_LIMIT = 250;
 
@@ -199,10 +191,10 @@ export const definition: ToolDefinition = {
 
         const args: string[] = ["--hidden"];
 
-        // Exclude VCS metadata directories from results.
-        for (const dir of VCS_DIRECTORIES_TO_EXCLUDE) {
-          args.push("--glob", `!${dir}`);
-        }
+        // Exclude VCS metadata only — NOT node_modules / dist / etc.
+        // This matches Claude Code's grep behavior: if the user wants
+        // to grep inside node_modules they can scope it via `path`.
+        args.push(...buildRgExcludeGlobs("vcs"));
 
         // Cap line length so base64 blobs / minified files don't blow up
         // the model's context window.

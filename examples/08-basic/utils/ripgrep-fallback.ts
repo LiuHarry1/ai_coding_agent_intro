@@ -50,6 +50,10 @@ import { glob as globPkg } from "glob";
 import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import {
+  DEPENDENCY_DIRECTORIES,
+  VCS_DIRECTORIES,
+} from "../core/file-filters.js";
 
 const MAX_FILES_SCANNED = 50_000;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -290,12 +294,18 @@ async function enumerateFiles(
   }
 
   // ── Full walk (rg --no-ignore equivalent) ─────────────────────────
+  // Ignore patterns mirror `core/file-filters.ts` (VCS + dependency dirs).
+  // Built here as `**/<name>/**` patterns because `glob`'s `ignore` option
+  // uses gitignore-style globs — same shape we'd emit for ripgrep.
+  const fullWalkIgnore = [...VCS_DIRECTORIES, ...DEPENDENCY_DIRECTORIES].map(
+    (d) => `**/${d}/**`
+  );
   const found = await globPkg("**/*", {
     cwd: targetAbs,
     nodir: true,
     dot: parsed.hidden,
     absolute: false,
-    ignore: ["**/node_modules/**", "**/.git/**"],
+    ignore: fullWalkIgnore,
   });
 
   let entries = found.map((rel) => ({

@@ -16,6 +16,7 @@
 import { basename, dirname, isAbsolute, join, sep } from "path";
 import { ripGrep } from "./ripgrep.js";
 import { isWindows } from "../core/platform.js";
+import { buildRgExcludeGlobs, envBool } from "../core/file-filters.js";
 
 /**
  * Extracts the static base directory from a glob pattern. The base
@@ -69,12 +70,6 @@ export function extractGlobBaseDirectory(pattern: string): {
   return { baseDir, relativePattern };
 }
 
-function isEnvTruthy(v: string | undefined): boolean {
-  if (!v) return false;
-  const lc = v.toLowerCase();
-  return lc === "1" || lc === "true" || lc === "yes" || lc === "on";
-}
-
 export async function glob(
   filePattern: string,
   cwd: string,
@@ -103,8 +98,11 @@ export async function glob(
   //                    GLOB_NO_IGNORE=false)
   //   --hidden         include hidden files (default true; override with
   //                    GLOB_HIDDEN=false)
-  const noIgnore = isEnvTruthy(process.env.GLOB_NO_IGNORE || "true");
-  const hidden = isEnvTruthy(process.env.GLOB_HIDDEN || "true");
+  // env defaults (true) match the historical behavior — see comment block
+  // above. Use `envBool` (not naive equality) so `GLOB_NO_IGNORE=false`
+  // works even when tsx leaves a trailing inline `# comment` in the value.
+  const noIgnore = envBool(process.env.GLOB_NO_IGNORE, true);
+  const hidden = envBool(process.env.GLOB_HIDDEN, true);
   const args = [
     "--files",
     "--glob",
@@ -112,6 +110,9 @@ export async function glob(
     "--sort=modified",
     ...(noIgnore ? ["--no-ignore"] : []),
     ...(hidden ? ["--hidden"] : []),
+    // Even with `--no-ignore`, we want VCS + dependency dirs out of glob
+    // results — they're never the source the agent is hunting for.
+    ...buildRgExcludeGlobs("vcs+deps"),
   ];
 
   const allPaths = await ripGrep(args, searchDir, abortSignal);

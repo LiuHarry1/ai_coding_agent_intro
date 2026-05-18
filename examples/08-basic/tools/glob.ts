@@ -14,6 +14,11 @@ import { resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
 import { GLOB_TOOL_NAME } from "./tool-names.js";
 import { TASK_TOOL_NAME } from "./tool-names.js";
+import {
+  envBool,
+  hasDotSegment,
+  isInsideExcludedDir,
+} from "../core/file-filters.js";
 
 const DESCRIPTION = `- Fast file pattern matching tool that works with any codebase size
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
@@ -23,56 +28,12 @@ const DESCRIPTION = `- Fast file pattern matching tool that works with any codeb
 
 const DEFAULT_LIMIT = 150;
 
-// Tool-level post-filter applied to whatever `utils/glob.ts` returns.
-// We belt-and-suspenders here: the ripgrep call in utils/glob.ts can be
-// configured to exclude these via `--glob !X`, but the default
-// `--no-ignore` makes node_modules leak through. A path is excluded if
-// ANY segment of its cwd-relative path matches one of these names —
-// catches both top-level (`.git/foo`) and nested
-// (`client2/web/node_modules/bar`) cases in one shot.
-const EXCLUDED_DIR_NAMES = new Set<string>([
-  // VCS metadata.
-  ".git", ".svn", ".hg", ".bzr", ".jj", ".sl",
-  // Dependency / build-artifact dirs (reproducible from source, almost
-  // never what the agent is actually looking for).
-  "node_modules", ".venv", "venv", "__pycache__",
-  ".pytest_cache", ".mypy_cache",
-  ".next", ".nuxt", ".turbo", ".cache",
-  "dist", "build", "target", ".gradle",
-]);
-
-function isInsideExcludedDir(relPath: string): boolean {
-  return relPath.split("/").some((seg) => EXCLUDED_DIR_NAMES.has(seg));
-}
-
-/**
- * Strip trailing `# …` inline comments from a `.env` value before
- * interpreting it. We do this because `tsx`'s built-in `.env` loader
- * does NOT always strip inline comments — observed in production where
- * `GLOB_HIDDEN=false   # skip dotfiles` yielded
- * `process.env.GLOB_HIDDEN === "false   # skip dotfiles"`. Without
- * this, a literal "false" comparison fails and we silently take the
- * surprise-permissive branch.
- */
-function envBool(value: string | undefined, defaultIfUnset: boolean): boolean {
-  if (value === undefined) return defaultIfUnset;
-  const cleaned = value.replace(/\s*#.*$/, "").trim().toLowerCase();
-  if (cleaned === "") return defaultIfUnset;
-  return cleaned === "1" || cleaned === "true" || cleaned === "yes" || cleaned === "on";
-}
-
-/**
- * `true` when ANY segment of the path starts with `.` — used to skip
- * hidden files / dirs (matching ripgrep's default behavior when
- * `--hidden` is *not* passed). The fallback in utils/ripgrep-fallback.ts
- * is supposed to do this too, but tracked dotfiles (`git add`ed before
- * being added to `.gitignore`) and tsx env-parsing quirks have caused
- * leaks. Filtering here guarantees consistent behavior regardless of
- * which code path ran below.
- */
-function hasDotSegment(relPath: string): boolean {
-  return relPath.split("/").some((seg) => seg.startsWith("."));
-}
+// One-time diagnostic on the first glob call, so we can see what env the
+// running server actually sees vs. what's in `.env`. Past confusion was
+// debugging "GLOB_NO_IGNORE=false in .env but ripgrep still returns
+// node_modules" — usually root cause was either a stale server, tsx
+// inline-comment parsing, or a subagent in another context.
+let diagnosticsLogged = false;
 
 export const definition: ToolDefinition = {
   name: GLOB_TOOL_NAME,
@@ -98,10 +59,23 @@ export const definition: ToolDefinition = {
         // We request a much bigger pool than DEFAULT_LIMIT from the
         // util layer because noise dirs (.git, node_modules) tend to
         // sort to the top by mtime and would otherwise eat the entire
-        // limit before we get a chance to filter them out here. 10× is
-        // the cheapest fix that scales — ripgrep is fast, the cost is
-        // just an in-memory array slice in utils/glob.ts.
-        const FETCH_LIMIT = DEFAULT_LIMIT * 10;
+        // limit before we get a chance to filter them out here. We use
+        // a big 50× multiplier because on freshly `npm install`-ed
+        // repos there can be tens of thousands of node_modules entries
+        // with recent mtimes — anything smaller risks burying the
+        // actual source tree.
+        const FETCH_LIMIT = DEFAULT_LIMIT * 50;
+
+        if (!diagnosticsLogged) {
+          diagnosticsLogged = true;
+          console.log(
+            `[glob] first call: pattern=${JSON.stringify(pattern)} ` +
+              `searchDir=${searchDir} ` +
+              `env GLOB_NO_IGNORE=${JSON.stringify(process.env.GLOB_NO_IGNORE)} ` +
+              `GLOB_HIDDEN=${JSON.stringify(process.env.GLOB_HIDDEN)} ` +
+              `RG_FALLBACK=${JSON.stringify(process.env.RG_FALLBACK)}`
+          );
+        }
         let result: { files: string[]; truncated: boolean };
         try {
           result = await runGlob(
@@ -120,6 +94,21 @@ export const definition: ToolDefinition = {
           const rel = path.relative(cwd, abs);
           return rel === "" ? "." : rel.replaceAll("\\", "/");
         });
+
+        // Telemetry: how much of what utils returned was actually noise?
+        // If this number is large, utils-layer .gitignore / --hidden flags
+        // are not being honored, regardless of what `.env` says.
+        const noiseInUtilsResult = allFilenames.filter((p) =>
+          /^(\.git|node_modules|dist|build|target|\.next|\.cache)(\/|$)/.test(p) ||
+          p.includes("/node_modules/")
+        ).length;
+        if (noiseInUtilsResult > 50) {
+          console.warn(
+            `[glob] utils returned ${result.files.length} paths of which ${noiseInUtilsResult} are noise ` +
+              `(.git/node_modules/dist/…). utils-layer .gitignore filter likely not honored. ` +
+              `Tool-layer post-filter will compensate, but consider installing \`rg\` or fixing env propagation.`
+          );
+        }
 
         // Apply tool-level filters BEFORE truncating to DEFAULT_LIMIT so
         // the user-facing limit applies to "real" files only:
