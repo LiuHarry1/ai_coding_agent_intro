@@ -248,10 +248,119 @@ Open http://localhost:5173 (Vite proxies API requests to port 4567).
 
 ### 添加新子代理
 
+#### 方式 A：内置（代码注册）
+
 1. 在 `subagents/` 新建定义文件，使用 `createAgentDefinition()`。
 2. 将 `definition` 加入 `subagents/index.ts` 的 `BUILTIN_AGENTS` 数组。
 
 `task` tool 的描述、`subagent_type` 枚举和分发表会自动更新。
+
+#### 方式 B：Markdown + YAML frontmatter（Claude Code 风格）
+
+在以下任一目录放 `<name>.md`，每次 chat 请求会重新扫描（编辑文件无需重启）：
+
+| 优先级 | 目录 | 备注 |
+|--------|------|------|
+| 低 | `~/.myagent/agents/*.md` | 用户级 |
+| 高 | `<cwd>/.agents/*.md` | 项目级；同名覆盖用户级、内置 |
+
+文件格式：
+
+```markdown
+---
+name: code-reviewer
+description: Reviews staged diffs for bugs / style / missing tests. Use proactively after the user finishes a feature branch.
+label: Reviewer
+tools: read_file, grep, glob, bash     # 省略 = 继承全部；'*' 同义；可写成 YAML list
+maxSteps: 25
+model: openai/gpt-5                    # 可选 model 覆盖
+omitProjectRules: true                 # 跳过 AGENTS.md / CLAUDE.md 注入
+---
+
+You are a senior code reviewer. Read the staged diff (`git diff --staged`),
+then produce a concise review covering: bugs, missing tests, style drift
+from project conventions, and risky edge cases.
+
+Output format:
+### Blockers
+### Suggestions
+### Nits
+```
+
+字段对应 `AgentDefinition`（见 `core/types.ts`）：
+- `name` → `agentType`（必填，模型用作 `subagent_type` 值）
+- `description` → `whenToUse`（必填，渲染到 `task` 工具描述）
+- 正文 → `systemPrompt`（必填，空 body 会被拒绝）
+- `tools` 与 `disallowedTools` 互斥；都不写时默认禁用 `task` + `ask_user_question`（防递归 / 防阻塞）；写了 allow-list 时也强制剔除 `task`
+
+实现入口：`subagents/from-files.ts` → `parseAgentFromMarkdown` / `mergeAgents`；async 注册器 `subagents/index.ts` → `registerSubagents(registry, cwd)` 由 `server/router.ts` 每次 chat 请求调用，对照 CC `loadAgentsDir.ts` 的 `getActiveAgentsFromList`。
+
+### 添加 Slash Commands（Claude Code 风格）
+
+把 `<name>.md` 放到 `<cwd>/.commands/` 或 `~/.myagent/commands/`，用户在聊天框输入 `/<name> [args]` 就触发。**Server 在调 LLM 前把 body 展开成用户消息**，所以 commands 不占 tool 槽。
+
+内置：`/help`、`/commands` 列出所有可用命令。
+
+```markdown
+---
+description: Review the current uncommitted diff and flag bugs / style / missing tests.
+argument-hint: "[optional: focus area]"
+arguments: "focus"               # 启用 $focus 命名参数
+---
+
+Review the local diff. Focus area: **$focus**
+
+Branch: !`git rev-parse --abbrev-ref HEAD`
+
+Diff:
+
+!`git diff`
+
+For each issue, output one bullet: `[severity]` `file:line` — what / why / fix.
+```
+
+body 里支持的语法（与 CC 对齐）：
+- `$ARGUMENTS` — `/cmd ` 后面的整段
+- `$1`、`$2`、… 或 `$ARGUMENTS[0]` — 索引访问（空格/引号分词）
+- `$name` — 命名参数（前提是 frontmatter 里声明 `arguments:`）
+- `` !`shell cmd` `` — 跑 shell，把 stdout 替换进 prompt（15s 超时，200KB 上限）
+- `@path/to/file` — 读文件内容塞进 prompt（100KB 上限，自动 fenced code block）
+
+实现：`commands/argument-substitution.ts`（参数替换）、`commands/prompt-expansion.ts`（!-block + @-ref）、`commands/from-files.ts`（解析）、`commands/dispatcher.ts`（在 router 调 LLM 之前拦截 `/`）。
+
+### 添加 Skills（Claude Code 风格）
+
+Skill 和 command 形态相同（同一套 `$ARGUMENTS` / `!` / `@`），区别在于**由模型而不是用户触发**——通过 `skill` dispatcher tool。放 `<cwd>/.skills/*.md` 或 `~/.myagent/skills/*.md`。
+
+```markdown
+---
+name: pr-author
+description: Draft a PR body (summary + test plan) from the current branch's diff.
+context: inline                   # "inline"（默认）或 "fork"
+arguments: "audience"
+---
+
+You are writing a PR body. Audience: **$audience**.
+
+Commits: !`git log --oneline origin/main..HEAD`
+Diff stats: !`git diff --stat origin/main...HEAD`
+...
+```
+
+两种 `context` 模式：
+
+- `inline`（默认）：body 展开后作为 **tool 结果**返回给主 agent，像"突然想起来该按这个流程办"
+- `fork`：body 展开后作为**新子 agent 的 user prompt**跑（用 `agent:` 字段指定哪个 subagent_type，默认 `general_purpose`）。用于需要大量工具调用又不想污染主上下文的场景
+
+实现：`skills/from-files.ts`（解析）、`tools/skill.ts`（dispatcher，mirror `task.ts`）、`skills/index.ts` → `registerSkills(registry, cwd, agents)` 每次 chat 请求调用。无 skill 文件时不注册工具，避免给模型一个空目录浪费 token。
+
+### 共享底座
+
+agents / commands / skills 三者共用：
+- `core/markdown-config-loader.ts` — 扫 user + project 两层目录、读文件、`gray-matter` 解析
+- `core/frontmatter-helpers.ts` — `parseToolList` / `parseBool` / `parseArgumentNames` 等
+
+加一种新的 markdown 扩展类型（比如 `output-styles`、`workflows`）只需在 `MarkdownConfigKind` 加一项 + 写一个 `parseXxxFromMarkdown` + 一个 `mergeXxx`，约 100 行。
 
 ### 添加新工具
 

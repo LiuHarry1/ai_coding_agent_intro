@@ -4,6 +4,8 @@ import { definition as planDef } from "./plan.js";
 import { definition as generalPurposeDef } from "./general_purpose.js";
 import { createTaskTool } from "../tools/task.js";
 import { TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { loadMarkdownConfigs } from "../core/markdown-config-loader.js";
+import { mergeAgents } from "./from-files.js";
 
 /**
  * Single source of truth for built-in subagents.
@@ -23,14 +25,36 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
 ];
 
 /**
- * Register the single `task` tool against the given registry. The tool
- * carries the BUILTIN_AGENTS directory baked in.
- *
- * The function name is preserved (`registerBuiltinSubagents`) so existing
- * callers in router.ts work unchanged.
+ * Register the `task` tool with ONLY the built-in agents. Called once at
+ * server boot so the registry has a working `task` tool before the first
+ * request. Replaced per-request by `registerSubagents(registry, cwd)`,
+ * which merges in markdown-defined agents from the user's filesystem.
  */
 export function registerBuiltinSubagents(registry: IToolRegistry): void {
   registry.register(createTaskTool(BUILTIN_AGENTS));
+}
+
+/**
+ * Discover markdown agents under `<cwd>/.agents/*.md` and
+ * `~/.myagent/agents/*.md`, merge with built-ins (project > user > built-in),
+ * and (re-)register the `task` tool with the combined directory.
+ *
+ * Called once per chat request from the router so a user editing an agent
+ * .md file sees the change on the next message — no server restart needed.
+ * Mirrors Claude Code's behavior: `getAgentDefinitionsWithOverrides` is
+ * invoked from the agent loop, not at process boot.
+ */
+export async function registerSubagents(
+  registry: IToolRegistry,
+  cwd: string,
+): Promise<{
+  activeAgents: AgentDefinition[];
+  errors: Array<{ filePath: string; error: string }>;
+}> {
+  const files = await loadMarkdownConfigs("agents", cwd);
+  const { agents, errors } = mergeAgents(BUILTIN_AGENTS, files);
+  registry.register(createTaskTool(agents));
+  return { activeAgents: agents, errors };
 }
 
 /**

@@ -7,7 +7,13 @@ import { createWorkspaceRouter } from "./workspace/router.js";
 import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
-import { registerBuiltinSubagents, getSubagentNames } from "../subagents/index.js";
+import {
+  registerBuiltinSubagents,
+  registerSubagents,
+  getSubagentNames,
+} from "../subagents/index.js";
+import { registerSkills } from "../skills/index.js";
+import { dispatchSlashCommand } from "../commands/dispatcher.js";
 import { MCPManager } from "../core/mcp-manager.js";
 import { configManager } from "../core/config-manager.js";
 import { answerQuestion } from "../core/question-broker.js";
@@ -118,6 +124,23 @@ async function handleChat(
 
   console.log(`[server] chat [session:${session.id.slice(0, 8)}] [${session.messages.length} prior msgs] ${message.slice(0, 80)}`);
 
+  // ── Slash-command resolution (pre-SSE, no LLM round-trip yet) ──────────
+  // Resolve /xxx BEFORE opening the SSE stream so we know whether to short-
+  // circuit (built-in /help) or feed the expanded body to the agent.
+  let effectiveMessage = message;
+  let immediateReply: string | null = null;
+  const slashResult = await dispatchSlashCommand(message, { cwd });
+  if (slashResult.kind === "reply") {
+    immediateReply = slashResult.text;
+  } else if (slashResult.kind === "unknown") {
+    immediateReply = `Unknown slash command: /${slashResult.name}\n\nTry /help to see all available commands.`;
+  } else if (slashResult.kind === "expanded") {
+    effectiveMessage = slashResult.text;
+    console.log(
+      `[server] expanded /${slashResult.command.name} → ${effectiveMessage.length} char prompt`,
+    );
+  }
+
   const eventBus = new EventBus();
   const middleware = new Middleware();
   middleware.use("afterTool", createTimingMiddleware(eventBus).afterTool);
@@ -129,6 +152,27 @@ async function handleChat(
     console.log("[server] client disconnected");
     eventBus.removeAllListeners();
   });
+
+  // Short-circuit built-in slash-command replies via SSE so the frontend's
+  // event-source plumbing stays identical to a normal chat turn.
+  if (immediateReply !== null) {
+    transport.send("text_delta", { delta: immediateReply });
+    transport.send("finish", { reason: "slash_command" });
+    transport.end();
+    return;
+  }
+
+  // ── Per-request markdown extension reload ──────────────────────────────
+  // Re-scan .agents/ and .skills/ for the current cwd so edits to user-
+  // authored definitions take effect on the NEXT message without a server
+  // restart. Both register/replace dispatcher tools on `defaultRegistry`.
+  // Cheap (~1ms per kind for tens of files). Mirrors CC's per-turn
+  // `getAgentDefinitionsWithOverrides` invocation.
+  const { activeAgents } = await registerSubagents(defaultRegistry, cwd);
+  const { activeSkills } = await registerSkills(defaultRegistry, cwd, activeAgents);
+  console.log(
+    `[server] cwd=${cwd}  agents=[${activeAgents.map(a => a.agentType).join(", ")}]  skills=[${activeSkills.map(s => s.name).join(", ")}]`,
+  );
 
   const projectRules = loadProjectRules(cwd);
 
@@ -149,7 +193,7 @@ async function handleChat(
 
   const messagesBefore = session.messages.length;
 
-  await runAgent(message, {
+  await runAgent(effectiveMessage, {
     tools,
     systemPrompt: systemPrompt(cwd, projectRules || undefined),
     eventBus,
