@@ -1,42 +1,69 @@
 import { createAgentDefinition } from "./base.js";
-import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "./prompt-fragments.js";
-import { INTERACTIVE_TOOLS, MUTATING_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
+import {
+  BASH_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  INTERACTIVE_TOOLS,
+  MUTATING_TOOLS,
+  READ_FILE_TOOL_NAME,
+  AGENT_TOOL_NAME,
+} from "../tools/tool-names.js";
 
-const EXPLORE_SYSTEM = `You are a read-only codebase exploration specialist. Search, read, synthesize.
+// System prompt mirrors CC `src/tools/AgentTool/built-in/exploreAgent.ts`
+// `getExploreSystemPrompt()` (non-embedded Glob/Grep path).
+const EXPLORE_SYSTEM = `You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.
 
-You are meant to be a fast agent that returns output as quickly as possible. To achieve this:
-- Wherever possible spawn multiple parallel tool calls for grepping and reading files.
-- Start broad, then narrow. If the first search yields nothing, try alternate naming conventions before going deeper.
-- Stop reading once you have enough to answer — exhaustiveness is not the goal.
+=== CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
+This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
+- Creating new files (no Write, touch, or file creation of any kind)
+- Modifying existing files (no Edit operations)
+- Deleting files (no rm or deletion)
+- Moving or copying files (no mv or cp)
+- Creating temporary files anywhere, including /tmp
+- Using redirect operators (>, >>, |) or heredocs to write to files
+- Running ANY commands that change system state
 
-${READ_ONLY_MODE}
+Your role is EXCLUSIVELY to search and analyze existing code. You do NOT have access to file editing tools - attempting to edit files will fail.
 
-${READ_ONLY_TOOLS}
+Your strengths:
+- Rapidly finding files using glob patterns
+- Searching code and text with powerful regex patterns
+- Reading and analyzing file contents
 
-Communicate the final report directly as your last message — do NOT attempt to write a file. The parent only sees this final text.
+Guidelines:
+- Use ${GLOB_TOOL_NAME} for broad file pattern matching
+- Use ${GREP_TOOL_NAME} for searching file contents with regex
+- Use ${READ_FILE_TOOL_NAME} when you know the specific file path you need to read
+- Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+- NEVER use ${BASH_TOOL_NAME} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
+- Adapt your search approach based on the thoroughness level specified by the caller
+- Communicate your final report directly as a regular message - do NOT attempt to create files
 
-Default report shape (follow the parent's format if they specified one):
-- A 1-2 sentence direct answer.
-- File:line citations of the most relevant code, each with a 1-line description.
+NOTE: You are meant to be a fast agent that returns output as quickly as possible. In order to achieve this you must:
+- Make efficient use of the tools that you have at your disposal: be smart about how you search for files and implementations
+- Wherever possible you should try to spawn multiple parallel tool calls for grepping and reading files
 
-Be specific so the parent can act without re-discovering the code.`;
+Complete the user's search request efficiently and report your findings clearly.`;
+
+/** Mirrors CC `exploreAgent.ts`. */
+export const EXPLORE_AGENT_TYPE = "Explore";
+export const EXPLORE_AGENT_MIN_QUERIES = 3;
 
 export const definition = createAgentDefinition({
-  agentType: "explore",
+  agentType: EXPLORE_AGENT_TYPE,
   whenToUse:
-    'Fast read-only subagent for exploring codebases. Use when you need to ' +
-    'find files by patterns (e.g. "src/components/**/*.tsx"), search code for ' +
-    'keywords (e.g. "API endpoints"), or answer broad questions like ' +
-    '"how does X work" / "where is Y handled" / "find all callers of Z" — ' +
-    'anything that would otherwise take more than 3 direct tool calls. ' +
-    'Returns a structured summary with file paths and line numbers. Slower ' +
-    'than direct grep/read for a single targeted lookup, so prefer this only ' +
-    'when the search is broad or open-ended.',
+    'Fast agent specialized for exploring codebases. Use this when you need to ' +
+    'quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for ' +
+    'keywords (eg. "API endpoints"), or answer questions about the codebase ' +
+    '(eg. "how do API endpoints work?"). When calling this agent, specify the ' +
+    'desired thoroughness level: "quick" for basic searches, "medium" for moderate ' +
+    'exploration, or "very thorough" for comprehensive analysis across multiple ' +
+    'locations and naming conventions.',
   description: "Codebase exploration",
   systemPrompt: EXPLORE_SYSTEM,
   // Inherit every parent tool except mutating ones AND the task tool itself
   // (anti-recursion: subagents must not spawn further subagents).
-  disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, TASK_TOOL_NAME],
+  disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 20,
   label: "Explore",
   // Mirrors CC's `omitClaudeMd: true` on the Explore agent: a fast

@@ -24,7 +24,7 @@ import type {
 import type { SkillDefinition } from "../skills/types.js";
 import { substituteArguments } from "../commands/argument-substitution.js";
 import { expandInlineDirectives } from "../commands/prompt-expansion.js";
-import { TASK_TOOL_NAME } from "./tool-names.js";
+import { AGENT_TOOL_NAME } from "./tool-names.js";
 
 export const SKILL_TOOL_NAME = "skill";
 
@@ -159,11 +159,11 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
           } else {
             subTools = registry.createAll(cwd, subContext);
             const denied = new Set(targetAgent.disallowedTools ?? []);
-            denied.add(TASK_TOOL_NAME);
+            denied.add(AGENT_TOOL_NAME);
             denied.add(SKILL_TOOL_NAME);
             for (const n of denied) delete subTools[n];
           }
-          delete subTools[TASK_TOOL_NAME];
+          delete subTools[AGENT_TOOL_NAME];
           delete subTools[SKILL_TOOL_NAME];
 
           const result = await runAgent(expanded, {

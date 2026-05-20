@@ -17,6 +17,7 @@ import { promises as fs } from "fs";
 import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { findGitBashPath } from "../core/git-bash.js";
 import { isWindows } from "../core/platform.js";
 
 const execFileAsync = promisify(execFile);
@@ -33,11 +34,9 @@ const FILE_MAX_BYTES = 100_000;
  * inlining the failure for the model to see.
  */
 async function runInlineShell(cmd: string, cwd: string): Promise<string> {
-  // Use `sh -c` on POSIX, `cmd.exe /c` on Windows so the user's pipes / &&
-  // / globs work as expected. We don't try to be clever (pwsh detection
-  // etc.) — slash commands are author-controlled, the author picks syntax.
+  // CC default: bash everywhere. On Windows use Git Bash so && / pipes work.
   const [exe, args] = isWindows
-    ? ["cmd.exe", ["/c", cmd]]
+    ? [findGitBashPath() ?? "bash", ["-lc", cmd]]
     : ["sh", ["-c", cmd]];
 
   try {

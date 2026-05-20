@@ -31,7 +31,7 @@ import {
   parseString,
   parseIdentifier,
 } from "../core/frontmatter-helpers.js";
-import { INTERACTIVE_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS } from "../tools/tool-names.js";
 
 export interface AgentParseResult {
   agent: AgentDefinition | null;
@@ -95,12 +95,12 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
   // Anti-recursion: subagents never inherit `task`.
   let allowedTools = tools;
   if (allowedTools) {
-    allowedTools = allowedTools.filter((t) => t !== TASK_TOOL_NAME);
+    allowedTools = allowedTools.filter((t) => t !== AGENT_TOOL_NAME);
   }
   // Default deny-list mirrors built-in subagents: interactive tools + task.
   const disallowed = disallowedRaw
-    ? Array.from(new Set([...disallowedRaw, TASK_TOOL_NAME]))
-    : [...INTERACTIVE_TOOLS, TASK_TOOL_NAME];
+    ? Array.from(new Set([...disallowedRaw, AGENT_TOOL_NAME]))
+    : [...INTERACTIVE_TOOLS, AGENT_TOOL_NAME];
 
   const filename = path.basename(file.filePath, ".md");
 

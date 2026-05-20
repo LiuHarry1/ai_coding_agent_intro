@@ -19,22 +19,24 @@ import * as path from "path";
 import { ripGrep } from "../utils/ripgrep.js";
 import { resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
-import { BASH_TOOL_NAME, GREP_TOOL_NAME, POWERSHELL_TOOL_NAME, TASK_TOOL_NAME } from "./tool-names.js";
-import { isWindows } from "../core/platform.js";
+import { AGENT_TOOL_NAME, BASH_TOOL_NAME, GREP_TOOL_NAME, POWERSHELL_TOOL_NAME } from "./tool-names.js";
+import { isPowerShellToolEnabled } from "../core/shell-utils.js";
 import { buildRgExcludeGlobs } from "../core/file-filters.js";
 
 const DEFAULT_HEAD_LIMIT = 250;
 
 function getDescription(): string {
-  const shellName = isWindows ? POWERSHELL_TOOL_NAME : BASH_TOOL_NAME;
+  const shellAvoid = isPowerShellToolEnabled()
+    ? `\`${BASH_TOOL_NAME}\` or \`${POWERSHELL_TOOL_NAME}\``
+    : `\`${BASH_TOOL_NAME}\``;
   return `A powerful search tool built on ripgrep
 
   Usage:
-  - ALWAYS use ${GREP_TOOL_NAME} for search tasks. NEVER invoke \`grep\` or \`rg\` as a ${shellName} command. The ${GREP_TOOL_NAME} tool has been optimized for correct permissions and access.
+  - ALWAYS use ${GREP_TOOL_NAME} for search tasks. NEVER invoke \`grep\` or \`rg\` as a ${shellAvoid} command. The ${GREP_TOOL_NAME} tool has been optimized for correct permissions and access.
   - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")
   - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
   - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts
-  - Use ${TASK_TOOL_NAME} tool for open-ended searches requiring multiple rounds
+  - Use ${AGENT_TOOL_NAME} tool for open-ended searches requiring multiple rounds
   - Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use \`interface\\{\\}\` to find \`interface{}\` in Go code)
   - Multiline matching: By default patterns match within single lines only. For cross-line patterns like \`struct \\{[\\s\\S]*?field\`, use \`multiline: true\`
 `;

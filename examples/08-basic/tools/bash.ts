@@ -1,8 +1,14 @@
 import { createShellTool } from "./shell-runner.js";
-import { bashShell } from "../core/platform.js";
+import { bashShell, isWindows } from "../core/platform.js";
 import { BASH_TOOL_NAME } from "./tool-names.js";
 
-const DESCRIPTION = `Run bash commands in the workspace shell.
+const windowsNote = isWindows
+  ? `
+On Windows this tool runs Git Bash (bash.exe from Git for Windows), not cmd.exe. Install Git for Windows if commands fail with "bash not found".
+`
+  : "";
+
+const DESCRIPTION = `Run bash commands in the workspace shell.${windowsNote}
 
 Modes:
 1. Run command — provide \`command\`. Blocks until completion, streams live output to the UI.
@@ -33,7 +39,14 @@ Constraints:
 - Combined stdout+stderr capped at ~100KB; older output is truncated.
 - Default timeout 120s. Pass \`timeout\` for slower commands.
 
-Prefer dedicated tools when available — \`read_file\` over \`cat\` / \`head\` / \`tail\`, \`glob\` over \`find\` / \`ls -R\`, \`grep\` (the tool) over raw \`grep\` / \`rg\`, \`edit_file\` over \`sed\`, \`write_file\` over heredoc redirection. Reserve this tool for actual system operations (git, package managers, build/test runners).`;
+IMPORTANT: Avoid using this tool to run \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Prefer the dedicated tools instead:
+- File search: Use \`glob\` (NOT find or ls)
+- Content search: Use \`grep\` (the tool) (NOT grep or rg)
+- Read files: Use \`read_file\` (NOT cat/head/tail)
+- Edit files: Use \`edit_file\` (NOT sed/awk)
+- Write files: Use \`write_file\` (NOT echo >/cat <<EOF)
+
+Reserve this tool for system commands and terminal operations (git, package managers, build/test runners) and read-only directory checks (\`ls\`, \`git status\`, etc.).`;
 
 export const definition = createShellTool({
   name: BASH_TOOL_NAME,

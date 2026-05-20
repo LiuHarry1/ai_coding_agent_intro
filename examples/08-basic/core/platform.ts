@@ -1,15 +1,14 @@
 import * as path from "path";
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, spawnSync, type ChildProcess } from "child_process";
+import { findGitBashPath } from "./git-bash.js";
 
 export const isWindows = process.platform === "win32";
 
 // ── Shell configurations ──
 //
-// Each platform has its own shell tool registered (see `tools/index.ts`):
-// Unix → `bash`, Windows → `powershell`. Both share the same execution
-// machinery in `tools/shell-runner.ts`; only the spawn config + tool prompt
-// differ. There is intentionally no "active shell" picker here — consumers
-// know which shell they're targeting.
+// CC model: `bash` is always available; on Windows `powershell` is added too.
+// Default shell for prompts / `!` expansion is bash (Git Bash on Windows).
+// Both share `tools/shell-runner.ts`; only spawn config + descriptions differ.
 
 export interface ShellConfig {
   name: string;
@@ -48,9 +47,25 @@ function pickUnixShell(): string {
 
 const unixShellPath = isWindows ? "" : pickUnixShell();
 
+function resolveBashCommand(): string {
+  if (!isWindows) return unixShellPath;
+  return findGitBashPath() ?? "bash";
+}
+
+/** Prefer pwsh (PS 7+) when on PATH; else Windows PowerShell 5.1. */
+function resolvePowerShellCommand(): string {
+  if (!isWindows) return "powershell.exe";
+  try {
+    const r = spawnSync("where", ["pwsh"], { encoding: "utf8", windowsHide: true });
+    const line = r.stdout?.trim().split(/\r?\n/)[0];
+    if (line) return line;
+  } catch {}
+  return "powershell.exe";
+}
+
 export const bashShell: ShellConfig = {
   name: "bash",
-  command: unixShellPath || "bash",
+  command: resolveBashCommand(),
   // -l: login shell — sources .bash_profile / .profile / .zprofile so
   //     the model sees the user's PATH, not the bare /usr/bin spawn PATH.
   // -c: run the command string that follows.
@@ -70,7 +85,7 @@ export const bashShell: ShellConfig = {
 
 export const powershellShell: ShellConfig = {
   name: "powershell",
-  command: "powershell.exe",
+  command: resolvePowerShellCommand(),
   // -NoProfile: skip $PROFILE (can be slow + emits prompt junk).
   // -NonInteractive: refuse Read-Host / Get-Credential prompts (would hang).
   // -ExecutionPolicy Bypass: allow inline -Command script blocks on

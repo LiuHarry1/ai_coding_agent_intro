@@ -33,6 +33,8 @@ function getEditionSection(edition: PowerShellEdition): string {
 
 const DESCRIPTION = `Run PowerShell commands in the workspace shell. Working directory persists between calls; shell state (variables, functions) does not.
 
+Prefer the \`bash\` tool for git, npm, and cross-platform scripts (CC default). Use \`powershell\` when you need native Windows cmdlets, registry paths, or $env: semantics.
+
 ${getEditionSection(detectPowerShellEdition())}
 
 Modes:
@@ -53,17 +55,6 @@ PowerShell syntax notes:
 - Environment variables: read with \`$env:NAME\`, set with \`$env:NAME = "value"\`. Do NOT use bash \`export\`.
 - Registry paths use PSDrive prefixes: \`HKLM:\\SOFTWARE\\...\`, \`HKCU:\\...\` — NOT raw \`HKEY_LOCAL_MACHINE\\...\`.
 - Native exe with spaces in path: use the call operator — \`& "C:\\Program Files\\App\\app.exe" arg1 arg2\`.
-
-Multiline strings (commit messages, file content) into native executables:
-- Use a single-quoted here-string so PowerShell does not expand \`$\` or backticks. The closing \`'@\` MUST be at column 0 (no leading whitespace) on its own line — indenting it is a parse error:
-  \`\`\`
-  git commit -m @'
-  Commit message here.
-  Second line with $literal dollar signs.
-  '@
-  \`\`\`
-- Use \`@'...'@\` (literal) over \`@"..."@\` (interpolated) unless you need variable expansion.
-- For arguments PS would parse as operators (\`-\`, \`@\`, etc.), use the stop-parsing token: \`git log --% --format=%H\`.
 
 Interactive cmdlets / commands that will hang (this tool runs with \`-NonInteractive\`):
 - NEVER use \`Read-Host\`, \`Get-Credential\`, \`Out-GridView\`, \`$Host.UI.PromptForChoice\`, or \`pause\`.

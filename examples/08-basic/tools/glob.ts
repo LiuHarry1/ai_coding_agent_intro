@@ -13,7 +13,7 @@ import { glob as runGlob } from "../utils/glob.js";
 import { resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
 import { GLOB_TOOL_NAME } from "./tool-names.js";
-import { TASK_TOOL_NAME } from "./tool-names.js";
+import { AGENT_TOOL_NAME } from "./tool-names.js";
 import {
   envBool,
   hasDotSegment,
@@ -24,7 +24,7 @@ const DESCRIPTION = `- Fast file pattern matching tool that works with any codeb
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths sorted by modification time
 - Use this tool when you need to find files by name patterns
-- When you are doing an open ended search that may require multiple rounds of globbing and grepping, use the ${TASK_TOOL_NAME} tool instead`;
+- When you are doing an open ended search that may require multiple rounds of globbing and grepping, use the ${AGENT_TOOL_NAME} tool instead`;
 
 const DEFAULT_LIMIT = 150;
 

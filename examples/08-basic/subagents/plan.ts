@@ -1,6 +1,9 @@
 import { createAgentDefinition } from "./base.js";
 import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "./prompt-fragments.js";
-import { INTERACTIVE_TOOLS, MUTATING_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS, MUTATING_TOOLS } from "../tools/tool-names.js";
+
+/** Mirrors CC `planAgent.ts` `agentType`. */
+export const PLAN_AGENT_TYPE = "Plan";
 
 const PLAN_SYSTEM = `You are a software architect. Explore the codebase and design a concrete implementation plan — NOT to write code.
 
@@ -26,7 +29,7 @@ Be specific (file paths, line numbers, function names) so the parent can execute
 REMEMBER: You can ONLY explore and plan — file-mutating tools are disabled. Produce the plan and stop; don't promise changes.`;
 
 export const definition = createAgentDefinition({
-  agentType: "plan",
+  agentType: PLAN_AGENT_TYPE,
   whenToUse:
     'Software-architect subagent for designing implementation plans before ' +
     'code is written. Use proactively for non-trivial changes where the right ' +
@@ -38,7 +41,7 @@ export const definition = createAgentDefinition({
     'should also execute changes.',
   description: "Implementation planning",
   systemPrompt: PLAN_SYSTEM,
-  disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, TASK_TOOL_NAME],
+  disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 25,
   label: "Plan",
   // Mirrors CC's `omitClaudeMd: true` on the Plan agent. Plan is

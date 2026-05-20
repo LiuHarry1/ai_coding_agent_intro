@@ -1,5 +1,8 @@
 import { createAgentDefinition } from "./base.js";
-import { INTERACTIVE_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS } from "../tools/tool-names.js";
+
+/** Mirrors CC `generalPurposeAgent.ts` `agentType`. */
+export const GENERAL_PURPOSE_AGENT_TYPE = "general-purpose";
 
 const GENERAL_PURPOSE_SYSTEM = `You are a general-purpose research and execution agent running in an isolated context. Complete the task fully — don't gold-plate, don't leave it half-done.
 
@@ -16,7 +19,7 @@ Guidelines:
 Final report: what you did, key findings, files changed (with paths), and any commands the parent needs to run. The parent only sees this text — make it self-contained.`;
 
 export const definition = createAgentDefinition({
-  agentType: "general_purpose",
+  agentType: GENERAL_PURPOSE_AGENT_TYPE,
   whenToUse:
     'General-purpose subagent for open-ended research and multi-step tasks. ' +
     'Use when a task is broad enough that you are not confident you will ' +
@@ -24,12 +27,12 @@ export const definition = createAgentDefinition({
     'end-to-end", "investigate why Y happens", "set up Z across the project", ' +
     '"do a wide refactor across N files". Inherits the full toolset (including ' +
     'write/edit), runs in an isolated context, returns a concise final report. ' +
-    'Prefer the more specialized "explore" for pure read-only searches and ' +
-    '"plan" for architectural design without code changes.',
+    'Prefer the more specialized Explore for pure read-only searches and ' +
+    'Plan for architectural design without code changes.',
   description: "General-purpose research / execution",
   systemPrompt: GENERAL_PURPOSE_SYSTEM,
   // Block recursive task calls but otherwise inherit everything.
-  disallowedTools: [...INTERACTIVE_TOOLS, TASK_TOOL_NAME],
+  disallowedTools: [...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 30,
   label: "Agent",
 });

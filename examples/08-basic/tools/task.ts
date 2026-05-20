@@ -6,7 +6,9 @@ import type {
   ToolContext,
   ToolDefinition,
 } from "../core/types.js";
-import { TASK_TOOL_NAME } from "./tool-names.js";
+import { AGENT_TOOL_NAME } from "./tool-names.js";
+import { EXPLORE_AGENT_TYPE } from "../subagents/explore.js";
+import { PLAN_AGENT_TYPE } from "../subagents/plan.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 
 /**
@@ -57,25 +59,25 @@ export function createTaskTool(agents: readonly AgentDefinition[]): ToolDefiniti
     .map((a) => `- ${a.agentType}: ${a.whenToUse}`)
     .join("\n");
 
-  const description = `Launch a new subagent to handle complex, multi-step tasks autonomously.
+  const description = `Launch a new agent to handle complex, multi-step tasks autonomously.
 
-The task tool launches specialized agents that handle work in their own isolated context. Each agent type has specific capabilities — pick the one whose description matches the task.
+The ${AGENT_TOOL_NAME} tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-Available subagent types:
+Available agent types:
 ${directory}
 
-When using the task tool, specify a \`subagent_type\` parameter to select which agent runs.
+When using the ${AGENT_TOOL_NAME} tool, specify a \`subagent_type\` parameter to select which agent type to use.
 
-When NOT to use the task tool:
+When NOT to use the ${AGENT_TOOL_NAME} tool:
 - You already know the file(s) you need → use \`read_file\` directly.
 - A specific symbol you can grep in one shot → use grep / bash directly.
 - The task needs interactive back-and-forth — subagents run autonomously to completion.
 
-No-duplication rule: \`plan\` already explores as part of its process. Don't run \`explore\` and \`plan\` in parallel on the same topic. If you need facts before planning, run \`explore\` first, then pass its report into \`plan\`'s prompt.
+No-duplication rule: \`${PLAN_AGENT_TYPE}\` already explores as part of its process. Don't run \`${EXPLORE_AGENT_TYPE}\` and \`${PLAN_AGENT_TYPE}\` in parallel on the same topic. If you need facts before planning, run \`${EXPLORE_AGENT_TYPE}\` first, then pass its report into \`${PLAN_AGENT_TYPE}\`'s prompt.
 
 Usage notes:
 - Always include a short \`description\` (3-5 words) summarizing what the agent will do.
-- You can issue several \`task\` calls in one response to dispatch independent subagents in parallel. If the user says "in parallel", you MUST do this.
+- You can issue several \`${AGENT_TOOL_NAME}\` calls in one response to dispatch independent agents in parallel. If the user says "in parallel", you MUST do this.
 - Each invocation starts fresh — the subagent does NOT see your prior conversation. The \`prompt\` must be self-contained.
 - The subagent returns a single final report. The result is NOT visible to the user — summarize the relevant parts in your own reply.
 - The subagent's outputs should generally be trusted. Don't re-run the same searches yourself.
@@ -97,21 +99,21 @@ Examples:
 
 <example>
 User: "Where is the SSE transport implemented and how does it stream tool events?"
-→ Broad "how does X work" across multiple files. Call \`task\` with \`subagent_type: "explore"\`.
+→ Broad "how does X work" across multiple files. Call \`${AGENT_TOOL_NAME}\` with \`subagent_type: "${EXPLORE_AGENT_TYPE}"\`.
 </example>
 
 <example>
 User: "Add retry logic to core/llm/strategies/openai.ts."
-→ You know the file. Read it directly and edit. No \`task\` call needed.
+→ You know the file. Read it directly and edit. No \`${AGENT_TOOL_NAME}\` call needed.
 </example>
 
 <example>
 User: "Refactor the agent loop to support cancellation."
-→ Non-trivial architecture. Call \`task\` with \`subagent_type: "plan"\`; it explores and designs. Then implement its plan.
+→ Non-trivial architecture. Call \`${AGENT_TOOL_NAME}\` with \`subagent_type: "${PLAN_AGENT_TYPE}"\`; it explores and designs. Then implement its plan.
 </example>`;
 
   return {
-    name: TASK_TOOL_NAME,
+    name: AGENT_TOOL_NAME,
     description,
     isSubagent: true,
     create(cwd: string, context: ToolContext) {
@@ -180,12 +182,12 @@ User: "Refactor the agent loop to support cancellation."
           } else {
             subTools = registry.createAll(cwd, subContext);
             const denied = new Set(def.disallowedTools ?? []);
-            denied.add(TASK_TOOL_NAME);
+            denied.add(AGENT_TOOL_NAME);
             for (const n of denied) delete subTools[n];
           }
           // Defense in depth: even with neither list set, the parent's
           // task tool itself must never be in the subagent's toolset.
-          delete subTools[TASK_TOOL_NAME];
+          delete subTools[AGENT_TOOL_NAME];
 
           // Inject project rules unless the subagent opted out. Read-only
           // exploration agents (Explore) skip this — rules carry

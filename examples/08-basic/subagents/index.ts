@@ -3,7 +3,7 @@ import { definition as exploreDef } from "./explore.js";
 import { definition as planDef } from "./plan.js";
 import { definition as generalPurposeDef } from "./general_purpose.js";
 import { createTaskTool } from "../tools/task.js";
-import { TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { AGENT_TOOL_NAME } from "../tools/tool-names.js";
 import { loadMarkdownConfigs } from "../core/markdown-config-loader.js";
 import { mergeAgents } from "./from-files.js";
 
@@ -75,6 +75,6 @@ export function getSubagentNames(registry: IToolRegistry): Set<string> {
   // Belt-and-braces: the task tool name is always part of the set even
   // before registration, so test code that calls getSubagentNames on an
   // empty registry still produces correct UI tagging.
-  names.add(TASK_TOOL_NAME);
+  names.add(AGENT_TOOL_NAME);
   return names;
 }

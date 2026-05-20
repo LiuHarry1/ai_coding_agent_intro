@@ -29,8 +29,11 @@ import { pickCard, SUPPRESSED_TOOL_CARDS } from "./pickToolCard.js";
  */
 
 const TYPE_META = {
+  Explore: { kind: "explore", icon: "\u{1F50D}", label: "Explore" },
   explore: { kind: "explore", icon: "\u{1F50D}", label: "Explore" },
+  Plan: { kind: "plan", icon: "\u{1F5C2}", label: "Plan" },
   plan: { kind: "plan", icon: "\u{1F5C2}", label: "Plan" },
+  "general-purpose": { kind: "agent", icon: "\u{1F916}", label: "Agent" },
   general_purpose: { kind: "agent", icon: "\u{1F916}", label: "Agent" },
 };
 
@@ -87,9 +90,8 @@ const STEP_PREVIEW_LIMIT = 6;
 
 export default function SubagentCard({ part }) {
   const args = part.args || {};
-  // Single-Task architecture: dispatch tool is always named "task"; the
-  // actual subagent identity is in args.subagent_type. Legacy sessions
-  // (one tool per subagent) stored it in part.name; fall back to that.
+  // Dispatch tool is named "Agent" (CC); legacy builds used "task". Identity
+  // is in args.subagent_type. Older sessions stored it in part.name.
   const subagentType = args.subagent_type || part.name || "subagent";
   const result = part.result;
   // New schema uses { description, prompt }; legacy used { task }. The

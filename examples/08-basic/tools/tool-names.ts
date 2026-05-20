@@ -28,10 +28,13 @@ export const GREP_TOOL_NAME = "grep";
 export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
 
 /**
- * Single tool that dispatches to all built-in subagents via a
- * `subagent_type` parameter. Modeled after Claude Code's `Task` tool.
+ * Single tool that dispatches to all built-in subagents via `subagent_type`.
+ * CC: `AGENT_TOOL_NAME` (`Agent`); legacy CC name was `Task`.
  */
-export const TASK_TOOL_NAME = "task";
+export const AGENT_TOOL_NAME = "Agent";
+
+/** @deprecated Use {@link AGENT_TOOL_NAME}. Kept so older docs/configs mentioning `task` are easy to grep. */
+export const TASK_TOOL_NAME = AGENT_TOOL_NAME;
 
 /**
  * Tools that mutate the filesystem or system state. Used as the deny-list
