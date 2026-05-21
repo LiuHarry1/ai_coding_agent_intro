@@ -1,24 +1,18 @@
 {
   "provider": {
-    "provider": "anthropic",
+    "provider": "openai",
     "baseURL": "http://localhost:4141/v1",
     "apiKey": "not-needed",
-    "model": "claude-opus-4.6",
-    "thinking": { "mode": "medium" }
+    "model": "gpt-5.4"
   },
   "compaction": {
     "tokenThreshold": 167000,
     "microCompactThreshold": 140000,
     "tailTokenBudget": 40000,
     "microCompactKeepRecent": 5,
-    "model": "claude-opus-4.6"
+    "model": "gpt-5.4"
   },
   "mcpServers": {
-
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-    },
 
     "chrome-devtools": {
       "command": "npx",
