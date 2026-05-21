@@ -1,16 +1,13 @@
 # syntax=docker/dockerfile:1
-# Multi-stage: Vite UI → Node agent server (default example: 07-basic).
+#
+# Agent-only image. No frontend assets bundled — pair with deploy/Dockerfile.web
+# (nginx + dist) via deploy/docker-compose.yml. If you instead want the
+# all-in-one image (agent + UI served from Node), use the root Dockerfile.
+#
+# Build from repo root:
+#   docker build -f deploy/Dockerfile.agent -t ai-agent:latest .
 
-# --- Stage 1: React/Vite frontend (served from client2/web/dist by 07-basic) ---
-FROM node:22-bookworm-slim AS ui
-WORKDIR /ui
-COPY client2/web/package.json client2/web/package-lock.json ./
-RUN npm ci
-COPY client2/web/ ./
-RUN npm run build
-
-# --- Stage 2: Agent + HTTP server ---
-FROM node:22-bookworm-slim AS app
+FROM node:22-bookworm-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,7 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-is-python3 \
   && rm -rf /var/lib/apt/lists/*
 
-# Python 3.11 + venv (agent bash 工具可调用 python / pip)
+# Python 3.11 + venv so the agent's bash tool can invoke python/pip
+# without polluting the system site-packages.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     VIRTUAL_ENV=/opt/venv
@@ -33,7 +31,7 @@ RUN python3 -m venv "${VIRTUAL_ENV}" \
   && pip install --no-cache-dir -r requirements.txt
 
 COPY package.json package-lock.json ./
-# Runtime needs tsx to load TypeScript examples; keep production deps lean.
+# Runtime needs tsx to load TypeScript examples; keep prod deps lean.
 RUN npm ci --omit=dev \
   && npm install tsx@^4.21.0 --no-save \
   && npm cache clean --force
@@ -41,10 +39,9 @@ RUN npm ci --omit=dev \
 COPY examples/ ./examples/
 COPY shared/ ./shared/
 COPY start.js ./
-COPY client/web ./client/web
-COPY --from=ui /ui/dist ./client2/web/dist
 
-# 07-basic：ConfigManager 读取 ~/.ai-agent/config.json（容器内 root 即 /root/.ai-agent）
+# Seed config.json so the container has working defaults out of the box.
+# Override at runtime by mounting your own ~/.ai-agent into /root/.ai-agent.
 COPY config.example.json /root/.ai-agent/config.json
 
 ENV NODE_ENV=production
@@ -54,5 +51,5 @@ EXPOSE 4567
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||4567)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-# Override example: docker run ... <image> 05-basic
-CMD ["./node_modules/.bin/tsx", "start.js", "07-basic"]
+# Override the example via `docker run ... <image> 05-basic` etc.
+CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"]

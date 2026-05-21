@@ -1,0 +1,390 @@
+/**
+ * HTTP API for skill / agent discovery + direct skill invocation.
+ *
+ * Designed for "other internal projects" to call this agent backend as
+ * a service:
+ *
+ *   GET  /skills                  — list all skills discoverable for a cwd
+ *   GET  /agents                  — list all subagents (built-in + .agents/)
+ *   POST /skills/:name/invoke     — directly run a skill, bypassing the
+ *                                   model's choice. For inline skills this
+ *                                   is an LLM-free template expansion;
+ *                                   for fork skills it spins up a subagent
+ *                                   run and returns its final text (JSON)
+ *                                   or streams progress (SSE).
+ *
+ * `workspace` is resolved per-request (matches `/chat`'s semantics), so a
+ * single agent backend can serve many projects from different host paths.
+ * Falls back to `process.cwd()` when the caller omits it.
+ *
+ * Auth is intentionally absent here — this module assumes it sits behind
+ * a trusted boundary (internal network, nginx allowlist, etc.). If you
+ * ever expose this to untrusted callers, wrap the returned handler in an
+ * auth middleware in router.ts BEFORE delegating.
+ */
+
+import * as fs from "fs";
+import * as path from "path";
+import type { IncomingMessage, ServerResponse } from "http";
+import {
+  loadSkillsFromDisk,
+  filterSkillsByPaths,
+} from "../skills/from-folders.js";
+import {
+  expandSkillBody,
+  normalizeSkillArguments,
+  SkillExpansionError,
+} from "../skills/expand.js";
+import { registerSubagents, BUILTIN_AGENTS } from "../subagents/index.js";
+import { defaultRegistry } from "../tools/index.js";
+import { EventBus } from "../core/event-bus.js";
+import { createSSETransport } from "./sse-transport.js";
+import { AGENT_TOOL_NAME } from "../tools/tool-names.js";
+import { SKILL_TOOL_NAME } from "../tools/skill.js";
+import { configManager } from "../core/config-manager.js";
+import type {
+  AgentDefinition,
+  AnyTool,
+  RunAgentFn,
+  ToolContext,
+} from "../core/types.js";
+import type { SkillDefinition } from "../skills/types.js";
+
+function sendJSON(res: ServerResponse, status: number, data: unknown): void {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(data));
+}
+
+const MAX_BODY = 4 * 1024 * 1024; // 4MB — generous for arguments, no images
+
+function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_BODY) {
+        req.destroy();
+        reject(new Error("Body too large"));
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString() || "{}"));
+      } catch {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+/**
+ * Resolve a caller-provided `workspace` path against the server's notion
+ * of "where it's safe to chdir". For now we accept any absolute path
+ * that exists. If you ever want to add allowlisting (e.g. force every
+ * workspace under `/workspaces/`), this is the single place to do it.
+ */
+function resolveWorkspace(workspace: unknown): string {
+  if (typeof workspace === "string" && workspace.length > 0) {
+    const resolved = path.resolve(workspace);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+  return process.cwd();
+}
+
+/** Public-friendly view of a SkillDefinition. */
+interface SkillSummary {
+  name: string;
+  description: string;
+  context: SkillDefinition["context"];
+  agent?: string;
+  argumentNames: string[];
+  paths?: string[];
+  source: SkillDefinition["source"];
+  filePath?: string;
+  baseDir?: string;
+  /**
+   * `true` when this skill has no `paths:` filter (always active) — so
+   * callers can tell at-a-glance which skills are unconditionally
+   * available. Conditional skills (with `paths:`) report `false` here
+   * because GET /skills doesn't see per-message file hints; they can
+   * still be invoked directly via /skills/:name/invoke regardless.
+   */
+  active: boolean;
+}
+
+function toSummary(skill: SkillDefinition, active: boolean): SkillSummary {
+  return {
+    name: skill.name,
+    description: skill.description,
+    context: skill.context,
+    agent: skill.agent,
+    argumentNames: skill.argumentNames,
+    paths: skill.paths,
+    source: skill.source,
+    filePath: skill.filePath,
+    baseDir: skill.baseDir,
+    active,
+  };
+}
+
+interface AgentSummary {
+  agentType: string;
+  whenToUse: string;
+  description: string;
+  tools?: string[];
+  disallowedTools?: string[];
+  maxSteps?: number;
+  model?: string;
+}
+
+function toAgentSummary(a: AgentDefinition): AgentSummary {
+  return {
+    agentType: a.agentType,
+    whenToUse: a.whenToUse,
+    description: a.description,
+    tools: a.tools,
+    disallowedTools: a.disallowedTools,
+    maxSteps: a.maxSteps,
+    model: a.model,
+  };
+}
+
+interface SkillsApiOptions {
+  runAgent: RunAgentFn;
+}
+
+/**
+ * Returns a request handler that owns the `/skills*` and `/agents*` URL
+ * space. Returns `true` iff it handled the request — the caller (router)
+ * uses that signal to fall through to other handlers.
+ */
+export function createSkillsApi({ runAgent }: SkillsApiOptions) {
+  return async function handle(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<boolean> {
+    const { method, url } = req;
+    if (!url) return false;
+
+    const [pathOnly, queryString] = url.split("?");
+    const query = new URLSearchParams(queryString ?? "");
+
+    // GET /skills?workspace=/path
+    if (method === "GET" && pathOnly === "/skills") {
+      const cwd = resolveWorkspace(query.get("workspace"));
+      try {
+        const { skills, errors } = await loadSkillsFromDisk(cwd);
+        const unconditional = new Set(
+          filterSkillsByPaths(skills, undefined, cwd).map((s) => s.name),
+        );
+        sendJSON(res, 200, {
+          workspace: cwd,
+          skills: skills.map((s) =>
+            toSummary(s, unconditional.has(s.name)),
+          ),
+          errors,
+        });
+      } catch (e) {
+        sendJSON(res, 500, { error: (e as Error).message });
+      }
+      return true;
+    }
+
+    // GET /agents?workspace=/path
+    if (method === "GET" && pathOnly === "/agents") {
+      const cwd = resolveWorkspace(query.get("workspace"));
+      try {
+        // registerSubagents replaces the `task` tool as a side effect.
+        // Acceptable here because /agents is rarely-called metadata —
+        // callers that pump traffic at it should debounce.
+        const { activeAgents, errors } = await registerSubagents(
+          defaultRegistry,
+          cwd,
+        );
+        sendJSON(res, 200, {
+          workspace: cwd,
+          agents: activeAgents.map((a) => toAgentSummary(a)),
+          builtin: BUILTIN_AGENTS.map((a) => a.agentType),
+          errors,
+        });
+      } catch (e) {
+        sendJSON(res, 500, { error: (e as Error).message });
+      }
+      return true;
+    }
+
+    // POST /skills/:name/invoke[?stream=false]
+    const invokeMatch = pathOnly?.match(/^\/skills\/([^/]+)\/invoke$/);
+    if (method === "POST" && invokeMatch) {
+      const skillName = decodeURIComponent(invokeMatch[1]!);
+      let body: Record<string, unknown>;
+      try {
+        body = await readBody(req);
+      } catch (e) {
+        sendJSON(res, 400, { error: (e as Error).message });
+        return true;
+      }
+      const wantsStream =
+        query.get("stream") !== "false" && body.stream !== false;
+      await handleSkillInvoke({
+        res,
+        skillName,
+        body,
+        runAgent,
+        wantsStream,
+      });
+      return true;
+    }
+
+    return false;
+  };
+}
+
+async function handleSkillInvoke(args: {
+  res: ServerResponse;
+  skillName: string;
+  body: Record<string, unknown>;
+  runAgent: RunAgentFn;
+  wantsStream: boolean;
+}): Promise<void> {
+  const { res, skillName, body, runAgent, wantsStream } = args;
+  const cwd = resolveWorkspace(body.workspace);
+
+  const { skills } = await loadSkillsFromDisk(cwd);
+  const skill = skills.find((s) => s.name === skillName);
+  if (!skill) {
+    sendJSON(res, 404, {
+      error: `Unknown skill '${skillName}'`,
+      available: skills.map((s) => s.name),
+      workspace: cwd,
+    });
+    return;
+  }
+
+  const rawArgs = normalizeSkillArguments(
+    body.arguments as
+      | string
+      | Record<string, string | number | boolean>
+      | undefined,
+  );
+
+  let combined: string;
+  try {
+    ({ combined } = await expandSkillBody(skill, rawArgs, cwd));
+  } catch (e) {
+    if (e instanceof SkillExpansionError) {
+      sendJSON(res, 400, { error: e.message, code: e.code });
+      return;
+    }
+    sendJSON(res, 500, { error: (e as Error).message });
+    return;
+  }
+
+  // ── inline ── pure template expansion, no LLM round-trip needed.
+  // Always JSON regardless of `stream` — inline skills have no progress
+  // events to stream, just one shot of text.
+  if (skill.context === "inline") {
+    sendJSON(res, 200, {
+      skill: skillName,
+      context: "inline",
+      workspace: cwd,
+      result: combined,
+    });
+    return;
+  }
+
+  // ── fork ── spin up a subagent with the skill body as the user
+  // message. Same machinery as the model-facing dispatcher tool
+  // (tools/skill.ts) but driven by HTTP instead of an LLM tool call.
+  const { activeAgents } = await registerSubagents(defaultRegistry, cwd);
+  const targetAgentType = skill.agent ?? "general_purpose";
+  const targetAgent = activeAgents.find(
+    (a) => a.agentType === targetAgentType,
+  );
+  if (!targetAgent) {
+    sendJSON(res, 400, {
+      error: `Skill '${skillName}' fork target '${targetAgentType}' not found`,
+      available: activeAgents.map((a) => a.agentType),
+    });
+    return;
+  }
+
+  const eventBus = new EventBus();
+  const enablement = configManager.getAll();
+  const toolEnablement = { disabledTools: enablement.disabledTools };
+
+  const subContext: ToolContext = {
+    eventBus,
+    registry: defaultRegistry,
+    runAgent,
+    toolEnablement,
+  };
+
+  let subTools: Record<string, AnyTool>;
+  if (targetAgent.tools) {
+    subTools = defaultRegistry.createAll(cwd, subContext, targetAgent.tools);
+  } else {
+    subTools = defaultRegistry.createAll(cwd, subContext);
+    const denied = new Set(targetAgent.disallowedTools ?? []);
+    denied.add(AGENT_TOOL_NAME);
+    denied.add(SKILL_TOOL_NAME);
+    for (const n of denied) delete subTools[n];
+  }
+  delete subTools[AGENT_TOOL_NAME];
+  delete subTools[SKILL_TOOL_NAME];
+
+  // ── streaming branch ─ same SSE wire format as /chat so clients can
+  // reuse their existing event-source parsers.
+  if (wantsStream) {
+    const transport = createSSETransport(res, eventBus, {
+      "X-Skill": skillName,
+    });
+    transport.send("skill_start", {
+      skill: skillName,
+      agentType: targetAgent.agentType,
+      workspace: cwd,
+    });
+    try {
+      const result = await runAgent(combined, {
+        tools: subTools,
+        systemPrompt: targetAgent.systemPrompt,
+        eventBus,
+        messages: [],
+        maxSteps: targetAgent.maxSteps ?? 20,
+        model: targetAgent.model,
+      });
+      transport.send("finish", { reason: "done", text: result });
+    } catch (e) {
+      transport.send("error", { message: (e as Error).message });
+    } finally {
+      transport.end();
+    }
+    return;
+  }
+
+  // ── buffered branch ─ wait for completion, return one JSON blob.
+  // Useful for scripts / CI that don't want to parse SSE.
+  try {
+    const result = await runAgent(combined, {
+      tools: subTools,
+      systemPrompt: targetAgent.systemPrompt,
+      eventBus,
+      messages: [],
+      maxSteps: targetAgent.maxSteps ?? 20,
+      model: targetAgent.model,
+    });
+    sendJSON(res, 200, {
+      skill: skillName,
+      context: "fork",
+      agentType: targetAgent.agentType,
+      workspace: cwd,
+      result,
+    });
+  } catch (e) {
+    sendJSON(res, 500, { error: (e as Error).message });
+  }
+}

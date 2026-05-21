@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { createSession, getSession, listSessions, deleteSession, appendMessage } from "./session.js";
 import { createSSETransport } from "./sse-transport.js";
 import { createWorkspaceRouter } from "./workspace/router.js";
+import { createSkillsApi } from "./skills-api.js";
 import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
@@ -107,6 +108,19 @@ async function handleChat(
     return;
   }
 
+  // Streaming defaults ON (back-compat with the UI). Callers that want a
+  // single JSON blob ask explicitly via `?stream=false`, `stream:false`
+  // in the body, or `Accept: application/json` — any one is enough.
+  // Useful for scripts/CI/internal services that don't want to parse SSE.
+  const urlQuery = new URLSearchParams(req.url?.split("?")[1] ?? "");
+  const acceptsJSON = (req.headers["accept"] ?? "").includes(
+    "application/json",
+  );
+  const wantsStream =
+    urlQuery.get("stream") !== "false" &&
+    body.stream !== false &&
+    !acceptsJSON;
+
   const cwd = workspace && fs.existsSync(workspace)
     ? path.resolve(workspace)
     : process.cwd();
@@ -145,20 +159,34 @@ async function handleChat(
   const middleware = new Middleware();
   middleware.use("afterTool", createTimingMiddleware(eventBus).afterTool);
 
-  const transport = createSSETransport(res, eventBus, { "X-Session-Id": session.id });
-  transport.send("session", { session_id: session.id });
+  // SSE transport is only created in streaming mode. For JSON mode we
+  // keep the eventBus around (the agent loop still uses it internally
+  // for tool middleware) but never wire it to the response — there's
+  // no place to send events when the caller wants one final blob.
+  const transport = wantsStream
+    ? createSSETransport(res, eventBus, { "X-Session-Id": session.id })
+    : null;
+  transport?.send("session", { session_id: session.id });
 
   req.on("close", () => {
     console.log("[server] client disconnected");
     eventBus.removeAllListeners();
   });
 
-  // Short-circuit built-in slash-command replies via SSE so the frontend's
-  // event-source plumbing stays identical to a normal chat turn.
+  // Short-circuit built-in slash-command replies. SSE path mirrors a
+  // normal chat turn; JSON path returns one shot.
   if (immediateReply !== null) {
-    transport.send("text_delta", { delta: immediateReply });
-    transport.send("finish", { reason: "slash_command" });
-    transport.end();
+    if (transport) {
+      transport.send("text_delta", { delta: immediateReply });
+      transport.send("finish", { reason: "slash_command" });
+      transport.end();
+    } else {
+      sendJSON(res, 200, {
+        session_id: session.id,
+        text: immediateReply,
+        reason: "slash_command",
+      });
+    }
     return;
   }
 
@@ -206,22 +234,46 @@ async function handleChat(
 
   const messagesBefore = session.messages.length;
 
-  await runAgent(effectiveMessage, {
-    tools,
-    systemPrompt: systemPrompt(cwd, projectRules || undefined),
-    eventBus,
-    messages: session.messages,
-    images: images?.length ? images : undefined,
-    // Forwarded so the agent can tag `tool_call` events with isSubagent:true
-    // for the UI's SubagentCard rendering.
-    subagentNames: getSubagentNames(defaultRegistry),
-  });
+  let finalText = "";
+  let runError: Error | null = null;
+  try {
+    finalText = await runAgent(effectiveMessage, {
+      tools,
+      systemPrompt: systemPrompt(cwd, projectRules || undefined),
+      eventBus,
+      messages: session.messages,
+      images: images?.length ? images : undefined,
+      // Forwarded so the agent can tag `tool_call` events with isSubagent:true
+      // for the UI's SubagentCard rendering.
+      subagentNames: getSubagentNames(defaultRegistry),
+    });
+  } catch (e) {
+    runError = e as Error;
+  }
 
   for (const msg of session.messages.slice(messagesBefore)) {
     appendMessage(session.id, msg as Message);
   }
 
-  transport.end();
+  if (transport) {
+    if (runError) transport.send("error", { message: runError.message });
+    transport.end();
+  } else {
+    if (runError) {
+      sendJSON(res, 500, {
+        session_id: session.id,
+        error: runError.message,
+      });
+    } else {
+      sendJSON(res, 200, {
+        session_id: session.id,
+        text: finalText,
+        // Echo the new messages so callers that persist their own history
+        // can append without re-fetching /sessions/:id/messages.
+        messages: sessionToUIMessages(session.messages.slice(messagesBefore)),
+      });
+    }
+  }
 }
 
 /**
@@ -344,6 +396,11 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
   // delegation: it returns true iff it handled the request.
   const workspaceRouter = createWorkspaceRouter({ root: process.cwd() });
 
+  // Direct skill / agent invocation API for "other internal projects"
+  // calling this backend as a service. Lives in its own module so the
+  // router stays a thin dispatch table. See server/skills-api.ts.
+  const skillsApi = createSkillsApi({ runAgent });
+
   return async (req: IncomingMessage, res: ServerResponse) => {
     setCORS(res);
 
@@ -354,6 +411,8 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     if (method === "GET" && url === "/health") { sendJSON(res, 200, { status: "ok" }); return; }
 
     if (await workspaceRouter(req, res)) return;
+
+    if (await skillsApi(req, res)) return;
 
     if (method === "POST" && url === "/sessions") {
       const session = createSession();
@@ -453,7 +512,10 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       return;
     }
 
-    if (method === "POST" && url === "/chat") { await handleChat(req, res, runAgent, systemPrompt); return; }
+    if (method === "POST" && url?.split("?")[0] === "/chat") {
+      await handleChat(req, res, runAgent, systemPrompt);
+      return;
+    }
 
     if (staticDir && serveStaticFile(req, res, staticDir)) return;
 

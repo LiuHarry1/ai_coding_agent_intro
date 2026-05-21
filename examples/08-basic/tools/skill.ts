@@ -22,8 +22,7 @@ import type {
   ToolDefinition,
 } from "../core/types.js";
 import type { SkillDefinition } from "../skills/types.js";
-import { substituteArguments } from "../commands/argument-substitution.js";
-import { expandInlineDirectives } from "../commands/prompt-expansion.js";
+import { expandSkillBody, SkillExpansionError } from "../skills/expand.js";
 import { AGENT_TOOL_NAME } from "./tool-names.js";
 
 export const SKILL_TOOL_NAME = "skill";
@@ -110,49 +109,21 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
             return `Error: unknown skill '${skill_name}'. Valid: ${validSkills.join(", ")}`;
           }
 
-          // Lazy body load — see `SkillDefinition.loadBody` for why we
-          // don't keep bodies pinned in memory after scan.
-          let body: string;
+          // Body load + arg substitution + `!`/`@`/`${SKILL_DIR}` expansion
+          // are all delegated to skills/expand.ts so this dispatcher and
+          // the HTTP-facing /skills/:name/invoke endpoint produce
+          // identical output byte-for-byte.
+          let combined: string;
           try {
-            body = await skill.loadBody();
+            ({ combined } = await expandSkillBody(skill, rawArgs ?? "", cwd));
           } catch (e) {
-            return `Error: failed to read skill body for '${skill_name}': ${(e as Error).message}`;
+            if (e instanceof SkillExpansionError) return `Error: ${e.message}`;
+            throw e;
           }
-          if (!body.trim()) {
-            return `Error: skill '${skill_name}' has an empty SKILL.md body`;
-          }
-
-          const args = rawArgs ?? "";
-          const substituted = substituteArguments(
-            body,
-            args,
-            skill.argumentNames,
-          );
-          let expanded = await expandInlineDirectives(substituted, cwd);
-
-          // Substitute `${SKILL_DIR}` with the skill's own folder path so
-          // the body can reference bundled scripts/data (mirrors CC's
-          // `${CLAUDE_SKILL_DIR}`). Normalize backslashes on Windows so
-          // shell snippets don't treat them as escape sequences.
-          if (skill.baseDir) {
-            const dir =
-              process.platform === "win32"
-                ? skill.baseDir.replace(/\\/g, "/")
-                : skill.baseDir;
-            expanded = expanded.replace(/\$\{SKILL_DIR\}/g, dir);
-          }
-
-          // Prepend a one-line base-directory hint so the model knows
-          // where bundled assets live, even if the SKILL.md author didn't
-          // reference `${SKILL_DIR}` explicitly. Same shape as CC's
-          // `Base directory for this skill: …` preamble.
-          const preamble = skill.baseDir
-            ? `Base directory for this skill: ${skill.baseDir}\n\n`
-            : "";
 
           // ── inline ── return the expanded body as the tool result.
           if (skill.context === "inline") {
-            return preamble + expanded;
+            return combined;
           }
 
           // ── fork ── dispatch as a subagent using the requested agent
@@ -198,7 +169,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
           delete subTools[AGENT_TOOL_NAME];
           delete subTools[SKILL_TOOL_NAME];
 
-          const result = await runAgent(preamble + expanded, {
+          const result = await runAgent(combined, {
             tools: subTools,
             systemPrompt: targetAgent.systemPrompt,
             eventBus: subBus,
