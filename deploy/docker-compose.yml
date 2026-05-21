@@ -26,17 +26,6 @@ services:
     environment:
       NODE_ENV: production
       PORT: "4567"
-    volumes:
-      # Bind-mount caller workspaces. The /chat and /skills endpoints
-      # accept a `workspace` field — pass an absolute path under
-      # /workspaces/<name> when calling from other projects. Edit the
-      # left side if your projects live somewhere else on the host.
-      - ../workspaces:/workspaces:rw
-
-      # Reuse your local agent config (~/.ai-agent/config.json with
-      # provider keys, MCP servers, etc.) read-only inside the container.
-      # Comment out if you'd rather the container ship its own config.
-      - ${HOME}/.ai-agent:/root/.ai-agent:ro
     restart: unless-stopped
     healthcheck:
       test:
