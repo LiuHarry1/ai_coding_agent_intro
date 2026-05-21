@@ -1,39 +1,63 @@
 import type { AgentDefinition, IToolRegistry } from "../core/types.js";
-import { loadMarkdownConfigs } from "../core/markdown-config-loader.js";
-import { mergeSkills } from "./from-files.js";
+import { loadSkillsFromDisk, filterSkillsByPaths } from "./from-folders.js";
 import { createSkillTool, SKILL_TOOL_NAME } from "../tools/skill.js";
 import type { SkillDefinition } from "./types.js";
 
-export { SKILL_TOOL_NAME };
+export { SKILL_TOOL_NAME, filterSkillsByPaths };
 export type { SkillDefinition };
 
+export interface RegisterSkillsOptions {
+  /**
+   * File paths to evaluate `paths:` frontmatter against. Skills whose
+   * `paths` patterns match at least one of these become active for this
+   * chat turn; non-matching conditional skills stay hidden. Pass the
+   * files mentioned in the user's current message, recently edited
+   * files, or `git ls-files` output — whatever signal best represents
+   * "what's relevant right now".
+   *
+   * Omit (or pass `undefined`) to keep conditional skills hidden.
+   * Pass an empty array to explicitly say "we checked, nothing matched"
+   * (same effect: conditional skills hidden, unconditional still active).
+   * Skills WITHOUT `paths:` are always active regardless of this option.
+   */
+  candidateFiles?: readonly string[];
+}
+
 /**
- * Discover markdown skills under `<cwd>/.skills/*.md` and
- * `~/.myagent/skills/*.md`, then register (or replace) the `skill`
- * dispatcher tool on the registry.
+ * Discover folder-based skills under `<ancestor>/.skills/<name>/SKILL.md`
+ * (walked up from cwd to home) and `~/.ai-agent/skills/<name>/SKILL.md`,
+ * then register (or replace) the `skill` dispatcher tool on the registry.
  *
- * If no skill files are found we DO NOT register the tool — the model
+ * If no skill folders are found we DO NOT register the tool — the model
  * shouldn't see an empty dispatcher (it would burn tokens on a useless
  * directory). Returns the active skill list so callers can decide what
  * to surface in UI.
  *
  * Mirrors `registerSubagents`: called once per chat request so user edits
- * to skill files take effect on the next turn without a server restart.
+ * to SKILL.md files take effect on the next turn without a server restart.
  */
 export async function registerSkills(
   registry: IToolRegistry,
   cwd: string,
   forkableAgents: readonly AgentDefinition[],
+  options: RegisterSkillsOptions = {},
 ): Promise<{
+  /** All discovered skills, including conditional ones not active this turn. */
+  allSkills: SkillDefinition[];
+  /** Skills exposed to the model this turn (after `paths:` filtering). */
   activeSkills: SkillDefinition[];
   errors: Array<{ filePath: string; error: string }>;
 }> {
-  const files = await loadMarkdownConfigs("skills", cwd);
-  const { skills, errors } = mergeSkills(files);
+  const { skills, errors } = await loadSkillsFromDisk(cwd);
+  const activeSkills = filterSkillsByPaths(
+    skills,
+    options.candidateFiles,
+    cwd,
+  );
 
-  if (skills.length > 0) {
-    registry.register(createSkillTool(skills, forkableAgents));
+  if (activeSkills.length > 0) {
+    registry.register(createSkillTool(activeSkills, forkableAgents));
   }
 
-  return { activeSkills: skills, errors };
+  return { allSkills: skills, activeSkills, errors };
 }

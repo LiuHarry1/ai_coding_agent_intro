@@ -169,9 +169,22 @@ async function handleChat(
   // Cheap (~1ms per kind for tens of files). Mirrors CC's per-turn
   // `getAgentDefinitionsWithOverrides` invocation.
   const { activeAgents } = await registerSubagents(defaultRegistry, cwd);
-  const { activeSkills } = await registerSkills(defaultRegistry, cwd, activeAgents);
+  // Extract file-path-shaped tokens from the user's message so skills
+  // declaring `paths:` frontmatter can opt in for relevant turns only
+  // (mirrors CC's conditional-skill activation, but evaluated per chat
+  // request instead of per file-tool-call). Cheap regex — won't catch
+  // every reference, but matches the common case of users naming files
+  // explicitly. Skills without `paths:` are unaffected.
+  const candidateFiles = extractFilePathCandidates(effectiveMessage);
+  const { activeSkills, allSkills } = await registerSkills(
+    defaultRegistry,
+    cwd,
+    activeAgents,
+    { candidateFiles },
+  );
+  const conditionalHidden = allSkills.length - activeSkills.length;
   console.log(
-    `[server] cwd=${cwd}  agents=[${activeAgents.map(a => a.agentType).join(", ")}]  skills=[${activeSkills.map(s => s.name).join(", ")}]`,
+    `[server] cwd=${cwd}  agents=[${activeAgents.map(a => a.agentType).join(", ")}]  skills=[${activeSkills.map(s => s.name).join(", ")}]${conditionalHidden > 0 ? `  (+${conditionalHidden} conditional hidden)` : ""}`,
   );
 
   const projectRules = loadProjectRules(cwd);
@@ -209,6 +222,36 @@ async function handleChat(
   }
 
   transport.end();
+}
+
+/**
+ * Pull file-path-shaped tokens out of free-form user text. Used to feed
+ * `registerSkills`' conditional `paths:` activation — we want a cheap,
+ * permissive extractor here, not a parser. Matches paths with a
+ * directory separator OR a recognizable extension, plus paths inside
+ * backticks (the most common "this file" syntax). False positives are
+ * fine — skills that don't match just stay hidden.
+ */
+function extractFilePathCandidates(text: string): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  // Backtick-quoted spans (`src/foo.ts`, `./run.sh`). Anything inside
+  // backticks containing a `.` or `/` is plausibly a path.
+  const backtickRe = /`([^`\n]{1,256})`/g;
+  for (const m of text.matchAll(backtickRe)) {
+    const candidate = m[1]!.trim();
+    if (/[./\\]/.test(candidate) && !candidate.includes(" ")) {
+      out.add(candidate);
+    }
+  }
+  // Bare path-like tokens: at least one slash OR an extension. Anchored
+  // at non-word so we don't grab the tail of an email/URL.
+  const bareRe =
+    /(?<![\w@/:])([./\w-]+\/[\w./-]+|[\w-]+\.[A-Za-z][\w]{0,9})(?![\w/])/g;
+  for (const m of text.matchAll(bareRe)) {
+    out.add(m[1]!);
+  }
+  return [...out];
 }
 
 /**

@@ -110,17 +110,49 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
             return `Error: unknown skill '${skill_name}'. Valid: ${validSkills.join(", ")}`;
           }
 
+          // Lazy body load — see `SkillDefinition.loadBody` for why we
+          // don't keep bodies pinned in memory after scan.
+          let body: string;
+          try {
+            body = await skill.loadBody();
+          } catch (e) {
+            return `Error: failed to read skill body for '${skill_name}': ${(e as Error).message}`;
+          }
+          if (!body.trim()) {
+            return `Error: skill '${skill_name}' has an empty SKILL.md body`;
+          }
+
           const args = rawArgs ?? "";
           const substituted = substituteArguments(
-            skill.body,
+            body,
             args,
             skill.argumentNames,
           );
-          const expanded = await expandInlineDirectives(substituted, cwd);
+          let expanded = await expandInlineDirectives(substituted, cwd);
+
+          // Substitute `${SKILL_DIR}` with the skill's own folder path so
+          // the body can reference bundled scripts/data (mirrors CC's
+          // `${CLAUDE_SKILL_DIR}`). Normalize backslashes on Windows so
+          // shell snippets don't treat them as escape sequences.
+          if (skill.baseDir) {
+            const dir =
+              process.platform === "win32"
+                ? skill.baseDir.replace(/\\/g, "/")
+                : skill.baseDir;
+            expanded = expanded.replace(/\$\{SKILL_DIR\}/g, dir);
+          }
+
+          // Prepend a one-line base-directory hint so the model knows
+          // where bundled assets live, even if the SKILL.md author didn't
+          // reference `${SKILL_DIR}` explicitly. Same shape as CC's
+          // `Base directory for this skill: …` preamble.
+          const preamble = skill.baseDir
+            ? `Base directory for this skill: ${skill.baseDir}\n\n`
+            : "";
 
           // ── inline ── return the expanded body as the tool result.
           if (skill.context === "inline") {
-            return expanded;
+            return preamble + expanded;
           }
 
           // ── fork ── dispatch as a subagent using the requested agent
@@ -166,7 +198,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
           delete subTools[AGENT_TOOL_NAME];
           delete subTools[SKILL_TOOL_NAME];
 
-          const result = await runAgent(expanded, {
+          const result = await runAgent(preamble + expanded, {
             tools: subTools,
             systemPrompt: targetAgent.systemPrompt,
             eventBus: subBus,

@@ -27,8 +27,15 @@ export interface SkillDefinition {
   description: string;
   /** Where the file was discovered. */
   source: "built-in" | ExtensionSource;
-  /** Original file path (file-loaded skills only). */
+  /** Original file path of `SKILL.md` (file-loaded skills only). */
   filePath?: string;
+  /**
+   * Absolute path to the skill's folder (the directory containing `SKILL.md`).
+   * Surfaced to the model so it can reference bundled assets — scripts, data
+   * files, sub-prompts — that live next to the skill body. Mirrors Claude
+   * Code's `skillRoot` / `${CLAUDE_SKILL_DIR}` mechanism.
+   */
+  baseDir?: string;
   /**
    * "inline" — expand body, return as tool result.
    * "fork"   — run as a subagent with body as system prompt.
@@ -41,6 +48,22 @@ export interface SkillDefinition {
   agent?: string;
   /** Named arg list for `$name` substitution (mirrors slash commands). */
   argumentNames: string[];
-  /** Markdown body — template with `$ARGUMENTS` / `!`-block / `@file` syntax. */
-  body: string;
+  /**
+   * Gitignore-style path patterns (per CC frontmatter `paths:`). When set
+   * and non-empty, the skill is **conditional**: it stays hidden from the
+   * model unless at least one matching file exists in the workspace. Skills
+   * without `paths` are always active. Matching uses the `ignore` library
+   * (same as CC) so patterns like `src/**` + `*.py`, `!vendor/**` work as
+   * users would expect from `.gitignore`.
+   */
+  paths?: string[];
+  /**
+   * Lazy body loader. We deliberately do NOT keep the full `SKILL.md`
+   * body in memory after scanning — for 100+ skills with multi-KB bodies
+   * that adds up. Instead the scanner stores only frontmatter + filePath
+   * here, and `loadBody()` re-reads + re-strips frontmatter on demand at
+   * skill-invocation time. The result is cached per skill so repeated
+   * invocations in the same chat request only pay one read.
+   */
+  loadBody: () => Promise<string>;
 }

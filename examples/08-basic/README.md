@@ -328,31 +328,90 @@ body 里支持的语法（与 CC 对齐）：
 
 实现：`commands/argument-substitution.ts`（参数替换）、`commands/prompt-expansion.ts`（!-block + @-ref）、`commands/from-files.ts`（解析）、`commands/dispatcher.ts`（在 router 调 LLM 之前拦截 `/`）。
 
-### 添加 Skills（Claude Code 风格）
+### 添加 Skills（Claude Code 风格 — 文件夹形态）
 
-Skill 和 command 形态相同（同一套 `$ARGUMENTS` / `!` / `@`），区别在于**由模型而不是用户触发**——通过 `skill` dispatcher tool。放 `<cwd>/.skills/*.md` 或 `~/.myagent/skills/*.md`。
+Skill 由**模型而不是用户**触发——通过 `skill` dispatcher tool。和 command 共用一套
+`$ARGUMENTS` / `!` / `@` 语法，但每个 skill 是一个**文件夹**而不是单文件 `.md`，
+对齐 Claude Code 的 `loadSkillsFromSkillsDir`。
+
+#### 目录布局
+
+| 优先级 | 路径 | 备注 |
+|--------|------|------|
+| 低 | `~/.ai-agent/skills/<skill-name>/SKILL.md` | 用户级（和 `~/.ai-agent/config.json` 同目录） |
+| 中 | `<ancestor>/.skills/<skill-name>/SKILL.md` | 沿 `cwd` 向上每一级（monorepo 友好） |
+| 高 | `<cwd>/.skills/<skill-name>/SKILL.md` | 最深一级，同名覆盖上面所有 |
+
+每个 skill 文件夹**必须**包含 `SKILL.md`；同目录下**可以**放任意其它文件 / 子目录
+（脚本、模板、示例数据）。skill 名 = 文件夹名（必须匹配 `[a-z0-9][a-z0-9_-]*`），
+直接散落在 `.skills/` 根下的 `.md` 文件会被忽略。对照 CC：`getProjectDirsUpToHome('skills', cwd)`
++ `~/.claude/skills/`（我们换成 `.ai-agent` 跟自身配置目录对齐）。
+
+#### `SKILL.md` 示例
 
 ```markdown
 ---
-name: pr-author
 description: Draft a PR body (summary + test plan) from the current branch's diff.
 context: inline                   # "inline"（默认）或 "fork"
 arguments: "audience"
+paths: "src/**, !vendor/**"       # 可选：gitignore-style 条件触发
 ---
 
 You are writing a PR body. Audience: **$audience**.
 
 Commits: !`git log --oneline origin/main..HEAD`
 Diff stats: !`git diff --stat origin/main...HEAD`
-...
+
+参考清单：@${SKILL_DIR}/checklist.md
+辅助脚本：!`bash ${SKILL_DIR}/scripts/collect.sh`
 ```
 
-两种 `context` 模式：
+`${SKILL_DIR}` 会被替换成该 skill 文件夹的绝对路径，body 里可以借此引用同目录下
+的其它文件 / 脚本（对齐 CC 的 `${CLAUDE_SKILL_DIR}`）。expand 之后还会自动在
+prompt 顶部加一行 `Base directory for this skill: …`，让模型即使没显式引用也能
+找到这些 bundled 资源。
+
+#### 条件激活（`paths:` frontmatter）
+
+写了 `paths:` 的 skill 是**条件性的**——只在用户当前消息提到的文件匹配其 pattern 时才暴露给模型。
+没写 `paths:` 的 skill 永远活跃。Pattern 用 `ignore` 库做 gitignore-style 匹配（和 CC 一致）：
+
+| Frontmatter | 行为 |
+|-------------|------|
+| `paths: "**/*.py"` | 用户消息提到 `.py` 文件时才出现 |
+| `paths: ["src/**", "!src/vendor/**"]` | YAML list，支持排除 |
+| 不写 `paths:` | 永远活跃 |
+
+候选文件列表由 `extractFilePathCandidates(effectiveMessage)`（router.ts）从用户消息抓取，支持
+- 反引号包裹的路径：`` `src/foo.ts` ``
+- 含 `/` 或扩展名的裸 token：`src/foo.ts`、`run.sh`
+
+要换更准的信号（git 修改文件、最近编辑、`git ls-files`），改 `registerSkills` 的 `candidateFiles` 入参即可。对照
+CC：`activateConditionalSkillsForPaths`（CC 在每次文件工具调用时动态激活；我们在每个聊天回合做一次过滤——
+和我们 per-request register 的节奏匹配）。
+
+#### 两种 `context` 模式
 
 - `inline`（默认）：body 展开后作为 **tool 结果**返回给主 agent，像"突然想起来该按这个流程办"
 - `fork`：body 展开后作为**新子 agent 的 user prompt**跑（用 `agent:` 字段指定哪个 subagent_type，默认 `general_purpose`）。用于需要大量工具调用又不想污染主上下文的场景
 
-实现：`skills/from-files.ts`（解析）、`tools/skill.ts`（dispatcher，mirror `task.ts`）、`skills/index.ts` → `registerSkills(registry, cwd, agents)` 每次 chat 请求调用。无 skill 文件时不注册工具，避免给模型一个空目录浪费 token。
+#### 性能：lazy body load
+
+扫描时只读 `SKILL.md` 前 16 KB 解析 frontmatter，**body 不进内存**——模型真调用了
+才通过 `loadBody()` 重新读一次完整文件并 strip frontmatter，结果在 `SkillDefinition`
+里缓存一份。对 100+ skill + 多 KB body 的项目，启动 IO 和 heap 都明显省。
+对照 CC：CC 把 body 留在 closure 里，靠 `estimateSkillFrontmatterTokens` 控制
+"展示给模型的 token"；我们更进一步把"留在内存里的 byte"也省了。
+
+#### 实现入口
+
+- `skills/from-folders.ts` — 扫描 + frontmatter 解析 + `paths:` 过滤
+- `skills/index.ts` → `registerSkills(registry, cwd, agents, { candidateFiles })`
+- `tools/skill.ts` — dispatcher，调 `loadBody()` 拿 body、做 `${SKILL_DIR}` / `$ARGUMENTS` 替换、加 preamble
+- `server/router.ts` — 每次聊天请求调用一次（编辑 `SKILL.md` 下条消息生效，无需重启）
+
+对照 CC：`src/skills/loadSkillsDir.ts` 的 `loadSkillsFromSkillsDir` + `getProjectDirsUpToHome`
++ `activateConditionalSkillsForPaths`。
 
 ### 共享底座
 
