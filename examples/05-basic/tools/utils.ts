@@ -16,9 +16,8 @@ export function resolvePath(
   cwd: string,
   filePath: string
 ): { abs: string; error?: undefined } | { abs?: undefined; error: string } {
-  const abs = path.resolve(cwd, filePath);
-  if (!abs.startsWith(cwd)) {
-    return { error: `Error: access denied — path outside project directory` };
-  }
+  const abs = path.isAbsolute(filePath)
+    ? path.normalize(filePath)
+    : path.resolve(cwd, filePath);
   return { abs };
 }

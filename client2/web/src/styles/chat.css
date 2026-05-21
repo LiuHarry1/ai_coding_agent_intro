@@ -641,3 +641,29 @@
 [data-theme="light"] .todo-completed .todo-content { color: #8c959f; }
 [data-theme="light"] .scroll-to-bottom { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 [data-theme="light"] .scroll-to-bottom:hover { background: var(--accent); color: #fff; }
+
+/* ── Mermaid Diagrams ──────────────────────── */
+.mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  padding: 12px 8px;
+  margin: 8px 0;
+  overflow-x: auto;
+  background: var(--bg-elev, rgba(255,255,255,0.02));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.mermaid-diagram svg { max-width: 100%; height: auto; }
+
+.mermaid-error {
+  border-left: 3px solid #f85149;
+  background: rgba(248,81,73,0.08);
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: 4px;
+  color: #f0883e;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+[data-theme="light"] .mermaid-diagram { background: #fafbfc; }

@@ -60,8 +60,8 @@ export default function WebFetchCard({ part }) {
   const title = normalized.title || "";
   const host = hostname(articleUrl);
 
-  // Success: collapsed by default (parallel fetches stay scannable).
-  const [expanded, setExpanded] = useState(isError || !isDone);
+  // Expanded only while running; collapses on done (user can still click).
+  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone);
   const [showFull, setShowAll] = useState(false);
 
   const headline = isDone && title ? title : urlHeadline(articleUrl);
@@ -80,7 +80,7 @@ export default function WebFetchCard({ part }) {
     <div className={`tool-row web-fetch-card ${isError ? "has-error" : ""}`}>
       <ToolRowHeader
         expanded={expanded}
-        onToggle={() => setExpanded((v) => !v)}
+        onToggle={toggleExpanded}
         icon={"\u{1F310}"}
         label="Fetch"
         title={headline}

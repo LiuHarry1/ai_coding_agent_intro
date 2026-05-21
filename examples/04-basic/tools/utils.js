@@ -13,9 +13,8 @@ export function truncate(text, max = MAX_OUTPUT) {
 }
 
 export function resolvePath(cwd, filePath) {
-  const abs = path.resolve(cwd, filePath);
-  if (!abs.startsWith(cwd)) {
-    return { error: `Error: access denied — path outside project directory` };
-  }
+  const abs = path.isAbsolute(filePath)
+    ? path.normalize(filePath)
+    : path.resolve(cwd, filePath);
   return { abs };
 }

@@ -16,7 +16,7 @@ import { formatDuration } from "../lib/utils.js";
  *
  * Slot layout (left → right):
  *
- *   [chevron] [icon] [label] [title] [subtitle] · · · [meta] [duration] [actions] [status]
+ *   [chevron?] [icon?] [label] [title] [subtitle] · · · [meta] [duration] [actions] [status]
  *
  * Slots beyond `title` are all optional. `actions` is rendered inside a
  * stopPropagation wrapper so a copy button there won't toggle the row.
@@ -24,6 +24,7 @@ import { formatDuration } from "../lib/utils.js";
 export default function ToolRowHeader({
   expanded,
   onToggle,
+  showChevron = true,
   icon,
   label,
   title,
@@ -48,12 +49,14 @@ export default function ToolRowHeader({
       onClick={onToggle}
       aria-expanded={expanded}
     >
-      <span
-        className={`tool-row-chevron ${expanded ? "open" : ""}`}
-        aria-hidden="true"
-      >
-        {"\u25B6"}
-      </span>
+      {showChevron && (
+        <span
+          className={`tool-row-chevron ${expanded ? "open" : ""}`}
+          aria-hidden="true"
+        >
+          {"\u25B6"}
+        </span>
+      )}
       {icon != null && (
         <span className="tool-row-icon" aria-hidden="true">
           {icon}

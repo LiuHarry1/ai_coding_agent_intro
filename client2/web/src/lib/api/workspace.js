@@ -42,4 +42,9 @@ export const workspaceApi = {
     fetchJSON(`/workspace/entry?path=${encodeURIComponent(path)}`, {
       method: "DELETE",
     }),
+
+  // ── Git (read-only) ─────────────────────────────────────
+  gitStatus: () => fetchJSON("/workspace/git/status"),
+  gitDiff: (path) =>
+    fetchJSON(`/workspace/git/diff?path=${encodeURIComponent(path)}`),
 };

@@ -27,6 +27,16 @@ function initialTreeWidth() {
  * have no shared mutations beyond the workspace cwd (which still lives
  * on the chat store).
  */
+const DEFAULT_CHANGES = {
+  loading: false,
+  error: null,
+  isGitRepo: true,
+  branch: null,
+  entries: [],
+  totals: { files: 0, insertions: 0, deletions: 0 },
+  lastFetchedAt: 0,
+};
+
 export const useWorkspaceIdeStore = create((set, get) => ({
   // ── Workspace root ───────────────────────────────────
   /**
@@ -36,7 +46,19 @@ export const useWorkspaceIdeStore = create((set, get) => ({
    * here. This breaks the reverse dependency on chat-store.
    */
   rootPath: null,
-  setRootPath: (p) => set({ rootPath: p }),
+  setRootPath: (p) => {
+    if (get().rootPath === p) return;
+    set({
+      rootPath: p,
+      // Drop git state so the new repo isn't shown with stale changes.
+      changes: { ...DEFAULT_CHANGES },
+      diffs: {},
+      openDiffs: [],
+      activeDiff: null,
+      activeView: "explorer",
+      activeKind: get().activeFile ? "file" : null,
+    });
+  },
 
   // ── Visibility / layout ───────────────────────────────
   open: false,
@@ -166,11 +188,62 @@ export const useWorkspaceIdeStore = create((set, get) => ({
     }
   },
 
+  // ── Side-panel view (Explorer / Changes) ─────────────
+  activeView: "explorer",
+  setActiveView: (view) => {
+    set({ activeView: view });
+    if (view === "changes" && !get().changes.lastFetchedAt) {
+      get().refreshChanges();
+    }
+  },
+
+  // ── Git changes (working tree vs HEAD) ────────────────
+  changes: { ...DEFAULT_CHANGES },
+
+  refreshChanges: async () => {
+    const root = get().rootPath;
+    if (!root) return;
+    set((s) => ({ changes: { ...s.changes, loading: true, error: null } }));
+    try {
+      const data = await workspaceApi.gitStatus();
+      set({
+        changes: {
+          loading: false,
+          error: null,
+          isGitRepo: data.isGitRepo,
+          branch: data.branch,
+          entries: data.entries,
+          totals: data.totals,
+          lastFetchedAt: Date.now(),
+        },
+      });
+      // Refresh any open diff tabs whose underlying file may have moved.
+      const openDiffs = get().openDiffs;
+      for (const p of openDiffs) get()._loadDiff(p);
+    } catch (e) {
+      set((s) => ({
+        changes: { ...s.changes, loading: false, error: e.message || String(e) },
+      }));
+    }
+  },
+
   // ── Editor tabs + content cache ──────────────────────
   /** Absolute paths of files currently open as tabs. */
   openFiles: [],
-  /** Path of the active tab, or null when nothing is open. */
+  /** Path of the active file tab. */
   activeFile: null,
+  /** Relative paths of currently open diff tabs (git working-tree vs HEAD). */
+  openDiffs: [],
+  /** Relative path of the active diff tab. */
+  activeDiff: null,
+  /**
+   * Which tab kind is currently focused. `null` only when there are
+   * neither file nor diff tabs open. EditorView and EditorTabs read this
+   * to decide which active state to honor.
+   */
+  activeKind: null,
+  /** path -> { loading, error, oldContent, newContent, status, isBinary, truncated }. */
+  diffs: {},
   /**
    * path -> {
    *   content, size, truncated, isBinary, mtimeMs,
@@ -184,6 +257,7 @@ export const useWorkspaceIdeStore = create((set, get) => ({
     set((s) => ({
       openFiles: s.openFiles.includes(filePath) ? s.openFiles : [...s.openFiles, filePath],
       activeFile: filePath,
+      activeKind: "file",
     }));
     if (get().fileContents[filePath]) return;
 
@@ -228,9 +302,14 @@ export const useWorkspaceIdeStore = create((set, get) => ({
     set((s) => {
       const openFiles = s.openFiles.filter((p) => p !== filePath);
       let activeFile = s.activeFile;
+      let activeKind = s.activeKind;
       if (s.activeFile === filePath) {
         const idx = s.openFiles.indexOf(filePath);
         activeFile = openFiles[idx] ?? openFiles[idx - 1] ?? null;
+        if (!activeFile) {
+          // No more file tabs — fall back to a diff tab if one is open.
+          activeKind = s.activeDiff ? "diff" : (s.openDiffs[0] ? "diff" : null);
+        }
       }
       // Drop the cached draft for the closed file so re-opening reloads
       // fresh content. Keep the rest of `fileContents[path]` to make
@@ -239,11 +318,60 @@ export const useWorkspaceIdeStore = create((set, get) => ({
       // re-fetches and re-seeds `draft` with the latest disk content.
       const next = { ...s.fileContents };
       delete next[filePath];
-      return { openFiles, activeFile, fileContents: next };
+      return { openFiles, activeFile, activeKind, fileContents: next };
     });
   },
 
-  setActiveFile: (filePath) => set({ activeFile: filePath }),
+  setActiveFile: (filePath) => set({ activeFile: filePath, activeKind: "file" }),
+
+  // ── Diff tabs ────────────────────────────────────────
+  openDiff: (relPath) => {
+    set((s) => ({
+      openDiffs: s.openDiffs.includes(relPath) ? s.openDiffs : [...s.openDiffs, relPath],
+      activeDiff: relPath,
+      activeKind: "diff",
+    }));
+    if (!get().diffs[relPath]) get()._loadDiff(relPath);
+  },
+
+  closeDiff: (relPath) => {
+    set((s) => {
+      const openDiffs = s.openDiffs.filter((p) => p !== relPath);
+      let activeDiff = s.activeDiff;
+      let activeKind = s.activeKind;
+      if (s.activeDiff === relPath) {
+        const idx = s.openDiffs.indexOf(relPath);
+        activeDiff = openDiffs[idx] ?? openDiffs[idx - 1] ?? null;
+        if (!activeDiff) {
+          activeKind = s.activeFile ? "file" : null;
+        }
+      }
+      const nextDiffs = { ...s.diffs };
+      delete nextDiffs[relPath];
+      return { openDiffs, activeDiff, activeKind, diffs: nextDiffs };
+    });
+  },
+
+  setActiveDiff: (relPath) => set({ activeDiff: relPath, activeKind: "diff" }),
+
+  _loadDiff: async (relPath) => {
+    set((s) => ({
+      diffs: { ...s.diffs, [relPath]: { ...(s.diffs[relPath] || {}), loading: true, error: null } },
+    }));
+    try {
+      const data = await workspaceApi.gitDiff(relPath);
+      set((s) => ({
+        diffs: { ...s.diffs, [relPath]: { ...data, loading: false, error: null } },
+      }));
+    } catch (e) {
+      set((s) => ({
+        diffs: {
+          ...s.diffs,
+          [relPath]: { ...(s.diffs[relPath] || {}), loading: false, error: e.message || String(e) },
+        },
+      }));
+    }
+  },
 
   // ── Editing ──────────────────────────────────────────
   setDraft: (filePath, content) => {

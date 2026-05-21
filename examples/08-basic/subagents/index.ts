@@ -2,7 +2,7 @@ import type { AgentDefinition, IToolRegistry } from "../core/types.js";
 import { definition as exploreDef } from "./explore.js";
 import { definition as planDef } from "./plan.js";
 import { definition as generalPurposeDef } from "./general_purpose.js";
-import { createTaskTool } from "../tools/task.js";
+import { createTaskTool } from "../tools/agent.js";
 import { AGENT_TOOL_NAME } from "../tools/tool-names.js";
 import { loadMarkdownConfigs } from "../core/markdown-config-loader.js";
 import { mergeAgents } from "./from-files.js";

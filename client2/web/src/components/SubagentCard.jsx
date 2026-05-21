@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import { mdComponents } from "../lib/markdown-components.jsx";
 import ToolRowHeader from "./ToolRowHeader.jsx";
 import { pickCard, SUPPRESSED_TOOL_CARDS } from "./pickToolCard.js";
 
@@ -229,6 +230,7 @@ export default function SubagentCard({ part }) {
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeHighlight]}
+                  components={mdComponents}
                 >
                   {result}
                 </ReactMarkdown>

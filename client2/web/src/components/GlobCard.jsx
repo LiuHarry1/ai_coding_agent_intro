@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import CopyButton from "./CopyButton.jsx";
 import ToolRowHeader from "./ToolRowHeader.jsx";
+import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
 
 /**
  * Cursor-style card for the `glob` tool.
  *
  * Header shape:
- *   ▶ 🔍 Searched files   "**\/*.ts"   src/   · 12 files
+ *   Searched files   "**\/*.ts"   src/   · 12 files
  *
  * Glob result string (see examples/08-basic/tools/glob.ts:execute) is either:
  *   - "No files found"
@@ -44,9 +45,8 @@ export default function GlobCard({ part }) {
 
   const { files, truncated, empty } = useMemo(() => parseResult(result), [result]);
 
-  // Default-collapsed for successful runs; auto-open on error/empty so
-  // the user doesn't have to click to find out what happened.
-  const [expanded, setExpanded] = useState(isError || !isDone);
+  // Expanded only while running (to stream results); collapses on done.
+  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone);
 
   const pattern = args.pattern || "";
   const searchPath = args.path && args.path !== "." ? args.path : null;
@@ -63,8 +63,8 @@ export default function GlobCard({ part }) {
     <div className={`tool-row glob-card ${isError ? "has-error" : ""}`}>
       <ToolRowHeader
         expanded={expanded}
-        onToggle={() => setExpanded((v) => !v)}
-        icon={"\u{1F50D}"}
+        onToggle={toggleExpanded}
+        showChevron={false}
         label="Searched files"
         title={pattern ? `\u201C${pattern}\u201D` : "glob\u2026"}
         titleTooltip={pattern}

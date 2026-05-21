@@ -1,14 +1,15 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import CopyButton from "./CopyButton.jsx";
 import ToolRowHeader from "./ToolRowHeader.jsx";
+import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
 
 /**
  * Cursor-style card for the `grep` tool.
  *
  * Header shape (varies by output_mode):
- *   ▶ 🔍 Grepped   "pattern"   *.ts · 5 files
- *   ▶ 🔍 Grepped   "pattern"   12 matches in 4 files       (content mode)
- *   ▶ 🔍 Grepped   "pattern"   42 occurrences across 3 files  (count mode)
+ *   Grepped   "pattern"   *.ts · 5 files
+ *   Grepped   "pattern"   12 matches in 4 files       (content mode)
+ *   Grepped   "pattern"   42 occurrences across 3 files  (count mode)
  *
  * Result-string shapes (see examples/08-basic/tools/grep.ts:execute):
  *   files_with_matches: "Found N file(s) [limit: …]\n<path>\n<path>\n…"
@@ -27,9 +28,14 @@ function parseFilesWithMatches(result) {
   return { kind: "files", fileCount, files };
 }
 
-function parseContent(result) {
+function parseContent(result, fallbackPath) {
   // Each line is `<path>:<line_no?>:<content>` — group by path so we can
   // render a Cursor-style "file → matches" tree.
+  //
+  // Special case: when ripgrep searches a single file it omits the
+  // filename prefix and emits `<line_no>:<content>` directly. We detect
+  // this (first colon-separated token is purely numeric) and attribute
+  // those rows to `fallbackPath` (the `path` argument the user passed).
   const lines = result.split("\n");
   const groups = new Map();
   let totalMatches = 0;
@@ -45,15 +51,26 @@ function parseContent(result) {
     }
     const firstColon = raw.indexOf(":");
     if (firstColon <= 0) continue;
-    const filePath = raw.slice(0, firstColon);
+    const head = raw.slice(0, firstColon);
     const rest = raw.slice(firstColon + 1);
-    // rest may be `<line_no>:<text>` or just `<text>`.
-    const secondColon = rest.indexOf(":");
+
+    let filePath;
     let lineNo = null;
-    let text = rest;
-    if (secondColon > 0 && /^\d+$/.test(rest.slice(0, secondColon))) {
-      lineNo = rest.slice(0, secondColon);
-      text = rest.slice(secondColon + 1);
+    let text;
+    if (/^\d+$/.test(head)) {
+      // Single-file rg output: `<line_no>:<text>`
+      filePath = fallbackPath || "(file)";
+      lineNo = head;
+      text = rest;
+    } else {
+      filePath = head;
+      // rest may be `<line_no>:<text>` or just `<text>`.
+      const secondColon = rest.indexOf(":");
+      text = rest;
+      if (secondColon > 0 && /^\d+$/.test(rest.slice(0, secondColon))) {
+        lineNo = rest.slice(0, secondColon);
+        text = rest.slice(secondColon + 1);
+      }
     }
     if (!groups.has(filePath)) groups.set(filePath, []);
     groups.get(filePath).push({ lineNo, text });
@@ -84,7 +101,7 @@ function parseCount(result) {
   return { kind: "count", entries, summary };
 }
 
-function parseResult(result, mode) {
+function parseResult(result, mode, fallbackPath) {
   if (typeof result !== "string" || result.length === 0) {
     return { kind: "empty" };
   }
@@ -92,7 +109,7 @@ function parseResult(result, mode) {
   if (result.trim() === "No files found" || result.trim() === "No matches found") {
     return { kind: mode === "content" ? "content" : "files", empty: true, files: [], groups: [], totalMatches: 0 };
   }
-  if (mode === "content") return parseContent(result);
+  if (mode === "content") return parseContent(result, fallbackPath);
   if (mode === "count") return parseCount(result);
   return parseFilesWithMatches(result);
 }
@@ -104,9 +121,9 @@ export default function GrepCard({ part }) {
   const isError = isDone && typeof result === "string" && result.startsWith("Error:");
   const mode = args.output_mode || "files_with_matches";
 
-  const parsed = useMemo(() => parseResult(result, mode), [result, mode]);
+  const parsed = useMemo(() => parseResult(result, mode, args.path), [result, mode, args.path]);
 
-  const [expanded, setExpanded] = useState(isError || !isDone);
+  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone);
 
   const pattern = args.pattern || "";
   const filterBits = [];
@@ -143,8 +160,8 @@ export default function GrepCard({ part }) {
     <div className={`tool-row grep-card ${isError ? "has-error" : ""}`}>
       <ToolRowHeader
         expanded={expanded}
-        onToggle={() => setExpanded((v) => !v)}
-        icon={"\u{1F50D}"}
+        onToggle={toggleExpanded}
+        showChevron={false}
         label="Grepped"
         title={pattern ? `\u201C${pattern}\u201D` : "grep\u2026"}
         titleTooltip={pattern}

@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { pickCard, SUPPRESSED_TOOL_CARDS } from "./pickToolCard.js";
+import { mdComponents } from "../lib/markdown-components.jsx";
 
 function ThinkingDots() {
   return (
@@ -39,7 +40,11 @@ function ReasoningBlock({ part }) {
       </button>
       {(open || isStreaming) && part.content && (
         <div className="reasoning-content">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={mdComponents}
+          >
             {part.content}
           </ReactMarkdown>
         </div>
@@ -211,7 +216,11 @@ export default function MessageBubble({ message }) {
           case "text":
             return (
               <div className="content" key={i}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={mdComponents}
+                >
                   {part.content}
                 </ReactMarkdown>
               </div>

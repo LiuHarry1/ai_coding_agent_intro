@@ -9,6 +9,7 @@ import {
   removeEntry,
   FsOpError,
 } from "./fs-ops.js";
+import { gitStatus, gitDiff } from "./git.js";
 
 /**
  * Self-contained workspace HTTP module.
@@ -131,6 +132,21 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const p = body.path as string | undefined;
         if (!p) { sendJSON(res, 400, { error: "Missing 'path'" }); return true; }
         sendJSON(res, 200, makeDir(resolvePath(p, root)));
+        return true;
+      }
+
+      // GET /workspace/git/status
+      if (method === "GET" && url === "/workspace/git/status") {
+        sendJSON(res, 200, await gitStatus(root));
+        return true;
+      }
+
+      // GET /workspace/git/diff?path=
+      if (method === "GET" && url.startsWith("/workspace/git/diff")) {
+        const params = new URL(url, `http://${req.headers.host}`).searchParams;
+        const p = params.get("path");
+        if (!p) { sendJSON(res, 400, { error: "Missing 'path'" }); return true; }
+        sendJSON(res, 200, await gitDiff(root, p));
         return true;
       }
 

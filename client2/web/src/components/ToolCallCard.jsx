@@ -3,6 +3,7 @@ import DiffViewer from "./DiffViewer.jsx";
 import FilePreview from "./FilePreview.jsx";
 import CopyButton from "./CopyButton.jsx";
 import { fileName, formatDuration, formatBytes, detectError } from "../lib/utils.js";
+import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
 
 function toolIconClass(name) {
   if (name?.includes("edit")) return "write";
@@ -156,17 +157,11 @@ export default function ToolCallCard({ part }) {
   const cls = toolIconClass(name);
   const icon = TOOL_ICONS[cls] || TOOL_ICONS.default;
 
-  // Auto-expand: anything producing live output, in-progress writes, AND
-  // errors (so the user doesn't have to click to find out what went wrong).
-  // Successful completed runs collapse by default to keep the conversation
-  // scannable. Subagent tool_calls take a different path (SubagentCard) so
-  // we no longer special-case them here.
-  const defaultExpanded =
-    hasLiveOutput ||
-    hasLivePreview ||
-    (isDone && isError) ||
-    (!isReadOnly(name) && !isDone);
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  // Auto-expand strictly while the tool is running so the user sees the
+  // streaming output live. Once finished (success or error) we collapse
+  // to keep the conversation scannable — the user can click to re-open.
+  const isStreaming = !isDone || hasLiveOutput || hasLivePreview;
+  const [expanded, toggleExpanded] = useStreamingExpanded(isStreaming);
 
   const truncLen = 3000;
   const isLong = result && result.length > truncLen;
@@ -176,13 +171,9 @@ export default function ToolCallCard({ part }) {
   const filePath = args.file_path || args.path || null;
   const fName = fileName(filePath);
 
-  useEffect(() => {
-    if ((hasLiveOutput || hasLivePreview) && !expanded) setExpanded(true);
-  }, [hasLiveOutput, hasLivePreview]);
-
   return (
     <div className={`tool-card ${expanded ? "open" : ""} ${isError ? "has-error" : ""}`}>
-      <div className="tool-card-header" onClick={() => setExpanded(!expanded)}>
+      <div className="tool-card-header" onClick={toggleExpanded}>
         <span className="chevron">{expanded ? "\u25BC" : "\u25B6"}</span>
         <span className={`tool-icon ${cls}`}>{icon}</span>
         <span className="tool-name">{name}</span>

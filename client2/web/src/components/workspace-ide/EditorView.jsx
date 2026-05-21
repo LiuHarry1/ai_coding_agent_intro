@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { useWorkspaceIdeStore } from "../../stores/workspace-ide-store.js";
 import CopyButton from "../CopyButton.jsx";
 import { languageLabel, buildBreadcrumb } from "./helpers.js";
+import DiffView from "./DiffView.jsx";
 
 /**
  * File editor used inside the WorkspaceIDE. Opens directly in editable
@@ -14,12 +15,14 @@ import { languageLabel, buildBreadcrumb } from "./helpers.js";
  * absolute path, so switching tabs preserves edits in flight.
  */
 export default function EditorView() {
+  const activeKind = useWorkspaceIdeStore((s) => s.activeKind);
   const activeFile = useWorkspaceIdeStore((s) => s.activeFile);
   const data = useWorkspaceIdeStore((s) =>
     activeFile ? s.fileContents[activeFile] : null
   );
   const workspace = useWorkspaceIdeStore((s) => s.rootPath);
 
+  if (activeKind === "diff") return <DiffView />;
   if (!activeFile) return <EmptyState />;
   if (!data || data.loading) return <div className="editor-loading">Loading…</div>;
   if (data.error) return <div className="editor-error">Failed to load: {data.error}</div>;

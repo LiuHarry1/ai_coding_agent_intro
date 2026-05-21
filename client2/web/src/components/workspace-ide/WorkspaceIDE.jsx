@@ -5,6 +5,8 @@ import FileTree from "./FileTree.jsx";
 import EditorTabs from "./EditorTabs.jsx";
 import EditorView from "./EditorView.jsx";
 import ResizeHandle from "./ResizeHandle.jsx";
+import ViewSwitcher from "./ViewSwitcher.jsx";
+import ChangesPanel from "./ChangesPanel.jsx";
 import { FolderIcon, NewFileIcon, NewFolderIcon } from "./icons.jsx";
 
 /**
@@ -23,8 +25,11 @@ export default function WorkspaceIDE() {
   const refreshTree = useWorkspaceIdeStore((s) => s.refreshTree);
   const collapseAll = useWorkspaceIdeStore((s) => s.collapseAll);
   const beginCreate = useWorkspaceIdeStore((s) => s.beginCreate);
-  const hasOpenFiles = useWorkspaceIdeStore((s) => s.openFiles.length > 0);
+  const hasOpenFiles = useWorkspaceIdeStore(
+    (s) => s.openFiles.length > 0 || s.openDiffs.length > 0
+  );
   const workspace = useWorkspaceIdeStore((s) => s.rootPath);
+  const activeView = useWorkspaceIdeStore((s) => s.activeView);
 
   if (!open) return null;
 
@@ -100,10 +105,17 @@ export default function WorkspaceIDE() {
 
       <div className={`workspace-ide-body ${hasOpenFiles ? "" : "tree-only"}`}>
         <div
-          className="workspace-ide-tree"
+          className="workspace-ide-side"
           style={hasOpenFiles ? { width: treeWidth } : undefined}
         >
-          <FileTree rootPath={workspace} />
+          <ViewSwitcher />
+          <div className="workspace-ide-tree">
+            {activeView === "explorer" ? (
+              <FileTree rootPath={workspace} />
+            ) : (
+              <ChangesPanel />
+            )}
+          </div>
         </div>
 
         {hasOpenFiles && (

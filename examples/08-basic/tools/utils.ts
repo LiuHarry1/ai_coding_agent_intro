@@ -1,5 +1,4 @@
 import * as path from "path";
-import { normalizePathForCompare } from "../core/platform.js";
 
 const MAX_OUTPUT = 30000;
 
@@ -17,9 +16,8 @@ export function resolvePath(
   cwd: string,
   filePath: string
 ): { abs: string; error?: undefined } | { abs?: undefined; error: string } {
-  const abs = path.resolve(cwd, filePath);
-  if (!normalizePathForCompare(abs).startsWith(normalizePathForCompare(cwd))) {
-    return { error: `Error: access denied — path outside project directory` };
-  }
+  const abs = path.isAbsolute(filePath)
+    ? path.normalize(filePath)
+    : path.resolve(cwd, filePath);
   return { abs };
 }

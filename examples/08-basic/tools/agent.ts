@@ -49,14 +49,17 @@ export function createTaskTool(agents: readonly AgentDefinition[]): ToolDefiniti
   const validTypes = [...byType.keys()];
 
   // Build the static portion of the description ONCE at registration time.
-  // Each entry surfaces the agent's `whenToUse` paragraph so the model has
-  // the same selection signal it would have if these were N separate tools.
-  // We deliberately do NOT print the disallowedTools list here — the
-  // whenToUse text already conveys the relevant capability ("read-only",
-  // "full toolset", etc.), and dumping every denied tool name was noise
-  // that didn't change selection behavior.
+  // Each entry surfaces the agent's `whenToUse` paragraph plus its tool
+  // surface so the model can judge capabilities at a glance.
   const directory = agents
-    .map((a) => `- ${a.agentType}: ${a.whenToUse}`)
+    .map((a) => {
+      const toolsDesc = a.disallowedTools?.length
+        ? `All tools except ${a.disallowedTools.join(", ")}`
+        : a.tools?.length
+          ? a.tools.join(", ")
+          : "All tools";
+      return `- ${a.agentType}: ${a.whenToUse} (Tools: ${toolsDesc})`;
+    })
     .join("\n");
 
   const description = `Launch a new agent to handle complex, multi-step tasks autonomously.
@@ -69,47 +72,51 @@ ${directory}
 When using the ${AGENT_TOOL_NAME} tool, specify a \`subagent_type\` parameter to select which agent type to use.
 
 When NOT to use the ${AGENT_TOOL_NAME} tool:
-- You already know the file(s) you need → use \`read_file\` directly.
-- A specific symbol you can grep in one shot → use grep / bash directly.
-- The task needs interactive back-and-forth — subagents run autonomously to completion.
-
-No-duplication rule: \`${PLAN_AGENT_TYPE}\` already explores as part of its process. Don't run \`${EXPLORE_AGENT_TYPE}\` and \`${PLAN_AGENT_TYPE}\` in parallel on the same topic. If you need facts before planning, run \`${EXPLORE_AGENT_TYPE}\` first, then pass its report into \`${PLAN_AGENT_TYPE}\`'s prompt.
+- If you want to read a specific file path, use \`read_file\` or \`glob\` instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
+- If you are searching for a specific class definition like "class Foo", use \`glob\` instead, to find the match more quickly
+- If you are searching for code within a specific file or set of 2-3 files, use \`read_file\` instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
+- Other tasks that are not related to the agent descriptions above
 
 Usage notes:
 - Always include a short \`description\` (3-5 words) summarizing what the agent will do.
-- You can issue several \`${AGENT_TOOL_NAME}\` calls in one response to dispatch independent agents in parallel. If the user says "in parallel", you MUST do this.
+- You can issue several \`${AGENT_TOOL_NAME}\` calls in one response to dispatch independent agents in parallel. If the user says "in parallel", you MUST send a single message with multiple ${AGENT_TOOL_NAME} tool use content blocks.
 - Each invocation starts fresh — the subagent does NOT see your prior conversation. The \`prompt\` must be self-contained.
 - The subagent returns a single final report. The result is NOT visible to the user — summarize the relevant parts in your own reply.
 - The subagent's outputs should generally be trusted. Don't re-run the same searches yourself.
-- Clearly tell the subagent whether you expect it to write code or just research. \`general_purpose\` has write access; be explicit.
+- Clearly tell the subagent whether you expect it to write code or just research, since it is not aware of the user's intent.
+- If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
 
-Writing the prompt — brief the subagent like a smart colleague who just walked into the room. They have not seen this conversation, do not know what you've tried, do not know why this matters.
-- Explain the goal and why it matters in 1-2 sentences.
-- Include what you've already learned or ruled out.
+Writing the prompt — brief the subagent like a smart colleague who just walked into the room. They have not seen this conversation, do not know what you've tried, do not understand why this task matters.
+- Explain what you're trying to accomplish and why.
+- Describe what you've already learned or ruled out.
+- Give enough context about the surrounding problem that the agent can make judgment calls rather than just following a narrow instruction.
 - Be specific about scope and the form of answer you want ("report in under 200 words", "list of file:line citations").
 - Lookups: hand over the exact command. Investigations: hand over the question — prescribed steps become dead weight when the premise is wrong.
 - Never delegate understanding. Don't write "based on your findings, fix the bug" — that pushes synthesis onto the subagent. Write prompts that prove you understood: file paths, line numbers, what specifically to change.
 
-Required arguments:
-- \`subagent_type\`: one of [${validTypes.join(", ")}]
-- \`description\`: 3-5 word title shown in the activity log.
-- \`prompt\`: self-contained task description (see writing-the-prompt rules above).
+Terse command-style prompts produce shallow, generic work.
 
 Examples:
 
+<example_agent_descriptions>
+"${EXPLORE_AGENT_TYPE}": use this agent for exploring and understanding codebases
+"${PLAN_AGENT_TYPE}": use this agent to design implementation plans before writing code
+</example_agent_descriptions>
+
 <example>
-User: "Where is the SSE transport implemented and how does it stream tool events?"
-→ Broad "how does X work" across multiple files. Call \`${AGENT_TOOL_NAME}\` with \`subagent_type: "${EXPLORE_AGENT_TYPE}"\`.
+user: "Where is the SSE transport implemented and how does it stream tool events?"
+<commentary>
+This is a broad "how does X work" question across multiple files. Use the ${EXPLORE_AGENT_TYPE} agent since it will require searching many files.
+</commentary>
+assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${EXPLORE_AGENT_TYPE} agent with a detailed prompt explaining what to find.
 </example>
 
 <example>
-User: "Add retry logic to core/llm/strategies/openai.ts."
-→ You know the file. Read it directly and edit. No \`${AGENT_TOOL_NAME}\` call needed.
-</example>
-
-<example>
-User: "Refactor the agent loop to support cancellation."
-→ Non-trivial architecture. Call \`${AGENT_TOOL_NAME}\` with \`subagent_type: "${PLAN_AGENT_TYPE}"\`; it explores and designs. Then implement its plan.
+user: "Refactor the agent loop to support cancellation."
+<commentary>
+Non-trivial architecture change. Use the ${PLAN_AGENT_TYPE} agent to explore and design first, then implement.
+</commentary>
+assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} agent
 </example>`;
 
   return {

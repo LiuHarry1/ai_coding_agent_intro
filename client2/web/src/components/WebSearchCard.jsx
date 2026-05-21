@@ -87,9 +87,8 @@ export default function WebSearchCard({ part }) {
     ? parsed.suggestions
     : [];
 
-  // Default-collapsed for successful runs (search results are noisy); auto-open
-  // on error so the failure message is visible without a click.
-  const [expanded, setExpanded] = useState(isError || !isDone);
+  // Expanded only while running; collapses on done (user can still click).
+  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone);
   const [showAll, setShowAll] = useState(false);
 
   const query = args.query || parsed?.query || "";
@@ -109,7 +108,7 @@ export default function WebSearchCard({ part }) {
     <div className={`tool-row web-search-card ${isError ? "has-error" : ""}`}>
       <ToolRowHeader
         expanded={expanded}
-        onToggle={() => setExpanded((v) => !v)}
+        onToggle={toggleExpanded}
         icon={"\u{1F50D}"}
         title={query ? `\u201C${query}\u201D` : "search\u2026"}
         titleTooltip={query}

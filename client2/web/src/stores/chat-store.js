@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { agentApi } from "../lib/api/agent.js";
+import { useWorkspaceIdeStore } from "./workspace-ide-store.js";
 
 /**
  * Central state store for the chat UI.
@@ -155,6 +156,16 @@ export const useChatStore = create((set, get) => ({
 
     get()._finalizeAssistant();
     set({ isStreaming: false, abortController: null });
+    // Nudge the workspace IDE's git status — the agent likely just
+    // wrote / edited / created files, so any open "Changes" view should
+    // reflect that without the user clicking refresh. Best-effort; we
+    // don't await it and we ignore errors (the store handles its own).
+    try {
+      const ideStore = useWorkspaceIdeStore.getState();
+      if (ideStore.rootPath) ideStore.refreshChanges();
+    } catch {
+      // store not initialized — ignore
+    }
   },
 
   // ── Internal SSE handlers ───────────────────
