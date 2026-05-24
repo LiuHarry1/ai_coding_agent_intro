@@ -13,7 +13,7 @@ import {
   registerSubagents,
   getSubagentNames,
 } from "../subagents/index.js";
-import { registerSkills } from "../skills/index.js";
+import { registerSkills, formatSkillListing } from "../skills/index.js";
 import { dispatchSlashCommand, listSlashCommands } from "../commands/dispatcher.js";
 import { respondSkillFork } from "../skills/respond-fork.js";
 import { MCPManager } from "../core/mcp-manager.js";
@@ -260,6 +260,13 @@ async function handleChat(
 
   const messagesBefore = session.messages.length;
 
+  // Build the <system-reminder> skill listing. Kept out of the tool
+  // schema / system prompt so those stay stable and cacheable. Mirrors
+  // CC's `skill_listing` attachment injected as a user-role meta message.
+  const skillListing = activeSkills.length > 0
+    ? `The following skills are available for use with the skill tool:\n\n${formatSkillListing(activeSkills)}`
+    : undefined;
+
   let finalText = "";
   let runError: Error | null = null;
   try {
@@ -269,9 +276,8 @@ async function handleChat(
       eventBus,
       messages: session.messages,
       images: images?.length ? images : undefined,
-      // Forwarded so the agent can tag `tool_call` events with isSubagent:true
-      // for the UI's SubagentCard rendering.
       subagentNames: getSubagentNames(defaultRegistry),
+      skillListing,
     });
   } catch (e) {
     runError = e as Error;

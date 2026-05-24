@@ -113,7 +113,7 @@ export async function runAgent(
   if (skillListing) {
     messages.push({
       role: "user",
-      content: skillListing,
+      content: `<system-reminder>\n${skillListing}\n</system-reminder>`,
     });
   }
   messages.push(buildUserMessage(userMessage, images));

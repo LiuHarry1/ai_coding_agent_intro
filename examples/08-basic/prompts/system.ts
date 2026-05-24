@@ -13,6 +13,7 @@ import {
   TODO_WRITE_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
 } from "../tools/tool-names.js";
+import { SKILL_TOOL_NAME } from "../tools/skill.js";
 
 // Section text from CC `src/constants/prompts.ts` (getSystemPrompt static +
 // getSessionSpecificGuidanceSection). Uses CC tool/agent names via constants.
@@ -36,6 +37,10 @@ function exploreGuidanceSection(): string {
     `For simple, directed codebase searches (e.g. for a specific file/class/function) use ${searchTools} directly.`,
     `For broader codebase exploration and deep research, use the ${AGENT_TOOL_NAME} tool with subagent_type=${EXPLORE_AGENT_TYPE}. This is slower than using ${searchTools} directly, so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more than ${EXPLORE_AGENT_MIN_QUERIES} queries.`,
   ].join("\n - ");
+}
+
+function skillGuidanceSection(): string {
+  return `/<skill-name> is shorthand for users to invoke a skill. When executed, the skill gets expanded to a full prompt. Use the ${SKILL_TOOL_NAME} tool to execute them. Only use ${SKILL_TOOL_NAME} for skills listed in <system-reminder> messages — do not guess or fabricate skill names.`;
 }
 
 export function systemPrompt(cwd: string, projectRules?: string): string {
@@ -104,7 +109,11 @@ Focus text output on:
 
 If you can say it in one sentence, don't use three. Prefer short, direct sentences over long explanations. This does not apply to code or tool calls.
 
+# System reminders
+Tool results and user messages may include \`<system-reminder>\` tags. They contain useful information and reminders automatically added by the system — such as available skills, agent listings, and project context. Heed them, but do not mention the tags to the user.
+
 # Session-specific guidance
  - ${agentToolSection()}
- - ${exploreGuidanceSection()}${rulesAppend}`;
+ - ${exploreGuidanceSection()}
+ - ${skillGuidanceSection()}${rulesAppend}`;
 }

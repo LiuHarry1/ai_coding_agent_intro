@@ -6,6 +6,52 @@ import type { SkillDefinition } from "./types.js";
 export { SKILL_TOOL_NAME, filterSkillsByPaths };
 export type { SkillDefinition };
 
+// ── Skill listing for <system-reminder> injection ────────────────────────
+
+const DEFAULT_LISTING_BUDGET = 8_000;
+const BUDGET_CONTEXT_PERCENT = 0.01;
+
+function getCharBudget(contextWindowTokens?: number): number {
+  if (!contextWindowTokens) return DEFAULT_LISTING_BUDGET;
+  return Math.max(2_000, Math.floor(contextWindowTokens * BUDGET_CONTEXT_PERCENT));
+}
+
+function truncateDesc(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 1) + "\u2026";
+}
+
+/**
+ * Format a skill listing suitable for `<system-reminder>` injection.
+ * Budget-aware: if all descriptions exceed the budget, they are truncated.
+ * Mirrors CC's `formatCommandsWithinBudget`.
+ */
+export function formatSkillListing(
+  skills: readonly SkillDefinition[],
+  contextWindowTokens?: number,
+): string {
+  if (skills.length === 0) return "";
+
+  const budget = getCharBudget(contextWindowTokens);
+  const lines = skills.map(
+    (s) => `- ${s.name} (${s.context}): ${s.description}`,
+  );
+  const full = lines.join("\n");
+
+  if (full.length <= budget) return full;
+
+  const nameOverhead = skills.reduce(
+    (sum, s) => sum + s.name.length + s.context.length + 8,
+    0,
+  );
+  const available = budget - nameOverhead;
+  const maxDesc = Math.max(30, Math.floor(available / skills.length));
+
+  return skills
+    .map((s) => `- ${s.name} (${s.context}): ${truncateDesc(s.description, maxDesc)}`)
+    .join("\n");
+}
+
 export interface RegisterSkillsOptions {
   /**
    * File paths to evaluate `paths:` frontmatter against. Skills whose

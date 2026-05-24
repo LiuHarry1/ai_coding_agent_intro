@@ -51,20 +51,17 @@ export function createSkillTool(
   }
   const validSkills = [...bySkill.keys()];
 
-  const directory = skills
-    .map((s) => `- ${s.name} (${s.context}): ${s.description}`)
-    .join("\n");
-
   const description = `Invoke a reusable skill — a parameterized procedure the user (or this project) has defined for repeatable workflows.
 
-Available skills:
-${directory}
+Important:
+- Available skills are listed in <system-reminder> messages in the conversation.
+- When a skill matches the user's request, invoke the relevant skill BEFORE generating any other response.
 
 Two execution modes:
 - **inline** skills return their expanded body as the tool result. Use them when you want to *remember* a procedure mid-thought (e.g. "code-review checklist", "PR-body template").
 - **fork** skills run as a fresh subagent with the body as system prompt. Use them when the skill needs many tool calls and you don't want its scratch work in your context.
 
-Required arguments:
+Arguments:
 - \`skill_name\`: one of [${validSkills.join(", ")}]
 - \`arguments\`: raw argument string (optional). Substituted into the skill body as \`$ARGUMENTS\`, \`$1\`, or \`$name\` depending on the skill's declared argument names.
 

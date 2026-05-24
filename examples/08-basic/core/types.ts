@@ -153,6 +153,13 @@ export interface AgentOptions {
    * "subagent" card style + auto-expanded nested step list.
    */
   subagentNames?: Set<string>;
+  /**
+   * Pre-formatted skill/agent listing injected as a `<system-reminder>`
+   * user message before the real user message. Keeps volatile listings
+   * out of the tool schema and system prompt so those stay cacheable.
+   * Mirrors CC's `skill_listing` attachment mechanism.
+   */
+  skillListing?: string;
 }
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;
