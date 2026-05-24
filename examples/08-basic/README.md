@@ -261,8 +261,8 @@ Open http://localhost:5173 (Vite proxies API requests to port 4567).
 
 | 优先级 | 目录 | 备注 |
 |--------|------|------|
-| 低 | `~/.myagent/agents/*.md` | 用户级 |
-| 高 | `<cwd>/.agents/*.md` | 项目级；同名覆盖用户级、内置 |
+| 低 | `~/.ai-agent/agents/*.md` | 用户级（与 `config.json` 同目录） |
+| 高 | `<ancestor>/.ai-agent/agents/*.md` | 项目级，沿 `cwd` 向上；最深覆盖浅层、用户级、内置 |
 
 文件格式：
 
@@ -295,9 +295,13 @@ Output format:
 
 实现入口：`subagents/from-files.ts` → `parseAgentFromMarkdown` / `mergeAgents`；async 注册器 `subagents/index.ts` → `registerSubagents(registry, cwd)` 由 `server/router.ts` 每次 chat 请求调用，对照 CC `loadAgentsDir.ts` 的 `getActiveAgentsFromList`。
 
-### 添加 Slash Commands（Claude Code 风格）
+### 添加 Slash Commands（Claude Code 风格 — 与 Skills 合并）
 
-把 `<name>.md` 放到 `<cwd>/.commands/` 或 `~/.myagent/commands/`，用户在聊天框输入 `/<name> [args]` 就触发。**Server 在调 LLM 前把 body 展开成用户消息**，所以 commands 不占 tool 槽。
+把 `<name>.md` 放到 `<cwd>/.ai-agent/commands/` 或 `~/.ai-agent/commands/`，**skills** 放到 `<cwd>/.ai-agent/skills/<name>/SKILL.md` — 两者都通过 **`/<name> [args]`** 触发（与 CC 一致；同名时 **skill 优先于 command**）。
+
+用户在聊天框输入 `/` 时，Web UI 会弹出 autocomplete（`GET /slash-commands`）；`/help` 列出 commands + skills。
+
+**Server 在调 LLM 前**把 body 展开成用户消息（inline skill / command），`context: fork` 的 skill 则直接跑子 agent。
 
 内置：`/help`、`/commands` 列出所有可用命令。
 
@@ -339,12 +343,12 @@ Skill 由**模型而不是用户**触发——通过 `skill` dispatcher tool。�
 | 优先级 | 路径 | 备注 |
 |--------|------|------|
 | 低 | `~/.ai-agent/skills/<skill-name>/SKILL.md` | 用户级（和 `~/.ai-agent/config.json` 同目录） |
-| 中 | `<ancestor>/.skills/<skill-name>/SKILL.md` | 沿 `cwd` 向上每一级（monorepo 友好） |
-| 高 | `<cwd>/.skills/<skill-name>/SKILL.md` | 最深一级，同名覆盖上面所有 |
+| 中 | `<ancestor>/.ai-agent/skills/<skill-name>/SKILL.md` | 沿 `cwd` 向上每一级（monorepo 友好） |
+| 高 | `<cwd>/.ai-agent/skills/<skill-name>/SKILL.md` | 最深一级，同名覆盖上面所有 |
 
 每个 skill 文件夹**必须**包含 `SKILL.md`；同目录下**可以**放任意其它文件 / 子目录
 （脚本、模板、示例数据）。skill 名 = 文件夹名（必须匹配 `[a-z0-9][a-z0-9_-]*`），
-直接散落在 `.skills/` 根下的 `.md` 文件会被忽略。对照 CC：`getProjectDirsUpToHome('skills', cwd)`
+直接散落在 `.ai-agent/skills/` 根下的 `.md` 文件会被忽略。对照 CC：`getProjectDirsUpToHome('skills', cwd)`
 + `~/.claude/skills/`（我们换成 `.ai-agent` 跟自身配置目录对齐）。
 
 #### `SKILL.md` 示例
@@ -416,8 +420,26 @@ CC：`activateConditionalSkillsForPaths`（CC 在每次文件工具调用时动�
 ### 共享底座
 
 agents / commands / skills 三者共用：
+- `core/app-dir.ts` — **唯一**配置目录名（默认 `.ai-agent`）；`AI_AGENT_DIR` 环境变量可覆盖
 - `core/markdown-config-loader.ts` — 扫 user + project 两层目录、读文件、`gray-matter` 解析
 - `core/frontmatter-helpers.ts` — `parseToolList` / `parseBool` / `parseArgumentNames` 等
+
+目录布局（对齐 Claude Code 的 `.claude/`，只是我们叫 `.ai-agent/`）：
+
+```text
+~/.ai-agent/
+├── config.json
+├── agents/*.md
+├── commands/*.md
+└── skills/<name>/SKILL.md
+
+<project>/.ai-agent/
+├── agents/*.md
+├── commands/*.md
+└── skills/<name>/SKILL.md
+```
+
+改目录名：设环境变量 `AI_AGENT_DIR=.my-agent`（可带或不带前导点），或改 `core/app-dir.ts` 里的 `DEFAULT_APP_DIR_NAME`。
 
 加一种新的 markdown 扩展类型（比如 `output-styles`、`workflows`）只需在 `MarkdownConfigKind` 加一项 + 写一个 `parseXxxFromMarkdown` + 一个 `mergeXxx`，约 100 行。
 

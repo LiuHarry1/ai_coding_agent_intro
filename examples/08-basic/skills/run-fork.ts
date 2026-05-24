@@ -1,0 +1,90 @@
+/**
+ * Run a `context: fork` skill as an isolated subagent. Shared by the
+ * model-facing `skill` tool, HTTP `/skills/:name/invoke`, and user
+ * slash invocation (`/skill-name`).
+ */
+
+import type {
+  AgentDefinition,
+  AnyTool,
+  IEventBus,
+  IToolRegistry,
+  RunAgentFn,
+  ToolContext,
+} from "../core/types.js";
+import { AGENT_TOOL_NAME } from "../tools/tool-names.js";
+import { SKILL_TOOL_NAME } from "../tools/skill.js";
+import type { SkillDefinition } from "./types.js";
+
+export interface RunSkillForkOptions {
+  skill: SkillDefinition;
+  /** Expanded skill body (preamble + substituted content). */
+  combined: string;
+  cwd: string;
+  runAgent: RunAgentFn;
+  registry: IToolRegistry;
+  activeAgents: readonly AgentDefinition[];
+  eventBus: IEventBus;
+  toolEnablement?: ToolContext["toolEnablement"];
+}
+
+export async function runSkillFork(
+  opts: RunSkillForkOptions,
+): Promise<string> {
+  const {
+    skill,
+    combined,
+    cwd,
+    runAgent,
+    registry,
+    activeAgents,
+    eventBus,
+    toolEnablement,
+  } = opts;
+
+  const targetAgentType = skill.agent ?? "general_purpose";
+  const targetAgent = activeAgents.find((a) => a.agentType === targetAgentType);
+  if (!targetAgent) {
+    throw new Error(
+      `Skill '${skill.name}' fork target '${targetAgentType}' not found. Available: ${activeAgents.map((a) => a.agentType).join(", ")}`,
+    );
+  }
+
+  const subBus = eventBus.scoped(`skill_${skill.name}`);
+  subBus.emit("step_start", {
+    step: 0,
+    task: skill.name,
+    label: `Skill: ${skill.name}`,
+  });
+
+  const subContext: ToolContext = {
+    eventBus: subBus,
+    registry,
+    runAgent,
+    toolEnablement,
+  };
+
+  let subTools: Record<string, AnyTool>;
+  if (targetAgent.tools) {
+    subTools = registry.createAll(cwd, subContext, targetAgent.tools);
+  } else {
+    subTools = registry.createAll(cwd, subContext);
+    const denied = new Set(targetAgent.disallowedTools ?? []);
+    denied.add(AGENT_TOOL_NAME);
+    denied.add(SKILL_TOOL_NAME);
+    for (const n of denied) delete subTools[n];
+  }
+  delete subTools[AGENT_TOOL_NAME];
+  delete subTools[SKILL_TOOL_NAME];
+
+  const result = await runAgent(combined, {
+    tools: subTools,
+    systemPrompt: targetAgent.systemPrompt,
+    eventBus: subBus,
+    messages: [],
+    maxSteps: targetAgent.maxSteps ?? 20,
+    model: targetAgent.model,
+  });
+
+  return result || `(skill ${skill.name} returned no result)`;
+}

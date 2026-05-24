@@ -35,8 +35,8 @@ export function registerBuiltinSubagents(registry: IToolRegistry): void {
 }
 
 /**
- * Discover markdown agents under `<cwd>/.agents/*.md` and
- * `~/.myagent/agents/*.md`, merge with built-ins (project > user > built-in),
+ * Discover markdown agents under `<ancestor>/.ai-agent/agents/*.md` and
+ * `~/.ai-agent/agents/*.md`, merge with built-ins (project > user > built-in),
  * and (re-)register the `task` tool with the combined directory.
  *
  * Called once per chat request from the router so a user editing an agent

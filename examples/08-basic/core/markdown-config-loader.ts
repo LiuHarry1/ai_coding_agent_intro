@@ -1,43 +1,41 @@
 /**
- * Unified loader for markdown-frontmatter extension files.
+ * Unified loader for flat markdown-frontmatter extensions (agents, commands).
  *
- * Mirrors Claude Code's `src/utils/markdownConfigLoader.ts` — one function
- * (`loadMarkdownFilesForSubdir`) drives discovery for *every* kind of
- * markdown extension (agents, skills, commands, output-styles, …). Per-kind
- * parsers then convert the returned `MarkdownFile[]` into their typed
- * definitions.
+ * Mirrors Claude Code's `src/utils/markdownConfigLoader.ts`. Skills have
+ * their own loader (`skills/from-folders.ts`) because they are *folders*
+ * with bundled assets, not flat `.md` files — but both share the project
+ * directory walk in `core/app-dir.ts`.
  *
- * Directory layout (per CC convention, scoped under `.<dir>` instead of
- * `.claude/<dir>` so we don't squat on the Claude Code namespace):
+ * Directory layout (CC analogue: `.claude/<kind>/`, we use `.ai-agent/<kind>/`):
  *
- *   <cwd>/.agents/*.md         project agents
- *   <cwd>/.skills/*.md         project skills
- *   <cwd>/.commands/*.md       project slash commands
+ *   <ancestor>/.ai-agent/agents/*.md
+ *   <ancestor>/.ai-agent/commands/*.md
  *
- *   ~/.<APP_DIR_NAME>/agents/*.md     user-scoped equivalents
- *   ~/.<APP_DIR_NAME>/skills/*.md
- *   ~/.<APP_DIR_NAME>/commands/*.md
+ *   ~/.ai-agent/agents/*.md
+ *   ~/.ai-agent/commands/*.md
  *
- * Priority on duplicate `name`: project > user (project closer to cwd wins,
- * same as CC's `getActiveAgentsFromList` semantics). Built-in entries are
- * registered separately and overridden by either of the above.
+ * Resolution: deepest project dir wins, project beats user. Matches CC's
+ * `getActiveAgentsFromList` semantics.
  */
 
 import { promises as fs } from "fs";
 import * as path from "path";
-import * as os from "os";
 import matter from "gray-matter";
+import {
+  getAppDirName,
+  getProjectAppDirsUpToHome,
+  getUserSubdir,
+} from "./app-dir.js";
 
-export const APP_DIR_NAME = "myagent";
-
-export type MarkdownConfigKind = "agents" | "skills" | "commands";
+/** Flat-file kinds. Skills live in folders and use their own loader. */
+export type FlatMarkdownKind = "agents" | "commands";
 
 export type ExtensionSource = "user" | "project";
 
 export interface MarkdownFile {
   /** Absolute path to the .md file. */
   filePath: string;
-  /** Absolute base directory the file was discovered under (for nested support later). */
+  /** Absolute base directory the file was discovered under. */
   baseDir: string;
   /** Where the file came from — used for priority resolution and UI display. */
   source: ExtensionSource;
@@ -47,20 +45,11 @@ export interface MarkdownFile {
   body: string;
 }
 
-function userDirFor(kind: MarkdownConfigKind): string {
-  return path.join(os.homedir(), `.${APP_DIR_NAME}`, kind);
-}
-
-function projectDirFor(kind: MarkdownConfigKind, cwd: string): string {
-  return path.join(cwd, `.${kind}`);
-}
-
 async function listMarkdownFiles(dir: string): Promise<string[]> {
   let entries: import("fs").Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch (e: unknown) {
-    // ENOENT / EACCES → silently skip. Anything else we surface.
     const code = (e as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "EACCES" || code === "ENOTDIR") return [];
     throw e;
@@ -87,12 +76,12 @@ async function readAndParse(
   try {
     parsed = matter(raw);
   } catch (e: unknown) {
-    console.warn(`[markdown-loader] invalid YAML frontmatter in ${filePath}: ${(e as Error).message}`);
+    console.warn(
+      `[markdown-loader] invalid YAML frontmatter in ${filePath}: ${(e as Error).message}`,
+    );
     return null;
   }
 
-  // gray-matter returns `data: {}` even when there's no frontmatter — we
-  // keep it (caller decides whether absence of `name` means skip).
   return {
     filePath,
     baseDir,
@@ -103,50 +92,50 @@ async function readAndParse(
 }
 
 /**
- * Load all `.md` files for a given extension kind from user + project dirs.
+ * Load all `.md` files for a flat extension kind from user + project dirs.
  *
- * Returned order: project files FIRST, then user files. Per-kind parsers
- * push them into a Map keyed by `name` — the LAST write wins, so callers
- * should iterate in REVERSE-priority order (low → high) when filling the
- * Map. This matches `getActiveAgentsFromList` in CC.
- *
- * NOTE on perf: scans are unmemoized intentionally. The router calls this
- * once per chat request (so a user editing an agent .md sees the change
- * on the next message without restarting). Costs ~1ms for tens of files.
- * If you ever have hundreds of extension files, wrap in a memo + chokidar
- * invalidation, mirroring CC's `memoize(loadMarkdownFilesForSubdir, …)`.
+ * Returned order: project files (shallow → deep), then user files. Per-kind
+ * parsers fill a Map keyed by `name` from this list — the last write wins,
+ * so deeper project paths override shallower ones, which override user files.
  */
 export async function loadMarkdownConfigs(
-  kind: MarkdownConfigKind,
+  kind: FlatMarkdownKind,
   cwd: string,
 ): Promise<MarkdownFile[]> {
-  const projectDir = projectDirFor(kind, cwd);
-  const userDir = userDirFor(kind);
+  // `getProjectAppDirsUpToHome` returns deepest-first; we want shallow-first
+  // here so a later in-Map write from a deeper dir overrides.
+  const projectAppDirs = getProjectAppDirsUpToHome(cwd).slice().reverse();
+  const userDir = getUserSubdir(kind);
 
-  const [projectPaths, userPaths] = await Promise.all([
-    listMarkdownFiles(projectDir),
-    listMarkdownFiles(userDir),
-  ]);
-
-  const projectFiles = await Promise.all(
-    projectPaths.map((p) => readAndParse(p, projectDir, "project")),
+  const projectLoads = await Promise.all(
+    projectAppDirs.map(async (appDir) => {
+      const kindDir = path.join(appDir, kind);
+      const paths = await listMarkdownFiles(kindDir);
+      return Promise.all(paths.map((p) => readAndParse(p, kindDir, "project")));
+    }),
   );
+  const userPaths = await listMarkdownFiles(userDir);
   const userFiles = await Promise.all(
     userPaths.map((p) => readAndParse(p, userDir, "user")),
   );
 
-  return [...projectFiles, ...userFiles].filter(
+  return [...projectLoads.flat(), ...userFiles].filter(
     (f): f is MarkdownFile => f !== null,
   );
 }
 
-/** Convenience: where would a user/project file for `kind` named `name` live? */
+/** Where would a user/project file for `kind` named `name` live? */
 export function suggestedPath(
-  kind: MarkdownConfigKind,
+  kind: FlatMarkdownKind,
   scope: ExtensionSource,
   name: string,
   cwd: string,
 ): string {
-  const dir = scope === "user" ? userDirFor(kind) : projectDirFor(kind, cwd);
+  const dir =
+    scope === "user"
+      ? getUserSubdir(kind)
+      : path.join(path.resolve(cwd), getAppDirName(), kind);
   return path.join(dir, `${name}.md`);
 }
+
+export { getAppDirName, getUserSubdir, getProjectAppDirsUpToHome } from "./app-dir.js";

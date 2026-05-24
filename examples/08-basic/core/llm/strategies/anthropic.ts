@@ -56,6 +56,16 @@ export const anthropicStrategy: ProviderStrategy = {
       chatModel: (id) => client.languageModel(id),
       streamTextExtras: () => thinkingToExtras(p.thinking, p.model),
       defaultModelId: () => p.model,
+      // Single 5-minute "ephemeral" breakpoint, attached by the agent to
+      // the last message of each request. Anthropic then caches the full
+      // prefix (system + tools + history) up to that point; subsequent
+      // requests reuse it for ~10% of the normal input price. Older cache
+      // entries from prior steps still serve as prefix matches even when
+      // their cache_control marker is no longer on the message — Anthropic
+      // picks the longest-matching cached prefix.
+      cacheControlOptions: () => ({
+        anthropic: { cacheControl: { type: "ephemeral" } },
+      }),
       describe: () => {
         const adaptive = p.thinking.mode === "auto" || needsAdaptive(p.model);
         if (p.thinking.mode === "off") return `anthropic thinking=off model=${p.model}`;

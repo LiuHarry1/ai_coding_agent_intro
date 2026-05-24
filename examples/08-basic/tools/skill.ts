@@ -17,13 +17,12 @@ import { tool } from "ai";
 import { z } from "zod";
 import type {
   AgentDefinition,
-  AnyTool,
   ToolContext,
   ToolDefinition,
 } from "../core/types.js";
 import type { SkillDefinition } from "../skills/types.js";
 import { expandSkillBody, SkillExpansionError } from "../skills/expand.js";
-import { AGENT_TOOL_NAME } from "./tool-names.js";
+import { runSkillFork } from "../skills/run-fork.js";
 
 export const SKILL_TOOL_NAME = "skill";
 
@@ -51,9 +50,6 @@ export function createSkillTool(
     bySkill.set(s.name, s);
   }
   const validSkills = [...bySkill.keys()];
-
-  const byAgent = new Map<string, AgentDefinition>();
-  for (const a of forkableAgents) byAgent.set(a.agentType, a);
 
   const directory = skills
     .map((s) => `- ${s.name} (${s.context}): ${s.description}`)
@@ -137,48 +133,21 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
           if (!runAgent || !registry) {
             return `Error: skill fork requires runAgent + registry in ToolContext`;
           }
-          const targetAgent = byAgent.get(skill.agent ?? "general_purpose");
-          if (!targetAgent) {
-            return `Error: skill '${skill_name}' fork target '${skill.agent ?? "general_purpose"}' not found. Available: ${[...byAgent.keys()].join(", ")}`;
+
+          try {
+            return await runSkillFork({
+              skill,
+              combined,
+              cwd,
+              runAgent,
+              registry,
+              activeAgents: forkableAgents,
+              eventBus,
+              toolEnablement,
+            });
+          } catch (e) {
+            return `Error: ${(e as Error).message}`;
           }
-
-          const subBus = eventBus.scoped(`skill_${skill_name}`);
-          subBus.emit("step_start", {
-            step: 0,
-            task: skill_name,
-            label: `Skill: ${skill_name}`,
-          });
-
-          const subContext: ToolContext = {
-            eventBus: subBus,
-            registry,
-            runAgent,
-            toolEnablement,
-          };
-
-          let subTools: Record<string, AnyTool>;
-          if (targetAgent.tools) {
-            subTools = registry.createAll(cwd, subContext, targetAgent.tools);
-          } else {
-            subTools = registry.createAll(cwd, subContext);
-            const denied = new Set(targetAgent.disallowedTools ?? []);
-            denied.add(AGENT_TOOL_NAME);
-            denied.add(SKILL_TOOL_NAME);
-            for (const n of denied) delete subTools[n];
-          }
-          delete subTools[AGENT_TOOL_NAME];
-          delete subTools[SKILL_TOOL_NAME];
-
-          const result = await runAgent(combined, {
-            tools: subTools,
-            systemPrompt: targetAgent.systemPrompt,
-            eventBus: subBus,
-            messages: [],
-            maxSteps: targetAgent.maxSteps ?? 20,
-            model: targetAgent.model,
-          });
-
-          return result || `(skill ${skill_name} returned no result)`;
         },
       });
     },

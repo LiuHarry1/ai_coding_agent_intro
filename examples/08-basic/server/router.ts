@@ -14,7 +14,8 @@ import {
   getSubagentNames,
 } from "../subagents/index.js";
 import { registerSkills } from "../skills/index.js";
-import { dispatchSlashCommand } from "../commands/dispatcher.js";
+import { dispatchSlashCommand, listSlashCommands } from "../commands/dispatcher.js";
+import { respondSkillFork } from "../skills/respond-fork.js";
 import { MCPManager } from "../core/mcp-manager.js";
 import { configManager } from "../core/config-manager.js";
 import { answerQuestion } from "../core/question-broker.js";
@@ -140,7 +141,8 @@ async function handleChat(
 
   // ── Slash-command resolution (pre-SSE, no LLM round-trip yet) ──────────
   // Resolve /xxx BEFORE opening the SSE stream so we know whether to short-
-  // circuit (built-in /help) or feed the expanded body to the agent.
+  // circuit (built-in /help), feed the expanded body to the main agent
+  // (inline command/skill), or fork into a subagent (skill `context: fork`).
   let effectiveMessage = message;
   let immediateReply: string | null = null;
   const slashResult = await dispatchSlashCommand(message, { cwd });
@@ -148,11 +150,35 @@ async function handleChat(
     immediateReply = slashResult.text;
   } else if (slashResult.kind === "unknown") {
     immediateReply = `Unknown slash command: /${slashResult.name}\n\nTry /help to see all available commands.`;
-  } else if (slashResult.kind === "expanded") {
+  } else if (slashResult.kind === "run" && slashResult.mode === "inline") {
     effectiveMessage = slashResult.text;
     console.log(
-      `[server] expanded /${slashResult.command.name} → ${effectiveMessage.length} char prompt`,
+      `[server] expanded /${slashResult.entry.name} (${slashResult.entry.kind}) → ${effectiveMessage.length} char prompt`,
     );
+  }
+
+  // ── Fork skill via slash (`/skill-name` with `context: fork`) ─────────
+  // Handled BEFORE opening the main SSE transport — `respondSkillFork`
+  // owns the response (writes its own headers / events).
+  if (
+    slashResult.kind === "run" &&
+    slashResult.mode === "fork" &&
+    slashResult.entry.kind === "skill"
+  ) {
+    console.log(
+      `[server] fork skill /${slashResult.entry.name} → agent ${slashResult.entry.def.agent ?? "general_purpose"}`,
+    );
+    await respondSkillFork({
+      res,
+      skill: slashResult.entry.def,
+      combined: slashResult.text,
+      cwd,
+      runAgent,
+      wantsStream,
+      sseHeaders: { "X-Session-Id": session.id },
+      jsonMeta: { session_id: session.id, reason: "skill_fork" },
+    });
+    return;
   }
 
   const eventBus = new EventBus();
@@ -191,7 +217,7 @@ async function handleChat(
   }
 
   // ── Per-request markdown extension reload ──────────────────────────────
-  // Re-scan .agents/ and .skills/ for the current cwd so edits to user-
+  // Re-scan .ai-agent/{agents,skills}/ for the current cwd so edits to user-
   // authored definitions take effect on the NEXT message without a server
   // restart. Both register/replace dispatcher tools on `defaultRegistry`.
   // Cheap (~1ms per kind for tens of files). Mirrors CC's per-turn
@@ -409,6 +435,23 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     if (method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
     if (method === "GET" && url === "/health") { sendJSON(res, 200, { status: "ok" }); return; }
+
+    // Slash autocomplete for the web UI — merged commands + skills.
+    if (method === "GET" && url?.startsWith("/slash-commands")) {
+      const query = new URLSearchParams(url.split("?")[1] ?? "");
+      const workspace = query.get("workspace");
+      const cwd =
+        workspace && fs.existsSync(workspace)
+          ? path.resolve(workspace)
+          : process.cwd();
+      try {
+        const entries = await listSlashCommands(cwd);
+        sendJSON(res, 200, { workspace: cwd, entries });
+      } catch (e) {
+        sendJSON(res, 500, { error: (e as Error).message });
+      }
+      return;
+    }
 
     if (await workspaceRouter(req, res)) return;
 

@@ -10,6 +10,11 @@ export const agentApi = {
   deleteSession: (id) => fetch(`/sessions/${id}`, { method: "DELETE" }),
   getSessionMessages: (id) => fetchJSON(`/sessions/${id}/messages`),
 
+  getSlashCommands: (workspace) => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
+    return fetchJSON(`/slash-commands${qs}`);
+  },
+
   postChat: (body, signal) =>
     fetch("/chat", {
       method: "POST",

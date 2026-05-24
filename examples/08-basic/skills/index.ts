@@ -24,7 +24,7 @@ export interface RegisterSkillsOptions {
 }
 
 /**
- * Discover folder-based skills under `<ancestor>/.skills/<name>/SKILL.md`
+ * Discover folder-based skills under `<ancestor>/.ai-agent/skills/<name>/SKILL.md`
  * (walked up from cwd to home) and `~/.ai-agent/skills/<name>/SKILL.md`,
  * then register (or replace) the `skill` dispatcher tool on the registry.
  *

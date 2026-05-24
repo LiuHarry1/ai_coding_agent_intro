@@ -1,109 +1,135 @@
 /**
  * Slash-command dispatcher.
  *
- * Responsibility: take the raw user message, detect a leading `/<name> [args]`
- * pattern, look up the command, and return the expanded user message that
- * should be sent to the agent. Returns `null` if the input isn't a slash
- * command — the router just forwards the original message in that case.
+ * Single job: take the raw user message, decide what `/` means in this
+ * context, and return a uniform `DispatchResult` for the router to act on.
+ * No transport, no SSE, no subagent execution — those live one layer up.
  *
- * Built-in commands (`/help`, `/commands`) are handled here too: their
- * output gets sent back to the user verbatim (no LLM round-trip) by
- * returning `{ kind: "reply", text }`. This mirrors Claude Code's slash
- * commands that produce immediate UI output instead of prompt rewrites.
+ * Result shape (CC-aligned: one verb, mode-discriminated payload):
+ *
+ *   - passthrough → not a slash command; forward unchanged
+ *   - reply       → immediate text to show the user (no LLM)
+ *   - run         → expanded body to execute; `mode` says how
+ *   - unknown     → leading `/` but name didn't resolve
  */
 
-import { loadMarkdownConfigs } from "../core/markdown-config-loader.js";
-import { mergeCommands } from "./from-files.js";
+import { expandSkillBody, SkillExpansionError } from "../skills/expand.js";
 import { substituteArguments } from "./argument-substitution.js";
 import { expandInlineDirectives } from "./prompt-expansion.js";
-import type { SlashCommand } from "./types.js";
+import {
+  formatHelp,
+  loadSlashRegistry,
+  lookupSlash,
+  toPublicEntry,
+  type SlashEntry,
+} from "./slash-registry.js";
 
-/** Parse `/foo bar baz` → { name: "foo", args: "bar baz" }. */
-function splitSlashLine(message: string): { name: string; args: string } | null {
+const SLASH_LINE_RE = /^\/([a-z0-9][a-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/i;
+
+interface ParsedSlash {
+  name: string;
+  args: string;
+}
+
+function parseSlashLine(message: string): ParsedSlash | null {
   if (!message.startsWith("/")) return null;
-  const trimmed = message.trimEnd();
-  // Allow newlines after args (`/cmd arg\n\nadditional context`).
-  const match = trimmed.match(/^\/([a-z0-9][a-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/i);
+  const match = message.trimEnd().match(SLASH_LINE_RE);
   if (!match) return null;
   return { name: match[1]!, args: (match[2] ?? "").trim() };
 }
 
-export type CommandDispatchResult =
-  /** Not a slash command; forward original message unchanged. */
+export type DispatchResult =
   | { kind: "passthrough" }
-  /** Expanded prompt to send as the user message to the agent. */
-  | { kind: "expanded"; text: string; command: SlashCommand }
-  /** Immediate text reply — skip the LLM, show to user verbatim. */
   | { kind: "reply"; text: string }
-  /** Slash command shape but unknown name. */
+  | {
+      kind: "run";
+      /** `inline` feeds expanded text to the main agent; `fork` runs a subagent. */
+      mode: "inline" | "fork";
+      /** Expanded body — already preamble + args + !`shell` + @file replaced. */
+      text: string;
+      entry: SlashEntry;
+    }
   | { kind: "unknown"; name: string; available: string[] };
 
 export interface DispatcherDeps {
   cwd: string;
 }
 
-export async function loadCommands(cwd: string): Promise<SlashCommand[]> {
-  const files = await loadMarkdownConfigs("commands", cwd);
-  return mergeCommands(files).commands;
-}
-
-function formatHelp(commands: SlashCommand[]): string {
-  const builtIns = [
-    { name: "help", description: "List all available slash commands.", argumentHint: undefined },
-    { name: "commands", description: "Alias for /help.", argumentHint: undefined },
-  ];
-  const rows = [
-    ...builtIns,
-    ...commands.map((c) => ({
-      name: c.name,
-      description: c.description,
-      argumentHint: c.argumentHint,
-    })),
-  ];
-  if (commands.length === 0) {
-    return [
-      "**Available slash commands** (built-in only):",
-      "",
-      ...rows.map((r) => `  /${r.name}${r.argumentHint ? ` ${r.argumentHint}` : ""} — ${r.description}`),
-      "",
-      "Drop `.md` files into `<cwd>/.commands/` or `~/.myagent/commands/` to add more.",
-    ].join("\n");
-  }
-  return [
-    `**Available slash commands** (${commands.length} user-defined):`,
-    "",
-    ...rows.map((r) => `  /${r.name}${r.argumentHint ? ` ${r.argumentHint}` : ""} — ${r.description}`),
-  ].join("\n");
-}
-
+/**
+ * Resolve a slash-command line. `entries` is optional — pass it when the
+ * caller already loaded the registry (avoids re-scanning the filesystem).
+ */
 export async function dispatchSlashCommand(
   message: string,
   deps: DispatcherDeps,
-): Promise<CommandDispatchResult> {
-  const parsed = splitSlashLine(message);
+  preloaded?: { entries: SlashEntry[] },
+): Promise<DispatchResult> {
+  const parsed = parseSlashLine(message);
   if (!parsed) return { kind: "passthrough" };
 
-  const { name, args } = parsed;
-  const commands = await loadCommands(deps.cwd);
+  const entries =
+    preloaded?.entries ?? (await loadSlashRegistry(deps.cwd)).entries;
 
-  // ── Built-in: /help, /commands ──
-  if (name === "help" || name === "commands") {
-    return { kind: "reply", text: formatHelp(commands) };
-  }
-
-  const cmd = commands.find((c) => c.name === name);
-  if (!cmd) {
+  const entry = lookupSlash(entries, parsed.name);
+  if (!entry) {
     return {
       kind: "unknown",
-      name,
-      available: ["help", "commands", ...commands.map((c) => c.name)],
+      name: parsed.name,
+      available: entries.map((e) => e.name),
     };
   }
 
-  // 1. Sub args into the template ($ARGUMENTS / $1 / $name).
-  const substituted = substituteArguments(cmd.body, args, cmd.argumentNames);
-  // 2. Expand inline !`shell` and @file directives.
-  const expanded = await expandInlineDirectives(substituted, deps.cwd);
+  if (entry.kind === "built-in") {
+    if (entry.name === "help" || entry.name === "commands") {
+      return { kind: "reply", text: formatHelp(entries) };
+    }
+    return { kind: "reply", text: `Built-in /${entry.name} not implemented` };
+  }
 
-  return { kind: "expanded", text: expanded, command: cmd };
+  if (entry.kind === "command") {
+    const substituted = substituteArguments(
+      entry.def.body,
+      parsed.args,
+      entry.def.argumentNames,
+    );
+    const expanded = await expandInlineDirectives(substituted, deps.cwd);
+    return { kind: "run", mode: "inline", text: expanded, entry };
+  }
+
+  // entry.kind === "skill"
+  try {
+    const { combined } = await expandSkillBody(entry.def, parsed.args, deps.cwd);
+
+    // If the skill body doesn't consume $ARGUMENTS / $1 / $name (common for
+    // reference-style skills like /pdf), the user's actual request would be
+    // silently lost. Always append the raw args so the agent sees both the
+    // skill context AND what the user wants done.
+    const userArgs = parsed.args.trim();
+    const text = userArgs
+      ? `${combined}\n\n---\n\nUser request: ${userArgs}`
+      : combined;
+
+    return {
+      kind: "run",
+      mode: entry.context === "fork" ? "fork" : "inline",
+      text,
+      entry,
+    };
+  } catch (e) {
+    const msg =
+      e instanceof SkillExpansionError ? e.message : (e as Error).message;
+    return {
+      kind: "reply",
+      text: `Error expanding skill '/${parsed.name}': ${msg}`,
+    };
+  }
+}
+
+/**
+ * HTTP/UI-friendly listing for `GET /slash-commands`. Returns the same
+ * entries `/help` shows, in `PublicSlashEntry` shape (no def references).
+ */
+export async function listSlashCommands(cwd: string) {
+  const { entries } = await loadSlashRegistry(cwd);
+  return entries.map(toPublicEntry);
 }

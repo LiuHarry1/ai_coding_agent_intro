@@ -35,19 +35,10 @@ import {
   normalizeSkillArguments,
   SkillExpansionError,
 } from "../skills/expand.js";
+import { respondSkillFork } from "../skills/respond-fork.js";
 import { registerSubagents, BUILTIN_AGENTS } from "../subagents/index.js";
 import { defaultRegistry } from "../tools/index.js";
-import { EventBus } from "../core/event-bus.js";
-import { createSSETransport } from "./sse-transport.js";
-import { AGENT_TOOL_NAME } from "../tools/tool-names.js";
-import { SKILL_TOOL_NAME } from "../tools/skill.js";
-import { configManager } from "../core/config-manager.js";
-import type {
-  AgentDefinition,
-  AnyTool,
-  RunAgentFn,
-  ToolContext,
-} from "../core/types.js";
+import type { AgentDefinition, RunAgentFn } from "../core/types.js";
 import type { SkillDefinition } from "../skills/types.js";
 
 function sendJSON(res: ServerResponse, status: number, data: unknown): void {
@@ -297,94 +288,14 @@ async function handleSkillInvoke(args: {
     return;
   }
 
-  // ── fork ── spin up a subagent with the skill body as the user
-  // message. Same machinery as the model-facing dispatcher tool
-  // (tools/skill.ts) but driven by HTTP instead of an LLM tool call.
-  const { activeAgents } = await registerSubagents(defaultRegistry, cwd);
-  const targetAgentType = skill.agent ?? "general_purpose";
-  const targetAgent = activeAgents.find(
-    (a) => a.agentType === targetAgentType,
-  );
-  if (!targetAgent) {
-    sendJSON(res, 400, {
-      error: `Skill '${skillName}' fork target '${targetAgentType}' not found`,
-      available: activeAgents.map((a) => a.agentType),
-    });
-    return;
-  }
-
-  const eventBus = new EventBus();
-  const enablement = configManager.getAll();
-  const toolEnablement = { disabledTools: enablement.disabledTools };
-
-  const subContext: ToolContext = {
-    eventBus,
-    registry: defaultRegistry,
+  // ── fork ── delegate to the shared helper used by /chat too.
+  await respondSkillFork({
+    res,
+    skill,
+    combined,
+    cwd,
     runAgent,
-    toolEnablement,
-  };
-
-  let subTools: Record<string, AnyTool>;
-  if (targetAgent.tools) {
-    subTools = defaultRegistry.createAll(cwd, subContext, targetAgent.tools);
-  } else {
-    subTools = defaultRegistry.createAll(cwd, subContext);
-    const denied = new Set(targetAgent.disallowedTools ?? []);
-    denied.add(AGENT_TOOL_NAME);
-    denied.add(SKILL_TOOL_NAME);
-    for (const n of denied) delete subTools[n];
-  }
-  delete subTools[AGENT_TOOL_NAME];
-  delete subTools[SKILL_TOOL_NAME];
-
-  // ── streaming branch ─ same SSE wire format as /chat so clients can
-  // reuse their existing event-source parsers.
-  if (wantsStream) {
-    const transport = createSSETransport(res, eventBus, {
-      "X-Skill": skillName,
-    });
-    transport.send("skill_start", {
-      skill: skillName,
-      agentType: targetAgent.agentType,
-      workspace: cwd,
-    });
-    try {
-      const result = await runAgent(combined, {
-        tools: subTools,
-        systemPrompt: targetAgent.systemPrompt,
-        eventBus,
-        messages: [],
-        maxSteps: targetAgent.maxSteps ?? 20,
-        model: targetAgent.model,
-      });
-      transport.send("finish", { reason: "done", text: result });
-    } catch (e) {
-      transport.send("error", { message: (e as Error).message });
-    } finally {
-      transport.end();
-    }
-    return;
-  }
-
-  // ── buffered branch ─ wait for completion, return one JSON blob.
-  // Useful for scripts / CI that don't want to parse SSE.
-  try {
-    const result = await runAgent(combined, {
-      tools: subTools,
-      systemPrompt: targetAgent.systemPrompt,
-      eventBus,
-      messages: [],
-      maxSteps: targetAgent.maxSteps ?? 20,
-      model: targetAgent.model,
-    });
-    sendJSON(res, 200, {
-      skill: skillName,
-      context: "fork",
-      agentType: targetAgent.agentType,
-      workspace: cwd,
-      result,
-    });
-  } catch (e) {
-    sendJSON(res, 500, { error: (e as Error).message });
-  }
+    wantsStream,
+    sseHeaders: { "X-Skill": skillName },
+  });
 }

@@ -77,6 +77,139 @@
   text-align: center;
 }
 
+/* ── Slash command / skill autocomplete ─────── */
+.slash-menu {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 100%;
+  margin-bottom: 6px;
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+  max-height: 380px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.18), 0 -1px 4px rgba(0, 0, 0, 0.08);
+  z-index: 20;
+  padding: 4px 0;
+}
+
+.slash-menu__group + .slash-menu__group {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+.slash-menu__section {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 8px 16px 4px;
+  user-select: none;
+}
+
+.slash-menu__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  transition: background 0.1s;
+}
+
+.slash-menu__item:hover,
+.slash-menu__item--active {
+  background: var(--bg-tertiary);
+}
+
+.slash-menu__row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slash-menu__name {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.slash-menu__hint {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.slash-menu__badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  color: var(--purple, var(--accent));
+  background: var(--purple-dim, var(--bg-tertiary));
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.slash-menu__desc {
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.slash-menu__show-more {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+.slash-menu__show-more:hover {
+  color: var(--accent);
+}
+
+/* Light theme: make menu pop over the white input area */
+[data-theme="light"] .slash-menu {
+  background: #ffffff;
+  border-color: #d1d9e0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.10), 0 -1px 6px rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .slash-menu__item:hover,
+[data-theme="light"] .slash-menu__item--active {
+  background: #f0f3f6;
+}
+[data-theme="light"] .slash-menu__section {
+  color: #656d76;
+}
+
 /* ── Attach button ──────────────────────────── */
 .attach-btn {
   background: none;

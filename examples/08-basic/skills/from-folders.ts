@@ -11,10 +11,10 @@
  *
  * Layout (CC analogue in parentheses):
  *
- *   <ancestor>/.skills/<skill-name>/SKILL.md   # project-scope, walked up to home
- *                                              # (CC: <ancestor>/.claude/skills/)
- *   ~/.ai-agent/skills/<skill-name>/SKILL.md   # user-scope
- *                                              # (CC: ~/.claude/skills/)
+ *   <ancestor>/.ai-agent/skills/<skill-name>/SKILL.md   # project-scope
+ *                                                      # (CC: .claude/skills/)
+ *   ~/.ai-agent/skills/<skill-name>/SKILL.md           # user-scope
+ *                                                      # (CC: ~/.claude/skills/)
  *
  * Precedence on duplicate skill name (highest wins): deepest project dir →
  * shallower project dirs → user dir. Same shape as CC's
@@ -45,23 +45,18 @@
 
 import { promises as fs } from "fs";
 import * as path from "path";
-import * as os from "os";
 import matter from "gray-matter";
 import ignore from "ignore";
 import type { SkillDefinition, SkillContextMode } from "./types.js";
 import type { ExtensionSource } from "../core/markdown-config-loader.js";
 import {
+  getProjectAppDirsUpToHome,
+  getUserSubdir,
+} from "../core/app-dir.js";
+import {
   parseArgumentNames,
   parseString,
 } from "../core/frontmatter-helpers.js";
-
-/**
- * Must match the `APP_DIR_NAME` constant in `core/config-manager.ts`. The
- * user-scope skills directory lives next to `config.json` so all
- * user-level state for this agent stays under one dot-folder. If you ever
- * rename one, rename both.
- */
-const APP_DIR_NAME = ".ai-agent";
 
 interface SkillLoadResult {
   skill: SkillDefinition | null;
@@ -196,7 +191,7 @@ async function loadSkillsFromDir(
   const results = await Promise.all(
     entries.map(async (entry): Promise<SkillLoadResult | null> => {
       // Only folders (or symlinks pointing at folders) are skills — flat
-      // .md files directly under `.skills/` are intentionally ignored.
+      // .md files directly under `.ai-agent/skills/` are intentionally ignored.
       if (!entry.isDirectory() && !entry.isSymbolicLink()) return null;
 
       const skillDir = path.join(basePath, entry.name);
@@ -297,38 +292,16 @@ async function loadSkillsFromDir(
 }
 
 /**
- * Walk from `cwd` upward, collecting every `.skills/` we find, stopping
- * at the home directory (exclusive — home is treated as the
- * user-skills scope, not a project scope). Order: deepest first, so when
- * the caller fills its name → skill Map by iterating REVERSE-priority
- * (shallow → deep), deeper paths overwrite shallower ones.
+ * Walk from `cwd` upward, collecting every `.ai-agent/skills/` we find,
+ * stopping at the home directory (exclusive — home is treated as the
+ * user-skills scope, not a project scope). Order: deepest first.
  *
  * Mirrors CC's `getProjectDirsUpToHome('skills', cwd)`.
- *
- * Bounded by `home` so we never walk past `/Users/<name>` into other
- * users' homes — same safety as CC.
  */
 function getProjectSkillsDirsUpToHome(cwd: string): string[] {
-  const home = os.homedir();
-  const dirs: string[] = [];
-
-  let current = path.resolve(cwd);
-  while (true) {
-    // Skip if we're at or above home — user-scope handles that level.
-    if (current === home) break;
-
-    dirs.push(path.join(current, ".skills"));
-
-    const parent = path.dirname(current);
-    if (parent === current) break; // hit filesystem root
-    // Stop once we'd walk INTO home from a sibling. Without this,
-    // /tmp would happily walk up to /, which is fine; the home check
-    // above handles the cwd-under-home case.
-    if (parent === home) break;
-    current = parent;
-  }
-
-  return dirs; // already deepest-first since we pushed cwd first
+  return getProjectAppDirsUpToHome(cwd).map((appDir) =>
+    path.join(appDir, "skills"),
+  );
 }
 
 /**
@@ -345,7 +318,7 @@ export async function loadSkillsFromDisk(cwd: string): Promise<{
   skills: SkillDefinition[];
   errors: Array<{ filePath: string; error: string }>;
 }> {
-  const userDir = path.join(os.homedir(), APP_DIR_NAME, "skills");
+  const userDir = getUserSubdir("skills");
   const projectDirs = getProjectSkillsDirsUpToHome(cwd);
 
   const [userResults, ...projectResultsByDir] = await Promise.all([

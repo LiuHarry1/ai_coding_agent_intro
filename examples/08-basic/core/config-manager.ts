@@ -1,11 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import type { AppConfig } from "./types.js";
 import { DEFAULT_PROFILE, resolveProfile, profileToRecord } from "./llm/index.js";
-
-const APP_DIR_NAME = ".ai-agent";
-const CONFIG_FILE = "config.json";
+import { getUserConfigPath, CONFIG_FILE_NAME } from "./app-dir.js";
 
 const DEFAULTS: AppConfig = {
   provider: { ...DEFAULT_PROFILE },
@@ -43,8 +40,10 @@ export class ConfigManager {
   #listeners = new Map<string, Set<ConfigListener>>();
 
   constructor(userConfigDir?: string) {
-    const dir = userConfigDir ?? path.join(os.homedir(), APP_DIR_NAME);
-    this.#userConfigPath = path.join(dir, CONFIG_FILE);
+    this.#userConfigPath =
+      userConfigDir != null
+        ? path.join(userConfigDir, CONFIG_FILE_NAME)
+        : getUserConfigPath();
   }
 
   /** Load user config from disk and merge over defaults. */

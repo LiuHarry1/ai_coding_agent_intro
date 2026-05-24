@@ -43,6 +43,18 @@ export interface IProvider {
   streamTextExtras(): AgentStreamTextExtras;
   defaultModelId(): string;
   describe(): string;
+  /**
+   * Per-message `providerOptions` payload that marks a cache breakpoint
+   * (Anthropic prompt caching). Returns `undefined` for providers that
+   * either don't support prompt caching or do it automatically (OpenAI).
+   *
+   * Caller attaches the returned object to the LAST message of each
+   * request so Anthropic caches everything up to that point. The next
+   * request finds the longest-matching prefix and reads from cache.
+   *
+   * @see https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+   */
+  cacheControlOptions?(): Record<string, unknown> | undefined;
 }
 
 export interface ProviderStrategy {

@@ -21,6 +21,7 @@ import {
   inlineReasoningAsText,
   sanitizeReasoningParts,
 } from "./agent/message-sanitize.js";
+import { applyCacheControlBreakpoint } from "./agent/cache-control.js";
 import { consumeStream, type StreamResult } from "./agent/stream-consumer.js";
 
 // ── User-message helpers ────────────────────────────
@@ -106,8 +107,15 @@ export async function runAgent(
     maxSteps = 80,
     model,
     subagentNames,
+    skillListing,
   }: AgentOptions,
 ): Promise<string> {
+  if (skillListing) {
+    messages.push({
+      role: "user",
+      content: skillListing,
+    });
+  }
   messages.push(buildUserMessage(userMessage, images));
 
   let finalText = "";
@@ -247,7 +255,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       const stream = streamText({
         model: provider.chatModel(resolvedModel),
         system: systemPrompt,
-        // Double sanitize before the SDK sees messages:
+        // Triple-pass message preparation before the SDK sees them:
         //   1. inlineReasoningAsText — rewrite reasoning blocks as
         //      <thinking> text so the request is portable across stateless
         //      proxies (copilot-api, etc.).
@@ -257,7 +265,14 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         //      step where the stream got cut, a session resumed from a
         //      truncated JSONL, etc.) deadlocks the next request with a
         //      400 from the Responses API.
-        messages: ensureToolResultPairing(inlineReasoningAsText(messages)),
+        //   3. applyCacheControlBreakpoint — attach a single
+        //      `cache_control: ephemeral` marker to the last message when
+        //      the provider supports prompt caching (Anthropic). No-op
+        //      for OpenAI (auto-cached) and openai-compatible (no caching).
+        messages: applyCacheControlBreakpoint(
+          ensureToolResultPairing(inlineReasoningAsText(messages)),
+          provider,
+        ),
         tools,
         maxRetries: 3,
         ...provider.streamTextExtras(),
