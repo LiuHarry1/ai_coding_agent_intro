@@ -12,6 +12,7 @@ import type {
   RunAgentFn,
   ToolContext,
 } from "../core/types.js";
+import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
 import { AGENT_TOOL_NAME } from "../tools/tool-names.js";
 import { SKILL_TOOL_NAME } from "../tools/skill.js";
 import type { SkillDefinition } from "./types.js";
@@ -84,6 +85,7 @@ export async function runSkillFork(
     messages: [],
     maxSteps: targetAgent.maxSteps ?? 20,
     model: targetAgent.model,
+    concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(subTools)),
   });
 
   return result || `(skill ${skill.name} returned no result)`;

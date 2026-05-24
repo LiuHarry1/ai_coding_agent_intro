@@ -7,6 +7,7 @@ import type { ToolDefinition } from "../core/types.js";
 export const definition: ToolDefinition = {
   name: "edit_file",
   description: "Make targeted edits by replacing specific text in a file",
+  isConcurrencySafe: () => false,
   create(cwd) {
     return tool({
       description:

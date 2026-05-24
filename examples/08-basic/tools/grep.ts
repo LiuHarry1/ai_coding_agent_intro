@@ -93,6 +93,7 @@ interface GrepArgs {
 export const definition: ToolDefinition = {
   name: GREP_TOOL_NAME,
   description: "Regex search across files (ripgrep)",
+  isConcurrencySafe: () => true,
   create(cwd) {
     return tool({
       description: getDescription(),

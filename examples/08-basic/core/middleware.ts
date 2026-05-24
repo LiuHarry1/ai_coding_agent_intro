@@ -24,14 +24,14 @@ export class Middleware implements IMiddleware {
 
   wrap(
     name: string,
-    executeFn: (args: unknown) => Promise<unknown>
-  ): (args: unknown) => Promise<unknown> {
+    executeFn: (args: unknown, options?: unknown) => Promise<unknown>,
+  ): (args: unknown, options?: unknown) => Promise<unknown> {
     const self = this;
-    return async (args: unknown) => {
+    return async (args: unknown, options?: unknown) => {
       const ctx: MiddlewareContext = { name, args, startTime: Date.now() };
       await self.#run("beforeTool", ctx);
       try {
-        const result = await executeFn(args);
+        const result = await executeFn(args, options);
         ctx.result = result;
         ctx.duration = Date.now() - ctx.startTime;
         await self.#run("afterTool", ctx);

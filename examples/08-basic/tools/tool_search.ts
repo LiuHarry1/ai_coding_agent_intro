@@ -59,6 +59,7 @@ Available deferred tools: ${nameList}`;
   return {
     name: TOOL_SEARCH_TOOL_NAME,
     description,
+    isConcurrencySafe: () => true,
     create(_cwd: string, _context: ToolContext) {
       return tool({
         description,

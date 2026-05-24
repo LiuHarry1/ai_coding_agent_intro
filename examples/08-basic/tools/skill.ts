@@ -74,6 +74,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
     // For inline skills the card style is still useful — it groups the
     // expanded body visually.
     isSubagent: true,
+    isConcurrencySafe: () => false,
     create(cwd: string, context: ToolContext) {
       const { runAgent, eventBus, registry, toolEnablement } = context;
 

@@ -8,6 +8,7 @@ import type { ToolDefinition } from "../core/types.js";
 export const definition: ToolDefinition = {
   name: "write_file",
   description: "Create or overwrite a file",
+  isConcurrencySafe: () => false,
   create(cwd) {
     return tool({
       description:

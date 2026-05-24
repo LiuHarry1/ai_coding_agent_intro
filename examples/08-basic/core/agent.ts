@@ -22,6 +22,12 @@ import {
 } from "./agent/messageSanitize.js";
 import { applyCacheControlBreakpoint } from "./agent/cacheControl.js";
 import { consumeStream, type StreamResult } from "./agent/streamConsumer.js";
+import { stripToolExecute } from "./agent/prepareTools.js";
+import {
+  buildToolMessage,
+  runToolCalls,
+} from "./agent/toolOrchestration.js";
+import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
 import type { AnyTool } from "./types.js";
 
@@ -166,6 +172,7 @@ export async function runAgent(
     subagentNames,
     skillListing,
     deferredToolPool,
+    concurrencyPolicy,
   }: AgentOptions,
 ): Promise<string> {
   if (skillListing) {
@@ -188,6 +195,7 @@ export async function runAgent(
   // Mutable copy so we can activate deferred tools mid-loop.
   const activeTools = { ...tools };
   const pool = deferredToolPool ? { ...deferredToolPool } : undefined;
+  const toolPolicy: ConcurrencyPolicyFn = concurrencyPolicy ?? (() => false);
 
   try {
     for (let step = 0; step < maxSteps; step++) {
@@ -207,6 +215,7 @@ export async function runAgent(
         step,
         stepStart,
         currentTodos,
+        concurrencyPolicy: toolPolicy,
       });
 
       if (stepResult === null) {
@@ -287,6 +296,7 @@ interface RunOneStepArgs {
   step: number;
   stepStart: number;
   currentTodos: TodoItem[];
+  concurrencyPolicy: ConcurrencyPolicyFn;
 }
 
 /**
@@ -307,7 +317,11 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     subagentNames,
     step,
     stepStart,
+    concurrencyPolicy,
   } = args;
+
+  const apiTools = stripToolExecute(tools);
+  const executors = tools;
 
   let ctxLengthAttempt = 0;
   let transientAttempt = 0;
@@ -337,21 +351,40 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           ensureToolResultPairing(inlineReasoningAsText(messages)),
           provider,
         ),
-        tools,
+        // Schema-only tools — execution is handled by toolOrchestration so
+        // we can batch concurrency-safe reads in parallel (CC-style).
+        tools: apiTools,
         maxRetries: 3,
         ...provider.streamTextExtras(),
       });
 
       const timing = { firstEventMs: 0 };
-      const stepResult = await consumeStream(stream, eventBus, timing, subagentNames);
+      const stepResult = await consumeStream(stream, eventBus, timing, subagentNames, {
+        manualToolExecution: true,
+      });
+
+      if (stepResult.toolCalls.length > 0) {
+        const executed = await runToolCalls({
+          toolCalls: stepResult.toolCalls,
+          tools: executors,
+          eventBus,
+          concurrencyPolicy,
+        });
+        stepResult.toolResults.push(...executed);
+      }
 
       // Trust the SDK's response.messages for ordering (reasoning → text
-      // → tool-call → tool-result). Then strip OpenAI-specific
-      // providerOptions so what we persist is the human-readable summary.
+      // → tool-call). Tool results are appended manually below.
       const response = await stream.response;
-      const sdkMessages = response.messages as unknown as Message[];
+      const sdkMessages = (response.messages as unknown as Message[]).filter(
+        (m) => m.role !== "tool",
+      );
       sanitizeReasoningParts(sdkMessages);
       messages.push(...sdkMessages);
+
+      if (stepResult.toolResults.length > 0) {
+        messages.push(buildToolMessage(stepResult.toolResults));
+      }
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless
       // proxies that drop the final SSE event may leave fields undefined.

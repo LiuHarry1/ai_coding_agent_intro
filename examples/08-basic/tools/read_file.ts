@@ -14,6 +14,7 @@ const MAX_FILE_SIZE = 256 * 1024;
 export const definition: ToolDefinition = {
   name: "read_file",
   description: "Read file contents with line numbers",
+  isConcurrencySafe: () => true,
   create(cwd) {
     return tool({
       description:

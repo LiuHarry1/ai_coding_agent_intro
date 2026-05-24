@@ -73,6 +73,7 @@ export const definition: ToolDefinition = {
   name: "web_search",
   description: "Search the web using a SearXNG instance",
   shouldDefer: true,
+  isConcurrencySafe: () => true,
   create() {
     return tool({
       description:

@@ -38,6 +38,7 @@ let diagnosticsLogged = false;
 export const definition: ToolDefinition = {
   name: GLOB_TOOL_NAME,
   description: "Fast file pattern matching with glob syntax",
+  isConcurrencySafe: () => true,
   create(cwd) {
     return tool({
       description: DESCRIPTION,

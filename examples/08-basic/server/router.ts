@@ -21,6 +21,7 @@ import { configManager } from "../core/config-manager.js";
 import { answerQuestion } from "../core/question-broker.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 import { filterToolsByEnablement } from "../core/tool-enablement.js";
+import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
 import { createToolSearchDefinition, TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig, LlmProfile } from "../core/types.js";
 
@@ -322,6 +323,7 @@ async function handleChat(
       subagentNames: getSubagentNames(defaultRegistry),
       skillListing,
       deferredToolPool: Object.keys(deferred).length > 0 ? deferred : undefined,
+      concurrencyPolicy: buildConcurrencyPolicy(defaultRegistry, Object.keys(tools)),
     });
   } catch (e) {
     runError = e as Error;

@@ -487,10 +487,41 @@ export const useChatStore = create((set, get) => ({
       const parts = [...last.parts];
       let targetIdx = -1;
 
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (parts[i].type === "tool_call" && parts[i].status !== "done") {
-          targetIdx = i;
-          break;
+      // Prefer explicit routing from backend (parallel subagents of same type).
+      if (ev.parentToolCallId) {
+        targetIdx = parts.findIndex(
+          (p) => p.type === "tool_call" && p.toolCallId === ev.parentToolCallId,
+        );
+      }
+
+      if (targetIdx === -1) {
+        const runningSubagents = parts
+          .map((p, i) => ({ p, i }))
+          .filter(
+            ({ p }) =>
+              p.type === "tool_call" &&
+              p.isSubagent &&
+              p.status !== "done",
+          );
+
+        if (runningSubagents.length === 1) {
+          targetIdx = runningSubagents[0].i;
+        } else if (runningSubagents.length > 1) {
+          // Serial subagent runs: prefer the card that already has nested
+          // steps (active run). Parallel runs require parentToolCallId.
+          const active = runningSubagents.filter(
+            ({ p }) => (p.subagentParts?.length ?? 0) > 0,
+          );
+          targetIdx = (active.length === 1 ? active[0] : runningSubagents[0]).i;
+        }
+      }
+
+      if (targetIdx === -1) {
+        for (let i = parts.length - 1; i >= 0; i--) {
+          if (parts[i].type === "tool_call" && parts[i].status !== "done") {
+            targetIdx = i;
+            break;
+          }
         }
       }
       if (targetIdx === -1) {

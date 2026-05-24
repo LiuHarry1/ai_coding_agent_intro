@@ -63,11 +63,17 @@ function readInputDelta(event: unknown): { id?: string; delta?: string } {
  *     cut mid-args, model hit max_tokens during a giant write_file, ...):
  *     same synthesis, with a concrete reason in the message.
  */
+export interface ConsumeStreamOptions {
+  /** When true, skip backfill — caller executes tools manually. */
+  manualToolExecution?: boolean;
+}
+
 export async function consumeStream(
   stream: ReturnType<typeof streamText>,
   eventBus: AgentOptions["eventBus"],
   timing?: { firstEventMs: number },
   subagentNames?: Set<string>,
+  options?: ConsumeStreamOptions,
 ): Promise<StreamResult> {
   const isSubagentName = (n?: string): boolean =>
     !!(n && subagentNames && subagentNames.has(n));
@@ -263,7 +269,9 @@ export async function consumeStream(
     );
   }
 
-  backfillMissingResults(toolCalls, toolResults, eventBus);
+  if (!options?.manualToolExecution) {
+    backfillMissingResults(toolCalls, toolResults, eventBus);
+  }
   return { text, toolCalls, toolResults };
 }
 

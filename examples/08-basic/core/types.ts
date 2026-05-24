@@ -1,6 +1,7 @@
 import type { Tool } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { LlmProfile } from "./llm/types.js";
+import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>;
@@ -34,7 +35,7 @@ export type MiddlewareHandler = (ctx: MiddlewareContext) => void | Promise<void>
 
 export interface IMiddleware {
   use(hook: MiddlewareHook, handler: MiddlewareHandler): void;
-  wrap(name: string, executeFn: (args: unknown) => Promise<unknown>): (args: unknown) => Promise<unknown>;
+  wrap(name: string, executeFn: (args: unknown, options?: unknown) => Promise<unknown>): (args: unknown, options?: unknown) => Promise<unknown>;
 }
 
 // ── Tool Registry ───────────────────────────────
@@ -73,6 +74,12 @@ export interface ToolDefinition {
    * config. Overrides both `shouldDefer` and the MCP auto-defer rule.
    */
   alwaysLoad?: boolean;
+  /**
+   * When true for a given input, the tool may run in parallel with other
+   * consecutive concurrency-safe calls in the same assistant turn. Runtime
+   * policy — the model is not told about this flag.
+   */
+  isConcurrencySafe?: (input: unknown) => boolean;
   create(cwd: string, context: ToolContext): AnyTool;
 }
 
@@ -178,6 +185,11 @@ export interface AgentOptions {
    * next step.
    */
   deferredToolPool?: Record<string, AnyTool>;
+  /**
+   * Per-tool concurrency policy for manual tool orchestration. When omitted,
+   * all tools run serially (safe default).
+   */
+  concurrencyPolicy?: ConcurrencyPolicyFn;
 }
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;

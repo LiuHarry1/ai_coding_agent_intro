@@ -10,6 +10,9 @@ import { AGENT_TOOL_NAME } from "./tool-names.js";
 import { EXPLORE_AGENT_TYPE } from "../agents/explore.js";
 import { PLAN_AGENT_TYPE } from "../agents/plan.js";
 import { loadProjectRules } from "../core/rules-loader.js";
+import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
+import { createSubagentEventBus } from "../core/subagent-bus.js";
+import { randomUUID } from "crypto";
 
 /**
  * Single tool that dispatches to all built-in subagents via a
@@ -123,6 +126,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
     name: AGENT_TOOL_NAME,
     description,
     isSubagent: true,
+    isConcurrencySafe: () => false,
     create(cwd: string, context: ToolContext) {
       const { runAgent, eventBus, registry, toolEnablement } = context;
 
@@ -145,15 +149,18 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
               "Self-contained, detailed task description. The subagent does NOT see prior conversation, so include all needed context, file paths, and what to return.",
             ),
         }),
-        execute: async ({
-          subagent_type,
-          description: shortDesc,
-          prompt,
-        }: {
-          subagent_type: string;
-          description: string;
-          prompt: string;
-        }) => {
+        execute: async (
+          {
+            subagent_type,
+            description: shortDesc,
+            prompt,
+          }: {
+            subagent_type: string;
+            description: string;
+            prompt: string;
+          },
+          options?: { toolCallId?: string },
+        ) => {
           const def = byType.get(subagent_type);
           if (!def) {
             return `Error: unknown subagent_type '${subagent_type}'. Valid: ${validTypes.join(", ")}`;
@@ -162,10 +169,20 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             return `Error: task tool requires runAgent + registry in ToolContext`;
           }
 
-          // Scope event bus by the subagent_type so the front-end's
-          // SubagentCard groups nested tool events correctly and applies
-          // the per-type styling (purple/amber/slate).
-          const subBus = eventBus.scoped(`subagent_${subagent_type}`);
+          // Unique scope + parentToolCallId on every nested event so parallel
+          // subagents of the same type route to the correct SubagentCard.
+          const parentToolCallId = options?.toolCallId;
+          if (!parentToolCallId) {
+            console.warn(
+              `[Agent] missing toolCallId for subagent ${subagent_type} — nested UI routing may be wrong`,
+            );
+          }
+          const resolvedParentId = parentToolCallId ?? randomUUID();
+          const subBus = createSubagentEventBus(
+            eventBus,
+            resolvedParentId,
+            `subagent_${subagent_type}_${resolvedParentId}`,
+          );
 
           subBus.emit("step_start", {
             step: 0,
@@ -214,6 +231,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             messages: [],
             maxSteps: def.maxSteps ?? 20,
             model: def.model,
+            concurrencyPolicy: registry
+              ? buildConcurrencyPolicy(registry, Object.keys(subTools))
+              : undefined,
           });
 
           return result || `(${subagent_type} subagent returned no result)`;

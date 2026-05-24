@@ -25,6 +25,7 @@ export const definition: ToolDefinition = {
   name: "web_fetch",
   description: "Fetch a web page and extract readable article content",
   shouldDefer: true,
+  isConcurrencySafe: () => true,
   create() {
     return tool({
       description:

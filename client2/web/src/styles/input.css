@@ -95,6 +95,31 @@
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.18), 0 -1px 4px rgba(0, 0, 0, 0.08);
   z-index: 20;
   padding: 4px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.slash-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.slash-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.slash-menu::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.slash-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.slash-menu::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
 }
 
 .slash-menu__group + .slash-menu__group {
@@ -208,6 +233,15 @@
 }
 [data-theme="light"] .slash-menu__section {
   color: #656d76;
+}
+[data-theme="light"] .slash-menu {
+  scrollbar-color: #d1d9e0 transparent;
+}
+[data-theme="light"] .slash-menu::-webkit-scrollbar-thumb {
+  background: #d1d9e0;
+}
+[data-theme="light"] .slash-menu::-webkit-scrollbar-thumb:hover {
+  background: #afb8c1;
 }
 
 /* ── Attach button ──────────────────────────── */
