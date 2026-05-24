@@ -117,19 +117,40 @@ export async function compactIfNeeded(
   // STEP 1 — micro-compaction (pre-pass to reduce summarizer input)
   let working = messages;
   const microKeep = aggressive ? 1 : cfg.microCompactKeepRecent;
-  if (aggressive || force || tokens >= microThreshold) {
+  const shouldMicro = aggressive || force || tokens >= microThreshold;
+  if (shouldMicro) {
+    console.log(
+      `[compact] micro-compact START — msgs=${working.length}, tokens≈${tokens.toLocaleString()}, ` +
+        `microThreshold=${microThreshold.toLocaleString()}, keepRecent=${microKeep}` +
+        (aggressive ? ", aggressive" : "") +
+        (force ? ", force" : ""),
+    );
+    const tokensBeforeMicro = tokens;
     const r = microCompact(working, microKeep);
+    tokens = estimateConversationTokens(r.messages);
     if (r.cleared > 0) {
       eventBus.emit("compaction_micro", { cleared: r.cleared, tokensFreed: r.tokensFreed });
       working = r.messages;
-      tokens = estimateConversationTokens(working);
     }
+    console.log(
+      `[compact] micro-compact DONE — cleared=${r.cleared}, freed≈${r.tokensFreed.toLocaleString()} tokens, ` +
+        `tokens ${tokensBeforeMicro.toLocaleString()} → ${tokens.toLocaleString()}, msgs=${working.length}`,
+    );
   }
 
   // STEP 2 — full LLM summarization (summarize ALL, no tail)
   if (!force && !aggressive && tokens < threshold) {
     return working;
   }
+
+  const msgsBeforeFull = working.length;
+  const tokensBeforeFull = tokens;
+  console.log(
+    `[compact] full-compact START — msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}, ` +
+      `fullThreshold=${threshold.toLocaleString()}` +
+      (aggressive ? ", aggressive" : "") +
+      (force ? ", force" : ""),
+  );
 
   eventBus.emit("compaction_start", {
     totalMessages: working.length,
@@ -150,6 +171,10 @@ export async function compactIfNeeded(
   try {
     const result = await compactConversation(working, mainModel, ctx);
     if (!result) {
+      console.log(
+        `[compact] full-compact DONE — no change (summarizer returned empty), ` +
+          `msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}`,
+      );
       return working;
     }
 
@@ -158,11 +183,18 @@ export async function compactIfNeeded(
       summaryLength: result.summaryLength,
       estimatedTokensAfter: result.estimatedTokensAfter,
     });
+    console.log(
+      `[compact] full-compact DONE — msgs ${msgsBeforeFull} → ${result.messages.length}, ` +
+        `tokens≈${tokensBeforeFull.toLocaleString()} → ${result.estimatedTokensAfter.toLocaleString()}, ` +
+        `summaryChars=${result.summaryLength.toLocaleString()}`,
+    );
     return result.messages;
   } catch (error) {
     consecutiveFailures++;
     const msg = error instanceof Error ? error.message : String(error);
-    console.error(`[auto-compact] LLM summarize failed: ${msg}`);
+    console.error(
+      `[compact] full-compact FAILED — msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}: ${msg}`,
+    );
     eventBus.emit("compaction_error", { error: msg });
     return working;
   }
