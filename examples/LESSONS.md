@@ -99,7 +99,7 @@ You > 读一下 package.json 的内容
 
 生产级 agent 不只有一个"写文件"工具，而是分两个操作：
 
-| 操作 | Claude Code | Cursor | OpenCode |
+| 操作 | Other CLI | Cursor | OpenCode |
 |---|---|---|---|
 | 创建新文件 / 全量覆写 | `create` 命令 | `Write` 工具 | `write` 工具 |
 | 局部修改（改几行） | `str_replace`（old→new） | `StrReplace`（old→new） | `edit`（old→new） |
@@ -168,8 +168,8 @@ You > 读一下 package.json 的内容
 | 策略 | 做法 | 谁在用 |
 |---|---|---|
 | 长输出写成文件 | 工具输出超过阈值 → 写到磁盘 → 上下文只留引用路径 | Cursor |
-| 工具输出存磁盘 + hot tail | 旧工具输出存磁盘，最近几个保留在上下文 | Claude Code（microcompaction） |
-| LLM 摘要（compaction） | 用便宜模型把旧消息压缩为结构化摘要 | Claude Code、OpenCode |
+| 工具输出存磁盘 + hot tail | 旧工具输出存磁盘，最近几个保留在上下文 | 部分 CLI（microcompaction） |
+| LLM 摘要（compaction） | 用便宜模型把旧消息压缩为结构化摘要 | OpenCode 等 |
 | RL 训练自我摘要 | 模型自己学会在上下文快满时保留关键信息 | Cursor（Composer） |
 
 Cursor 的做法最简单：长工具输出直接写文件，不做截断。但上下文最终还是会满——这时所有人都得做 **summarization**。
@@ -266,7 +266,7 @@ You > 创建一个 Node.js 项目，包含 express 服务器、3 个 CRUD 路由
 
 1. **上下文的核心问题是消息数量累积，不是单个输出太大** —— 单个输出已经被 `utils.js` 的 `truncate()` 限制在 30KB
 2. **Coding agent 的工具输出天然可重新获取** —— 文件可以重读，命令可以重跑。逐个截断工具输出意义不大
-3. **Summarization 是所有生产级 agent 的共同选择** —— Claude Code、Cursor、OpenCode 都做 compaction
+3. **Summarization 是所有生产级 agent 的共同选择** —— Cursor、OpenCode 等主流产品都做 compaction
 4. **Summary 的质量取决于 prompt** —— 结构化的"工作状态"比流水账式的"对话总结"好得多
 
 **引出下一课：** "现在单个 agent 能跑长任务了。但有些操作（比如探索代码库）会产生大量中间输出、占用主 agent 的上下文——能不能把它们分到独立的 agent 里？"

@@ -101,7 +101,7 @@ export async function loadSlashRegistry(cwd: string): Promise<{
     });
   }
 
-  // Skill overrides command on duplicate name (CC rule); built-ins are
+  // Skill overrides command on duplicate name; built-ins are
   // protected.
   for (const s of skills) {
     if (BUILTIN_NAMES.has(s.name)) {

@@ -35,7 +35,7 @@ You MUST NOT:
 File-mutating tools have been disabled for you; attempting to use them will fail.`;
 
 /** Read-only tool surface available to subagents that inherit the parent's
- *  toolset minus mutating tools. Wording mirrors CC exploreAgent guidelines. */
+ *  toolset minus mutating tools. */
 export const READ_ONLY_TOOLS = `Available tools (inherited from the parent agent, except mutating ones):
 - Use ${GLOB_TOOL_NAME} for broad file pattern matching
 - Use ${GREP_TOOL_NAME} for searching file contents with regex

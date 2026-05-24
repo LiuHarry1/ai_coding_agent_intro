@@ -6,7 +6,7 @@ import type { ToolDefinition } from "../core/types.js";
 
 // Hard cap on file size for read_file. Files over this throw — the
 // model must use grep to locate the section first, or fall back to
-// shell `sed -n 'A,Bp'`. Equivalent to CC's `FileReadTool/limits.ts`
+// shell `sed -n 'A,Bp'`.
 // `MAX_OUTPUT_SIZE` (0.25 MB), retained after their A/B test showed
 // "throw on oversize" yields fewer tokens than "truncate and serve".
 const MAX_FILE_SIZE = 256 * 1024;

@@ -4,7 +4,7 @@
  * is a single-file change.
  *
  * each tool's prompt module exports its own name, then subagent
- * deny-lists compose them (see `built-in/exploreAgent.ts:67`).
+ * deny-lists compose them.
  *
  * Why not just import each tool definition and read `.name`? Two
  * reasons: (1) the tool files import zod / runtime deps we don't want to
@@ -25,7 +25,7 @@ export const WEB_FETCH_TOOL_NAME = "web_fetch";
 
 /**
  * Single tool that dispatches to all built-in subagents via a
- * `subagent_type` parameter. Modeled after Claude Code's `Task` tool.
+ * `subagent_type` parameter.
  */
 export const TASK_TOOL_NAME = "task";
 

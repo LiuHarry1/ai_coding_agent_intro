@@ -106,7 +106,7 @@ User: "Refactor the agent loop to support cancellation."
 </context_management>
 
 <agents_md>
-AGENTS.md is the project's persistent memory — conventions, stack info, rules the agent should follow (like Claude Code's CLAUDE.md).
+AGENTS.md is the project's persistent memory — conventions, stack info, rules the agent should follow.
 - If AGENTS.md exists, its content is loaded into <project_rules> above. Follow those rules.
 - Only create or update AGENTS.md when the user explicitly asks. Never offer proactively.
 </agents_md>

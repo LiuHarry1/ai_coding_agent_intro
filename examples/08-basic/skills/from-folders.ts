@@ -26,9 +26,9 @@
  *                                          # hidden unless a matching file exists
  *   ---
  *
- * The skill name comes from the folder name (CC convention). An optional
+ * The skill name comes from the folder name. An optional
  * `name:` frontmatter override is intentionally NOT supported — the folder
- * name is the source of truth, same as CC.
+ * name is the source of truth.
  *
  * Performance notes:
  * - Frontmatter is parsed from the first ~16 KB of `SKILL.md`. Full body
@@ -67,9 +67,8 @@ function parseContextMode(value: unknown): SkillContextMode | null {
 }
 
 /**
- * Skill folders are restricted to the same identifier shape as CC + slash
- * commands so callers can use the name verbatim in tool inputs / URLs
- * without escaping.
+ * Skill folders are restricted to a safe identifier shape so callers can
+ * use the name verbatim in tool inputs / URLs without escaping.
  */
 function isValidSkillFolderName(name: string): boolean {
   return /^[a-z0-9][a-z0-9_-]*$/i.test(name);
@@ -80,7 +79,7 @@ function isValidSkillFolderName(name: string): boolean {
  * if no patterns are present or they're all match-all (which is the same
  * as "no filter"). Strips trailing `/**` because the `ignore` library
  * already treats a bare path as matching both the path and everything
- * inside it — same normalization CC does.
+ * inside it — trailing `/**` is stripped for consistency with gitignore-style matching.
  */
 function parseSkillPaths(value: unknown): string[] | undefined {
   if (value === undefined || value === null) return undefined;

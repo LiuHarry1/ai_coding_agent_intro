@@ -10,7 +10,7 @@ import { TASK_TOOL_NAME } from "./tool-names.js";
 
 /**
  * Single tool that dispatches to all built-in subagents via a
- * `subagent_type` parameter. Modeled after Claude Code's `Task` tool.
+ * `subagent_type` parameter.
  *
  * Why a single dispatcher instead of one tool per subagent (the previous
  * design)?

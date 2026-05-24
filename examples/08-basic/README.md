@@ -40,7 +40,7 @@ core/llm/
 
 ### 2. 统一 `task` 子代理调度
 
-06 把 `explore` 注册成与普通 tool 并列的独立工具。07 改为 **Claude Code 风格的单一 `task` tool**：
+06 把 `explore` 注册成与普通 tool 并列的独立工具。07 改为 **单一 `task` tool**：
 
 - 描述里内嵌所有子代理目录（`whenToUse` 段落），便于模型横向对比选型
 - 参数 `subagent_type`：`explore` | `plan` | `general_purpose`
@@ -255,7 +255,7 @@ Open http://localhost:5173 (Vite proxies API requests to port 4567).
 
 `task` tool 的描述、`subagent_type` 枚举和分发表会自动更新。
 
-#### 方式 B：Markdown + YAML frontmatter（Claude Code 风格）
+#### 方式 B：Markdown + YAML frontmatter
 
 在以下任一目录放 `<name>.md`，每次 chat 请求会重新扫描（编辑文件无需重启）：
 
@@ -293,11 +293,11 @@ Output format:
 - 正文 → `systemPrompt`（必填，空 body 会被拒绝）
 - `tools` 与 `disallowedTools` 互斥；都不写时默认禁用 `task` + `ask_user_question`（防递归 / 防阻塞）；写了 allow-list 时也强制剔除 `task`
 
-实现入口：`subagents/from-files.ts` → `parseAgentFromMarkdown` / `mergeAgents`；async 注册器 `subagents/index.ts` → `registerSubagents(registry, cwd)` 由 `server/router.ts` 每次 chat 请求调用，对照 CC `loadAgentsDir.ts` 的 `getActiveAgentsFromList`。
+实现入口：`subagents/from-files.ts` → `parseAgentFromMarkdown` / `mergeAgents`；async 注册器 `subagents/index.ts` → `registerSubagents(registry, cwd)` 由 `server/router.ts` 每次 chat 请求调用。
 
-### 添加 Slash Commands（Claude Code 风格 — 与 Skills 合并）
+### 添加 Slash Commands（与 Skills 合并）
 
-把 `<name>.md` 放到 `<cwd>/.ai-agent/commands/` 或 `~/.ai-agent/commands/`，**skills** 放到 `<cwd>/.ai-agent/skills/<name>/SKILL.md` — 两者都通过 **`/<name> [args]`** 触发（与 CC 一致；同名时 **skill 优先于 command**）。
+把 `<name>.md` 放到 `<cwd>/.ai-agent/commands/` 或 `~/.ai-agent/commands/`，**skills** 放到 `<cwd>/.ai-agent/skills/<name>/SKILL.md` — 两者都通过 **`/<name> [args]`** 触发（同名时 **skill 优先于 command**）。
 
 用户在聊天框输入 `/` 时，Web UI 会弹出 autocomplete（`GET /slash-commands`）；`/help` 列出 commands + skills。
 
@@ -323,7 +323,7 @@ Diff:
 For each issue, output one bullet: `[severity]` `file:line` — what / why / fix.
 ```
 
-body 里支持的语法（与 CC 对齐）：
+body 里支持的语法：
 - `$ARGUMENTS` — `/cmd ` 后面的整段
 - `$1`、`$2`、… 或 `$ARGUMENTS[0]` — 索引访问（空格/引号分词）
 - `$name` — 命名参数（前提是 frontmatter 里声明 `arguments:`）
@@ -332,11 +332,10 @@ body 里支持的语法（与 CC 对齐）：
 
 实现：`commands/argument-substitution.ts`（参数替换）、`commands/prompt-expansion.ts`（!-block + @-ref）、`commands/from-files.ts`（解析）、`commands/dispatcher.ts`（在 router 调 LLM 之前拦截 `/`）。
 
-### 添加 Skills（Claude Code 风格 — 文件夹形态）
+### 添加 Skills（文件夹形态）
 
 Skill 由**模型而不是用户**触发——通过 `skill` dispatcher tool。和 command 共用一套
-`$ARGUMENTS` / `!` / `@` 语法，但每个 skill 是一个**文件夹**而不是单文件 `.md`，
-对齐 Claude Code 的 `loadSkillsFromSkillsDir`。
+`$ARGUMENTS` / `!` / `@` 语法，但每个 skill 是一个**文件夹**而不是单文件 `.md`。
 
 #### 目录布局
 
@@ -348,8 +347,7 @@ Skill 由**模型而不是用户**触发——通过 `skill` dispatcher tool。�
 
 每个 skill 文件夹**必须**包含 `SKILL.md`；同目录下**可以**放任意其它文件 / 子目录
 （脚本、模板、示例数据）。skill 名 = 文件夹名（必须匹配 `[a-z0-9][a-z0-9_-]*`），
-直接散落在 `.ai-agent/skills/` 根下的 `.md` 文件会被忽略。对照 CC：`getProjectDirsUpToHome('skills', cwd)`
-+ `~/.claude/skills/`（我们换成 `.ai-agent` 跟自身配置目录对齐）。
+直接散落在 `.ai-agent/skills/` 根下的 `.md` 文件会被忽略。用户级 skill 目录为 `~/.ai-agent/skills/`。
 
 #### `SKILL.md` 示例
 
@@ -371,14 +369,14 @@ Diff stats: !`git diff --stat origin/main...HEAD`
 ```
 
 `${SKILL_DIR}` 会被替换成该 skill 文件夹的绝对路径，body 里可以借此引用同目录下
-的其它文件 / 脚本（对齐 CC 的 `${CLAUDE_SKILL_DIR}`）。expand 之后还会自动在
+的其它文件 / 脚本（`${SKILL_DIR}` 占位符）。expand 之后还会自动在
 prompt 顶部加一行 `Base directory for this skill: …`，让模型即使没显式引用也能
 找到这些 bundled 资源。
 
 #### 条件激活（`paths:` frontmatter）
 
 写了 `paths:` 的 skill 是**条件性的**——只在用户当前消息提到的文件匹配其 pattern 时才暴露给模型。
-没写 `paths:` 的 skill 永远活跃。Pattern 用 `ignore` 库做 gitignore-style 匹配（和 CC 一致）：
+没写 `paths:` 的 skill 永远活跃。Pattern 用 `ignore` 库做 gitignore-style 匹配：
 
 | Frontmatter | 行为 |
 |-------------|------|
@@ -390,9 +388,7 @@ prompt 顶部加一行 `Base directory for this skill: …`，让模型即使没
 - 反引号包裹的路径：`` `src/foo.ts` ``
 - 含 `/` 或扩展名的裸 token：`src/foo.ts`、`run.sh`
 
-要换更准的信号（git 修改文件、最近编辑、`git ls-files`），改 `registerSkills` 的 `candidateFiles` 入参即可。对照
-CC：`activateConditionalSkillsForPaths`（CC 在每次文件工具调用时动态激活；我们在每个聊天回合做一次过滤——
-和我们 per-request register 的节奏匹配）。
+要换更准的信号（git 修改文件、最近编辑、`git ls-files`），改 `registerSkills` 的 `candidateFiles` 入参即可。我们在每个聊天回合做一次过滤，和 per-request register 的节奏匹配。
 
 #### 两种 `context` 模式
 
@@ -404,8 +400,6 @@ CC：`activateConditionalSkillsForPaths`（CC 在每次文件工具调用时动�
 扫描时只读 `SKILL.md` 前 16 KB 解析 frontmatter，**body 不进内存**——模型真调用了
 才通过 `loadBody()` 重新读一次完整文件并 strip frontmatter，结果在 `SkillDefinition`
 里缓存一份。对 100+ skill + 多 KB body 的项目，启动 IO 和 heap 都明显省。
-对照 CC：CC 把 body 留在 closure 里，靠 `estimateSkillFrontmatterTokens` 控制
-"展示给模型的 token"；我们更进一步把"留在内存里的 byte"也省了。
 
 #### 实现入口
 
@@ -414,9 +408,6 @@ CC：`activateConditionalSkillsForPaths`（CC 在每次文件工具调用时动�
 - `tools/skill.ts` — dispatcher，调 `loadBody()` 拿 body、做 `${SKILL_DIR}` / `$ARGUMENTS` 替换、加 preamble
 - `server/router.ts` — 每次聊天请求调用一次（编辑 `SKILL.md` 下条消息生效，无需重启）
 
-对照 CC：`src/skills/loadSkillsDir.ts` 的 `loadSkillsFromSkillsDir` + `getProjectDirsUpToHome`
-+ `activateConditionalSkillsForPaths`。
-
 ### 共享底座
 
 agents / commands / skills 三者共用：
@@ -424,7 +415,7 @@ agents / commands / skills 三者共用：
 - `core/markdown-config-loader.ts` — 扫 user + project 两层目录、读文件、`gray-matter` 解析
 - `core/frontmatter-helpers.ts` — `parseToolList` / `parseBool` / `parseArgumentNames` 等
 
-目录布局（对齐 Claude Code 的 `.claude/`，只是我们叫 `.ai-agent/`）：
+目录布局（项目配置目录 `.ai-agent/`）：
 
 ```text
 ~/.ai-agent/

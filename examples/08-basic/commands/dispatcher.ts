@@ -5,7 +5,7 @@
  * context, and return a uniform `DispatchResult` for the router to act on.
  * No transport, no SSE, no subagent execution — those live one layer up.
  *
- * Result shape (CC-aligned: one verb, mode-discriminated payload):
+ * Result shape (one verb, mode-discriminated payload):
  *
  *   - passthrough → not a slash command; forward unchanged
  *   - reply       → immediate text to show the user (no LLM)

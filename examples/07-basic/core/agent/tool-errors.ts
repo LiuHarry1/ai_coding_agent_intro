@@ -1,7 +1,7 @@
 /**
  * Tool-error formatting helpers.
  *
- * generic-error path (`formatError`) and the Zod-validation path
+ * The generic-error path (`formatError`) and the Zod-validation path
  * (`formatZodValidationError`) are kept as separate exports — callers
  * pick the right one depending on what produced the error. We keep that
  * split because (a) Zod errors don't have `.stderr` / `.stdout` and the
@@ -18,7 +18,7 @@
 //
 // child_process / shell errors can spit out megabytes of stderr; if we
 // pass the whole thing back to the model it inflates the next request by
-// 10x and we hit context limits within a turn or two. Match Claude Code's
+// 10x and we hit context limits within a turn or two. Cap at
 // 10k cap with a head/tail split + middle elision so the model still sees
 // both the failure summary AND the final lines (where the actual error
 // usually lives for shell tools).
@@ -62,7 +62,7 @@ export function formatError(err: unknown): string {
 /**
  * Render a Zod `path` array (e.g. `["todos", 0, "activeForm"]`) as the
  * dotted/bracketed string the model already knows from its tool schema:
- * `todos[0].activeForm`. Matches Claude Code's `formatValidationPath`.
+ * `todos[0].activeForm`.
  */
 export function formatZodPath(path: ReadonlyArray<PropertyKey>): string {
   if (path.length === 0) return "(root)";

@@ -3,7 +3,7 @@
  * (via the `skill` dispatcher tool) when it needs a reusable procedure
  * — code review checklist, PR-author template, debug protocol, etc.
  *
- * Two execution modes (CC convention):
+ * Two execution modes:
  *
  *   "inline" (default): the body — after `$ARGUMENTS` / `!` / `@` expansion
  *                       — is returned as the tool result. The main agent
@@ -49,11 +49,11 @@ export interface SkillDefinition {
   /** Named arg list for `$name` substitution (mirrors slash commands). */
   argumentNames: string[];
   /**
-   * Gitignore-style path patterns (per CC frontmatter `paths:`). When set
+   * Gitignore-style path patterns (frontmatter `paths:`). When set
    * and non-empty, the skill is **conditional**: it stays hidden from the
    * model unless at least one matching file exists in the workspace. Skills
    * without `paths` are always active. Matching uses the `ignore` library
-   * (same as CC) so patterns like `src/**` + `*.py`, `!vendor/**` work as
+   * so patterns like `src/**` + `*.py`, `!vendor/**` work as
    * users would expect from `.gitignore`.
    */
   paths?: string[];

@@ -2,7 +2,7 @@ import { createAgentDefinition } from "./base.js";
 import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "./prompt-fragments.js";
 import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS, MUTATING_TOOLS } from "../tools/tool-names.js";
 
-/** Mirrors CC `planAgent.ts` `agentType`. */
+/** Plan subagent type identifier. */
 export const PLAN_AGENT_TYPE = "Plan";
 
 const PLAN_SYSTEM = `You are a software architect. Explore the codebase and design a concrete implementation plan — NOT to write code.

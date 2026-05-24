@@ -25,8 +25,6 @@ export interface ShellConfig {
    * the post-command working directory into `cwdFile`, (3) exits with the
    * user command's exit code (NOT the trailer's). The shell-runner reads
    * `cwdFile` after the child closes to persist `cd` across calls.
-   *
-     * `powershellProvider`'s `$LASTEXITCODE ?? $?` exit-code logic.
    */
   wrapCommand(userCmd: string, cwdFile: string): string;
 }

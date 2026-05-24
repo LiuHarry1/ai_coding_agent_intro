@@ -30,7 +30,7 @@ export interface SlashCommand {
   /**
    * Optional model override applied when the expanded message is sent.
    * Currently not wired into the runtime (Phase 2). Captured for parity
-   * with CC frontmatter so user files don't get rejected.
+   * with common frontmatter so user files don't get rejected.
    */
   model?: string;
   /** Markdown body — the prompt template with `$ARGUMENTS` / `!` / `@` syntax. */

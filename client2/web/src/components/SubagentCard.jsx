@@ -91,7 +91,7 @@ const STEP_PREVIEW_LIMIT = 6;
 
 export default function SubagentCard({ part }) {
   const args = part.args || {};
-  // Dispatch tool is named "Agent" (CC); legacy builds used "task". Identity
+  // Dispatch tool is named "Agent"; legacy builds used "task". Identity
   // is in args.subagent_type. Older sessions stored it in part.name.
   const subagentType = args.subagent_type || part.name || "subagent";
   const result = part.result;

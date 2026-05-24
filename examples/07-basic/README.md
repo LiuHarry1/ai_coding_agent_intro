@@ -40,7 +40,7 @@ core/llm/
 
 ### 2. 统一 `task` 子代理调度
 
-06 把 `explore` 注册成与普通 tool 并列的独立工具。07 改为 **Claude Code 风格的单一 `task` tool**：
+06 把 `explore` 注册成与普通 tool 并列的独立工具。07 改为 **单一 `task` tool**：
 
 - 描述里内嵌所有子代理目录（`whenToUse` 段落），便于模型横向对比选型
 - 参数 `subagent_type`：`explore` | `plan` | `general_purpose`

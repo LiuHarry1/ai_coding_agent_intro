@@ -1,7 +1,7 @@
 import { createAgentDefinition } from "./base.js";
 import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS } from "../tools/tool-names.js";
 
-/** Mirrors CC `generalPurposeAgent.ts` `agentType`. */
+/** General-purpose subagent type identifier. */
 export const GENERAL_PURPOSE_AGENT_TYPE = "general-purpose";
 
 const GENERAL_PURPOSE_SYSTEM = `You are a general-purpose research and execution agent running in an isolated context. Complete the task fully — don't gold-plate, don't leave it half-done.

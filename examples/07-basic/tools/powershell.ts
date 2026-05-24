@@ -6,8 +6,7 @@ import { detectPowerShellEdition, type PowerShellEdition } from "../core/powersh
 /**
  * Edition-specific syntax guidance. Without this branch the model either
  * (a) emits PS 7+ idioms (`&&`, `??`) on a 5.1 host → parser error / exit 1,
- * or (b) needlessly avoids them on a 7+ host. Mirrors Claude Code's
- * `getEditionSection` in `PowerShellTool/prompt.ts`.
+ * or (b) needlessly avoids them on a 7+ host.
  */
 function getEditionSection(edition: PowerShellEdition): string {
   if (edition === "desktop") {

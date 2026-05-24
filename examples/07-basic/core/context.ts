@@ -146,7 +146,7 @@ export function estimateConversationTokens(messages: Message[]): number {
   return t;
 }
 
-// ── Hybrid token counting (Claude-Code-style) ───────────
+// ── Hybrid token counting ─────────────────────────────────
 
 /**
  * Real usage we cache on the assistant message that ended each agent step.
@@ -184,9 +184,8 @@ function clearTokenUsages(messages: Message[]): void {
 }
 
 /**
- * Canonical "context size" from an attached usage record. Mirrors Claude
- * Code's `getTokenCountFromUsage` philosophy: prefer `totalTokens` when the
- * provider gave us one, otherwise sum the components we have.
+ * Canonical "context size" from an attached usage record: prefer `totalTokens`
+ * when the provider gave us one, otherwise sum the components we have.
  */
 function tokenCountFromUsage(u: AttachedTokenUsage): number {
   if (typeof u.totalTokens === "number" && u.totalTokens > 0) return u.totalTokens;
@@ -194,8 +193,7 @@ function tokenCountFromUsage(u: AttachedTokenUsage): number {
 }
 
 /**
- * The CANONICAL token-count function for threshold checks. Mirrors Claude
- * Code's `tokenCountWithEstimation` (utils/tokens.ts:226):
+ * The CANONICAL token-count function for threshold checks:
  *   1. Walk backward to the most recent assistant with cached usage.
  *   2. Use that real number as the baseline (it includes tokenizer-precise
  *      counts, tools schema, cache state — things estimation can't capture).

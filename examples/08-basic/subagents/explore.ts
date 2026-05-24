@@ -44,7 +44,7 @@ NOTE: You are meant to be a fast agent that returns output as quickly as possibl
 
 Complete the user's search request efficiently and report your findings clearly.`;
 
-/** Mirrors CC `exploreAgent.ts`. */
+/** Explore subagent type identifier. */
 export const EXPLORE_AGENT_TYPE = "Explore";
 export const EXPLORE_AGENT_MIN_QUERIES = 3;
 

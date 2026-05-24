@@ -1,6 +1,6 @@
 /**
  * Single dispatcher tool exposing all loaded skills. Mirrors the `task`
- * tool's "one tool, many subagent_types" pattern from CC.
+ * tool's "one tool, many subagent_types" pattern.
  *
  * The model calls `skill(skill_name=..., arguments=...)` and we either:
  *

@@ -75,7 +75,7 @@ export function parseString(value: unknown): string | undefined {
 
 /**
  * Parse a "name" key from frontmatter as a stable identifier.
- * agent/skill validation: must be a non-empty string. Returns null on miss
+ * Used for agent/skill validation: must be a non-empty string. Returns null on miss
  * so callers can silently skip non-extension markdown files in the dir.
  */
 export function parseIdentifier(value: unknown): string | null {
