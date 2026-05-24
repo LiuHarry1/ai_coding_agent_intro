@@ -27,8 +27,8 @@ import {
   buildToolMessage,
   runToolCalls,
 } from "./agent/toolOrchestration.js";
-import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
+import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
 import type { AnyTool } from "./types.js";
 
 // ── User-message helpers ────────────────────────────
@@ -173,6 +173,7 @@ export async function runAgent(
     skillListing,
     deferredToolPool,
     concurrencyPolicy,
+    sessionId,
   }: AgentOptions,
 ): Promise<string> {
   if (skillListing) {
@@ -202,7 +203,7 @@ export async function runAgent(
       eventBus.emit("step_start", { step });
       const stepStart = Date.now();
 
-      await runCompactionAndLog(messages, eventBus, step, resolvedModel, provider, currentTodos);
+      await runCompactionAndLog(messages, eventBus, step, resolvedModel, provider, currentTodos, sessionId);
 
       const stepResult = await runOneStep({
         messages,
@@ -216,6 +217,7 @@ export async function runAgent(
         stepStart,
         currentTodos,
         concurrencyPolicy: toolPolicy,
+        sessionId,
       });
 
       if (stepResult === null) {
@@ -261,9 +263,18 @@ async function runCompactionAndLog(
   resolvedModel: string,
   provider: ReturnType<typeof defaultManager.get>,
   currentTodos: TodoItem[],
+  sessionId?: string,
 ): Promise<void> {
   const compactStart = Date.now();
-  const managed = await compactIfNeeded(messages, eventBus, resolvedModel, process.cwd(), currentTodos);
+  const managed = await compactIfNeeded(
+    messages,
+    eventBus,
+    resolvedModel,
+    process.cwd(),
+    currentTodos,
+    {},
+    sessionId,
+  );
   const compactMs = Date.now() - compactStart;
 
   const counted = tokenCountWithEstimation(messages);
@@ -297,6 +308,7 @@ interface RunOneStepArgs {
   stepStart: number;
   currentTodos: TodoItem[];
   concurrencyPolicy: ConcurrencyPolicyFn;
+  sessionId?: string;
 }
 
 /**
@@ -318,6 +330,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     step,
     stepStart,
     concurrencyPolicy,
+    sessionId,
   } = args;
 
   const apiTools = stripToolExecute(tools);
@@ -369,6 +382,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           tools: executors,
           eventBus,
           concurrencyPolicy,
+          sessionId,
         });
         stepResult.toolResults.push(...executed);
       }
@@ -424,10 +438,18 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           `[agent] step ${step} hit context-length error → reactive aggressive compaction. ${errMsg}`,
         );
         eventBus.emit("compaction_reactive", { error: errMsg });
-        const recompacted = await compactIfNeeded(messages, eventBus, resolvedModel, process.cwd(), args.currentTodos, {
-          force: true,
-          aggressive: true,
-        });
+        const recompacted = await compactIfNeeded(
+          messages,
+          eventBus,
+          resolvedModel,
+          process.cwd(),
+          args.currentTodos,
+          {
+            force: true,
+            aggressive: true,
+          },
+          sessionId,
+        );
         if (recompacted !== messages) {
           messages.length = 0;
           messages.push(...recompacted);

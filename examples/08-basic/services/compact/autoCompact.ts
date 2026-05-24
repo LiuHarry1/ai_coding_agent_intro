@@ -86,6 +86,7 @@ export async function compactIfNeeded(
   cwd: string,
   currentTodos: TodoItem[],
   opts: CompactOptions = {},
+  sessionId?: string,
 ): Promise<Message[]> {
   const cfg = getCompactionConfig();
   const force = !!opts.force;
@@ -126,7 +127,7 @@ export async function compactIfNeeded(
         (force ? ", force" : ""),
     );
     const tokensBeforeMicro = tokens;
-    const r = microCompact(working, microKeep);
+    const r = microCompact(working, microKeep, sessionId);
     tokens = estimateConversationTokens(r.messages);
     if (r.cleared > 0) {
       eventBus.emit("compaction_micro", { cleared: r.cleared, tokensFreed: r.tokensFreed });

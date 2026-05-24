@@ -6,6 +6,7 @@
 import type { AnyTool, IEventBus, ToolMessage } from "../types.js";
 import type { ConcurrencyPolicyFn } from "../concurrency-policy.js";
 import { formatToolError } from "./toolErrors.js";
+import { maybePersistAfterExecute } from "../../services/tool-storage/index.js";
 
 export interface ToolCallRef {
   toolCallId: string;
@@ -63,6 +64,7 @@ async function executeOne(
   tc: ToolCallRef,
   tools: Record<string, AnyTool>,
   eventBus: IEventBus,
+  sessionId?: string,
 ): Promise<ExecutedToolResult> {
   const tool = tools[tc.toolName] as AnyTool & {
     execute?: (input: unknown, options?: unknown) => Promise<unknown>;
@@ -83,7 +85,8 @@ async function executeOne(
       toolCallId: tc.toolCallId,
       messages: [],
     });
-    const result = typeof raw === "string" ? raw : JSON.stringify(raw);
+    let result = typeof raw === "string" ? raw : JSON.stringify(raw);
+    result = maybePersistAfterExecute(sessionId, tc.toolCallId, tc.toolName, result);
     eventBus.emit("tool_result", {
       name: tc.toolName,
       result,
@@ -106,6 +109,7 @@ async function executeBatchParallel(
   tools: Record<string, AnyTool>,
   eventBus: IEventBus,
   maxConcurrency: number,
+  sessionId?: string,
 ): Promise<ExecutedToolResult[]> {
   const results: ExecutedToolResult[] = new Array(calls.length);
   let nextIndex = 0;
@@ -114,7 +118,7 @@ async function executeBatchParallel(
     while (true) {
       const i = nextIndex++;
       if (i >= calls.length) return;
-      results[i] = await executeOne(calls[i]!, tools, eventBus);
+      results[i] = await executeOne(calls[i]!, tools, eventBus, sessionId);
     }
   }
 
@@ -128,6 +132,7 @@ export interface RunToolCallsOptions {
   tools: Record<string, AnyTool>;
   eventBus: IEventBus;
   concurrencyPolicy: ConcurrencyPolicyFn;
+  sessionId?: string;
 }
 
 export async function runToolCalls(
@@ -147,13 +152,14 @@ export async function runToolCalls(
           opts.tools,
           opts.eventBus,
           getMaxToolUseConcurrency(),
+          opts.sessionId,
         )),
       );
     } else if (batch.isConcurrencySafe) {
-      allResults.push(await executeOne(batch.calls[0]!, opts.tools, opts.eventBus));
+      allResults.push(await executeOne(batch.calls[0]!, opts.tools, opts.eventBus, opts.sessionId));
     } else {
       for (const tc of batch.calls) {
-        allResults.push(await executeOne(tc, opts.tools, opts.eventBus));
+        allResults.push(await executeOne(tc, opts.tools, opts.eventBus, opts.sessionId));
       }
     }
   }

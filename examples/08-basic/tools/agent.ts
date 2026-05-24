@@ -198,6 +198,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             registry,
             runAgent,
             toolEnablement,
+            sessionId: context.sessionId,
           };
 
           let subTools: Record<string, AnyTool>;
@@ -234,6 +235,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             concurrencyPolicy: registry
               ? buildConcurrencyPolicy(registry, Object.keys(subTools))
               : undefined,
+            sessionId: context.sessionId,
           });
 
           return result || `(${subagent_type} subagent returned no result)`;

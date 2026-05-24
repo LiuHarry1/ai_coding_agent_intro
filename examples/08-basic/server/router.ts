@@ -254,6 +254,7 @@ async function handleChat(
     registry: defaultRegistry,
     mcpTools: mcpManager.getAllTools(),
     toolEnablement,
+    sessionId: session.id,
   };
 
   // Split built-in + MCP tools into active vs deferred pools.
@@ -324,6 +325,7 @@ async function handleChat(
       skillListing,
       deferredToolPool: Object.keys(deferred).length > 0 ? deferred : undefined,
       concurrencyPolicy: buildConcurrencyPolicy(defaultRegistry, Object.keys(tools)),
+      sessionId: session.id,
     });
   } catch (e) {
     runError = e as Error;

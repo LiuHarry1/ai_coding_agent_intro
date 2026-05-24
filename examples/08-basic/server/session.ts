@@ -6,6 +6,13 @@ import type { Session, SessionInfo, Message } from "../core/types.js";
 const SESSION_DIR = path.resolve(".sessions");
 const sessions = new Map<string, Session>();
 
+export { SESSION_DIR };
+
+export function getToolResultFilePath(sessionId: string, toolCallId: string): string {
+  const safe = toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return path.join(SESSION_DIR, sessionId, "tool-results", `${safe}.txt`);
+}
+
 function sessionPath(id: string): string {
   return path.join(SESSION_DIR, `${id}.jsonl`);
 }

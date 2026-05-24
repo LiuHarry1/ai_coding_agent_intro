@@ -27,6 +27,7 @@ export interface RunSkillForkOptions {
   activeAgents: readonly AgentDefinition[];
   eventBus: IEventBus;
   toolEnablement?: ToolContext["toolEnablement"];
+  sessionId?: string;
 }
 
 export async function runSkillFork(
@@ -41,6 +42,7 @@ export async function runSkillFork(
     activeAgents,
     eventBus,
     toolEnablement,
+    sessionId,
   } = opts;
 
   const targetAgentType = skill.agent ?? "general_purpose";
@@ -63,6 +65,7 @@ export async function runSkillFork(
     registry,
     runAgent,
     toolEnablement,
+    sessionId,
   };
 
   let subTools: Record<string, AnyTool>;
@@ -86,6 +89,7 @@ export async function runSkillFork(
     maxSteps: targetAgent.maxSteps ?? 20,
     model: targetAgent.model,
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(subTools)),
+    sessionId,
   });
 
   return result || `(skill ${skill.name} returned no result)`;

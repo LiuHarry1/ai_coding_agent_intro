@@ -8,6 +8,10 @@
  */
 import type { AssistantMessage, Message, ToolMessage } from "../../core/types.js";
 import { estimateMessageTokens } from "./tokens.js";
+import {
+  isPersistedReference,
+  offloadReferenceForCompact,
+} from "../tool-storage/index.js";
 
 const MICRO_COMPACT_MARKER = "[Old tool result content cleared to save context]";
 
@@ -36,7 +40,6 @@ function estStr(s: string): number {
   return Math.ceil(s.length / 4);
 }
 
-const MARKER_RESULT_COST = estStr(MICRO_COMPACT_MARKER);
 const MARKER_INPUT_JSON = JSON.stringify(MICRO_COMPACT_INPUT_MARKER);
 const MARKER_INPUT_COST = estStr(MARKER_INPUT_JSON);
 
@@ -46,7 +49,11 @@ export interface MicroCompactResult {
   cleared: number;
 }
 
-export function microCompact(messages: Message[], keepRecent: number): MicroCompactResult {
+export function microCompact(
+  messages: Message[],
+  keepRecent: number,
+  sessionId?: string,
+): MicroCompactResult {
   const toolMsgIdx: number[] = [];
   for (let i = 0; i < messages.length; i++) {
     if (messages[i].role === "tool") toolMsgIdx.push(i);
@@ -62,7 +69,7 @@ export function microCompact(messages: Message[], keepRecent: number): MicroComp
 
   const out = messages.map((m, i) => {
     if (i >= clearUpToExclusive) return m;
-    if (m.role === "tool") return clearToolResults(m, () => cleared++, (n) => (tokensFreed += n));
+    if (m.role === "tool") return clearToolResults(m, sessionId, () => cleared++, (n) => (tokensFreed += n));
     if (m.role === "assistant") return clearToolInputs(m, () => cleared++, (n) => (tokensFreed += n));
     return m;
   });
@@ -88,6 +95,7 @@ export function estimateAfterMicroCompact(
 
 function clearToolResults(
   m: ToolMessage,
+  sessionId: string | undefined,
   bumpCleared: () => void,
   addFreed: (n: number) => void,
 ): ToolMessage {
@@ -96,11 +104,18 @@ function clearToolResults(
     if (!CLEARABLE_TOOL_RESULTS.has(part.toolName)) return part;
     const v = part.output?.value ?? "";
     const text = typeof v === "string" ? v : JSON.stringify(v);
-    if (text === MICRO_COMPACT_MARKER) return part;
-    addFreed(Math.max(0, estStr(text) - MARKER_RESULT_COST));
+    if (text === MICRO_COMPACT_MARKER || isPersistedReference(text)) return part;
+    const replacement = offloadReferenceForCompact(
+      sessionId,
+      part.toolCallId,
+      part.toolName,
+      text,
+      MICRO_COMPACT_MARKER,
+    );
+    addFreed(Math.max(0, estStr(text) - estStr(replacement)));
     bumpCleared();
     touched = true;
-    return { ...part, output: { type: "text" as const, value: MICRO_COMPACT_MARKER } };
+    return { ...part, output: { type: "text" as const, value: replacement } };
   });
   return touched ? ({ ...m, content: newContent } as ToolMessage) : m;
 }

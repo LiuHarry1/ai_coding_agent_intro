@@ -142,6 +142,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
               activeAgents: forkableAgents,
               eventBus,
               toolEnablement,
+              sessionId: context.sessionId,
             });
           } catch (e) {
             return `Error: ${(e as Error).message}`;

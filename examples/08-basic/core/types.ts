@@ -49,6 +49,8 @@ export interface ToolContext {
   mcpTools?: Record<string, AnyTool>;
   /** From AppConfig: omit disabled tools in registry.createAll; subagents pass through for MCP merge + filter */
   toolEnablement?: Pick<AppConfig, "disabledTools">;
+  /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
+  sessionId?: string;
 }
 
 export interface ToolDefinition {
@@ -190,6 +192,8 @@ export interface AgentOptions {
    * all tools run serially (safe default).
    */
   concurrencyPolicy?: ConcurrencyPolicyFn;
+  /** Persists large tool outputs; inherited by subagent runs. */
+  sessionId?: string;
 }
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;
