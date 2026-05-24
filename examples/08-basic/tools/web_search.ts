@@ -72,6 +72,7 @@ function buildSearchURL(baseURL: string, args: {
 export const definition: ToolDefinition = {
   name: "web_search",
   description: "Search the web using a SearXNG instance",
+  shouldDefer: true,
   create() {
     return tool({
       description:

@@ -27,6 +27,7 @@ function summarize(items: TodoItem[]): string {
 export const definition: ToolDefinition = {
   name: "todo_write",
   description: "Create or update a structured task checklist to track multi-step work",
+  shouldDefer: true,
 
   create(_cwd, context) {
     const todos = new Map<string, TodoItem>();

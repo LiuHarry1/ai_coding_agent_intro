@@ -11,6 +11,7 @@ import {
   GREP_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
+  TOOL_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
 } from "../tools/tool-names.js";
 import { SKILL_TOOL_NAME } from "../tools/skill.js";
@@ -41,6 +42,10 @@ function exploreGuidanceSection(): string {
 
 function skillGuidanceSection(): string {
   return `/<skill-name> is shorthand for users to invoke a skill. When executed, the skill gets expanded to a full prompt. Use the ${SKILL_TOOL_NAME} tool to execute them. Only use ${SKILL_TOOL_NAME} for skills listed in <system-reminder> messages — do not guess or fabricate skill names.`;
+}
+
+function toolSearchGuidanceSection(): string {
+  return `Some tools are deferred — their names are listed in <system-reminder> messages but their full schemas are not loaded. When you need a deferred tool, call ${TOOL_SEARCH_TOOL_NAME} first (with \`select:tool_name\` for exact lookup or keywords for search). The tool will be activated and available for your next action. Do not attempt to call a deferred tool without discovering it first — the call will fail.`;
 }
 
 export function systemPrompt(cwd: string, projectRules?: string): string {
@@ -115,5 +120,6 @@ Tool results and user messages may include \`<system-reminder>\` tags. They cont
 # Session-specific guidance
  - ${agentToolSection()}
  - ${exploreGuidanceSection()}
- - ${skillGuidanceSection()}${rulesAppend}`;
+ - ${skillGuidanceSection()}
+ - ${toolSearchGuidanceSection()}${rulesAppend}`;
 }

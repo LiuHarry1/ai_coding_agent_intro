@@ -159,6 +159,7 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 export const definition: ToolDefinition = {
   name: ASK_USER_QUESTION_TOOL_NAME,
   description: DESCRIPTION,
+  shouldDefer: true,
   create(_cwd, context) {
     return tool({
       description: `${DESCRIPTION}\n\n${ASK_USER_QUESTION_TOOL_PROMPT}`,

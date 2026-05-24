@@ -21,6 +21,7 @@ import { configManager } from "../core/config-manager.js";
 import { answerQuestion } from "../core/question-broker.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 import { filterToolsByEnablement } from "../core/tool-enablement.js";
+import { createToolSearchDefinition, TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig, LlmProfile } from "../core/types.js";
 
 registerBuiltinSubagents(defaultRegistry);
@@ -246,26 +247,69 @@ async function handleChat(
   const enablement = configManager.getAll();
   const toolEnablement = { disabledTools: enablement.disabledTools };
 
-  const localTools = defaultRegistry.createAll(cwd, {
+  const toolContext = {
     eventBus,
     middleware,
     runAgent,
     registry: defaultRegistry,
     mcpTools: mcpManager.getAllTools(),
     toolEnablement,
-  });
-  const mcpTools = mcpManager.getAllTools();
-  const merged = { ...localTools, ...mcpTools };
-  const tools = filterToolsByEnablement(merged, defaultRegistry, toolEnablement);
+  };
+
+  // Split built-in + MCP tools into active vs deferred pools.
+  // Tools previously discovered in this session stay active.
+  const { active, deferred, deferredDefs } = defaultRegistry.createSplit(
+    cwd,
+    toolContext,
+    mcpManager.getAllTools(),
+    session.discoveredTools,
+  );
+
+  // If there are deferred tools, register tool_search as an always-active tool
+  // so the model can discover them on demand.
+  if (deferredDefs.length > 0) {
+    const tsearchDef = createToolSearchDefinition(deferredDefs);
+    active[TOOL_SEARCH_TOOL_NAME] = tsearchDef.create(cwd, toolContext);
+  }
+
+  const tools = filterToolsByEnablement(active, defaultRegistry, toolEnablement);
 
   const messagesBefore = session.messages.length;
 
-  // Build the <system-reminder> skill listing. Kept out of the tool
-  // schema / system prompt so those stay stable and cacheable. Mirrors
-  // CC's `skill_listing` attachment injected as a user-role meta message.
-  const skillListing = activeSkills.length > 0
-    ? `The following skills are available for use with the skill tool:\n\n${formatSkillListing(activeSkills)}`
+  // Build the <system-reminder> content:
+  // 1) Skill listing (same as before)
+  // 2) Deferred-tool listing (new: names only, tells model to use tool_search)
+  const reminderParts: string[] = [];
+
+  if (activeSkills.length > 0) {
+    reminderParts.push(
+      `The following skills are available for use with the skill tool:\n\n${formatSkillListing(activeSkills)}`,
+    );
+  }
+
+  if (deferredDefs.length > 0) {
+    const listing = deferredDefs
+      .map((d) => `- ${d.name}${d.isMcp ? " (MCP)" : ""}`)
+      .join("\n");
+    reminderParts.push(
+      `The following tools are available but not loaded. Use \`tool_search\` to discover and load them before use:\n${listing}`,
+    );
+  }
+
+  const skillListing = reminderParts.length > 0
+    ? reminderParts.join("\n\n")
     : undefined;
+
+  console.log(
+    `[server] tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ""}`,
+  );
+
+  // Track tools discovered via tool_search so they stay active in future turns.
+  const unsubDiscover = eventBus.on("tools_discovered", (data) => {
+    const names = (data as { tools: string[] }).tools;
+    if (!session.discoveredTools) session.discoveredTools = new Set();
+    for (const n of names) session.discoveredTools.add(n);
+  });
 
   let finalText = "";
   let runError: Error | null = null;
@@ -278,9 +322,12 @@ async function handleChat(
       images: images?.length ? images : undefined,
       subagentNames: getSubagentNames(defaultRegistry),
       skillListing,
+      deferredToolPool: Object.keys(deferred).length > 0 ? deferred : undefined,
     });
   } catch (e) {
     runError = e as Error;
+  } finally {
+    unsubDiscover();
   }
 
   for (const msg of session.messages.slice(messagesBefore)) {

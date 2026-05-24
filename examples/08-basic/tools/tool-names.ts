@@ -26,6 +26,7 @@ export const WEB_FETCH_TOOL_NAME = "web_fetch";
 export const GLOB_TOOL_NAME = "glob";
 export const GREP_TOOL_NAME = "grep";
 export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
+export const TOOL_SEARCH_TOOL_NAME = "tool_search";
 
 /**
  * Single tool that dispatches to all built-in subagents via `subagent_type`.

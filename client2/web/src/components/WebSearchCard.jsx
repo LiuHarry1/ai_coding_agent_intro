@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import CopyButton from "./CopyButton.jsx";
 import ToolRowHeader from "./ToolRowHeader.jsx";
 import { parseMcpToolName } from "../lib/tool-kind.js";
+import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
 
 /**
  * Dedicated card for the `web_search` tool. Replaces the generic ToolCallCard's

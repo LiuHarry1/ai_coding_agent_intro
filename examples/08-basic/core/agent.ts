@@ -23,6 +23,8 @@ import {
 } from "./agent/message-sanitize.js";
 import { applyCacheControlBreakpoint } from "./agent/cache-control.js";
 import { consumeStream, type StreamResult } from "./agent/stream-consumer.js";
+import { TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
+import type { AnyTool } from "./types.js";
 
 // ── User-message helpers ────────────────────────────
 
@@ -86,6 +88,62 @@ function attachTodoReminderAfterCompaction(
   }
 }
 
+// ── Deferred-tool activation ────────────────────────
+
+/**
+ * After each step, check if the model called `tool_search`. If so,
+ * extract the `matches` array from tool results and move matching tools
+ * from the deferred pool into the active set so the next step can use
+ * them. Mirrors CC's mid-turn tool activation flow.
+ */
+function activateDeferredTools(
+  toolCalls: StreamResult["toolCalls"],
+  pool: Record<string, AnyTool>,
+  active: Record<string, AnyTool>,
+  discovered: Set<string>,
+): void {
+  for (const tc of toolCalls) {
+    if (tc.toolName !== TOOL_SEARCH_TOOL_NAME) continue;
+
+    // The tool_search execute returns { matches: string[], text, ... }.
+    // In the stream result, the input is what we sent; the result comes
+    // via the corresponding toolResult entry.  But we can also parse the
+    // query's select: prefix to know what was requested.  Simplest: look
+    // at the query input and activate all names found in the pool.
+    const query = (tc.input as any)?.query as string | undefined;
+    if (!query) continue;
+
+    const trimmed = query.trim();
+    let names: string[] = [];
+
+    if (trimmed.toLowerCase().startsWith("select:")) {
+      names = trimmed
+        .slice(7)
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean);
+    } else {
+      // For keyword queries, we can't know exact matches until the result.
+      // Activate all pool tools whose name partially matches the keywords.
+      const kw = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+      for (const name of Object.keys(pool)) {
+        if (kw.some((k) => name.toLowerCase().includes(k))) {
+          names.push(name);
+        }
+      }
+    }
+
+    for (const name of names) {
+      if (pool[name] && !active[name]) {
+        active[name] = pool[name];
+        delete pool[name];
+        discovered.add(name);
+        console.log(`[agent] activated deferred tool: ${name}`);
+      }
+    }
+  }
+}
+
 // ── runAgent ────────────────────────────────────────
 
 // Two independent retry budgets:
@@ -108,6 +166,7 @@ export async function runAgent(
     model,
     subagentNames,
     skillListing,
+    deferredToolPool,
   }: AgentOptions,
 ): Promise<string> {
   if (skillListing) {
@@ -122,18 +181,14 @@ export async function runAgent(
   const provider = defaultManager.get();
   const resolvedModel = model ?? provider.defaultModelId();
 
-  // Debug: dump the system prompt once per chat turn so it's easy to
-  // inspect what the model actually sees (project rules + tool list +
-  // workspace cwd, etc.). Set `DEBUG_SYSTEM_PROMPT=0` to silence.
-  // if (process.env.DEBUG_SYSTEM_PROMPT !== "0") {
-  //   const sep = "─".repeat(60);
-  //   console.log(`\n${sep}\n[agent] system prompt (${systemPrompt.length} chars, model=${resolvedModel}):\n${sep}\n${systemPrompt}\n${sep}\n`);
-  // }
-
   let currentTodos: TodoItem[] = [];
   const unsubTodo = eventBus.on("todo_update", (data) => {
     currentTodos = (data as { todos: TodoItem[] }).todos;
   });
+
+  // Mutable copy so we can activate deferred tools mid-loop.
+  const activeTools = { ...tools };
+  const pool = deferredToolPool ? { ...deferredToolPool } : undefined;
 
   try {
     for (let step = 0; step < maxSteps; step++) {
@@ -144,7 +199,7 @@ export async function runAgent(
 
       const stepResult = await runOneStep({
         messages,
-        tools,
+        tools: activeTools,
         systemPrompt,
         provider,
         resolvedModel,
@@ -156,12 +211,22 @@ export async function runAgent(
       });
 
       if (stepResult === null) {
-        // Step failed terminally (already emitted error + done events).
         return finalText;
       }
 
       const { text, toolCalls } = stepResult;
       if (text) finalText = text;
+
+      // Activate tools discovered via tool_search in this step.
+      if (pool) {
+        const newlyDiscovered = new Set<string>();
+        activateDeferredTools(toolCalls, pool, activeTools, newlyDiscovered);
+        if (newlyDiscovered.size > 0) {
+          eventBus.emit("tools_discovered", {
+            tools: [...newlyDiscovered],
+          });
+        }
+      }
 
       if (toolCalls.length === 0) {
         autoCompleteTodos(currentTodos, eventBus);

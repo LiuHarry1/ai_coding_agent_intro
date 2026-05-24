@@ -61,6 +61,19 @@ export interface ToolDefinition {
    * as tools regardless of allow/deny lists.
    */
   isSubagent?: boolean;
+  /**
+   * When true, the tool is deferred: its schema is excluded from the API
+   * `tools[]` array until the model discovers it via `tool_search`. MCP
+   * tools are auto-deferred (see `isDeferredTool`). Mirrors CC's
+   * `shouldDefer` on `Tool`.
+   */
+  shouldDefer?: boolean;
+  /**
+   * When true, the tool is never deferred — full schema in the initial
+   * prompt even when tool_search is enabled. For MCP tools, set via
+   * config. Overrides both `shouldDefer` and the MCP auto-defer rule.
+   */
+  alwaysLoad?: boolean;
   create(cwd: string, context: ToolContext): AnyTool;
 }
 
@@ -160,6 +173,14 @@ export interface AgentOptions {
    * Mirrors CC's `skill_listing` attachment mechanism.
    */
   skillListing?: string;
+  /**
+   * Deferred tools pool — keyed by name, created but not in `tools`.
+   * When the model calls `tool_search` and discovers a tool, the agent
+   * loop activates it by moving it from this pool into `tools` for the
+   * next step. Provider-agnostic alternative to CC's `defer_loading` +
+   * `tool_reference` (which requires Anthropic API).
+   */
+  deferredToolPool?: Record<string, AnyTool>;
 }
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;
@@ -198,6 +219,8 @@ export interface Session {
   id: string;
   messages: Message[];
   createdAt: number;
+  /** Tool names discovered via `tool_search` — activated in subsequent turns. */
+  discoveredTools?: Set<string>;
 }
 
 export interface SessionInfo {
