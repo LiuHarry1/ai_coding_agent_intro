@@ -6,7 +6,7 @@
  * Tool blocks are preserved (only payloads replaced) so tool_call ↔
  * tool_result pairing stays intact.
  */
-import type { AssistantMessage, Message, ToolMessage } from "../types.js";
+import type { AssistantMessage, Message, ToolMessage } from "../../core/types.js";
 import { estimateMessageTokens } from "./tokens.js";
 
 const MICRO_COMPACT_MARKER = "[Old tool result content cleared to save context]";

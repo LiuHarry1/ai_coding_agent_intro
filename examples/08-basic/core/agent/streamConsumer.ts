@@ -1,7 +1,7 @@
 import type { streamText } from "ai";
 import type { AgentOptions } from "../types.js";
-import { appendPreviewDelta, maybeStartPreview, type PreviewState } from "./preview-stream.js";
-import { formatToolError } from "./tool-errors.js";
+import { appendPreviewDelta, maybeStartPreview, type PreviewState } from "./previewStream.js";
+import { formatToolError } from "./toolErrors.js";
 
 export interface StreamResult {
   text: string;

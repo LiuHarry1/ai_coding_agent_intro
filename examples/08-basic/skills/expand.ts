@@ -16,8 +16,8 @@
  * want to feed the result back into the agent.
  */
 
-import { substituteArguments } from "../commands/argument-substitution.js";
-import { expandInlineDirectives } from "../commands/prompt-expansion.js";
+import { substituteArguments } from "../commands/argumentSubstitution.js";
+import { expandInlineDirectives } from "../commands/promptExpansion.js";
 import type { SkillDefinition } from "./types.js";
 
 export interface ExpandedSkill {

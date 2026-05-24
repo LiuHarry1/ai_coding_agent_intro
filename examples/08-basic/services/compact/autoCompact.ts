@@ -2,10 +2,10 @@
  * Auto-compact orchestrator: dynamic threshold, circuit breaker, config,
  * and the main compactIfNeeded entry point.
  */
-import { configManager } from "../config-manager.js";
-import type { IEventBus, Message, TodoItem } from "../types.js";
+import { configManager } from "../../core/config-manager.js";
+import type { IEventBus, Message, TodoItem } from "../../core/types.js";
 import { tokenCountWithEstimation, estimateConversationTokens } from "./tokens.js";
-import { microCompact } from "./micro-compact.js";
+import { microCompact } from "./microCompact.js";
 import { compactConversation } from "./compact.js";
 import type { CompactContext } from "./compact.js";
 

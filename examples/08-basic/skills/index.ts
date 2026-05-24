@@ -1,5 +1,5 @@
 import type { AgentDefinition, IToolRegistry } from "../core/types.js";
-import { loadSkillsFromDisk, filterSkillsByPaths } from "./from-folders.js";
+import { loadSkillsFromDisk, filterSkillsByPaths } from "./loadSkillsDir.js";
 import { createSkillTool, SKILL_TOOL_NAME } from "../tools/skill.js";
 import type { SkillDefinition } from "./types.js";
 

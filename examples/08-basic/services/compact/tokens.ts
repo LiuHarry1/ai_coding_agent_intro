@@ -2,7 +2,7 @@
  * Token estimation and hybrid counting for compaction threshold decisions.
  * Canonical "context size" measurement.
  */
-import type { Message } from "../types.js";
+import type { Message } from "../../core/types.js";
 
 // ── Pure estimation ─────────────────────────────────────
 

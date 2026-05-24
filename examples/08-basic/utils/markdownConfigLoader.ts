@@ -1,7 +1,7 @@
 /**
  * Unified loader for flat markdown-frontmatter extensions (agents, commands).
  *
- * Skills have their own loader (`skills/from-folders.ts`) because they are *folders*
+ * Skills have their own loader (`skills/loadSkillsDir.ts`) because they are *folders*
  * with bundled assets, not flat `.md` files — but both share the project
  * directory walk in `core/app-dir.ts`.
  *
@@ -23,7 +23,7 @@ import {
   getAppDirName,
   getProjectAppDirsUpToHome,
   getUserSubdir,
-} from "./app-dir.js";
+} from "../core/app-dir.js";
 
 /** Flat-file kinds. Skills live in folders and use their own loader. */
 export type FlatMarkdownKind = "agents" | "commands";
@@ -136,4 +136,4 @@ export function suggestedPath(
   return path.join(dir, `${name}.md`);
 }
 
-export { getAppDirName, getUserSubdir, getProjectAppDirsUpToHome } from "./app-dir.js";
+export { getAppDirName, getUserSubdir, getProjectAppDirsUpToHome } from "../core/app-dir.js";

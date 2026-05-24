@@ -10,9 +10,9 @@
  *   - `formatHelp()`             — text reply for `/help`
  */
 
-import { loadMarkdownConfigs, getAppDirName } from "../core/markdown-config-loader.js";
-import { loadSkillsFromDisk } from "../skills/from-folders.js";
-import { mergeCommands } from "./from-files.js";
+import { loadMarkdownConfigs, getAppDirName } from "../utils/markdownConfigLoader.js";
+import { loadSkillsFromDisk } from "../skills/loadSkillsDir.js";
+import { mergeCommands } from "./loadCommandsFromFiles.js";
 import type { SlashCommand } from "./types.js";
 import type { SkillDefinition } from "../skills/types.js";
 

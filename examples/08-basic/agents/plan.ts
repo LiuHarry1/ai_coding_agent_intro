@@ -1,5 +1,5 @@
 import { createAgentDefinition } from "./base.js";
-import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "./prompt-fragments.js";
+import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "./promptFragments.js";
 import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS, MUTATING_TOOLS } from "../tools/tool-names.js";
 
 /** Plan subagent type identifier. */

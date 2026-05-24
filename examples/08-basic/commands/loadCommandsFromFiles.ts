@@ -18,11 +18,11 @@
 
 import * as path from "path";
 import type { SlashCommand } from "./types.js";
-import type { MarkdownFile } from "../core/markdown-config-loader.js";
+import type { MarkdownFile } from "../utils/markdownConfigLoader.js";
 import {
   parseArgumentNames,
   parseString,
-} from "../core/frontmatter-helpers.js";
+} from "../utils/frontmatterParser.js";
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/i;
 

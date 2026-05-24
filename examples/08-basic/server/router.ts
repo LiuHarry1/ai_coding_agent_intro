@@ -12,7 +12,7 @@ import {
   registerBuiltinSubagents,
   registerSubagents,
   getSubagentNames,
-} from "../subagents/index.js";
+} from "../agents/index.js";
 import { registerSkills, formatSkillListing } from "../skills/index.js";
 import { dispatchSlashCommand, listSlashCommands } from "../commands/dispatcher.js";
 import { respondSkillFork } from "../skills/respond-fork.js";

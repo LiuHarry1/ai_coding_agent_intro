@@ -16,7 +16,7 @@
  *                      agent's context clean.
  */
 
-import type { ExtensionSource } from "../core/markdown-config-loader.js";
+import type { ExtensionSource } from "../utils/markdownConfigLoader.js";
 
 export type SkillContextMode = "inline" | "fork";
 

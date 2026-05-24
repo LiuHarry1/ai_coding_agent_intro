@@ -6,8 +6,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { generateText } from "ai";
-import { defaultManager } from "../provider-manager.js";
-import type { Message, TodoItem } from "../types.js";
+import { defaultManager } from "../../core/provider-manager.js";
+import type { Message, TodoItem } from "../../core/types.js";
 import { estimateConversationTokens, clearTokenUsages } from "./tokens.js";
 
 // ── Prompt (analysis + summary) ─────────────────────────

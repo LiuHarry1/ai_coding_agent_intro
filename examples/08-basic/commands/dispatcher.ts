@@ -14,15 +14,15 @@
  */
 
 import { expandSkillBody, SkillExpansionError } from "../skills/expand.js";
-import { substituteArguments } from "./argument-substitution.js";
-import { expandInlineDirectives } from "./prompt-expansion.js";
+import { substituteArguments } from "./argumentSubstitution.js";
+import { expandInlineDirectives } from "./promptExpansion.js";
 import {
   formatHelp,
   loadSlashRegistry,
   lookupSlash,
   toPublicEntry,
   type SlashEntry,
-} from "./slash-registry.js";
+} from "./slashRegistry.js";
 
 const SLASH_LINE_RE = /^\/([a-z0-9][a-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/i;
 

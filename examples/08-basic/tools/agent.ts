@@ -7,8 +7,8 @@ import type {
   ToolDefinition,
 } from "../core/types.js";
 import { AGENT_TOOL_NAME } from "./tool-names.js";
-import { EXPLORE_AGENT_TYPE } from "../subagents/explore.js";
-import { PLAN_AGENT_TYPE } from "../subagents/plan.js";
+import { EXPLORE_AGENT_TYPE } from "../agents/explore.js";
+import { PLAN_AGENT_TYPE } from "../agents/plan.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 
 /**

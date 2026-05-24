@@ -8,7 +8,7 @@
  * the dispatcher just rewrites the user's message text before sending.
  */
 
-import type { ExtensionSource } from "../core/markdown-config-loader.js";
+import type { ExtensionSource } from "../utils/markdownConfigLoader.js";
 
 export interface SlashCommand {
   /** Command name as the user types it (without the leading `/`). */

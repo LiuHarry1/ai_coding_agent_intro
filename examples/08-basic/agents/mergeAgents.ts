@@ -23,14 +23,14 @@
 
 import path from "path";
 import type { AgentDefinition } from "../core/types.js";
-import type { MarkdownFile } from "../core/markdown-config-loader.js";
+import type { MarkdownFile } from "../utils/markdownConfigLoader.js";
 import {
   parseToolList,
   parseBool,
   parsePositiveInt,
   parseString,
   parseIdentifier,
-} from "../core/frontmatter-helpers.js";
+} from "../utils/frontmatterParser.js";
 import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS } from "../tools/tool-names.js";
 
 export interface AgentParseResult {

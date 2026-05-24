@@ -4,8 +4,8 @@ import {
   attachTokenUsage,
   compactIfNeeded,
   tokenCountWithEstimation,
-} from "./compaction/index.js";
-import type { AttachedTokenUsage } from "./compaction/index.js";
+} from "../services/compact/index.js";
+import type { AttachedTokenUsage } from "../services/compact/index.js";
 import { isContextLengthError, isTransientStreamError } from "./stream-errors.js";
 import type {
   AgentOptions,
@@ -19,9 +19,9 @@ import {
   ensureToolResultPairing,
   inlineReasoningAsText,
   sanitizeReasoningParts,
-} from "./agent/message-sanitize.js";
-import { applyCacheControlBreakpoint } from "./agent/cache-control.js";
-import { consumeStream, type StreamResult } from "./agent/stream-consumer.js";
+} from "./agent/messageSanitize.js";
+import { applyCacheControlBreakpoint } from "./agent/cacheControl.js";
+import { consumeStream, type StreamResult } from "./agent/streamConsumer.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
 import type { AnyTool } from "./types.js";
 

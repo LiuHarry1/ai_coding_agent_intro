@@ -43,7 +43,7 @@ import * as path from "path";
 import matter from "gray-matter";
 import ignore from "ignore";
 import type { SkillDefinition, SkillContextMode } from "./types.js";
-import type { ExtensionSource } from "../core/markdown-config-loader.js";
+import type { ExtensionSource } from "../utils/markdownConfigLoader.js";
 import {
   getProjectAppDirsUpToHome,
   getUserSubdir,
@@ -51,7 +51,7 @@ import {
 import {
   parseArgumentNames,
   parseString,
-} from "../core/frontmatter-helpers.js";
+} from "../utils/frontmatterParser.js";
 
 interface SkillLoadResult {
   skill: SkillDefinition | null;
