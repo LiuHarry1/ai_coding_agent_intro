@@ -20,7 +20,6 @@ import type { ToolDefinition, ToolContext, IEventBus } from "../core/types.js";
  * it here keeps the per-shell wrapper files (~50 lines each) focused on the
  * prompt content, which is what actually differs between shells.
  *
- * Mirrors Claude Code's BashTool / PowerShellTool split: separate tool names
  * + separate descriptions, but functionally similar runtime behavior.
  */
 

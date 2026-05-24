@@ -16,8 +16,7 @@ import {
 } from "../tools/tool-names.js";
 import { SKILL_TOOL_NAME } from "../tools/skill.js";
 
-// Section text from CC `src/constants/prompts.ts` (getSystemPrompt static +
-// getSessionSpecificGuidanceSection). Uses CC tool/agent names via constants.
+// Static system prompt sections. Uses tool/agent names via constants.
 
 function shellInfoLine(): string {
   if (isWindows) {
@@ -26,7 +25,7 @@ function shellInfoLine(): string {
   return `Shell: ${BASH_TOOL_NAME}`;
 }
 
-/** CC `getAgentToolSection()` — non-fork branch only. */
+/** Agent tool usage guidance. */
 function agentToolSection(): string {
   return `Use the ${AGENT_TOOL_NAME} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`;
 }

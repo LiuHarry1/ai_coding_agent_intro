@@ -64,8 +64,7 @@ export interface ToolDefinition {
   /**
    * When true, the tool is deferred: its schema is excluded from the API
    * `tools[]` array until the model discovers it via `tool_search`. MCP
-   * tools are auto-deferred (see `isDeferredTool`). Mirrors CC's
-   * `shouldDefer` on `Tool`.
+   * tools are auto-deferred (see `isDeferredTool`).
    */
   shouldDefer?: boolean;
   /**
@@ -170,15 +169,13 @@ export interface AgentOptions {
    * Pre-formatted skill/agent listing injected as a `<system-reminder>`
    * user message before the real user message. Keeps volatile listings
    * out of the tool schema and system prompt so those stay cacheable.
-   * Mirrors CC's `skill_listing` attachment mechanism.
    */
   skillListing?: string;
   /**
    * Deferred tools pool — keyed by name, created but not in `tools`.
    * When the model calls `tool_search` and discovers a tool, the agent
    * loop activates it by moving it from this pool into `tools` for the
-   * next step. Provider-agnostic alternative to CC's `defer_loading` +
-   * `tool_reference` (which requires Anthropic API).
+   * next step.
    */
   deferredToolPool?: Record<string, AnyTool>;
 }
@@ -255,8 +252,6 @@ export interface SSETransport {
  * refactor, subagents are no longer registered as individual tools — they
  * are entries in the `task` tool's directory. The model picks one via
  * `subagent_type` parameter.
- *
- * Modeled after Claude Code's `BaseAgentDefinition` (loadAgentsDir.ts).
  */
 export interface AgentDefinition {
   /** Stable identifier shown to the model as `subagent_type` value. */
@@ -292,8 +287,7 @@ export interface AgentDefinition {
    * into this subagent's system prompt. Set true for fast read-only
    * exploration agents — the rules carry commit/PR/lint guidance the
    * subagent will never act on, and the parent already interprets results
-   * with full context. Mirrors Claude Code's `omitClaudeMd: true` on the
-   * Explore agent.
+   * with full context.
    */
   omitProjectRules?: boolean;
 }
@@ -334,16 +328,18 @@ export interface TodoItem {
 // ── App Config ──────────────────────────────────
 
 export interface CompactionConfig {
-  /** Run full LLM summarization when total conversation tokens >= this. */
-  tokenThreshold: number;
-  /** Run cheap micro-compaction (clear old tool_result content) when total tokens >= this. */
-  microCompactThreshold: number;
-  /** Token budget for the tail preserved verbatim across a full LLM compaction. */
-  tailTokenBudget: number;
+  /** Master switch — when false, proactive auto-compact is skipped (manual /compact still works). */
+  enabled: boolean;
+  /** Model's context window size in tokens. Used to dynamically compute compact threshold. */
+  contextWindow: number;
   /** Number of most-recent tool results to keep verbatim during micro-compaction. */
   microCompactKeepRecent: number;
-  /** Model used for full LLM summarization. */
-  model: string;
+  /** Max number of recently-read files to re-inject post-compact. */
+  maxFilesToRestore: number;
+  /** Max tokens (estimated) per restored file. */
+  maxTokensPerFile: number;
+  /** Total token budget for all restored files combined. */
+  fileBudget: number;
 }
 
 export interface AppConfig {

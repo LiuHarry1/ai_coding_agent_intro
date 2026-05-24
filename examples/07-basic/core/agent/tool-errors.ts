@@ -1,7 +1,6 @@
 /**
  * Tool-error formatting helpers.
  *
- * Modeled after Claude Code's `src/utils/toolErrors.ts`. There the
  * generic-error path (`formatError`) and the Zod-validation path
  * (`formatZodValidationError`) are kept as separate exports — callers
  * pick the right one depending on what produced the error. We keep that
@@ -43,7 +42,7 @@ function truncateMiddle(text: string): string {
  *
  * Pulls `.message` plus `.stderr` / `.stdout` when present (child_process
  * errors carry those), joins them, and middle-truncates anything over 10k
- * chars. Mirrors Claude Code's formatError + getErrorParts behavior.
+ * chars.
  */
 export function formatError(err: unknown): string {
   if (!(err instanceof Error)) return String(err ?? "tool execution failed");
@@ -101,7 +100,6 @@ interface ZodErrorShape {
  * "The required parameter `file_path` is missing" gives the model a
  * concrete recovery path.
  *
- * Behaviorally identical to Claude Code's `formatZodValidationError`.
  */
 export function formatZodValidationError(
   toolName: string,

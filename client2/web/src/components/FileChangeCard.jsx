@@ -66,7 +66,7 @@ function diffLineCounts(oldStr, newStr) {
 
 /**
  * Inline counts shown after the filename (e.g. `+12` for write, `+3 -1`
- * for edit). Bare colored text — no pill, matches the Cursor / Claude Code
+ * for edit). Bare colored text — no pill, matches the Cursor
  * inline-row style. Returns null when there's nothing to count.
  */
 function ChangeBadge({ kind, args }) {

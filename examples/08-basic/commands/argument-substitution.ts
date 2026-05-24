@@ -1,8 +1,7 @@
 /**
  * Argument substitution for slash commands.
  *
- * Mirrors Claude Code's `src/utils/argumentSubstitution.ts`. Supported
- * placeholders inside a command body:
+ * Supported placeholders inside a command body:
  *
  *   $ARGUMENTS         the entire post-`/cmd ` string, verbatim
  *   $ARGUMENTS[0..N]   indexed access into the parsed argument array

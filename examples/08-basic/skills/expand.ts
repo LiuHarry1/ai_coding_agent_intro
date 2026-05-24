@@ -72,7 +72,7 @@ export async function expandSkillBody(
   let expanded = await expandInlineDirectives(substituted, cwd);
 
   // `${SKILL_DIR}` → skill folder. Normalize backslashes on Windows so
-  // shell snippets don't treat them as escape sequences. Mirrors CC's
+  // shell snippets don't treat them as escape sequences.
   // `${CLAUDE_SKILL_DIR}`.
   if (skill.baseDir) {
     const dir =

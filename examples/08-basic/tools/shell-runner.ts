@@ -19,9 +19,6 @@ import type { ToolDefinition, ToolContext, IEventBus } from "../core/types.js";
  * streaming, timeout/kill, pid check/kill modes — is identical. Centralizing
  * it here keeps the per-shell wrapper files (~50 lines each) focused on the
  * prompt content, which is what actually differs between shells.
- *
- * Mirrors Claude Code's BashTool / PowerShellTool split: separate tool names
- * + separate descriptions, but functionally similar runtime behavior.
  */
 
 // ── Background process tracking ──

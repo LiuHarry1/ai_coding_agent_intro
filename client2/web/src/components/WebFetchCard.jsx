@@ -10,7 +10,7 @@ import { normalizeFetchResult, compactFetchError } from "../lib/fetch-result.js"
  * - built-in `web_fetch` (JSON article payload)
  * - MCP fetch tools like `mcp_server_fetch` (markdown / content blocks)
  *
- * Cursor / Claude Code show a compact row (action + URL/title), not
+ * Cursor show a compact row (action + URL/title), not
  * `tool_name {"url":…}` plus an empty Arguments panel.
  */
 

@@ -41,8 +41,7 @@ export function registerBuiltinSubagents(registry: IToolRegistry): void {
  *
  * Called once per chat request from the router so a user editing an agent
  * .md file sees the change on the next message — no server restart needed.
- * Mirrors Claude Code's behavior: `getAgentDefinitionsWithOverrides` is
- * invoked from the agent loop, not at process boot.
+ * Invoked from the agent loop, not at process boot.
  */
 export async function registerSubagents(
   registry: IToolRegistry,

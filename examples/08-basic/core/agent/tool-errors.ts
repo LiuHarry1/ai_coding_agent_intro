@@ -1,8 +1,7 @@
 /**
  * Tool-error formatting helpers.
  *
- * Modeled after Claude Code's `src/utils/toolErrors.ts`. There the
- * generic-error path (`formatError`) and the Zod-validation path
+ * The generic-error path (`formatError`) and the Zod-validation path
  * (`formatZodValidationError`) are kept as separate exports — callers
  * pick the right one depending on what produced the error. We keep that
  * split because (a) Zod errors don't have `.stderr` / `.stdout` and the
@@ -19,7 +18,7 @@
 //
 // child_process / shell errors can spit out megabytes of stderr; if we
 // pass the whole thing back to the model it inflates the next request by
-// 10x and we hit context limits within a turn or two. Match Claude Code's
+// 10x and we hit context limits within a turn or two. Cap at
 // 10k cap with a head/tail split + middle elision so the model still sees
 // both the failure summary AND the final lines (where the actual error
 // usually lives for shell tools).
@@ -43,7 +42,7 @@ function truncateMiddle(text: string): string {
  *
  * Pulls `.message` plus `.stderr` / `.stdout` when present (child_process
  * errors carry those), joins them, and middle-truncates anything over 10k
- * chars. Mirrors Claude Code's formatError + getErrorParts behavior.
+ * chars.
  */
 export function formatError(err: unknown): string {
   if (!(err instanceof Error)) return String(err ?? "tool execution failed");
@@ -63,7 +62,7 @@ export function formatError(err: unknown): string {
 /**
  * Render a Zod `path` array (e.g. `["todos", 0, "activeForm"]`) as the
  * dotted/bracketed string the model already knows from its tool schema:
- * `todos[0].activeForm`. Matches Claude Code's `formatValidationPath`.
+ * `todos[0].activeForm`.
  */
 export function formatZodPath(path: ReadonlyArray<PropertyKey>): string {
   if (path.length === 0) return "(root)";
@@ -100,8 +99,6 @@ interface ZodErrorShape {
  * "Missing tool result" is a missing required field — surfacing it as
  * "The required parameter `file_path` is missing" gives the model a
  * concrete recovery path.
- *
- * Behaviorally identical to Claude Code's `formatZodValidationError`.
  */
 export function formatZodValidationError(
   toolName: string,

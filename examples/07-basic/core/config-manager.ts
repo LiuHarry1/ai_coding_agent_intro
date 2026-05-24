@@ -10,7 +10,7 @@ const CONFIG_FILE = "config.json";
 const DEFAULTS: AppConfig = {
   provider: { ...DEFAULT_PROFILE },
   compaction: {
-    // Defaults mirror Claude Code's autocompact thresholds for a 200K model
+    // Defaults for autocompact thresholds on a 200K model
     // (Claude 3.5 Sonnet / Claude 4.x baseline). See:
     //   src/utils/context.ts:           MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
     //                                   COMPACT_MAX_OUTPUT_TOKENS    =  20_000
@@ -18,8 +18,7 @@ const DEFAULTS: AppConfig = {
     //   → effectiveWindow = 200K − 20K = 180K
     //   → autoCompactThreshold = 180K − 13K = 167K
     tokenThreshold: 167_000,
-    // No direct token-based equivalent in Claude Code (their micro-compact is
-    // count- or time-based). We pick `effectiveWindow − target keep` (40K,
+        // count- or time-based). We pick `effectiveWindow − target keep` (40K,
     // see tailTokenBudget below) ≈ 140K as the "warm zone" where it's cheap
     // to scan and start clearing.
     microCompactThreshold: 140_000,

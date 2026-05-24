@@ -5,8 +5,7 @@ import { normalizeGitPath } from "./platform.js";
 
 // Single-file rule docs found at each directory level (in priority order
 // per dir — first match wins). AGENTS.md is the cross-tool standard;
-// CLAUDE.md is the Anthropic-specific equivalent; .cursorrules is the
-// legacy Cursor file (superseded by .cursor/rules/*.md, which we load
+// .cursorrules is the legacy Cursor file (superseded by .cursor/rules/*.md, which we load
 // separately below).
 const RULE_FILENAMES = ["AGENTS.md", "CLAUDE.md", ".cursorrules"];
 
@@ -15,10 +14,7 @@ const RULE_FILENAMES = ["AGENTS.md", "CLAUDE.md", ".cursorrules"];
 // stability.
 const RULES_DIR_NAMES = [".cursor/rules"];
 
-// Caps aligned with Claude Code's `MAX_MEMORY_CHARACTER_COUNT = 40000`
-// in utils/claudemd.ts. Per-file cap stops a single mega-file from
-// dominating; combined cap prevents the merged output from drowning out
-// the system prompt itself.
+// Caps to prevent rule files from drowning out the system prompt.
 const MAX_SINGLE_FILE_BYTES = 40 * 1024;
 const MAX_RULES_BYTES = 40 * 1024;
 

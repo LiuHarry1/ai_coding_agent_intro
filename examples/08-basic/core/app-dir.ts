@@ -1,8 +1,7 @@
 /**
  * Single source of truth for the user/project config directory name.
  *
- * Mirrors Claude Code's `.claude/` layout — all extension types live under
- * one dot-folder:
+ * All extension types live under one dot-folder:
  *
  *   ~/.ai-agent/config.json
  *   ~/.ai-agent/agents/*.md
@@ -64,7 +63,7 @@ export function getProjectSubdir(kind: AppSubdir, dir: string): string {
 
 /**
  * Walk from `cwd` upward, collecting every project app dir, **deepest first**
- * (same order as CC's `getProjectDirsUpToHome`). Stops at the home directory
+ * (deepest project dir first). Stops at the home directory
  * (exclusive — home is user-scope, not project-scope).
  */
 export function getProjectAppDirsUpToHome(cwd: string): string[] {

@@ -23,7 +23,6 @@ const KEEP_RECENT_REASONINGS = 1;
  * Placeholder used when we have to synthesize a tool-result for an
  * assistant tool-call that has no real result on disk (stream cut between
  * tool-call and tool-result, session resumed from a truncated JSONL, etc.).
- * Matches Claude Code's `SYNTHETIC_TOOL_RESULT_PLACEHOLDER` semantically.
  */
 export const SYNTHETIC_TOOL_RESULT_PLACEHOLDER =
   "[Tool result missing due to internal error]";
@@ -139,8 +138,7 @@ export function ensureToolResultPairing(messages: Message[]): Message[] {
     const m = messages[i]!;
 
     if (m.role !== "assistant" || !Array.isArray(m.content)) {
-      // Start-of-conversation orphan handling (mirrors Claude Code's
-      // messages.ts:5161-5200): a `tool` message at index 0 — or any `tool`
+      // Start-of-conversation orphan handling: a `tool` message at index 0 — or any `tool`
       // message NOT immediately preceded by an assistant in our output —
       // has tool-results whose paired tool-calls don't exist. This is the
       // shape we get when a session is resumed after a compaction step

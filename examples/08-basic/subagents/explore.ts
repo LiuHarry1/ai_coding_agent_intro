@@ -9,9 +9,8 @@ import {
   AGENT_TOOL_NAME,
 } from "../tools/tool-names.js";
 
-// System prompt mirrors CC `src/tools/AgentTool/built-in/exploreAgent.ts`
-// `getExploreSystemPrompt()` (non-embedded Glob/Grep path).
-const EXPLORE_SYSTEM = `You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.
+// System prompt for the explore subagent (read-only file search).
+const EXPLORE_SYSTEM = `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
 This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
@@ -66,7 +65,6 @@ export const definition = createAgentDefinition({
   disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 20,
   label: "Explore",
-  // Mirrors CC's `omitClaudeMd: true` on the Explore agent: a fast
-  // read-only search agent doesn't need commit/PR/lint rules.
+    // read-only search agent doesn't need commit/PR/lint rules.
   omitProjectRules: true,
 });

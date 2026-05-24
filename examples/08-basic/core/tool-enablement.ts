@@ -6,7 +6,7 @@ export type ToolEnablementSource = Pick<AppConfig, "disabledTools">;
  * Determine if a tool should be deferred (excluded from the API `tools[]`
  * array until discovered via `tool_search`).
  *
- * Decision order (mirrors CC's `isDeferredTool`):
+ * Decision order:
  *   1. `alwaysLoad === true`  → never deferred
  *   2. `isMcp === true`       → always deferred (workflow-specific)
  *   3. `shouldDefer === true`  → deferred

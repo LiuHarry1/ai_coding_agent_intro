@@ -3,8 +3,7 @@
  * gets expanded into a user message at the moment the user types
  * `/<name> <args>` in the chat input.
  *
- * Modeled after Claude Code's `Command` type (src/types/command.ts) but
- * trimmed to the subset we actually need: prompt commands only (no UI
+ * Trimmed to the subset we actually need: prompt commands only (no UI
  * commands, no MCP commands). Slash commands here never become LLM tools —
  * the dispatcher just rewrites the user's message text before sending.
  */

@@ -1,5 +1,5 @@
 /**
- * Inline expansions inside a slash-command body. Two CC-style constructs:
+ * Inline expansions inside a slash-command body:
  *
  *   1. !`<command>`     — shell out, replace with stdout (timeout-bounded).
  *                         Inline form. Useful for `!`git status`` style
@@ -8,9 +8,7 @@
  *   2. @path/to/file    — read file, replace with its content fenced in
  *                         markdown. Path is resolved relative to `cwd`.
  *
- * Mirrors Claude Code's `src/utils/promptShellExecution.ts` semantics in
- * spirit (we don't reproduce the full hook pipeline / permission prompts
- * here — slash commands are user-initiated and trusted).
+ * Slash commands are user-initiated and trusted.
  */
 
 import { promises as fs } from "fs";
@@ -34,7 +32,7 @@ const FILE_MAX_BYTES = 100_000;
  * inlining the failure for the model to see.
  */
 async function runInlineShell(cmd: string, cwd: string): Promise<string> {
-  // CC default: bash everywhere. On Windows use Git Bash so && / pipes work.
+  // Default: bash everywhere. On Windows use Git Bash so && / pipes work.
   const [exe, args] = isWindows
     ? [findGitBashPath() ?? "bash", ["-lc", cmd]]
     : ["sh", ["-c", cmd]];

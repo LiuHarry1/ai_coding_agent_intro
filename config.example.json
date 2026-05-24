@@ -6,11 +6,11 @@
     "model": "gpt-5.4"
   },
   "compaction": {
-    "tokenThreshold": 167000,
-    "microCompactThreshold": 140000,
-    "tailTokenBudget": 40000,
+    "contextWindow": 200000,
     "microCompactKeepRecent": 5,
-    "model": "gpt-5.4"
+    "maxFilesToRestore": 5,
+    "maxTokensPerFile": 5000,
+    "fileBudget": 50000
   },
   "mcpServers": {
 

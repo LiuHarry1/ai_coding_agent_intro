@@ -6,7 +6,7 @@ export const isWindows = process.platform === "win32";
 
 // ── Shell configurations ──
 //
-// CC model: `bash` is always available; on Windows `powershell` is added too.
+// `bash` is always available; on Windows `powershell` is added too.
 // Default shell for prompts / `!` expansion is bash (Git Bash on Windows).
 // Both share `tools/shell-runner.ts`; only spawn config + descriptions differ.
 
@@ -26,8 +26,7 @@ export interface ShellConfig {
    * user command's exit code (NOT the trailer's). The shell-runner reads
    * `cwdFile` after the child closes to persist `cd` across calls.
    *
-   * Mirrors Claude Code's `bashProvider.buildExecCommand` cwd tracking +
-   * `powershellProvider`'s `$LASTEXITCODE ?? $?` exit-code logic.
+     * `powershellProvider`'s `$LASTEXITCODE ?? $?` exit-code logic.
    */
   wrapCommand(userCmd: string, cwdFile: string): string;
 }
@@ -96,7 +95,7 @@ export const powershellShell: ShellConfig = {
     // Escape single quotes in the cwdFile path for PS literal-string syntax.
     // PS escapes `'` as `''` inside a single-quoted string.
     const escaped = cwdFile.replace(/'/g, "''");
-    // Exit-code rule (matches Claude Code's powershellProvider logic):
+    // Exit-code rule:
     //   prefer $LASTEXITCODE when a native exe ran (covers the PS 5.1
     //   bug where `git push 2>&1` sets $? = $false even on exit 0);
     //   else fall back to $? for cmdlet-only pipelines;

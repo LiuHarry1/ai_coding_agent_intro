@@ -194,8 +194,7 @@ export const definition: ToolDefinition = {
         const args: string[] = ["--hidden"];
 
         // Exclude VCS metadata only — NOT node_modules / dist / etc.
-        // This matches Claude Code's grep behavior: if the user wants
-        // to grep inside node_modules they can scope it via `path`.
+        // Users can scope node_modules via `path` if needed.
         args.push(...buildRgExcludeGlobs("vcs"));
 
         // Cap line length so base64 blobs / minified files don't blow up

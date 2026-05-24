@@ -1,26 +1,21 @@
 /**
  * Discover skills from `<dir>/<skill-name>/SKILL.md` folders.
  *
- * Mirrors Claude Code's `loadSkillsFromSkillsDir` in
- * `src/skills/loadSkillsDir.ts`: a skill is a *directory* (not a flat `.md`
- * file). Each skill folder MUST contain a `SKILL.md`; it MAY also contain
- * additional files / sub-folders (scripts, prompts, sample inputs). The
- * folder path is exposed to the model as `baseDir` so the skill body can
- * reference its own bundled assets via `${SKILL_DIR}` substitution in
- * `tools/skill.ts`.
+ * A skill is a *directory* (not a flat `.md` file). Each skill folder MUST
+ * contain a `SKILL.md`; it MAY also contain additional files / sub-folders
+ * (scripts, prompts, sample inputs). The folder path is exposed to the model
+ * as `baseDir` so the skill body can reference its own bundled assets via
+ * `${SKILL_DIR}` substitution in `tools/skill.ts`.
  *
- * Layout (CC analogue in parentheses):
+ * Layout:
  *
  *   <ancestor>/.ai-agent/skills/<skill-name>/SKILL.md   # project-scope
- *                                                      # (CC: .claude/skills/)
- *   ~/.ai-agent/skills/<skill-name>/SKILL.md           # user-scope
- *                                                      # (CC: ~/.claude/skills/)
+ *   ~/.ai-agent/skills/<skill-name>/SKILL.md             # user-scope
  *
  * Precedence on duplicate skill name (highest wins): deepest project dir →
- * shallower project dirs → user dir. Same shape as CC's
- * `getActiveAgentsFromList` / `getProjectDirsUpToHome` resolution.
+ * shallower project dirs → user dir.
  *
- * Frontmatter (subset of CC's skill frontmatter):
+ * Frontmatter:
  *
  *   ---
  *   description: Draft a PR body...       # required
@@ -113,7 +108,7 @@ function parseSkillPaths(value: unknown): string[] | undefined {
 /**
  * Read just enough of a file to extract its YAML frontmatter. Using a
  * single positional read avoids streaming up to EOF for SKILL.md bodies
- * that may be tens of KB. 16 KB is well over CC's effective frontmatter
+ * that may be tens of KB. 16 KB is well over typical frontmatter size in
  * size in practice; if we ever undershoot, the caller falls back to a
  * full read so the skill still loads correctly.
  */
@@ -296,7 +291,6 @@ async function loadSkillsFromDir(
  * stopping at the home directory (exclusive — home is treated as the
  * user-skills scope, not a project scope). Order: deepest first.
  *
- * Mirrors CC's `getProjectDirsUpToHome('skills', cwd)`.
  */
 function getProjectSkillsDirsUpToHome(cwd: string): string[] {
   return getProjectAppDirsUpToHome(cwd).map((appDir) =>
@@ -307,7 +301,6 @@ function getProjectSkillsDirsUpToHome(cwd: string): string[] {
 /**
  * Scan user + project skill directories for skill folders. Project skills
  * (closer to cwd) override shallower ones, which override user skills,
- * mirroring CC's precedence.
  *
  * This is intentionally unmemoized — the router calls it per chat request
  * so a user editing a SKILL.md sees the change on the next message
@@ -366,8 +359,7 @@ export async function loadSkillsFromDisk(cwd: string): Promise<{
  * `src/**\/*.py` without worrying about absolute paths. Files outside cwd
  * are skipped (gitignore patterns can't match `../foo` anyway).
  *
- * Mirrors CC's `activateConditionalSkillsForPaths`, but evaluated per
- * chat request against a snapshot of files (rather than CC's per-tool-
+ * chat request against a snapshot of files
  * call dynamic activation). For our architecture this is the right
  * granularity — registerSkills already runs once per chat turn.
  *

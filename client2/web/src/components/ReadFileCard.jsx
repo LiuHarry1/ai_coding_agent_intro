@@ -4,7 +4,7 @@ import ToolRowHeader from "./ToolRowHeader.jsx";
 import { fileName } from "../lib/utils.js";
 
 /**
- * Single-row card for read_file. Mirrors the Cursor / Claude Code style:
+ * Single-row card for read_file. Mirrors the Cursor style:
  *   `▶ 📄 Read foo.tsx L1-105`
  *
  * Default-collapsed: read_file is the noisiest tool — letting it claim a

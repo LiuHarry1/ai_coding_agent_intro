@@ -3,10 +3,6 @@
  * references tools by name should import from here so a rename of a tool
  * is a single-file change.
  *
- * Modeled after Claude Code's per-tool `*_TOOL_NAME` constants — there
- * each tool's prompt module exports its own name, then subagent
- * deny-lists compose them (see `built-in/exploreAgent.ts:67`).
- *
  * Why not just import each tool definition and read `.name`? Two
  * reasons: (1) the tool files import zod / runtime deps we don't want to
  * pull into prompt-construction paths, and (2) string literals here are
@@ -30,7 +26,6 @@ export const TOOL_SEARCH_TOOL_NAME = "tool_search";
 
 /**
  * Single tool that dispatches to all built-in subagents via `subagent_type`.
- * CC: `AGENT_TOOL_NAME` (`Agent`); legacy CC name was `Task`.
  */
 export const AGENT_TOOL_NAME = "Agent";
 

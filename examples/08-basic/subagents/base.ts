@@ -13,8 +13,8 @@ import type { AgentDefinition } from "../core/types.js";
  * This file used to return `ToolDefinition` objects that registered each
  * subagent as a sibling of `bash` / `read_file` / etc. That coupled
  * subagent count to the main-agent tool list size and made directory-style
- * comparison impossible. The Claude Code AgentTool design (one Task tool +
- * dynamic agent list) avoids both issues.
+ * comparison impossible. A single Agent tool with a dynamic agent list
+ * avoids both issues.
  */
 export function createAgentDefinition(def: AgentDefinition): AgentDefinition {
   if (def.tools && def.disallowedTools) {

@@ -24,7 +24,6 @@ function truncateDesc(text: string, maxLen: number): string {
 /**
  * Format a skill listing suitable for `<system-reminder>` injection.
  * Budget-aware: if all descriptions exceed the budget, they are truncated.
- * Mirrors CC's `formatCommandsWithinBudget`.
  */
 export function formatSkillListing(
   skills: readonly SkillDefinition[],

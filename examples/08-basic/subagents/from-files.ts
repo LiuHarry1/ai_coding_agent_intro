@@ -1,7 +1,7 @@
 /**
  * Parse user/project markdown agent files into `AgentDefinition`.
  *
- * Frontmatter schema (subset of Claude Code's `parseAgentFromMarkdown`):
+ * Frontmatter schema:
  *
  *   ---
  *   name: db-migrator                     # required, becomes agentType
@@ -42,14 +42,13 @@ export interface AgentParseResult {
 }
 
 /**
- * Convert a `MarkdownFile` into an `AgentDefinition`. Mirrors CC's
- * `parseAgentFromMarkdown` rules:
+ * Convert a `MarkdownFile` into an `AgentDefinition`.
  *
  *   - Missing `name` → silently skipped (file is probably a co-located
  *     README, not an agent attempt). Returns `{ agent: null }` with no error.
  *   - Missing `description` or empty body → reported error (looks like a
  *     malformed agent).
- *   - Both `tools` AND `disallowedTools` set → reported error (CC's rule).
+ *   - Both `tools` AND `disallowedTools` set → reported error.
  *   - Subagents NEVER get the `task` tool (anti-recursion). If the file
  *     defines a deny-list we append `task`; if it defines an allow-list
  *     we drop `task` from it.
@@ -125,7 +124,7 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
 /**
  * Merge built-in agents with file-loaded ones.
  *
- * Priority (later overrides earlier, matching CC's `getActiveAgentsFromList`):
+ * Priority (later overrides earlier):
  *
  *   built-in < user < project
  *

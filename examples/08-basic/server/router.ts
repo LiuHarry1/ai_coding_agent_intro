@@ -221,13 +221,12 @@ async function handleChat(
   // Re-scan .ai-agent/{agents,skills}/ for the current cwd so edits to user-
   // authored definitions take effect on the NEXT message without a server
   // restart. Both register/replace dispatcher tools on `defaultRegistry`.
-  // Cheap (~1ms per kind for tens of files). Mirrors CC's per-turn
+  // Cheap (~1ms per kind for tens of files). Reloaded each turn
   // `getAgentDefinitionsWithOverrides` invocation.
   const { activeAgents } = await registerSubagents(defaultRegistry, cwd);
   // Extract file-path-shaped tokens from the user's message so skills
   // declaring `paths:` frontmatter can opt in for relevant turns only
-  // (mirrors CC's conditional-skill activation, but evaluated per chat
-  // request instead of per file-tool-call). Cheap regex — won't catch
+    // request instead of per file-tool-call). Cheap regex — won't catch
   // every reference, but matches the common case of users naming files
   // explicitly. Skills without `paths:` are unaffected.
   const candidateFiles = extractFilePathCandidates(effectiveMessage);

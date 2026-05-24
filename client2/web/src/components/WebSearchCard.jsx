@@ -7,7 +7,7 @@ import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
 /**
  * Dedicated card for the `web_search` tool. Replaces the generic ToolCallCard's
  * `web_search {"query":"…","max_results":8}` JSON header with a query-first,
- * results-list-second layout — the same shape Cursor / Claude Code use for
+ * results-list-second layout — the same shape Cursor use for
  * search-result rendering.
  *
  * Result-string shape (from examples/07-basic/tools/web_search.ts:execute):

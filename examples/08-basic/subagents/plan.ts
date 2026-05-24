@@ -44,8 +44,7 @@ export const definition = createAgentDefinition({
   disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 25,
   label: "Plan",
-  // Mirrors CC's `omitClaudeMd: true` on the Plan agent. Plan is
-  // read-only — if it needs project conventions it can read AGENTS.md /
+    // read-only — if it needs project conventions it can read AGENTS.md /
   // CLAUDE.md on demand. Dropping rules from context saves tokens
   // without blocking access.
   omitProjectRules: true,

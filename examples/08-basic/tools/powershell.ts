@@ -6,8 +6,7 @@ import { detectPowerShellEdition, type PowerShellEdition } from "../core/powersh
 /**
  * Edition-specific syntax guidance. Without this branch the model either
  * (a) emits PS 7+ idioms (`&&`, `??`) on a 5.1 host → parser error / exit 1,
- * or (b) needlessly avoids them on a 7+ host. Mirrors Claude Code's
- * `getEditionSection` in `PowerShellTool/prompt.ts`.
+ * or (b) needlessly avoids them on a 7+ host.
  */
 function getEditionSection(edition: PowerShellEdition): string {
   if (edition === "desktop") {
@@ -33,7 +32,7 @@ function getEditionSection(edition: PowerShellEdition): string {
 
 const DESCRIPTION = `Run PowerShell commands in the workspace shell. Working directory persists between calls; shell state (variables, functions) does not.
 
-Prefer the \`bash\` tool for git, npm, and cross-platform scripts (CC default). Use \`powershell\` when you need native Windows cmdlets, registry paths, or $env: semantics.
+Prefer the \`bash\` tool for git, npm, and cross-platform scripts (default). Use \`powershell\` when you need native Windows cmdlets, registry paths, or $env: semantics.
 
 ${getEditionSection(detectPowerShellEdition())}
 

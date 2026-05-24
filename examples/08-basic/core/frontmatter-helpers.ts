@@ -1,6 +1,5 @@
 /**
- * Small parsing helpers for YAML frontmatter values. Mirrors a slim subset
- * of Claude Code's `src/utils/frontmatterParser.ts` + `markdownConfigLoader.ts`.
+ * Small parsing helpers for YAML frontmatter values.
  *
  * Keep this file dependency-free so every kind of markdown extension
  * (agents / skills / commands / output-styles / memory) can reuse the same
@@ -14,8 +13,6 @@
  *   - "a, b, c"  →  ["a", "b", "c"]
  *   - ["a", "b"] →  ["a", "b"]
  *   - "*"        →  undefined  (= all)
- *
- * Mirrors CC's `parseAgentToolsFromFrontmatter` semantics.
  */
 export function parseToolList(value: unknown): string[] | undefined {
   if (value === undefined) return undefined;
@@ -77,7 +74,7 @@ export function parseString(value: unknown): string | undefined {
 }
 
 /**
- * Parse a "name" key from frontmatter as a stable identifier. Mirrors CC's
+ * Parse a "name" key from frontmatter as a stable identifier.
  * agent/skill validation: must be a non-empty string. Returns null on miss
  * so callers can silently skip non-extension markdown files in the dir.
  */

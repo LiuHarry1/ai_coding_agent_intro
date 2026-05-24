@@ -6,8 +6,7 @@ import { isWindows } from "./platform.js";
 let cached: string | null | undefined;
 
 /**
- * Locate Git for Windows bash.exe. Mirrors Claude Code's `findGitBashPath`
- * without process.exit — callers get `null` and spawn fails with a clear error.
+ * Locate Git for Windows bash.exe. Callers get `null` and spawn fails with a clear error.
  */
 export function findGitBashPath(): string | null {
   if (!isWindows) return null;

@@ -32,7 +32,7 @@ export interface SkillDefinition {
   /**
    * Absolute path to the skill's folder (the directory containing `SKILL.md`).
    * Surfaced to the model so it can reference bundled assets — scripts, data
-   * files, sub-prompts — that live next to the skill body. Mirrors Claude
+   * files, sub-prompts — that live next to the skill body.
    * Code's `skillRoot` / `${CLAUDE_SKILL_DIR}` mechanism.
    */
   baseDir?: string;

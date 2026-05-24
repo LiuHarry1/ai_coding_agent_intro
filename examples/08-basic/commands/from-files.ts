@@ -1,7 +1,7 @@
 /**
  * Parse user/project markdown slash-command files into `SlashCommand`.
  *
- * Frontmatter schema (subset of CC's slash-command frontmatter):
+ * Frontmatter schema :
  *
  *   ---
  *   description: Run lints and auto-fix all reported issues.
@@ -13,8 +13,7 @@
  *   Body uses $ARGUMENTS / $1 / $name plus !`shell` and @file directives.
  *
  * The command name is derived from the filename (`fix-lint.md` → `/fix-lint`)
- * — matches CC's convention and means users rename files instead of editing
- * frontmatter to rename a command.
+ * so users rename files instead of editing frontmatter to rename a command.
  */
 
 import * as path from "path";

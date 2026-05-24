@@ -3,7 +3,6 @@
  * references tools by name should import from here so a rename of a tool
  * is a single-file change.
  *
- * Modeled after Claude Code's per-tool `*_TOOL_NAME` constants — there
  * each tool's prompt module exports its own name, then subagent
  * deny-lists compose them (see `built-in/exploreAgent.ts:67`).
  *

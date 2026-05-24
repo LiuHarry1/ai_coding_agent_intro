@@ -1,12 +1,11 @@
 /**
  * Unified loader for flat markdown-frontmatter extensions (agents, commands).
  *
- * Mirrors Claude Code's `src/utils/markdownConfigLoader.ts`. Skills have
- * their own loader (`skills/from-folders.ts`) because they are *folders*
+ * Skills have their own loader (`skills/from-folders.ts`) because they are *folders*
  * with bundled assets, not flat `.md` files — but both share the project
  * directory walk in `core/app-dir.ts`.
  *
- * Directory layout (CC analogue: `.claude/<kind>/`, we use `.ai-agent/<kind>/`):
+ * Directory layout:
  *
  *   <ancestor>/.ai-agent/agents/*.md
  *   <ancestor>/.ai-agent/commands/*.md
@@ -14,8 +13,7 @@
  *   ~/.ai-agent/agents/*.md
  *   ~/.ai-agent/commands/*.md
  *
- * Resolution: deepest project dir wins, project beats user. Matches CC's
- * `getActiveAgentsFromList` semantics.
+ * Resolution: deepest project dir wins, project beats user.
  */
 
 import { promises as fs } from "fs";

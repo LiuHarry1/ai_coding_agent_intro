@@ -2,8 +2,7 @@
  * Single source of truth for everything reachable via `/<name>`:
  * built-ins, file-loaded slash commands, and skill folders.
  *
- * Mirrors Claude Code's merged "commands = skills" namespace. On duplicate
- * `name`, **skill > command > built-in** (CC: skill files always win).
+ * On duplicate `name`, **skill > command > built-in** (skill files always win).
  *
  * Consumers:
  *   - `commands/dispatcher.ts`  — parse `/x` and route

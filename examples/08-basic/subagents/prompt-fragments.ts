@@ -18,7 +18,7 @@ import {
  * read-only subagents) happens in one place.
  */
 
-/** Primary shell tool (CC default: bash, including Git Bash on Windows). */
+/** Primary shell tool (bash, including Git Bash on Windows). */
 export const SHELL_TOOL_NAME = DEFAULT_SHELL_TOOL_NAME;
 
 const SHELL_READ_ONLY_LINE = isPowerShellToolEnabled()

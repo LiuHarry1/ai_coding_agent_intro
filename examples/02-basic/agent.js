@@ -15,7 +15,7 @@ const provider = createProvider();
  *   5. Go back to step 1
  *   6. If text only (no tool_calls) → done
  *
- * This is exactly how Claude Code, Cursor, OpenCode, etc. work under the hood.
+ * This is exactly how Cursor, OpenCode, etc. work under the hood.
  */
 export async function runAgent(userMessage, { tools, systemPrompt, sendSSE, maxSteps = 40 } ) {
   const messages = [

@@ -226,7 +226,6 @@ export interface SSETransport {
  * are entries in the `task` tool's directory. The model picks one via
  * `subagent_type` parameter.
  *
- * Modeled after Claude Code's `BaseAgentDefinition` (loadAgentsDir.ts).
  */
 export interface AgentDefinition {
   /** Stable identifier shown to the model as `subagent_type` value. */

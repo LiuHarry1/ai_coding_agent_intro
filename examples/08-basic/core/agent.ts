@@ -3,11 +3,10 @@ import { defaultManager } from "./provider-manager.js";
 import {
   attachTokenUsage,
   compactIfNeeded,
-  isContextLengthError,
-  isTransientStreamError,
   tokenCountWithEstimation,
-} from "./context.js";
-import type { AttachedTokenUsage } from "./context.js";
+} from "./compaction/index.js";
+import type { AttachedTokenUsage } from "./compaction/index.js";
+import { isContextLengthError, isTransientStreamError } from "./stream-errors.js";
 import type {
   AgentOptions,
   Message,
@@ -94,7 +93,7 @@ function attachTodoReminderAfterCompaction(
  * After each step, check if the model called `tool_search`. If so,
  * extract the `matches` array from tool results and move matching tools
  * from the deferred pool into the active set so the next step can use
- * them. Mirrors CC's mid-turn tool activation flow.
+ * them. Activates deferred tools mid-turn.
  */
 function activateDeferredTools(
   toolCalls: StreamResult["toolCalls"],
@@ -255,7 +254,7 @@ async function runCompactionAndLog(
   currentTodos: TodoItem[],
 ): Promise<void> {
   const compactStart = Date.now();
-  const managed = await compactIfNeeded(messages, eventBus);
+  const managed = await compactIfNeeded(messages, eventBus, resolvedModel, process.cwd(), currentTodos);
   const compactMs = Date.now() - compactStart;
 
   const counted = tokenCountWithEstimation(messages);
@@ -392,7 +391,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           `[agent] step ${step} hit context-length error → reactive aggressive compaction. ${errMsg}`,
         );
         eventBus.emit("compaction_reactive", { error: errMsg });
-        const recompacted = await compactIfNeeded(messages, eventBus, {
+        const recompacted = await compactIfNeeded(messages, eventBus, resolvedModel, process.cwd(), args.currentTodos, {
           force: true,
           aggressive: true,
         });

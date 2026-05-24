@@ -9,8 +9,6 @@ import { isWindows, powershellShell } from "./platform.js";
  * The two ship a meaningfully different language surface, and the model
  * cannot tell them apart from a generic "PowerShell" label — so we detect
  * the running edition once and embed it into the tool's description.
- *
- * Mirrors Claude Code's `getPowerShellEdition()`.
  */
 export type PowerShellEdition = "desktop" | "core" | null;
 

@@ -1,7 +1,6 @@
 /**
  * ToolSearch — discover deferred tools by name or keyword.
  *
- * Mirrors CC's ToolSearchTool. Deferred tools (shouldDefer / MCP) are
  * excluded from the API tools[] array to save tokens and stabilize prompt
  * cache. The model calls this tool to discover them; the agent loop then
  * activates discovered tools for subsequent steps.

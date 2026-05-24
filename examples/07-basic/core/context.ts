@@ -22,7 +22,6 @@ const MICRO_COMPACT_INPUT_MARKER = { _cleared: true, note: "Old tool input clear
  * The input (a path / query / command) stays — usually tiny and lets the
  * model see "what did I already look at / run".
  *
- * Mirrors Claude Code's `TOOLS_CLEARABLE_RESULTS` set in apiMicrocompact.ts:
  *   [SHELL_TOOL_NAMES, GLOB, GREP, FILE_READ, WEB_FETCH, WEB_SEARCH]
  */
 const CLEARABLE_TOOL_RESULTS = new Set<string>([
@@ -41,7 +40,6 @@ const CLEARABLE_TOOL_RESULTS = new Set<string>([
  * the model doesn't need the verbatim args back. The result stays since
  * it's tiny ("wrote N bytes").
  *
- * Mirrors Claude Code's `TOOLS_CLEARABLE_USES` set in apiMicrocompact.ts:
  *   [FILE_EDIT, FILE_WRITE, NOTEBOOK_EDIT]
  *
  * NOTE: bash/shell are NOT here — their input is the small command, their
@@ -330,7 +328,6 @@ function clearToolInputs(
  * `tailBudget`. Returns the index of the first message in the tail (i.e.
  * the split point so that `messages.slice(splitPoint)` is the tail).
  *
- * Mirrors Claude Code's `DEFAULT_TARGET_INPUT_TOKENS` strategy
  * (apiMicrocompact.ts:17): "Keep last 40k tokens like client-side".
  */
 function pickTailByTokenBudget(messages: Message[], tailBudget: number): number {
