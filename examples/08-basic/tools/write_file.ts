@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
 import { resolvePath } from "./utils.js";
+import { assertPathInWorkspace } from "../core/workspace.js";
 import type { ToolDefinition } from "../core/types.js";
 
 export const definition: ToolDefinition = {
@@ -23,6 +24,12 @@ export const definition: ToolDefinition = {
         const resolved = resolvePath(cwd, file_path);
         if ("error" in resolved) return resolved.error;
         const { abs } = resolved;
+
+        try {
+          assertPathInWorkspace(abs, cwd);
+        } catch (err) {
+          return (err as Error).message;
+        }
 
         fs.mkdirSync(path.dirname(abs), { recursive: true });
         fs.writeFileSync(abs, content, "utf-8");

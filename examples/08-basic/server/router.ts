@@ -5,6 +5,7 @@ import { createSession, getSession, listSessions, deleteSession, appendMessage }
 import { createSSETransport } from "./sse-transport.js";
 import { createWorkspaceRouter } from "./workspace/router.js";
 import { createSkillsApi } from "./skills-api.js";
+import { getDefaultWorkspace } from "../core/workspace.js";
 import { EventBus } from "../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../core/middleware.js";
 import { defaultRegistry } from "../tools/index.js";
@@ -126,7 +127,7 @@ async function handleChat(
 
   const cwd = workspace && fs.existsSync(workspace)
     ? path.resolve(workspace)
-    : process.cwd();
+    : getDefaultWorkspace();
 
   let session;
   if (session_id) {
@@ -476,7 +477,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
 
   // Workspace HTTP module — independent of agent/session/MCP. Composed by
   // delegation: it returns true iff it handled the request.
-  const workspaceRouter = createWorkspaceRouter({ root: process.cwd() });
+  const workspaceRouter = createWorkspaceRouter({ root: getDefaultWorkspace() });
 
   // Direct skill / agent invocation API for "other internal projects"
   // calling this backend as a service. Lives in its own module so the
@@ -499,7 +500,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       const cwd =
         workspace && fs.existsSync(workspace)
           ? path.resolve(workspace)
-          : process.cwd();
+          : getDefaultWorkspace();
       try {
         const entries = await listSlashCommands(cwd);
         sendJSON(res, 200, { workspace: cwd, entries });

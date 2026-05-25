@@ -15,7 +15,8 @@
  *
  * `workspace` is resolved per-request (matches `/chat`'s semantics), so a
  * single agent backend can serve many projects from different host paths.
- * Falls back to `process.cwd()` when the caller omits it.
+ * Falls back to the server's default workspace (CLI `--workspace`, env
+ * `WORKSPACE`, or `process.cwd()`) when the caller omits it.
  *
  * Auth is intentionally absent here — this module assumes it sits behind
  * a trusted boundary (internal network, nginx allowlist, etc.). If you
@@ -40,6 +41,7 @@ import { registerSubagents, BUILTIN_AGENTS } from "../agents/index.js";
 import { defaultRegistry } from "../tools/index.js";
 import type { AgentDefinition, RunAgentFn } from "../core/types.js";
 import type { SkillDefinition } from "../skills/types.js";
+import { getDefaultWorkspace } from "../core/workspace.js";
 
 function sendJSON(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -83,7 +85,7 @@ function resolveWorkspace(workspace: unknown): string {
     const resolved = path.resolve(workspace);
     if (fs.existsSync(resolved)) return resolved;
   }
-  return process.cwd();
+  return getDefaultWorkspace();
 }
 
 /** Public-friendly view of a SkillDefinition. */

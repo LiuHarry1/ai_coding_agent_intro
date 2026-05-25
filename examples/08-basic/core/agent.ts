@@ -28,6 +28,7 @@ import {
   runToolCalls,
 } from "./agent/toolOrchestration.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
+import { getDefaultWorkspace } from "./workspace.js";
 import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
 import type { AnyTool } from "./types.js";
 
@@ -270,7 +271,7 @@ async function runCompactionAndLog(
     messages,
     eventBus,
     resolvedModel,
-    process.cwd(),
+    getDefaultWorkspace(),
     currentTodos,
     {},
     sessionId,
@@ -442,7 +443,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           messages,
           eventBus,
           resolvedModel,
-          process.cwd(),
+          getDefaultWorkspace(),
           args.currentTodos,
           {
             force: true,

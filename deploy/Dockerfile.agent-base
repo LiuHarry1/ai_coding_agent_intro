@@ -1,0 +1,79 @@
+# syntax=docker/dockerfile:1
+#
+# Agent BASE image — runtime + agent code, NO project config.
+#
+# This image is the slow-changing half: Node 22, Python venv, npm deps,
+# pip deps, and the agent's TypeScript source. It is published once per
+# agent-code release and consumed by thin "tenant" images that COPY in
+# a project-specific `.ai-agent/` directory (config.json, agents,
+# skills, slash commands). See `deploy/Dockerfile.agent.example` for the
+# tenant pattern and `deploy/README.md` for the full workflow.
+#
+# Build from repo root:
+#   docker build -f deploy/Dockerfile.agent-base -t ai-agent-base:latest .
+#
+# Notes for downstream tenant Dockerfiles:
+#   - `WORKDIR /app` and tsx are already set up; `CMD` defaults to
+#     `start.js 08-basic` and need not be overridden.
+#   - `/root/.ai-agent` is the agent config directory. The tenant image
+#     should `COPY` its own contents there (NOT mount at runtime —
+#     mounting defeats the point of baking the tenant layer).
+#   - `/workspace` is the default project root the agent operates on.
+#     Bind-mount your host project tree onto this path at runtime.
+
+FROM node:22-bookworm-slim
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    git \
+    ripgrep \
+    python3 \
+    python3-venv \
+    python3-pip \
+    python-is-python3 \
+  && rm -rf /var/lib/apt/lists/*
+# ripgrep powers the grep/glob tools. Without it utils/ripgrep.ts falls
+# back to the pure-Node implementation in ripgrep-fallback.ts — correct
+# but much slower on large repos. See RG_FALLBACK in .env.example.
+
+# Python 3.11 + venv so the agent's bash tool can invoke python/pip
+# without polluting the system site-packages.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+COPY requirements.txt ./
+RUN python3 -m venv "${VIRTUAL_ENV}" \
+  && pip install --no-cache-dir --upgrade pip \
+  && pip install --no-cache-dir -r requirements.txt
+
+COPY package.json package-lock.json ./
+# Runtime needs tsx to load TypeScript examples; keep prod deps lean.
+RUN npm ci --omit=dev \
+  && npm install tsx@^4.21.0 --no-save \
+  && npm cache clean --force
+
+COPY examples/ ./examples/
+COPY shared/ ./shared/
+COPY start.js ./
+
+# Pre-create the config dir so tenant images can COPY into it without
+# worrying about directory existence / ownership.
+RUN mkdir -p /root/.ai-agent
+
+ENV NODE_ENV=production
+ENV PORT=4567
+# Default workspace inside the container. The tenant deployment is expected
+# to bind-mount the host project tree at this path (see docker-compose.yml).
+# Override per-instance via `-e WORKSPACE=/other` or `--workspace=/path`
+# after the example name in CMD.
+ENV WORKSPACE=/workspace
+VOLUME /workspace
+EXPOSE 4567
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||4567)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+
+# Tenant images can override the example via CMD ["./node_modules/.bin/tsx", "start.js", "05-basic"].
+CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"]

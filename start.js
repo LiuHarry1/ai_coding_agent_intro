@@ -20,7 +20,9 @@ console.log(
     `GLOB_HIDDEN=${process.env.GLOB_HIDDEN ?? "(unset → defaults true)"}`
 );
 
-const example = process.argv[2] || "08-basic";
+// First positional that isn't a `--flag` is the example name.
+const positionals = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const example = positionals[0] || "08-basic";
 
 console.log(`[start] Loading example: ${example}`);
 
@@ -50,6 +52,22 @@ try {
   const dirs = fs.readdirSync(new URL("./examples", import.meta.url));
   dirs.forEach(d => console.error(`  - ${d}`));
   process.exit(1);
+}
+
+// Resolve the default workspace ONCE at boot (CLI --workspace > $WORKSPACE >
+// process.cwd()). Logs early so a typo blows up here rather than on the first
+// tool call. The actual resolver lives inside the example so each example can
+// own its workspace semantics; we just trigger it and log the result.
+try {
+  const { resolveDefaultWorkspace } = await tryImport("core/workspace");
+  const workspace = resolveDefaultWorkspace();
+  console.log(`[start] workspace = ${workspace}`);
+} catch (err) {
+  // Examples without a core/workspace module (older ones) are unaffected.
+  if (err?.code !== "ERR_MODULE_NOT_FOUND") {
+    console.error(`[start] Failed to resolve workspace: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 startServer({ runAgent, createTools, systemPrompt });

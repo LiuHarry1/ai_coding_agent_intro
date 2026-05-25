@@ -39,6 +39,10 @@ Constraints:
 - Combined stdout+stderr capped at ~100KB; older output is truncated.
 - Default timeout 120s. Pass \`timeout\` for slower commands.
 
+Workspace boundary:
+- Read-only commands (\`ls\`, \`cat\`, \`grep\`, \`git log\`, etc.) MAY target paths outside the workspace — use this to inspect system config, logs, or sibling projects.
+- File mutations belong to \`write_file\` / \`edit_file\`, which are sandboxed to the workspace root. Don't use bash redirections (\`>\`, \`>>\`, \`tee\`) or \`rm\` / \`mv\` / \`cp\` to write OUTSIDE the workspace — that's the user's filesystem, not yours.
+
 IMPORTANT: Avoid using this tool to run \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Prefer the dedicated tools instead:
 - File search: Use \`glob\` (NOT find or ls)
 - Content search: Use \`grep\` (the tool) (NOT grep or rg)

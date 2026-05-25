@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as fs from "fs";
 import { resolvePath } from "./utils.js";
+import { assertPathInWorkspace } from "../core/workspace.js";
 import type { ToolDefinition } from "../core/types.js";
 
 export const definition: ToolDefinition = {
@@ -27,6 +28,13 @@ export const definition: ToolDefinition = {
         const resolved = resolvePath(cwd, file_path);
         if ("error" in resolved) return resolved.error;
         const { abs } = resolved;
+
+        try {
+          assertPathInWorkspace(abs, cwd);
+        } catch (err) {
+          return (err as Error).message;
+        }
+
         if (!fs.existsSync(abs)) return `Error: file not found: ${file_path}`;
         if (fs.statSync(abs).isDirectory()) return `Error: ${file_path} is a directory`;
         if (old_string === new_string) return `Error: old_string and new_string are identical`;

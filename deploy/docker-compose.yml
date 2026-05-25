@@ -1,24 +1,37 @@
 # Deployment compose for the coding agent + web frontend.
 #
-# This file is IMAGE-ONLY — no `build:` blocks. The workflow is:
+# Two-image deploy:
+#   - ai-agent-tenant:latest  (your project's thin config layer)
+#   - ai-agent-web:latest     (vite build + nginx)
 #
-#   1. Build the two images manually (from repo root):
-#        docker build -f deploy/Dockerfile.agent -t ai-agent:latest .
-#        docker build -f deploy/Dockerfile.web   -t ai-agent-web:latest .
+# Both images are IMAGE-ONLY here — no `build:` blocks. The workflow is:
 #
-#   2. Bring the stack up:
+#   1. Build the BASE agent image (slow, rare — only when agent code changes):
+#        docker build -f deploy/Dockerfile.agent-base -t ai-agent-base:latest .
+#
+#   2. Build the TENANT agent image (fast — runs whenever config changes):
+#        docker build -f deploy/Dockerfile.agent.example \
+#          --build-arg BASE_TAG=latest \
+#          -t ai-agent-tenant:latest \
+#          deploy/tenant-example
+#
+#   3. Build the web image:
+#        docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .
+#
+#   4. Bring the stack up:
 #        docker compose -f deploy/docker-compose.yml up -d
 #
-#   3. Open the UI:
+#   5. Open the UI:
 #        open http://localhost:8080
 #
-# To rebuild after code changes: re-run the `docker build` for whichever
-# side changed, then `docker compose ... up -d` again — compose will
-# recreate only the affected container.
+# Re-running `up -d` after any rebuild recreates only the container
+# whose image digest changed.
 
 services:
   agent:
-    image: ai-agent:latest
+    # Tenant image, built from deploy/Dockerfile.agent.example.
+    # FROM ai-agent-base + your project's .ai-agent/ baked in.
+    image: ai-agent-tenant:latest
     # `expose` (not `ports`) — agent is reachable only from inside the
     # compose network. All external traffic goes through nginx (web).
     expose:
@@ -26,6 +39,26 @@ services:
     environment:
       NODE_ENV: production
       PORT: "4567"
+      # Default workspace inside the container. The bind mount below makes
+      # this directory the host project tree, so writes (write_file /
+      # edit_file) are sandboxed there. Override per-request with the
+      # `workspace` body field on /chat to point at a subdirectory.
+      WORKSPACE: /workspace
+      # ── Secrets ──────────────────────────────────────────────────
+      # Pass API keys via env, NEVER bake them into the tenant image.
+      # `${VAR:-}` reads from the host's environment (or .env beside this
+      # file); the trailing `:-` means "empty string if unset" so compose
+      # doesn't error out when a key is intentionally absent.
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      GOOGLE_GENERATIVE_AI_API_KEY: "${GOOGLE_GENERATIVE_AI_API_KEY:-}"
+    volumes:
+      # Bind-mount the host project(s) you want the agent to operate on.
+      # Edit the left side to your real path. `:rw` because the agent
+      # writes files here; everything outside this path inside the
+      # container is image-only and effectively read-only.
+      - ../workspaces:/workspace:rw
     restart: unless-stopped
     healthcheck:
       test:
