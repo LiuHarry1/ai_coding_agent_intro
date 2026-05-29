@@ -47,6 +47,7 @@ export default function Mermaid({ code }) {
           if (cancelled) return;
           // mermaid leaves a stray <div id="dmermaid-…"> on parse failure.
           document.querySelectorAll(`[id^="d${id}"]`).forEach((n) => n.remove());
+          if (ref.current) ref.current.innerHTML = "";
           setError(String(e?.message || e));
         });
     }, 120);
@@ -56,12 +57,18 @@ export default function Mermaid({ code }) {
     };
   }, [code, id]);
 
-  if (error) {
-    return (
-      <pre className="mermaid-error" title={error}>
-        <code>{code}</code>
-      </pre>
-    );
-  }
-  return <div className="mermaid-diagram" ref={ref} />;
+  // Keep the diagram mount point in the DOM even while showing the error
+  // fallback. During streaming the source is often temporarily invalid; if we
+  // unmount this div on parse failure, a later successful render has nowhere
+  // to inject the SVG and the error state gets stuck until refresh.
+  return (
+    <>
+      <div className="mermaid-diagram" ref={ref} hidden={Boolean(error)} />
+      {error && (
+        <pre className="mermaid-error" title={error}>
+          <code>{code}</code>
+        </pre>
+      )}
+    </>
+  );
 }
