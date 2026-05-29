@@ -389,6 +389,12 @@ function extractFilePathCandidates(text: string): string[] {
   return [...out];
 }
 
+/** Internal agent context - must not appear in the chat UI. */
+function isSystemReminderContent(content: string): boolean {
+  const t = content.trim();
+  return t.startsWith("<system-reminder>") && t.endsWith("</system-reminder>");
+}
+
 /**
  * Convert AI SDK messages (user/assistant/tool) into the flat UI format
  * that the frontend MessageBubble component expects.
@@ -410,6 +416,7 @@ function sessionToUIMessages(messages: Message[]): unknown[] {
             .filter((p) => p.type === "text")
             .map((p) => p.text)
             .join("");
+      if (isSystemReminderContent(content)) continue;
       uiMessages.push({ type: "user", content });
     } else if (msg.role === "assistant") {
       const parts: unknown[] = [];
