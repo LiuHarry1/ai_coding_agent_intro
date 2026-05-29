@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useChatStore } from "../stores/chat-store.js";
 import { useWorkspaceIdeStore } from "../stores/workspace-ide-store.js";
 import { workspaceApi } from "../lib/api/workspace.js";
+import { isDesktop, pickWorkspaceDir } from "../lib/desktop.js";
 import SessionSwitcher from "./SessionSwitcher.jsx";
 
 export default function Header() {
@@ -73,6 +74,13 @@ export default function Header() {
     else loadDirectory(workspace || ".");
   };
 
+  const handlePickFolder = async (e) => {
+    e.stopPropagation();
+    setDropdownOpen(false);
+    const dir = await pickWorkspaceDir();
+    if (dir) setWorkspace(dir);
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -100,7 +108,7 @@ export default function Header() {
       </div>
 
       {!workspaceIdeOpen ? (
-        <div className="workspace-bar" ref={dropdownRef}>
+        <div className={`workspace-bar ${isDesktop() ? "workspace-bar--desktop" : ""}`} ref={dropdownRef}>
           <label className="workspace-label" htmlFor="workspace-input">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -116,6 +124,15 @@ export default function Header() {
             autoComplete="off"
             placeholder="loading..."
           />
+          {isDesktop() && (
+            <button className="workspace-pick-btn" onClick={handlePickFolder} title="Choose folder">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                <line x1="12" y1="11" x2="12" y2="17" />
+                <line x1="9" y1="14" x2="15" y2="14" />
+              </svg>
+            </button>
+          )}
           <button className={`workspace-browse-btn ${dropdownOpen ? "open" : ""}`} onClick={handleBrowse} title="Browse directories">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="6 9 12 15 18 9" />

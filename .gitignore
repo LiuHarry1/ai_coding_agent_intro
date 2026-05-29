@@ -3,4 +3,5 @@ node_modules
 .sessions
 client2/web/dist
 client2/web/node_modules
+dist-desktop
 .DS_Store

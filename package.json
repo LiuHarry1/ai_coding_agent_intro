@@ -3,12 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
-  "main": "start.js",
+  "main": "electron/main.mjs",
   "scripts": {
     "start": "tsx start.js",
     "start:js": "node start.js",
     "server:stop": "node ./shared/kill-port.cjs 4567",
     "server:restart": "npm run server:stop && npm run start",
+    "build:web": "npm --prefix client2/web run build",
+    "desktop:start": "electron .",
+    "desktop:dev": "npm run build:web && npm run desktop:start",
+    "desktop:pack": "npm run build:web && electron-builder",
+    "desktop:pack:win": "npm run build:web && electron-builder --win",
     "typecheck": "tsc --noEmit -p examples/05-basic/tsconfig.json"
   },
   "keywords": [],
@@ -41,7 +46,41 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
+  },
+  "build": {
+    "appId": "com.ai-coding-agent.desktop",
+    "productName": "Coding Agent",
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "files": [
+      "electron/**/*",
+      "start.js",
+      "examples/**/*",
+      "shared/**/*",
+      "client2/web/dist/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "asar": false,
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }

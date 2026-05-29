@@ -121,19 +121,33 @@
 }
 .workspace-input:focus { border-color: var(--accent); color: var(--text-primary); }
 
+.workspace-pick-btn,
 .workspace-browse-btn {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-left: none;
   color: var(--text-muted);
   padding: 4px 6px;
-  border-radius: 0 6px 6px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   transition: all 0.15s;
   flex-shrink: 0;
 }
+
+.workspace-bar--desktop .workspace-pick-btn {
+  border-radius: 0;
+}
+
+.workspace-bar--desktop .workspace-browse-btn {
+  border-radius: 0 6px 6px 0;
+}
+
+.workspace-bar:not(.workspace-bar--desktop) .workspace-browse-btn {
+  border-radius: 0 6px 6px 0;
+}
+
+.workspace-pick-btn:hover,
 .workspace-browse-btn:hover { color: var(--accent); }
 .workspace-browse-btn.open { color: var(--accent); border-color: var(--accent); }
 .workspace-browse-btn.open svg { transform: rotate(180deg); }
@@ -292,5 +306,6 @@
 [data-theme="light"] .session-badge { color: var(--text-secondary); background: #e8ecf0; }
 [data-theme="light"] .workspace-label { color: var(--text-secondary); }
 [data-theme="light"] .workspace-input { color: var(--text-primary); }
+[data-theme="light"] .workspace-pick-btn,
 [data-theme="light"] .workspace-browse-btn { color: var(--text-secondary); }
 [data-theme="light"] .workspace-dropdown { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
