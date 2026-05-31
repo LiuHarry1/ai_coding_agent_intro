@@ -58,7 +58,7 @@ export function detectError(name, result) {
   if (exitMatch && exitMatch[1] !== "0") return true;
   // Some bash-like tools embed exit codes inline rather than in brackets.
   if (
-    (name === "bash" || name === "powershell" || name?.includes("command") || name?.includes("run")) &&
+    (name === "Bash" || name === "PowerShell" || name?.includes("command") || name?.includes("run")) &&
     /exit code:\s*[1-9]/.test(result)
   ) {
     return true;

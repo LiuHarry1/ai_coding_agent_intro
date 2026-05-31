@@ -14,7 +14,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolDefinition, ToolContext, AnyTool } from "../core/types.js";
 
-export const TOOL_SEARCH_TOOL_NAME = "tool_search";
+import { TOOL_SEARCH_TOOL_NAME } from "./tool-names.js";
 
 interface DeferredEntry {
   name: string;

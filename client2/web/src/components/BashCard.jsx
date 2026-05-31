@@ -44,7 +44,7 @@ export default function BashCard({ part }) {
   const args = part.args || {};
   const result = part.result;
   const isDone = part.status === "done";
-  const isError = isDone && detectError(part.name || "bash", result);
+  const isError = isDone && detectError(part.name || "Bash", result);
   const { verb, text } = describeBash(args);
   const hasOutput = typeof result === "string" && result.length > 0;
 

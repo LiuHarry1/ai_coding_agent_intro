@@ -3,6 +3,7 @@ import { z } from "zod";
 import { truncate } from "./utils.js";
 import { cleanURL, decodeHtml, fetchWithTimeout, stripHtml } from "./http-utils.js";
 import type { ToolDefinition } from "../core/types.js";
+import { WEB_SEARCH_TOOL_NAME } from "./tool-names.js";
 
 interface SearXNGResult {
   title?: string;
@@ -70,7 +71,7 @@ function buildSearchURL(baseURL: string, args: {
 }
 
 export const definition: ToolDefinition = {
-  name: "web_search",
+  name: WEB_SEARCH_TOOL_NAME,
   description: "Search the web using a SearXNG instance",
   shouldDefer: true,
   isConcurrencySafe: () => true,

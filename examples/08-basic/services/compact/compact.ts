@@ -8,6 +8,7 @@ import * as path from "path";
 import { generateText } from "ai";
 import { defaultManager } from "../../core/provider-manager.js";
 import type { Message, TodoItem } from "../../core/types.js";
+import { READ_FILE_TOOL_NAME } from "../../tools/tool-names.js";
 import { estimateConversationTokens, clearTokenUsages } from "./tokens.js";
 
 // ── Prompt (analysis + summary) ─────────────────────────
@@ -160,7 +161,7 @@ function extractRecentlyReadFiles(messages: Message[], maxFiles = 8): string[] {
     const m = messages[i];
     if (m.role !== "assistant") continue;
     for (const part of m.content) {
-      if (part.type !== "tool-call" || part.toolName !== "read_file") continue;
+      if (part.type !== "tool-call" || part.toolName !== READ_FILE_TOOL_NAME) continue;
       const filePath =
         (part.input as Record<string, unknown>)?.file_path as string | undefined ??
         (part.input as Record<string, unknown>)?.path as string | undefined;

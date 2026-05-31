@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolDefinition, TodoItem, TodoStatus } from "../core/types.js";
+import { TODO_WRITE_TOOL_NAME } from "./tool-names.js";
 
 const STATUS_ORDER: Record<TodoStatus, number> = {
   in_progress: 0,
@@ -25,7 +26,7 @@ function summarize(items: TodoItem[]): string {
 }
 
 export const definition: ToolDefinition = {
-  name: "todo_write",
+  name: TODO_WRITE_TOOL_NAME,
   description: "Create or update a structured task checklist to track multi-step work",
   shouldDefer: true,
   isConcurrencySafe: () => false,

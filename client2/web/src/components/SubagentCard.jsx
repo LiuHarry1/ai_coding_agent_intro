@@ -67,17 +67,17 @@ function summarizeSteps(steps) {
     counts[bucket] = (counts[bucket] || 0) + 1;
   }
   const VERBS = [
-    ["read_file", "read", "reads"],
-    ["grep", "search", "searches"],
+    ["Read", "read", "reads"],
+    ["Grep", "search", "searches"],
     ["list_dir", "dir", "dirs"],
-    ["bash", "cmd", "cmds"],
-    ["powershell", "cmd", "cmds"],
-    ["web_search", "web search", "web searches"],
+    ["Bash", "cmd", "cmds"],
+    ["PowerShell", "cmd", "cmds"],
+    ["WebSearch", "web search", "web searches"],
     ["__search__", "web search", "web searches"],
-    ["web_fetch", "fetch", "fetches"],
+    ["WebFetch", "fetch", "fetches"],
     ["__fetch__", "fetch", "fetches"],
-    ["write_file", "write", "writes"],
-    ["edit_file", "edit", "edits"],
+    ["Write", "write", "writes"],
+    ["Edit", "edit", "edits"],
   ];
   const phrases = [];
   for (const [key, sing, plur] of VERBS) {

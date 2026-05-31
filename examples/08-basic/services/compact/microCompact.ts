@@ -7,6 +7,17 @@
  * tool_result pairing stays intact.
  */
 import type { AssistantMessage, Message, ToolMessage } from "../../core/types.js";
+import {
+  BASH_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  POWERSHELL_TOOL_NAME,
+  READ_FILE_TOOL_NAME,
+  WEB_FETCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+  WRITE_FILE_TOOL_NAME,
+} from "../../tools/tool-names.js";
 import { estimateMessageTokens } from "./tokens.js";
 import {
   isPersistedReference,
@@ -18,22 +29,22 @@ const MICRO_COMPACT_MARKER = "[Old tool result content cleared to save context]"
 const MICRO_COMPACT_INPUT_MARKER = { _cleared: true, note: "Old tool input cleared to save context" };
 
 const CLEARABLE_TOOL_RESULTS = new Set<string>([
-  "bash",
+  BASH_TOOL_NAME,
   "shell",
-  "powershell",
-  "glob",
-  "grep",
-  "read_file",
-  "web_fetch",
-  "web_search",
+  POWERSHELL_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  READ_FILE_TOOL_NAME,
+  WEB_FETCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
 ]);
 
 const CLEARABLE_TOOL_INPUTS = new Set<string>([
-  "write_file",
-  "edit_file",
+  WRITE_FILE_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
   "create_file",
   "apply_patch",
-  "notebook_edit",
+  "NotebookEdit",
 ]);
 
 function estStr(s: string): number {

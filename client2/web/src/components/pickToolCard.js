@@ -8,34 +8,44 @@ import WebFetchCard from "./WebFetchCard.jsx";
 import SubagentCard from "./SubagentCard.jsx";
 import GlobCard from "./GlobCard.jsx";
 import GrepCard from "./GrepCard.jsx";
+import ToolSearchCard from "./ToolSearchCard.jsx";
 import { isFetchTool, isSearchTool } from "../lib/tool-kind.js";
+import {
+  BASH,
+  POWERSHELL,
+  READ,
+  WRITE,
+  EDIT,
+  LIST_DIR,
+  WEB_SEARCH,
+  WEB_FETCH,
+  GLOB,
+  GREP,
+  TOOL_SEARCH,
+  SUPPRESSED_TOOL_CARDS,
+} from "../lib/tool-names.js";
 
-// Tool-name → dedicated card component. Subagent dispatch is handled
-// separately because `isSubagent` is a flag rather than a fixed name —
-// any registered subagent (explore, plan, custom) routes to SubagentCard
-// regardless of its tool name.
+export { SUPPRESSED_TOOL_CARDS };
+
 const TOOL_CARDS = {
-  write_file: FileChangeCard,
-  edit_file: FileChangeCard,
-  read_file: ReadFileCard,
-  list_dir: ListDirCard,
-  bash: BashCard,
-  powershell: BashCard,
-  web_search: WebSearchCard,
-  web_fetch: WebFetchCard,
-  glob: GlobCard,
-  grep: GrepCard,
+  [WRITE]: FileChangeCard,
+  [EDIT]: FileChangeCard,
+  [READ]: ReadFileCard,
+  [LIST_DIR]: ListDirCard,
+  [BASH]: BashCard,
+  [POWERSHELL]: BashCard,
+  [WEB_SEARCH]: WebSearchCard,
+  [WEB_FETCH]: WebFetchCard,
+  [GLOB]: GlobCard,
+  [GREP]: GrepCard,
+  [TOOL_SEARCH]: ToolSearchCard,
 };
-
-// Tools that render via a non-tool-card path elsewhere (e.g. TodoListCard
-// from the `todo_list` part type). Drop the duplicate tool_call row.
-export const SUPPRESSED_TOOL_CARDS = new Set(["todo_write"]);
 
 export function pickCard(item) {
   if (item.isSubagent) return SubagentCard;
-  if (TOOL_CARDS[item.name]) return TOOL_CARDS[item.name];
-  // MCP tools are named `{server}_{tool}` — route by capability, not exact name.
-  if (isFetchTool(item.name)) return WebFetchCard;
-  if (isSearchTool(item.name)) return WebSearchCard;
+  const name = item.name;
+  if (TOOL_CARDS[name]) return TOOL_CARDS[name];
+  if (isFetchTool(name)) return WebFetchCard;
+  if (isSearchTool(name)) return WebSearchCard;
   return ToolCallCard;
 }

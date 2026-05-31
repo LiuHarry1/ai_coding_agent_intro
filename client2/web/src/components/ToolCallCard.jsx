@@ -22,7 +22,7 @@ const TOOL_ICONS = {
   read: "\u{1F4C4}", write: "\u270E", run: "$", search: "\u{1F50D}", list: "\u{1F4C1}", default: "\u2699",
 };
 
-const READ_ONLY_TOOLS = new Set(["read_file", "list_dir", "list_directory", "search", "find", "grep"]);
+const READ_ONLY_TOOLS = new Set(["Read", "list_dir", "list_directory", "search", "find", "Grep"]);
 
 function isReadOnly(name) {
   if (READ_ONLY_TOOLS.has(name)) return true;
@@ -38,21 +38,26 @@ function formatArgs(name, args) {
   // bash has 4 modes: run a command (above), check pid, kill pid, background.
   // Without this branch the mode-2/mode-3 calls render as raw JSON
   // (`bash {"pid":60090}`), which is gibberish to the user.
-  if ((name === "bash" || name === "powershell") && args.pid != null) {
+  if ((name === "Bash" || name === "PowerShell") && args.pid != null) {
     return args.kill ? `kill pid ${args.pid}` : `check pid ${args.pid}`;
   }
   if (args.task) return args.task.slice(0, 80) + (args.task.length > 80 ? "\u2026" : "");
+  if (args.query) return args.query;
   if (args.pattern) return args.pattern;
   if (args.directory) return args.directory;
   return JSON.stringify(args).slice(0, 80);
 }
 
+function hasArgsContent(args) {
+  return args && typeof args === "object" && Object.keys(args).length > 0;
+}
+
 function renderToolArgs(name, args) {
-  if (!args) return null;
-  if (name === "edit_file" && args.old_string != null && args.new_string != null) {
+  if (!hasArgsContent(args)) return null;
+  if (name === "Edit" && args.old_string != null && args.new_string != null) {
     return <DiffViewer oldStr={args.old_string} newStr={args.new_string} filePath={args.file_path} replaceAll={args.replace_all} />;
   }
-  if (name === "write_file" && typeof args.content === "string") {
+  if (name === "Write" && typeof args.content === "string") {
     return <FilePreview content={args.content} filePath={args.file_path} />;
   }
   const json = JSON.stringify(args, null, 2);
@@ -170,6 +175,9 @@ export default function ToolCallCard({ part }) {
 
   const filePath = args.file_path || args.path || null;
   const fName = fileName(filePath);
+  const argsPreview = formatArgs(name, args);
+  const showArgsDetails = hasArgsContent(args) || hasLivePreview;
+  const showResultDetails = result != null && result !== "";
 
   return (
     <div className={`tool-card ${expanded ? "open" : ""} ${isError ? "has-error" : ""}`}>
@@ -178,12 +186,12 @@ export default function ToolCallCard({ part }) {
         <span className={`tool-icon ${cls}`}>{icon}</span>
         <span className="tool-name">{name}</span>
         {fName && <span className="tool-file-badge" title={filePath}>{fName}</span>}
-        {!fName && (
+        {!fName && argsPreview && (
           <span
             className="tool-args-preview"
-            title={formatArgs(name, args)}
+            title={argsPreview}
           >
-            {formatArgs(name, args)}
+            {argsPreview}
           </span>
         )}
         <span className="tool-meta">
@@ -204,7 +212,7 @@ export default function ToolCallCard({ part }) {
         </span>
       </div>
 
-      {expanded && (
+      {expanded && (showArgsDetails || showResultDetails || hasLivePreview || hasLiveOutput || (!isDone && part.liveInputBytes != null)) && (
         <div className="tool-card-body">
           {hasLivePreview ? (
             <LivePreview text={part.livePreview} fileName={fName} startTime={part.liveInputStart} />
@@ -218,12 +226,14 @@ export default function ToolCallCard({ part }) {
             <LiveTerminal output={part.liveOutput} elapsed={part.liveElapsed} done={part.liveDone} />
           )}
 
-          <details open={name === "edit_file" || name === "write_file"}>
-            <summary>Arguments</summary>
-            {renderToolArgs(name, args)}
-          </details>
+          {showArgsDetails && (
+            <details open={name === "Edit" || name === "Write"}>
+              <summary>Arguments</summary>
+              {renderToolArgs(name, args)}
+            </details>
+          )}
 
-          {result != null && (
+          {showResultDetails && (
             <details open={isError} className={isError ? "result-error" : ""}>
               <summary>
                 Result

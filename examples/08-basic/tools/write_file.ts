@@ -5,9 +5,10 @@ import * as path from "path";
 import { resolvePath } from "./utils.js";
 import { assertPathInWorkspace } from "../core/workspace.js";
 import type { ToolDefinition } from "../core/types.js";
+import { WRITE_FILE_TOOL_NAME } from "./tool-names.js";
 
 export const definition: ToolDefinition = {
-  name: "write_file",
+  name: WRITE_FILE_TOOL_NAME,
   description: "Create or overwrite a file",
   isConcurrencySafe: () => false,
   create(cwd) {

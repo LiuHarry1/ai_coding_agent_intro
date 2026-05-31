@@ -5,6 +5,7 @@ import * as path from "path";
 import { execSync } from "child_process";
 import { truncate, resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
+import { LIST_DIR_TOOL_NAME } from "./tool-names.js";
 
 const IGNORE_PATTERNS = [
   "node_modules/",
@@ -135,7 +136,7 @@ function renderTree(node: TreeNode, depth: number): string {
 }
 
 export const definition: ToolDefinition = {
-  name: "list_dir",
+  name: LIST_DIR_TOOL_NAME,
   description: "List files and directories with smart filtering (respects .gitignore, hides noise like node_modules)",
   create(cwd) {
     return tool({

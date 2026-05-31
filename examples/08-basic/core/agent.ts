@@ -27,10 +27,18 @@ import {
   buildToolMessage,
   runToolCalls,
 } from "./agent/toolOrchestration.js";
-import { TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
+import { TOOL_SEARCH_TOOL_NAME, TODO_WRITE_TOOL_NAME } from "../tools/tool-names.js";
 import { getDefaultWorkspace } from "./workspace.js";
 import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
 import type { AnyTool } from "./types.js";
+
+/** Default per-step output cap when the provider SDK cannot infer model limits. */
+const DEFAULT_MAX_OUTPUT_TOKENS = 128_000;
+
+function getMaxOutputTokens(): number {
+  const parsed = parseInt(process.env.AGENT_MAX_OUTPUT_TOKENS ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_OUTPUT_TOKENS;
+}
 
 // ── User-message helpers ────────────────────────────
 
@@ -69,7 +77,7 @@ function autoCompleteTodos(todos: TodoItem[], eventBus: AgentOptions["eventBus"]
 
 function formatTodoReminder(todos: TodoItem[]): string {
   const lines = todos.map((t) => `- [${t.status}] ${t.id}: ${t.content}`);
-  return `[Active todo list — update via todo_write(merge=true) as you complete items]\n${lines.join("\n")}`;
+  return `[Active todo list — update via ${TODO_WRITE_TOOL_NAME}(merge=true) as you complete items]\n${lines.join("\n")}`;
 }
 
 /**
@@ -368,6 +376,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         // Schema-only tools — execution is handled by toolOrchestration so
         // we can batch concurrency-safe reads in parallel (CC-style).
         tools: apiTools,
+        maxOutputTokens: getMaxOutputTokens(),
         maxRetries: 3,
         ...provider.streamTextExtras(),
       });

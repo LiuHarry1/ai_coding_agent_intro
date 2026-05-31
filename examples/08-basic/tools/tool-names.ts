@@ -3,26 +3,30 @@
  * references tools by name should import from here so a rename of a tool
  * is a single-file change.
  *
+ * Names follow Claude Code (claude-code-rev) where a matching tool exists.
  * Why not just import each tool definition and read `.name`? Two
  * reasons: (1) the tool files import zod / runtime deps we don't want to
  * pull into prompt-construction paths, and (2) string literals here are
- * cheap to grep for ("what code references write_file by name?") even
+ * cheap to grep for ("what code references Read by name?") even
  * before tooling lands to verify the constants match the definitions.
  */
 
-export const BASH_TOOL_NAME = "bash";
-export const POWERSHELL_TOOL_NAME = "powershell";
-export const READ_FILE_TOOL_NAME = "read_file";
-export const WRITE_FILE_TOOL_NAME = "write_file";
-export const EDIT_FILE_TOOL_NAME = "edit_file";
+export const BASH_TOOL_NAME = "Bash";
+export const POWERSHELL_TOOL_NAME = "PowerShell";
+export const READ_FILE_TOOL_NAME = "Read";
+export const WRITE_FILE_TOOL_NAME = "Write";
+export const EDIT_FILE_TOOL_NAME = "Edit";
+/** No Claude Code equivalent — project-specific directory tree listing. */
 export const LIST_DIR_TOOL_NAME = "list_dir";
-export const TODO_WRITE_TOOL_NAME = "todo_write";
-export const WEB_SEARCH_TOOL_NAME = "web_search";
-export const WEB_FETCH_TOOL_NAME = "web_fetch";
-export const GLOB_TOOL_NAME = "glob";
-export const GREP_TOOL_NAME = "grep";
-export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
-export const TOOL_SEARCH_TOOL_NAME = "tool_search";
+export const TODO_WRITE_TOOL_NAME = "TodoWrite";
+export const WEB_SEARCH_TOOL_NAME = "WebSearch";
+export const WEB_FETCH_TOOL_NAME = "WebFetch";
+export const GLOB_TOOL_NAME = "Glob";
+export const GREP_TOOL_NAME = "Grep";
+export const ASK_USER_QUESTION_TOOL_NAME = "AskUserQuestion";
+/** Not `tool_search` — OpenAI Responses treats that as native `tool_search_call`. */
+export const TOOL_SEARCH_TOOL_NAME = "ToolSearch";
+export const SKILL_TOOL_NAME = "Skill";
 
 /**
  * Single tool that dispatches to all built-in subagents via `subagent_type`.
@@ -38,7 +42,7 @@ export const TASK_TOOL_NAME = AGENT_TOOL_NAME;
  * here automatically restricts every read-only subagent from inheriting
  * it — the alternative is editing every subagent's deny-list by hand.
  *
- * `todo_write` is included even though it doesn't touch the filesystem:
+ * `TodoWrite` is included even though it doesn't touch the filesystem:
  * todo state is a per-conversation construct of the parent agent, not
  * something we want a read-only fact-finding subagent to manipulate.
  */

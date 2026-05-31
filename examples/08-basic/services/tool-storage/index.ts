@@ -5,18 +5,27 @@
 import * as fs from "fs";
 import * as path from "path";
 import { getToolResultFilePath } from "../../server/session.js";
+import {
+  BASH_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  POWERSHELL_TOOL_NAME,
+  READ_FILE_TOOL_NAME,
+  WEB_FETCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+} from "../../tools/tool-names.js";
 
 export const PERSISTED_OUTPUT_OPEN = "<persisted-output";
 export const PERSISTED_OUTPUT_CLOSE = "</persisted-output>";
 
 const PERSISTABLE_TOOLS = new Set([
-  "read_file",
-  "grep",
-  "glob",
-  "bash",
-  "powershell",
-  "web_fetch",
-  "web_search",
+  READ_FILE_TOOL_NAME,
+  GREP_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  BASH_TOOL_NAME,
+  POWERSHELL_TOOL_NAME,
+  WEB_FETCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
 ]);
 
 function parseEnvInt(name: string, fallback: number): number {

@@ -1,0 +1,22 @@
+/**
+ * Canonical tool names — keep in sync with examples/08-basic/tools/tool-names.ts
+ */
+
+export const BASH = "Bash";
+export const POWERSHELL = "PowerShell";
+export const READ = "Read";
+export const WRITE = "Write";
+export const EDIT = "Edit";
+export const LIST_DIR = "list_dir";
+export const TODO_WRITE = "TodoWrite";
+export const WEB_SEARCH = "WebSearch";
+export const WEB_FETCH = "WebFetch";
+export const GLOB = "Glob";
+export const GREP = "Grep";
+export const ASK_USER_QUESTION = "AskUserQuestion";
+export const TOOL_SEARCH = "ToolSearch";
+export const SKILL = "Skill";
+export const AGENT = "Agent";
+
+/** Shown elsewhere (TodoListCard) — hide duplicate tool_call rows. */
+export const SUPPRESSED_TOOL_CARDS = new Set([TODO_WRITE]);

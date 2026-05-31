@@ -159,7 +159,7 @@ export default function FileChangeCard({ part }) {
   const isError = isDone && typeof result === "string" && result.startsWith("Error:");
   const duration = formatDuration(part.duration);
   const filePath = args.file_path || args.path || null;
-  const isWrite = name === "write_file";
+  const isWrite = name === "Write";
   const kind = isWrite ? "write" : "edit";
   const icon = isWrite ? "\u{1F4C4}" : "\u270E"; // 📄 / ✎
   const hasLivePreview =

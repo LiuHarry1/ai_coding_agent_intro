@@ -24,7 +24,9 @@ import type { SkillDefinition } from "../skills/types.js";
 import { expandSkillBody, SkillExpansionError } from "../skills/expand.js";
 import { runSkillFork } from "../skills/run-fork.js";
 
-export const SKILL_TOOL_NAME = "skill";
+import { SKILL_TOOL_NAME } from "./tool-names.js";
+
+export { SKILL_TOOL_NAME } from "./tool-names.js";
 
 export function createSkillTool(
   skills: readonly SkillDefinition[],

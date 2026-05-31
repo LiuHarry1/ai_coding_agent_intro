@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as fs from "fs";
 import { truncate, resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
+import { READ_FILE_TOOL_NAME } from "./tool-names.js";
 
 // Hard cap on file size for read_file. Files over this throw — the
 // model must use grep to locate the section first, or fall back to
@@ -12,7 +13,7 @@ import type { ToolDefinition } from "../core/types.js";
 const MAX_FILE_SIZE = 256 * 1024;
 
 export const definition: ToolDefinition = {
-  name: "read_file",
+  name: READ_FILE_TOOL_NAME,
   description: "Read file contents with line numbers",
   isConcurrencySafe: () => true,
   create(cwd) {

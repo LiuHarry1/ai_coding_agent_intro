@@ -241,7 +241,7 @@ export default function MessageBubble({ message }) {
             return <ThinkingDots key={i} step={part.step} />;
           case "tool_group": {
             const visibleItems = part.items.filter(
-              (it) => it.type === "tool_call" && !SUPPRESSED_TOOL_CARDS.has(it.name)
+              (it) => it.type === "tool_call" && !SUPPRESSED_TOOL_CARDS.has(it.name),
             );
             if (visibleItems.length === 0) return null;
             return (

@@ -4,9 +4,10 @@ import * as fs from "fs";
 import { resolvePath } from "./utils.js";
 import { assertPathInWorkspace } from "../core/workspace.js";
 import type { ToolDefinition } from "../core/types.js";
+import { EDIT_FILE_TOOL_NAME } from "./tool-names.js";
 
 export const definition: ToolDefinition = {
-  name: "edit_file",
+  name: EDIT_FILE_TOOL_NAME,
   description: "Make targeted edits by replacing specific text in a file",
   isConcurrencySafe: () => false,
   create(cwd) {

@@ -23,7 +23,8 @@ import { answerQuestion } from "../core/question-broker.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 import { filterToolsByEnablement } from "../core/tool-enablement.js";
 import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
-import { createToolSearchDefinition, TOOL_SEARCH_TOOL_NAME } from "../tools/tool_search.js";
+import { createToolSearchDefinition } from "../tools/tool_search.js";
+import { TOOL_SEARCH_TOOL_NAME } from "../tools/tool-names.js";
 import type { RouterOptions, Message, RunAgentFn, MCPServerConfig, LlmProfile } from "../core/types.js";
 
 registerBuiltinSubagents(defaultRegistry);
@@ -294,7 +295,7 @@ async function handleChat(
       .map((d) => `- ${d.name}${d.isMcp ? " (MCP)" : ""}`)
       .join("\n");
     reminderParts.push(
-      `The following tools are available but not loaded. Use \`tool_search\` to discover and load them before use:\n${listing}`,
+      `The following tools are available but not loaded. Use \`${TOOL_SEARCH_TOOL_NAME}\` to discover and load them before use:\n${listing}`,
     );
   }
 

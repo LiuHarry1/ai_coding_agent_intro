@@ -5,6 +5,7 @@ import { z } from "zod";
 import { truncate } from "./utils.js";
 import { fetchWithTimeout, stripHtml } from "./http-utils.js";
 import type { ToolDefinition } from "../core/types.js";
+import { WEB_FETCH_TOOL_NAME } from "./tool-names.js";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const MAX_OUTPUT_CHARS = 20000;
@@ -22,7 +23,7 @@ function compactText(value: string): string {
 }
 
 export const definition: ToolDefinition = {
-  name: "web_fetch",
+  name: WEB_FETCH_TOOL_NAME,
   description: "Fetch a web page and extract readable article content",
   shouldDefer: true,
   isConcurrencySafe: () => true,
