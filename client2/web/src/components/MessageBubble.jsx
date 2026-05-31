@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { pickCard, SUPPRESSED_TOOL_CARDS } from "./pickToolCard.js";
-import { mdComponents } from "../lib/markdown-components.jsx";
+import { getMdComponents } from "../lib/markdown-components.jsx";
 
 function ThinkingDots() {
   return (
@@ -17,6 +17,7 @@ function ThinkingDots() {
 function ReasoningBlock({ part }) {
   const [open, setOpen] = useState(false);
   const isStreaming = part.status === "streaming";
+  const mdComponents = getMdComponents({ streaming: isStreaming });
 
   const label = isStreaming
     ? "Thinking..."
@@ -192,6 +193,7 @@ export default function MessageBubble({ message }) {
   if (message.type !== "assistant") return null;
 
   const { parts = [] } = message;
+  const messageStreaming = message.status === "streaming";
 
   const groupedParts = [];
   let currentToolGroup = null;
@@ -213,7 +215,9 @@ export default function MessageBubble({ message }) {
     <div className="msg msg-assistant">
       {groupedParts.map((part, i) => {
         switch (part.type) {
-          case "text":
+          case "text": {
+            const partStreaming = messageStreaming && i === groupedParts.length - 1;
+            const mdComponents = getMdComponents({ streaming: partStreaming });
             return (
               <div className="content" key={i}>
                 <ReactMarkdown
@@ -225,6 +229,7 @@ export default function MessageBubble({ message }) {
                 </ReactMarkdown>
               </div>
             );
+          }
           case "reasoning":
             // Skip short, content-less reasoning blocks — they're pure noise
             // ("Thought for 1s" rows with nothing inside). We still render

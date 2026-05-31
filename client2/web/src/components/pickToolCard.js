@@ -9,6 +9,8 @@ import SubagentCard from "./SubagentCard.jsx";
 import GlobCard from "./GlobCard.jsx";
 import GrepCard from "./GrepCard.jsx";
 import ToolSearchCard from "./ToolSearchCard.jsx";
+import SkillCard from "./SkillCard.jsx";
+import SubagentStepFallback from "./SubagentStepFallback.jsx";
 import { isFetchTool, isSearchTool } from "../lib/tool-kind.js";
 import {
   BASH,
@@ -22,10 +24,12 @@ import {
   GLOB,
   GREP,
   TOOL_SEARCH,
+  SKILL,
   SUPPRESSED_TOOL_CARDS,
+  SUBAGENT_SUPPRESSED,
 } from "../lib/tool-names.js";
 
-export { SUPPRESSED_TOOL_CARDS };
+export { SUPPRESSED_TOOL_CARDS, SUBAGENT_SUPPRESSED };
 
 const TOOL_CARDS = {
   [WRITE]: FileChangeCard,
@@ -39,13 +43,16 @@ const TOOL_CARDS = {
   [GLOB]: GlobCard,
   [GREP]: GrepCard,
   [TOOL_SEARCH]: ToolSearchCard,
+  [SKILL]: SkillCard,
 };
 
-export function pickCard(item) {
+export function pickCard(item, options = {}) {
+  const { nested = false } = options;
   if (item.isSubagent) return SubagentCard;
   const name = item.name;
   if (TOOL_CARDS[name]) return TOOL_CARDS[name];
   if (isFetchTool(name)) return WebFetchCard;
   if (isSearchTool(name)) return WebSearchCard;
+  if (nested) return SubagentStepFallback;
   return ToolCallCard;
 }

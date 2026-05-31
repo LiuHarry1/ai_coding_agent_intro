@@ -760,6 +760,31 @@
 .tool-row-status--empty { color: var(--text-muted); }
 .tool-row-actions { display: inline-flex; align-items: center; }
 
+.tool-row-meta-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+/* Nested rows inside subagent step lists — slightly tighter than top-level. */
+.tool-row--nested .tool-row-header {
+  padding: 2px 6px;
+  font-size: 11.5px;
+}
+.tool-row--nested .tool-row-label { font-size: 11.5px; }
+.tool-row--nested .tool-row-subtitle { font-size: 10.5px; }
+.tool-row--nested .tool-row-body { margin-left: 14px; font-size: 11px; }
+
+.tool-row-actions-bar {
+  margin: 4px 0 0 14px;
+  display: flex;
+  gap: 6px;
+}
+
 /* Shared body styles for the compact row family. Indented to align under
    the icon (not the chevron) so the body visually "belongs" to its
    parent row. */
@@ -1076,158 +1101,96 @@
 }
 [data-theme="light"] .web-fetch-link { color: #1a7f37; }
 
-/* ── Subagent Card (explore / plan / general_purpose) ─ */
-.subagent-card {
-  margin: 6px 0;
-  border: 1px solid var(--border);
-  border-left-width: 3px;
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  overflow: hidden;
+/* ── Subagent row (Explore / Plan / Agent) ───────────────────────
+   Flat tool-row — same visual tier as Read/Bash. Expanded body is
+   indented nested tool rows + plain markdown report (no card chrome). */
+.subagent-row {
+  /* inherits .tool-row margin from .tool-group .tool-row */
 }
-.subagent-card--explore { border-left-color: #a371f7; }
-.subagent-card--plan    { border-left-color: #d29922; }
-.subagent-card--agent   { border-left-color: #8b949e; }
-.subagent-card.has-error { border-left-color: #f85149; }
 
-/* Subagent variants of the shared tool-row-header — same DOM, taller
-   padding + slightly larger type, plus a per-type label color so the
-   user can tell explore / plan / agent apart from across the chat. */
-/* Only the subagent's OWN header row gets the bigger padding / font.
-   Nested tool cards (BashCard, ReadFileCard, etc.) keep their own
-   compact dimensions — using a descendant selector here is what made
-   the inner rows look spaced out. */
-.subagent-card > .tool-row-header {
-  padding: 8px 12px;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-.subagent-card > .tool-row-header:hover { background: rgba(255,255,255,0.03); }
-.subagent-card > .tool-row-header .tool-row-icon { font-size: 13px; }
-.subagent-card > .tool-row-header .tool-row-label { color: var(--text-primary); font-weight: 600; }
-.subagent-card--explore > .tool-row-header .tool-row-label { color: #a371f7; }
-.subagent-card--plan    > .tool-row-header .tool-row-label { color: #d29922; }
-.subagent-card--agent   > .tool-row-header .tool-row-label { color: #8b949e; }
-/* Per-type ✓ check on the right tip when the subagent succeeded. */
-.subagent-card > .tool-row-header .tool-row-status--ok { color: #3fb950; font-size: 13px; }
-
-.subagent-sep { color: var(--text-muted); flex-shrink: 0; }
-.subagent-task {
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 55%;
-}
-/* Clickable step-count chip in the header. Toggles the process list
-   independently of the card-level chevron. */
-.subagent-step-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+.subagent-step-toggle {
+  padding: 0;
+  background: none;
+  border: none;
   color: var(--text-muted);
   font-size: 11px;
   font-family: inherit;
   cursor: pointer;
-  transition: color .12s, border-color .12s, background .12s;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: color 0.12s, text-decoration-color 0.12s;
 }
-.subagent-step-chip:hover {
+.subagent-step-toggle:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.subagent-step-toggle.open {
+  color: var(--text-secondary);
+}
+
+.subagent-expanded {
+  margin: 2px 0 4px 18px;
   color: var(--text-primary);
-  border-color: var(--text-secondary);
-  background: rgba(255,255,255,0.04);
-}
-.subagent-step-chip-arrow {
-  display: inline-block;
-  font-size: 9px;
-  transition: transform .12s ease;
-}
-.subagent-step-chip.open .subagent-step-chip-arrow { transform: rotate(90deg); }
-
-.subagent-body {
-  padding: 8px 12px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-primary);
-  /* Explicit body color: without this the body inherits text-muted from the
-     header button, so the whole report renders as washed-out gray. */
-  color: var(--text-primary);
-  font-size: 13px;
-  line-height: 1.55;
 }
 
-.subagent-summary {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-style: italic;
-  margin-bottom: 8px;
-}
-
-/* Container for nested tool cards. Reuses the main-agent card components
-   (ReadFileCard / BashCard / ListDirCard / etc.) so each step is fully
-   interactive — expandable, copyable, with its own args + result. The
-   left dashed rail visually anchors the steps to the parent subagent. */
 .subagent-steps {
-  margin: 0 0 4px 4px;
-  padding-left: 10px;
-  border-left: 1px dashed var(--border);
+  margin: 0 0 6px;
   display: flex;
   flex-direction: column;
   gap: 0;
 }
-/* Tighten the nested cards a touch — they live inside an already-padded
-   subagent body, so they don't need their own outer margin. */
 .subagent-steps > .tool-row,
-.subagent-steps > .tool-card {
+.subagent-steps > .tool-card,
+.subagent-steps > .subagent-nested-step {
+  margin: 0;
+}
+.subagent-nested-step > .tool-row,
+.subagent-nested-step > .tool-card {
   margin: 0;
 }
 
 .subagent-more {
   display: inline-block;
-  margin-top: 4px;
-  padding: 2px 8px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 3px;
+  margin-top: 2px;
+  padding: 0;
+  background: none;
+  border: none;
   color: var(--text-muted);
   font-size: 11px;
   cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
 }
-.subagent-more:hover { color: var(--accent); border-color: var(--accent); }
+.subagent-more:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
 
-.subagent-report {
-  margin-top: 12px;
-  padding: 10px 12px;
-  background: var(--bg-secondary);
-  border-radius: 6px;
-  border-left: 2px solid var(--border);
+/* Report: flat markdown flow (matches assistant .content, no inner box). */
+.subagent-result {
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.55;
   color: var(--text-primary);
 }
-.subagent-report h1,
-.subagent-report h2,
-.subagent-report h3,
-.subagent-report h4 {
+.subagent-result h1,
+.subagent-result h2,
+.subagent-result h3,
+.subagent-result h4 {
   margin: 12px 0 6px;
   font-weight: 600;
   color: var(--text-primary);
 }
-.subagent-report h1:first-child,
-.subagent-report h2:first-child,
-.subagent-report h3:first-child { margin-top: 0; }
-.subagent-report strong { color: var(--text-primary); font-weight: 600; }
-.subagent-report a { color: var(--accent); }
-.subagent-report li { margin: 2px 0; }
-.subagent-card--explore .subagent-report { border-left-color: rgba(163,113,247,0.5); }
-.subagent-card--plan    .subagent-report { border-left-color: rgba(210,153,34,0.5); }
-.subagent-card--agent   .subagent-report { border-left-color: rgba(139,148,158,0.5); }
-.subagent-report p { margin: 0 0 8px; }
-.subagent-report p:last-child { margin-bottom: 0; }
-.subagent-report ul, .subagent-report ol { margin: 4px 0 8px 20px; }
-.subagent-report code {
+.subagent-result h1:first-child,
+.subagent-result h2:first-child,
+.subagent-result h3:first-child { margin-top: 0; }
+.subagent-result strong { color: var(--text-primary); font-weight: 600; }
+.subagent-result a { color: var(--accent); }
+.subagent-result li { margin: 2px 0; }
+.subagent-result p { margin: 0 0 8px; }
+.subagent-result p:last-child { margin-bottom: 0; }
+.subagent-result ul,
+.subagent-result ol { margin: 4px 0 8px 20px; }
+.subagent-result code {
   font-family: var(--font-mono);
   font-size: 12px;
   padding: 1px 5px;
@@ -1235,14 +1198,14 @@
   border-radius: 3px;
   color: var(--text-primary);
 }
-.subagent-report pre {
+.subagent-result pre {
   font-size: 12px;
   padding: 8px;
   border-radius: 4px;
   overflow: auto;
 }
-.subagent-report--error { border-left-color: var(--red); }
-.subagent-report-error {
+.subagent-result--error { color: var(--red); }
+.subagent-result-error {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1250,14 +1213,7 @@
   white-space: pre-wrap;
 }
 
-[data-theme="light"] .subagent-card { background: #fff; }
-[data-theme="light"] .subagent-body { background: #f6f8fa; }
-[data-theme="light"] .subagent-report { background: #fff; }
-[data-theme="light"] .subagent-card--explore > .tool-row-header .tool-row-label { color: #8250df; }
-[data-theme="light"] .subagent-card--plan    > .tool-row-header .tool-row-label { color: #9a6700; }
-[data-theme="light"] .subagent-card--agent   > .tool-row-header .tool-row-label { color: #59636e; }
-[data-theme="light"] .subagent-step-name { color: var(--accent); }
-[data-theme="light"] .subagent-report code { background: rgba(0,0,0,0.05); }
+[data-theme="light"] .subagent-result code { background: rgba(0,0,0,0.05); }
 
 /* ── Glob / Grep cards ─────────────────────────────────────────────
    Cursor-style "Searched files" and "Grepped" rows. Re-uses the shared
