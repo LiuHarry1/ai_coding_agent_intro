@@ -39,12 +39,8 @@ try {
   ({ createTools } = await tryImport("tools"));
   ({ systemPrompt } = await tryImport("prompts"));
 
-  try {
-    ({ startServer } = await tryImport("server"));
-    console.log(`[start] Using custom server from ${example}/`);
-  } catch {
-    ({ startServer } = await import("./shared/server.js"));
-  }
+  ({ startServer } = await tryImport("server"));
+  console.log(`[start] Using server from ${example}/`);
 } catch (err) {
   console.error(`[start] Failed to load example "${example}": ${err.message}`);
   console.error(`[start] Available examples:`);

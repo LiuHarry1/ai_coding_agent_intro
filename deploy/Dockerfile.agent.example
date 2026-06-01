@@ -10,16 +10,14 @@
 #   1. Build the base image (slow — only when agent code changes):
 #        docker build -f deploy/Dockerfile.agent-base -t ai-agent-base:latest .
 #
-#   2. Lay down your project config under `deploy/tenant-example/.ai-agent/`
-#      (or copy that directory to your own deployment repo). At minimum it
-#      should contain a `config.json`. See `deploy/tenant-example/` for a
-#      skeleton.
+#   2. Ensure your build context contains `.ai-agent/` (e.g. the repo root).
+#      At minimum it should include `config.json`.
 #
 #   3. Build the tenant image:
 #        docker build -f deploy/Dockerfile.agent.example \
 #          --build-arg BASE_TAG=latest \
 #          -t ai-agent-tenant:latest \
-#          deploy/tenant-example
+#          .
 #
 #   4. Run via compose (which already references ai-agent-tenant:latest):
 #        docker compose -f deploy/docker-compose.yml up -d

@@ -75,5 +75,5 @@ EXPOSE 4567
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||4567)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-# Tenant images can override the example via CMD ["./node_modules/.bin/tsx", "start.js", "05-basic"].
+# Tenant images can override the example via CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"].
 CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"]

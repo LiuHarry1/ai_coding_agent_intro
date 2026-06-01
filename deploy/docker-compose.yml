@@ -13,7 +13,7 @@
 #        docker build -f deploy/Dockerfile.agent.example \
 #          --build-arg BASE_TAG=latest \
 #          -t ai-agent-tenant:latest \
-#          deploy/tenant-example
+#          .
 #
 #   3. Build the web image:
 #        docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .

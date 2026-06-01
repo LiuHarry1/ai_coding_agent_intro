@@ -14,7 +14,7 @@
     "desktop:dev": "npm run build:web && npm run desktop:start",
     "desktop:pack": "npm run build:web && electron-builder",
     "desktop:pack:win": "npm run build:web && electron-builder --win",
-    "typecheck": "tsc --noEmit -p examples/05-basic/tsconfig.json"
+    "typecheck": "tsc --noEmit -p examples/08-basic/tsconfig.json"
   },
   "keywords": [],
   "author": "",

@@ -34,7 +34,6 @@ Only port `8080` is published. The agent's `4567` is internal-only.
 |------|------|
 | `Dockerfile.agent-base` | Slow-changing base image (agent runtime + code, no config). |
 | `Dockerfile.agent.example` | Tenant template — `FROM ai-agent-base` + `COPY .ai-agent/`. |
-| `tenant-example/` | Sample tenant build context (`.ai-agent/config.json` skeleton + README). |
 | `Dockerfile.web` | Multi-stage: vite build → `nginx:alpine`. |
 | `docker-compose.yml` | Image-only deploy (`ai-agent-tenant:latest` + `ai-agent-web:latest`). |
 | `nginx.conf` | Reverse proxy with SSE-friendly settings + SPA fallback. |
@@ -54,14 +53,14 @@ this reason.
 
 ### Step 2 — build the tenant image (fast, on every config change)
 
-Edit `deploy/tenant-example/.ai-agent/` (or your own copy of it) to taste,
-then:
+Edit the repo's `.ai-agent/` (or your own deployment copy) to taste,
+then build from the repo root (the build context must contain `.ai-agent/`):
 
 ```bash
 docker build -f deploy/Dockerfile.agent.example \
   --build-arg BASE_TAG=latest \
   -t ai-agent-tenant:latest \
-  deploy/tenant-example
+  .
 ```
 
 Rebuilds are ~seconds because `npm ci` / `pip install` / `apt-get` all
