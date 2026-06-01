@@ -1,7 +1,7 @@
 node_modules
 .env
 .sessions
-client2/web/dist
-client2/web/node_modules
+client/web/dist
+client/web/node_modules
 dist-desktop
 .DS_Store

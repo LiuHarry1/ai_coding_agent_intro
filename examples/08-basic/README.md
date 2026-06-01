@@ -216,7 +216,7 @@ core/llm/
 
 ```bash
 # Build the React UI
-cd client2/web
+cd client/web
 npm install
 npm run build
 cd ../..
@@ -234,7 +234,7 @@ npm start -- 07-basic
 
 Terminal 2 — Frontend (with hot reload):
 ```bash
-cd client2/web
+cd client/web
 npm run dev
 ```
 

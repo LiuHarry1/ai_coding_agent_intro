@@ -1,5 +1,5 @@
 node_modules
-client2/web/node_modules
+client/web/node_modules
 **/dist
 .git
 .env

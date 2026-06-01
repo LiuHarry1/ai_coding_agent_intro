@@ -8,7 +8,7 @@
 
 ```bash
 npm install
-cd client2/web && npm install && cd ../..
+cd client/web && npm install && cd ../..
 ```
 
 ### 2. 配置
@@ -30,7 +30,7 @@ npm start              # 默认加载 08-basic，监听 http://localhost:4567
 ### 4. 启动 Web UI（开发模式，支持热更新）
 
 ```bash
-cd client2/web
+cd client/web
 npm run dev            # http://localhost:5173，API 代理到 4567
 ```
 
@@ -58,7 +58,7 @@ docker compose -f deploy/docker-compose.yml up -d
 ```
 ├── start.js              # 统一启动入口
 ├── examples/             # 各版本 agent 实现（默认 08-basic）
-├── client2/web/          # React 前端
+├── client/web/          # React 前端
 ├── electron/             # Electron 桌面壳
 ├── shared/               # 共享服务端工具
 ├── client-sdk/           # TypeScript 客户端 SDK
@@ -72,7 +72,7 @@ docker compose -f deploy/docker-compose.yml up -d
 |------|------|
 | `npm start` | 启动 agent 后端 |
 | `npm run server:stop` | 释放 4567 端口 |
-| `npm run build:web` | 构建前端到 `client2/web/dist` |
+| `npm run build:web` | 构建前端到 `client/web/dist` |
 | `npm run desktop:dev` | 启动桌面版 |
 | `npm run typecheck` | TypeScript 类型检查 |
 

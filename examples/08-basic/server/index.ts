@@ -23,13 +23,13 @@ export function startServer({ runAgent, systemPrompt }: ServerOptions): void {
     console.error("[server] uncaughtException:", err.stack ?? err.message);
   });
 
-  const distDir = path.resolve(__dirname, "../../../client2/web/dist");
+  const distDir = path.resolve(__dirname, "../../../client/web/dist");
   const staticDir = fs.existsSync(distDir) ? distDir : null;
 
   if (!staticDir) {
-    console.log(`[server] Warning: client2/web/dist not found.`);
-    console.log(`[server] Run: cd client2/web && npm install && npm run build`);
-    console.log(`[server] Or use dev mode: cd client2/web && npm run dev`);
+    console.log(`[server] Warning: client/web/dist not found.`);
+    console.log(`[server] Run: cd client/web && npm install && npm run build`);
+    console.log(`[server] Or use dev mode: cd client/web && npm run dev`);
   }
 
   const handler = createRouter({ runAgent, systemPrompt, staticDir });

@@ -24,7 +24,7 @@ function getAppRoot() {
 }
 
 function getWebDistDir() {
-  return path.join(getAppRoot(), "client2", "web", "dist");
+  return path.join(getAppRoot(), "client", "web", "dist");
 }
 
 function getAgentUrl() {
@@ -154,7 +154,7 @@ async function ensureWebBuild() {
     buttons: ["Quit", "Continue anyway"],
     defaultId: 0,
     title: "Web build missing",
-    message: "client2/web/dist was not found.",
+    message: "client/web/dist was not found.",
     detail:
       "Run `npm run build:web` first so the agent can serve the UI.\n\n" +
       "You can still use the API at /health, but the window will be blank.",
