@@ -782,6 +782,15 @@
   color: #f0883e;
   font-family: var(--font-mono);
 }
+.mermaid-failed-msg {
+  padding: 4px 12px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .mermaid-pending-code {
   margin: 0;
   padding: 10px 12px;
@@ -790,11 +799,37 @@
   font-family: var(--font-mono);
   color: var(--text-secondary);
   white-space: pre-wrap;
-  overflow-x: auto;
-  max-height: 280px;
+  word-break: break-word;
+  overflow-x: hidden;
+  max-height: 240px;
   overflow-y: auto;
   border: none;
   background: none;
+}
+
+/* Thin, unobtrusive scrollbars for mermaid scroll areas. */
+.mermaid-diagram,
+.mermaid-pending-code,
+.mermaid-modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.mermaid-diagram::-webkit-scrollbar,
+.mermaid-pending-code::-webkit-scrollbar,
+.mermaid-modal-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.mermaid-diagram::-webkit-scrollbar-thumb,
+.mermaid-pending-code::-webkit-scrollbar-thumb,
+.mermaid-modal-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+.mermaid-diagram::-webkit-scrollbar-track,
+.mermaid-pending-code::-webkit-scrollbar-track,
+.mermaid-modal-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* Full-screen expand for wide / dense diagrams. */

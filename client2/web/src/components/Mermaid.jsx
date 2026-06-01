@@ -57,10 +57,20 @@ function ensureInit(appTheme) {
   });
 }
 function normalizeMermaidSource(source) {
-  return source.replace(/\[([^\]]*)\]/g, (match, inner) => {
+  // Convert hard line breaks inside node labels to <br/> so multi-line text renders.
+  let out = source.replace(/\[([^\]]*)\]/g, (match, inner) => {
     if (inner.includes("<br") || inner.includes("|")) return match;
     return `[${inner.replace(/\n/g, "<br/>")}]`;
   });
+  // Quote edge labels (`-->|label|`). LLMs frequently emit labels containing
+  // characters like ()/:+ which mermaid only accepts inside quotes; without this
+  // the whole diagram fails to parse.
+  out = out.replace(/\|([^|\n]+)\|/g, (match, label) => {
+    const trimmed = label.trim();
+    if (!trimmed || (trimmed.startsWith('"') && trimmed.endsWith('"'))) return match;
+    return `|"${trimmed.replace(/"/g, "&quot;")}"|`;
+  });
+  return out;
 }
 
 function downloadSvg(svg, filename = "diagram.svg") {
@@ -250,6 +260,9 @@ function MermaidDiagram({ code, streaming = false }) {
     return (
       <div className="mermaid-failed mermaid-block">
         <div className="mermaid-failed-head">Could not render diagram</div>
+        {error && error !== "true" ? (
+          <div className="mermaid-failed-msg">{error}</div>
+        ) : null}
         <div className="mermaid-pending-code">{code}</div>
       </div>
     );
