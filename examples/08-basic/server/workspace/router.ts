@@ -10,6 +10,7 @@ import {
   FsOpError,
 } from "./fs-ops.js";
 import { gitStatus, gitDiff } from "./git.js";
+import { handleUpload, handleDownload } from "./transfer.js";
 
 /**
  * Self-contained workspace HTTP module.
@@ -82,6 +83,19 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
       // GET /workspace
       if (method === "GET" && url === "/workspace") {
         sendJSON(res, 200, { workspace: root });
+        return true;
+      }
+
+      // POST /workspace/upload  (multipart/form-data: dir + file[])
+      if (method === "POST" && url.startsWith("/workspace/upload")) {
+        await handleUpload(req, res, root);
+        return true;
+      }
+
+      // GET /workspace/download?path=  (file → attachment, dir → zip)
+      if (method === "GET" && url.startsWith("/workspace/download")) {
+        const params = new URL(url, `http://${req.headers.host}`).searchParams;
+        await handleDownload(res, root, params.get("path"));
         return true;
       }
 

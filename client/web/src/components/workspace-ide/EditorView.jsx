@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { useWorkspaceIdeStore } from "../../stores/workspace-ide-store.js";
+import { workspaceApi, triggerDownload } from "../../lib/api/workspace.js";
 import CopyButton from "../CopyButton.jsx";
 import { languageLabel, buildBreadcrumb } from "./helpers.js";
+import { DownloadIcon } from "./icons.jsx";
+import { fileName } from "../../lib/utils.js";
 import DiffView from "./DiffView.jsx";
+
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "ico"]);
 
 /**
  * File editor used inside the WorkspaceIDE. Opens directly in editable
@@ -27,14 +32,42 @@ export default function EditorView() {
   if (!data || data.loading) return <div className="editor-loading">Loading…</div>;
   if (data.error) return <div className="editor-error">Failed to load: {data.error}</div>;
   if (data.isBinary) {
-    return (
-      <div className="editor-error">
-        Binary file ({data.size.toLocaleString()} bytes) — not previewable.
-      </div>
-    );
+    return <BinaryView filePath={activeFile} size={data.size} />;
   }
 
   return <FileBody filePath={activeFile} data={data} workspace={workspace} />;
+}
+
+/**
+ * Binary files can't be edited as text. Images get an inline preview (served
+ * straight from the download endpoint); everything else gets a download
+ * affordance instead of a dead-end "not previewable" message.
+ */
+function BinaryView({ filePath, size }) {
+  const ext = (filePath.split(".").pop() || "").toLowerCase();
+  const isImage = IMAGE_EXTS.has(ext);
+  const url = workspaceApi.downloadUrl(filePath);
+
+  return (
+    <div className="editor-binary">
+      {isImage ? (
+        <img className="editor-binary-img" src={url} alt={fileName(filePath)} />
+      ) : (
+        <div className="editor-binary-icon" aria-hidden="true">{"\u{1F4E6}"}</div>
+      )}
+      <div className="editor-binary-meta">
+        {fileName(filePath)} · {size.toLocaleString()} bytes
+        {!isImage && " · binary file"}
+      </div>
+      <button
+        className="editor-binary-download"
+        onClick={() => triggerDownload(filePath)}
+      >
+        <DownloadIcon size={14} />
+        Download
+      </button>
+    </div>
+  );
 }
 
 function EmptyState() {

@@ -135,18 +135,9 @@ export function removeEntry(targetPath: string): { path: string } {
   if (!fs.existsSync(targetPath)) {
     throw new FsOpError("ENOENT", `Not found: ${targetPath}`);
   }
-  const stat = fs.statSync(targetPath);
-  if (stat.isDirectory()) {
-    // Refuse non-empty dir deletion to avoid accidents; caller can recurse
-    // explicitly later if we ever add it.
-    const entries = fs.readdirSync(targetPath);
-    if (entries.length > 0) {
-      throw new FsOpError("ENOTEMPTY", `Directory not empty: ${targetPath}`);
-    }
-    fs.rmdirSync(targetPath);
-  } else {
-    fs.unlinkSync(targetPath);
-  }
+  // Recursive delete for directories (files + nested folders). The UI asks
+  // for confirmation before calling this endpoint.
+  fs.rmSync(targetPath, { recursive: true, force: true });
   return { path: targetPath };
 }
 

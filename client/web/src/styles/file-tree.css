@@ -136,6 +136,83 @@
   text-overflow: ellipsis;
 }
 
+/* Drag-and-drop upload target highlight */
+.tree-drop-target {
+  background: var(--bg-tertiary);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Inline upload-progress row */
+.tree-upload {
+  cursor: default;
+  background: var(--bg-tertiary);
+}
+.tree-upload:hover { background: var(--bg-tertiary); }
+.tree-upload-bar {
+  flex: 1;
+  min-width: 0;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-primary);
+  overflow: hidden;
+  margin-right: 6px;
+}
+.tree-upload-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s ease;
+}
+.tree-upload--error { box-shadow: inset 0 0 0 1px var(--red); }
+.tree-upload-error {
+  flex: 1;
+  color: var(--red);
+  font-size: 10.5px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right-click context menu (portaled to document.body) */
+.tree-ctx-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 160px;
+  padding: 4px 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.tree-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tree-ctx-item:hover {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="light"] .tree-ctx-menu {
+  background: #ffffff;
+  border-color: #d1d9e0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+[data-theme="light"] .tree-ctx-item:hover {
+  background: #f0f3f6;
+}
+
 /* Dirty marker for files in the tree */
 .tree-dirty-dot {
   color: var(--accent);

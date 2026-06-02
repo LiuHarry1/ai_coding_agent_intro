@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { useWorkspaceIdeStore } from "../../stores/workspace-ide-store.js";
 import { fileName } from "../../lib/utils.js";
 import FileTree from "./FileTree.jsx";
@@ -7,7 +7,7 @@ import EditorView from "./EditorView.jsx";
 import ResizeHandle from "./ResizeHandle.jsx";
 import ViewSwitcher from "./ViewSwitcher.jsx";
 import ChangesPanel from "./ChangesPanel.jsx";
-import { FolderIcon, NewFileIcon, NewFolderIcon } from "./icons.jsx";
+import { FolderIcon, NewFileIcon, NewFolderIcon, UploadIcon } from "./icons.jsx";
 
 /**
  * Left-side IDE panel. Header → 2-column body (file tree | editor). When
@@ -30,6 +30,8 @@ export default function WorkspaceIDE() {
   );
   const workspace = useWorkspaceIdeStore((s) => s.rootPath);
   const activeView = useWorkspaceIdeStore((s) => s.activeView);
+  const uploadToDir = useWorkspaceIdeStore((s) => s.uploadToDir);
+  const uploadInputRef = useRef(null);
 
   if (!open) return null;
 
@@ -68,6 +70,26 @@ export default function WorkspaceIDE() {
           >
             <NewFolderIcon size={14} />
           </button>
+          <button
+            className="icon-btn"
+            onClick={() => uploadInputRef.current?.click()}
+            title="Upload files (to workspace root)"
+            disabled={!workspace}
+          >
+            <UploadIcon size={14} />
+          </button>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              if (workspace && e.target.files?.length) {
+                uploadToDir(workspace, e.target.files);
+              }
+              e.target.value = "";
+            }}
+          />
           <button
             className="icon-btn"
             onClick={refreshTree}

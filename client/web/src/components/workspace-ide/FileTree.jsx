@@ -1,7 +1,15 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspaceIdeStore } from "../../stores/workspace-ide-store.js";
+import { triggerDownload } from "../../lib/api/workspace.js";
 import { fileName } from "../../lib/utils.js";
-import { FolderIcon, FileIcon, NewFileIcon, NewFolderIcon } from "./icons.jsx";
+import TreeContextMenu from "./TreeContextMenu.jsx";
+import {
+  FolderIcon,
+  FileIcon,
+  NewFileIcon,
+  NewFolderIcon,
+  UploadIcon,
+} from "./icons.jsx";
 
 /**
  * Lazy-loading recursive file tree. Each directory's entries are fetched
@@ -14,26 +22,50 @@ import { FolderIcon, FileIcon, NewFileIcon, NewFolderIcon } from "./icons.jsx";
  */
 export default function FileTree({ rootPath }) {
   const expandDir = useWorkspaceIdeStore((s) => s.expandDir);
+  const deleteEntry = useWorkspaceIdeStore((s) => s.deleteEntry);
+  const [ctxMenu, setCtxMenu] = useState(null);
 
   useEffect(() => {
     if (rootPath) expandDir(rootPath);
   }, [rootPath, expandDir]);
 
+  const openContextMenu = useCallback((e, target) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, target });
+  }, []);
+
   if (!rootPath) return <div className="file-tree-empty">No workspace</div>;
 
   return (
     <div className="file-tree">
-      <DirNode dirPath={rootPath} depth={0} />
+      <DirNode
+        dirPath={rootPath}
+        depth={0}
+        isWorkspaceRoot
+        onContextMenu={openContextMenu}
+      />
+      <TreeContextMenu
+        menu={ctxMenu}
+        onClose={() => setCtxMenu(null)}
+        onDelete={(t) => deleteEntry(t)}
+        onDownload={(t) => triggerDownload(t.path)}
+      />
     </div>
   );
 }
 
-function DirNode({ dirPath, depth }) {
+function DirNode({ dirPath, depth, isWorkspaceRoot = false, onContextMenu }) {
   const data = useWorkspaceIdeStore((s) => s.dirCache[dirPath]);
   const isExpanded = useWorkspaceIdeStore((s) => s.expandedDirs.has(dirPath));
   const toggleDir = useWorkspaceIdeStore((s) => s.toggleDir);
   const beginCreate = useWorkspaceIdeStore((s) => s.beginCreate);
   const pendingNew = useWorkspaceIdeStore((s) => s.pendingNew);
+  const uploadToDir = useWorkspaceIdeStore((s) => s.uploadToDir);
+  const upload = useWorkspaceIdeStore((s) => s.uploadState[dirPath]);
+
+  const fileInputRef = useRef(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const name = fileName(dirPath) || dirPath;
   const showInlineRow = pendingNew && pendingNew.parentDir === dirPath;
@@ -43,12 +75,51 @@ function DirNode({ dirPath, depth }) {
     beginCreate(dirPath, kind);
   };
 
+  const handleUploadClick = (e) => {
+    e.stopPropagation();
+    fileInputRef.current?.click();
+  };
+
+  const handleFilesPicked = (e) => {
+    const { files } = e.target;
+    if (files && files.length) uploadToDir(dirPath, files);
+    e.target.value = ""; // allow re-selecting the same file
+  };
+
+  const handleDragOver = (e) => {
+    if (!e.dataTransfer?.types?.includes("Files")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    uploadToDir(dirPath, e.dataTransfer.files);
+  };
+
   return (
     <>
       <div
-        className="tree-row tree-dir"
+        className={`tree-row tree-dir ${dragOver ? "tree-drop-target" : ""}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={() => toggleDir(dirPath)}
+        onContextMenu={
+          isWorkspaceRoot
+            ? undefined
+            : (e) => onContextMenu(e, { path: dirPath, name, isDir: true })
+        }
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         <svg
           className={`tree-chevron ${isExpanded ? "open" : ""}`}
@@ -79,11 +150,30 @@ function DirNode({ dirPath, depth }) {
           >
             <NewFolderIcon size={12} />
           </button>
+          <button
+            className="tree-action-btn"
+            onClick={handleUploadClick}
+            title="Upload files here"
+            tabIndex={-1}
+          >
+            <UploadIcon size={12} />
+          </button>
         </span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          onChange={handleFilesPicked}
+        />
       </div>
 
       {isExpanded && showInlineRow && (
         <NewEntryRow depth={depth + 1} kind={pendingNew.kind} error={pendingNew.error} />
+      )}
+
+      {isExpanded && upload && (
+        <UploadRow depth={depth + 1} dirPath={dirPath} upload={upload} />
       )}
 
       {isExpanded && data && (
@@ -94,9 +184,19 @@ function DirNode({ dirPath, depth }) {
         ) : (
           data.entries.map((entry) =>
             entry.isDir ? (
-              <DirNode key={entry.path} dirPath={entry.path} depth={depth + 1} />
+              <DirNode
+                key={entry.path}
+                dirPath={entry.path}
+                depth={depth + 1}
+                onContextMenu={onContextMenu}
+              />
             ) : (
-              <FileRow key={entry.path} entry={entry} depth={depth + 1} />
+              <FileRow
+                key={entry.path}
+                entry={entry}
+                depth={depth + 1}
+                onContextMenu={onContextMenu}
+              />
             )
           )
         )
@@ -110,7 +210,7 @@ function DirNode({ dirPath, depth }) {
   );
 }
 
-function FileRow({ entry, depth }) {
+function FileRow({ entry, depth, onContextMenu }) {
   const isActive = useWorkspaceIdeStore((s) => s.activeFile === entry.path);
   const isDirty = useWorkspaceIdeStore((s) => Boolean(s.fileContents[entry.path]?.dirty));
   const openFile = useWorkspaceIdeStore((s) => s.openFile);
@@ -120,6 +220,9 @@ function FileRow({ entry, depth }) {
       className={`tree-row tree-file ${isActive ? "active" : ""}`}
       style={{ paddingLeft: 8 + depth * 14 + 12 /* chevron gutter */ }}
       onClick={() => openFile(entry.path)}
+      onContextMenu={(e) =>
+        onContextMenu(e, { path: entry.path, name: entry.name, isDir: false })
+      }
       title={entry.path}
     >
       <span className="tree-icon tree-icon--file">
@@ -129,6 +232,42 @@ function FileRow({ entry, depth }) {
         {isDirty && <span className="tree-dirty-dot" aria-hidden="true">●</span>}
         {entry.name}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Inline upload-progress row, rendered inside a directory while an upload
+ * is in flight. Mirrors NewEntryRow's placement so the tree feels coherent.
+ */
+function UploadRow({ depth, dirPath, upload }) {
+  const dismissUpload = useWorkspaceIdeStore((s) => s.dismissUpload);
+  const { pct, error } = upload;
+
+  return (
+    <div
+      className={`tree-row tree-upload ${error ? "tree-upload--error" : ""}`}
+      style={{ paddingLeft: 8 + depth * 14 + 12 }}
+    >
+      <span className="tree-icon tree-icon--file">
+        <UploadIcon size={12} />
+      </span>
+      {error ? (
+        <>
+          <span className="tree-upload-error" title={error}>{error}</span>
+          <button
+            className="tree-action-btn"
+            onClick={() => dismissUpload(dirPath)}
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </>
+      ) : (
+        <span className="tree-upload-bar" aria-label={`Uploading ${pct}%`}>
+          <span className="tree-upload-fill" style={{ width: `${pct}%` }} />
+        </span>
+      )}
     </div>
   );
 }

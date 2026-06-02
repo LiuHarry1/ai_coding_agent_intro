@@ -43,8 +43,63 @@ export const workspaceApi = {
       method: "DELETE",
     }),
 
+  // ── Binary transfer ─────────────────────────────────────
+  /**
+   * Upload one or more files into `dir`. Uses XHR (not fetch) so we can
+   * surface upload progress — fetch has no upload-progress event.
+   *
+   * @param {string} dir       Absolute target directory.
+   * @param {FileList|File[]} files
+   * @param {(pct:number)=>void} [onProgress]  0–100.
+   * @returns {Promise<{dir:string, uploaded:Array<{name,path,size}>}>}
+   */
+  uploadFiles: (dir, files, onProgress) =>
+    new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append("dir", dir);
+      for (const f of files) form.append("file", f);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/workspace/upload");
+      xhr.upload.onprogress = (e) => {
+        if (onProgress && e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+      xhr.onload = () => {
+        let body = null;
+        try { body = JSON.parse(xhr.responseText); } catch {}
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(body ?? {});
+        } else {
+          const err = new Error(`HTTP ${xhr.status}${body?.error ? `: ${body.error}` : ""}`);
+          err.status = xhr.status;
+          reject(err);
+        }
+      };
+      xhr.onerror = () => reject(new Error("Upload failed (network error)"));
+      xhr.send(form);
+    }),
+
+  /** URL that streams a file (or a zip of a directory) as a download. */
+  downloadUrl: (path) => `/workspace/download?path=${encodeURIComponent(path)}`,
+
   // ── Git (read-only) ─────────────────────────────────────
   gitStatus: () => fetchJSON("/workspace/git/status"),
   gitDiff: (path) =>
     fetchJSON(`/workspace/git/diff?path=${encodeURIComponent(path)}`),
 };
+
+/**
+ * Trigger a browser download for `path` (file or directory-as-zip) by
+ * clicking a transient anchor. Kept out of `workspaceApi` because it touches
+ * the DOM rather than the network.
+ */
+export function triggerDownload(path) {
+  const a = document.createElement("a");
+  a.href = workspaceApi.downloadUrl(path);
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}

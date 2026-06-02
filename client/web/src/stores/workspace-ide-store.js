@@ -37,6 +37,18 @@ const DEFAULT_CHANGES = {
   lastFetchedAt: 0,
 };
 
+function parentDir(absPath) {
+  const norm = absPath.replace(/\/$/, "");
+  const i = norm.lastIndexOf("/");
+  return i > 0 ? norm.slice(0, i) : norm;
+}
+
+/** True when `p` is `prefix` itself or a descendant of `prefix`. */
+function isUnderPath(p, prefix) {
+  const base = prefix.replace(/\/$/, "");
+  return p === base || p.startsWith(base + "/");
+}
+
 export const useWorkspaceIdeStore = create((set, get) => ({
   // ── Workspace root ───────────────────────────────────
   /**
@@ -188,6 +200,110 @@ export const useWorkspaceIdeStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Delete a file or folder from disk (with confirmation). Refuses to
+   * delete the workspace root. Closes editor/diff tabs under the deleted
+   * path and refreshes the parent directory listing.
+   */
+  deleteEntry: async ({ path: targetPath, isDir }) => {
+    const root = get().rootPath;
+    if (!targetPath || !root || targetPath === root) return;
+
+    const name = fileName(targetPath) || targetPath;
+    const label = isDir
+      ? `folder "${name}" and everything inside it`
+      : `file "${name}"`;
+
+    const affectedFiles = get().openFiles.filter((p) =>
+      isDir ? isUnderPath(p, targetPath) : p === targetPath
+    );
+    if (affectedFiles.some((p) => get().fileContents[p]?.dirty)) {
+      // eslint-disable-next-line no-alert
+      if (!window.confirm("Some open files have unsaved changes. Delete anyway?")) {
+        return;
+      }
+    }
+
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+
+    try {
+      await workspaceApi.removeEntry(targetPath);
+
+      for (const p of [...affectedFiles]) get().closeFile(p, { force: true });
+
+      const rootNorm = root.replace(/\/$/, "");
+      if (isDir && targetPath.startsWith(rootNorm + "/")) {
+        const relPrefix = targetPath.slice(rootNorm.length + 1);
+        for (const rel of [...get().openDiffs]) {
+          if (isUnderPath(rel, relPrefix)) get().closeDiff(rel);
+        }
+      } else if (!isDir && targetPath.startsWith(rootNorm + "/")) {
+        const rel = targetPath.slice(rootNorm.length + 1);
+        if (get().openDiffs.includes(rel)) get().closeDiff(rel);
+      }
+
+      set((s) => {
+        const dirCache = { ...s.dirCache };
+        const expandedDirs = new Set(s.expandedDirs);
+        for (const key of Object.keys(dirCache)) {
+          if (isUnderPath(key, targetPath)) delete dirCache[key];
+        }
+        for (const d of expandedDirs) {
+          if (isUnderPath(d, targetPath)) expandedDirs.delete(d);
+        }
+        return { dirCache, expandedDirs };
+      });
+
+      await get().loadDir(parentDir(targetPath));
+      if (get().changes.lastFetchedAt) get().refreshChanges();
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      window.alert(e.message || "Delete failed");
+    }
+  },
+
+  // ── Upload (binary) ──────────────────────────────────
+  /**
+   * Transient per-directory upload state, keyed by absolute dir path:
+   *   { pct: number, error?: string } | undefined
+   * FileTree renders an inline progress row from this, mirroring how
+   * `pendingNew` drives the inline "new file" row.
+   */
+  uploadState: {},
+
+  uploadToDir: async (dir, files) => {
+    const list = Array.from(files || []);
+    if (!dir || list.length === 0) return;
+    if (!get().expandedDirs.has(dir)) get().expandDir(dir);
+
+    set((s) => ({ uploadState: { ...s.uploadState, [dir]: { pct: 0 } } }));
+    const setPct = (pct) =>
+      set((s) => ({ uploadState: { ...s.uploadState, [dir]: { pct } } }));
+
+    try {
+      await workspaceApi.uploadFiles(dir, list, setPct);
+      await get().loadDir(dir);
+      // Clear the progress row shortly after completion.
+      set((s) => {
+        const next = { ...s.uploadState };
+        delete next[dir];
+        return { uploadState: next };
+      });
+    } catch (e) {
+      set((s) => ({
+        uploadState: { ...s.uploadState, [dir]: { pct: 0, error: e.message || "Upload failed" } },
+      }));
+    }
+  },
+
+  dismissUpload: (dir) =>
+    set((s) => {
+      const next = { ...s.uploadState };
+      delete next[dir];
+      return { uploadState: next };
+    }),
+
   // ── Side-panel view (Explorer / Changes) ─────────────
   activeView: "explorer",
   setActiveView: (view) => {
@@ -290,9 +406,9 @@ export const useWorkspaceIdeStore = create((set, get) => ({
     }
   },
 
-  closeFile: (filePath) => {
+  closeFile: (filePath, { force = false } = {}) => {
     const cur = get().fileContents[filePath];
-    if (cur?.dirty) {
+    if (!force && cur?.dirty) {
       // eslint-disable-next-line no-alert
       const ok = window.confirm(
         `"${fileName(filePath)}" has unsaved changes. Discard them?`
