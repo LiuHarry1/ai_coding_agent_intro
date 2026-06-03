@@ -21,3 +21,13 @@ docker run --rm -p 4567:4567 \
 winget install BurntSushi.ripgrep.MSVC
 # 或者
 choco install ripgrep
+
+set HTTP_PROXY=
+set HTTPS_PROXY=
+set ALL_PROXY=
+set NO_PROXY=localhost,127.0.0.1,::1
+
+export HTTP_PROXY=
+export HTTPS_PROXY=
+export ALL_PROXY=
+export NO_PROXY=localhost,127.0.0.1,::1

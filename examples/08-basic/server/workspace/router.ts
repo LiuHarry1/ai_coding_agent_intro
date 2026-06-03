@@ -7,6 +7,8 @@ import {
   saveFile,
   makeDir,
   removeEntry,
+  searchFiles,
+  invalidateFileSearchCache,
   FsOpError,
 } from "./fs-ops.js";
 import { gitStatus, gitDiff } from "./git.js";
@@ -104,6 +106,17 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const params = new URL(url, `http://${req.headers.host}`).searchParams;
         const dirParam = params.get("dir") || root;
         sendJSON(res, 200, listDir(resolvePath(dirParam, root)));
+        return true;
+      }
+
+      // GET /workspace/search?q=&dir=&limit=  (@-mention autocomplete)
+      if (method === "GET" && url.startsWith("/workspace/search")) {
+        const params = new URL(url, `http://${req.headers.host}`).searchParams;
+        const q = params.get("q") ?? "";
+        const dirParam = params.get("dir") || root;
+        const limit = Math.min(50, Math.max(1, parseInt(params.get("limit") ?? "15", 10) || 15));
+        const searchRoot = resolvePath(dirParam, root);
+        sendJSON(res, 200, searchFiles(searchRoot, q, limit));
         return true;
       }
 

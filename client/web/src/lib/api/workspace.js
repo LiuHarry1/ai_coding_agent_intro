@@ -18,6 +18,16 @@ export const workspaceApi = {
 
   listDir: (dir) => fetchJSON(`/workspace/list?dir=${encodeURIComponent(dir)}`),
 
+  /** @-mention autocomplete — fuzzy search over workspace files. */
+  searchFiles: (q, dir, limit = 15) => {
+    const params = new URLSearchParams({
+      q,
+      limit: String(limit),
+    });
+    if (dir) params.set("dir", dir);
+    return fetchJSON(`/workspace/search?${params}`);
+  },
+
   getFile: (path) => fetchJSON(`/workspace/file?path=${encodeURIComponent(path)}`),
 
   /** Create a new file. Fails (409) if it already exists. */

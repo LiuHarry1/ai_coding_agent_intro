@@ -183,6 +183,7 @@ export async function runAgent(
     deferredToolPool,
     concurrencyPolicy,
     sessionId,
+    attachmentMessages,
   }: AgentOptions,
 ): Promise<string> {
   if (skillListing) {
@@ -190,6 +191,9 @@ export async function runAgent(
       role: "user",
       content: `<system-reminder>\n${skillListing}\n</system-reminder>`,
     });
+  }
+  if (attachmentMessages?.length) {
+    messages.push(...attachmentMessages);
   }
   messages.push(buildUserMessage(userMessage, images));
 
@@ -408,6 +412,11 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
 
       if (stepResult.toolResults.length > 0) {
         messages.push(buildToolMessage(stepResult.toolResults));
+        for (const tr of stepResult.toolResults) {
+          if (tr.followUpMessages?.length) {
+            messages.push(...tr.followUpMessages);
+          }
+        }
       }
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless

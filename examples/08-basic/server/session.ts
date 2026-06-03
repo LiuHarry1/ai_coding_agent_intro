@@ -19,7 +19,12 @@ function sessionPath(id: string): string {
 
 export function createSession(): Session {
   const id = randomUUID();
-  const session: Session = { id, messages: [], createdAt: Date.now() };
+  const session: Session = {
+    id,
+    messages: [],
+    createdAt: Date.now(),
+    readFileState: new Map(),
+  };
   sessions.set(id, session);
   fs.mkdirSync(SESSION_DIR, { recursive: true });
   appendLine(id, { type: "session_created", id, createdAt: session.createdAt });
@@ -90,7 +95,12 @@ function restoreFromDisk(id: string): Session {
   const raw = fs.readFileSync(sessionPath(id), "utf-8").trim();
   const lines = raw.split("\n").map((l: string) => JSON.parse(l));
 
-  const session: Session = { id, messages: [], createdAt: Date.now() };
+  const session: Session = {
+    id,
+    messages: [],
+    createdAt: Date.now(),
+    readFileState: new Map(),
+  };
 
   for (const line of lines) {
     if (line.type === "session_created") {

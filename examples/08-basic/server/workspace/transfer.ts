@@ -3,8 +3,21 @@ import * as os from "os";
 import * as path from "path";
 import type { IncomingMessage, ServerResponse } from "http";
 import multer from "multer";
-import archiver from "archiver";
+// archiver v8 is ESM-only: named ZipArchive class, no default export (@types/archiver is v7-shaped).
+import * as archiverPkg from "archiver";
 import { resolvePath, assertSafeName } from "./path-safety.js";
+import { invalidateFileSearchCache } from "./fs-ops.js";
+
+type ZipArchiveInstance = import("stream").PassThrough & {
+  on(event: "error", listener: () => void): ZipArchiveInstance;
+  pipe(destination: ServerResponse): ZipArchiveInstance;
+  directory(dirpath: string, destpath: false): ZipArchiveInstance;
+  finalize(): Promise<void>;
+};
+
+const ZipArchive = (archiverPkg as unknown as {
+  ZipArchive: new (options?: { zlib?: { level?: number } }) => ZipArchiveInstance;
+}).ZipArchive;
 
 /**
  * Binary upload / download for the workspace module.
@@ -146,6 +159,7 @@ export async function handleUpload(
     }
 
     sendJSON(res, 200, { dir: targetDir, uploaded });
+    invalidateFileSearchCache();
   } catch (err) {
     await cleanup();
     if (!res.headersSent) {
@@ -180,7 +194,7 @@ export async function handleDownload(
       "Content-Type": "application/zip",
       "Content-Disposition": contentDisposition(zipName),
     });
-    const archive = archiver("zip", { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     archive.on("error", () => res.destroy());
     archive.pipe(res);
     archive.directory(target, false);

@@ -1,6 +1,15 @@
 import React, { useRef, useCallback, useState, useEffect, useMemo } from "react";
 import { useChatStore } from "../stores/chat-store.js";
 import { agentApi } from "../lib/api/agent.js";
+import { workspaceApi } from "../lib/api/workspace.js";
+import {
+  extractCompletionToken,
+  extractSearchToken,
+  formatAtMentionReplacement,
+  applyFileSuggestion,
+  toWorkspaceRelative,
+  insertTextAtCursor,
+} from "../lib/at-mention.js";
 
 const MAX_IMAGES = 5;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -14,15 +23,26 @@ function fileToDataURL(file) {
   });
 }
 
-function extractImages(dataTransfer) {
+function extractDroppedFiles(dataTransfer) {
   const files = [];
   if (!dataTransfer?.items) return files;
   for (const item of dataTransfer.items) {
-    if (item.kind === "file" && ACCEPTED_TYPES.includes(item.type)) {
-      files.push(item.getAsFile());
+    if (item.kind === "file") {
+      const f = item.getAsFile();
+      if (f) files.push(f);
     }
   }
   return files;
+}
+
+function extractImages(dataTransfer) {
+  return extractDroppedFiles(dataTransfer).filter((f) =>
+    ACCEPTED_TYPES.includes(f.type),
+  );
+}
+
+function isImageFile(file) {
+  return ACCEPTED_TYPES.includes(file.type);
 }
 
 /** Returns partial name after `/`, or null when not in slash-pick mode. */
@@ -59,9 +79,13 @@ export default function InputArea() {
   const [dragOver, setDragOver] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [inputValue, setInputValue] = useState("");
+  const [cursorPos, setCursorPos] = useState(0);
   const [slashEntries, setSlashEntries] = useState([]);
   const [slashIndex, setSlashIndex] = useState(0);
   const [expandedSections, setExpandedSections] = useState(new Set());
+  const [atSuggestions, setAtSuggestions] = useState([]);
+  const [atIndex, setAtIndex] = useState(0);
+  const [uploadingDrop, setUploadingDrop] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +102,11 @@ export default function InputArea() {
     return () => { cancelled = true; };
   }, [workspace]);
 
+  const syncCursor = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) setCursorPos(el.selectionStart ?? 0);
+  }, []);
+
   const slashFilter = useMemo(() => getSlashFilter(inputValue), [inputValue]);
 
   const slashMatches = useMemo(() => {
@@ -89,9 +118,16 @@ export default function InputArea() {
 
   const showSlashMenu = slashFilter !== null && slashMatches.length > 0;
 
+  const atToken = useMemo(() => {
+    if (showSlashMenu) return null;
+    return extractCompletionToken(inputValue, cursorPos, true);
+  }, [inputValue, cursorPos, showSlashMenu]);
+
+  const showAtMenu =
+    atToken?.token.startsWith("@") && atSuggestions.length > 0 && !showSlashMenu;
+
   const slashGroups = useMemo(() => groupEntries(slashMatches), [slashMatches]);
 
-  // Build a flat "visible items" list from groups, respecting collapsed state.
   const flatVisible = useMemo(() => {
     const flat = [];
     for (const g of slashGroups) {
@@ -107,6 +143,39 @@ export default function InputArea() {
     setExpandedSections(new Set());
   }, [slashFilter, slashMatches.length]);
 
+  useEffect(() => {
+    setAtIndex(0);
+  }, [atToken?.token, atSuggestions.length]);
+
+  // Clear stale suggestions when workspace changes.
+  useEffect(() => {
+    setAtSuggestions([]);
+  }, [workspace]);
+
+  // Debounced @ file search (CC useTypeahead debouncedFetchFileSuggestions)
+  useEffect(() => {
+    if (!atToken?.token.startsWith("@") || showSlashMenu || !workspace) {
+      setAtSuggestions([]);
+      return undefined;
+    }
+    const searchToken = extractSearchToken(atToken);
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await workspaceApi.searchFiles(searchToken, workspace);
+        if (!cancelled && Array.isArray(data.entries)) {
+          setAtSuggestions(data.entries);
+        }
+      } catch {
+        if (!cancelled) setAtSuggestions([]);
+      }
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [atToken, showSlashMenu, workspace]);
+
   const addImageFiles = useCallback(async (files) => {
     const remaining = MAX_IMAGES - images.length;
     const toProcess = files.slice(0, remaining);
@@ -120,6 +189,7 @@ export default function InputArea() {
 
   const handleInput = useCallback((e) => {
     setInputValue(e.target.value);
+    setCursorPos(e.target.selectionStart ?? 0);
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
@@ -136,8 +206,53 @@ export default function InputArea() {
     el.focus();
     const pos = `/${entry.name} `.length;
     el.setSelectionRange(pos, pos);
+    setCursorPos(pos);
     handleInput({ target: el });
   }, [handleInput]);
+
+  const applyAtSelection = useCallback(
+    (entry) => {
+      const el = textareaRef.current;
+      if (!el || !atToken) return;
+      const hasAtPrefix = atToken.token.startsWith("@");
+      const needsQuotes = entry.path.includes(" ");
+      const replacementValue = formatAtMentionReplacement(entry.path, {
+        hasAtPrefix,
+        needsQuotes,
+        isQuoted: atToken.isQuoted,
+        isDir: entry.isDir,
+      });
+      const { newInput, newCursorPos } = applyFileSuggestion(
+        replacementValue,
+        inputValue,
+        atToken.token,
+        atToken.startPos,
+      );
+      el.value = newInput;
+      setInputValue(newInput);
+      el.setSelectionRange(newCursorPos, newCursorPos);
+      setCursorPos(newCursorPos);
+      el.focus();
+      if (!entry.isDir) setAtSuggestions([]);
+      handleInput({ target: el });
+    },
+    [atToken, inputValue, handleInput],
+  );
+
+  const insertAtMentions = useCallback(
+    (relativePaths) => {
+      const el = textareaRef.current;
+      if (!el || relativePaths.length === 0) return;
+      const mentions = relativePaths
+        .filter(Boolean)
+        .map((p) => (p.includes(" ") ? `@"${p}" ` : `@${p} `))
+        .join("");
+      insertTextAtCursor(el, mentions, setInputValue);
+      setCursorPos(el.selectionStart ?? 0);
+      handleInput({ target: el });
+    },
+    [handleInput],
+  );
 
   const handleSend = useCallback(() => {
     const el = textareaRef.current;
@@ -146,9 +261,11 @@ export default function InputArea() {
     if ((!text && images.length === 0) || isStreaming) return;
     el.value = "";
     setInputValue("");
+    setCursorPos(0);
     el.style.height = "auto";
     sendMessage(text || "(image)", images);
     setImages([]);
+    setAtSuggestions([]);
   }, [sendMessage, isStreaming, images]);
 
   const handleKeyDown = useCallback(
@@ -175,12 +292,45 @@ export default function InputArea() {
         }
       }
 
+      if (showAtMenu) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setAtIndex((i) => (i + 1) % atSuggestions.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setAtIndex((i) => (i - 1 + atSuggestions.length) % atSuggestions.length);
+          return;
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+          e.preventDefault();
+          applyAtSelection(atSuggestions[atIndex]);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setAtSuggestions([]);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
     },
-    [showSlashMenu, flatVisible, slashIndex, applySlashSelection, handleSend],
+    [
+      showSlashMenu,
+      flatVisible,
+      slashIndex,
+      applySlashSelection,
+      showAtMenu,
+      atSuggestions,
+      atIndex,
+      applyAtSelection,
+      handleSend,
+    ],
   );
 
   const handlePaste = useCallback((e) => {
@@ -201,12 +351,34 @@ export default function InputArea() {
     setDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setDragOver(false);
-    const files = extractImages(e.dataTransfer);
-    if (files.length > 0) addImageFiles(files);
-  }, [addImageFiles]);
+  const handleDrop = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setDragOver(false);
+      const allFiles = extractDroppedFiles(e.dataTransfer);
+      const imageFiles = allFiles.filter(isImageFile);
+      const otherFiles = allFiles.filter((f) => !isImageFile(f));
+
+      if (imageFiles.length > 0) addImageFiles(imageFiles);
+
+      if (otherFiles.length === 0) return;
+      if (!workspace) return;
+
+      setUploadingDrop(true);
+      try {
+        const result = await workspaceApi.uploadFiles(workspace, otherFiles);
+        const paths = (result.uploaded ?? []).map((u) =>
+          toWorkspaceRelative(u.path, workspace),
+        );
+        insertAtMentions(paths);
+      } catch (err) {
+        console.error("Drop upload failed:", err);
+      } finally {
+        setUploadingDrop(false);
+      }
+    },
+    [addImageFiles, workspace, insertAtMentions],
+  );
 
   const handleFileChange = useCallback((e) => {
     const files = [...e.target.files].filter((f) => ACCEPTED_TYPES.includes(f.type));
@@ -274,6 +446,33 @@ export default function InputArea() {
           })}
         </div>
       )}
+      {showAtMenu && (
+        <div className="slash-menu at-menu" role="listbox" aria-label="File suggestions">
+          <div className="slash-menu__section">Files</div>
+          {atSuggestions.map((entry, idx) => (
+            <button
+              key={entry.path}
+              type="button"
+              role="option"
+              aria-selected={idx === atIndex}
+              className={`slash-menu__item${idx === atIndex ? " slash-menu__item--active" : ""}`}
+              onMouseDown={(ev) => {
+                ev.preventDefault();
+                applyAtSelection(entry);
+              }}
+            >
+              <div className="slash-menu__row-top">
+                <span className="slash-menu__name">
+                  @{entry.path}{entry.isDir ? "/" : ""}
+                </span>
+                {entry.isDir && (
+                  <span className="slash-menu__badge">dir</span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
       <div className={`input-wrapper ${images.length > 0 ? "has-images" : ""}`}>
         {images.length > 0 && (
           <div className="image-preview-bar">
@@ -309,10 +508,13 @@ export default function InputArea() {
             ref={textareaRef}
             className="input-textarea"
             rows="1"
-            placeholder="Describe your task… type / for commands & skills"
+            placeholder="Describe your task… @file to attach · / for commands"
             value={inputValue}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
+            onKeyUp={syncCursor}
+            onClick={syncCursor}
+            onSelect={syncCursor}
             onPaste={handlePaste}
             autoFocus
           />
@@ -333,9 +535,13 @@ export default function InputArea() {
         </div>
       </div>
       <div className="input-hint">
-        Enter to send · Shift+Enter newline · / commands & skills · ↑↓ pick
+        Enter to send · Shift+Enter newline · @path attaches file · drag files to @mention
       </div>
-      {dragOver && <div className="drop-overlay">Drop images here</div>}
+      {dragOver && (
+        <div className="drop-overlay">
+          {uploadingDrop ? "Uploading…" : "Drop files here (images attach, others → @path)"}
+        </div>
+      )}
       {lightbox && (
         <div className="lightbox" onClick={() => setLightbox(null)}>
           <img src={lightbox} alt="Preview" />

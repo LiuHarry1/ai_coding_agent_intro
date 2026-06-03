@@ -73,92 +73,93 @@ function CompactionNotice({ part }) {
   );
 }
 
-const STATUS_ICONS = {
-  pending: "□",
-  // Filled square: visually distinct from the card's chevron (▶/▼) so the
-  // in-progress row doesn't read as a nested toggle.
-  in_progress: "▣",
-  completed: "☑",
-  cancelled: "☒",
-};
+function TodoListIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="2" cy="3" r="1.25" stroke="currentColor" strokeWidth="1" />
+      <line x1="5" y1="3" x2="13" y2="3" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      <circle cx="2" cy="7" r="1.25" stroke="currentColor" strokeWidth="1" />
+      <line x1="5" y1="7" x2="13" y2="7" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      <circle cx="2" cy="11" r="1.25" stroke="currentColor" strokeWidth="1" />
+      <line x1="5" y1="11" x2="13" y2="11" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TodoStatusIcon({ status }) {
+  if (status === "completed") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1" />
+        <path d="M4.25 7L6.25 9L9.75 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (status === "cancelled") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1" />
+        <path d="M5 5L9 9M9 5L5 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (status === "in_progress") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1" />
+        <circle cx="7" cy="7" r="2.5" fill="currentColor" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  );
+}
 
 function TodoListCard({ part }) {
   const { todos = [] } = part;
   if (todos.length === 0) return null;
 
-  const completed = todos.filter((t) => t.status === "completed").length;
-  const cancelled = todos.filter((t) => t.status === "cancelled").length;
-  const inProgress = todos.find((t) => t.status === "in_progress");
-  const hasActive = todos.some((t) => t.status === "in_progress" || t.status === "pending");
-  const allDone = !hasActive;
   const total = todos.length;
-  const done = completed + cancelled;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   const [manualToggle, setManualToggle] = useState(null);
-  const open = manualToggle !== null ? manualToggle : !allDone;
-
-  // Header no longer echoes the in-progress task title — the highlighted row
-  // in the list already shows it, and duplicating it on the header was just
-  // noise (also forced the header to truncate on long task names).
-  let headerIcon, headerText;
-  if (allDone) {
-    headerIcon = "☑";
-    headerText = `All ${total} tasks complete`;
-  } else {
-    headerIcon = inProgress ? "▣" : "□";
-    headerText = "Tasks";
-  }
+  const open = manualToggle !== null ? manualToggle : true;
 
   return (
-    <div className={`todo-card ${allDone ? "todo-done" : ""} ${inProgress ? "todo-active" : ""}`}>
+    <div className="todo-card">
       <button
         className="todo-header"
         onClick={() => setManualToggle((v) => (v === null ? !open : !v))}
+        aria-expanded={open}
       >
-        <div className="todo-header-left">
-          <svg
-            className={`todo-arrow ${open ? "open" : ""}`}
-            width="12" height="12" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" strokeWidth="2.5"
-            strokeLinecap="round" strokeLinejoin="round"
-          >
-            <polyline points="9 6 15 12 9 18" />
-          </svg>
-          <span className={`todo-header-icon todo-icon-${allDone ? "completed" : inProgress ? "in_progress" : "pending"}`}>
-            {headerIcon}
-          </span>
-          <span className="todo-title">{headerText}</span>
-        </div>
-        <span className="todo-count">
-          {done === 0 ? (
-            <span className="todo-count-total">{total} tasks</span>
-          ) : (
-            <>
-              <span className="todo-count-done">{done}</span>
-              <span className="todo-count-sep">/</span>
-              <span className="todo-count-total">{total}</span>
-            </>
-          )}
+        <TodoListIcon />
+        <span className="todo-title">
+          To-dos <span className="todo-count">{total}</span>
         </span>
+        <svg
+          className={`todo-arrow ${open ? "open" : ""}`}
+          width="12" height="12" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
       {open && (
         <ul className="todo-list">
           {todos.map((t) => (
             <li key={t.id} className={`todo-item todo-${t.status}`}>
               <span className={`todo-icon todo-icon-${t.status}`}>
-                {STATUS_ICONS[t.status] || "□"}
+                <TodoStatusIcon status={t.status} />
               </span>
               <span className="todo-content">{t.content}</span>
             </li>
           ))}
         </ul>
       )}
-      <div className="todo-progress">
-        <div className="todo-progress-bar">
-          <div className="todo-progress-fill" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
     </div>
   );
 }

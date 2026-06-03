@@ -11,13 +11,19 @@ import { fileName } from "../lib/utils.js";
  * full code block per call buries the actual conversation.
  */
 
-/** Tool returns `<path> (lines a-b of total)\n   N│code`. Parse the header. */
+/** Tool returns `<path> (lines a-b of total)\n   N│code` or structured read output. */
 function parseHeader(result) {
   if (typeof result !== "string") return null;
   const firstLine = result.split("\n", 1)[0] || "";
-  const m = firstLine.match(/\(lines\s+(\d+)-(\d+)\s+of\s+(\d+)\)/);
-  if (!m) return null;
-  return { start: +m[1], end: +m[2], total: +m[3] };
+  const lineMatch = firstLine.match(/\(lines\s+(\d+)-(\d+)\s+of\s+(\d+)\)/);
+  if (lineMatch) {
+    return { kind: "text", start: +lineMatch[1], end: +lineMatch[2], total: +lineMatch[3] };
+  }
+  if (firstLine.startsWith("[Image:")) return { kind: "image", label: firstLine };
+  if (firstLine.startsWith("[PDF:")) return { kind: "pdf", label: firstLine };
+  if (firstLine.match(/\(\d+ cells\)/)) return { kind: "notebook", label: firstLine };
+  if (firstLine.startsWith("[PDF pages")) return { kind: "pdf_pages", label: firstLine };
+  return null;
 }
 
 /** Drop the leading header line + the `   N│` gutter that read_file adds. */
@@ -41,18 +47,27 @@ export default function ReadFileCard({ part }) {
   // request args so we show *something* mid-flight.
   const header = parseHeader(result);
   let rangeLabel = "";
-  if (header) {
+  if (header?.kind === "text") {
     rangeLabel = `L${header.start}-${header.end}`;
     if (header.total && header.end - header.start + 1 < header.total) {
       rangeLabel += ` of ${header.total}`;
     }
+  } else if (header?.kind === "image") {
+    rangeLabel = "image";
+  } else if (header?.kind === "pdf" || header?.kind === "pdf_pages") {
+    rangeLabel = "pdf";
+  } else if (header?.kind === "notebook") {
+    rangeLabel = "notebook";
   } else if (args.offset || args.limit) {
     const start = args.offset && args.offset > 0 ? args.offset : 1;
     const end = args.limit ? start + args.limit - 1 : "?";
     rangeLabel = `L${start}-${end}`;
   }
 
-  const codeBody = isDone && !isError ? stripDecorations(result) : "";
+  const codeBody =
+    isDone && !isError && header?.kind === "text" ? stripDecorations(result) : "";
+  const summaryBody =
+    isDone && !isError && header && header.kind !== "text" ? result : "";
 
   return (
     <div className={`tool-row read-file-card ${isError ? "has-error" : ""}`}>
@@ -73,6 +88,9 @@ export default function ReadFileCard({ part }) {
 
       {expanded && isDone && !isError && codeBody && (
         <pre className="tool-row-body">{codeBody}</pre>
+      )}
+      {expanded && isDone && !isError && summaryBody && (
+        <pre className="tool-row-body">{summaryBody}</pre>
       )}
       {expanded && isError && (
         <div className="tool-row-body tool-row-body--error">{result}</div>

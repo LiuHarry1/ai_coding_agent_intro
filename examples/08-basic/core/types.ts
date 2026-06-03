@@ -194,6 +194,11 @@ export interface AgentOptions {
   concurrencyPolicy?: ConcurrencyPolicyFn;
   /** Persists large tool outputs; inherited by subagent runs. */
   sessionId?: string;
+  /**
+   * @-mention file attachments injected before the user message (Claude Code
+   * getAttachmentMessages pattern).
+   */
+  attachmentMessages?: Message[];
 }
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;
@@ -234,6 +239,8 @@ export interface Session {
   createdAt: number;
   /** Tool names discovered via `tool_search` — activated in subsequent turns. */
   discoveredTools?: Set<string>;
+  /** Tracks files read for @-mention dedup (mtime-based), per session. */
+  readFileState?: Map<string, { content: string; timestamp: number }>;
 }
 
 export interface SessionInfo {

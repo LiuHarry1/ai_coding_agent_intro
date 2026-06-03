@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { WALK_IGNORE_DIR_NAMES } from "../../constants/file_filters.js";
 
 const MAX_FILE_PREVIEW_BYTES = 2 * 1024 * 1024; // 2 MB cap for file viewer
 
@@ -147,4 +148,120 @@ export class FsOpError extends Error {
     super(message);
     this.code = code;
   }
+}
+
+// ── @-mention file search (Claude Code fileSuggestions pattern, simplified) ──
+
+export interface FileSearchEntry {
+  /** Path relative to workspace root, forward slashes. */
+  path: string;
+  isDir: boolean;
+}
+
+export interface FileSearchResult {
+  query: string;
+  entries: FileSearchEntry[];
+}
+
+const MAX_INDEX_ENTRIES = 12_000;
+const INDEX_TTL_MS = 30_000;
+
+let fileIndexCache: {
+  root: string;
+  builtAt: number;
+  entries: FileSearchEntry[];
+} | null = null;
+
+function toPosixRel(root: string, abs: string): string {
+  return path.relative(root, abs).split(path.sep).join("/");
+}
+
+function buildFileIndex(root: string): FileSearchEntry[] {
+  const entries: FileSearchEntry[] = [];
+
+  function walk(absDir: string): void {
+    if (entries.length >= MAX_INDEX_ENTRIES) return;
+    let items: fs.Dirent[];
+    try {
+      items = fs.readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items) {
+      if (item.name.startsWith(".")) continue;
+      const abs = path.join(absDir, item.name);
+      const rel = toPosixRel(root, abs);
+      if (item.isDirectory()) {
+        entries.push({ path: rel, isDir: true });
+        if (!WALK_IGNORE_DIR_NAMES.has(item.name)) walk(abs);
+      } else {
+        entries.push({ path: rel, isDir: false });
+      }
+      if (entries.length >= MAX_INDEX_ENTRIES) return;
+    }
+  }
+
+  if (fs.existsSync(root) && fs.statSync(root).isDirectory()) {
+    walk(root);
+  }
+  return entries;
+}
+
+function getFileIndex(root: string): FileSearchEntry[] {
+  const now = Date.now();
+  if (
+    !fileIndexCache ||
+    fileIndexCache.root !== root ||
+    now - fileIndexCache.builtAt > INDEX_TTL_MS
+  ) {
+    fileIndexCache = { root, builtAt: now, entries: buildFileIndex(root) };
+  }
+  return fileIndexCache.entries;
+}
+
+function scorePath(relPath: string, query: string): number {
+  const lower = relPath.toLowerCase();
+  const base = (lower.split("/").pop() ?? lower);
+  if (base.startsWith(query)) return 200 - lower.length;
+  if (lower.startsWith(query)) return 150 - lower.length;
+  if (lower.includes(query)) return 80 - lower.length;
+  // Subsequence match on basename (light fuzzy)
+  let qi = 0;
+  for (let i = 0; i < base.length && qi < query.length; i++) {
+    if (base[i] === query[qi]) qi++;
+  }
+  if (qi === query.length) return 40 - lower.length;
+  return 0;
+}
+
+export function invalidateFileSearchCache(): void {
+  fileIndexCache = null;
+}
+
+export function searchFiles(
+  root: string,
+  query: string,
+  limit = 15,
+): FileSearchResult {
+  const q = query.trim().toLowerCase();
+  const index = getFileIndex(root);
+
+  let matches: FileSearchEntry[];
+  if (!q) {
+    matches = [...index]
+      .sort((a, b) => {
+        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+        return a.path.localeCompare(b.path);
+      })
+      .slice(0, limit);
+  } else {
+    matches = index
+      .map((entry) => ({ entry, score: scorePath(entry.path, q) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.entry.path.localeCompare(b.entry.path))
+      .slice(0, limit)
+      .map((x) => x.entry);
+  }
+
+  return { query, entries: matches };
 }

@@ -1,0 +1,214 @@
+/**
+ * Prepare a chat turn before runAgent — CC: processUserInput pipeline.
+ * Slash resolution, per-request registry reload, tools, @-attachments.
+ */
+import { dispatchSlashCommand } from "../commands/dispatcher.js";
+import { registerSubagents, getSubagentNames } from "../tools/AgentTool/index.js";
+import { registerSkills, formatSkillListing } from "../skills/index.js";
+import { loadProjectRules } from "../core/rules-loader.js";
+import { filterToolsByEnablement } from "../core/tool-enablement.js";
+import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
+import { createToolSearchDefinition } from "../tools/tool_search.js";
+import { TOOL_SEARCH_TOOL_NAME } from "../constants/tool_names.js";
+import { buildAttachmentMessages } from "../utils/attachments/index.js";
+import type { ReadFileState } from "../utils/attachments/types.js";
+import type {
+  AnyTool,
+  IToolRegistry,
+  Message,
+  Session,
+  ToolContext,
+} from "../core/types.js";
+import type { MCPManager } from "../core/mcp-manager.js";
+import type { ConfigManager } from "../core/config-manager.js";
+import type { ToolRegistry } from "../core/tool-registry.js";
+import type { SlashEntry } from "../commands/slashRegistry.js";
+import { extractFilePathCandidates } from "./path_candidates.js";
+
+export type ForkSkillSlashResult = {
+  kind: "run";
+  mode: "fork";
+  text: string;
+  entry: Extract<SlashEntry, { kind: "skill" }>;
+};
+
+export interface SlashResolution {
+  effectiveMessage: string;
+  immediateReply: string | null;
+  forkSkill: ForkSkillSlashResult | null;
+}
+
+export async function resolveSlashCommand(
+  message: string,
+  cwd: string,
+): Promise<SlashResolution> {
+  const slashResult = await dispatchSlashCommand(message, { cwd });
+  let effectiveMessage = message;
+  let immediateReply: string | null = null;
+  let forkSkill: SlashResolution["forkSkill"] = null;
+
+  if (slashResult.kind === "reply") {
+    immediateReply = slashResult.text;
+  } else if (slashResult.kind === "unknown") {
+    immediateReply = `Unknown slash command: /${slashResult.name}\n\nTry /help to see all available commands.`;
+  } else if (slashResult.kind === "run" && slashResult.mode === "inline") {
+    effectiveMessage = slashResult.text;
+    console.log(
+      `[server] expanded /${slashResult.entry.name} (${slashResult.entry.kind}) → ${effectiveMessage.length} char prompt`,
+    );
+  } else if (
+    slashResult.kind === "run" &&
+    slashResult.mode === "fork" &&
+    slashResult.entry.kind === "skill"
+  ) {
+    forkSkill = slashResult as ForkSkillSlashResult;
+  }
+
+  return { effectiveMessage, immediateReply, forkSkill };
+}
+
+export interface PreparedChatTurn {
+  effectiveMessage: string;
+  immediateReply: string | null;
+  forkSkill: SlashResolution["forkSkill"];
+  tools: Record<string, AnyTool>;
+  deferredToolPool?: Record<string, AnyTool>;
+  skillListing?: string;
+  projectRules: string;
+  attachmentMessages: Message[];
+  subagentNames: Set<string>;
+  concurrencyPolicy: ReturnType<typeof buildConcurrencyPolicy>;
+}
+
+export interface PrepareChatTurnInput {
+  message: string;
+  cwd: string;
+  session: Session;
+  registry: IToolRegistry;
+  mcpManager: MCPManager;
+  configManager: ConfigManager;
+  eventBus: ToolContext["eventBus"];
+  middleware: ToolContext["middleware"];
+  runAgent: NonNullable<ToolContext["runAgent"]>;
+}
+
+export async function prepareChatTurn(
+  input: PrepareChatTurnInput,
+): Promise<PreparedChatTurn> {
+  const {
+    message,
+    cwd,
+    session,
+    registry,
+    mcpManager,
+    configManager,
+    eventBus,
+    middleware,
+    runAgent,
+  } = input;
+
+  const slash = await resolveSlashCommand(message, cwd);
+
+  const { activeAgents } = await registerSubagents(registry, cwd);
+  const candidateFiles = extractFilePathCandidates(slash.effectiveMessage);
+  const { activeSkills, allSkills } = await registerSkills(
+    registry,
+    cwd,
+    activeAgents,
+    { candidateFiles },
+  );
+  const conditionalHidden = allSkills.length - activeSkills.length;
+  console.log(
+    `[server] cwd=${cwd}  agents=[${activeAgents.map((a) => a.agentType).join(", ")}]  skills=[${activeSkills.map((s) => s.name).join(", ")}]${conditionalHidden > 0 ? `  (+${conditionalHidden} conditional hidden)` : ""}`,
+  );
+
+  const projectRules = loadProjectRules(cwd);
+  const enablement = configManager.getAll();
+  const toolEnablement = { disabledTools: enablement.disabledTools };
+
+  const toolContext: ToolContext = {
+    eventBus,
+    middleware,
+    runAgent,
+    registry,
+    mcpTools: mcpManager.getAllTools(),
+    toolEnablement,
+    sessionId: session.id,
+  };
+
+  const { active, deferred, deferredDefs } = (registry as ToolRegistry).createSplit(
+    cwd,
+    toolContext,
+    mcpManager.getAllTools(),
+    session.discoveredTools,
+  );
+
+  if (deferredDefs.length > 0) {
+    const tsearchDef = createToolSearchDefinition(deferredDefs);
+    active[TOOL_SEARCH_TOOL_NAME] = tsearchDef.create(cwd, toolContext);
+  }
+
+  const tools = filterToolsByEnablement(active, registry, toolEnablement);
+
+  const reminderParts: string[] = [];
+  if (activeSkills.length > 0) {
+    reminderParts.push(
+      `The following skills are available for use with the skill tool:\n\n${formatSkillListing(activeSkills)}`,
+    );
+  }
+  if (deferredDefs.length > 0) {
+    const listing = deferredDefs
+      .map((d: { name: string; description: string; isMcp: boolean }) =>
+        `- ${d.name}${d.isMcp ? " (MCP)" : ""}`,
+      )
+      .join("\n");
+    reminderParts.push(
+      `The following tools are available but not loaded. Use \`${TOOL_SEARCH_TOOL_NAME}\` to discover and load them before use:\n${listing}`,
+    );
+  }
+  const skillListing =
+    reminderParts.length > 0 ? reminderParts.join("\n\n") : undefined;
+
+  console.log(
+    `[server] tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ""}`,
+  );
+
+  if (!session.readFileState) {
+    session.readFileState = new Map();
+  }
+  const readFileState = session.readFileState as ReadFileState;
+
+  let attachmentMessages: Message[] = [];
+  if (slash.effectiveMessage && !slash.immediateReply) {
+    try {
+      attachmentMessages = await buildAttachmentMessages(
+        cwd,
+        slash.effectiveMessage,
+        readFileState,
+      );
+      if (attachmentMessages.length > 0) {
+        console.log(
+          `[server] @-attachments: ${attachmentMessages.length} message(s) from input`,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[server] attachment extraction failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  return {
+    effectiveMessage: slash.effectiveMessage,
+    immediateReply: slash.immediateReply,
+    forkSkill: slash.forkSkill,
+    tools,
+    deferredToolPool:
+      Object.keys(deferred).length > 0 ? deferred : undefined,
+    skillListing,
+    projectRules,
+    attachmentMessages,
+    subagentNames: getSubagentNames(registry),
+    concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(tools)),
+  };
+}

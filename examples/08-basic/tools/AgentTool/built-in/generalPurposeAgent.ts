@@ -1,7 +1,6 @@
-import { createAgentDefinition } from "./base.js";
-import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS } from "../tools/tool-names.js";
+import { createAgentDefinition } from "../base.js";
+import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS } from "../../../constants/tool_names.js";
 
-/** General-purpose subagent type identifier. */
 export const GENERAL_PURPOSE_AGENT_TYPE = "general-purpose";
 
 const GENERAL_PURPOSE_SYSTEM = `You are a general-purpose research and execution agent running in an isolated context. Complete the task fully — don't gold-plate, don't leave it half-done.
@@ -31,7 +30,6 @@ export const definition = createAgentDefinition({
     'Plan for architectural design without code changes.',
   description: "General-purpose research / execution",
   systemPrompt: GENERAL_PURPOSE_SYSTEM,
-  // Block recursive task calls but otherwise inherit everything.
   disallowedTools: [...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 30,
   label: "Agent",
