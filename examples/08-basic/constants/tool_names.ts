@@ -15,6 +15,7 @@ export const WEB_FETCH_TOOL_NAME = "WebFetch";
 export const GLOB_TOOL_NAME = "Glob";
 export const GREP_TOOL_NAME = "Grep";
 export const ASK_USER_QUESTION_TOOL_NAME = "AskUserQuestion";
+export const PUBLISH_PREVIEW_TOOL_NAME = "PublishPreview";
 export const TOOL_SEARCH_TOOL_NAME = "ToolSearch";
 export const SKILL_TOOL_NAME = "Skill";
 export const AGENT_TOOL_NAME = "Agent";

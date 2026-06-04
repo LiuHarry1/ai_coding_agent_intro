@@ -1,5 +1,6 @@
 node_modules
 .env
+.ai-agent/config.json
 .sessions
 client/web/dist
 client/web/node_modules

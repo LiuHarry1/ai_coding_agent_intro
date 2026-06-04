@@ -53,6 +53,15 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       GOOGLE_GENERATIVE_AI_API_KEY: "${GOOGLE_GENERATIVE_AI_API_KEY:-}"
+      # ── Web preview (cloud only — omit locally via npm start) ────────
+      # PublishPreview tool + nginx /preview/{port}/ routing. Set
+      # PUBLIC_BASE_URL to the origin users hit (scheme + host + optional
+      # port, no trailing slash). Example: https://agent.example.com
+      PREVIEW_ENABLED: "1"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+      PREVIEW_PATH_PREFIX: "/preview"
+      PREVIEW_PORT_MIN: "3000"
+      PREVIEW_PORT_MAX: "9999"
     volumes:
       # Bind-mount the host project(s) you want the agent to operate on.
       # Edit the left side to your real path. `:rw` because the agent

@@ -1,4 +1,5 @@
 import { defaultRegistry } from "../core/tool-registry.js";
+import { isPreviewEnabled } from "../core/preview.js";
 import { isPowerShellToolEnabled } from "../core/shell-utils.js";
 import { definition as bash } from "./bash.js";
 import { definition as powershell } from "./powershell.js";
@@ -11,6 +12,7 @@ import { definition as webFetch } from "./web_fetch.js";
 import { definition as globTool } from "./glob.js";
 import { definition as grepTool } from "./grep.js";
 import { definition as askUserQuestion } from "./ask_user_question.js";
+import { definition as publishPreview } from "./publish_preview.js";
 
 // Default: bash always; powershell additionally on Windows.
 const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])];
@@ -26,6 +28,7 @@ const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])];
   webSearch,
   webFetch,
   askUserQuestion,
+  ...(isPreviewEnabled() ? [publishPreview] : []),
 ].forEach((def) => defaultRegistry.register(def));
 
 export { defaultRegistry };

@@ -15,6 +15,7 @@ import {
   WRITE_FILE_TOOL_NAME,
 } from "../tools/tool-names.js";
 import { SKILL_TOOL_NAME } from "../tools/skill.js";
+import { previewSection } from "./preview.js";
 
 // Static system prompt sections. Uses tool/agent names via constants.
 
@@ -57,7 +58,7 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
 # Environment
  - Primary working directory: ${cwd}
  - Platform: ${platformLabel}
- - ${shellInfoLine()}
+ - ${shellInfoLine()}${previewSection()}
 
 # Tone and style
  - Only use emojis if the user explicitly requests it. Avoid using emojis in all communication unless asked.

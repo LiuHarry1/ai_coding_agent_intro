@@ -184,6 +184,48 @@ curl http://localhost:8080/chat?stream=false \
 For TypeScript projects, use `client-sdk/` — wraps all of the above with
 proper types and an `AsyncIterable<AgentEvent>` for streaming.
 
+## Web preview (generated apps)
+
+When deployed via Docker Compose, the stack exposes dev servers that the
+agent starts inside the `agent` container. Users test them through the
+same origin as the UI — no extra host ports.
+
+```
+https://your-domain.com/preview/5173/   →  Vite frontend (agent:5173)
+https://your-domain.com/preview/3000/   →  API server   (agent:3000)
+```
+
+### Configuration
+
+Set in a `.env` file beside `docker-compose.yml` (or export in your shell):
+
+```bash
+PUBLIC_BASE_URL=https://your-domain.com
+```
+
+`PREVIEW_ENABLED=1` is already set in `docker-compose.yml` for the
+`agent` service. The agent registers a `PublishPreview` tool and adds
+cloud-only prompt rules. **Local `npm start` does not set these vars** —
+preview stays off.
+
+Optional tuning on the `agent` service:
+
+| Variable | Default | Role |
+|----------|---------|------|
+| `PUBLIC_BASE_URL` | `http://localhost:8080` | Origin users open in the browser |
+| `PREVIEW_PATH_PREFIX` | `/preview` | URL path prefix before the port |
+| `PREVIEW_PORT_MIN` / `MAX` | `3000` / `9999` | Allowed preview port range |
+| `PREVIEW_BLOCKED_PORTS` | (4567) | Extra blocked ports, comma-separated |
+
+### Agent workflow
+
+1. Start a dev server with `Bash` (`background: true`), binding `0.0.0.0`.
+2. Call `PublishPreview` with the port number.
+3. Give the returned URL to the user (never `localhost`).
+
+Rebuild the **web** image after changing `nginx.conf`; rebuild the
+**tenant** image after agent code changes.
+
 ## Auth — currently OFF
 
 Both containers assume a trusted boundary. The agent's `bash` tool runs
@@ -207,3 +249,6 @@ internet** without first:
 | `workspace not found, falling back to ...` | The path passed in the request body doesn't exist *inside* the container — re-check the `../workspaces` bind mount and the `"workspace"` value. |
 | Provider returns 401 / "missing API key" | Host env var not forwarded — check `OPENAI_API_KEY` (or equivalent) is set in your shell / `.env` beside the compose file. |
 | Browser shows blank page | `Dockerfile.web` build failed before `npm run build`; rerun with `docker build --no-cache -f deploy/Dockerfile.web -t ai-agent-web:latest .` |
+| Preview URL 502 / connection refused | Dev server not listening on `0.0.0.0`, or wrong port — check `docker compose logs agent` and re-run `PublishPreview`. |
+| Preview URL 403 | Port is blocked (e.g. 4567) — use a port in 3000–9999 outside the blocklist. |
+| Agent suggests localhost | `PUBLIC_BASE_URL` unset or `PREVIEW_ENABLED` not `1` — verify agent container env. |
