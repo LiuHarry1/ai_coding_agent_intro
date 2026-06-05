@@ -873,3 +873,196 @@
 [data-theme="light"] .mermaid-icon-btn { background: rgba(255,255,255,0.92); }
 [data-theme="light"] .mermaid-modal-panel { background: #fff; }
 [data-theme="light"] .mermaid-modal-body { background: #fafbfc; }
+
+/* ── Plan approval card ───────────────────── */
+.plan-card {
+  margin: 10px 0;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--purple, #bc8cff) 45%, var(--border));
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-secondary);
+}
+
+.plan-card__header {
+  margin-bottom: 10px;
+}
+
+.plan-card__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.plan-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--purple, #bc8cff);
+}
+
+.plan-card__path {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.plan-card__placeholder {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.plan-card__body {
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+
+.plan-card__body--collapsed {
+  overflow: hidden;
+  position: relative;
+}
+
+.plan-card__body--collapsed::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  background: linear-gradient(transparent, var(--bg-primary));
+  pointer-events: none;
+}
+
+.plan-card__markdown {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+.plan-card__markdown p { margin: 0 0 10px; }
+.plan-card__markdown p:last-child { margin-bottom: 0; }
+
+.plan-card__markdown h1,
+.plan-card__markdown h2,
+.plan-card__markdown h3,
+.plan-card__markdown h4 {
+  margin: 14px 0 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.plan-card__markdown h1:first-child,
+.plan-card__markdown h2:first-child,
+.plan-card__markdown h3:first-child { margin-top: 0; }
+
+.plan-card__markdown strong { color: var(--text-primary); font-weight: 600; }
+.plan-card__markdown a { color: var(--accent); text-decoration: none; }
+.plan-card__markdown a:hover { text-decoration: underline; }
+
+.plan-card__markdown ul,
+.plan-card__markdown ol {
+  margin: 4px 0 10px 20px;
+  padding: 0;
+}
+
+.plan-card__markdown li { margin: 4px 0; color: var(--text-primary); }
+
+.plan-card__markdown blockquote {
+  border-left: 3px solid var(--purple, #bc8cff);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+.plan-card__markdown code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.plan-card__markdown pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.plan-card__markdown pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-primary);
+}
+
+.plan-card__editor {
+  width: 100%;
+  min-height: 280px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.plan-card__toggle {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plan-card__toggle:hover { text-decoration: underline; }
+
+.plan-card__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.plan-card__btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+
+.plan-card__btn--secondary {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.plan-card__btn--primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.plan-card__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.plan-card--done { padding: 10px 14px; }
+.plan-card__badge { font-size: 13px; color: var(--purple, #bc8cff); font-weight: 500; }
+
+[data-theme="light"] .plan-card__markdown code { background: #f0f3f6; }
+[data-theme="light"] .plan-card__markdown pre { background: #f6f8fa; }
+[data-theme="light"] .plan-card__body--collapsed::after {
+  background: linear-gradient(transparent, #ffffff);
+}

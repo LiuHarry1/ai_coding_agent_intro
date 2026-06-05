@@ -31,6 +31,7 @@ export default function ToolRowHeader({
   titleTooltip,
   titlePlain,
   subtitle,
+  subtitleTooltip,
   meta,
   duration,
   isDone,
@@ -71,7 +72,14 @@ export default function ToolRowHeader({
           {title}
         </span>
       )}
-      {subtitle && <span className="tool-row-subtitle">{subtitle}</span>}
+      {subtitle && (
+        <span
+          className="tool-row-subtitle"
+          title={subtitleTooltip ?? (typeof subtitle === "string" ? subtitle : undefined)}
+        >
+          {subtitle}
+        </span>
+      )}
       <span className="tool-row-spacer" />
       {meta}
       {dur && isDone && <span className="tool-row-duration">{dur}</span>}

@@ -2,6 +2,7 @@ import type { Tool } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { LlmProfile } from "./llm/types.js";
 import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
+import type { ExternalMode, PermissionModeContext } from "./permission-mode.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>;
@@ -51,6 +52,10 @@ export interface ToolContext {
   toolEnablement?: Pick<AppConfig, "disabledTools">;
   /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
   sessionId?: string;
+  /** Active session — set on main-agent runs for mode/plan tools. */
+  session?: Session;
+  /** Workspace cwd for plan file resolution. */
+  cwd?: string;
 }
 
 export interface ToolDefinition {
@@ -199,6 +204,15 @@ export interface AgentOptions {
    * getAttachmentMessages pattern).
    */
   attachmentMessages?: Message[];
+  /**
+   * Rebuild the active tool set when permission mode changes mid-turn
+   * (e.g. ExitPlanMode approval unlocks Write/Bash after planning).
+   */
+  refreshTools?: () => Record<string, AnyTool>;
+  /** Rebuild system prompt when permission mode changes mid-turn. */
+  refreshSystemPrompt?: () => string;
+  /** Inject plan-exit reminders when transitioning out of plan mode mid-turn. */
+  onPermissionModeChange?: () => Message[];
 }
 
 export type RunAgentFn = (userMessage: string, options: AgentOptions) => Promise<string>;
@@ -241,6 +255,12 @@ export interface Session {
   discoveredTools?: Set<string>;
   /** Tracks files read for @-mention dedup (mtime-based), per session. */
   readFileState?: Map<string, { content: string; timestamp: number }>;
+  /** Session-level Agent / Ask / Plan mode. */
+  permissionMode: PermissionModeContext;
+  /** Set when exiting plan — triggers reentry attachment on next plan entry. */
+  hasExitedPlanMode?: boolean;
+  /** One-shot attachment after plan exit allowing execution. */
+  needsPlanModeExitAttachment?: boolean;
 }
 
 export interface SessionInfo {
@@ -248,6 +268,7 @@ export interface SessionInfo {
   createdAt?: number;
   messageCount: number;
   preview?: string;
+  permissionMode?: ExternalMode;
 }
 
 // ── Server ──────────────────────────────────────

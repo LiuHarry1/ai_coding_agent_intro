@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import CopyButton from "./CopyButton.jsx";
 import ToolRowHeader from "./ToolRowHeader.jsx";
 import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
+import { shortDisplayPath, truncateEnd } from "../lib/utils.js";
 
 /**
  * Cursor-style card for the `glob` tool.
@@ -49,10 +50,12 @@ export default function GlobCard({ part }) {
   const [expanded, toggleExpanded] = useStreamingExpanded(!isDone);
 
   const pattern = args.pattern || "";
+  const displayPattern = pattern ? truncateEnd(pattern, 44) : "";
   const searchPath = args.path && args.path !== "." ? args.path : null;
+  const displayPath = searchPath ? shortDisplayPath(searchPath) : null;
 
   const subtitleParts = [];
-  if (searchPath) subtitleParts.push(searchPath);
+  if (displayPath) subtitleParts.push(displayPath);
   if (isDone && !isError && files.length > 0) {
     subtitleParts.push(`${files.length}${truncated ? "+" : ""} ${files.length === 1 ? "file" : "files"}`);
   }
@@ -66,9 +69,10 @@ export default function GlobCard({ part }) {
         onToggle={toggleExpanded}
         showChevron={false}
         label="Searched files"
-        title={pattern ? `\u201C${pattern}\u201D` : "glob\u2026"}
+        title={displayPattern ? `\u201C${displayPattern}\u201D` : "glob\u2026"}
         titleTooltip={pattern}
         subtitle={subtitleParts.length > 0 ? subtitleParts.join(" \u00B7 ") : null}
+        subtitleTooltip={searchPath || undefined}
         duration={part.duration}
         isDone={isDone}
         isError={isError}

@@ -28,9 +28,91 @@ export const useChatStore = create((set, get) => ({
   workspace: "",
   theme: localStorage.getItem("coding_agent_theme") || "dark",
 
+  // ── Agent mode (Agent / Ask / Plan) ─────────
+  agentMode: localStorage.getItem("coding_agent_mode") || "agent",
+  planState: {
+    status: "idle",
+    content: "",
+    filePath: null,
+  },
+  isAwaitingInteraction: false,
+
   // ── Actions ─────────────────────────────────
 
   setWorkspace: (workspace) => set({ workspace }),
+
+  setAgentMode: (mode) => {
+    localStorage.setItem("coding_agent_mode", mode);
+    set({ agentMode: mode });
+    const { currentSessionId, workspace } = get();
+    if (currentSessionId) {
+      agentApi.setSessionMode({
+        session_id: currentSessionId,
+        mode,
+        workspace: workspace || undefined,
+      }).catch(() => {});
+    }
+  },
+
+  cycleAgentMode: () => {
+    const order = ["agent", "ask", "plan"];
+    const idx = order.indexOf(get().agentMode);
+    const next = order[(idx + 1) % order.length];
+    get().setAgentMode(next);
+  },
+
+  answerQuestion: async (id, answers, extra) => {
+    const annotations = extra?.notes
+      ? Object.fromEntries(
+          Object.keys(answers).map((q) => [q, { notes: extra.notes }]),
+        )
+      : undefined;
+    await agentApi.answerQuestion({ id, answers, annotations });
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return { isAwaitingInteraction: false };
+      const parts = last.parts.map((p) =>
+        p.type === "ask_user_question" && p.id === id
+          ? { ...p, status: "answered", answers }
+          : p,
+      );
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs, isAwaitingInteraction: false };
+    });
+  },
+
+  approvePlan: async (requestId, opts) => {
+    await agentApi.approvePlan({
+      request_id: requestId,
+      approved: opts.approved,
+      edited_plan: opts.editedPlan,
+      target_mode: opts.targetMode,
+      reason: opts.reason,
+    });
+    if (opts.approved) {
+      set({
+        planState: { status: "building", content: opts.editedPlan ?? "", filePath: null },
+      });
+      // Agent loop continues on the same SSE stream; show activity while implementing.
+      if (!get().isStreaming) {
+        set({ isStreaming: true });
+      }
+      get()._setThinking();
+    }
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return { isAwaitingInteraction: false };
+      const parts = last.parts.map((p) =>
+        p.type === "plan_approval" && p.requestId === requestId
+          ? { ...p, status: "answered", approved: opts.approved }
+          : p,
+      );
+      msgs[msgs.length - 1] = { ...last, parts };
+      return { messages: msgs, isAwaitingInteraction: false };
+    });
+  },
 
   syncHljs: () => {
     const t = get().theme;
@@ -107,6 +189,7 @@ export const useChatStore = create((set, get) => ({
       message: text,
       workspace: get().workspace,
       session_id: get().currentSessionId,
+      mode: get().agentMode,
     };
     if (images.length > 0) body.images = images;
 
@@ -122,6 +205,11 @@ export const useChatStore = create((set, get) => ({
 
       const newSid = res.headers.get("x-session-id");
       if (newSid) get().setSessionId(newSid);
+      const headerMode = res.headers.get("x-permission-mode");
+      if (headerMode && ["agent", "ask", "plan"].includes(headerMode)) {
+        localStorage.setItem("coding_agent_mode", headerMode);
+        set({ agentMode: headerMode });
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -200,6 +288,38 @@ export const useChatStore = create((set, get) => ({
     switch (event) {
       case "session":
         if (data.session_id) store.setSessionId(data.session_id);
+        if (data.mode) {
+          localStorage.setItem("coding_agent_mode", data.mode);
+          set({ agentMode: data.mode });
+        }
+        break;
+      case "mode_changed":
+        if (data.mode) {
+          localStorage.setItem("coding_agent_mode", data.mode);
+          set({ agentMode: data.mode });
+        }
+        break;
+      case "ask_user_question":
+        store._appendPart({
+          type: "ask_user_question",
+          id: data.id,
+          questions: data.questions,
+          status: "pending",
+        });
+        set({ isAwaitingInteraction: true });
+        break;
+      case "plan_approval_request":
+        store._appendPlanApprovalPart(data);
+        break;
+      case "plan_ready":
+        set({
+          planState: {
+            status: data.approved ? "building" : "idle",
+            content: data.plan ?? "",
+            filePath: data.filePath ?? null,
+          },
+        });
+        if (data.approved) store._setThinking();
         break;
       case "step_start":
         set({ currentStep: data.step ?? get().currentStep });
@@ -227,9 +347,6 @@ export const useChatStore = create((set, get) => ({
         break;
       case "tool_input_start": {
         store._removeThinking();
-        // liveInputStart doubles as the part's overall start time — the
-        // tool_call event will eventually upsert duration based on backend
-        // timestamps, so a single client-side anchor is enough.
         const t0 = Date.now();
         store._appendPart({
           type: "tool_call",
@@ -237,10 +354,6 @@ export const useChatStore = create((set, get) => ({
           toolCallId: data.toolCallId,
           args: {},
           status: "streaming-input",
-          // Carry isSubagent through from the start so the placeholder card
-          // already uses subagent styling/dispatch during the streaming-input
-          // window. Without this it briefly renders as a generic tool card,
-          // then flips visual style when tool_call lands → ugly flash.
           isSubagent: data.isSubagent === true,
           liveInputBytes: 0,
           liveInputStart: t0,
@@ -385,6 +498,35 @@ export const useChatStore = create((set, get) => ({
         msgs[msgs.length - 1] = { ...last, parts: [...last.parts, part] };
       }
       return { messages: msgs };
+    });
+  },
+
+  /** ExitPlanMode — show plan card only when user approval is requested (CC UX). */
+  _appendPlanApprovalPart: (data) => {
+    set((s) => {
+      const msgs = [...s.messages];
+      const last = msgs[msgs.length - 1];
+      if (last?.type !== "assistant") return s;
+
+      const parts = last.parts.filter((p) => p.type !== "plan_approval");
+      parts.push({
+        type: "plan_approval",
+        requestId: data.requestId,
+        plan: data.plan ?? "",
+        filePath: data.filePath,
+        status: "pending",
+      });
+
+      msgs[msgs.length - 1] = { ...last, parts };
+      return {
+        messages: msgs,
+        isAwaitingInteraction: true,
+        planState: {
+          status: "awaiting_approval",
+          content: data.plan ?? "",
+          filePath: data.filePath ?? null,
+        },
+      };
     });
   },
 

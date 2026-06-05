@@ -3,6 +3,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { pickCard, SUPPRESSED_TOOL_CARDS } from "./pickToolCard.js";
+import { isPlanFileWrite } from "../lib/plan-utils.js";
+import AskUserQuestionCard from "./AskUserQuestionCard.jsx";
+import PlanApprovalCard from "./PlanApprovalCard.jsx";
 import { getMdComponents } from "../lib/markdown-components.jsx";
 
 function ThinkingDots() {
@@ -196,10 +199,17 @@ export default function MessageBubble({ message }) {
   const { parts = [] } = message;
   const messageStreaming = message.status === "streaming";
 
+  // Plan approval card pinned to bottom of the turn (after tools / questions).
   const groupedParts = [];
+  const planParts = [];
   let currentToolGroup = null;
 
   for (const part of parts) {
+    if (part.type === "plan_approval") {
+      currentToolGroup = null;
+      planParts.push(part);
+      continue;
+    }
     if (part.type === "tool_call") {
       if (!currentToolGroup) {
         currentToolGroup = { type: "tool_group", items: [] };
@@ -211,6 +221,7 @@ export default function MessageBubble({ message }) {
       groupedParts.push(part);
     }
   }
+  groupedParts.push(...planParts);
 
   return (
     <div className="msg msg-assistant">
@@ -247,7 +258,10 @@ export default function MessageBubble({ message }) {
             return <ThinkingDots key={i} step={part.step} />;
           case "tool_group": {
             const visibleItems = part.items.filter(
-              (it) => it.type === "tool_call" && !SUPPRESSED_TOOL_CARDS.has(it.name),
+              (it) =>
+                it.type === "tool_call" &&
+                !SUPPRESSED_TOOL_CARDS.has(it.name) &&
+                !isPlanFileWrite(it),
             );
             if (visibleItems.length === 0) return null;
             return (
@@ -259,6 +273,10 @@ export default function MessageBubble({ message }) {
               </div>
             );
           }
+          case "ask_user_question":
+            return <AskUserQuestionCard key={i} part={part} />;
+          case "plan_approval":
+            return <PlanApprovalCard key={i} part={part} />;
           case "todo_list":
             return <TodoListCard key={i} part={part} />;
           case "compaction_start":

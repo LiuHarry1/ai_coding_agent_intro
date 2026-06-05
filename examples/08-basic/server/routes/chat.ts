@@ -5,6 +5,7 @@ import {
   createSession,
   getSession,
   appendMessage,
+  appendModeChange,
 } from "../session.js";
 import { createSSETransport } from "../sse-transport.js";
 import { readBody, sendJSON, wantsStreamingResponse } from "../http.js";
@@ -12,18 +13,26 @@ import { sessionToUIMessages } from "../session-ui.js";
 import { getDefaultWorkspace } from "../../core/workspace.js";
 import { EventBus } from "../../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../../core/middleware.js";
+import { createPlanModeGuardMiddleware } from "../../middleware/plan-mode-guard.js";
 import { defaultRegistry } from "../../tools/index.js";
 import { respondSkillFork } from "../../skills/respond-fork.js";
 import { configManager } from "../../core/config-manager.js";
 import { prepareChatTurn } from "../../process_input/prepare_chat_turn.js";
 import { mcpManager } from "../mcp-lifecycle.js";
+import {
+  handlePlanModeTransition,
+  isValidExternalMode,
+  transitionPermissionMode,
+} from "../../core/permission-mode.js";
+import { getSystemPromptForMode } from "../../prompts/mode.js";
+import { applyModeRestrictions } from "../../core/mode-restrictions.js";
+import { planExists } from "../../utils/plans.js";
 import type { Message, RunAgentFn } from "../../core/types.js";
 
 export async function handleChat(
   req: IncomingMessage,
   res: ServerResponse,
   runAgent: RunAgentFn,
-  systemPrompt: (cwd: string, projectRules?: string) => string,
 ): Promise<void> {
   let body: Record<string, unknown>;
   try {
@@ -33,11 +42,12 @@ export async function handleChat(
     return;
   }
 
-  const { message, workspace, session_id, images } = body as {
+  const { message, workspace, session_id, images, mode } = body as {
     message?: string;
     workspace?: string;
     session_id?: string;
     images?: string[];
+    mode?: string;
   };
   if (!message) {
     sendJSON(res, 400, { error: "Missing 'message' field" });
@@ -61,13 +71,25 @@ export async function handleChat(
     session = createSession();
   }
 
+  if (!session.permissionMode) {
+    session.permissionMode = { mode: "agent" };
+  }
+
+  if (mode && isValidExternalMode(mode) && mode !== session.permissionMode.mode) {
+    const from = session.permissionMode.mode;
+    handlePlanModeTransition(from, mode, session);
+    session.permissionMode = transitionPermissionMode(from, mode, session.permissionMode);
+    appendModeChange(session.id, session);
+  }
+
   console.log(
-    `[server] chat [session:${session.id.slice(0, 8)}] [${session.messages.length} prior msgs] ${message.slice(0, 80)}`,
+    `[server] chat [session:${session.id.slice(0, 8)}] [mode:${session.permissionMode.mode}] [${session.messages.length} prior msgs] ${message.slice(0, 80)}`,
   );
 
   const eventBus = new EventBus();
   const middleware = new Middleware();
   middleware.use("afterTool", createTimingMiddleware(eventBus).afterTool);
+  middleware.use("beforeTool", createPlanModeGuardMiddleware(session, cwd));
 
   const prepared = await prepareChatTurn({
     message,
@@ -98,10 +120,32 @@ export async function handleChat(
     return;
   }
 
+  const sseHeaders: Record<string, string> = {
+    "X-Session-Id": session.id,
+    "X-Permission-Mode": session.permissionMode.mode,
+  };
+
   const transport = wantsStream
-    ? createSSETransport(res, eventBus, { "X-Session-Id": session.id })
+    ? createSSETransport(res, eventBus, sseHeaders)
     : null;
-  transport?.send("session", { session_id: session.id });
+  transport?.send("session", {
+    session_id: session.id,
+    mode: session.permissionMode.mode,
+  });
+  transport?.send("mode_changed", { mode: session.permissionMode.mode });
+
+  if (prepared.modeChanged) {
+    appendModeChange(session.id, session);
+    transport?.send("mode_changed", { mode: session.permissionMode.mode });
+  }
+
+  const unsubMode = eventBus.on("mode_changed", (data) => {
+    const newMode = (data as { mode: string }).mode;
+    if (newMode && isValidExternalMode(newMode)) {
+      appendModeChange(session.id, session);
+      transport?.send("mode_changed", { mode: newMode });
+    }
+  });
 
   req.on("close", () => {
     console.log("[server] client disconnected");
@@ -116,10 +160,12 @@ export async function handleChat(
     } else {
       sendJSON(res, 200, {
         session_id: session.id,
+        mode: session.permissionMode.mode,
         text: prepared.immediateReply,
         reason: "slash_command",
       });
     }
+    unsubMode();
     return;
   }
 
@@ -133,10 +179,40 @@ export async function handleChat(
   let finalText = "";
   let runError: Error | null = null;
 
+  const promptOptions = {
+    planFilePath: prepared.planFilePath,
+    planExists: planExists(session, cwd),
+  };
+
+  const systemPrompt = getSystemPromptForMode(
+    session.permissionMode.mode,
+    cwd,
+    prepared.projectRules || undefined,
+    promptOptions,
+  );
+
+  const refreshTools = () =>
+    applyModeRestrictions(
+      session.permissionMode.mode,
+      prepared.baseTools,
+      prepared.modeTools,
+    );
+
+  const refreshSystemPrompt = () =>
+    getSystemPromptForMode(
+      session.permissionMode.mode,
+      cwd,
+      prepared.projectRules || undefined,
+      {
+        planFilePath: prepared.planFilePath,
+        planExists: planExists(session, cwd),
+      },
+    );
+
   try {
     finalText = await runAgent(prepared.effectiveMessage, {
       tools: prepared.tools,
-      systemPrompt: systemPrompt(cwd, prepared.projectRules || undefined),
+      systemPrompt,
       eventBus,
       messages: session.messages,
       images: images?.length ? images : undefined,
@@ -149,11 +225,14 @@ export async function handleChat(
         prepared.attachmentMessages.length > 0
           ? prepared.attachmentMessages
           : undefined,
+      refreshTools,
+      refreshSystemPrompt,
     });
   } catch (e) {
     runError = e as Error;
   } finally {
     unsubDiscover();
+    unsubMode();
   }
 
   for (const msg of session.messages.slice(messagesBefore)) {
@@ -162,15 +241,18 @@ export async function handleChat(
 
   if (transport) {
     if (runError) transport.send("error", { message: runError.message });
+    transport.send("done", { mode: session.permissionMode.mode });
     transport.end();
   } else if (runError) {
     sendJSON(res, 500, {
       session_id: session.id,
+      mode: session.permissionMode.mode,
       error: runError.message,
     });
   } else {
     sendJSON(res, 200, {
       session_id: session.id,
+      mode: session.permissionMode.mode,
       text: finalText,
       messages: sessionToUIMessages(session.messages.slice(messagesBefore)),
     });

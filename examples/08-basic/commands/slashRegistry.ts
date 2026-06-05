@@ -26,7 +26,7 @@ import type { SkillDefinition } from "../skills/types.js";
  * don't have to look up again. Built-ins have no def.
  */
 export type SlashEntry =
-  | { kind: "built-in"; name: string; description: string }
+  | { kind: "built-in"; name: string; description: string; argumentHint?: string }
   | {
       kind: "command";
       name: string;
@@ -55,6 +55,12 @@ export const BUILTIN_SLASH_ENTRIES: SlashEntry[] = [
     kind: "built-in",
     name: "commands",
     description: "Alias for /help.",
+  },
+  {
+    kind: "built-in",
+    name: "plan",
+    description: "Enter or view plan mode. Use /plan open for the plan file path.",
+    argumentHint: "[open|<description>]",
   },
 ];
 

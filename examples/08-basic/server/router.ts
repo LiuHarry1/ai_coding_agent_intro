@@ -8,6 +8,13 @@ import { defaultRegistry } from "../tools/index.js";
 import { registerBuiltinSubagents } from "../tools/AgentTool/index.js";
 import { listSlashCommands } from "../commands/dispatcher.js";
 import { answerQuestion } from "../core/question-broker.js";
+import { answerPlanApproval } from "../core/plan-approval-broker.js";
+import {
+  handlePlanModeTransition,
+  isValidExternalMode,
+  transitionPermissionMode,
+} from "../core/permission-mode.js";
+import { getPlanFilePath } from "../utils/plans.js";
 import { configManager } from "../core/config-manager.js";
 import { readBody, sendJSON, setCORS } from "./http.js";
 import { serveStaticFile } from "./static.js";
@@ -18,6 +25,7 @@ import {
   getSession,
   listSessions,
   deleteSession,
+  appendModeChange,
 } from "./session.js";
 import { sessionToUIMessages } from "./session-ui.js";
 import type { RouterOptions, MCPServerConfig, LlmProfile } from "../core/types.js";
@@ -152,6 +160,78 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       return;
     }
 
+    if (method === "POST" && url === "/plan/approve") {
+      try {
+        const body = await readBody(req);
+        const requestId = body.request_id as string;
+        const approved = body.approved as boolean;
+        const editedPlan = body.edited_plan as string | undefined;
+        const targetMode = body.target_mode as string | undefined;
+        const reason = body.reason as string | undefined;
+
+        if (!requestId || typeof approved !== "boolean") {
+          sendJSON(res, 400, { error: "Missing 'request_id' or 'approved'" });
+          return;
+        }
+
+        const ok = answerPlanApproval(requestId, {
+          approved,
+          editedPlan,
+          targetMode:
+            targetMode === "ask" || targetMode === "agent" ? targetMode : "agent",
+          reason,
+        });
+        sendJSON(
+          res,
+          ok ? 200 : 404,
+          ok ? { ok: true } : { error: "No pending plan approval with that id" },
+        );
+      } catch {
+        sendJSON(res, 400, { error: "Invalid JSON" });
+      }
+      return;
+    }
+
+    if (method === "POST" && url === "/session/mode") {
+      try {
+        const body = await readBody(req);
+        const sessionId = body.session_id as string;
+        const mode = body.mode as string;
+        const workspace = body.workspace as string | undefined;
+
+        if (!sessionId || !isValidExternalMode(mode)) {
+          sendJSON(res, 400, { error: "Missing 'session_id' or valid 'mode'" });
+          return;
+        }
+
+        const session = getSession(sessionId);
+        if (!session) {
+          sendJSON(res, 404, { error: "Session not found" });
+          return;
+        }
+
+        const from = session.permissionMode.mode;
+        if (from !== mode) {
+          handlePlanModeTransition(from, mode, session);
+          session.permissionMode = transitionPermissionMode(from, mode, session.permissionMode);
+          appendModeChange(sessionId, session);
+        }
+
+        const cwd =
+          workspace && fs.existsSync(workspace)
+            ? path.resolve(workspace)
+            : getDefaultWorkspace();
+
+        sendJSON(res, 200, {
+          mode: session.permissionMode.mode,
+          planFilePath: getPlanFilePath(session, cwd),
+        });
+      } catch {
+        sendJSON(res, 400, { error: "Invalid JSON" });
+      }
+      return;
+    }
+
     if (method === "POST" && url === "/ask_user_question/answer") {
       try {
         const body = await readBody(req);
@@ -177,7 +257,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     }
 
     if (method === "POST" && url?.split("?")[0] === "/chat") {
-      await handleChat(req, res, runAgent, systemPrompt);
+      await handleChat(req, res, runAgent);
       return;
     }
 

@@ -168,6 +168,16 @@ function activateDeferredTools(
 //     compaction needed). Common with copilot-api on long bodies.
 const MAX_TRANSIENT_RETRIES = 2;
 
+function syncToolSet(
+  target: Record<string, AnyTool>,
+  source: Record<string, AnyTool>,
+): void {
+  for (const key of Object.keys(target)) {
+    if (!(key in source)) delete target[key];
+  }
+  Object.assign(target, source);
+}
+
 export async function runAgent(
   userMessage: string,
   {
@@ -184,6 +194,8 @@ export async function runAgent(
     concurrencyPolicy,
     sessionId,
     attachmentMessages,
+    refreshTools,
+    refreshSystemPrompt,
   }: AgentOptions,
 ): Promise<string> {
   if (skillListing) {
@@ -210,6 +222,33 @@ export async function runAgent(
   const activeTools = { ...tools };
   const pool = deferredToolPool ? { ...deferredToolPool } : undefined;
   const toolPolicy: ConcurrencyPolicyFn = concurrencyPolicy ?? (() => false);
+  let activeSystemPrompt = systemPrompt;
+  let planBuildPending = false;
+
+  const applyPermissionModeRefresh = (newMode: string) => {
+    if (refreshTools) {
+      syncToolSet(activeTools, refreshTools());
+      console.log(
+        `[agent] refreshed tools for mode=${newMode}: ${Object.keys(activeTools).join(", ")}`,
+      );
+    }
+    if (refreshSystemPrompt) {
+      activeSystemPrompt = refreshSystemPrompt();
+      console.log(`[agent] refreshed system prompt for mode=${newMode}`);
+    }
+  };
+
+  const unsubPlanReady = eventBus.on("plan_ready", (data) => {
+    if ((data as { approved?: boolean }).approved) {
+      planBuildPending = true;
+    }
+  });
+
+  const unsubMode = eventBus.on("mode_changed", (data) => {
+    const newMode = (data as { mode?: string }).mode;
+    if (!newMode) return;
+    applyPermissionModeRefresh(newMode);
+  });
 
   try {
     for (let step = 0; step < maxSteps; step++) {
@@ -221,7 +260,7 @@ export async function runAgent(
       const stepResult = await runOneStep({
         messages,
         tools: activeTools,
-        systemPrompt,
+        systemPrompt: activeSystemPrompt,
         provider,
         resolvedModel,
         eventBus,
@@ -252,6 +291,19 @@ export async function runAgent(
       }
 
       if (toolCalls.length === 0) {
+        if (planBuildPending) {
+          planBuildPending = false;
+          messages.push({
+            role: "user",
+            content: `<system-reminder>
+The user approved your plan and expects implementation to start now.
+Do not reply with a summary or status update only — call TodoWrite, Write, Edit, or Bash to make the first code change from the approved plan.
+</system-reminder>`,
+          });
+          console.log("[agent] plan approved but no tools called — forcing implementation step");
+          eventBus.emit("thinking", {});
+          continue;
+        }
         autoCompleteTodos(currentTodos, eventBus);
         eventBus.emit("done", { steps: step + 1 });
         return finalText;
@@ -265,6 +317,8 @@ export async function runAgent(
     eventBus.emit("done", { steps: maxSteps });
     return finalText;
   } finally {
+    unsubPlanReady();
+    unsubMode();
     unsubTodo();
   }
 }

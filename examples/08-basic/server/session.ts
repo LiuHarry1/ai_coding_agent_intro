@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
 import type { Session, SessionInfo, Message } from "../core/types.js";
+import { createDefaultPermissionMode } from "../core/permission-mode.js";
+import type { ExternalMode } from "../core/permission-mode.js";
 
 const SESSION_DIR = path.resolve(".sessions");
 const sessions = new Map<string, Session>();
@@ -24,10 +26,18 @@ export function createSession(): Session {
     messages: [],
     createdAt: Date.now(),
     readFileState: new Map(),
+    permissionMode: createDefaultPermissionMode(),
+    hasExitedPlanMode: false,
+    needsPlanModeExitAttachment: false,
   };
   sessions.set(id, session);
   fs.mkdirSync(SESSION_DIR, { recursive: true });
-  appendLine(id, { type: "session_created", id, createdAt: session.createdAt });
+  appendLine(id, {
+    type: "session_created",
+    id,
+    createdAt: session.createdAt,
+    permissionMode: session.permissionMode,
+  });
   return session;
 }
 
@@ -69,6 +79,7 @@ export function listSessions(): SessionInfo[] {
         createdAt: session?.createdAt,
         messageCount: session?.messages.length ?? 0,
         preview: extractPreview(session),
+        permissionMode: session?.permissionMode.mode,
       };
     })
     .sort((a: SessionInfo, b: SessionInfo) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
@@ -86,6 +97,16 @@ export function appendMessage(sessionId: string, message: Message): void {
   appendLine(sessionId, { type: "message", ...message, timestamp: Date.now() });
 }
 
+export function appendModeChange(sessionId: string, session: Session): void {
+  appendLine(sessionId, {
+    type: "mode_changed",
+    permissionMode: session.permissionMode,
+    hasExitedPlanMode: session.hasExitedPlanMode ?? false,
+    needsPlanModeExitAttachment: session.needsPlanModeExitAttachment ?? false,
+    timestamp: Date.now(),
+  });
+}
+
 function appendLine(sessionId: string, data: Record<string, unknown>): void {
   fs.mkdirSync(SESSION_DIR, { recursive: true });
   fs.appendFileSync(sessionPath(sessionId), JSON.stringify(data) + "\n");
@@ -100,11 +121,27 @@ function restoreFromDisk(id: string): Session {
     messages: [],
     createdAt: Date.now(),
     readFileState: new Map(),
+    permissionMode: createDefaultPermissionMode(),
+    hasExitedPlanMode: false,
+    needsPlanModeExitAttachment: false,
   };
 
   for (const line of lines) {
     if (line.type === "session_created") {
       session.createdAt = line.createdAt;
+      if (line.permissionMode) {
+        session.permissionMode = line.permissionMode as Session["permissionMode"];
+      }
+    } else if (line.type === "mode_changed") {
+      if (line.permissionMode) {
+        session.permissionMode = line.permissionMode as Session["permissionMode"];
+      }
+      if (typeof line.hasExitedPlanMode === "boolean") {
+        session.hasExitedPlanMode = line.hasExitedPlanMode;
+      }
+      if (typeof line.needsPlanModeExitAttachment === "boolean") {
+        session.needsPlanModeExitAttachment = line.needsPlanModeExitAttachment;
+      }
     } else if (line.type === "message") {
       const { type: _, timestamp: __, ...msg } = line;
       session.messages.push(msg as Message);

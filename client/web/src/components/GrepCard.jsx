@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import CopyButton from "./CopyButton.jsx";
 import ToolRowHeader from "./ToolRowHeader.jsx";
 import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
+import { shortDisplayPath, shortGlobPattern, truncateEnd } from "../lib/utils.js";
 
 /**
  * Cursor-style card for the `grep` tool.
@@ -126,12 +127,23 @@ export default function GrepCard({ part }) {
   const [expanded, toggleExpanded] = useStreamingExpanded(!isDone);
 
   const pattern = args.pattern || "";
+  const displayPattern = pattern ? truncateEnd(pattern, 44) : "";
   const filterBits = [];
-  if (args.glob) filterBits.push(args.glob);
+  const shortGlob = shortGlobPattern(args.glob);
+  const shortPath = args.path && args.path !== "." ? shortDisplayPath(args.path) : null;
+  if (shortGlob) filterBits.push(shortGlob);
   if (args.type) filterBits.push(`type:${args.type}`);
-  if (args.path && args.path !== ".") filterBits.push(args.path);
+  if (shortPath) filterBits.push(shortPath);
 
-  // Subtitle = filters · result-count summary.
+  const filterTooltip = [
+    args.glob && `glob: ${args.glob}`,
+    args.type && `type: ${args.type}`,
+    args.path && args.path !== "." && `path: ${args.path}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  // Count sits in `meta` so it stays visible when filters are long.
   let countLabel = null;
   if (isDone && !isError) {
     if (parsed.kind === "files") {
@@ -147,9 +159,7 @@ export default function GrepCard({ part }) {
       countLabel = parsed.summary?.replace(/\.$/, "").replace(/^Found\s+/, "") || null;
     }
   }
-  const subtitleParts = [];
-  if (filterBits.length > 0) subtitleParts.push(filterBits.join(" \u00B7 "));
-  if (countLabel) subtitleParts.push(countLabel);
+  const subtitle = filterBits.length > 0 ? filterBits.join(" \u00B7 ") : null;
 
   const emptyHint =
     isDone && !isError && (parsed.empty || parsed.kind === "empty")
@@ -163,9 +173,11 @@ export default function GrepCard({ part }) {
         onToggle={toggleExpanded}
         showChevron={false}
         label="Grepped"
-        title={pattern ? `\u201C${pattern}\u201D` : "grep\u2026"}
-        titleTooltip={pattern}
-        subtitle={subtitleParts.length > 0 ? subtitleParts.join(" \u00B7 ") : null}
+        title={displayPattern ? `\u201C${displayPattern}\u201D` : "grep\u2026"}
+        titleTooltip={[pattern && `pattern: ${pattern}`, filterTooltip].filter(Boolean).join("\n") || undefined}
+        subtitle={subtitle}
+        subtitleTooltip={filterTooltip || undefined}
+        meta={countLabel ? <span className="grep-count-label">{countLabel}</span> : null}
         duration={part.duration}
         isDone={isDone}
         isError={isError}

@@ -22,4 +22,25 @@ export const agentApi = {
       body: JSON.stringify(body),
       signal,
     }),
+
+  answerQuestion: (body) =>
+    fetchJSON("/ask_user_question/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  approvePlan: (body) =>
+    fetchJSON("/plan/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  setSessionMode: (body) =>
+    fetchJSON("/session/mode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 };

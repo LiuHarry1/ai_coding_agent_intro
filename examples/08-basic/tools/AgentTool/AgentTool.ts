@@ -140,6 +140,16 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           if (!def) {
             return `Error: unknown subagent_type '${subagent_type}'. Valid: ${validTypes.join(", ")}`;
           }
+
+          if (context.session?.permissionMode.mode === "plan") {
+            const allowedInPlan = new Set([EXPLORE_AGENT_TYPE, PLAN_AGENT_TYPE]);
+            if (!allowedInPlan.has(subagent_type)) {
+              return (
+                `Error: plan mode only allows ${EXPLORE_AGENT_TYPE} (Phase 1) and ` +
+                `${PLAN_AGENT_TYPE} (Phase 2) subagents. Got '${subagent_type}'.`
+              );
+            }
+          }
           if (!runAgent || !registry) {
             return `Error: task tool requires runAgent + registry in ToolContext`;
           }

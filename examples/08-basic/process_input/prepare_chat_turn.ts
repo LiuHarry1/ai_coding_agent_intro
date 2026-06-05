@@ -1,8 +1,9 @@
 /**
  * Prepare a chat turn before runAgent — CC: processUserInput pipeline.
- * Slash resolution, per-request registry reload, tools, @-attachments.
+ * Slash resolution, per-request registry reload, tools, @-attachments, mode restrictions.
  */
 import { dispatchSlashCommand } from "../commands/dispatcher.js";
+import { resolvePlanSlash } from "../commands/plan.js";
 import { registerSubagents, getSubagentNames } from "../tools/AgentTool/index.js";
 import { registerSkills, formatSkillListing } from "../skills/index.js";
 import { loadProjectRules } from "../core/rules-loader.js";
@@ -11,6 +12,11 @@ import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
 import { createToolSearchDefinition } from "../tools/tool_search.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../constants/tool_names.js";
 import { buildAttachmentMessages } from "../utils/attachments/index.js";
+import { buildPlanModeAttachments } from "../utils/attachments/plan-mode.js";
+import { applyModeRestrictions } from "../core/mode-restrictions.js";
+import { definition as enterPlanModeDef } from "../tools/enter_plan_mode.js";
+import { definition as exitPlanModeDef } from "../tools/exit_plan_mode.js";
+import { getPlanFilePath, planExists } from "../utils/plans.js";
 import type { ReadFileState } from "../utils/attachments/types.js";
 import type {
   AnyTool,
@@ -36,12 +42,26 @@ export interface SlashResolution {
   effectiveMessage: string;
   immediateReply: string | null;
   forkSkill: ForkSkillSlashResult | null;
+  modeChanged?: boolean;
 }
 
 export async function resolveSlashCommand(
   message: string,
   cwd: string,
+  session?: Session,
 ): Promise<SlashResolution> {
+  if (session) {
+    const planSlash = resolvePlanSlash(message, session, cwd);
+    if (planSlash.handled) {
+      return {
+        effectiveMessage: planSlash.effectiveMessage ?? message,
+        immediateReply: planSlash.immediateReply ?? null,
+        forkSkill: null,
+        modeChanged: planSlash.modeChanged,
+      };
+    }
+  }
+
   const slashResult = await dispatchSlashCommand(message, { cwd });
   let effectiveMessage = message;
   let immediateReply: string | null = null;
@@ -72,12 +92,18 @@ export interface PreparedChatTurn {
   immediateReply: string | null;
   forkSkill: SlashResolution["forkSkill"];
   tools: Record<string, AnyTool>;
+  /** Tools before mode filtering — used to refresh when mode changes mid-turn. */
+  baseTools: Record<string, AnyTool>;
+  modeTools: Record<string, AnyTool>;
   deferredToolPool?: Record<string, AnyTool>;
   skillListing?: string;
   projectRules: string;
   attachmentMessages: Message[];
   subagentNames: Set<string>;
   concurrencyPolicy: ReturnType<typeof buildConcurrencyPolicy>;
+  permissionMode: Session["permissionMode"]["mode"];
+  planFilePath: string;
+  modeChanged?: boolean;
 }
 
 export interface PrepareChatTurnInput {
@@ -107,7 +133,7 @@ export async function prepareChatTurn(
     runAgent,
   } = input;
 
-  const slash = await resolveSlashCommand(message, cwd);
+  const slash = await resolveSlashCommand(message, cwd, session);
 
   const { activeAgents } = await registerSubagents(registry, cwd);
   const candidateFiles = extractFilePathCandidates(slash.effectiveMessage);
@@ -134,6 +160,8 @@ export async function prepareChatTurn(
     mcpTools: mcpManager.getAllTools(),
     toolEnablement,
     sessionId: session.id,
+    session,
+    cwd,
   };
 
   const { active, deferred, deferredDefs } = (registry as ToolRegistry).createSplit(
@@ -148,7 +176,18 @@ export async function prepareChatTurn(
     active[TOOL_SEARCH_TOOL_NAME] = tsearchDef.create(cwd, toolContext);
   }
 
-  const tools = filterToolsByEnablement(active, registry, toolEnablement);
+  const enablementFiltered = filterToolsByEnablement(active, registry, toolEnablement);
+
+  const modeTools: Record<string, AnyTool> = {
+    [enterPlanModeDef.name]: enterPlanModeDef.create(cwd, toolContext),
+    [exitPlanModeDef.name]: exitPlanModeDef.create(cwd, toolContext),
+  };
+
+  const tools = applyModeRestrictions(
+    session.permissionMode.mode,
+    enablementFiltered,
+    modeTools,
+  );
 
   const reminderParts: string[] = [];
   if (activeSkills.length > 0) {
@@ -170,7 +209,7 @@ export async function prepareChatTurn(
     reminderParts.length > 0 ? reminderParts.join("\n\n") : undefined;
 
   console.log(
-    `[server] tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ""}`,
+    `[server] mode=${session.permissionMode.mode} tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ""}`,
   );
 
   if (!session.readFileState) {
@@ -178,17 +217,23 @@ export async function prepareChatTurn(
   }
   const readFileState = session.readFileState as ReadFileState;
 
-  let attachmentMessages: Message[] = [];
+  const attachmentMessages: Message[] = [];
+
+  attachmentMessages.push(
+    ...buildPlanModeAttachments(session, cwd, session.permissionMode.mode),
+  );
+
   if (slash.effectiveMessage && !slash.immediateReply) {
     try {
-      attachmentMessages = await buildAttachmentMessages(
+      const atAttachments = await buildAttachmentMessages(
         cwd,
         slash.effectiveMessage,
         readFileState,
       );
-      if (attachmentMessages.length > 0) {
+      attachmentMessages.push(...atAttachments);
+      if (atAttachments.length > 0) {
         console.log(
-          `[server] @-attachments: ${attachmentMessages.length} message(s) from input`,
+          `[server] @-attachments: ${atAttachments.length} message(s) from input`,
         );
       }
     } catch (err) {
@@ -198,11 +243,15 @@ export async function prepareChatTurn(
     }
   }
 
+  const planFilePath = getPlanFilePath(session, cwd);
+
   return {
     effectiveMessage: slash.effectiveMessage,
     immediateReply: slash.immediateReply,
     forkSkill: slash.forkSkill,
     tools,
+    baseTools: enablementFiltered,
+    modeTools,
     deferredToolPool:
       Object.keys(deferred).length > 0 ? deferred : undefined,
     skillListing,
@@ -210,5 +259,8 @@ export async function prepareChatTurn(
     attachmentMessages,
     subagentNames: getSubagentNames(registry),
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(tools)),
+    permissionMode: session.permissionMode.mode,
+    planFilePath,
+    modeChanged: slash.modeChanged,
   };
 }

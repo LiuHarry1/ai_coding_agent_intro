@@ -7,6 +7,41 @@ export function fileName(filePath) {
   return parts[parts.length - 1];
 }
 
+/** Truncate at the end — good for regex patterns and globs. */
+export function truncateEnd(str, maxLen) {
+  if (!str || str.length <= maxLen) return str;
+  return `${str.slice(0, maxLen - 1)}…`;
+}
+
+/** Show a compact path: last 1–2 segments, or basename when very long. */
+export function shortDisplayPath(filePath, maxLen = 36) {
+  if (!filePath) return null;
+  const norm = String(filePath).replace(/\\/g, "/");
+  if (norm.length <= maxLen) return norm;
+  const parts = norm.split("/").filter(Boolean);
+  if (parts.length >= 2) {
+    const tail = parts.slice(-2).join("/");
+    if (tail.length <= maxLen) return tail;
+  }
+  const base = parts[parts.length - 1] || norm;
+  return base.length <= maxLen ? base : truncateEnd(base, maxLen);
+}
+
+/** Summarize long or negated glob strings for tool-row headers. */
+export function shortGlobPattern(glob, maxLen = 28) {
+  if (!glob) return null;
+  const g = glob.trim();
+  if (g.length <= maxLen) return g;
+  if (g.startsWith("![")) {
+    const count = g.slice(2).replace(/\]$/, "").split(",").filter(Boolean).length;
+    return count > 1 ? `${count} exclusions` : truncateEnd(g, maxLen);
+  }
+  if (g.startsWith("!")) return truncateEnd(g, maxLen);
+  const parts = g.split(/[\s,]+/).filter(Boolean);
+  if (parts.length > 1) return `${parts.length} patterns`;
+  return truncateEnd(g, maxLen);
+}
+
 /**
  * Format a timestamp to relative time string.
  */

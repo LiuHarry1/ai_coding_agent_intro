@@ -1,5 +1,6 @@
 import React, { useRef, useCallback, useState, useEffect, useMemo } from "react";
 import { useChatStore } from "../stores/chat-store.js";
+import ModePicker from "./ModePicker.jsx";
 import { agentApi } from "../lib/api/agent.js";
 import { workspaceApi } from "../lib/api/workspace.js";
 import {
@@ -68,11 +69,19 @@ function groupEntries(matches) {
   return groups;
 }
 
+const MODE_PLACEHOLDERS = {
+  agent: "Describe your task… @file",
+  ask: "Ask about your codebase…",
+  plan: "Plan your implementation…",
+};
+
 export default function InputArea() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const workspace = useChatStore((s) => s.workspace);
+  const agentMode = useChatStore((s) => s.agentMode);
+  const cycleAgentMode = useChatStore((s) => s.cycleAgentMode);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const [images, setImages] = useState([]);
@@ -315,6 +324,12 @@ export default function InputArea() {
         }
       }
 
+      if (e.key === "Tab" && e.shiftKey && !showSlashMenu && !showAtMenu) {
+        e.preventDefault();
+        cycleAgentMode();
+        return;
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -330,6 +345,7 @@ export default function InputArea() {
       atIndex,
       applyAtSelection,
       handleSend,
+      cycleAgentMode,
     ],
   );
 
@@ -473,7 +489,7 @@ export default function InputArea() {
           ))}
         </div>
       )}
-      <div className={`input-wrapper ${images.length > 0 ? "has-images" : ""}`}>
+      <div className={`input-wrapper input-wrapper--${agentMode} ${images.length > 0 ? "has-images" : ""}`}>
         {images.length > 0 && (
           <div className="image-preview-bar">
             {images.map((src, i) => (
@@ -485,12 +501,14 @@ export default function InputArea() {
           </div>
         )}
         <div className="input-row">
+          <ModePicker />
           <button
             className="attach-btn"
             onClick={() => fileInputRef.current?.click()}
             title="Attach image"
+            type="button"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
               <circle cx="8.5" cy="8.5" r="1.5" />
               <polyline points="21 15 16 10 5 21" />
@@ -508,7 +526,8 @@ export default function InputArea() {
             ref={textareaRef}
             className="input-textarea"
             rows="1"
-            placeholder="Describe your task… @file to attach · / for commands"
+            placeholder={MODE_PLACEHOLDERS[agentMode] ?? MODE_PLACEHOLDERS.agent}
+            title="Enter to send · Shift+Tab switch mode · Shift+Enter newline"
             value={inputValue}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
@@ -519,23 +538,26 @@ export default function InputArea() {
             autoFocus
           />
           {isStreaming ? (
-            <button className="stop-btn" onClick={stopStreaming} title="Stop">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <button className="composer-btn composer-btn--stop" onClick={stopStreaming} title="Stop" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="6" width="12" height="12" rx="2" />
               </svg>
             </button>
           ) : (
-            <button className="send-btn" onClick={handleSend} title="Send">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            <button
+              className="composer-btn composer-btn--send"
+              onClick={handleSend}
+              title="Send (Enter)"
+              type="button"
+              disabled={!inputValue.trim() && images.length === 0}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
               </svg>
             </button>
           )}
         </div>
-      </div>
-      <div className="input-hint">
-        Enter to send · Shift+Enter newline · @path attaches file · drag files to @mention
       </div>
       {dragOver && (
         <div className="drop-overlay">

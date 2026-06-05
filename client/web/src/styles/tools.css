@@ -741,6 +741,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  flex: 0 1 auto;
+  max-width: 42%;
   /* For bash, the "title" is the full command which is plain mono text,
      not a filename — components can override color via a modifier class. */
 }
@@ -748,7 +750,18 @@
 .tool-row-subtitle {
   color: #6e7681;
   font-size: 11px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 32%;
+}
+.grep-count-label {
+  font-size: 11px;
+  color: #6e7681;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 .tool-row-spacer { flex: 1; }
 .tool-row-duration {
