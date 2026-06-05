@@ -4,6 +4,7 @@ import ToolRowHeader from "./ToolRowHeader.jsx";
 import { formatBytes } from "../lib/utils.js";
 import { parseMcpToolName } from "../lib/tool-kind.js";
 import { normalizeFetchResult, compactFetchError } from "../lib/fetch-result.js";
+import { useStreamingExpanded } from "../lib/use-streaming-expanded.js";
 
 /**
  * Dedicated card for URL-fetch tools:
