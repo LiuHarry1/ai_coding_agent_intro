@@ -35,6 +35,21 @@ const PROJECT_HINTS = [
     label: "Tetris",
     prompt: "Create a Tetris game in a single HTML file with embedded CSS and JavaScript. Include: all 7 tetromino shapes with colors, rotation, soft/hard drop, line clearing with animation, score and level system, next piece preview, and keyboard controls (arrows + up to rotate). Modern neon-style dark UI.",
   },
+  {
+    icon: "\u{1F3D3}",
+    label: "Pong",
+    prompt: "Create a Pong game using a single HTML file with embedded CSS and JavaScript. Include: canvas-based rendering, two paddles (W/S vs arrow keys), ball physics with angle-based bounces, score tracking to 10, serve after each point, and a retro arcade dark UI. Make it immediately playable by opening the HTML file.",
+  },
+  {
+    icon: "\u{1F522}",
+    label: "2048",
+    prompt: "Create a 2048 puzzle game using a single HTML file with embedded CSS and JavaScript. Include: 4x4 grid, arrow key controls, tile merge animation, score and best score (localStorage), win at 2048 with continue option, and game over detection. Clean modern UI with colored tiles.",
+  },
+  {
+    icon: "\u{1F4AC}",
+    label: "Chatbot",
+    prompt: "Create a chatbot web app using a single HTML file with embedded CSS and JavaScript. Connect to an OpenAI-compatible API at base URL http://localhost:4141/v1 with apiKey 'dummy' and model 'gpt-4'. Include: chat message history, user input with send button, Enter to send, loading indicator while waiting, markdown rendering for assistant replies, and clear error messages on API failure. Make it immediately usable by opening the HTML file.",
+  },
 ];
 
 export default function WelcomeScreen() {
@@ -60,7 +75,7 @@ export default function WelcomeScreen() {
       </div>
 
       <div className="hint-section">
-        <span className="hint-section-label">Build a mini game</span>
+        <span className="hint-section-label">Build a mini game or app</span>
         <div className="hint-grid hint-grid--3col">
           {PROJECT_HINTS.map((h, i) => (
             <button key={i} className="hint-card hint-card--compact" onClick={() => sendMessage(h.prompt)}>
