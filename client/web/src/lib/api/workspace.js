@@ -16,15 +16,20 @@ const json = (body) => ({
 export const workspaceApi = {
   getRoot: () => fetchJSON("/workspace"),
 
-  listDir: (dir) => fetchJSON(`/workspace/list?dir=${encodeURIComponent(dir)}`),
+  listDir: (dir, showHidden = false) => {
+    const params = new URLSearchParams({ dir });
+    if (showHidden) params.set("showHidden", "1");
+    return fetchJSON(`/workspace/list?${params}`);
+  },
 
   /** @-mention autocomplete — fuzzy search over workspace files. */
-  searchFiles: (q, dir, limit = 15) => {
+  searchFiles: (q, dir, limit = 15, showHidden = false) => {
     const params = new URLSearchParams({
       q,
       limit: String(limit),
     });
     if (dir) params.set("dir", dir);
+    if (showHidden) params.set("showHidden", "1");
     return fetchJSON(`/workspace/search?${params}`);
   },
 

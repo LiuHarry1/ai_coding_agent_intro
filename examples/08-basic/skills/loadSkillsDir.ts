@@ -298,8 +298,11 @@ function getProjectSkillsDirsUpToHome(cwd: string): string[] {
 }
 
 /**
- * Scan user + project skill directories for skill folders. Project skills
- * (closer to cwd) override shallower ones, which override user skills,
+ * Scan user + project skill directories for skill folders.
+ *
+ * Precedence (highest wins on duplicate name):
+ *   1. `<cwd>/.ai-agent/skills/` and ancestors up to home (workspace/project)
+ *   2. `~/.ai-agent/skills/` (user / root-level baked config)
  *
  * This is intentionally unmemoized — the router calls it per chat request
  * so a user editing a SKILL.md sees the change on the next message

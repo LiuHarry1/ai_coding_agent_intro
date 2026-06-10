@@ -20,6 +20,12 @@ import {
  * inline input row inside the directory. The actual filesystem write goes
  * through `workspaceApi.createFile / createFolder` from the store.
  */
+const APP_CONFIG_DIR = ".ai-agent";
+
+function isHiddenTreeEntry(name) {
+  return name.startsWith(".") && name !== APP_CONFIG_DIR;
+}
+
 export default function FileTree({ rootPath }) {
   const expandDir = useWorkspaceIdeStore((s) => s.expandDir);
   const deleteEntry = useWorkspaceIdeStore((s) => s.deleteEntry);
@@ -69,6 +75,7 @@ function DirNode({ dirPath, depth, isWorkspaceRoot = false, onContextMenu }) {
 
   const name = fileName(dirPath) || dirPath;
   const showInlineRow = pendingNew && pendingNew.parentDir === dirPath;
+  const isHidden = isHiddenTreeEntry(name);
 
   const handleAction = (kind) => (e) => {
     e.stopPropagation();
@@ -109,7 +116,7 @@ function DirNode({ dirPath, depth, isWorkspaceRoot = false, onContextMenu }) {
   return (
     <>
       <div
-        className={`tree-row tree-dir ${dragOver ? "tree-drop-target" : ""}`}
+        className={`tree-row tree-dir ${dragOver ? "tree-drop-target" : ""} ${isHidden ? "tree-hidden-entry" : ""}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={() => toggleDir(dirPath)}
         onContextMenu={
@@ -214,10 +221,11 @@ function FileRow({ entry, depth, onContextMenu }) {
   const isActive = useWorkspaceIdeStore((s) => s.activeFile === entry.path);
   const isDirty = useWorkspaceIdeStore((s) => Boolean(s.fileContents[entry.path]?.dirty));
   const openFile = useWorkspaceIdeStore((s) => s.openFile);
+  const isHidden = isHiddenTreeEntry(entry.name);
 
   return (
     <div
-      className={`tree-row tree-file ${isActive ? "active" : ""}`}
+      className={`tree-row tree-file ${isActive ? "active" : ""} ${isHidden ? "tree-hidden-entry" : ""}`}
       style={{ paddingLeft: 8 + depth * 14 + 12 /* chevron gutter */ }}
       onClick={() => openFile(entry.path)}
       onContextMenu={(e) =>

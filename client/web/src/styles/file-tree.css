@@ -75,6 +75,19 @@
 .tree-empty:hover,
 .tree-loading:hover { background: transparent; }
 
+.tree-hidden-entry .tree-name {
+  opacity: 0.72;
+  font-style: italic;
+}
+
+.icon-btn--active {
+  color: var(--accent);
+  background: rgba(88, 166, 255, 0.12);
+}
+[data-theme="light"] .icon-btn--active {
+  background: rgba(9, 105, 218, 0.12);
+}
+
 [data-theme="light"] .tree-file.active { background: rgba(9, 105, 218, 0.12); }
 [data-theme="light"] .tree-file.active:hover { background: rgba(9, 105, 218, 0.18); }
 

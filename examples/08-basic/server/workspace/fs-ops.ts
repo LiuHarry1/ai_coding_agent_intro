@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { WALK_IGNORE_DIR_NAMES } from "../../constants/file_filters.js";
+import { shouldListDirEntry } from "./list-filter.js";
 
 const MAX_FILE_PREVIEW_BYTES = 2 * 1024 * 1024; // 2 MB cap for file viewer
 
@@ -25,13 +26,19 @@ export interface ReadFileResult {
   mtimeMs: number;
 }
 
-export function listDir(dir: string): ListDirResult {
+export interface ListDirOptions {
+  /** When true, include dotfiles/dotdirs (`.ai-agent` is always shown). */
+  showHidden?: boolean;
+}
+
+export function listDir(dir: string, options: ListDirOptions = {}): ListDirResult {
+  const showHidden = options.showHidden ?? false;
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
     return { dir, parent: path.dirname(dir), entries: [] };
   }
   const raw = fs.readdirSync(dir, { withFileTypes: true });
   const entries: DirEntry[] = raw
-    .filter((d) => !d.name.startsWith("."))
+    .filter((d) => shouldListDirEntry(d.name, showHidden))
     .map((d) => ({ name: d.name, isDir: d.isDirectory(), path: path.join(dir, d.name) }))
     .sort((a, b) => (a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name)));
   return { dir, parent: path.dirname(dir), entries };
@@ -168,6 +175,7 @@ const INDEX_TTL_MS = 30_000;
 
 let fileIndexCache: {
   root: string;
+  showHidden: boolean;
   builtAt: number;
   entries: FileSearchEntry[];
 } | null = null;
@@ -176,7 +184,7 @@ function toPosixRel(root: string, abs: string): string {
   return path.relative(root, abs).split(path.sep).join("/");
 }
 
-function buildFileIndex(root: string): FileSearchEntry[] {
+function buildFileIndex(root: string, showHidden: boolean): FileSearchEntry[] {
   const entries: FileSearchEntry[] = [];
 
   function walk(absDir: string): void {
@@ -188,7 +196,7 @@ function buildFileIndex(root: string): FileSearchEntry[] {
       return;
     }
     for (const item of items) {
-      if (item.name.startsWith(".")) continue;
+      if (!shouldListDirEntry(item.name, showHidden)) continue;
       const abs = path.join(absDir, item.name);
       const rel = toPosixRel(root, abs);
       if (item.isDirectory()) {
@@ -207,14 +215,15 @@ function buildFileIndex(root: string): FileSearchEntry[] {
   return entries;
 }
 
-function getFileIndex(root: string): FileSearchEntry[] {
+function getFileIndex(root: string, showHidden: boolean): FileSearchEntry[] {
   const now = Date.now();
   if (
     !fileIndexCache ||
     fileIndexCache.root !== root ||
+    fileIndexCache.showHidden !== showHidden ||
     now - fileIndexCache.builtAt > INDEX_TTL_MS
   ) {
-    fileIndexCache = { root, builtAt: now, entries: buildFileIndex(root) };
+    fileIndexCache = { root, showHidden, builtAt: now, entries: buildFileIndex(root, showHidden) };
   }
   return fileIndexCache.entries;
 }
@@ -242,9 +251,10 @@ export function searchFiles(
   root: string,
   query: string,
   limit = 15,
+  showHidden = false,
 ): FileSearchResult {
   const q = query.trim().toLowerCase();
-  const index = getFileIndex(root);
+  const index = getFileIndex(root, showHidden);
 
   let matches: FileSearchEntry[];
   if (!q) {

@@ -101,22 +101,24 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         return true;
       }
 
-      // GET /workspace/list?dir=
+      // GET /workspace/list?dir=&showHidden=
       if (method === "GET" && url.startsWith("/workspace/list")) {
         const params = new URL(url, `http://${req.headers.host}`).searchParams;
         const dirParam = params.get("dir") || root;
-        sendJSON(res, 200, listDir(resolvePath(dirParam, root)));
+        const showHidden = params.get("showHidden") === "1" || params.get("showHidden") === "true";
+        sendJSON(res, 200, listDir(resolvePath(dirParam, root), { showHidden }));
         return true;
       }
 
-      // GET /workspace/search?q=&dir=&limit=  (@-mention autocomplete)
+      // GET /workspace/search?q=&dir=&limit=&showHidden=  (@-mention autocomplete)
       if (method === "GET" && url.startsWith("/workspace/search")) {
         const params = new URL(url, `http://${req.headers.host}`).searchParams;
         const q = params.get("q") ?? "";
         const dirParam = params.get("dir") || root;
         const limit = Math.min(50, Math.max(1, parseInt(params.get("limit") ?? "15", 10) || 15));
+        const showHidden = params.get("showHidden") === "1" || params.get("showHidden") === "true";
         const searchRoot = resolvePath(dirParam, root);
-        sendJSON(res, 200, searchFiles(searchRoot, q, limit));
+        sendJSON(res, 200, searchFiles(searchRoot, q, limit, showHidden));
         return true;
       }
 

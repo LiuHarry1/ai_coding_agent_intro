@@ -4,7 +4,12 @@ import { fileName } from "../lib/utils.js";
 
 const STORAGE_KEY_WIDTH = "coding_agent_ide_width";
 const STORAGE_KEY_TREE_WIDTH = "coding_agent_ide_tree_width";
+const STORAGE_KEY_SHOW_HIDDEN = "coding_agent_ide_show_hidden";
 const DEFAULT_TREE_WIDTH = 260;
+
+function initialShowHidden() {
+  return localStorage.getItem(STORAGE_KEY_SHOW_HIDDEN) === "1";
+}
 
 function initialWidth() {
   const saved = parseInt(localStorage.getItem(STORAGE_KEY_WIDTH) || "0", 10);
@@ -102,11 +107,20 @@ export const useWorkspaceIdeStore = create((set, get) => ({
   },
 
   // ── File tree ────────────────────────────────────────
+  /** When true, list dotfiles/dotdirs in addition to `.ai-agent`. */
+  showHiddenFiles: initialShowHidden(),
   /** Absolute paths of directories the user has expanded. */
   expandedDirs: new Set(),
   /** listDir results keyed by absolute path. */
   dirCache: {},
 
+  toggleShowHiddenFiles: async () => {
+    const next = !get().showHiddenFiles;
+    localStorage.setItem(STORAGE_KEY_SHOW_HIDDEN, next ? "1" : "0");
+    set({ showHiddenFiles: next, dirCache: {} });
+    const paths = Array.from(get().expandedDirs);
+    await Promise.all(paths.map((p) => get().loadDir(p)));
+  },
   toggleDir: (dirPath) => {
     set((s) => {
       const next = new Set(s.expandedDirs);
@@ -132,7 +146,7 @@ export const useWorkspaceIdeStore = create((set, get) => ({
 
   loadDir: async (dirPath) => {
     try {
-      const data = await workspaceApi.listDir(dirPath);
+      const data = await workspaceApi.listDir(dirPath, get().showHiddenFiles);
       set((s) => ({ dirCache: { ...s.dirCache, [dirPath]: data } }));
     } catch (e) {
       console.error("[workspace-ide] listDir failed:", e);
