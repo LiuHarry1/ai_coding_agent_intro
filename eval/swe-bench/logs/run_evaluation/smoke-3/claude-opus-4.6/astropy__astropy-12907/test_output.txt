@@ -1,0 +1,62 @@
+/eval.sh: line 2: set: pipefail: invalid option name
++ source $'/opt/miniconda3/bin/activate\r'
+/eval.sh: line 3: /opt/miniconda3/bin/activate: No such file or directory
++ conda activate $'testbed\r'
+
+CondaError: Run 'conda init' before 'conda activate'
+
++ cd $'/testbed\r'
+/eval.sh: line 5: cd: $'/testbed\r': No such file or directory
++ git config --global --add safe.directory $'/testbed\r'
++ cd $'/testbed\r'
+/eval.sh: line 7: cd: $'/testbed\r': No such file or directory
++ git $'status\r'
+git: 'status' is not a git command. See 'git --help'.
+
+The most similar command is
+	status
++ git $'show\r'
+git: 'show' is not a git command. See 'git --help'.
+
+The most similar command is
+	show
++ git -c core.fileMode=false diff $'d16bfe05a744909de4b27f5875fe0d4ed41ce607\r'
+fatal: ambiguous argument 'd16bfe05a744909de4b27f5875fe0d4ed41ce607?': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
++ source $'/opt/miniconda3/bin/activate\r'
+/eval.sh: line 11: /opt/miniconda3/bin/activate: No such file or directory
++ conda activate $'testbed\r'
+
+CondaError: Run 'conda init' before 'conda activate'
+
++ python -m pip install -e '.[test]' $'--verbose\r'
+
+Usage:   
+  /opt/miniconda3/bin/python -m pip install [options] <requirement specifier> [package-index-options] ...
+  /opt/miniconda3/bin/python -m pip install [options] -r <requirements file> [package-index-options] ...
+  /opt/miniconda3/bin/python -m pip install [options] [-e] <vcs project url> ...
+  /opt/miniconda3/bin/python -m pip install [options] [-e] <local project path> ...
+  /opt/miniconda3/bin/python -m pip install [options] <archive url/path> ...
+
+no such option: --verbose
++ git checkout d16bfe05a744909de4b27f5875fe0d4ed41ce607 $'astropy/modeling/tests/test_separable.py\r'
+error: pathspec 'astropy/modeling/tests/test_separable.py?' did not match any file(s) known to git
++ git apply -v -
+Checking patch astropy/modeling/tests/test_separable.py...
+error: while searching for:
+p1 = models.Polynomial1D(1, name='p1')?
+?
+?
+compound_models = {?
+    'cm1': (map3 & sh1 | rot & sh1 | sh1 & sh2 & sh1,?
+            (np.array([False, False, True]),?
+
+error: patch failed: astropy/modeling/tests/test_separable.py:28
+error: astropy/modeling/tests/test_separable.py: patch does not apply
++ : '>>>>> Start Test Output'
++ pytest -rA $'astropy/modeling/tests/test_separable.py\r'
+/eval.sh: line 55: pytest: command not found
++ : '>>>>> End Test Output'
++ git checkout d16bfe05a744909de4b27f5875fe0d4ed41ce607 $'astropy/modeling/tests/test_separable.py\r'
+error: pathspec 'astropy/modeling/tests/test_separable.py?' did not match any file(s) known to git

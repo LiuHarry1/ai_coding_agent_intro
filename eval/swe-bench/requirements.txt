@@ -1,0 +1,4 @@
+swebench
+datasets
+huggingface_hub
+requests

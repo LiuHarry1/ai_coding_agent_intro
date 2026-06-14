@@ -1,0 +1,7 @@
+{
+  "instance_id": "astropy__astropy-12907",
+  "workspace": "C:\\Users\\Harry\\cursor_workspace\\ai_coding_agent_intro\\eval\\swe-bench\\workspaces\\astropy__astropy-12907",
+  "agent_url": "http://localhost:4567",
+  "status_code": 200,
+  "error": "Expecting value: line 1 column 1 (char 0)"
+}
