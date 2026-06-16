@@ -1,7 +1,7 @@
 # SWE-bench 完整流程（学习/冒烟用）
 #
 # 在项目根目录另开终端跑 `npm start` 启动 Agent，然后：
-#   conda activate py311
+#   conda activate llm_ft
 #   cd eval/swe-bench
 #   .\run_one.ps1                                   # 默认单条 sympy
 #   .\run_one.ps1 -Instances "psf__requests-3362","pallets__flask-4992" -RunId small-1

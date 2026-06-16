@@ -67,6 +67,10 @@ DEFAULT_INSTANCES = [
     "sympy__sympy-20590",
     "astropy__astropy-12907",
     "django__django-10914",
+    "pallets__flask-4992",
+    "psf__requests-3362",
+    "pylint-dev__pylint-5859",
+    ""
 ]
 
 
@@ -82,6 +86,7 @@ def git(args: list[str], cwd: Path) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=_git_env(),
     )
     if result.returncode != 0:
         raise RuntimeError(
@@ -103,6 +108,38 @@ def reset_workspace(workspace: Path, base_commit: str) -> None:
     git(["clean", "-fdx"], workspace)
 
 
+def commit_available(workspace: Path, commit: str) -> bool:
+    """True if `commit` is already present in the local object database."""
+    result = subprocess.run(
+        ["git", "cat-file", "-t", commit],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=_git_env(),
+    )
+    return result.returncode == 0 and result.stdout.strip() == "commit"
+
+
+def fetch_commit(workspace: Path, commit: str, retries: int = 3) -> None:
+    """Fetch a single commit from origin, with retries for flaky networks."""
+    last_err: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            git(["fetch", "--depth", "1", "origin", commit], workspace)
+            return
+        except RuntimeError as e:
+            last_err = e
+            if attempt < retries:
+                print(f"[prepare] fetch failed (try {attempt}/{retries}), retrying...")
+    raise RuntimeError(
+        f"git fetch --depth 1 origin {commit} failed after {retries} attempts.\n"
+        f"Check network access to github.com (proxy/VPN/firewall).\n"
+        f"Last error: {last_err}"
+    )
+
+
 def collect_patch(workspace: Path) -> str:
     """Return the workspace's git diff, normalized to Unix (LF) line endings."""
     patch = git(["diff", "--no-color"], workspace)
@@ -115,7 +152,28 @@ def collect_patch(workspace: Path) -> str:
 # --------------------------------------------------------------------------
 # Dataset & manifest
 # --------------------------------------------------------------------------
+def _datasets_cache_dir() -> Path:
+    if os.environ.get("HF_DATASETS_CACHE"):
+        return Path(os.environ["HF_DATASETS_CACHE"])
+    hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+    return hf_home / "datasets"
+
+
+def _dataset_cached() -> bool:
+    slug = DATASET.lower().replace("/", "___")
+    return (_datasets_cache_dir() / slug).is_dir()
+
+
+def _enable_hf_offline() -> None:
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+    os.environ["HF_HUB_OFFLINE"] = "1"
+
+
 def load_instances(instance_ids: list[str]) -> list[dict]:
+    offline = os.environ.get("HF_DATASETS_OFFLINE", "").lower() in ("1", "true", "yes")
+    if not offline and _dataset_cached():
+        print("[dataset] local cache found — loading offline (skip huggingface.co)")
+        _enable_hf_offline()
     ds = load_dataset(DATASET, split=SPLIT)
     by_id = {row["instance_id"]: row for row in ds}
     missing = [i for i in instance_ids if i not in by_id]
@@ -132,14 +190,45 @@ def load_manifest() -> list[dict]:
 
 def read_prediction_ids() -> list[str]:
     """Instance ids present in predictions.jsonl (preserves order)."""
+    return list(load_predictions().keys())
+
+
+def load_predictions() -> dict[str, dict]:
+    """Load predictions.jsonl as {instance_id: record}."""
     if not PREDICTIONS_PATH.exists():
-        return []
-    ids = []
+        return {}
+    preds: dict[str, dict] = {}
     for line in PREDICTIONS_PATH.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line:
-            ids.append(json.loads(line)["instance_id"])
-    return ids
+            rec = json.loads(line)
+            preds[rec["instance_id"]] = rec
+    return preds
+
+
+def load_trace(instance_id: str) -> dict | None:
+    path = TRACES_DIR / f"{instance_id}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def instance_run_complete(instance_id: str, predictions: dict[str, dict]) -> bool:
+    """True if a prior run finished successfully (trace exists, no error, prediction saved)."""
+    if instance_id not in predictions:
+        return False
+    trace = load_trace(instance_id)
+    return trace is not None and "error" not in trace
+
+
+def write_predictions(predictions: dict[str, dict], manifest: list[dict]) -> None:
+    """Write predictions.jsonl in manifest order (only instances that have a record)."""
+    RUNS.mkdir(parents=True, exist_ok=True)
+    with PREDICTIONS_PATH.open("w", encoding="utf-8") as pred_f:
+        for item in manifest:
+            iid = item["instance_id"]
+            if iid in predictions:
+                pred_f.write(json.dumps(predictions[iid]) + "\n")
 
 
 def prediction_record(instance_id: str, model_name: str, patch: str) -> str:
@@ -157,6 +246,17 @@ def patch_summary(patch: str) -> str:
     return f"{len(patch)} chars, {len(patch.splitlines())} lines"
 
 
+def filter_manifest(manifest: list[dict], instance_ids: list[str] | None) -> list[dict]:
+    """Return manifest rows for `instance_ids` (full manifest if ids omitted)."""
+    if not instance_ids:
+        return manifest
+    by_id = {item["instance_id"]: item for item in manifest}
+    missing = [iid for iid in instance_ids if iid not in by_id]
+    if missing:
+        raise SystemExit(f"Instance ids not in manifest: {missing}")
+    return [by_id[iid] for iid in instance_ids]
+
+
 # --------------------------------------------------------------------------
 # Subcommand: prepare
 # --------------------------------------------------------------------------
@@ -168,10 +268,24 @@ def clone_instance(instance: dict, retries: int = 3) -> Path:
     url = f"https://github.com/{instance['repo']}.git"
 
     if dest.exists() and (dest / ".git").exists():
-        print(f"[prepare] {iid}: workspace exists, resetting to base_commit")
-        git(["fetch", "--depth", "1", "origin", commit], dest)
-        reset_workspace(dest, commit)
-        return dest
+        if commit_available(dest, commit):
+            print(f"[prepare] {iid}: workspace exists, resetting to base_commit (local)")
+            reset_workspace(dest, commit)
+            return dest
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=dest,
+            capture_output=True,
+            env=_git_env(),
+        )
+        if head.returncode != 0:
+            print(f"[prepare] {iid}: incomplete workspace, removing and recloning")
+            shutil.rmtree(dest)
+        else:
+            print(f"[prepare] {iid}: workspace exists but commit missing, fetching from origin")
+            fetch_commit(dest, commit, retries=retries)
+            reset_workspace(dest, commit)
+            return dest
 
     if dest.exists():
         shutil.rmtree(dest)
@@ -183,12 +297,7 @@ def clone_instance(instance: dict, retries: int = 3) -> Path:
             dest.mkdir(parents=True)
             subprocess.run(["git", "init"], cwd=dest, check=True, env=_git_env())
             subprocess.run(["git", "remote", "add", "origin", url], cwd=dest, check=True, env=_git_env())
-            subprocess.run(
-                ["git", "fetch", "--depth", "1", "origin", commit],
-                cwd=dest,
-                check=True,
-                env=_git_env(),
-            )
+            fetch_commit(dest, commit, retries=1)
             git(["checkout", "FETCH_HEAD"], dest)
             return dest
         except Exception as e:
@@ -197,7 +306,11 @@ def clone_instance(instance: dict, retries: int = 3) -> Path:
             if dest.exists():
                 shutil.rmtree(dest, ignore_errors=True)
 
-    raise RuntimeError(f"Failed to prepare {iid} after {retries} attempts: {last_err}")
+    raise RuntimeError(
+        f"Failed to prepare {iid} after {retries} attempts.\n"
+        f"Check network access to github.com (proxy/VPN/firewall).\n"
+        f"Last error: {last_err}"
+    )
 
 
 def prepare(instance_ids: list[str]) -> None:
@@ -264,49 +377,91 @@ def call_agent(agent_url: str, payload: dict, timeout_sec: int) -> dict:
     return resp.json()
 
 
-def run_agent(agent_url: str, timeout_sec: int, model_name: str) -> None:
+def run_agent(
+    agent_url: str,
+    timeout_sec: int,
+    model_name: str,
+    *,
+    instance_ids: list[str] | None = None,
+    fresh: bool = False,
+) -> None:
     manifest = load_manifest()
+    to_run = filter_manifest(manifest, instance_ids)
     check_agent_health(agent_url)
     TRACES_DIR.mkdir(parents=True, exist_ok=True)
+
+    predictions = load_predictions()
+    if fresh:
+        if instance_ids:
+            for iid in instance_ids:
+                predictions.pop(iid, None)
+            print(f"[run] fresh run — re-running {len(to_run)} selected instance(s)")
+        else:
+            predictions = {}
+            print(f"[run] fresh run — re-running all {len(manifest)} instances")
+    else:
+        completed = [i["instance_id"] for i in to_run if instance_run_complete(i["instance_id"], predictions)]
+        pending = len(to_run) - len(completed)
+        if instance_ids:
+            print(f"[run] selected {len(to_run)} instance(s)")
+        if completed:
+            print(f"[run] resume — skipping {len(completed)} completed, {pending} pending")
+        elif not instance_ids:
+            print(f"[run] starting {len(to_run)} instances")
 
     def save_trace(iid: str, trace: dict) -> None:
         (TRACES_DIR / f"{iid}.json").write_text(json.dumps(trace, indent=2), encoding="utf-8")
 
-    with PREDICTIONS_PATH.open("w", encoding="utf-8") as pred_f:
-        for item in manifest:
-            iid = item["instance_id"]
-            workspace = Path(item["workspace"])
-            print(f"\n[run] === {iid} ===")
-            print(f"[run] workspace: {workspace}")
+    ran = 0
+    skipped = 0
+    for item in to_run:
+        iid = item["instance_id"]
+        workspace = Path(item["workspace"])
 
-            reset_workspace(workspace, item["base_commit"])
-
-            payload = {
-                "message": build_prompt(item["problem_statement"]),
-                "workspace": str(workspace),
-                "mode": "agent",
-                "stream": False,
-            }
-            trace = {"instance_id": iid, "workspace": str(workspace), "agent_url": agent_url}
-            try:
-                data = call_agent(agent_url, payload, timeout_sec)
-                trace["session_id"] = data.get("session_id")
-                trace["final_text"] = data.get("text", "")[:4000]
-            except Exception as e:
-                trace["error"] = str(e)
-                save_trace(iid, trace)
-                print(f"[run] {iid}: agent error — {e}")
-                continue
-
-            patch = collect_patch(workspace)
-            trace["patch_lines"] = len(patch.splitlines())
-            save_trace(iid, trace)
-
-            pred_f.write(prediction_record(iid, model_name, patch) + "\n")
-            pred_f.flush()
+        if not fresh and instance_run_complete(iid, predictions):
+            patch = predictions[iid].get("model_patch", "")
+            print(f"\n[run] === {iid} === (skipped, already done)")
             print(f"[run] {iid}: patch {patch_summary(patch)}")
+            skipped += 1
+            continue
+
+        print(f"\n[run] === {iid} ===")
+        print(f"[run] workspace: {workspace}")
+
+        reset_workspace(workspace, item["base_commit"])
+
+        payload = {
+            "message": build_prompt(item["problem_statement"]),
+            "workspace": str(workspace),
+            "mode": "agent",
+            "stream": False,
+        }
+        trace = {"instance_id": iid, "workspace": str(workspace), "agent_url": agent_url}
+        try:
+            data = call_agent(agent_url, payload, timeout_sec)
+            trace["session_id"] = data.get("session_id")
+            trace["final_text"] = data.get("text", "")[:4000]
+        except Exception as e:
+            trace["error"] = str(e)
+            save_trace(iid, trace)
+            print(f"[run] {iid}: agent error — {e}")
+            continue
+
+        patch = collect_patch(workspace)
+        trace["patch_lines"] = len(patch.splitlines())
+        save_trace(iid, trace)
+
+        predictions[iid] = {
+            "instance_id": iid,
+            "model_name_or_path": model_name,
+            "model_patch": patch,
+        }
+        write_predictions(predictions, manifest)
+        ran += 1
+        print(f"[run] {iid}: patch {patch_summary(patch)}")
 
     print(f"\n[run] predictions → {PREDICTIONS_PATH}")
+    print(f"[run] done: {len(predictions)} total ({ran} ran, {skipped} skipped)")
 
 
 # --------------------------------------------------------------------------
@@ -342,9 +497,46 @@ def print_summary(run_id: str) -> None:
         print(f"[evaluate]   unresolved: {', '.join(unresolved)}")
 
 
+def ensure_docker_host() -> None:
+    """Set DOCKER_HOST when Docker Desktop uses a non-default socket (common on macOS)."""
+    if os.environ.get("DOCKER_HOST"):
+        return
+    for sock in (
+        Path.home() / ".docker" / "run" / "docker.sock",
+        Path("/var/run/docker.sock"),
+    ):
+        if sock.exists():
+            os.environ["DOCKER_HOST"] = f"unix://{sock}"
+            return
+
+
+def check_docker() -> None:
+    """Fail fast with a clear message if the Docker daemon is not reachable."""
+    try:
+        import docker
+    except ImportError:
+        raise SystemExit(
+            "Docker Python package not installed — run `pip install -r requirements.txt`."
+        )
+
+    ensure_docker_host()
+    try:
+        client = docker.from_env()
+        client.ping()
+    except Exception as e:
+        raise SystemExit(
+            "Docker is not running or not reachable.\n"
+            "  macOS: open Docker Desktop and wait until the whale icon shows *Running*.\n"
+            "  Linux: start the docker service (e.g. `sudo systemctl start docker`).\n"
+            f"  ({e})"
+        )
+
+
 def evaluate(run_id: str, instance_ids: list[str], max_workers: int, force_rebuild: bool) -> None:
     if not PREDICTIONS_PATH.exists():
         raise SystemExit("No predictions.jsonl — run `collect` or `run` first.")
+
+    check_docker()
 
     # Default to whatever is in predictions.jsonl so the ids never have to be
     # retyped (and never silently fall back to a wrong default set).
@@ -391,6 +583,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--agent-url", default="http://localhost:4567")
     p_run.add_argument("--timeout-sec", type=int, default=3600)
     p_run.add_argument("--model-name", default=DEFAULT_MODEL_NAME)
+    p_run.add_argument(
+        "--instance-ids",
+        nargs="+",
+        default=None,
+        help="Run only these instances (default: all in manifest)",
+    )
+    p_run.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Re-run from scratch (default: resume). With --instance-ids, only those are reset",
+    )
 
     p_collect = sub.add_parser("collect", help="Collect git diff patches from workspaces")
     p_collect.add_argument("--model-name", default=DEFAULT_MODEL_NAME)
@@ -415,7 +618,13 @@ def main() -> None:
     if args.cmd == "prepare":
         prepare(args.instance_ids)
     elif args.cmd == "run":
-        run_agent(args.agent_url, args.timeout_sec, args.model_name)
+        run_agent(
+            args.agent_url,
+            args.timeout_sec,
+            args.model_name,
+            instance_ids=args.instance_ids,
+            fresh=args.fresh,
+        )
     elif args.cmd == "collect":
         collect_predictions(args.model_name)
     elif args.cmd == "evaluate":
