@@ -22,11 +22,29 @@ prepare  →  run  →  collect  →  evaluate
 | **Agent 配置** | `~/.ai-agent/config.json` 里配好 `provider`（模型地址 / model 名）。 |
 | 网络 | 首次需联网下载数据集和拉取镜像；之后可离线。 |
 
-> Windows 注意：脚本已内置两处兼容处理 —— 控制台 UTF-8 输出、以及把送进容器的 `eval.sh`/`patch.diff` 换行规范成 LF（详见末尾 FAQ）。无需手动处理。
+**macOS 注意**
+
+- 安装 [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)，菜单栏鲸鱼图标显示 *Running* 后再跑 `evaluate`。
+- Apple Silicon（M 系列）会通过 Rosetta/QEMU 拉 x86_64 镜像，首次拉取和评测会比 Intel Mac 慢一些，属正常。
+- macOS 上 git 默认 LF 换行，一般不会出现 Windows 那种 CRLF 进容器的问题。
+
+**Windows 注意**
+
+- 脚本已内置两处兼容处理 —— 控制台 UTF-8 输出、以及把送进容器的 `eval.sh`/`patch.diff` 换行规范成 LF（详见末尾 FAQ）。无需手动处理。
 
 ---
 
 ## 2. 一次性安装
+
+**macOS / Linux**
+
+```bash
+conda activate py311
+cd eval/swe-bench
+pip install -r requirements.txt
+```
+
+**Windows (PowerShell)**
 
 ```powershell
 conda activate py311
@@ -39,6 +57,23 @@ pip install -r requirements.txt
 ## 3. 启动 Agent 服务
 
 `run` 步骤通过 HTTP 调用 agent，所以先在**项目根目录**另开一个终端把它跑起来：
+
+**macOS / Linux**
+
+```bash
+# 在仓库根目录
+npm start
+# 看到 "[server] listening on http://localhost:4567" 即就绪
+```
+
+健康检查（任意终端）：
+
+```bash
+curl -s http://localhost:4567/health
+# 期望: {"status":"ok"}
+```
+
+**Windows (PowerShell)**
 
 ```powershell
 # 在仓库根目录
@@ -60,6 +95,16 @@ Invoke-WebRequest http://localhost:4567/health -UseBasicParsing
 下面命令都在 `eval/swe-bench/` 目录、`py311` 环境下执行。
 本例用一条最小官方验证用例 `sympy__sympy-20590`，`--run-id` 自取一个本次运行的名字（如 `my-1`）。
 
+**macOS / Linux**
+
+```bash
+conda activate py311
+cd eval/swe-bench
+export HF_DATASETS_OFFLINE=1   # 数据集已缓存后加这行，避免连 HuggingFace 超时
+```
+
+**Windows (PowerShell)**
+
 ```powershell
 conda activate py311
 cd eval/swe-bench
@@ -68,17 +113,18 @@ $env:HF_DATASETS_OFFLINE = "1"   # 数据集已缓存后加这行，避免连 Hu
 
 ### 第 1 步 · prepare —— 克隆仓库到 `workspaces/`
 
-```powershell
+```bash
 python run_eval.py prepare --instance-ids sympy__sympy-20590
 ```
 
 - 把每条实例的仓库浅克隆到 `workspaces/<instance_id>/` 并检出到 `base_commit`。
 - 写出 `runs/manifest.json`。
-- 多条用空格分隔：`--instance-ids id1 id2 id3`。
+- 多条用空格分隔：`--instance-ids id1 id2 id3`。  
+- sympy__sympy-20590 astropy__astropy-12907 django__django-10914 pallets__flask-4992 psf__requests-3362 pylint-dev__pylint-5859
 
 ### 第 2 步 · run —— 让 Agent 修 bug
 
-```powershell
+```bash
 python run_eval.py run --agent-url http://localhost:4567 --model-name claude-opus-4.6
 ```
 
@@ -88,7 +134,7 @@ python run_eval.py run --agent-url http://localhost:4567 --model-name claude-opu
 
 ### 第 3 步 · collect —— 收集补丁
 
-```powershell
+```bash
 python run_eval.py collect --model-name claude-opus-4.6
 ```
 
@@ -97,7 +143,7 @@ python run_eval.py collect --model-name claude-opus-4.6
 
 ### 第 4 步 · evaluate —— Docker 官方评测
 
-```powershell
+```bash
 python run_eval.py evaluate --run-id my-1 --max-workers 3
 ```
 
@@ -136,7 +182,7 @@ SWE-bench Lite 共 300 条、12 个仓库。**最轻、评测最快**的仓库�
 
 已验证可一键跑通的几条小实例：
 
-```powershell
+```bash
 python run_eval.py prepare --instance-ids pallets__flask-4992 psf__requests-3362 pylint-dev__pylint-5859
 ```
 
@@ -146,7 +192,22 @@ python run_eval.py prepare --instance-ids pallets__flask-4992 psf__requests-3362
 
 ## 7. 便捷脚本（可选）
 
-`run_one.ps1` 把四步串起来：
+### macOS / Linux — `run_one.sh`
+
+把四步串起来（用法与 Windows 版 `run_one.ps1` 相同）：
+
+```bash
+chmod +x run_one.sh   # 首次需要
+
+# 默认单条 sympy
+./run_one.sh
+
+# 自定义实例 + run-id
+./run_one.sh psf__requests-3362 pallets__flask-4992 small-1 3
+# 参数: [instance_id ...] [run_id] [max_workers]
+```
+
+### Windows — `run_one.ps1`
 
 ```powershell
 # 默认单条 sympy
@@ -162,10 +223,12 @@ python run_eval.py prepare --instance-ids pallets__flask-4992 psf__requests-3362
 
 - **`evaluate` 一直卡住不动**：通常在拉取预构建镜像（较大），属正常。可看 `logs/run_evaluation/<run-id>/<model>/<instance>/run_instance.log` 确认进度。
 - **`Agent not reachable`**：忘了 `npm start`，或端口不是 4567，用 `--agent-url` 指定。
-- **数据集下载慢/超时**：首次联网下载一次后，设置 `$env:HF_DATASETS_OFFLINE="1"` 走本地缓存。
-- **所有测试（含 PASS_TO_PASS）全失败**：多半是补丁/脚本以 CRLF 进了 Linux 容器。本仓库的 `run_harness.py` 已自动把 `.sh`/`.diff` 规范成 LF，正常情况下不会遇到。
-- **`conda` 找不到**：若 conda 不在 PATH，可直接用环境内解释器，例如
-  `& "$env:USERPROFILE\AppData\Local\anaconda3\envs\py311\python.exe" run_eval.py ...`。
+- **数据集下载慢/超时**：首次联网下载一次后，设置 `HF_DATASETS_OFFLINE=1`（macOS/Linux 用 `export`，Windows 用 `$env:HF_DATASETS_OFFLINE="1"`）走本地缓存。
+- **所有测试（含 PASS_TO_PASS）全失败（Windows）**：多半是补丁/脚本以 CRLF 进了 Linux 容器。本仓库的 `run_harness.py` 已自动把 `.sh`/`.diff` 规范成 LF，正常情况下不会遇到。
+- **Docker 报错 / 权限问题（macOS）**：确认 Docker Desktop 已启动；若提示 socket 找不到，打开 Docker Desktop 等其完全就绪后再试。
+- **`conda` 找不到**：
+  - macOS/Linux：可直接用环境内解释器，例如 `~/miniconda3/envs/py311/bin/python run_eval.py ...`（路径按你的 conda 安装位置调整）。
+  - Windows：可直接用 `& "$env:USERPROFILE\AppData\Local\anaconda3\envs\py311\python.exe" run_eval.py ...`。
 
 ---
 
@@ -175,7 +238,8 @@ python run_eval.py prepare --instance-ids pallets__flask-4992 psf__requests-3362
 eval/swe-bench/
 ├── run_eval.py      # 主入口：prepare / run / collect / evaluate 四个子命令
 ├── run_harness.py   # SWE-bench 官方 harness 的 Windows 兼容封装
-├── run_one.ps1      # 串起四步的便捷脚本
+├── run_one.sh       # [macOS/Linux] 串起四步的便捷脚本
+├── run_one.ps1      # [Windows] 串起四步的便捷脚本
 ├── requirements.txt # Python 依赖（swebench / datasets / requests）
 ├── README.md        # 本文档
 ├── workspaces/      # [生成] 克隆的仓库
