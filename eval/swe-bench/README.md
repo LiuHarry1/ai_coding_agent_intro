@@ -290,6 +290,86 @@ chmod +x run_one.sh   # 首次需要
 
 ---
 
+## 9. Mini-SWE-Agent 评估（对照基准）
+
+除了评测**本仓库自研 agent**（`run_eval.py`），也可以用 [Mini-SWE-Agent](https://github.com/SWE-agent/mini-swe-agent) 作为**标准对照组**：它在 SWE-bench 官方 Docker 镜像里跑多轮 bash agent loop，再用同一套 harness 打分。
+
+### 和 `run_eval.py` 的区别
+
+| | **run_eval.py** | **run_mini_eval.py** |
+|--|-----------------|----------------------|
+| Agent | 本仓库 HTTP agent（`npm start`） | Mini-SWE-Agent（官方 bash loop） |
+| 工作环境 | 宿主机 `workspaces/` | **每条实例一个 Docker 容器** |
+| 需要 Node.js | 是 | 否 |
+| 需要模型 API | 在 `~/.ai-agent/config.json` | LiteLLM 环境变量（见下） |
+| 产出 | `runs/predictions.jsonl` | `mini-runs/<run-id>/preds.json` |
+
+### 安装
+
+```powershell
+conda activate python3_11
+cd eval/swe-bench
+pip install -r requirements.txt
+```
+
+依赖里已包含 `mini-swe-agent` 和 `swe-rex`（Docker 环境后端）。
+
+### 配置模型 API Key
+
+Mini-SWE-Agent 通过 [LiteLLM](https://github.com/BerriAI/litellm) 调模型，在环境里设置对应 Key，例如：
+
+```powershell
+$env:ANTHROPIC_API_KEY = "sk-..."
+# 或 OpenAI: $env:OPENAI_API_KEY = "sk-..."
+```
+
+默认模型为 `anthropic/claude-sonnet-4-5-20250929`，可用 `--model` 或环境变量 `MINI_SWE_MODEL` 覆盖。
+
+### 两步流程
+
+**第 1 步 · infer** — Mini-SWE-Agent 在 Docker 里修 bug：
+
+```powershell
+python run_mini_eval.py infer `
+  --run-id mini-1 `
+  --instance-ids sympy__sympy-20590 pallets__flask-4992 `
+  --model anthropic/claude-sonnet-4-5-20250929 `
+  --workers 1
+```
+
+- 输出目录：`mini-runs/mini-1/`
+- 补丁文件：`mini-runs/mini-1/preds.json`
+- 轨迹：`mini-runs/mini-1/<instance_id>/*.traj.json`
+- **首次运行会拉取 SWE-bench 实例 Docker 镜像**，较慢属正常
+- 中断后再次执行会**跳过** `preds.json` 里已有实例；要重跑加 `--redo-existing`
+
+**第 2 步 · evaluate** — 官方 harness 打分（与 `run_eval.py evaluate` 相同）：
+
+```powershell
+python run_mini_eval.py evaluate --run-id mini-1 --max-workers 1
+```
+
+### 一键脚本
+
+```powershell
+.\run_one_mini.ps1
+.\run_one_mini.ps1 -Instances "psf__requests-3362","pallets__flask-4992" -RunId mini-small-1
+```
+
+macOS / Linux：`./run_one_mini.sh`（用法同 `run_one.sh`）
+
+### 调试单条（交互模式）
+
+安装后可直接用官方 CLI 调试一条（不产出 `preds.json`）：
+
+```powershell
+mini-extra swebench-single --subset lite --split test -i sympy__sympy-20590 -m anthropic/claude-sonnet-4-5-20250929
+```
+
+文档：[mini-swe-agent.com — SWE-bench](https://mini-swe-agent.com/latest/usage/swebench/)
+
+---
+
 ## 文件结构
 
 ```
