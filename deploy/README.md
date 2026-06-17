@@ -226,14 +226,62 @@ Optional tuning on the `agent` service:
 Rebuild the **web** image after changing `nginx.conf`; rebuild the
 **tenant** image after agent code changes.
 
-## Auth — currently OFF
+## Auth — optional password gate (HTTP Basic Auth)
 
-Both containers assume a trusted boundary. The agent's `bash` tool runs
-arbitrary shell as the container user — **don't expose port 8080 to the
-internet** without first:
+The `web` image ships an **optional password gate** enforced by nginx. It
+sits in front of *everything* the browser can reach — the UI, the agent
+API proxy (`/chat`, `/sessions`, …) and the `/preview/*` routes — so no
+request reaches the coding agent until the visitor authenticates.
 
-1. Adding API-key middleware in `examples/08-basic/server/router.ts` (or
-   delegating to nginx via `if ($http_x_api_key != $expected) { return 401; }`).
+### Enable it
+
+Set `WEB_PASSWORD` (and optionally `WEB_USERNAME`) when bringing the stack
+up. The simplest way is a `.env` file beside `docker-compose.yml`:
+
+```bash
+WEB_USERNAME=admin        # optional, defaults to "admin"
+WEB_PASSWORD=super-secret # set this → login required; leave empty → open
+```
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+Open `http://localhost:9999` and the browser prompts for the
+username/password before the app loads. Enter them once and the browser
+replays the credentials on every subsequent request (page loads, `/chat`
+fetches, the SSE stream, previews) — all same-origin, so it "just works".
+
+### How it works
+
+- It's a **runtime** setting, not a build arg: the password is read from
+  the container env on startup by `deploy/web-auth.sh` (installed at
+  `/docker-entrypoint.d/40-web-auth.sh`), which hashes it with `htpasswd`
+  (bcrypt) into `/etc/nginx/.htpasswd` and writes the `auth_basic`
+  directives into `auth.inc`. nginx then includes that snippet at server
+  scope (see `nginx.conf`).
+- **Rotate the password** by changing `WEB_PASSWORD` and re-running
+  `docker compose up -d` — no image rebuild, and the secret never lands in
+  `docker history` (build args would).
+- Leaving `WEB_PASSWORD` empty produces an empty `auth.inc`, so local dev
+  stays open exactly as before.
+- `/healthz` is explicitly exempt (`auth_basic off;`) so the Docker
+  HEALTHCHECK keeps passing once a password is set.
+
+> Basic Auth protects *access*, but credentials are only base64-encoded on
+> the wire. **Always pair it with HTTPS** (terminate TLS in a
+> traefik/caddy/cloud-LB sidecar in front of nginx) when exposing the
+> stack beyond a trusted network.
+
+### Defense in depth (still recommended for internet exposure)
+
+The agent's `bash` tool runs arbitrary shell as the container user, so the
+password gate is a perimeter, not a sandbox. For anything internet-facing,
+also consider:
+
+1. A second auth layer on the API (API-key middleware in
+   `examples/08-basic/server/router.ts`, or an nginx
+   `if ($http_x_api_key != $expected) { return 401; }`).
 2. Putting the `bash` / `edit_file` / `write_file` tools on the
    `disabledTools` list in your tenant's `.ai-agent/config.json` if
    callers don't need filesystem mutation.

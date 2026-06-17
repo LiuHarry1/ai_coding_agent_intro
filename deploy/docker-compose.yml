@@ -13,7 +13,7 @@
 #        docker build -f deploy/Dockerfile.agent.example \
 #          --build-arg BASE_TAG=latest \
 #          -t ai-agent-tenant:latest \
-#          .
+#          deploy/tenant-example
 #
 #   3. Build the web image:
 #        docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .
@@ -61,7 +61,7 @@ services:
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
       PREVIEW_PATH_PREFIX: "/preview"
       PREVIEW_PORT_MIN: "3000"
-      PREVIEW_PORT_MAX: "9999"
+      PREVIEW_PORT_MAX: "9998"
     volumes:
       # Bind-mount the host project(s) you want the agent to operate on.
       # Edit the left side to your real path. `:rw` because the agent
@@ -79,13 +79,22 @@ services:
       start_period: 15s
 
   web:
-    image: ai-agent-web:latest
+    image: 10.150.115.69/dice-zero/ai-agent-web:latest
+    environment:
+      # ── Optional password gate ───────────────────────────────────────
+      # Set WEB_PASSWORD (host env or .env beside this file) to require a
+      # login before the UI / API / preview load. Leave it empty to keep
+      # open access. WEB_USERNAME is optional (defaults to "admin").
+      # Rotating the password = change the value + `docker compose up -d`;
+      # no image rebuild required.
+      WEB_USERNAME: "${WEB_USERNAME:-admin}"
+      WEB_PASSWORD: "${WEB_PASSWORD:-}"
     ports:
       # Host:container. Change the left side (8080) to publish on a
       # different host port. For TLS, terminate it in a sidecar in front
       # of nginx (traefik / caddy / cloud LB) — keep nginx on :80 inside
       # the container.
-      - "8080:80"
+      - "9999:80"
     depends_on:
       agent:
         condition: service_started

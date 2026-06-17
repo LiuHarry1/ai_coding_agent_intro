@@ -15,9 +15,22 @@ COPY client/web/ ./
 RUN npm run build
 
 FROM nginx:alpine
+# `htpasswd` (apache2-utils) is used by the startup script to hash the
+# optional Basic Auth password from the WEB_PASSWORD env var.
+RUN apk add --no-cache apache2-utils
 # Static assets live where nginx.conf points its `root` directive.
 COPY --from=build /ui/dist /usr/share/nginx/html
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+# Startup hook: the stock nginx entrypoint runs *.sh in this dir before
+# launching nginx. It (re)generates auth.inc from WEB_PASSWORD on every
+# `docker run` / `compose up`, so the password is a RUNTIME setting — no
+# rebuild needed to change it, and it never lands in `docker history`.
+COPY deploy/web-auth.sh /docker-entrypoint.d/40-web-auth.sh
+# Pre-create an empty include so `nginx -t` is valid before the hook runs,
+# strip any CRLF (the script may be authored on Windows), make it runnable.
+RUN touch /etc/nginx/conf.d/auth.inc \
+ && sed -i 's/\r$//' /docker-entrypoint.d/40-web-auth.sh \
+ && chmod +x /docker-entrypoint.d/40-web-auth.sh
 
 EXPOSE 80
 
