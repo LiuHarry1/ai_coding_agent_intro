@@ -1,20 +1,21 @@
 import React from "react";
 import { useChatStore } from "../stores/chat-store.js";
+import BaizeLogo from "./BaizeLogo.jsx";
 
 const TOOL_HINTS = [
   {
     icon: "\u{1F50D}",
-    label: "Explore codebase",
+    label: "Explore project",
     prompt: "Read the current directory structure, find the main entry points, and give me a brief summary of this project's architecture",
   },
   {
     icon: "\u{1F41B}",
-    label: "Debug an error",
+    label: "Fix a bug",
     prompt: "I'm getting an error in my code. Let me describe it — help me find the root cause and fix it",
   },
   {
     icon: "\u{1F4DD}",
-    label: "Refactor code",
+    label: "Improve code",
     prompt: "Read the main source files in this project and suggest refactoring improvements for better readability and maintainability",
   },
 ];
@@ -57,13 +58,15 @@ export default function WelcomeScreen() {
 
   return (
     <div className="welcome">
-      <div className="welcome-icon">&#9670;</div>
-      <h2 className="welcome-title">AI Coding Agent</h2>
+      <BaizeLogo size="lg" />
+      <h2 className="welcome-title">Baize</h2>
+      <p className="welcome-subtitle">白泽</p>
       <p className="welcome-desc">
-        Read & write files, run commands, and build complete projects.
+        Build in the cloud and preview complete projects in your browser.
       </p>
 
       <div className="hint-section">
+        <span className="hint-section-label">Work with your code</span>
         <div className="hint-grid hint-grid--3col">
           {TOOL_HINTS.map((h, i) => (
             <button key={i} className="hint-card hint-card--compact" onClick={() => sendMessage(h.prompt)}>
@@ -75,7 +78,7 @@ export default function WelcomeScreen() {
       </div>
 
       <div className="hint-section">
-        <span className="hint-section-label">Build a mini game or app</span>
+        <span className="hint-section-label">Start from a template</span>
         <div className="hint-grid hint-grid--3col">
           {PROJECT_HINTS.map((h, i) => (
             <button key={i} className="hint-card hint-card--compact" onClick={() => sendMessage(h.prompt)}>

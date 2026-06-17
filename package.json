@@ -46,8 +46,8 @@
     "typescript": "^6.0.2"
   },
   "build": {
-    "appId": "com.ai-coding-agent.desktop",
-    "productName": "Coding Agent",
+    "appId": "com.baize.desktop",
+    "productName": "Baize",
     "directories": {
       "output": "dist-desktop"
     },

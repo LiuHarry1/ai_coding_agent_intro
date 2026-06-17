@@ -55,18 +55,60 @@ function getSlashFilter(text) {
   return rest.toLowerCase();
 }
 
-const INITIAL_VISIBLE = 5;
+const INITIAL_VISIBLE = 3;
 
-/** Group flat matches into sections: Skills, Commands, Built-in. */
+/** Group matches: Skills → user Commands → Built-in. */
 function groupEntries(matches) {
-  const skills = matches.filter((e) => e.kind === "skill");
-  const commands = matches.filter((e) => e.kind === "command");
-  const builtins = matches.filter((e) => e.kind === "built-in");
+  const skills = matches
+    .filter((e) => e.kind === "skill")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const commands = matches
+    .filter((e) => e.kind === "command")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const builtins = matches
+    .filter((e) => e.kind === "built-in" && e.name !== "commands")
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const groups = [];
-  if (skills.length > 0) groups.push({ label: "Skills", items: skills });
-  if (commands.length > 0) groups.push({ label: "Commands", items: commands });
-  if (builtins.length > 0) groups.push({ label: "Built-in", items: builtins });
+  if (skills.length > 0) groups.push({ label: "Skills", icon: "skill", items: skills });
+  if (commands.length > 0) groups.push({ label: "Commands", icon: "command", items: commands });
+  if (builtins.length > 0) groups.push({ label: "Built-in", icon: "command", items: builtins });
   return groups;
+}
+
+/** Flat navigable rows for keyboard + mouse (items, show more, show less). */
+function rowFromSectionRow(section, row) {
+  if (row.kind === "item") {
+    return {
+      kind: "item",
+      groupLabel: section.label,
+      groupIcon: section.icon,
+      entry: row.entry,
+    };
+  }
+  if (row.kind === "more") {
+    return { kind: "more", groupLabel: section.label, count: row.count };
+  }
+  return { kind: "less", groupLabel: section.label };
+}
+
+function clearSlashToken(value) {
+  return value.replace(/^\s*\/[^\s\n]*/, "");
+}
+
+function SlashMenuIcon({ type }) {
+  if (type === "skill") {
+    return (
+      <svg className="slash-menu__icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="slash-menu__icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+    </svg>
+  );
 }
 
 const MODE_PLACEHOLDERS = {
@@ -84,6 +126,8 @@ export default function InputArea() {
   const cycleAgentMode = useChatStore((s) => s.cycleAgentMode);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const slashMenuRef = useRef(null);
+  const slashActiveRef = useRef(null);
   const [images, setImages] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const [lightbox, setLightbox] = useState(null);
@@ -125,7 +169,8 @@ export default function InputArea() {
     );
   }, [slashEntries, slashFilter]);
 
-  const showSlashMenu = slashFilter !== null && slashMatches.length > 0;
+  const showSlashMenu =
+    slashFilter !== null && slashEntries.length > 0 && slashMatches.length > 0;
 
   const atToken = useMemo(() => {
     if (showSlashMenu) return null;
@@ -137,20 +182,57 @@ export default function InputArea() {
 
   const slashGroups = useMemo(() => groupEntries(slashMatches), [slashMatches]);
 
-  const flatVisible = useMemo(() => {
-    const flat = [];
-    for (const g of slashGroups) {
-      const expanded = expandedSections.has(g.label);
-      const shown = expanded ? g.items : g.items.slice(0, INITIAL_VISIBLE);
-      for (const item of shown) flat.push(item);
-    }
-    return flat;
+  const { slashMenuSections, slashMenuRows } = useMemo(() => {
+    let flatIdx = 0;
+    const sections = slashGroups.map((group) => {
+      const expanded = expandedSections.has(group.label);
+      const shown = expanded ? group.items : group.items.slice(0, INITIAL_VISIBLE);
+      const hiddenCount = group.items.length - shown.length;
+      const rows = [];
+
+      for (const entry of shown) {
+        rows.push({ kind: "item", flatIdx: flatIdx++, entry });
+      }
+      if (hiddenCount > 0) {
+        rows.push({ kind: "more", flatIdx: flatIdx++, count: hiddenCount });
+      } else if (expanded && group.items.length > INITIAL_VISIBLE) {
+        rows.push({ kind: "less", flatIdx: flatIdx++ });
+      }
+
+      return { label: group.label, icon: group.icon, rows };
+    });
+
+    const rows = sections.flatMap((section) =>
+      section.rows.map((row) => rowFromSectionRow(section, row)),
+    );
+    return { slashMenuSections: sections, slashMenuRows: rows };
   }, [slashGroups, expandedSections]);
 
+  const toggleSlashSection = useCallback((groupLabel, expand) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (expand) next.add(groupLabel);
+      else next.delete(groupLabel);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
+    if (slashFilter === null) {
+      setSlashIndex(0);
+      setExpandedSections(new Set());
+      return;
+    }
     setSlashIndex(0);
-    setExpandedSections(new Set());
-  }, [slashFilter, slashMatches.length]);
+  }, [slashFilter]);
+
+  useEffect(() => {
+    setSlashIndex((i) => Math.min(i, Math.max(0, slashMenuRows.length - 1)));
+  }, [slashMenuRows.length]);
+
+  useEffect(() => {
+    slashActiveRef.current?.scrollIntoView({ block: "nearest" });
+  }, [slashIndex, slashMenuRows]);
 
   useEffect(() => {
     setAtIndex(0);
@@ -219,6 +301,30 @@ export default function InputArea() {
     handleInput({ target: el });
   }, [handleInput]);
 
+  const activateSlashRow = useCallback(
+    (row) => {
+      if (row.kind === "item") {
+        applySlashSelection(row.entry);
+      } else if (row.kind === "more") {
+        toggleSlashSection(row.groupLabel, true);
+      } else if (row.kind === "less") {
+        toggleSlashSection(row.groupLabel, false);
+      }
+    },
+    [applySlashSelection, toggleSlashSection],
+  );
+
+  const dismissSlashMenu = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const next = clearSlashToken(el.value);
+    el.value = next;
+    setInputValue(next);
+    el.focus();
+    setCursorPos(el.selectionStart ?? 0);
+    handleInput({ target: el });
+  }, [handleInput]);
+
   const applyAtSelection = useCallback(
     (entry) => {
       const el = textareaRef.current;
@@ -279,24 +385,25 @@ export default function InputArea() {
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (showSlashMenu) {
+      if (showSlashMenu && slashMenuRows.length > 0) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
-          setSlashIndex((i) => (i + 1) % flatVisible.length);
+          setSlashIndex((i) => (i + 1) % slashMenuRows.length);
           return;
         }
         if (e.key === "ArrowUp") {
           e.preventDefault();
-          setSlashIndex((i) => (i - 1 + flatVisible.length) % flatVisible.length);
+          setSlashIndex((i) => (i - 1 + slashMenuRows.length) % slashMenuRows.length);
           return;
         }
         if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
           e.preventDefault();
-          applySlashSelection(flatVisible[slashIndex]);
+          activateSlashRow(slashMenuRows[slashIndex]);
           return;
         }
         if (e.key === "Escape") {
           e.preventDefault();
+          dismissSlashMenu();
           return;
         }
       }
@@ -337,9 +444,10 @@ export default function InputArea() {
     },
     [
       showSlashMenu,
-      flatVisible,
+      slashMenuRows,
       slashIndex,
-      applySlashSelection,
+      activateSlashRow,
+      dismissSlashMenu,
       showAtMenu,
       atSuggestions,
       atIndex,
@@ -410,56 +518,73 @@ export default function InputArea() {
       onDrop={handleDrop}
     >
       {showSlashMenu && (
-        <div className="slash-menu" role="listbox">
-          {slashGroups.map((group) => {
-            const expanded = expandedSections.has(group.label);
-            const shown = expanded ? group.items : group.items.slice(0, INITIAL_VISIBLE);
-            const hiddenCount = group.items.length - shown.length;
-            return (
-              <div key={group.label} className="slash-menu__group">
-                <div className="slash-menu__section">{group.label}</div>
-                {shown.map((entry) => {
-                  const flatIdx = flatVisible.indexOf(entry);
+        <div className="slash-menu" ref={slashMenuRef} role="listbox" aria-label="Slash commands">
+          {slashMenuSections.map((section) =>
+            section.rows.length === 0 ? null : (
+              <div key={section.label} className="slash-menu__group">
+                <div className="slash-menu__section">{section.label}</div>
+                {section.rows.map((row) => {
+                  const active = row.flatIdx === slashIndex;
+                  if (row.kind === "item") {
+                    return (
+                      <button
+                        key={`${row.entry.kind}-${row.entry.name}`}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        ref={active ? slashActiveRef : undefined}
+                        className={`slash-menu__item${active ? " slash-menu__item--active" : ""}`}
+                        onMouseDown={(ev) => {
+                          ev.preventDefault();
+                          applySlashSelection(row.entry);
+                        }}
+                        onMouseEnter={() => setSlashIndex(row.flatIdx)}
+                      >
+                        <SlashMenuIcon type={section.icon} />
+                        <span className="slash-menu__label">{row.entry.name}</span>
+                      </button>
+                    );
+                  }
+                  if (row.kind === "more") {
+                    return (
+                      <button
+                        key={`more-${section.label}`}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        ref={active ? slashActiveRef : undefined}
+                        className={`slash-menu__show-more${active ? " slash-menu__show-more--active" : ""}`}
+                        onMouseDown={(ev) => {
+                          ev.preventDefault();
+                          toggleSlashSection(section.label, true);
+                        }}
+                        onMouseEnter={() => setSlashIndex(row.flatIdx)}
+                      >
+                        Show {row.count} more
+                      </button>
+                    );
+                  }
                   return (
                     <button
-                      key={entry.name}
+                      key={`less-${section.label}`}
                       type="button"
                       role="option"
-                      aria-selected={flatIdx === slashIndex}
-                      className={`slash-menu__item${flatIdx === slashIndex ? " slash-menu__item--active" : ""}`}
+                      aria-selected={active}
+                      ref={active ? slashActiveRef : undefined}
+                      className={`slash-menu__show-more${active ? " slash-menu__show-more--active" : ""}`}
                       onMouseDown={(ev) => {
                         ev.preventDefault();
-                        applySlashSelection(entry);
+                        toggleSlashSection(section.label, false);
                       }}
+                      onMouseEnter={() => setSlashIndex(row.flatIdx)}
                     >
-                      <div className="slash-menu__row-top">
-                        <span className="slash-menu__name">/{entry.name}</span>
-                        {entry.argumentHint && (
-                          <span className="slash-menu__hint">{entry.argumentHint}</span>
-                        )}
-                        {entry.context === "fork" && (
-                          <span className="slash-menu__badge">fork</span>
-                        )}
-                      </div>
-                      <div className="slash-menu__desc">{entry.description}</div>
+                      Show less
                     </button>
                   );
                 })}
-                {hiddenCount > 0 && (
-                  <button
-                    type="button"
-                    className="slash-menu__show-more"
-                    onMouseDown={(ev) => {
-                      ev.preventDefault();
-                      setExpandedSections((prev) => new Set([...prev, group.label]));
-                    }}
-                  >
-                    Show {hiddenCount} more
-                  </button>
-                )}
               </div>
-            );
-          })}
+            ),
+          )}
         </div>
       )}
       {showAtMenu && (

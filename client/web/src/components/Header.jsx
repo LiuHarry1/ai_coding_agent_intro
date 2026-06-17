@@ -5,6 +5,7 @@ import { workspaceApi } from "../lib/api/workspace.js";
 import { isDesktop, pickWorkspaceDir } from "../lib/desktop.js";
 import { authEnabled, getUser, logout } from "../lib/auth.js";
 import SessionSwitcher from "./SessionSwitcher.jsx";
+import BaizeLogo from "./BaizeLogo.jsx";
 
 export default function Header() {
   // SSO mode: the workspace is pinned server-side to the logged-in user, so
@@ -107,8 +108,8 @@ export default function Header() {
           </svg>
         </button>
         <div className="logo">
-          <div className="logo-icon">&#9670;</div>
-          <span className="logo-text">Coding Agent</span>
+          <BaizeLogo size="sm" />
+          <span className="logo-text">Baize</span>
         </div>
         <SessionSwitcher />
       </div>
