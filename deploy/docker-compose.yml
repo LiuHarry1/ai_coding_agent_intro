@@ -79,7 +79,7 @@ services:
       start_period: 15s
 
   web:
-    image: 10.150.115.69/dice-zero/ai-agent-web:latest
+    image: ai-agent-web:latest
     environment:
       # ── Optional password gate ───────────────────────────────────────
       # Set WEB_PASSWORD (host env or .env beside this file) to require a

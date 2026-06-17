@@ -26,7 +26,7 @@
 
 services:
   agent:
-    image: 10.150.115.69/dice-zero/ai-agent-tenant:latest
+    image: ai-agent-tenant:latest
     expose:
       - "4567"
     environment:
@@ -50,8 +50,8 @@ services:
       # MUST match the web service's published origin (the ${WEB_PORT} below),
       # otherwise preview links point at a port nothing is listening on.
       PREVIEW_ENABLED: "1"
-      PUBLIC_BASE_URL: "http://10.150.115.69:8090"
-      SEARXNG_URL: "http://10.150.115.69:8888"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+      SEARXNG_URL: "${SEARXNG_URL:-http://localhost:8888}"
       PREVIEW_PATH_PREFIX: "/preview"
       PREVIEW_PORT_MIN: "3000"
       PREVIEW_PORT_MAX: "9998"
@@ -68,12 +68,12 @@ services:
       start_period: 15s
 
   web:
-    image: 10.150.115.69/dice-zero/ai-agent-web:latest
+    image: ai-agent-web:latest
     environment:
       # Turns on the SPA's SSO login flow (window.__APP_CONFIG__.authEnabled).
       AUTH_ENABLED: "true"
       # External auth-service that nginx proxies /sso + /api/auth to.
-      AUTH_SERVICE_URL: "${AUTH_SERVICE_URL:-http://10.150.115.69:52320}"
+      AUTH_SERVICE_URL: "${AUTH_SERVICE_URL:-http://localhost:52320}"
       # WEB_PASSWORD intentionally unset → Basic Auth OFF (login = auth-service).
     ports:
       - "${WEB_PORT:-8090}:80"
