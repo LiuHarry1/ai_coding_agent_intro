@@ -11,6 +11,7 @@ import { createSSETransport } from "../sse-transport.js";
 import { readBody, sendJSON, wantsStreamingResponse } from "../http.js";
 import { sessionToUIMessages } from "../session-ui.js";
 import { getDefaultWorkspace } from "../../core/workspace.js";
+import type { AuthedRequest } from "../auth/identity.js";
 import { EventBus } from "../../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../../core/middleware.js";
 import { createPlanModeGuardMiddleware } from "../../middleware/plan-mode-guard.js";
@@ -55,10 +56,14 @@ export async function handleChat(
   }
 
   const wantsStream = wantsStreamingResponse(req, body);
+  // When auth is on, the workspace is pinned to the authenticated user
+  // (set by the router's auth gate); the client-supplied `workspace` is
+  // intentionally ignored so a user cannot escape their own directory.
   const cwd =
-    workspace && fs.existsSync(workspace)
+    (req as AuthedRequest).userWorkspace ??
+    (workspace && fs.existsSync(workspace)
       ? path.resolve(workspace)
-      : getDefaultWorkspace();
+      : getDefaultWorkspace());
 
   let session;
   if (session_id) {

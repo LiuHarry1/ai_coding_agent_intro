@@ -17,6 +17,12 @@ import {
 import { getPlanFilePath } from "../utils/plans.js";
 import { configManager } from "../core/config-manager.js";
 import { readBody, sendJSON, setCORS } from "./http.js";
+import {
+  authenticateRequest,
+  isAuthEnabled,
+  AuthError,
+  type AuthedRequest,
+} from "./auth/identity.js";
 import { serveStaticFile } from "./static.js";
 import { initMcpLifecycle, mcpManager } from "./mcp-lifecycle.js";
 import { handleChat } from "./routes/chat.js";
@@ -52,13 +58,28 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       return;
     }
 
+    // ── Auth gate (only when AUTH_ENABLED=true) ──────────────────────────
+    // Verifies the bearer token and pins `req.userWorkspace`. Everything
+    // below this line is protected; `/health` and OPTIONS above are not.
+    const authed = req as AuthedRequest;
+    if (isAuthEnabled()) {
+      try {
+        authenticateRequest(authed);
+      } catch (e) {
+        const err = e as AuthError;
+        sendJSON(res, err.statusCode ?? 401, { error: err.message });
+        return;
+      }
+    }
+
     if (method === "GET" && url?.startsWith("/slash-commands")) {
       const query = new URLSearchParams(url.split("?")[1] ?? "");
       const workspace = query.get("workspace");
       const cwd =
-        workspace && fs.existsSync(workspace)
+        authed.userWorkspace ??
+        (workspace && fs.existsSync(workspace)
           ? path.resolve(workspace)
-          : getDefaultWorkspace();
+          : getDefaultWorkspace());
       try {
         const entries = await listSlashCommands(cwd);
         sendJSON(res, 200, { workspace: cwd, entries });
@@ -218,9 +239,10 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
         }
 
         const cwd =
-          workspace && fs.existsSync(workspace)
+          authed.userWorkspace ??
+          (workspace && fs.existsSync(workspace)
             ? path.resolve(workspace)
-            : getDefaultWorkspace();
+            : getDefaultWorkspace());
 
         sendJSON(res, 200, {
           mode: session.permissionMode.mode,

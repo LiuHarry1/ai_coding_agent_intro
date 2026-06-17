@@ -26,11 +26,17 @@ COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 # `docker run` / `compose up`, so the password is a RUNTIME setting — no
 # rebuild needed to change it, and it never lands in `docker history`.
 COPY deploy/web-auth.sh /docker-entrypoint.d/40-web-auth.sh
-# Pre-create an empty include so `nginx -t` is valid before the hook runs,
-# strip any CRLF (the script may be authored on Windows), make it runnable.
-RUN touch /etc/nginx/conf.d/auth.inc \
- && sed -i 's/\r$//' /docker-entrypoint.d/40-web-auth.sh \
- && chmod +x /docker-entrypoint.d/40-web-auth.sh
+# Runtime SPA config (auth on/off) — regenerates app-config.js from
+# AUTH_ENABLED so one image serves every deploy mode (password/local/SSO).
+COPY deploy/web-runtime-config.sh /docker-entrypoint.d/45-web-runtime-config.sh
+# SSO reverse-proxy block — generated from AUTH_SERVICE_URL so /sso and
+# /api/auth forward to an external auth-service (empty when unset).
+COPY deploy/web-auth-proxy.sh /docker-entrypoint.d/46-web-auth-proxy.sh
+# Pre-create empty includes so `nginx -t` is valid before the hooks run,
+# strip any CRLF (scripts may be authored on Windows), make them runnable.
+RUN touch /etc/nginx/conf.d/auth.inc /etc/nginx/conf.d/auth-proxy.inc \
+ && sed -i 's/\r$//' /docker-entrypoint.d/40-web-auth.sh /docker-entrypoint.d/45-web-runtime-config.sh /docker-entrypoint.d/46-web-auth-proxy.sh \
+ && chmod +x /docker-entrypoint.d/40-web-auth.sh /docker-entrypoint.d/45-web-runtime-config.sh /docker-entrypoint.d/46-web-auth-proxy.sh
 
 EXPOSE 80
 

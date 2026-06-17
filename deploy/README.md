@@ -226,6 +226,66 @@ Optional tuning on the `agent` service:
 Rebuild the **web** image after changing `nginx.conf`; rebuild the
 **tenant** image after agent code changes.
 
+## Deployment modes
+
+Pick a compose file per mode — all share the same agent/web images; behavior
+is toggled by env, so no rebuild is needed to switch.
+
+| Mode | Compose file | Auth | Workspace |
+|------|--------------|------|-----------|
+| **1. Shared password** | `docker-compose.password.yml` | One Basic-Auth password (nginx) | Free switching |
+| **2. Local / no auth** | *(none — run `npm start`)* | None | Free switching |
+| **3. SSO + pinned** | `docker-compose.sso.yml` | Per-user login via auth-service (JWT) | Pinned per user, no switching |
+
+```bash
+# Mode 1
+docker compose -f deploy/docker-compose.password.yml up -d
+# Mode 3
+docker compose -f deploy/docker-compose.sso.yml --env-file deploy/.env up -d
+```
+
+### Mode 3 — SSO + per-user workspace (how it works)
+
+The auth-service is deployed **separately** (you already run one). This stack
+is just agent + web; nginx reverse-proxies the auth routes to it.
+
+```
+browser ─▶ nginx ─┬─ /              SPA (RequireAuth → /sso/authorize)
+                  ├─ /sso/* /api/auth/*  → AUTH_SERVICE_URL (external auth-service)
+                  └─ /chat /workspace/* → agent (verifies JWT, pins cwd)
+```
+
+1. The SPA (auth on via `AUTH_ENABLED=true` → `app-config.js`) has no token,
+   so it redirects to `/sso/authorize`. The auth-service logs the user in and
+   bounces back with `#token=<jwt>`.
+2. The SPA stores the JWT and sends `Authorization: Bearer <jwt>` on every
+   agent call.
+3. The agent (`server/auth/identity.ts`) **verifies** the token with the
+   shared `JWT_SECRET` (no DB, no network), then derives a fixed workspace
+   `${USERS_ROOT}/<slug(email)>`, creating it on first use. The client's
+   `workspace` field is ignored, and `/workspace/*` is sandboxed to that
+   directory.
+
+Required env (put in `deploy/.env`):
+
+| Variable | Where | Notes |
+|----------|-------|-------|
+| `JWT_SECRET` | agent | **Must equal your auth-service's signing secret** — the trust anchor |
+| `AUTH_SERVICE_URL` | web | Your external auth-service, e.g. `http://10.150.115.69:52320` |
+| `PUBLIC_ORIGIN` | web/agent | Origin users open, e.g. `http://10.150.117.195:9999` (default `http://localhost:8080`) |
+| `WEB_PORT` | web | Host port to publish (default `8080`) |
+
+On the **external auth-service**, add `PUBLIC_ORIGIN` to both
+`SSO_ALLOWED_RETURN_ORIGINS` and `CORS_ALLOWED_ORIGINS`, otherwise the SSO
+redirect back to the UI is rejected (400). Email-domain / admin settings
+(`ALLOWED_EMAIL_DOMAINS`, `ADMIN_EMAILS`) are configured there too.
+
+> **Isolation note (L1):** pinning is enforced for the UI and the workspace
+> API, but the `bash`/`powershell` tools can still read/write elsewhere in
+> the container. This suits mutually-trusting users who just want their own
+> working directory. For untrusted multi-tenant use, run one agent container
+> per user or disable the shell tools.
+
 ## Auth — optional password gate (HTTP Basic Auth)
 
 The `web` image ships an **optional password gate** enforced by nginx. It

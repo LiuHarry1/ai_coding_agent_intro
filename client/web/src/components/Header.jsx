@@ -3,9 +3,15 @@ import { useChatStore } from "../stores/chat-store.js";
 import { useWorkspaceIdeStore } from "../stores/workspace-ide-store.js";
 import { workspaceApi } from "../lib/api/workspace.js";
 import { isDesktop, pickWorkspaceDir } from "../lib/desktop.js";
+import { authEnabled, getUser, logout } from "../lib/auth.js";
 import SessionSwitcher from "./SessionSwitcher.jsx";
 
 export default function Header() {
+  // SSO mode: the workspace is pinned server-side to the logged-in user, so
+  // the switcher/browser is hidden and shown read-only instead.
+  const locked = authEnabled();
+  const user = locked ? getUser() : null;
+
   const workspace = useChatStore((s) => s.workspace);
   const setWorkspace = useChatStore((s) => s.setWorkspace);
   const toggleWorkspaceIde = useWorkspaceIdeStore((s) => s.toggle);
@@ -107,7 +113,19 @@ export default function Header() {
         <SessionSwitcher />
       </div>
 
-      {!workspaceIdeOpen ? (
+      {workspaceIdeOpen ? (
+        /* When the IDE is open, the cwd is shown in the workspace header. */
+        <div className="header-spacer" />
+      ) : locked ? (
+        <div className="workspace-bar workspace-bar--locked">
+          <label className="workspace-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          </label>
+          <span className="workspace-input workspace-input--readonly" title={workspace}>{workspace}</span>
+        </div>
+      ) : (
         <div className={`workspace-bar ${isDesktop() ? "workspace-bar--desktop" : ""}`} ref={dropdownRef}>
           <label className="workspace-label" htmlFor="workspace-input">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -188,14 +206,14 @@ export default function Header() {
             </div>
           )}
         </div>
-      ) : (
-        /* When the IDE is open, the cwd is shown in the workspace header
-           (its tree root). Hiding this avoids duplicated chrome and frees
-           the chat header for the session pill + actions. */
-        <div className="header-spacer" />
       )}
 
       <div className="header-right">
+        {locked && user && (
+          <span className="auth-user" title={user.email}>
+            {user.username || user.email}
+          </span>
+        )}
         <button className="icon-btn" onClick={toggleTheme} title="Toggle theme">
           {theme === "dark" ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
@@ -204,6 +222,9 @@ export default function Header() {
           )}
         </button>
         <button className="btn-clear" onClick={clearSession}>Clear</button>
+        {locked && (
+          <button className="btn-clear" onClick={logout} title="Sign out">Logout</button>
+        )}
       </div>
     </header>
   );

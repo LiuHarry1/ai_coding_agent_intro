@@ -13,6 +13,7 @@ import {
 } from "./fs-ops.js";
 import { gitStatus, gitDiff } from "./git.js";
 import { handleUpload, handleDownload } from "./transfer.js";
+import { isPathInWorkspace } from "../../core/workspace.js";
 
 /**
  * Self-contained workspace HTTP module.
@@ -65,6 +66,7 @@ function statusFor(err: unknown): number {
     case "EMTIME": return 409;
     case "ENOTEMPTY": return 409;
     case "E2BIG": return 413;
+    case "EACCES": return 403;
     default: return 500;
   }
 }
@@ -75,11 +77,23 @@ function errorBody(err: unknown): { error: string; code?: string } {
 }
 
 export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
-  const { root } = opts;
-
   return async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
     const { method, url } = req;
     if (!url || !url.startsWith("/workspace")) return false;
+
+    // Per-request root: when the auth gate pinned a user workspace
+    // (req.userWorkspace), use it and SANDBOX every path to it. Otherwise
+    // fall back to the server default with no sandbox (legacy single-user).
+    const pinned = (req as { userWorkspace?: string }).userWorkspace;
+    const root = pinned ?? opts.root;
+    const sandbox = Boolean(pinned);
+    const safe = (input: string): string => {
+      const abs = resolvePath(input, root);
+      if (sandbox && !isPathInWorkspace(abs, root)) {
+        throw new FsOpError("EACCES", "Path is outside your workspace");
+      }
+      return abs;
+    };
 
     try {
       // GET /workspace
@@ -106,7 +120,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const params = new URL(url, `http://${req.headers.host}`).searchParams;
         const dirParam = params.get("dir") || root;
         const showHidden = params.get("showHidden") === "1" || params.get("showHidden") === "true";
-        sendJSON(res, 200, listDir(resolvePath(dirParam, root), { showHidden }));
+        sendJSON(res, 200, listDir(safe(dirParam), { showHidden }));
         return true;
       }
 
@@ -117,7 +131,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const dirParam = params.get("dir") || root;
         const limit = Math.min(50, Math.max(1, parseInt(params.get("limit") ?? "15", 10) || 15));
         const showHidden = params.get("showHidden") === "1" || params.get("showHidden") === "true";
-        const searchRoot = resolvePath(dirParam, root);
+        const searchRoot = safe(dirParam);
         sendJSON(res, 200, searchFiles(searchRoot, q, limit, showHidden));
         return true;
       }
@@ -127,7 +141,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const params = new URL(url, `http://${req.headers.host}`).searchParams;
         const p = params.get("path");
         if (!p) { sendJSON(res, 400, { error: "Missing 'path'" }); return true; }
-        sendJSON(res, 200, readFile(resolvePath(p, root)));
+        sendJSON(res, 200, readFile(safe(p)));
         return true;
       }
 
@@ -137,7 +151,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const p = body.path as string | undefined;
         const content = (body.content as string | undefined) ?? "";
         if (!p) { sendJSON(res, 400, { error: "Missing 'path'" }); return true; }
-        sendJSON(res, 200, createFile(resolvePath(p, root), content));
+        sendJSON(res, 200, createFile(safe(p), content));
         return true;
       }
 
@@ -151,7 +165,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
           sendJSON(res, 400, { error: "Missing 'path' or 'content'" });
           return true;
         }
-        sendJSON(res, 200, saveFile(resolvePath(p, root), content, expectedMtimeMs));
+        sendJSON(res, 200, saveFile(safe(p), content, expectedMtimeMs));
         return true;
       }
 
@@ -160,7 +174,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const body = await readBody(req);
         const p = body.path as string | undefined;
         if (!p) { sendJSON(res, 400, { error: "Missing 'path'" }); return true; }
-        sendJSON(res, 200, makeDir(resolvePath(p, root)));
+        sendJSON(res, 200, makeDir(safe(p)));
         return true;
       }
 
@@ -184,7 +198,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         const params = new URL(url, `http://${req.headers.host}`).searchParams;
         const p = params.get("path");
         if (!p) { sendJSON(res, 400, { error: "Missing 'path'" }); return true; }
-        sendJSON(res, 200, removeEntry(resolvePath(p, root)));
+        sendJSON(res, 200, removeEntry(safe(p)));
         return true;
       }
 

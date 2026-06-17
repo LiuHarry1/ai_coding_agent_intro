@@ -7,6 +7,7 @@
  * shared code is the tiny `fetchJSON` helper.
  */
 import { fetchJSON } from "./_http.js";
+import { authHeader } from "../auth.js";
 
 const json = (body) => ({
   headers: { "Content-Type": "application/json" },
@@ -76,6 +77,8 @@ export const workspaceApi = {
 
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/workspace/upload");
+      const auth = authHeader();
+      if (auth.Authorization) xhr.setRequestHeader("Authorization", auth.Authorization);
       xhr.upload.onprogress = (e) => {
         if (onProgress && e.lengthComputable) {
           onProgress(Math.round((e.loaded / e.total) * 100));
