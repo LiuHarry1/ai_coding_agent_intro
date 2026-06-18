@@ -10,6 +10,14 @@ export default defineConfig({
       "/sessions": "http://localhost:4567",
       "/workspace": "http://localhost:4567",
       "/health": "http://localhost:4567",
+      "/slash-commands": "http://localhost:4567",
+      "/plan": "http://localhost:4567",
+      "/session": "http://localhost:4567",
+      "/settings": "http://localhost:4567",
+      "/mcp": "http://localhost:4567",
+      "/ask_user_question": "http://localhost:4567",
+      "/skills": "http://localhost:4567",
+      "/agents": "http://localhost:4567",
       // SSO mode (dev): forward auth-service routes to localhost:8010.
       // Override the target with DEV_AUTH_BACKEND_URL if it runs elsewhere.
       "/sso": process.env.DEV_AUTH_BACKEND_URL || "http://localhost:8010",

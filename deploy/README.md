@@ -360,3 +360,4 @@ also consider:
 | Preview URL 502 / connection refused | Dev server not listening on `0.0.0.0`, or wrong port — check `docker compose logs agent` and re-run `PublishPreview`. |
 | Preview URL 403 | Port is blocked (e.g. 4567) — use a port in 3000–9999 outside the blocklist. |
 | Agent suggests localhost | `PUBLIC_BASE_URL` unset or `PREVIEW_ENABLED` not `1` — verify agent container env. |
+| `/` shows no skills or commands | `GET /slash-commands` not proxied — add it to `deploy/nginx.conf` (and rebuild the web image). Same for `/plan` and `/session`. |
