@@ -108,6 +108,80 @@ export function inlineReasoningAsText(messages: Message[]): Message[] {
 }
 
 /**
+ * Relocate every tool-result block to immediately follow the assistant
+ * message that issued its tool-call (matched by `toolCallId`), collapsing
+ * each assistant's results into ONE tool message right after it. Mirrors
+ * Claude Code's `normalizeMessagesForAPI` "merge same-turn assistant +
+ * hoist tool_results" step (utils/messages.ts).
+ *
+ * Why this matters: providers require tool results to IMMEDIATELY follow
+ * the assistant carrying the matching tool-calls. Two real shapes break
+ * that adjacency:
+ *   - Reasoning models / the AI SDK split one turn into
+ *     `[assistant(tool-call), assistant(text)]`, and the trailing text sits
+ *     between the call and its result.
+ *   - Resume-from-JSONL or compaction detaches results from their calls.
+ *
+ * Pulling each result back to its owner lets the downstream pairing pass
+ * see clean adjacency and recover the REAL tool output, instead of
+ * degrading to a synthetic `[Tool result missing…]` placeholder (which is
+ * what happens when the real result gets stripped as an "orphan").
+ *
+ * Rules:
+ *   - First occurrence of a given `toolCallId` result wins (dedupe).
+ *   - Results are emitted in the assistant's tool-call order (some
+ *     providers care about alignment).
+ *   - Results whose id matches no assistant tool-call anywhere are dropped
+ *     (true orphans).
+ *   - Non-tool messages (user attachments, follow-ups) keep their relative
+ *     order, so a trailing `user` / `assistant(text)` correctly lands AFTER
+ *     the relocated tool message.
+ *
+ * Returns a new array — does not mutate `messages`.
+ */
+export function regroupToolResults(messages: Message[]): Message[] {
+  const resultById = new Map<string, ToolResultPart>();
+  for (const m of messages) {
+    if (m.role !== "tool" || !Array.isArray(m.content)) continue;
+    for (const p of m.content) {
+      if (p.type === "tool-result") {
+        const tr = p as ToolResultPart;
+        if (!resultById.has(tr.toolCallId)) resultById.set(tr.toolCallId, tr);
+      }
+    }
+  }
+
+  if (resultById.size === 0) return messages;
+
+  const out: Message[] = [];
+  for (const m of messages) {
+    // Drop original tool messages; their results are re-emitted next to the
+    // assistant that owns them below.
+    if (m.role === "tool") continue;
+
+    out.push(m);
+
+    if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+
+    const collected: ToolResultPart[] = [];
+    for (const p of m.content) {
+      if (p.type !== "tool-call") continue;
+      const id = (p as { toolCallId: string }).toolCallId;
+      const tr = resultById.get(id);
+      if (tr) {
+        collected.push(tr);
+        resultById.delete(id);
+      }
+    }
+    if (collected.length > 0) {
+      out.push({ role: "tool", content: collected });
+    }
+  }
+
+  return out;
+}
+
+/**
  * Defensive bidirectional check of tool-call ↔ tool-result pairing across
  * the ENTIRE message history. Runs once per step in O(n).
  *

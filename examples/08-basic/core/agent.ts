@@ -18,6 +18,7 @@ import type {
 import {
   ensureToolResultPairing,
   inlineReasoningAsText,
+  regroupToolResults,
   sanitizeReasoningParts,
 } from "./agent/messageSanitize.js";
 import { applyCacheControlBreakpoint } from "./agent/cacheControl.js";
@@ -413,22 +414,31 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       const stream = streamText({
         model: provider.chatModel(resolvedModel),
         system: systemPrompt,
-        // Triple-pass message preparation before the SDK sees them:
+        // Four-pass message preparation before the SDK sees them (mirrors
+        // Claude Code's normalizeMessagesForAPI → ensureToolResultPairing
+        // pipeline ordering):
         //   1. inlineReasoningAsText — rewrite reasoning blocks as
         //      <thinking> text so the request is portable across stateless
         //      proxies (copilot-api, etc.).
-        //   2. ensureToolResultPairing — guarantee every assistant
-        //      tool-call has a matching tool-result and strip orphan
-        //      tool-results. Without this, ANY historical damage (a prior
-        //      step where the stream got cut, a session resumed from a
-        //      truncated JSONL, etc.) deadlocks the next request with a
-        //      400 from the Responses API.
-        //   3. applyCacheControlBreakpoint — attach a single
+        //   2. regroupToolResults — pull every tool-result back to
+        //      immediately follow the assistant that issued its tool-call
+        //      (CC's "merge same-turn assistant + hoist tool_results").
+        //      Recovers REAL results when a reasoning model splits a turn
+        //      into [assistant(call), assistant(text)] or a resume/compaction
+        //      detached them — instead of degrading to a synthetic
+        //      placeholder.
+        //   3. ensureToolResultPairing — safety net: synthesize a
+        //      `[Tool result missing…]` for any tool-call STILL without a
+        //      result, and strip true orphans. Without this, historical
+        //      damage deadlocks the next request with a 400.
+        //   4. applyCacheControlBreakpoint — attach a single
         //      `cache_control: ephemeral` marker to the last message when
         //      the provider supports prompt caching (Anthropic). No-op
         //      for OpenAI (auto-cached) and openai-compatible (no caching).
         messages: applyCacheControlBreakpoint(
-          ensureToolResultPairing(inlineReasoningAsText(messages)),
+          ensureToolResultPairing(
+            regroupToolResults(inlineReasoningAsText(messages)),
+          ),
           provider,
         ),
         // Schema-only tools — execution is handled by toolOrchestration so
@@ -455,56 +465,26 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         stepResult.toolResults.push(...executed);
       }
 
-      // Trust the SDK's response.messages for ordering (reasoning → text
-      // → tool-call). Tool results are appended manually below.
+      // Append the SDK's assistant message(s) as-is, then the tool results.
+      // We deliberately do NOT reorder here: a reasoning model can split a
+      // turn into [assistant(tool-call), assistant(text)], which leaves the
+      // tool message non-adjacent to its tool-call. That's repaired at
+      // request time by regroupToolResults() (CC's model: keep raw history,
+      // normalize only before sending), so assembly stays a dumb append.
       const response = await stream.response;
       const sdkMessages = (response.messages as unknown as Message[]).filter(
         (m) => m.role !== "tool",
       );
       sanitizeReasoningParts(sdkMessages);
+      messages.push(...sdkMessages);
 
-      // Tool results MUST immediately follow the assistant message that
-      // carries the tool-calls (OpenAI/Responses requirement). The SDK can
-      // return a *trailing* text-only assistant AFTER the tool-call message
-      // — reasoning models often emit commentary right after deciding to
-      // call a tool. Pushing the tool message after that trailing assistant
-      // yields a `tool` block whose predecessor has no `tool_calls`, and the
-      // provider 400s with "messages with role 'tool' must be a response to
-      // a preceding message with 'tool_calls'". So splice the tool results
-      // in right after the LAST tool-call-bearing assistant, keeping any
-      // trailing assistant messages after the results.
-      const hasToolResults = stepResult.toolResults.length > 0;
-      const pushToolResults = (): void => {
+      if (stepResult.toolResults.length > 0) {
         messages.push(buildToolMessage(stepResult.toolResults));
         for (const tr of stepResult.toolResults) {
           if (tr.followUpMessages?.length) {
             messages.push(...tr.followUpMessages);
           }
         }
-      };
-
-      let lastToolCallIdx = -1;
-      if (hasToolResults) {
-        for (let k = sdkMessages.length - 1; k >= 0; k--) {
-          const mk = sdkMessages[k];
-          if (
-            mk.role === "assistant" &&
-            Array.isArray(mk.content) &&
-            mk.content.some((p) => p.type === "tool-call")
-          ) {
-            lastToolCallIdx = k;
-            break;
-          }
-        }
-      }
-
-      if (hasToolResults && lastToolCallIdx >= 0) {
-        messages.push(...sdkMessages.slice(0, lastToolCallIdx + 1));
-        pushToolResults();
-        messages.push(...sdkMessages.slice(lastToolCallIdx + 1));
-      } else {
-        messages.push(...sdkMessages);
-        if (hasToolResults) pushToolResults();
       }
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless
