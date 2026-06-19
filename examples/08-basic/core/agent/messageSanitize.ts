@@ -138,21 +138,40 @@ export function ensureToolResultPairing(messages: Message[]): Message[] {
     const m = messages[i]!;
 
     if (m.role !== "assistant" || !Array.isArray(m.content)) {
-      // Start-of-conversation orphan handling: a `tool` message at index 0 — or any `tool`
-      // message NOT immediately preceded by an assistant in our output —
-      // has tool-results whose paired tool-calls don't exist. This is the
-      // shape we get when a session is resumed after a compaction step
-      // dropped the assistant tool-calls but the on-disk JSONL still
-      // starts with tool-results. The downstream assistant-lookahead
-      // branch (below) only catches the assistant→tool adjacency case;
-      // orphans at the very start slip past unless we strip them here.
-      if (m.role === "tool" && Array.isArray(m.content) && out.at(-1)?.role !== "assistant") {
+      // Orphan tool-result handling. Any `tool` message reaching this branch
+      // was NOT consumed by a preceding assistant-with-tool-calls — the
+      // forward branch below `i++`-consumes every legitimately paired tool
+      // message. So a tool message here is an orphan whenever its results
+      // don't belong to the immediately-preceding assistant's tool-calls.
+      // This covers three real shapes that otherwise 400 the provider with
+      // "messages with role 'tool' must be a response to a preceding message
+      // with 'tool_calls'":
+      //   1. tool at index 0 (resumed from a truncated JSONL),
+      //   2. tool after a non-assistant message,
+      //   3. tool after an assistant that has NO tool-calls — e.g. compaction
+      //      dropped the tool-call assistant, or inlineReasoningAsText turned
+      //      a reasoning-only block into a plain <thinking> text message that
+      //      now sits right before these results.
+      // We match by id (rather than just "is prev an assistant?") so a stray
+      // text-only assistant in front of an orphan no longer hides it.
+      if (m.role === "tool" && Array.isArray(m.content)) {
+        const prev = out.at(-1);
+        const prevCallIds = new Set<string>();
+        if (prev?.role === "assistant" && Array.isArray(prev.content)) {
+          for (const p of prev.content) {
+            if (p.type === "tool-call") {
+              prevCallIds.add((p as { toolCallId: string }).toolCallId);
+            }
+          }
+        }
         const original = m.content.length;
-        // Drop every tool-result — there's no preceding assistant to pair
-        // against, so EVERY result here is orphaned. If something other
-        // than tool-result lives in this message (shouldn't, by schema),
-        // keep it.
-        const kept = m.content.filter((p) => p.type !== "tool-result");
+        // Keep non-tool-result parts (shouldn't exist by schema) and any
+        // tool-result that actually pairs with the preceding assistant.
+        const kept = m.content.filter(
+          (p) =>
+            p.type !== "tool-result" ||
+            prevCallIds.has((p as ToolResultPart).toolCallId),
+        );
         if (kept.length !== original) {
           stripped += original - kept.length;
           // Empty content would leave the API with two non-tool messages

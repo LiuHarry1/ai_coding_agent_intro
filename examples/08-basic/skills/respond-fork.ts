@@ -11,7 +11,7 @@ import type { ServerResponse } from "http";
 import { EventBus } from "../core/event-bus.js";
 import { configManager } from "../core/config-manager.js";
 import { createSSETransport } from "../server/sse-transport.js";
-import { registerSubagents } from "../agents/index.js";
+import { registerSubagents } from "../tools/AgentTool/index.js";
 import { defaultRegistry } from "../tools/index.js";
 import type { RunAgentFn } from "../core/types.js";
 import { runSkillFork } from "./run-fork.js";

@@ -2,7 +2,7 @@ import { isWindows, platformLabel } from "../core/platform.js";
 import {
   EXPLORE_AGENT_MIN_QUERIES,
   EXPLORE_AGENT_TYPE,
-} from "../agents/explore.js";
+} from "../tools/AgentTool/built-in/exploreAgent.js";
 import {
   AGENT_TOOL_NAME,
   BASH_TOOL_NAME,

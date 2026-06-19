@@ -37,7 +37,7 @@ import {
   SkillExpansionError,
 } from "../skills/expand.js";
 import { respondSkillFork } from "../skills/respond-fork.js";
-import { registerSubagents, BUILTIN_AGENTS } from "../agents/index.js";
+import { registerSubagents, BUILTIN_AGENTS } from "../tools/AgentTool/index.js";
 import { defaultRegistry } from "../tools/index.js";
 import type { AgentDefinition, RunAgentFn } from "../core/types.js";
 import type { SkillDefinition } from "../skills/types.js";

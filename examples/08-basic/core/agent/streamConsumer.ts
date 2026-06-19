@@ -3,7 +3,7 @@ import type { AgentOptions } from "../types.js";
 import { appendPreviewDelta, maybeStartPreview, type PreviewState } from "./previewStream.js";
 import { formatToolError } from "./toolErrors.js";
 
-import type { ExecutedToolResult } from "./toolOrchestration.js";
+import type { ExecutedToolResult } from "../../services/tools/tool_execution.js";
 
 export interface StreamResult {
   text: string;
