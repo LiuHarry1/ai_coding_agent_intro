@@ -6,7 +6,7 @@ import {
   readFileCore,
   formatReadOutputAsToolString,
   resolveFileInCwd,
-} from "../../core/read/index.js";
+} from "../../utils/read/index.js";
 import { PDF_MAX_PAGES_PER_READ } from "../../constants/api_limits.js";
 
 export type ReadToolExecuteResult = {
@@ -14,7 +14,7 @@ export type ReadToolExecuteResult = {
   followUpMessages?: import("../../core/types.js").Message[];
 };
 
-/** CC: tools/FileReadTool/FileReadTool.ts — thin wrapper over core/read. */
+/** CC: tools/FileReadTool/FileReadTool.ts — thin wrapper over utils/read. */
 export const definition: ToolDefinition = {
   name: READ_FILE_TOOL_NAME,
   description: "Read files, images, PDFs, notebooks",

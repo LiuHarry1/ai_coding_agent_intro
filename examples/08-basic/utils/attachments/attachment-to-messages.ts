@@ -2,8 +2,8 @@ import type { Message, UserContentPart, UserMessage } from "../../core/types.js"
 import type { Attachment } from "./types.js";
 import { BASH_TOOL_NAME, READ_FILE_TOOL_NAME } from "../../constants/tool_names.js";
 import { MAX_LINES_TO_READ } from "../../constants/api_limits.js";
-import { formatReadOutputAsToolString } from "../../core/read/index.js";
-import type { ReadOutput } from "../../core/read/types.js";
+import { formatReadOutputAsToolString } from "../read/index.js";
+import type { ReadOutput } from "../read/types.js";
 
 function wrapInSystemReminder(content: string): string {
   return `<system-reminder>\n${content}\n</system-reminder>`;

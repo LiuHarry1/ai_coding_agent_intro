@@ -3,7 +3,7 @@
  *
  * Skills have their own loader (`skills/loadSkillsDir.ts`) because they are *folders*
  * with bundled assets, not flat `.md` files — but both share the project
- * directory walk in `core/app-dir.ts`.
+ * directory walk in `utils/app-dir.ts`.
  *
  * Directory layout:
  *
@@ -23,7 +23,7 @@ import {
   getAppDirName,
   getProjectAppDirsUpToHome,
   getUserSubdir,
-} from "../core/app-dir.js";
+} from "./app-dir.js";
 
 /** Flat-file kinds. Skills live in folders and use their own loader. */
 export type FlatMarkdownKind = "agents" | "commands";
@@ -183,4 +183,4 @@ export function suggestedPath(
   return path.join(dir, `${name}.md`);
 }
 
-export { getAppDirName, getUserSubdir, getProjectAppDirsUpToHome } from "../core/app-dir.js";
+export { getAppDirName, getUserSubdir, getProjectAppDirsUpToHome } from "./app-dir.js";

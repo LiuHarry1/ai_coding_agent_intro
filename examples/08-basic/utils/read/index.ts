@@ -11,7 +11,7 @@ import { readImageFile } from "./read-image.js";
 import { readNotebookFile } from "./read-notebook.js";
 import { readPdfFile } from "./read-pdf.js";
 import type { ReadImageOutput, ReadOutput } from "./types.js";
-import type { Message, UserContentPart } from "../types.js";
+import type { Message, UserContentPart } from "../../core/types.js";
 
 export interface ReadFileOptions {
   offset?: number;

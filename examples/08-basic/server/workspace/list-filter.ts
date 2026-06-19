@@ -1,4 +1,4 @@
-import { getAppDirName } from "../../core/app-dir.js";
+import { getAppDirName } from "../../utils/app-dir.js";
 
 /**
  * Whether a directory entry should appear in the workspace file tree.

@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { AppConfig } from "./types.js";
 import { DEFAULT_PROFILE, resolveProfile, profileToRecord } from "./llm/index.js";
-import { getUserConfigPath, CONFIG_FILE_NAME } from "./app-dir.js";
+import { getUserConfigPath, CONFIG_FILE_NAME } from "../utils/app-dir.js";
 
 const DEFAULTS: AppConfig = {
   provider: { ...DEFAULT_PROFILE },

@@ -1,4 +1,4 @@
-import type { ReadOutput } from "../../core/read/types.js";
+import type { ReadOutput } from "../read/types.js";
 
 export type FileAttachment = {
   type: "file";

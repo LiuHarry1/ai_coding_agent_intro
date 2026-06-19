@@ -47,7 +47,7 @@ import type { ExtensionSource } from "../utils/markdownConfigLoader.js";
 import {
   getProjectAppDirsUpToHome,
   getUserSubdir,
-} from "../core/app-dir.js";
+} from "../utils/app-dir.js";
 import {
   parseArgumentNames,
   parseString,

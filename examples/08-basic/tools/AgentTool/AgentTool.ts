@@ -9,7 +9,7 @@ import type {
 import { AGENT_TOOL_NAME, GLOB_TOOL_NAME, READ_FILE_TOOL_NAME } from "../../constants/tool_names.js";
 import { EXPLORE_AGENT_TYPE } from "./built-in/exploreAgent.js";
 import { PLAN_AGENT_TYPE } from "./built-in/planAgent.js";
-import { loadProjectRules } from "../../core/rules-loader.js";
+import { loadProjectRules } from "../../utils/rules-loader.js";
 import { buildConcurrencyPolicy } from "../../core/concurrency-policy.js";
 import { createSubagentEventBus } from "../../core/brokers/subagent-bus.js";
 import { randomUUID } from "crypto";

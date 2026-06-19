@@ -7,7 +7,7 @@ import { resolvePlanSlash } from "../../commands/plan.js";
 import { registerSubagents, getSubagentNames } from "../../tools/AgentTool/index.js";
 import { registerSkills, formatSkillListing } from "../../skills/index.js";
 import { loadPlugins, pluginErrorMessage, pluginErrorSource } from "../../core/plugins/index.js";
-import { loadProjectRules } from "../../core/rules-loader.js";
+import { loadProjectRules } from "../rules-loader.js";
 import { filterToolsByEnablement } from "../../core/tool-enablement.js";
 import { buildConcurrencyPolicy } from "../../core/concurrency-policy.js";
 import { createToolSearchDefinition } from "../../tools/tool_search.js";

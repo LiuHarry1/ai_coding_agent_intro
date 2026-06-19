@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
-import { normalizeGitPath } from "./platform.js";
+import { normalizeGitPath } from "../core/platform.js";
 
 // Single-file rule docs found at each directory level (in priority order
 // per dir — first match wins). AGENTS.md is the cross-tool standard;

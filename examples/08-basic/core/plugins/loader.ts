@@ -23,7 +23,7 @@ import type { MCPServerConfig } from "../types.js";
 import {
   getProjectAppDirsUpToHome,
   getUserAppDir,
-} from "../app-dir.js";
+} from "../../utils/app-dir.js";
 import {
   loadMarkdownFilesFromDir,
   loadMarkdownFile,

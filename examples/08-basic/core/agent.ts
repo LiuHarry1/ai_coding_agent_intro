@@ -462,15 +462,49 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         (m) => m.role !== "tool",
       );
       sanitizeReasoningParts(sdkMessages);
-      messages.push(...sdkMessages);
 
-      if (stepResult.toolResults.length > 0) {
+      // Tool results MUST immediately follow the assistant message that
+      // carries the tool-calls (OpenAI/Responses requirement). The SDK can
+      // return a *trailing* text-only assistant AFTER the tool-call message
+      // — reasoning models often emit commentary right after deciding to
+      // call a tool. Pushing the tool message after that trailing assistant
+      // yields a `tool` block whose predecessor has no `tool_calls`, and the
+      // provider 400s with "messages with role 'tool' must be a response to
+      // a preceding message with 'tool_calls'". So splice the tool results
+      // in right after the LAST tool-call-bearing assistant, keeping any
+      // trailing assistant messages after the results.
+      const hasToolResults = stepResult.toolResults.length > 0;
+      const pushToolResults = (): void => {
         messages.push(buildToolMessage(stepResult.toolResults));
         for (const tr of stepResult.toolResults) {
           if (tr.followUpMessages?.length) {
             messages.push(...tr.followUpMessages);
           }
         }
+      };
+
+      let lastToolCallIdx = -1;
+      if (hasToolResults) {
+        for (let k = sdkMessages.length - 1; k >= 0; k--) {
+          const mk = sdkMessages[k];
+          if (
+            mk.role === "assistant" &&
+            Array.isArray(mk.content) &&
+            mk.content.some((p) => p.type === "tool-call")
+          ) {
+            lastToolCallIdx = k;
+            break;
+          }
+        }
+      }
+
+      if (hasToolResults && lastToolCallIdx >= 0) {
+        messages.push(...sdkMessages.slice(0, lastToolCallIdx + 1));
+        pushToolResults();
+        messages.push(...sdkMessages.slice(lastToolCallIdx + 1));
+      } else {
+        messages.push(...sdkMessages);
+        if (hasToolResults) pushToolResults();
       }
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless

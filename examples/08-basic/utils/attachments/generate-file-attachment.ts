@@ -9,15 +9,15 @@ import {
   readFileCore,
   resolveFileInCwd,
   listDirectoryEntries,
-} from "../../core/read/index.js";
+} from "../read/index.js";
 import {
   readTextFileTruncated,
   isFileWithinReadSizeLimit,
-} from "../../core/read/read-text.js";
-import { tryGetPdfReference } from "../../core/read/read-pdf.js";
+} from "../read/read-text.js";
+import { tryGetPdfReference } from "../read/read-pdf.js";
 import { isPdfExtension } from "../../constants/api_limits.js";
-import { FileTooLargeError } from "../../core/read/types.js";
-import type { ReadOutput } from "../../core/read/types.js";
+import { FileTooLargeError } from "../read/types.js";
+import type { ReadOutput } from "../read/types.js";
 
 function serializeReadOutput(output: ReadOutput): string {
   if (output.type === "text") return output.file.content;
