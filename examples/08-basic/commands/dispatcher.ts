@@ -18,6 +18,7 @@ import { substituteArguments } from "./argumentSubstitution.js";
 import { expandInlineDirectives } from "./promptExpansion.js";
 import {
   formatHelp,
+  formatPluginsReply,
   loadSlashRegistry,
   lookupSlash,
   toPublicEntry,
@@ -82,6 +83,9 @@ export async function dispatchSlashCommand(
   if (entry.kind === "built-in") {
     if (entry.name === "help" || entry.name === "commands") {
       return { kind: "reply", text: formatHelp(entries) };
+    }
+    if (entry.name === "plugins") {
+      return { kind: "reply", text: await formatPluginsReply(deps.cwd) };
     }
     return { kind: "reply", text: `Built-in /${entry.name} not implemented` };
   }

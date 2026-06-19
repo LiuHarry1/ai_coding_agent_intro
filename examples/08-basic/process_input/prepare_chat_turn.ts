@@ -6,6 +6,7 @@ import { dispatchSlashCommand } from "../commands/dispatcher.js";
 import { resolvePlanSlash } from "../commands/plan.js";
 import { registerSubagents, getSubagentNames } from "../tools/AgentTool/index.js";
 import { registerSkills, formatSkillListing } from "../skills/index.js";
+import { loadPlugins, pluginErrorMessage, pluginErrorSource } from "../core/plugins/index.js";
 import { loadProjectRules } from "../core/rules-loader.js";
 import { filterToolsByEnablement } from "../core/tool-enablement.js";
 import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
@@ -135,13 +136,27 @@ export async function prepareChatTurn(
 
   const slash = await resolveSlashCommand(message, cwd, session);
 
-  const { activeAgents } = await registerSubagents(registry, cwd);
+  // Declarative plugins (.ai-agent/plugins/*) contribute agents/skills/MCP at
+  // the lowest override priority. Loaded once per turn (hot-reload friendly).
+  const plugins = await loadPlugins(cwd);
+  if (plugins.plugins.length > 0) {
+    console.log(
+      `[server] plugins=[${plugins.plugins.map((p) => p.name).join(", ")}] ` +
+        `(+${plugins.agentFiles.length} agents, ${plugins.skills.length} skills, ` +
+        `${Object.keys(plugins.mcpServers).length} mcp)`,
+    );
+  }
+  for (const e of plugins.errors) {
+    console.warn(`[plugins] ${pluginErrorSource(e)}: ${pluginErrorMessage(e)}`);
+  }
+
+  const { activeAgents } = await registerSubagents(registry, cwd, plugins.agentFiles);
   const candidateFiles = extractFilePathCandidates(slash.effectiveMessage);
   const { activeSkills, allSkills } = await registerSkills(
     registry,
     cwd,
     activeAgents,
-    { candidateFiles },
+    { candidateFiles, pluginSkills: plugins.skills },
   );
   const conditionalHidden = allSkills.length - activeSkills.length;
   console.log(

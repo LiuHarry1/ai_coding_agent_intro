@@ -53,7 +53,7 @@ import {
   parseString,
 } from "../utils/frontmatterParser.js";
 
-interface SkillLoadResult {
+export interface SkillLoadResult {
   skill: SkillDefinition | null;
   filePath: string;
   error?: string;
@@ -169,7 +169,7 @@ function makeBodyLoader(filePath: string): () => Promise<string> {
  * surface them) and excluding entries that don't have a `SKILL.md` at all
  * (those aren't skills, just sibling folders).
  */
-async function loadSkillsFromDir(
+export async function loadSkillsFromDir(
   basePath: string,
   source: ExtensionSource,
 ): Promise<SkillLoadResult[]> {
@@ -349,6 +349,26 @@ export async function loadSkillsFromDisk(cwd: string): Promise<{
   }
 
   return { skills: [...byName.values()], errors };
+}
+
+/**
+ * Merge skill lists by name. Inputs are ordered LOWEST priority first, so
+ * later lists override earlier ones on duplicate names. Used to layer disk
+ * skills (`.ai-agent/skills/`) on top of plugin-contributed skills.
+ */
+export function mergeSkillsByName(
+  ...lists: ReadonlyArray<readonly SkillDefinition[]>
+): SkillDefinition[] {
+  const byName = new Map<string, SkillDefinition>();
+  for (const list of lists) {
+    for (const skill of list) {
+      if (byName.has(skill.name)) {
+        console.log(`[skills] overriding '${skill.name}' from ${skill.filePath ?? skill.baseDir}`);
+      }
+      byName.set(skill.name, skill);
+    }
+  }
+  return [...byName.values()];
 }
 
 /**

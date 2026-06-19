@@ -1,5 +1,9 @@
 import type { AgentDefinition, IToolRegistry } from "../core/types.js";
-import { loadSkillsFromDisk, filterSkillsByPaths } from "./loadSkillsDir.js";
+import {
+  loadSkillsFromDisk,
+  filterSkillsByPaths,
+  mergeSkillsByName,
+} from "./loadSkillsDir.js";
 import { createSkillTool, SKILL_TOOL_NAME } from "../tools/skill.js";
 import type { SkillDefinition } from "./types.js";
 
@@ -53,6 +57,11 @@ export function formatSkillListing(
 
 export interface RegisterSkillsOptions {
   /**
+   * Skills contributed by plugins (source "plugin"). Merged at the LOWEST
+   * priority, so a disk skill (`.ai-agent/skills/`) with the same name wins.
+   */
+  pluginSkills?: readonly SkillDefinition[];
+  /**
    * File paths to evaluate `paths:` frontmatter against. Skills whose
    * `paths` patterns match at least one of these become active for this
    * chat turn; non-matching conditional skills stay hidden. Pass the
@@ -93,7 +102,9 @@ export async function registerSkills(
   activeSkills: SkillDefinition[];
   errors: Array<{ filePath: string; error: string }>;
 }> {
-  const { skills, errors } = await loadSkillsFromDisk(cwd);
+  const { skills: diskSkills, errors } = await loadSkillsFromDisk(cwd);
+  // plugin skills first (lowest priority) → disk skills override on collision.
+  const skills = mergeSkillsByName(options.pluginSkills ?? [], diskSkills);
   const activeSkills = filterSkillsByPaths(
     skills,
     options.candidateFiles,

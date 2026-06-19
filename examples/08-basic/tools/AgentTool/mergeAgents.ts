@@ -1,6 +1,6 @@
 import path from "path";
 import type { AgentDefinition } from "../../core/types.js";
-import type { MarkdownFile } from "../../utils/markdownConfigLoader.js";
+import { sourceRank, type MarkdownFile } from "../../utils/markdownConfigLoader.js";
 import {
   parseToolList,
   parseBool,
@@ -88,12 +88,10 @@ export function mergeAgents(
   const errors: Array<{ filePath: string; error: string }> = [];
   const byType = new Map<string, AgentDefinition>();
 
+  const builtinTypes = new Set(builtins.map((b) => b.agentType));
   for (const b of builtins) byType.set(b.agentType, b);
 
-  const ordered = [...files].sort((a, b) => {
-    const rank = (s: typeof a.source) => (s === "user" ? 0 : 1);
-    return rank(a.source) - rank(b.source);
-  });
+  const ordered = [...files].sort((a, b) => sourceRank(a.source) - sourceRank(b.source));
 
   for (const f of ordered) {
     const { agent, error, filePath } = parseAgentFromMarkdown(f);
@@ -102,6 +100,15 @@ export function mergeAgents(
       console.warn(`[agents] ${error} (${filePath})`);
     }
     if (agent) {
+      // Trust boundary: third-party plugins must not shadow built-in agents.
+      // CC enforces this structurally via `{plugin}:{name}` namespacing; we use
+      // flat names, so guard explicitly. User/project agents may still override.
+      if (f.source === "plugin" && builtinTypes.has(agent.agentType)) {
+        const msg = `plugin agent '${agent.agentType}' may not override a built-in agent; ignored`;
+        errors.push({ filePath, error: msg });
+        console.warn(`[agents] ${msg} (${filePath})`);
+        continue;
+      }
       if (byType.has(agent.agentType)) {
         console.log(`[agents] overriding '${agent.agentType}' from ${f.filePath}`);
       }

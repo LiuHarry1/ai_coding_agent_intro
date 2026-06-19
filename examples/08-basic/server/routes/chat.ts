@@ -14,6 +14,7 @@ import { getDefaultWorkspace } from "../../core/workspace.js";
 import type { AuthedRequest } from "../auth/identity.js";
 import { EventBus } from "../../core/event-bus.js";
 import { Middleware, createTimingMiddleware } from "../../core/middleware.js";
+import { applyPluginHooks, hasPluginHooks } from "../../core/plugins/index.js";
 import { createPlanModeGuardMiddleware } from "../../middleware/plan-mode-guard.js";
 import { defaultRegistry } from "../../tools/index.js";
 import { respondSkillFork } from "../../skills/respond-fork.js";
@@ -95,6 +96,9 @@ export async function handleChat(
   const middleware = new Middleware();
   middleware.use("afterTool", createTimingMiddleware(eventBus).afterTool);
   middleware.use("beforeTool", createPlanModeGuardMiddleware(session, cwd));
+  // Replay hooks/subscriptions registered by code plugins at boot (skip the
+  // call entirely when no code plugin registered anything).
+  if (hasPluginHooks()) applyPluginHooks(middleware, eventBus);
 
   const prepared = await prepareChatTurn({
     message,

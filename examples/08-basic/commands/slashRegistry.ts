@@ -10,8 +10,11 @@
  *   - `formatHelp()`             — text reply for `/help`
  */
 
+import { sep } from "path";
 import { loadMarkdownConfigs, getAppDirName } from "../utils/markdownConfigLoader.js";
-import { loadSkillsFromDisk } from "../skills/loadSkillsDir.js";
+import { loadSkillsFromDisk, mergeSkillsByName } from "../skills/loadSkillsDir.js";
+import { loadPlugins } from "../core/plugins/loader.js";
+import { pluginErrorMessage, pluginErrorSource } from "../core/plugins/types.js";
 import { mergeCommands } from "./loadCommandsFromFiles.js";
 import type { SlashCommand } from "./types.js";
 import type { SkillDefinition } from "../skills/types.js";
@@ -62,6 +65,11 @@ export const BUILTIN_SLASH_ENTRIES: SlashEntry[] = [
     description: "Enter or view plan mode. Use /plan open for the plan file path.",
     argumentHint: "[open|<description>]",
   },
+  {
+    kind: "built-in",
+    name: "plugins",
+    description: "List installed plugins and any load errors.",
+  },
 ];
 
 const BUILTIN_NAMES = new Set(BUILTIN_SLASH_ENTRIES.map((e) => e.name));
@@ -83,11 +91,16 @@ export async function loadSlashRegistry(cwd: string): Promise<{
   commands: SlashCommand[];
   skills: SkillDefinition[];
 }> {
-  const [commandFiles, { skills }] = await Promise.all([
+  const [commandFiles, { skills: diskSkills }, contributions] = await Promise.all([
     loadMarkdownConfigs("commands", cwd),
     loadSkillsFromDisk(cwd),
+    loadPlugins(cwd),
   ]);
-  const commands = mergeCommands(commandFiles).commands;
+  // Plugin contributions are lowest priority: plugin files first so disk
+  // commands/skills override them on a name collision (mergeCommands sorts by
+  // sourceRank; mergeSkillsByName takes lowest-priority first).
+  const commands = mergeCommands([...contributions.commandFiles, ...commandFiles]).commands;
+  const skills = mergeSkillsByName(contributions.skills, diskSkills);
 
   const byName = new Map<string, SlashEntry>();
 
@@ -196,4 +209,93 @@ export function formatHelp(entries: readonly SlashEntry[]): string {
       : "";
 
   return [header, "", ...lines, footer].join("\n").trimEnd();
+}
+
+// ── /plugins ──────────────────────────────────────────────────────────────
+
+/** Per-plugin summary (counts derived by matching contribution paths). */
+export interface PluginSummary {
+  name: string;
+  scope: "user" | "project";
+  version?: string;
+  description?: string;
+  path: string;
+  agents: number;
+  commands: number;
+  skills: number;
+  mcp: number;
+}
+
+export interface PluginsOverview {
+  plugins: PluginSummary[];
+  errors: Array<{ type: string; source: string; message: string }>;
+}
+
+/**
+ * Discover plugins for `cwd` and roll them up into a UI/CLI-friendly shape.
+ * Per-plugin component counts are derived by matching each contribution's
+ * file path against the plugin root — no second scan.
+ */
+export async function loadPluginsOverview(cwd: string): Promise<PluginsOverview> {
+  const c = await loadPlugins(cwd);
+  const underRoot = (p: string | undefined, root: string) =>
+    !!p && (p === root || p.startsWith(root + sep) || p.startsWith(root + "/"));
+
+  const plugins: PluginSummary[] = c.plugins.map((p) => ({
+    name: p.name,
+    scope: p.scope,
+    version: typeof p.manifest.version === "string" ? p.manifest.version : undefined,
+    description:
+      typeof p.manifest.description === "string" ? p.manifest.description : undefined,
+    path: p.path,
+    agents: c.agentFiles.filter((f) => underRoot(f.filePath, p.path)).length,
+    commands: c.commandFiles.filter((f) => underRoot(f.filePath, p.path)).length,
+    skills: c.skills.filter((s) => underRoot(s.baseDir ?? s.filePath, p.path)).length,
+    // Number of MCP config sources the plugin declares (.mcp.json + manifest).
+    mcp: p.mcpSources.length,
+  }));
+
+  const errors = c.errors.map((e) => ({
+    type: e.type,
+    source: pluginErrorSource(e),
+    message: pluginErrorMessage(e),
+  }));
+
+  return { plugins, errors };
+}
+
+/** Markdown reply for `/plugins`. */
+export function formatPlugins(overview: PluginsOverview): string {
+  const { plugins, errors } = overview;
+
+  if (plugins.length === 0 && errors.length === 0) {
+    return [
+      "**No plugins installed.**",
+      "",
+      `Drop a plugin folder into \`<cwd>/${getAppDirName()}/plugins/<name>/\` ` +
+        `(with \`agents/\`, \`commands/\`, \`skills/\`, and/or \`.mcp.json\`).`,
+    ].join("\n");
+  }
+
+  const lines = plugins.map((p) => {
+    const meta = [p.version ? `v${p.version}` : null, p.description]
+      .filter(Boolean)
+      .join(" · ");
+    const counts = `agents: ${p.agents}, commands: ${p.commands}, skills: ${p.skills}, mcp: ${p.mcp}`;
+    return `- **${p.name}** @${p.scope}${meta ? ` — ${meta}` : ""}\n    ${counts}`;
+  });
+
+  const out = [`**Plugins** (${plugins.length} loaded):`, "", ...lines];
+
+  if (errors.length > 0) {
+    out.push("", `**Errors** (${errors.length}):`);
+    for (const e of errors) out.push(`  - [${e.type}] ${e.source}: ${e.message}`);
+  }
+
+  return out.join("\n").trimEnd();
+}
+
+/** Convenience: load + format in one call for the `/plugins` dispatcher path. */
+export async function formatPluginsReply(cwd: string): Promise<string> {
+  return formatPlugins(await loadPluginsOverview(cwd));
 }

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deferred MCP / Tools &amp; Skill 懒加载 — 图文详解</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
+
+    :root {
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --blue: #0284c7;
+      --blue-light: #e0f2fe;
+      --purple: #7c3aed;
+      --purple-light: #ede9fe;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --green: #059669;
+      --green-light: #d1fae5;
+      --red-light: #fee2e2;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #312e81 100%);
+      color: white;
+      padding: 56px 24px 64px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 4vw, 38px);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .hero p {
+      max-width: 680px;
+      margin: 0 auto;
+      color: #cbd5e1;
+      font-size: 16px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 20px 80px;
+    }
+
+    section {
+      margin-top: 48px;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: white;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .lead {
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-size: 14.5px;
+    }
+
+    .figure {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin: 20px 0;
+      box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    .figure-caption {
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 14px;
+    }
+
+    .svg-wrap { width: 100%; overflow-x: auto; }
+
+    svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+
+    .cards-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      border-top: 4px solid var(--blue);
+    }
+
+    .card.purple { border-top-color: var(--purple); }
+    .card.amber { border-top-color: var(--amber); }
+
+    .card h3 { font-size: 16px; margin-bottom: 8px; }
+    .card p, .card li { font-size: 13.5px; color: #475569; }
+    .card ul { padding-left: 18px; margin-top: 8px; }
+    .card li { margin-bottom: 4px; }
+
+    .mono {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: #0f172a;
+    }
+
+    .callout {
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .callout.warn {
+      background: var(--amber-light);
+      border-left: 4px solid var(--amber);
+      color: #92400e;
+    }
+
+    .callout.info {
+      background: var(--blue-light);
+      border-left: 4px solid var(--blue);
+      color: #0c4a6e;
+    }
+
+    .callout.ok {
+      background: var(--green-light);
+      border-left: 4px solid var(--green);
+      color: #065f46;
+    }
+
+    .chat-demo {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .bubble {
+      max-width: 88%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .bubble.user {
+      align-self: flex-end;
+      background: var(--blue);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .bubble.system {
+      align-self: flex-start;
+      background: #f8fafc;
+      border: 1px dashed #94a3b8;
+      color: #475569;
+      font-size: 12px;
+    }
+
+    .bubble.assistant {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble.tool {
+      align-self: flex-start;
+      background: var(--purple-light);
+      border: 1px solid #c4b5fd;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11.5px;
+      white-space: pre-wrap;
+    }
+
+    .bubble-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      opacity: 0.7;
+      margin-bottom: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+    }
+
+    th { background: #f8fafc; font-weight: 600; }
+    td { color: #475569; }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-right: 4px;
+    }
+
+    .tag.blue { background: var(--blue-light); color: var(--blue); }
+    .tag.purple { background: var(--purple-light); color: var(--purple); }
+    .tag.amber { background: var(--amber-light); color: var(--amber); }
+
+    footer {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>Deferred MCP / Tools &amp; Skill 懒加载</h1>
+  <p>图文详解：为什么需要两套机制、数据流怎么走、messages 和 tools[] 各管什么</p>
+</header>
+
+<div class="container">
+
+  <!-- ── 1. 大图：一次请求里有什么 ── -->
+  <section>
+    <h2><span class="num">1</span>发给 LLM 的一次请求 = 三条通道</h2>
+    <p class="lead">很多人以为「加载工具」就是往 messages 里塞文字。实际上 schema 和对话是分开的。</p>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg">
+          <!-- API Request box -->
+          <rect x="20" y="20" width="840" height="280" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+          <text x="440" y="52" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">streamText 请求（每一 Step）</text>
+
+          <!-- system -->
+          <rect x="48" y="72" width="240" height="100" rx="10" fill="#dbeafe" stroke="#0284c7" stroke-width="2"/>
+          <text x="168" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="#0369a1">system</text>
+          <text x="168" y="122" text-anchor="middle" font-size="11" fill="#475569">静态指令</text>
+          <text x="168" y="142" text-anchor="middle" font-size="11" fill="#475569">skill / tool_search 用法</text>
+          <text x="168" y="162" text-anchor="middle" font-size="10" fill="#64748b">prompts/system.ts</text>
+
+          <!-- tools -->
+          <rect x="320" y="72" width="240" height="100" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+          <text x="440" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="#b45309">tools[]</text>
+          <text x="440" y="122" text-anchor="middle" font-size="11" fill="#475569">JSON Schema</text>
+          <text x="440" y="142" text-anchor="middle" font-size="11" fill="#475569">决定能否合法 tool call</text>
+          <text x="440" y="162" text-anchor="middle" font-size="10" fill="#64748b">activeTools → stripToolExecute</text>
+
+          <!-- messages -->
+          <rect x="592" y="72" width="240" height="100" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+          <text x="712" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="#6d28d9">messages[]</text>
+          <text x="712" y="122" text-anchor="middle" font-size="11" fill="#475569">对话历史</text>
+          <text x="712" y="142" text-anchor="middle" font-size="11" fill="#475569">user / assistant / tool</text>
+          <text x="712" y="162" text-anchor="middle" font-size="10" fill="#64748b">session.messages</text>
+
+          <!-- arrows down -->
+          <text x="168" y="210" text-anchor="middle" font-size="11" fill="#64748b">几乎不变</text>
+          <text x="440" y="210" text-anchor="middle" font-size="11" fill="#64748b">Deferred 会动态变大 ↕</text>
+          <text x="712" y="210" text-anchor="middle" font-size="11" fill="#64748b">每 Step 追加</text>
+
+          <!-- bottom insight -->
+          <rect x="48" y="230" width="784" height="52" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+          <text x="440" y="254" text-anchor="middle" font-size="12" font-weight="600" fill="#065f46">tool result 在 messages 里只是「文字记忆」→ 不能替代 tools[] 里的 Schema</text>
+          <text x="440" y="272" text-anchor="middle" font-size="11" fill="#047857">这就是为什么 deferred 工具需要 activateDeferredTools + discoveredTools</text>
+        </svg>
+      </div>
+      <p class="figure-caption">图 1 · 三条通道职责不同：messages 记「说过什么」，tools[] 定「能调用什么」</p>
+    </div>
+  </section>
+
+  <!-- ── 2. 三种机制对比 ── -->
+  <section>
+    <h2><span class="num">2</span>三种机制：延迟的是什么？</h2>
+    <p class="lead">「Defer」在不同地方含义不同。Skill 不是 deferred tool pool，而是 body 懒加载。</p>
+
+    <div class="cards-3">
+      <div class="card amber">
+        <h3>🟡 Deferred 内置工具</h3>
+        <ul>
+          <li>如 <span class="mono">web_search</span>、<span class="mono">todo_write</span></li>
+          <li>标记 <span class="mono">shouldDefer: true</span></li>
+          <li>延迟：<strong>Schema</strong></li>
+          <li>解锁：<span class="mono">tool_search</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🔵 Deferred MCP</h3>
+        <ul>
+          <li>所有 MCP 工具<strong>默认 defer</strong></li>
+          <li>命名 <span class="mono">{server}_{tool}</span></li>
+          <li>延迟：<strong>Schema</strong></li>
+          <li>实例在 <span class="mono">deferredToolPool</span></li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <h3>🟣 Skill 懒加载</h3>
+        <ul>
+          <li><span class="mono">skill</span> 工具<strong>始终 active</strong></li>
+          <li>延迟：<strong>SKILL.md 正文</strong></li>
+          <li>解锁：调 <span class="mono">skill(...)</span></li>
+          <li><strong>不用</strong> discoveredTools</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 240" xmlns="http://www.w3.org/2000/svg">
+          <text x="440" y="24" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Turn 开始时，模型「能看到」vs「还看不到」</text>
+
+          <!-- Turn start -->
+          <rect x="40" y="44" width="800" height="180" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+
+          <!-- Left: visible -->
+          <rect x="60" y="64" width="360" height="140" rx="8" fill="#d1fae5" stroke="#059669"/>
+          <text x="240" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="#065f46">✓ Turn 开头就有</text>
+          <text x="80" y="112" font-size="11" fill="#047857">• system prompt</text>
+          <text x="80" y="132" font-size="11" fill="#047857">• read / write / grep / bash …</text>
+          <text x="80" y="152" font-size="11" fill="#047857">• skill 工具（若有 skills）</text>
+          <text x="80" y="172" font-size="11" fill="#047857">• tool_search（若有 deferred）</text>
+          <text x="80" y="192" font-size="11" fill="#047857">• &lt;system-reminder&gt; 里的 listing</text>
+
+          <!-- Right: hidden -->
+          <rect x="460" y="64" width="360" height="140" rx="8" fill="#fee2e2" stroke="#dc2626"/>
+          <text x="640" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="#991b1b">✗ Turn 开头没有</text>
+          <text x="480" y="112" font-size="11" fill="#b91c1c">• MCP 工具的 JSON Schema</text>
+          <text x="480" y="132" font-size="11" fill="#b91c1c">• web_search 等 deferred schema</text>
+          <text x="480" y="152" font-size="11" fill="#b91c1c">• SKILL.md 完整正文（只有名字）</text>
+          <text x="480" y="178" font-size="10" fill="#64748b" font-style="italic">listing 只有 metadata，不是完整内容</text>
+        </svg>
+      </div>
+      <p class="figure-caption">图 2 · 绿色 = 已在 active；红色 = 按需加载</p>
+    </div>
+  </section>
+
+  <!-- ── 3. MCP 流程图 ── -->
+  <section>
+    <h2><span class="num">3</span>MCP 加载流程（tool_search → 下一步才能调）</h2>
+    <p class="lead">用户：「用浏览器打开 example.com」</p>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg">
+          <!-- timeline -->
+          <line x1="80" y1="360" x2="800" y2="360" stroke="#cbd5e1" stroke-width="2"/>
+          <text x="80" y="388" font-size="10" fill="#64748b">Turn 开始</text>
+          <text x="280" y="388" font-size="10" fill="#64748b">Step 1</text>
+          <text x="480" y="388" font-size="10" fill="#64748b">Step 1 结束</text>
+          <text x="680" y="388" font-size="10" fill="#64748b">Step 2</text>
+
+          <!-- Step 0 prepare -->
+          <rect x="60" y="40" width="160" height="90" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+          <text x="140" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#0369a1">prepareChatTurn</text>
+          <text x="140" y="82" text-anchor="middle" font-size="10" fill="#475569">createSplit</text>
+          <text x="140" y="98" text-anchor="middle" font-size="10" fill="#475569">MCP → deferred</text>
+          <text x="140" y="118" text-anchor="middle" font-size="10" fill="#475569">注册 tool_search</text>
+
+          <!-- Step 1 LLM -->
+          <rect x="240" y="40" width="180" height="90" rx="8" fill="#fef3c7" stroke="#d97706"/>
+          <text x="330" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309">Step 1 · LLM</text>
+          <text x="330" y="82" text-anchor="middle" font-size="10" fill="#475569">tools[] 无 MCP schema</text>
+          <text x="330" y="98" text-anchor="middle" font-size="10" fill="#475569">模型调 tool_search</text>
+          <text x="330" y="118" text-anchor="middle" font-size="10" fill="#475569">select:browser_navigate</text>
+
+          <!-- activate -->
+          <rect x="460" y="40" width="180" height="90" rx="8" fill="#d1fae5" stroke="#059669"/>
+          <text x="550" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#065f46">activateDeferredTools</text>
+          <text x="550" y="82" text-anchor="middle" font-size="10" fill="#475569">pool → activeTools</text>
+          <text x="550" y="98" text-anchor="middle" font-size="10" fill="#475569">discoveredTools +=</text>
+          <text x="550" y="118" text-anchor="middle" font-size="10" fill="#475569">messages 不变</text>
+
+          <!-- Step 2 -->
+          <rect x="660" y="40" width="180" height="90" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="750" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#6d28d9">Step 2 · LLM</text>
+          <text x="750" y="82" text-anchor="middle" font-size="10" fill="#475569">tools[] 含 MCP schema</text>
+          <text x="750" y="98" text-anchor="middle" font-size="10" fill="#475569">browser_navigate(url)</text>
+          <text x="750" y="118" text-anchor="middle" font-size="10" fill="#475569">✓ 调用成功</text>
+
+          <!-- arrows -->
+          <path d="M 220 85 L 238 85" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+          <path d="M 420 85 L 458 85" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+          <path d="M 640 85 L 658 85" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+          <defs>
+            <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6" fill="#64748b"/>
+            </marker>
+          </defs>
+
+          <!-- messages stack -->
+          <text x="80" y="160" font-size="12" font-weight="700" fill="#0f172a">messages 变化：</text>
+
+          <rect x="80" y="172" width="720" height="36" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+          <text x="96" y="194" font-size="10" fill="#475569">user · &lt;system-reminder&gt; browser_navigate (MCP) 在 listing 里</text>
+
+          <rect x="80" y="216" width="720" height="36" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+          <text x="96" y="238" font-size="10" fill="#475569">user · "打开 example.com"</text>
+
+          <rect x="80" y="260" width="720" height="36" rx="6" fill="#fef3c7" stroke="#d97706"/>
+          <text x="96" y="276" font-size="10" fill="#92400e">assistant + tool · tool_search → </text>
+          <text x="96" y="290" font-size="10" fill="#92400e">tool result: "Loaded 1 tool(s)... navigate: ..." （仅文字）</text>
+
+          <rect x="80" y="304" width="720" height="36" rx="6" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="96" y="326" font-size="10" fill="#5b21b6">assistant + tool · browser_navigate → tool result: "Navigated..."</text>
+        </svg>
+      </div>
+      <p class="figure-caption">图 3 · MCP：tool result 是文字；Schema 进 tools[] 靠 activate，不靠 messages</p>
+    </div>
+
+    <div class="callout warn">
+      <strong>⚠ 常见误解：</strong>Step 1 的 tool result 已经说「You can now use browser_navigate」，但<strong>同一步还不能调</strong>——必须等 Step 2 tools[] 更新。
+    </div>
+  </section>
+
+  <!-- ── 4. Skill 流程 + 聊天气泡 ── -->
+  <section>
+    <h2><span class="num">4</span>Skill 加载流程（skill 工具 → body 进 messages）</h2>
+    <p class="lead">用户：「用 xlsx skill 修 reports/q1.xlsx 的公式错误」</p>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg">
+          <rect x="40" y="20" width="200" height="70" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="140" y="48" text-anchor="middle" font-size="11" font-weight="700" fill="#6d28d9">registerSkills</text>
+          <text x="140" y="68" text-anchor="middle" font-size="10" fill="#475569">只读 frontmatter</text>
+          <text x="140" y="82" text-anchor="middle" font-size="10" fill="#475569">skill 工具 → active</text>
+
+          <path d="M 240 55 L 268 55" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+          <rect x="270" y="20" width="200" height="70" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+          <text x="370" y="48" text-anchor="middle" font-size="11" font-weight="700" fill="#0369a1">Turn 开头 listing</text>
+          <text x="370" y="68" text-anchor="middle" font-size="10" fill="#475569">xlsx (inline): 短描述</text>
+          <text x="370" y="82" text-anchor="middle" font-size="10" fill="#475569">无 SKILL.md body</text>
+
+          <path d="M 470 55 L 498 55" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+          <rect x="500" y="20" width="200" height="70" rx="8" fill="#fef3c7" stroke="#d97706"/>
+          <text x="600" y="48" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309">skill(xlsx, args)</text>
+          <text x="600" y="68" text-anchor="middle" font-size="10" fill="#475569">expandSkillBody</text>
+          <text x="600" y="82" text-anchor="middle" font-size="10" fill="#475569">loadBody() 读磁盘</text>
+
+          <path d="M 700 55 L 728 55" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+          <rect x="730" y="20" width="110" height="70" rx="8" fill="#d1fae5" stroke="#059669"/>
+          <text x="785" y="48" text-anchor="middle" font-size="11" font-weight="700" fill="#065f46">inline</text>
+          <text x="785" y="68" text-anchor="middle" font-size="10" fill="#475569">body →</text>
+          <text x="785" y="82" text-anchor="middle" font-size="10" fill="#475569">tool result</text>
+
+          <defs>
+            <marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6" fill="#64748b"/>
+            </marker>
+          </defs>
+
+          <rect x="40" y="110" width="800" height="70" rx="8" fill="#ecfdf5" stroke="#059669"/>
+          <text x="440" y="136" text-anchor="middle" font-size="12" font-weight="600" fill="#065f46">Skill 正文在 messages 里就够了 → 模型按 text 指令继续 read/write</text>
+          <text x="440" y="158" text-anchor="middle" font-size="11" fill="#047857">不需要 discoveredTools，因为始终只有一个 skill 工具 schema</text>
+        </svg>
+      </div>
+      <p class="figure-caption">图 4 · Skill：加载的是「说明书正文」，不是新的 tool schema</p>
+    </div>
+
+    <div class="figure">
+      <p style="font-size:13px;font-weight:600;margin-bottom:12px;color:#475569">对话气泡示意（messages 数组）</p>
+      <div class="chat-demo">
+        <div class="bubble system">
+          <div class="bubble-label">user · system-reminder</div>
+          The following skills are available: xlsx (inline): Use this skill when spreadsheet...
+        </div>
+        <div class="bubble user">
+          <div class="bubble-label">user</div>
+          用 xlsx skill 修 reports/q1.xlsx 里的 #REF! 错误
+        </div>
+        <div class="bubble assistant">
+          <div class="bubble-label">assistant · tool-call</div>
+          skill({ skill_name: "xlsx", arguments: "Fix #REF! in reports/q1.xlsx" })
+        </div>
+        <div class="bubble tool">
+          <div class="bubble-label">tool · tool-result（← 完整 SKILL.md 在这里展开）</div>
+Base directory for this skill: .../.ai-agent/skills/xlsx
+
+# Requirements for Outputs
+## Zero Formula Errors
+- Every Excel model MUST be delivered with ZERO formula errors...
+        </div>
+        <div class="bubble assistant">
+          <div class="bubble-label">assistant · 下一步</div>
+          按 skill 要求，我先 read reports/q1.xlsx ...
+        </div>
+      </div>
+      <p class="figure-caption">图 5 · Skill body 出现在 tool result，不在 turn 开头的 listing 里</p>
+    </div>
+  </section>
+
+  <!-- ── 5. discoveredTools ── -->
+  <section>
+    <h2><span class="num">5</span>为什么 messages 有了，还要 discoveredTools？</h2>
+    <p class="lead">跨 Turn 时，prepareChatTurn 会重新 createSplit。没有 discoveredTools，MCP 又会被 defer 回去。</p>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 280" xmlns="http://www.w3.org/2000/svg">
+          <!-- Turn 1 -->
+          <rect x="40" y="30" width="380" height="220" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+          <text x="230" y="56" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Turn 1（已 tool_search 过）</text>
+          <text x="60" y="82" font-size="11" fill="#475569">messages 里有：</text>
+          <text x="60" y="100" font-size="11" fill="#059669">✓ "Loaded browser_navigate..." 文字</text>
+          <text x="60" y="126" font-size="11" fill="#475569">discoveredTools 里有：</text>
+          <text x="60" y="144" font-size="11" fill="#059669">✓ "cursor-ide-browser_browser_navigate"</text>
+          <text x="60" y="170" font-size="11" fill="#475569">Turn 1 结束时两者都有 ✓</text>
+
+          <!-- arrow -->
+          <text x="440" y="140" text-anchor="middle" font-size="24" fill="#64748b">→</text>
+
+          <!-- Turn 2 without discovered -->
+          <rect x="480" y="30" width="180" height="100" rx="8" fill="#fee2e2" stroke="#dc2626"/>
+          <text x="570" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#991b1b">若无 discoveredTools</text>
+          <text x="570" y="76" text-anchor="middle" font-size="10" fill="#b91c1c">createSplit → MCP</text>
+          <text x="570" y="92" text-anchor="middle" font-size="10" fill="#b91c1c">又回到 deferred</text>
+          <text x="570" y="112" text-anchor="middle" font-size="10" fill="#b91c1c">需再 tool_search ✗</text>
+
+          <!-- Turn 2 with discovered -->
+          <rect x="480" y="150" width="180" height="100" rx="8" fill="#d1fae5" stroke="#059669"/>
+          <text x="570" y="174" text-anchor="middle" font-size="11" font-weight="700" fill="#065f46">有 discoveredTools</text>
+          <text x="570" y="196" text-anchor="middle" font-size="10" fill="#047857">createSplit → 直接</text>
+          <text x="570" y="212" text-anchor="middle" font-size="10" fill="#047857">放进 active tools[]</text>
+          <text x="570" y="232" text-anchor="middle" font-size="10" fill="#047857">可直接调用 ✓</text>
+
+          <!-- annotation -->
+          <rect x="680" y="80" width="160" height="120" rx="8" fill="#fff" stroke="#cbd5e1"/>
+          <text x="760" y="104" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">messages</text>
+          <text x="760" y="122" text-anchor="middle" font-size="9" fill="#64748b">= 模型记忆</text>
+          <text x="760" y="148" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">discoveredTools</text>
+          <text x="760" y="166" text-anchor="middle" font-size="9" fill="#64748b">= runtime 状态</text>
+          <text x="760" y="182" text-anchor="middle" font-size="9" fill="#64748b">重建 tools[]</text>
+        </svg>
+      </div>
+      <p class="figure-caption">图 6 · messages 不能替代 discoveredTools：后者决定下一 Turn 的 tools[] 初始状态</p>
+    </div>
+
+    <div class="callout ok">
+      <strong>✓ Skill 不需要这套：</strong>因为只有一个 <span class="mono">skill</span> schema，正文在 tool result 里模型就能继续执行；没有「每个 skill 一个独立 schema」的问题。
+    </div>
+  </section>
+
+  <!-- ── 6. 对照表 ── -->
+  <section>
+    <h2><span class="num">6</span>一表总结</h2>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Deferred MCP / Tools</th>
+          <th>Skill 懒加载</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>延迟什么</strong></td>
+          <td>JSON Schema（<span class="mono">tools[]</span>）</td>
+          <td>SKILL.md 正文</td>
+        </tr>
+        <tr>
+          <td><strong>Turn 开头</strong></td>
+          <td>工具名 listing + <span class="mono">tool_search</span></td>
+          <td>skill 名 listing + <span class="mono">skill</span> 工具 active</td>
+        </tr>
+        <tr>
+          <td><strong>解锁方式</strong></td>
+          <td><span class="mono">tool_search</span> → <span class="mono">activateDeferredTools</span></td>
+          <td><span class="mono">skill(skill_name, args)</span> → <span class="mono">expandSkillBody</span></td>
+        </tr>
+        <tr>
+          <td><strong>加载结果在哪</strong></td>
+          <td>Schema 进 <span class="mono">tools[]</span>；文字进 messages</td>
+          <td>正文进 messages（tool result）</td>
+        </tr>
+        <tr>
+          <td><strong>跨 Turn 持久化</strong></td>
+          <td><span class="mono">session.discoveredTools</span></td>
+          <td>body 留在 messages 历史里</td>
+        </tr>
+        <tr>
+          <td><strong>关键代码</strong></td>
+          <td><span class="mono">tool-registry.createSplit</span> · <span class="mono">tool_search.ts</span> · <span class="mono">agent.activateDeferredTools</span></td>
+          <td><span class="mono">skills/loadSkillsDir</span> · <span class="mono">tools/skill.ts</span> · <span class="mono">skills/expand.ts</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="num">7</span>一句话记住</h2>
+    <div class="callout info">
+      <strong>Deferred 工具：</strong>messages 告诉模型「有个叫 X 的工具」；<span class="mono">tools[]</span> 才让它能真正调用 X。<br><br>
+      <strong>Skill：</strong>listing 告诉模型「有个叫 xlsx 的流程」；调用 <span class="mono">skill</span> 后正文进 messages，模型按文字执行即可。
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  examples/08-basic · 用浏览器打开本文件即可阅读 ·
+  <a href="deferred-mcp-tools-skills-slides.html" style="color:#0284c7">2 页精简版幻灯片</a>
+</footer>
+
+</body>
+</html>

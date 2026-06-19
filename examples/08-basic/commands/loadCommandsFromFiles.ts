@@ -18,7 +18,7 @@
 
 import * as path from "path";
 import type { SlashCommand } from "./types.js";
-import type { MarkdownFile } from "../utils/markdownConfigLoader.js";
+import { sourceRank, type MarkdownFile } from "../utils/markdownConfigLoader.js";
 import {
   parseArgumentNames,
   parseString,
@@ -82,11 +82,9 @@ export function mergeCommands(
 ): { commands: SlashCommand[]; errors: Array<{ filePath: string; error: string }> } {
   const errors: Array<{ filePath: string; error: string }> = [];
 
-  // user → project so project overrides user (last write wins in Map).
-  const ordered = [...files].sort((a, b) => {
-    const rank = (s: typeof a.source) => (s === "user" ? 0 : 1);
-    return rank(a.source) - rank(b.source);
-  });
+  // plugin → user → project so project overrides user overrides plugin
+  // (last write wins in Map).
+  const ordered = [...files].sort((a, b) => sourceRank(a.source) - sourceRank(b.source));
 
   const byName = new Map<string, SlashCommand>();
   for (const f of ordered) {

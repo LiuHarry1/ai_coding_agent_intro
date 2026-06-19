@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coding Agent 架构图集 — 08-basic</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap");
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Noto Sans SC", sans-serif;
+      background: #eef2ff;
+      color: #0f172a;
+    }
+    .hero {
+      background: linear-gradient(135deg, #1e1b4b, #312e81 50%, #0c4a6e);
+      color: #fff;
+      text-align: center;
+      padding: 40px 20px 48px;
+    }
+    .hero h1 { font-size: 32px; margin-bottom: 6px; }
+    .hero p { color: #c7d2fe; font-size: 14px; }
+    .container { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+    .container-wide { max-width: 1280px; padding-top: 28px; padding-bottom: 0; }
+    .fig-master {
+      padding: 24px 12px 16px;
+      border: 2px solid #4f46e5;
+      box-shadow: 0 12px 40px rgba(79,70,229,.12);
+    }
+    .fig-master .fig-title {
+      font-size: 18px;
+      color: #312e81;
+      margin-bottom: 12px;
+    }
+    .fig-master .svg-wrap { min-height: 520px; }
+    .fig-master svg { min-width: 960px; }
+    .fig {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 20px 16px 12px;
+      margin-bottom: 28px;
+      box-shadow: 0 8px 30px rgba(15,23,42,.06);
+    }
+    .fig-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      padding: 0 8px;
+    }
+    .fig-cap {
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 10px;
+    }
+    .svg-wrap { overflow-x: auto; }
+    svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+    .nav {
+      display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+      margin-top: 16px;
+    }
+    .nav a {
+      font-size: 12px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,.15); color: #e0e7ff; text-decoration: none;
+    }
+    footer { text-align: center; padding: 24px; font-size: 12px; color: #64748b; }
+    footer a { color: #4f46e5; margin: 0 6px; }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>Coding Agent 架构图集</h1>
+  <p>examples/08-basic · 图为主 · 少文字</p>
+  <div class="nav">
+    <a href="deferred-mcp-tools-skills-guide.html">Deferred / Skills</a>
+    <a href="session-compacting-guide.html">Compacting</a>
+  </div>
+</header>
+
+<div class="container container-wide">
+
+  <!-- ★ 完整总览 -->
+  <div class="fig fig-master">
+    <div class="fig-title">★ 完整系统架构总览</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 1280 860" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#64748b"/></marker>
+          <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#2563eb"/></marker>
+          <marker id="arr-green" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#059669"/></marker>
+          <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/>
+          </filter>
+        </defs>
+
+        <!-- 标题区 -->
+        <text x="640" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">08-basic Coding Agent — End-to-End Architecture</text>
+        <text x="640" y="52" text-anchor="middle" font-size="11" fill="#64748b">Client → Server → Turn Prep → Agent Loop → Tools / LLM → Persistence &amp; Events</text>
+
+        <!-- ═══ 外部配置（顶） ═══ -->
+        <rect x="40" y="68" width="1200" height="72" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="6 3"/>
+        <text x="56" y="88" font-size="11" font-weight="700" fill="#64748b">CONFIG &amp; EXTENSIONS</text>
+        <g font-size="9" font-weight="600">
+          <rect x="56" y="96" width="148" height="32" rx="6" fill="#fff" stroke="#94a3b8"/><text x="130" y="115" text-anchor="middle" fill="#475569">~/.ai-agent/config.json</text>
+          <rect x="216" y="96" width="148" height="32" rx="6" fill="#fff" stroke="#94a3b8"/><text x="290" y="115" text-anchor="middle" fill="#475569">mcpServers</text>
+          <rect x="376" y="96" width="148" height="32" rx="6" fill="#fce7f3" stroke="#e11d48"/><text x="450" y="115" text-anchor="middle" fill="#be185d">.ai-agent/skills/</text>
+          <rect x="536" y="96" width="148" height="32" rx="6" fill="#fce7f3" stroke="#e11d48"/><text x="610" y="115" text-anchor="middle" fill="#be185d">.ai-agent/agents/</text>
+          <rect x="696" y="96" width="148" height="32" rx="6" fill="#d1fae5" stroke="#059669"/><text x="770" y="115" text-anchor="middle" fill="#047857">.cursor/rules</text>
+          <rect x="856" y="96" width="148" height="32" rx="6" fill="#fef9c3" stroke="#ca8a04"/><text x="930" y="115" text-anchor="middle" fill="#854d0e">slash commands</text>
+          <rect x="1016" y="96" width="208" height="32" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="1120" y="115" text-anchor="middle" fill="#4338ca">compaction · provider · disabledTools</text>
+        </g>
+
+        <!-- ═══ CLIENT ═══ -->
+        <rect x="40" y="158" width="1200" height="88" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2" filter="url(#shadow)"/>
+        <text x="56" y="178" font-size="12" font-weight="700" fill="#0369a1">CLIENT · client/web (React + Vite)</text>
+        <g font-size="9">
+          <rect x="56" y="188" width="130" height="44" rx="6" fill="#fff" stroke="#7dd3fc"/><text x="121" y="208" text-anchor="middle" font-weight="600" fill="#0369a1">ChatView</text><text x="121" y="222" text-anchor="middle" fill="#64748b">SSE stream</text>
+          <rect x="200" y="188" width="130" height="44" rx="6" fill="#fff" stroke="#7dd3fc"/><text x="265" y="208" text-anchor="middle" font-weight="600" fill="#0369a1">InputArea</text><text x="265" y="222" text-anchor="middle" fill="#64748b">@file · slash</text>
+          <rect x="344" y="188" width="130" height="44" rx="6" fill="#fff" stroke="#7dd3fc"/><text x="409" y="208" text-anchor="middle" font-weight="600" fill="#0369a1">ToolCards</text><text x="409" y="222" text-anchor="middle" fill="#64748b">SubagentCard</text>
+          <rect x="488" y="188" width="130" height="44" rx="6" fill="#fff" stroke="#7dd3fc"/><text x="553" y="208" text-anchor="middle" font-weight="600" fill="#0369a1">WorkspaceIDE</text><text x="553" y="222" text-anchor="middle" fill="#64748b">/workspace API</text>
+          <rect x="632" y="188" width="130" height="44" rx="6" fill="#fff" stroke="#7dd3fc"/><text x="697" y="208" text-anchor="middle" font-weight="600" fill="#0369a1">ModePicker</text><text x="697" y="222" text-anchor="middle" fill="#64748b">agent/ask/plan</text>
+          <rect x="776" y="188" width="200" height="44" rx="6" fill="#fff" stroke="#7dd3fc"/><text x="876" y="208" text-anchor="middle" font-weight="600" fill="#0369a1">chat-store · agent.js</text><text x="876" y="222" text-anchor="middle" fill="#64748b">POST /chat · session_id</text>
+        </g>
+
+        <path d="M640 246 L640 268" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-blue)"/>
+        <text x="652" y="262" font-size="9" fill="#2563eb">HTTP / SSE</text>
+
+        <!-- ═══ SERVER ═══ -->
+        <rect x="40" y="270" width="1200" height="96" rx="12" fill="#eef2ff" stroke="#4f46e5" stroke-width="2" filter="url(#shadow)"/>
+        <text x="56" y="290" font-size="12" font-weight="700" fill="#4338ca">SERVER · server/ · :4567</text>
+        <g font-size="9">
+          <rect x="56" y="300" width="110" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="111" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">router.ts</text><text x="111" y="338" text-anchor="middle" fill="#64748b">HTTP 总线</text>
+          <rect x="178" y="300" width="120" height="50" rx="6" fill="#c7d2fe" stroke="#4f46e5" stroke-width="1.5"/><text x="238" y="320" text-anchor="middle" font-weight="700" fill="#3730a3">routes/chat</text><text x="238" y="338" text-anchor="middle" fill="#64748b">主入口</text>
+          <rect x="310" y="300" width="100" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="360" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">session</text><text x="360" y="338" text-anchor="middle" fill="#64748b">JSONL</text>
+          <rect x="422" y="300" width="100" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="472" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">sse-transport</text><text x="472" y="338" text-anchor="middle" fill="#64748b">events</text>
+          <rect x="534" y="300" width="110" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="589" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">workspace/*</text><text x="589" y="338" text-anchor="middle" fill="#64748b">IDE CRUD</text>
+          <rect x="656" y="300" width="100" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="706" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">skills-api</text><text x="706" y="338" text-anchor="middle" fill="#64748b">invoke</text>
+          <rect x="768" y="300" width="100" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="818" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">settings</text><text x="818" y="338" text-anchor="middle" fill="#64748b">provider</text>
+          <rect x="880" y="300" width="110" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="935" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">mcp-lifecycle</text><text x="935" y="338" text-anchor="middle" fill="#64748b">stdio/SSE</text>
+          <rect x="1002" y="300" width="110" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="1057" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">questions</text><text x="1057" y="338" text-anchor="middle" fill="#64748b">HITL</text>
+          <rect x="1124" y="300" width="100" height="50" rx="6" fill="#fff" stroke="#a5b4fc"/><text x="1174" y="320" text-anchor="middle" font-weight="600" fill="#4338ca">auth?</text><text x="1174" y="338" text-anchor="middle" fill="#64748b">optional</text>
+        </g>
+
+        <path d="M238 366 L238 388" stroke="#4f46e5" stroke-width="2" marker-end="url(#arr-blue)"/>
+
+        <!-- ═══ prepareChatTurn ═══ -->
+        <rect x="80" y="390" width="1120" height="78" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+        <text x="96" y="410" font-size="11" font-weight="700" fill="#854d0e">prepareChatTurn · process_input/prepare_chat_turn.ts</text>
+        <g font-size="8.5" font-weight="600">
+          <text x="96" y="430" fill="#92400e">slash</text><text x="130" y="430" fill="#64748b">→</text>
+          <text x="142" y="430" fill="#92400e">registerSubagents</text><text x="240" y="430" fill="#64748b">→</text>
+          <text x="252" y="430" fill="#92400e">registerSkills</text><text x="330" y="430" fill="#64748b">→</text>
+          <text x="342" y="430" fill="#92400e">createSplit</text><text x="400" y="430" fill="#64748b">→</text>
+          <text x="412" y="430" fill="#92400e">tool_search?</text><text x="478" y="430" fill="#64748b">→</text>
+          <text x="490" y="430" fill="#92400e">mode filter</text><text x="552" y="430" fill="#64748b">→</text>
+          <text x="564" y="430" fill="#92400e">attachments</text><text x="628" y="430" fill="#64748b">→</text>
+          <text x="640" y="430" fill="#92400e">skillListing</text>
+          <rect x="760" y="418" width="420" height="38" rx="6" fill="#fff" stroke="#fcd34d"/>
+          <text x="970" y="434" text-anchor="middle" fill="#854d0e">输出: tools · deferredPool · attachmentMessages · subagentNames</text>
+          <text x="970" y="448" text-anchor="middle" fill="#64748b">discoveredTools(session) → MCP 直接 active</text>
+        </g>
+
+        <path d="M640 468 L640 490" stroke="#059669" stroke-width="2" marker-end="url(#arr-green)"/>
+
+        <!-- ═══ runAgent 主框 ═══ -->
+        <rect x="40" y="492" width="860" height="280" rx="14" fill="#ecfdf5" stroke="#059669" stroke-width="2.5" filter="url(#shadow)"/>
+        <text x="56" y="514" font-size="13" font-weight="700" fill="#065f46">AGENT CORE · core/agent.ts · runAgent()</text>
+
+        <!-- step loop inner -->
+        <rect x="56" y="528" width="828" height="128" rx="8" fill="#fff" stroke="#6ee7b7"/>
+        <text x="72" y="546" font-size="10" font-weight="700" fill="#047857">STEP LOOP (maxSteps)</text>
+
+        <rect x="72" y="556" width="100" height="44" rx="6" fill="#e0f2fe" stroke="#0284c7"/>
+        <text x="122" y="576" text-anchor="middle" font-size="9" font-weight="700" fill="#0369a1">compact</text>
+        <text x="122" y="590" text-anchor="middle" font-size="7.5" fill="#64748b">micro→full</text>
+
+        <path d="M172 578 L192 578" stroke="#64748b" marker-end="url(#arr)"/>
+
+        <rect x="194" y="552" width="140" height="52" rx="6" fill="#fce7f3" stroke="#e11d48"/>
+        <text x="264" y="572" text-anchor="middle" font-size="9" font-weight="700" fill="#be185d">streamText</text>
+        <text x="264" y="586" text-anchor="middle" font-size="7.5" fill="#64748b">system + messages</text>
+        <text x="264" y="596" text-anchor="middle" font-size="7.5" fill="#64748b">+ tools[] schema</text>
+
+        <path d="M334 578 L354 578" stroke="#64748b" marker-end="url(#arr)"/>
+
+        <rect x="356" y="556" width="110" height="44" rx="6" fill="#fef3c7" stroke="#d97706"/>
+        <text x="411" y="576" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">runToolCalls</text>
+        <text x="411" y="590" text-anchor="middle" font-size="7.5" fill="#64748b">parallel reads</text>
+
+        <path d="M466 578 L486 578" stroke="#64748b" marker-end="url(#arr)"/>
+
+        <rect x="488" y="556" width="120" height="44" rx="6" fill="#ede9fe" stroke="#7c3aed"/>
+        <text x="548" y="576" text-anchor="middle" font-size="9" font-weight="700" fill="#6d28d9">append msgs</text>
+        <text x="548" y="590" text-anchor="middle" font-size="7.5" fill="#64748b">asst + tool</text>
+
+        <path d="M608 578 L628 578" stroke="#64748b" marker-end="url(#arr)"/>
+
+        <rect x="630" y="556" width="100" height="44" rx="6" fill="#fef3c7" stroke="#d97706" stroke-dasharray="3"/>
+        <text x="680" y="576" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">defer</text>
+        <text x="680" y="590" text-anchor="middle" font-size="7.5" fill="#64748b">tool_search</text>
+
+        <path d="M730 578 L750 578" stroke="#64748b" marker-end="url(#arr)"/>
+        <polygon points="758,578 778,566 778,590" fill="#059669"/>
+        <text x="800" y="576" font-size="8" fill="#047857">tool call?</text>
+        <text x="800" y="588" font-size="8" fill="#047857">loop / done</text>
+
+        <path d="M122 600 C122 640 56 640 56 620" fill="none" stroke="#059669" stroke-width="1" marker-end="url(#arr-green)"/>
+
+        <!-- 三通道 -->
+        <rect x="56" y="668" width="260" height="88" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+        <text x="186" y="688" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">system</text>
+        <text x="186" y="704" text-anchor="middle" font-size="8" fill="#475569">prompts/system · mode · rules</text>
+        <text x="186" y="718" text-anchor="middle" font-size="8" fill="#475569">plan attachments</text>
+        <text x="186" y="744" text-anchor="middle" font-size="8" fill="#64748b">几乎静态</text>
+
+        <rect x="336" y="668" width="260" height="88" rx="8" fill="#fef3c7" stroke="#d97706"/>
+        <text x="466" y="688" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">tools[]</text>
+        <text x="466" y="704" text-anchor="middle" font-size="8" fill="#475569">activeTools JSON Schema</text>
+        <text x="466" y="718" text-anchor="middle" font-size="8" fill="#475569">deferred → 动态激活</text>
+        <text x="466" y="744" text-anchor="middle" font-size="8" fill="#64748b">无 execute（手动跑）</text>
+
+        <rect x="616" y="668" width="260" height="88" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+        <text x="746" y="688" text-anchor="middle" font-size="10" font-weight="700" fill="#6d28d9">messages[]</text>
+        <text x="746" y="704" text-anchor="middle" font-size="8" fill="#475569">user · assistant · tool</text>
+        <text x="746" y="718" text-anchor="middle" font-size="8" fill="#475569">reminder · @file · history</text>
+        <text x="746" y="744" text-anchor="middle" font-size="8" fill="#64748b">compact 可替换</text>
+
+        <!-- ═══ 右侧：Tools + LLM ═══ -->
+        <rect x="920" y="492" width="320" height="136" rx="12" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+        <text x="936" y="512" font-size="11" font-weight="700" fill="#b45309">TOOL EXECUTION</text>
+        <g font-size="8">
+          <text x="936" y="532" fill="#475569">tool-registry · middleware wrap</text>
+          <text x="936" y="548" fill="#475569">read/write/edit/grep/bash/todo</text>
+          <text x="936" y="564" fill="#475569">web_search · web_fetch · ask_user</text>
+          <text x="936" y="580" fill="#475569">task(subagent) · skill · tool_search</text>
+          <text x="936" y="596" fill="#475569">MCP tools · shell-runner</text>
+          <text x="936" y="612" fill="#64748b">services/tool_execution.ts</text>
+        </g>
+        <path d="M900 578 L920 560" stroke="#d97706" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <rect x="920" y="640" width="320" height="80" rx="12" fill="#fce7f3" stroke="#e11d48" stroke-width="2"/>
+        <text x="936" y="660" font-size="11" font-weight="700" fill="#be185d">LLM PROVIDER</text>
+        <text x="936" y="678" font-size="8" fill="#475569">core/llm · openai · anthropic · compatible</text>
+        <text x="936" y="694" font-size="8" fill="#475569">thinking/reasoning · prompt cache</text>
+        <text x="936" y="710" font-size="8" fill="#64748b">config-manager → provider-manager</text>
+        <path d="M334 604 L900 680" stroke="#e11d48" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arr)"/>
+        <path d="M900 690 L334 590" stroke="#e11d48" stroke-width="1" stroke-dasharray="4" marker-end="url(#arr)"/>
+
+        <!-- ═══ 右侧下：Services ═══ -->
+        <rect x="920" y="732" width="320" height="40" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+        <text x="1080" y="756" text-anchor="middle" font-size="9" font-weight="600" fill="#0369a1">services/compact · tool-storage sidecar</text>
+
+        <!-- ═══ 底部：Persistence + Events ═══ -->
+        <rect x="40" y="790" width="700" height="58" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="56" y="810" font-size="10" font-weight="700" fill="#475569">PERSISTENCE</text>
+        <text x="56" y="828" font-size="8.5" fill="#64748b">.sessions/{id}.jsonl · messages · permissionMode · discoveredTools · readFileState</text>
+        <text x="56" y="842" font-size="8.5" fill="#64748b">.sessions/{id}/tool-results/*.txt · plans/</text>
+
+        <rect x="760" y="790" width="480" height="58" rx="10" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+        <text x="776" y="810" font-size="10" font-weight="700" fill="#4338ca">EVENT BUS → SSE → UI</text>
+        <text x="776" y="828" font-size="8.5" fill="#64748b">step_start · text_delta · tool_call · compaction_* · tools_discovered · todo_update · done</text>
+        <path d="M900 628 L900 790" stroke="#4f46e5" stroke-width="1" stroke-dasharray="3" marker-end="url(#arr-blue)"/>
+
+        <!-- 子 agent 标注 -->
+        <rect x="920" y="432" width="320" height="48" rx="8" fill="#f3e8ff" stroke="#9333ea" stroke-dasharray="4"/>
+        <text x="1080" y="452" text-anchor="middle" font-size="9" font-weight="700" fill="#7e22ce">NESTED runAgent</text>
+        <text x="1080" y="468" text-anchor="middle" font-size="8" fill="#64748b">task(fork) · skill(fork) · 独立 messages 上下文</text>
+        <path d="M900 540 L920 456" stroke="#9333ea" stroke-width="1" stroke-dasharray="3"/>
+
+        <!-- legend -->
+        <rect x="40" y="432" width="860" height="48" rx="8" fill="#fff" stroke="#e2e8f0"/>
+        <text x="56" y="452" font-size="9" font-weight="700" fill="#64748b">LEGEND</text>
+        <line x1="120" y1="458" x2="160" y2="458" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-blue)"/><text x="168" y="462" font-size="8" fill="#475569">同步调用</text>
+        <line x1="260" y1="458" x2="300" y2="458" stroke="#64748b" stroke-width="1" stroke-dasharray="4" marker-end="url(#arr)"/><text x="308" y="462" font-size="8" fill="#475569">数据/反馈</text>
+        <rect x="400" y="448" width="12" height="12" fill="#d1fae5" stroke="#059669"/><text x="418" y="458" font-size="8" fill="#475569">Agent</text>
+        <rect x="480" y="448" width="12" height="12" fill="#eef2ff" stroke="#4f46e5"/><text x="498" y="458" font-size="8" fill="#475569">Server</text>
+        <rect x="560" y="448" width="12" height="12" fill="#fef3c7" stroke="#d97706"/><text x="578" y="458" font-size="8" fill="#475569">Tools</text>
+        <rect x="640" y="448" width="12" height="12" fill="#fce7f3" stroke="#e11d48"/><text x="658" y="458" font-size="8" fill="#475569">LLM/Skill</text>
+      </svg>
+    </div>
+    <p class="fig-cap">一图看全：配置 → Client → Server → Turn 装配 → Agent 循环 ↔ Tools/LLM → 持久化 &amp; 事件</p>
+  </div>
+
+</div>
+
+<div class="container">
+
+  <!-- 图1 五层 -->
+  <div class="fig">
+    <div class="fig-title">① 五层架构</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 340" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#64748b"/></marker>
+        </defs>
+        <rect x="160" y="20" width="600" height="52" rx="10" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+        <text x="460" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#0369a1">Client · React · ChatView · Workspace IDE · SSE</text>
+        <text x="460" y="58" text-anchor="middle" font-size="10" fill="#64748b">client/web/</text>
+        <path d="M460 72 L460 88" stroke="#94a3b8" stroke-width="2" marker-end="url(#a)"/>
+
+        <rect x="160" y="90" width="600" height="52" rx="10" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+        <text x="460" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#4338ca">Server · router · chat · session · workspace API</text>
+        <text x="460" y="128" text-anchor="middle" font-size="10" fill="#64748b">server/ · POST /chat · JSONL</text>
+        <path d="M460 142 L460 158" stroke="#94a3b8" stroke-width="2" marker-end="url(#a)"/>
+
+        <rect x="160" y="160" width="600" height="52" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+        <text x="460" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#047857">Agent Core · prepareChatTurn · runAgent · compact</text>
+        <text x="460" y="198" text-anchor="middle" font-size="10" fill="#64748b">core/agent.ts · process_input/</text>
+        <path d="M460 212 L460 228" stroke="#94a3b8" stroke-width="2" marker-end="url(#a)"/>
+
+        <rect x="160" y="230" width="600" height="52" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+        <text x="460" y="252" text-anchor="middle" font-size="13" font-weight="700" fill="#b45309">Tools · task · skill · tool_search · MCP · slash</text>
+        <text x="460" y="268" text-anchor="middle" font-size="10" fill="#64748b">tools/ · skills/ · commands/</text>
+        <path d="M460 282 L460 298" stroke="#94a3b8" stroke-width="2" marker-end="url(#a)"/>
+
+        <rect x="160" y="300" width="600" height="32" rx="8" fill="#fce7f3" stroke="#e11d48" stroke-width="2"/>
+        <text x="460" y="320" text-anchor="middle" font-size="12" font-weight="700" fill="#be185d">Infra · LLM Provider · config · event-bus · tool-storage</text>
+
+        <text x="30" y="50" font-size="10" fill="#64748b" transform="rotate(-90 30 50)">↓ 请求</text>
+        <rect x="780" y="175" width="120" height="44" rx="8" fill="#fff" stroke="#e11d48"/>
+        <text x="840" y="195" text-anchor="middle" font-size="10" font-weight="700" fill="#be185d">LLM API</text>
+        <text x="840" y="210" text-anchor="middle" font-size="9" fill="#64748b">OpenAI / Claude</text>
+        <path d="M760 197 L780 197" stroke="#e11d48" stroke-width="1.5" marker-end="url(#a)"/>
+        <line x1="760" y1="197" x2="680" y2="186" stroke="#e11d48" stroke-width="1" stroke-dasharray="3"/>
+      </svg>
+    </div>
+    <p class="fig-cap">自上而下：UI → HTTP → Agent 循环 → 工具层 → 基础设施</p>
+  </div>
+
+  <!-- 图2 一次 Chat -->
+  <div class="fig">
+    <div class="fig-title">② 一次 Chat 请求</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 200" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="b" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#64748b"/></marker></defs>
+        <g font-size="10" font-weight="600">
+          <rect x="20" y="70" width="72" height="44" rx="8" fill="#e0f2fe" stroke="#0284c7"/><text x="56" y="96" text-anchor="middle" fill="#0369a1">Browser</text>
+          <path d="M92 92 L118 92" stroke="#64748b" marker-end="url(#b)"/>
+          <rect x="120" y="70" width="88" height="44" rx="8" fill="#eef2ff" stroke="#4f46e5"/><text x="164" y="88" text-anchor="middle" fill="#4338ca">POST</text><text x="164" y="102" text-anchor="middle" fill="#4338ca">/chat</text>
+          <path d="M208 92 L234 92" stroke="#64748b" marker-end="url(#b)"/>
+          <rect x="236" y="58" width="110" height="68" rx="8" fill="#eef2ff" stroke="#4f46e5"/><text x="291" y="82" text-anchor="middle" fill="#4338ca">prepare</text><text x="291" y="96" text-anchor="middle" fill="#4338ca">ChatTurn</text><text x="291" y="112" text-anchor="middle" font-size="8" fill="#64748b">tools·skills·attach</text>
+          <path d="M346 92 L372 92" stroke="#64748b" marker-end="url(#b)"/>
+          <rect x="374" y="58" width="100" height="68" rx="8" fill="#d1fae5" stroke="#059669"/><text x="424" y="82" text-anchor="middle" fill="#047857">runAgent</text><text x="424" y="98" text-anchor="middle" font-size="8" fill="#64748b">compact</text><text x="424" y="112" text-anchor="middle" font-size="8" fill="#64748b">step loop</text>
+          <path d="M474 92 L500 92" stroke="#64748b" marker-end="url(#b)"/>
+          <rect x="502" y="70" width="88" height="44" rx="8" fill="#fef3c7" stroke="#d97706"/><text x="546" y="96" text-anchor="middle" fill="#b45309">Tools</text>
+          <path d="M590 92 L616 92" stroke="#64748b" marker-end="url(#b)"/>
+          <rect x="618" y="70" width="72" height="44" rx="8" fill="#fce7f3" stroke="#e11d48"/><text x="654" y="96" text-anchor="middle" fill="#be185d">LLM</text>
+        </g>
+        <path d="M654 120 Q654 160 424 160 Q194 160 194 120" fill="none" stroke="#94a3b8" stroke-dasharray="4"/>
+        <text x="424" y="178" text-anchor="middle" font-size="9" fill="#64748b">tool result → messages[] → 下一步 streamText（循环）</text>
+        <rect x="720" y="55" width="180" height="90" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="810" y="78" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">持久化</text>
+        <text x="730" y="96" font-size="8" fill="#475569">.sessions/{id}.jsonl</text>
+        <text x="730" y="110" font-size="8" fill="#475569">discoveredTools</text>
+        <text x="730" y="124" font-size="8" fill="#475569">tool-results/</text>
+        <text x="730" y="138" font-size="8" fill="#475569">permissionMode</text>
+      </svg>
+    </div>
+    <p class="fig-cap">主路径 + Session 落盘</p>
+  </div>
+
+  <!-- 图3 prepareChatTurn -->
+  <div class="fig">
+    <div class="fig-title">③ prepareChatTurn 管线</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="c" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#64748b"/></marker></defs>
+        <rect x="380" y="16" width="160" height="36" rx="18" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+        <text x="460" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">用户 message</text>
+
+        <line x1="460" y1="52" x2="460" y2="68" stroke="#64748b" marker-end="url(#c)"/>
+        <rect x="340" y="70" width="240" height="32" rx="6" fill="#fef9c3" stroke="#ca8a04"/>
+        <text x="460" y="90" text-anchor="middle" font-size="10" fill="#854d0e">resolveSlashCommand</text>
+
+        <line x1="460" y1="102" x2="460" y2="118" stroke="#64748b" marker-end="url(#c)"/>
+        <g font-size="9" font-weight="600">
+          <rect x="80" y="120" width="150" height="40" rx="6" fill="#fce7f3" stroke="#e11d48"/><text x="155" y="138" text-anchor="middle" fill="#be185d">registerSubagents</text><text x="155" y="152" text-anchor="middle" font-size="8" fill="#64748b">task tool</text>
+          <rect x="250" y="120" width="150" height="40" rx="6" fill="#fce7f3" stroke="#e11d48"/><text x="325" y="138" text-anchor="middle" fill="#be185d">registerSkills</text><text x="325" y="152" text-anchor="middle" font-size="8" fill="#64748b">skill tool</text>
+          <rect x="420" y="120" width="150" height="40" rx="6" fill="#fef3c7" stroke="#d97706"/><text x="495" y="138" text-anchor="middle" fill="#b45309">createSplit</text><text x="495" y="152" text-anchor="middle" font-size="8" fill="#64748b">active / deferred</text>
+          <rect x="590" y="120" width="150" height="40" rx="6" fill="#fef3c7" stroke="#d97706"/><text x="665" y="138" text-anchor="middle" fill="#b45309">+ tool_search</text><text x="665" y="152" text-anchor="middle" font-size="8" fill="#64748b">若有 deferred</text>
+          <rect x="760" y="120" width="120" height="40" rx="6" fill="#e0f2fe" stroke="#0284c7"/><text x="820" y="138" text-anchor="middle" fill="#0369a1">mode filter</text><text x="820" y="152" text-anchor="middle" font-size="8" fill="#64748b">agent/ask/plan</text>
+        </g>
+
+        <line x1="460" y1="160" x2="460" y2="178" stroke="#64748b" marker-end="url(#c)"/>
+        <g font-size="9">
+          <rect x="120" y="180" width="200" height="36" rx="6" fill="#d1fae5" stroke="#059669"/><text x="220" y="202" text-anchor="middle" fill="#047857">skillListing → system-reminder</text>
+          <rect x="360" y="180" width="200" height="36" rx="6" fill="#d1fae5" stroke="#059669"/><text x="460" y="202" text-anchor="middle" fill="#047857">@file attachments</text>
+          <rect x="600" y="180" width="200" height="36" rx="6" fill="#d1fae5" stroke="#059669"/><text x="700" y="202" text-anchor="middle" fill="#047857">plan-mode attachments</text>
+        </g>
+
+        <line x1="460" y1="216" x2="460" y2="232" stroke="#64748b" marker-end="url(#c)"/>
+        <rect x="300" y="234" width="320" height="40" rx="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+        <text x="460" y="252" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">PreparedChatTurn</text>
+        <text x="460" y="266" text-anchor="middle" font-size="9" fill="#64748b">tools · deferredPool · messages · systemPrompt inputs</text>
+      </svg>
+    </div>
+    <p class="fig-cap">每 Turn 重新扫描 skills / agents / 划分工具池</p>
+  </div>
+
+  <!-- 图4 runAgent 循环 -->
+  <div class="fig">
+    <div class="fig-title">④ runAgent Step 循环</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 320" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="d" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#64748b"/></marker></defs>
+        <rect x="30" y="130" width="100" height="50" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+        <text x="80" y="152" text-anchor="middle" font-size="10" font-weight="700" fill="#047857">step++</text>
+        <text x="80" y="168" text-anchor="middle" font-size="8" fill="#64748b">maxSteps</text>
+
+        <path d="M130 155 L160 155" stroke="#64748b" marker-end="url(#d)"/>
+        <rect x="162" y="130" width="120" height="50" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+        <text x="222" y="152" text-anchor="middle" font-size="10" font-weight="700" fill="#0369a1">compact</text>
+        <text x="222" y="168" text-anchor="middle" font-size="8" fill="#64748b">micro→full</text>
+
+        <path d="M282 155 L312 155" stroke="#64748b" marker-end="url(#d)"/>
+        <rect x="314" y="120" width="130" height="70" rx="8" fill="#fce7f3" stroke="#e11d48"/>
+        <text x="379" y="148" text-anchor="middle" font-size="10" font-weight="700" fill="#be185d">streamText</text>
+        <text x="379" y="164" text-anchor="middle" font-size="8" fill="#64748b">system</text>
+        <text x="379" y="176" text-anchor="middle" font-size="8" fill="#64748b">messages + tools[]</text>
+
+        <path d="M444 155 L474 155" stroke="#64748b" marker-end="url(#d)"/>
+        <rect x="476" y="130" width="110" height="50" rx="8" fill="#fef3c7" stroke="#d97706"/>
+        <text x="531" y="152" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">runTool</text>
+        <text x="531" y="168" text-anchor="middle" font-size="8" fill="#64748b">Calls</text>
+
+        <path d="M586 155 L616 155" stroke="#64748b" marker-end="url(#d)"/>
+        <rect x="618" y="130" width="130" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+        <text x="683" y="148" text-anchor="middle" font-size="10" font-weight="700" fill="#6d28d9">append</text>
+        <text x="683" y="164" text-anchor="middle" font-size="8" fill="#64748b">assistant+tool</text>
+
+        <path d="M748 155 L778 155" stroke="#64748b" marker-end="url(#d)"/>
+        <polygon points="790,155 820,140 820,170" fill="#64748b"/>
+        <text x="848" y="152" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">有 tool</text>
+        <text x="848" y="166" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">call?</text>
+
+        <path d="M848 140 C848 60 80 60 80 130" fill="none" stroke="#059669" stroke-width="1.5" marker-end="url(#d)"/>
+        <text x="460" y="48" text-anchor="middle" font-size="9" fill="#059669">是 → 继续 loop</text>
+
+        <path d="M870 155 L890 155" stroke="#64748b"/>
+        <rect x="800" y="200" width="100" height="44" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+        <text x="850" y="220" text-anchor="middle" font-size="10" font-weight="700" fill="#065f46">return</text>
+        <text x="850" y="234" text-anchor="middle" font-size="8" fill="#64748b">finalText</text>
+        <text x="848" y="192" text-anchor="middle" font-size="9" fill="#64748b">否</text>
+        <line x1="848" y1="170" x2="848" y2="200" stroke="#64748b" marker-end="url(#d)"/>
+
+        <rect x="314" y="230" width="130" height="36" rx="6" fill="#fef3c7" stroke="#d97706" stroke-dasharray="4"/>
+        <text x="379" y="252" text-anchor="middle" font-size="9" fill="#92400e">activateDeferredTools</text>
+
+        <rect x="120" y="260" width="680" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="460" y="278" text-anchor="middle" font-size="9" fill="#475569">进 SDK 前: inlineReasoning · ensureToolResultPairing · cacheControlBreakpoint</text>
+        <text x="460" y="294" text-anchor="middle" font-size="9" fill="#475569">tool_search 后 → 下一步 tools[] 变大</text>
+      </svg>
+    </div>
+    <p class="fig-cap">ReAct 多 step；compact 在每 step 开头</p>
+  </div>
+
+  <!-- 图5 streamText 三通道 -->
+  <div class="fig">
+    <div class="fig-title">⑤ 单次 LLM 请求结构</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="40" y="30" width="840" height="120" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+        <text x="460" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">streamText 请求</text>
+        <rect x="60" y="50" width="240" height="80" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+        <text x="180" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="#1d4ed8">system</text>
+        <text x="180" y="96" text-anchor="middle" font-size="9" fill="#475569">prompts/system.ts</text>
+        <text x="180" y="112" text-anchor="middle" font-size="9" fill="#475569">+ projectRules + mode</text>
+        <rect x="340" y="50" width="240" height="80" rx="8" fill="#fef3c7" stroke="#d97706"/>
+        <text x="460" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="#b45309">tools[]</text>
+        <text x="460" y="96" text-anchor="middle" font-size="9" fill="#475569">JSON Schema only</text>
+        <text x="460" y="112" text-anchor="middle" font-size="9" fill="#475569">activeTools（可动态变大）</text>
+        <rect x="620" y="50" width="240" height="80" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+        <text x="740" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="#6d28d9">messages[]</text>
+        <text x="740" y="96" text-anchor="middle" font-size="9" fill="#475569">user · assistant · tool</text>
+        <text x="740" y="112" text-anchor="middle" font-size="9" fill="#475569">history 不断增长</text>
+        <text x="460" y="168" text-anchor="middle" font-size="10" fill="#64748b">execute 不在 SDK — runToolCalls 手动执行</text>
+      </svg>
+    </div>
+    <p class="fig-cap">三条独立通道</p>
+  </div>
+
+  <!-- 图6 工具池 -->
+  <div class="fig">
+    <div class="fig-title">⑥ 工具池 active / deferred</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 220" xmlns="http://www.w3.org/2000/svg">
+        <rect x="40" y="30" width="400" height="160" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+        <text x="240" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#065f46">activeTools → tools[]</text>
+        <text x="60" y="82" font-size="9" fill="#047857">read · write · edit · grep · bash</text>
+        <text x="60" y="98" font-size="9" fill="#047857">task · skill · tool_search</text>
+        <text x="60" y="114" font-size="9" fill="#047857">discoveredTools 中的 MCP</text>
+        <text x="60" y="140" font-size="9" fill="#64748b">每 step 发给 LLM 的 schema</text>
+
+        <rect x="480" y="30" width="400" height="160" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+        <text x="680" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">deferredToolPool</text>
+        <text x="500" y="82" font-size="9" fill="#b91c1c">MCP 工具（默认）</text>
+        <text x="500" y="98" font-size="9" fill="#b91c1c">web_search · todo_write …</text>
+        <text x="500" y="114" font-size="9" fill="#b91c1c">实例已创建，schema  withheld</text>
+        <text x="500" y="140" font-size="9" fill="#64748b">tool_search → 移入 active</text>
+
+        <path d="M440 110 L480 110" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+        <text x="460" y="100" text-anchor="middle" font-size="8" fill="#64748b">discover</text>
+
+        <rect x="340" y="175" width="240" height="32" rx="6" fill="#eef2ff" stroke="#4f46e5"/>
+        <text x="460" y="195" text-anchor="middle" font-size="9" fill="#4338ca">listing 在 messages · schema 在 tools[]</text>
+      </svg>
+    </div>
+    <p class="fig-cap">createSplit · tool-registry.ts</p>
+  </div>
+
+  <!-- 图7 子系统 -->
+  <div class="fig">
+    <div class="fig-title">⑦ 子系统关系</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 400" xmlns="http://www.w3.org/2000/svg">
+        <rect x="360" y="170" width="200" height="60" rx="12" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+        <text x="460" y="198" text-anchor="middle" font-size="14" font-weight="700" fill="#065f46">runAgent</text>
+        <text x="460" y="216" text-anchor="middle" font-size="9" fill="#64748b">core/agent.ts</text>
+
+        <g font-size="10" font-weight="600">
+          <rect x="60" y="40" width="110" height="44" rx="8" fill="#eef2ff" stroke="#4f46e5"/><text x="115" y="67" text-anchor="middle" fill="#4338ca">LLM</text>
+          <rect x="200" y="40" width="110" height="44" rx="8" fill="#fef3c7" stroke="#d97706"/><text x="255" y="67" text-anchor="middle" fill="#b45309">Registry</text>
+          <rect x="340" y="40" width="110" height="44" rx="8" fill="#fef3c7" stroke="#d97706"/><text x="395" y="67" text-anchor="middle" fill="#b45309">MCP</text>
+          <rect x="480" y="40" width="110" height="44" rx="8" fill="#fce7f3" stroke="#e11d48"/><text x="535" y="67" text-anchor="middle" fill="#be185d">Skills</text>
+          <rect x="620" y="40" width="110" height="44" rx="8" fill="#fce7f3" stroke="#e11d48"/><text x="675" y="67" text-anchor="middle" fill="#be185d">Agents</text>
+          <rect x="760" y="40" width="110" height="44" rx="8" fill="#fef9c3" stroke="#ca8a04"/><text x="815" y="67" text-anchor="middle" fill="#854d0e">Commands</text>
+        </g>
+        <line x1="115" y1="84" x2="400" y2="170" stroke="#cbd5e1"/>
+        <line x1="255" y1="84" x2="420" y2="170" stroke="#cbd5e1"/>
+        <line x1="395" y1="84" x2="440" y2="170" stroke="#cbd5e1"/>
+        <line x1="535" y1="84" x2="480" y2="170" stroke="#cbd5e1"/>
+        <line x1="675" y1="84" x2="500" y2="170" stroke="#cbd5e1"/>
+
+        <g font-size="10" font-weight="600">
+          <rect x="40" y="300" width="130" height="44" rx="8" fill="#e0f2fe" stroke="#0284c7"/><text x="105" y="327" text-anchor="middle" fill="#0369a1">Compact</text>
+          <rect x="200" y="300" width="130" height="44" rx="8" fill="#e0f2fe" stroke="#0284c7"/><text x="265" y="327" text-anchor="middle" fill="#0369a1">EventBus</text>
+          <rect x="360" y="300" width="130" height="44" rx="8" fill="#e0f2fe" stroke="#0284c7"/><text x="425" y="327" text-anchor="middle" fill="#0369a1">Session</text>
+          <rect x="520" y="300" width="130" height="44" rx="8" fill="#e0f2fe" stroke="#0284c7"/><text x="585" y="327" text-anchor="middle" fill="#0369a1">ToolStorage</text>
+          <rect x="680" y="300" width="130" height="44" rx="8" fill="#eef2ff" stroke="#4f46e5"/><text x="745" y="327" text-anchor="middle" fill="#4338ca">React UI</text>
+        </g>
+        <line x1="105" y1="300" x2="400" y2="230" stroke="#cbd5e1"/>
+        <line x1="265" y1="300" x2="430" y2="230" stroke="#cbd5e1"/>
+        <line x1="425" y1="300" x2="460" y2="230" stroke="#cbd5e1"/>
+        <line x1="585" y1="300" x2="490" y2="230" stroke="#cbd5e1"/>
+        <line x1="745" y1="300" x2="520" y2="230" stroke="#cbd5e1" stroke-dasharray="4"/>
+      </svg>
+    </div>
+    <p class="fig-cap">runAgent 居中枢纽</p>
+  </div>
+
+  <!-- 图8 目录地图 SVG -->
+  <div class="fig">
+    <div class="fig-title">⑧ 代码模块地图</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 360" xmlns="http://www.w3.org/2000/svg">
+        <text x="460" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">examples/08-basic/</text>
+        <g font-size="9" font-weight="600">
+          <rect x="30" y="40" width="130" height="140" rx="8" fill="#d1fae5" stroke="#059669"/><text x="95" y="58" text-anchor="middle" fill="#047857">core/</text>
+          <text x="42" y="78" fill="#475569">agent.ts</text><text x="42" y="92" fill="#475569">agent/*</text><text x="42" y="106" fill="#475569">llm/*</text><text x="42" y="120" fill="#475569">tool-registry</text><text x="42" y="134" fill="#475569">mcp-manager</text><text x="42" y="148" fill="#475569">permission-mode</text><text x="42" y="162" fill="#475569">event-bus</text>
+
+          <rect x="180" y="40" width="130" height="140" rx="8" fill="#eef2ff" stroke="#4f46e5"/><text x="245" y="58" text-anchor="middle" fill="#4338ca">server/</text>
+          <text x="192" y="78" fill="#475569">router</text><text x="192" y="92" fill="#475569">routes/chat</text><text x="192" y="106" fill="#475569">session</text><text x="192" y="120" fill="#475569">sse-transport</text><text x="192" y="134" fill="#475569">workspace/*</text><text x="192" y="148" fill="#475569">skills-api</text>
+
+          <rect x="330" y="40" width="130" height="140" rx="8" fill="#fef3c7" stroke="#d97706"/><text x="395" y="58" text-anchor="middle" fill="#b45309">tools/</text>
+          <text x="342" y="78" fill="#475569">read/write/edit</text><text x="342" y="92" fill="#475569">bash/grep</text><text x="342" y="106" fill="#475569">AgentTool/</text><text x="342" y="120" fill="#475569">skill.ts</text><text x="342" y="134" fill="#475569">tool_search</text>
+
+          <rect x="480" y="40" width="130" height="140" rx="8" fill="#fce7f3" stroke="#e11d48"/><text x="545" y="58" text-anchor="middle" fill="#be185d">skills/</text>
+          <text x="492" y="78" fill="#475569">loadSkillsDir</text><text x="492" y="92" fill="#475569">expand</text><text x="492" y="106" fill="#475569">run-fork</text>
+          <rect x="480" y="192" width="130" height="70" rx="8" fill="#fce7f3" stroke="#e11d48"/><text x="545" y="210" text-anchor="middle" fill="#be185d">commands/</text>
+          <text x="492" y="230" fill="#475569">slash · expand</text>
+
+          <rect x="630" y="40" width="130" height="140" rx="8" fill="#e0f2fe" stroke="#0284c7"/><text x="695" y="58" text-anchor="middle" fill="#0369a1">services/</text>
+          <text x="642" y="78" fill="#475569">compact/*</text><text x="642" y="92" fill="#475569">tool_execution</text><text x="642" y="106" fill="#475569">tool-storage</text>
+
+          <rect x="780" y="40" width="110" height="140" rx="8" fill="#f3e8ff" stroke="#9333ea"/><text x="835" y="58" text-anchor="middle" fill="#7e22ce">prompts/</text>
+          <text x="792" y="78" fill="#475569">system</text><text x="792" y="92" fill="#475569">mode</text><text x="792" y="106" fill="#475569">plan</text>
+
+          <rect x="30" y="200" width="280" height="70" rx="8" fill="#eef2ff" stroke="#4f46e5"/><text x="170" y="218" text-anchor="middle" fill="#4338ca">process_input/prepare_chat_turn.ts</text>
+          <rect x="330" y="200" width="130" height="70" rx="8" fill="#fef9c3" stroke="#ca8a04"/><text x="395" y="218" text-anchor="middle" fill="#854d0e">middleware/</text>
+
+          <rect x="630" y="200" width="260" height="70" rx="8" fill="#e0f2fe" stroke="#0284c7"/><text x="760" y="218" text-anchor="middle" fill="#0369a1">client/web · React UI</text>
+          <text x="642" y="238" fill="#475569">ChatView · ToolCards · WorkspaceIDE</text>
+
+          <rect x="30" y="290" width="860" height="50" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+          <text x="460" y="312" text-anchor="middle" font-size="10" fill="#475569">~/.ai-agent/config.json · .ai-agent/skills/ · .ai-agent/agents/ · .cursor/rules/</text>
+          <text x="460" y="328" text-anchor="middle" font-size="10" fill="#475569">外部配置与扩展（每 Turn 或启动时加载）</text>
+        </g>
+      </svg>
+    </div>
+    <p class="fig-cap">模块方块图</p>
+  </div>
+
+  <!-- 图9 Permission Mode -->
+  <div class="fig">
+    <div class="fig-title">⑨ Permission Mode</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="40" y="40" width="250" height="130" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+        <text x="165" y="68" text-anchor="middle" font-size="14" font-weight="700" fill="#065f46">agent</text>
+        <text x="165" y="92" text-anchor="middle" font-size="9" fill="#475569">read · write · edit · bash</text>
+        <text x="165" y="108" text-anchor="middle" font-size="9" fill="#475569">task · skill · web_*</text>
+        <text x="165" y="124" text-anchor="middle" font-size="9" fill="#475569">enter_plan_mode</text>
+        <text x="165" y="148" text-anchor="middle" font-size="8" fill="#64748b">默认 · 全功能</text>
+
+        <rect x="335" y="40" width="250" height="130" rx="10" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+        <text x="460" y="68" text-anchor="middle" font-size="14" font-weight="700" fill="#0369a1">ask</text>
+        <text x="460" y="92" text-anchor="middle" font-size="9" fill="#475569">read · grep · glob</text>
+        <text x="460" y="108" text-anchor="middle" font-size="9" fill="#475569">web_search · web_fetch</text>
+        <text x="460" y="132" text-anchor="middle" font-size="9" fill="#dc2626">✗ write · bash · edit</text>
+
+        <rect x="630" y="40" width="250" height="130" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+        <text x="755" y="68" text-anchor="middle" font-size="14" font-weight="700" fill="#6d28d9">plan</text>
+        <text x="755" y="92" text-anchor="middle" font-size="9" fill="#475569">只读 + 写 plan 文件</text>
+        <text x="755" y="108" text-anchor="middle" font-size="9" fill="#475569">plan attachments</text>
+        <text x="755" y="124" text-anchor="middle" font-size="9" fill="#475569">exit_plan_mode → 批准</text>
+        <text x="755" y="148" text-anchor="middle" font-size="8" fill="#64748b">→ 切回 agent 实现</text>
+
+        <path d="M755 170 Q755 185 460 185 Q165 185 165 170" fill="none" stroke="#94a3b8" stroke-dasharray="4"/>
+        <text x="460" y="198" text-anchor="middle" font-size="9" fill="#64748b">applyModeRestrictions · mid-turn refreshTools</text>
+      </svg>
+    </div>
+    <p class="fig-cap">三种模式工具集</p>
+  </div>
+
+  <!-- 图10 SSE -->
+  <div class="fig">
+    <div class="fig-title">⑩ EventBus → SSE → UI</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 200" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="e" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#64748b"/></marker></defs>
+        <rect x="40" y="60" width="140" height="80" rx="8" fill="#d1fae5" stroke="#059669"/>
+        <text x="110" y="92" text-anchor="middle" font-size="11" font-weight="700" fill="#047857">runAgent</text>
+        <text x="110" y="110" text-anchor="middle" font-size="9" fill="#64748b">emit events</text>
+
+        <path d="M180 100 L220 100" stroke="#64748b" marker-end="url(#e)"/>
+        <rect x="222" y="60" width="140" height="80" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+        <text x="292" y="92" text-anchor="middle" font-size="11" font-weight="700" fill="#0369a1">EventBus</text>
+
+        <path d="M362 100 L402 100" stroke="#64748b" marker-end="url(#e)"/>
+        <rect x="404" y="60" width="140" height="80" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+        <text x="474" y="88" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">sse-transport</text>
+        <text x="474" y="108" text-anchor="middle" font-size="8" fill="#64748b">text_delta</text>
+        <text x="474" y="120" text-anchor="middle" font-size="8" fill="#64748b">tool_call · step_start</text>
+
+        <path d="M544 100 L584 100" stroke="#64748b" marker-end="url(#e)"/>
+        <rect x="586" y="60" width="140" height="80" rx="8" fill="#fef3c7" stroke="#d97706"/>
+        <text x="656" y="92" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309">React Cards</text>
+        <text x="656" y="112" text-anchor="middle" font-size="8" fill="#64748b">SubagentCard</text>
+        <text x="656" y="124" text-anchor="middle" font-size="8" fill="#64748b">ReadFile · Bash …</text>
+
+        <rect x="760" y="40" width="140" height="120" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="830" y="62" text-anchor="middle" font-size="9" font-weight="700" fill="#334155">事件示例</text>
+        <text x="772" y="80" font-size="8" fill="#475569">step_start</text>
+        <text x="772" y="94" font-size="8" fill="#475569">text_delta</text>
+        <text x="772" y="108" font-size="8" fill="#475569">tool_call</text>
+        <text x="772" y="122" font-size="8" fill="#475569">compaction_*</text>
+        <text x="772" y="136" font-size="8" fill="#475569">tools_discovered</text>
+        <text x="772" y="150" font-size="8" fill="#475569">done</text>
+      </svg>
+    </div>
+    <p class="fig-cap">流式 UI 更新路径</p>
+  </div>
+
+  <!-- 图11 HTTP -->
+  <div class="fig">
+    <div class="fig-title">⑪ HTTP 路由</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 240" xmlns="http://www.w3.org/2000/svg">
+        <rect x="360" y="20" width="200" height="44" rx="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+        <text x="460" y="47" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">server/router.ts</text>
+
+        <line x1="460" y1="64" x2="460" y2="80" stroke="#cbd5e1"/>
+        <line x1="120" y1="80" x2="800" y2="80" stroke="#cbd5e1"/>
+
+        <g font-size="9" font-weight="600">
+          <rect x="40" y="90" width="150" height="56" rx="6" fill="#d1fae5" stroke="#059669"/><text x="115" y="112" text-anchor="middle" fill="#047857">POST /chat</text><text x="115" y="128" text-anchor="middle" font-size="8" fill="#64748b">SSE · 主对话</text>
+          <rect x="210" y="90" width="150" height="56" rx="6" fill="#e0f2fe" stroke="#0284c7"/><text x="285" y="112" text-anchor="middle" fill="#0369a1">/sessions/*</text><text x="285" y="128" text-anchor="middle" font-size="8" fill="#64748b">CRUD · messages</text>
+          <rect x="380" y="90" width="150" height="56" rx="6" fill="#fef3c7" stroke="#d97706"/><text x="455" y="112" text-anchor="middle" fill="#b45309">/workspace/*</text><text x="455" y="128" text-anchor="middle" font-size="8" fill="#64748b">IDE 文件 API</text>
+          <rect x="550" y="90" width="150" height="56" rx="6" fill="#ede9fe" stroke="#7c3aed"/><text x="625" y="112" text-anchor="middle" fill="#6d28d9">/settings</text><text x="625" y="128" text-anchor="middle" font-size="8" fill="#64748b">provider · MCP</text>
+          <rect x="720" y="90" width="160" height="56" rx="6" fill="#fce7f3" stroke="#e11d48"/><text x="800" y="112" text-anchor="middle" fill="#be185d">/skills · /questions</text><text x="800" y="128" text-anchor="middle" font-size="8" fill="#64748b">skill invoke · HITL</text>
+        </g>
+
+        <rect x="120" y="170" width="680" height="50" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="460" y="192" text-anchor="middle" font-size="9" fill="#475569">GET /health · /slash-commands · static client/web/dist · auth gate (optional)</text>
+        <text x="460" y="208" text-anchor="middle" font-size="9" fill="#475569">:4567 · npm start -- 08-basic</text>
+      </svg>
+    </div>
+    <p class="fig-cap">HTTP 入口分布</p>
+  </div>
+
+  <!-- 图12 扩展点 -->
+  <div class="fig">
+    <div class="fig-title">⑫ 扩展点</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="460" cy="140" r="44" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+        <text x="460" y="136" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Agent</text>
+        <text x="460" y="152" text-anchor="middle" font-size="9" fill="#64748b">runAgent</text>
+
+        <g font-size="9" font-weight="600">
+          <rect x="60" y="30" width="120" height="50" rx="8" fill="#fef3c7" stroke="#d97706"/><text x="120" y="52" text-anchor="middle" fill="#b45309">tools/*.ts</text><text x="120" y="68" text-anchor="middle" font-size="8" fill="#64748b">启动注册</text>
+          <rect x="760" y="30" width="120" height="50" rx="8" fill="#fef3c7" stroke="#d97706"/><text x="820" y="52" text-anchor="middle" fill="#b45309">mcpServers</text><text x="820" y="68" text-anchor="middle" font-size="8" fill="#64748b">config.json</text>
+          <rect x="20" y="200" width="140" height="50" rx="8" fill="#fce7f3" stroke="#e11d48"/><text x="90" y="222" text-anchor="middle" fill="#be185d">skills/SKILL.md</text><text x="90" y="238" text-anchor="middle" font-size="8" fill="#64748b">每 Turn</text>
+          <rect x="200" y="220" width="140" height="50" rx="8" fill="#fce7f3" stroke="#e11d48"/><text x="270" y="242" text-anchor="middle" fill="#be185d">agents/*.md</text><text x="270" y="258" text-anchor="middle" font-size="8" fill="#64748b">每 Turn</text>
+          <rect x="580" y="220" width="140" height="50" rx="8" fill="#fef9c3" stroke="#ca8a04"/><text x="650" y="242" text-anchor="middle" fill="#854d0e">slash cmds</text><text x="650" y="258" text-anchor="middle" font-size="8" fill="#64748b">每消息</text>
+          <rect x="760" y="200" width="140" height="50" rx="8" fill="#d1fae5" stroke="#059669"/><text x="830" y="222" text-anchor="middle" fill="#047857">.cursor/rules</text><text x="830" y="238" text-anchor="middle" font-size="8" fill="#64748b">system</text>
+        </g>
+        <line x1="120" y1="80" x2="420" y2="120" stroke="#cbd5e1"/>
+        <line x1="820" y1="80" x2="500" y2="120" stroke="#cbd5e1"/>
+        <line x1="90" y1="200" x2="430" y2="160" stroke="#cbd5e1"/>
+        <line x1="270" y1="220" x2="440" y2="184" stroke="#cbd5e1"/>
+        <line x1="650" y1="220" x2="480" y2="184" stroke="#cbd5e1"/>
+        <line x1="830" y1="200" x2="490" y2="160" stroke="#cbd5e1"/>
+      </svg>
+    </div>
+    <p class="fig-cap">六向扩展，无需改 agent 主循环</p>
+  </div>
+
+  <!-- 图13 启动 -->
+  <div class="fig">
+    <div class="fig-title">⑬ 启动链</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 100" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="f" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#64748b"/></marker></defs>
+        <g font-size="9" font-weight="600">
+          <rect x="20" y="30" width="100" height="40" rx="6" fill="#f1f5f9" stroke="#94a3b8"/><text x="70" y="55" text-anchor="middle" fill="#334155">npm start</text>
+          <path d="M120 50 L140 50" stroke="#64748b" marker-end="url(#f)"/>
+          <rect x="142" y="30" width="100" height="40" rx="6" fill="#eef2ff" stroke="#4f46e5"/><text x="192" y="55" text-anchor="middle" fill="#4338ca">server/index</text>
+          <path d="M242 50 L262 50" stroke="#64748b" marker-end="url(#f)"/>
+          <rect x="264" y="30" width="120" height="40" rx="6" fill="#fef3c7" stroke="#d97706"/><text x="324" y="55" text-anchor="middle" fill="#b45309">register tools</text>
+          <path d="M384 50 L404 50" stroke="#64748b" marker-end="url(#f)"/>
+          <rect x="406" y="30" width="120" height="40" rx="6" fill="#fef3c7" stroke="#d97706"/><text x="466" y="55" text-anchor="middle" fill="#b45309">init MCP</text>
+          <path d="M526 50 L546 50" stroke="#64748b" marker-end="url(#f)"/>
+          <rect x="548" y="30" width="120" height="40" rx="6" fill="#d1fae5" stroke="#059669"/><text x="608" y="55" text-anchor="middle" fill="#047857">createRouter</text>
+          <path d="M668 50 L688 50" stroke="#64748b" marker-end="url(#f)"/>
+          <rect x="690" y="30" width="100" height="40" rx="6" fill="#fce7f3" stroke="#e11d48"/><text x="740" y="55" text-anchor="middle" fill="#be185d">:4567</text>
+          <path d="M790 50 L810 50" stroke="#64748b" marker-end="url(#f)"/>
+          <rect x="812" y="30" width="88" height="40" rx="6" fill="#e0f2fe" stroke="#0284c7"/><text x="856" y="55" text-anchor="middle" fill="#0369a1">listen</text>
+        </g>
+      </svg>
+    </div>
+    <p class="fig-cap">进程启动顺序</p>
+  </div>
+
+  <!-- 图14 task/skill 分叉 -->
+  <div class="fig">
+    <div class="fig-title">⑭ task / skill 子运行</div>
+    <div class="svg-wrap">
+      <svg viewBox="0 0 920 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="360" y="20" width="200" height="40" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="2"/>
+        <text x="460" y="45" text-anchor="middle" font-size="11" font-weight="700" fill="#047857">主 runAgent</text>
+
+        <line x1="400" y1="60" x2="280" y2="100" stroke="#64748b"/>
+        <line x1="520" y1="60" x2="640" y2="100" stroke="#64748b"/>
+
+        <rect x="160" y="100" width="240" height="80" rx="8" fill="#fce7f3" stroke="#e11d48"/>
+        <text x="280" y="128" text-anchor="middle" font-size="11" font-weight="700" fill="#be185d">task(subagent_type)</text>
+        <text x="280" y="148" text-anchor="middle" font-size="9" fill="#475569">explore · plan · general_purpose</text>
+        <text x="280" y="164" text-anchor="middle" font-size="8" fill="#64748b">→ 嵌套 runAgent · 独立 messages</text>
+
+        <rect x="520" y="100" width="240" height="80" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+        <text x="640" y="128" text-anchor="middle" font-size="11" font-weight="700" fill="#6d28d9">skill(name, args)</text>
+        <text x="640" y="148" text-anchor="middle" font-size="9" fill="#475569">inline → tool result</text>
+        <text x="640" y="164" text-anchor="middle" font-size="8" fill="#64748b">fork → runSkillFork 子 agent</text>
+      </svg>
+    </div>
+    <p class="fig-cap">子代理与 skill fork 都复用 runAgent</p>
+  </div>
+
+</div>
+
+<footer>
+  <a href="deferred-mcp-tools-skills-guide.html">Deferred / Skills</a>
+  <a href="session-compacting-guide.html">Compacting</a>
+</footer>
+
+</body>
+</html>

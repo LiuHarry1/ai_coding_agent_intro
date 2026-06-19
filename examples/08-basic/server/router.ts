@@ -7,6 +7,7 @@ import { getDefaultWorkspace } from "../core/workspace.js";
 import { defaultRegistry } from "../tools/index.js";
 import { registerBuiltinSubagents } from "../tools/AgentTool/index.js";
 import { listSlashCommands } from "../commands/dispatcher.js";
+import { loadPluginsOverview } from "../commands/slashRegistry.js";
 import { answerQuestion } from "../core/question-broker.js";
 import { answerPlanApproval } from "../core/plan-approval-broker.js";
 import {
@@ -25,6 +26,7 @@ import {
 } from "./auth/identity.js";
 import { serveStaticFile } from "./static.js";
 import { initMcpLifecycle, mcpManager } from "./mcp-lifecycle.js";
+import { initCodePlugins } from "../core/plugins/index.js";
 import { handleChat } from "./routes/chat.js";
 import {
   createSession,
@@ -37,6 +39,9 @@ import { sessionToUIMessages } from "./session-ui.js";
 import type { RouterOptions, MCPServerConfig, LlmProfile } from "../core/types.js";
 
 registerBuiltinSubagents(defaultRegistry);
+initCodePlugins(defaultRegistry).catch((err) => {
+  console.error(`[plugins] code plugin init failed: ${err.message}`);
+});
 initMcpLifecycle();
 
 export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOptions) {
@@ -83,6 +88,23 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
       try {
         const entries = await listSlashCommands(cwd);
         sendJSON(res, 200, { workspace: cwd, entries });
+      } catch (e) {
+        sendJSON(res, 500, { error: (e as Error).message });
+      }
+      return;
+    }
+
+    if (method === "GET" && url?.startsWith("/plugins")) {
+      const query = new URLSearchParams(url.split("?")[1] ?? "");
+      const workspace = query.get("workspace");
+      const cwd =
+        authed.userWorkspace ??
+        (workspace && fs.existsSync(workspace)
+          ? path.resolve(workspace)
+          : getDefaultWorkspace());
+      try {
+        const overview = await loadPluginsOverview(cwd);
+        sendJSON(res, 200, { workspace: cwd, ...overview });
       } catch (e) {
         sendJSON(res, 500, { error: (e as Error).message });
       }

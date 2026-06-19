@@ -28,7 +28,27 @@ import {
 /** Flat-file kinds. Skills live in folders and use their own loader. */
 export type FlatMarkdownKind = "agents" | "commands";
 
-export type ExtensionSource = "user" | "project";
+/**
+ * Where an extension was discovered. `"plugin"` is the lowest priority so
+ * local `.ai-agent/` config always overrides a plugin's contribution of the
+ * same name (see `sourceRank`).
+ */
+export type ExtensionSource = "plugin" | "user" | "project";
+
+/**
+ * Override precedence (higher wins on duplicate name): project > user > plugin.
+ * Shared by `mergeAgents` / `mergeCommands` so the rule lives in one place.
+ */
+export function sourceRank(source: ExtensionSource): number {
+  switch (source) {
+    case "plugin":
+      return 0;
+    case "user":
+      return 1;
+    case "project":
+      return 2;
+  }
+}
 
 export interface MarkdownFile {
   /** Absolute path to the .md file. */
@@ -87,6 +107,33 @@ async function readAndParse(
     frontmatter: (parsed.data ?? {}) as Record<string, unknown>,
     body: parsed.content ?? "",
   };
+}
+
+/**
+ * Read + parse every `.md` file directly under `dir`, tagging each with
+ * `source`. Returns an empty array when the directory is absent. Exposed so
+ * the plugin loader can scan arbitrary `<plugin>/agents` and
+ * `<plugin>/commands` directories with the same parsing path as built-in config.
+ */
+export async function loadMarkdownFilesFromDir(
+  dir: string,
+  source: ExtensionSource,
+): Promise<MarkdownFile[]> {
+  const paths = await listMarkdownFiles(dir);
+  const files = await Promise.all(paths.map((p) => readAndParse(p, dir, source)));
+  return files.filter((f): f is MarkdownFile => f !== null);
+}
+
+/**
+ * Read + parse a single `.md` file (its directory becomes `baseDir`). Returns
+ * null if the file is missing or has invalid frontmatter. Used by the plugin
+ * loader for manifest-specified single-file component paths.
+ */
+export async function loadMarkdownFile(
+  filePath: string,
+  source: ExtensionSource,
+): Promise<MarkdownFile | null> {
+  return readAndParse(filePath, path.dirname(filePath), source);
 }
 
 /**

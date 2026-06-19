@@ -4,7 +4,10 @@ import { definition as planDef } from "./built-in/planAgent.js";
 import { definition as generalPurposeDef } from "./built-in/generalPurposeAgent.js";
 import { createTaskTool } from "./AgentTool.js";
 import { AGENT_TOOL_NAME } from "../../constants/tool_names.js";
-import { loadMarkdownConfigs } from "../../utils/markdownConfigLoader.js";
+import {
+  loadMarkdownConfigs,
+  type MarkdownFile,
+} from "../../utils/markdownConfigLoader.js";
 import { mergeAgents } from "./mergeAgents.js";
 
 export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
@@ -20,12 +23,15 @@ export function registerBuiltinSubagents(registry: IToolRegistry): void {
 export async function registerSubagents(
   registry: IToolRegistry,
   cwd: string,
+  pluginAgentFiles: readonly MarkdownFile[] = [],
 ): Promise<{
   activeAgents: AgentDefinition[];
   errors: Array<{ filePath: string; error: string }>;
 }> {
   const files = await loadMarkdownConfigs("agents", cwd);
-  const { agents, errors } = mergeAgents(BUILTIN_AGENTS, files);
+  // Plugin files carry source "plugin" (lowest priority); `mergeAgents` sorts
+  // by `sourceRank` so disk agents override plugin agents of the same name.
+  const { agents, errors } = mergeAgents(BUILTIN_AGENTS, [...pluginAgentFiles, ...files]);
   registry.register(createTaskTool(agents));
   return { activeAgents: agents, errors };
 }

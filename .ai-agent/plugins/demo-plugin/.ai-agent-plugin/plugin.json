@@ -1,0 +1,6 @@
+{
+  "name": "demo-plugin",
+  "version": "0.1.0",
+  "description": "Sample declarative plugin: ships one agent, one command, one skill.",
+  "author": { "name": "ai-coding-agent" }
+}
