@@ -1,7 +1,7 @@
 import { createShellTool } from "./shell-runner.js";
 import { powershellShell } from "../core/platform.js";
 import { POWERSHELL_TOOL_NAME } from "../constants/tool_names.js";
-import { detectPowerShellEdition, type PowerShellEdition } from "../core/powershell-edition.js";
+import { detectPowerShellEdition, type PowerShellEdition } from "../core/shell/powershell-edition.js";
 
 /**
  * Edition-specific syntax guidance. Without this branch the model either

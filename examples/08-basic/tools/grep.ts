@@ -20,7 +20,7 @@ import { ripGrep } from "../utils/ripgrep.js";
 import { resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
 import { AGENT_TOOL_NAME, BASH_TOOL_NAME, GREP_TOOL_NAME, POWERSHELL_TOOL_NAME } from "../constants/tool_names.js";
-import { isPowerShellToolEnabled } from "../core/shell-utils.js";
+import { isPowerShellToolEnabled } from "../core/shell/shell-utils.js";
 import { buildRgExcludeGlobs } from "../constants/file_filters.js";
 
 const DEFAULT_HEAD_LIMIT = 250;

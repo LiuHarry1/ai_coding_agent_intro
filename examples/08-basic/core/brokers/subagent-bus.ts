@@ -1,4 +1,4 @@
-import type { EventHandler, IEventBus } from "./types.js";
+import type { EventHandler, IEventBus } from "../types.js";
 
 /**
  * Scoped event bus for a single subagent invocation. Every emitted payload

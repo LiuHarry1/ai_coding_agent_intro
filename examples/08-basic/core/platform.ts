@@ -1,6 +1,6 @@
 import * as path from "path";
 import { spawn, spawnSync, type ChildProcess } from "child_process";
-import { findGitBashPath } from "./git-bash.js";
+import { findGitBashPath } from "./shell/git-bash.js";
 
 export const isWindows = process.platform === "win32";
 

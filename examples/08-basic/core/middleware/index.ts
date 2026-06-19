@@ -4,7 +4,7 @@ import type {
   MiddlewareHook,
   MiddlewareHandler,
   MiddlewareContext,
-} from "./types.js";
+} from "../types.js";
 
 export class Middleware implements IMiddleware {
   #hooks = new Map<MiddlewareHook, MiddlewareHandler[]>();

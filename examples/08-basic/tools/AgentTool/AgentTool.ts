@@ -11,7 +11,7 @@ import { EXPLORE_AGENT_TYPE } from "./built-in/exploreAgent.js";
 import { PLAN_AGENT_TYPE } from "./built-in/planAgent.js";
 import { loadProjectRules } from "../../core/rules-loader.js";
 import { buildConcurrencyPolicy } from "../../core/concurrency-policy.js";
-import { createSubagentEventBus } from "../../core/subagent-bus.js";
+import { createSubagentEventBus } from "../../core/brokers/subagent-bus.js";
 import { randomUUID } from "crypto";
 
 /** CC: tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */

@@ -2,9 +2,9 @@
  * Hard enforcement for plan/ask modes — blocks mutating tools before execute.
  */
 import * as path from "path";
-import type { Session } from "../core/types.js";
-import type { MiddlewareHandler } from "../core/types.js";
-import { isSessionPlanFile } from "../utils/plans.js";
+import type { Session } from "../types.js";
+import type { MiddlewareHandler } from "../types.js";
+import { isSessionPlanFile } from "../../utils/plans.js";
 import {
   BASH_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
@@ -12,7 +12,7 @@ import {
   EDIT_FILE_TOOL_NAME,
   AGENT_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
-} from "../constants/tool_names.js";
+} from "../../constants/tool_names.js";
 
 const SHELL_TOOLS = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME]);
 const FILE_MUTATING = new Set([WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME]);

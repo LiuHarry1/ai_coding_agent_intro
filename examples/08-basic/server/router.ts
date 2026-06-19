@@ -8,8 +8,8 @@ import { defaultRegistry } from "../tools/index.js";
 import { registerBuiltinSubagents } from "../tools/AgentTool/index.js";
 import { listSlashCommands } from "../commands/dispatcher.js";
 import { loadPluginsOverview } from "../commands/slashRegistry.js";
-import { answerQuestion } from "../core/question-broker.js";
-import { answerPlanApproval } from "../core/plan-approval-broker.js";
+import { answerQuestion } from "../core/brokers/question-broker.js";
+import { answerPlanApproval } from "../core/brokers/plan-approval-broker.js";
 import {
   handlePlanModeTransition,
   isValidExternalMode,

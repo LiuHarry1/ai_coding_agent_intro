@@ -1,6 +1,6 @@
 import { defaultRegistry } from "../core/tool-registry.js";
 import { isPreviewEnabled } from "../core/preview.js";
-import { isPowerShellToolEnabled } from "../core/shell-utils.js";
+import { isPowerShellToolEnabled } from "../core/shell/shell-utils.js";
 import { definition as bash } from "./bash.js";
 import { definition as powershell } from "./powershell.js";
 import { definition as readFile } from "./ReadTool/index.js";

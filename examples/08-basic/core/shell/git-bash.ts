@@ -1,7 +1,7 @@
 import { existsSync } from "fs";
 import * as path from "path";
 import { spawnSync } from "child_process";
-import { isWindows } from "./platform.js";
+import { isWindows } from "../platform.js";
 
 let cached: string | null | undefined;
 

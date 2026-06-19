@@ -22,7 +22,7 @@ import { randomUUID } from "crypto";
 import type { ToolDefinition } from "../core/types.js";
 import { ASK_USER_QUESTION_TOOL_NAME } from "../constants/tool_names.js";
 import { EXIT_PLAN_MODE_TOOL_NAME } from "../constants/tool_names.js";
-import { registerQuestion, type QuestionAnnotation } from "../core/question-broker.js";
+import { registerQuestion, type QuestionAnnotation } from "../core/brokers/question-broker.js";
 
 const ASK_USER_QUESTION_TOOL_CHIP_WIDTH = 12;
 

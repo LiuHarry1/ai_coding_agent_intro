@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process";
-import { isWindows, powershellShell } from "./platform.js";
+import { isWindows, powershellShell } from "../platform.js";
 
 /**
  * "desktop" = Windows PowerShell 5.1 (powershell.exe — bundled with Windows).

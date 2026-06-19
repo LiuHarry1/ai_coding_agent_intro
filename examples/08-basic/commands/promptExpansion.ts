@@ -15,7 +15,7 @@ import { promises as fs } from "fs";
 import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { findGitBashPath } from "../core/git-bash.js";
+import { findGitBashPath } from "../core/shell/git-bash.js";
 import { isWindows } from "../core/platform.js";
 
 const execFileAsync = promisify(execFile);

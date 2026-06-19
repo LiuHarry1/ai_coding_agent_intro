@@ -7,7 +7,7 @@ import * as path from "path";
 import { truncate } from "./utils.js";
 import { killChild, forceKillChild, type ShellConfig } from "../core/platform.js";
 import type { ToolDefinition, ToolContext, IEventBus } from "../core/types.js";
-import { isShellInputConcurrencySafe } from "../core/shell-readonly.js";
+import { isShellInputConcurrencySafe } from "../core/shell/shell-readonly.js";
 
 /**
  * Shared execution machinery for shell-style tools (bash on Unix, powershell

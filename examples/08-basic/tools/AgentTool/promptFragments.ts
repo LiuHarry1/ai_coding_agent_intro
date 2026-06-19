@@ -1,7 +1,7 @@
 import {
   DEFAULT_SHELL_TOOL_NAME,
   isPowerShellToolEnabled,
-} from "../../core/shell-utils.js";
+} from "../../core/shell/shell-utils.js";
 import {
   BASH_TOOL_NAME,
   GLOB_TOOL_NAME,
