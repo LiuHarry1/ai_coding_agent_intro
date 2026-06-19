@@ -3,7 +3,7 @@ import {
   IMAGE_MAX_HEIGHT,
   IMAGE_MAX_WIDTH,
   IMAGE_TARGET_RAW_SIZE,
-} from "./limits.js";
+} from "../../constants/api_limits.js";
 import type { ReadImageOutput } from "./types.js";
 
 const MEDIA_BY_EXT: Record<string, ReadImageOutput["file"]["mediaType"]> = {

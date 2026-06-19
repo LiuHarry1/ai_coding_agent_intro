@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolDefinition, TodoItem, TodoStatus } from "../core/types.js";
-import { TODO_WRITE_TOOL_NAME } from "./tool-names.js";
+import { TODO_WRITE_TOOL_NAME } from "../constants/tool_names.js";
 
 const STATUS_ORDER: Record<TodoStatus, number> = {
   in_progress: 0,

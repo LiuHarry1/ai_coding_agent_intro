@@ -1,5 +1,5 @@
 import { isPreviewEnabled, previewPathPrefix } from "../core/preview.js";
-import { BASH_TOOL_NAME, PUBLISH_PREVIEW_TOOL_NAME } from "../tools/tool-names.js";
+import { BASH_TOOL_NAME, PUBLISH_PREVIEW_TOOL_NAME } from "../constants/tool_names.js";
 
 /** Cloud-only guidance for exposing dev servers via the preview proxy. */
 export function previewSection(): string {

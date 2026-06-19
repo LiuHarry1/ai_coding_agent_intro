@@ -8,7 +8,7 @@ import * as path from "path";
 import { generateText } from "ai";
 import { defaultManager } from "../../core/provider-manager.js";
 import type { Message, TodoItem } from "../../core/types.js";
-import { READ_FILE_TOOL_NAME } from "../../tools/tool-names.js";
+import { READ_FILE_TOOL_NAME } from "../../constants/tool_names.js";
 import { estimateConversationTokens, clearTokenUsages } from "./tokens.js";
 
 // ── Prompt (analysis + summary) ─────────────────────────

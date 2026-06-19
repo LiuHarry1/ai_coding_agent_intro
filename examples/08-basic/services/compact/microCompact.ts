@@ -17,7 +17,7 @@ import {
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
-} from "../../tools/tool-names.js";
+} from "../../constants/tool_names.js";
 import { estimateMessageTokens } from "./tokens.js";
 import {
   isPersistedReference,

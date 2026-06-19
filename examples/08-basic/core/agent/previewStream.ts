@@ -17,7 +17,7 @@
  * preview. Tools not listed here just fall back to the byte counter.
  */
 
-import { EDIT_FILE_TOOL_NAME, WRITE_FILE_TOOL_NAME } from "../../tools/tool-names.js";
+import { EDIT_FILE_TOOL_NAME, WRITE_FILE_TOOL_NAME } from "../../constants/tool_names.js";
 
 export const PREVIEW_FIELDS: Record<string, string> = {
   [EDIT_FILE_TOOL_NAME]: "new_string",

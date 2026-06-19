@@ -1,6 +1,6 @@
 import { createShellTool } from "./shell-runner.js";
 import { bashShell, isWindows } from "../core/platform.js";
-import { BASH_TOOL_NAME } from "./tool-names.js";
+import { BASH_TOOL_NAME } from "../constants/tool_names.js";
 
 const windowsNote = isWindows
   ? `

@@ -12,13 +12,13 @@ import * as path from "path";
 import { glob as runGlob } from "../utils/glob.js";
 import { resolvePath } from "./utils.js";
 import type { ToolDefinition } from "../core/types.js";
-import { GLOB_TOOL_NAME } from "./tool-names.js";
-import { AGENT_TOOL_NAME } from "./tool-names.js";
+import { GLOB_TOOL_NAME } from "../constants/tool_names.js";
+import { AGENT_TOOL_NAME } from "../constants/tool_names.js";
 import {
   envBool,
   hasDotSegment,
   isInsideExcludedDir,
-} from "../core/file-filters.js";
+} from "../constants/file_filters.js";
 
 const DESCRIPTION = `- Fast file pattern matching tool that works with any codebase size
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"

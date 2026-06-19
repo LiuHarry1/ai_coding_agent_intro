@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { MAX_OUTPUT_SIZE_BYTES } from "./limits.js";
+import { MAX_OUTPUT_SIZE_BYTES } from "../../constants/api_limits.js";
 import type { ReadNotebookOutput } from "./types.js";
 import { FileTooLargeError } from "./types.js";
 

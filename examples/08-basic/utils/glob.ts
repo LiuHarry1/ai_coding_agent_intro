@@ -16,7 +16,7 @@
 import { basename, dirname, isAbsolute, join, sep } from "path";
 import { ripGrep } from "./ripgrep.js";
 import { isWindows } from "../core/platform.js";
-import { buildRgExcludeGlobs, envBool } from "../core/file-filters.js";
+import { buildRgExcludeGlobs, envBool } from "../constants/file_filters.js";
 
 /**
  * Extracts the static base directory from a glob pattern. The base

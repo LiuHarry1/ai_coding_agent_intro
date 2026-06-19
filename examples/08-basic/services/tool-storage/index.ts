@@ -13,7 +13,7 @@ import {
   READ_FILE_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
-} from "../../tools/tool-names.js";
+} from "../../constants/tool_names.js";
 
 export const PERSISTED_OUTPUT_OPEN = "<persisted-output";
 export const PERSISTED_OUTPUT_CLOSE = "</persisted-output>";

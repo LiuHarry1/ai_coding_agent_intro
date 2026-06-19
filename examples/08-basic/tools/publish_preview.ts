@@ -8,7 +8,7 @@ import {
   waitForPort,
 } from "../core/preview.js";
 import type { ToolDefinition } from "../core/types.js";
-import { PUBLISH_PREVIEW_TOOL_NAME } from "./tool-names.js";
+import { PUBLISH_PREVIEW_TOOL_NAME } from "../constants/tool_names.js";
 
 export const definition: ToolDefinition = {
   name: PUBLISH_PREVIEW_TOOL_NAME,

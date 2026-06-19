@@ -3,8 +3,8 @@ import * as path from "path";
 import {
   MAX_LINES_TO_READ,
   MAX_OUTPUT_SIZE_BYTES,
-} from "./limits.js";
-import { isBinaryContent } from "./binary-extensions.js";
+} from "../../constants/api_limits.js";
+import { isBinaryContent } from "../../constants/files.js";
 import type { ReadTextOutput } from "./types.js";
 import { FileTooLargeError } from "./types.js";
 

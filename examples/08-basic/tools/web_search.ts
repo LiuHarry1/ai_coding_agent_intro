@@ -3,7 +3,7 @@ import { z } from "zod";
 import { truncate } from "./utils.js";
 import { cleanURL, decodeHtml, fetchWithTimeout, stripHtml } from "./http-utils.js";
 import type { ToolDefinition } from "../core/types.js";
-import { WEB_SEARCH_TOOL_NAME } from "./tool-names.js";
+import { WEB_SEARCH_TOOL_NAME } from "../constants/tool_names.js";
 
 interface SearXNGResult {
   title?: string;

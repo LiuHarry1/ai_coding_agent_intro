@@ -5,7 +5,7 @@ import {
   isNotebookExtension,
   isPdfExtension,
   MAX_DIR_ENTRIES,
-} from "./limits.js";
+} from "../../constants/api_limits.js";
 import { fileExtension, readTextFile } from "./read-text.js";
 import { readImageFile } from "./read-image.js";
 import { readNotebookFile } from "./read-notebook.js";

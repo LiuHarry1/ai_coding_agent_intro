@@ -3,7 +3,7 @@ import {
   PDF_AT_MENTION_INLINE_THRESHOLD,
   PDF_MAX_PAGES_PER_READ,
   PDF_TARGET_RAW_SIZE,
-} from "./limits.js";
+} from "../../constants/api_limits.js";
 import type { ReadPdfOutput, ReadPdfPagesOutput } from "./types.js";
 
 export function parsePdfPageRange(pages: string): { start: number; end: number } | null {

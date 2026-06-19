@@ -13,7 +13,7 @@ import {
   TODO_WRITE_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
-} from "../tools/tool-names.js";
+} from "../constants/tool_names.js";
 import { SKILL_TOOL_NAME } from "../tools/skill.js";
 import { previewSection } from "./preview.js";
 

@@ -13,7 +13,7 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
-import { AGENT_TOOL_NAME } from "../tools/tool-names.js";
+import { AGENT_TOOL_NAME } from "../constants/tool_names.js";
 import { SKILL_TOOL_NAME } from "../tools/skill.js";
 import type { SkillDefinition } from "./types.js";
 

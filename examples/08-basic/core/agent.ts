@@ -27,7 +27,7 @@ import {
   buildToolMessage,
   runToolCalls,
 } from "../services/tools/tool_execution.js";
-import { TOOL_SEARCH_TOOL_NAME, TODO_WRITE_TOOL_NAME } from "../tools/tool-names.js";
+import { TOOL_SEARCH_TOOL_NAME, TODO_WRITE_TOOL_NAME } from "../constants/tool_names.js";
 import { getDefaultWorkspace } from "./workspace.js";
 import type { ConcurrencyPolicyFn } from "./concurrency-policy.js";
 import type { AnyTool } from "./types.js";

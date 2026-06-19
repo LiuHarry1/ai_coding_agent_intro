@@ -1,6 +1,6 @@
 import { createShellTool } from "./shell-runner.js";
 import { powershellShell } from "../core/platform.js";
-import { POWERSHELL_TOOL_NAME } from "./tool-names.js";
+import { POWERSHELL_TOOL_NAME } from "../constants/tool_names.js";
 import { detectPowerShellEdition, type PowerShellEdition } from "../core/powershell-edition.js";
 
 /**

@@ -53,7 +53,7 @@ import * as path from "path";
 import {
   DEPENDENCY_DIRECTORIES,
   VCS_DIRECTORIES,
-} from "../core/file-filters.js";
+} from "../constants/file_filters.js";
 
 const MAX_FILES_SCANNED = 50_000;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -294,7 +294,7 @@ async function enumerateFiles(
   }
 
   // ── Full walk (rg --no-ignore equivalent) ─────────────────────────
-  // Ignore patterns mirror `core/file-filters.ts` (VCS + dependency dirs).
+  // Ignore patterns mirror `constants/file_filters.ts` (VCS + dependency dirs).
   // Built here as `**/<name>/**` patterns because `glob`'s `ignore` option
   // uses gitignore-style globs — same shape we'd emit for ripgrep.
   const fullWalkIgnore = [...VCS_DIRECTORIES, ...DEPENDENCY_DIRECTORIES].map(
