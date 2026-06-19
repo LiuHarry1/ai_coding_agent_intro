@@ -19,7 +19,7 @@ import { createPlanModeGuardMiddleware } from "../../core/middleware/plan-mode-g
 import { defaultRegistry } from "../../tools/index.js";
 import { respondSkillFork } from "../../skills/respond-fork.js";
 import { configManager } from "../../core/config-manager.js";
-import { prepareChatTurn } from "../../process_input/prepare_chat_turn.js";
+import { prepareChatTurn } from "../../utils/processUserInput/prepare_chat_turn.js";
 import { mcpManager } from "../mcp-lifecycle.js";
 import {
   handlePlanModeTransition,

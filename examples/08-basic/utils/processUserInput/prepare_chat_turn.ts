@@ -2,34 +2,34 @@
  * Prepare a chat turn before runAgent — CC: processUserInput pipeline.
  * Slash resolution, per-request registry reload, tools, @-attachments, mode restrictions.
  */
-import { dispatchSlashCommand } from "../commands/dispatcher.js";
-import { resolvePlanSlash } from "../commands/plan.js";
-import { registerSubagents, getSubagentNames } from "../tools/AgentTool/index.js";
-import { registerSkills, formatSkillListing } from "../skills/index.js";
-import { loadPlugins, pluginErrorMessage, pluginErrorSource } from "../core/plugins/index.js";
-import { loadProjectRules } from "../core/rules-loader.js";
-import { filterToolsByEnablement } from "../core/tool-enablement.js";
-import { buildConcurrencyPolicy } from "../core/concurrency-policy.js";
-import { createToolSearchDefinition } from "../tools/tool_search.js";
-import { TOOL_SEARCH_TOOL_NAME } from "../constants/tool_names.js";
-import { buildAttachmentMessages } from "../utils/attachments/index.js";
-import { buildPlanModeAttachments } from "../utils/attachments/plan-mode.js";
-import { applyModeRestrictions } from "../core/mode-restrictions.js";
-import { definition as enterPlanModeDef } from "../tools/enter_plan_mode.js";
-import { definition as exitPlanModeDef } from "../tools/exit_plan_mode.js";
-import { getPlanFilePath, planExists } from "../utils/plans.js";
-import type { ReadFileState } from "../utils/attachments/types.js";
+import { dispatchSlashCommand } from "../../commands/dispatcher.js";
+import { resolvePlanSlash } from "../../commands/plan.js";
+import { registerSubagents, getSubagentNames } from "../../tools/AgentTool/index.js";
+import { registerSkills, formatSkillListing } from "../../skills/index.js";
+import { loadPlugins, pluginErrorMessage, pluginErrorSource } from "../../core/plugins/index.js";
+import { loadProjectRules } from "../../core/rules-loader.js";
+import { filterToolsByEnablement } from "../../core/tool-enablement.js";
+import { buildConcurrencyPolicy } from "../../core/concurrency-policy.js";
+import { createToolSearchDefinition } from "../../tools/tool_search.js";
+import { TOOL_SEARCH_TOOL_NAME } from "../../constants/tool_names.js";
+import { buildAttachmentMessages } from "../attachments/index.js";
+import { buildPlanModeAttachments } from "../attachments/plan-mode.js";
+import { applyModeRestrictions } from "../../core/mode-restrictions.js";
+import { definition as enterPlanModeDef } from "../../tools/enter_plan_mode.js";
+import { definition as exitPlanModeDef } from "../../tools/exit_plan_mode.js";
+import { getPlanFilePath, planExists } from "../plans.js";
+import type { ReadFileState } from "../attachments/types.js";
 import type {
   AnyTool,
   IToolRegistry,
   Message,
   Session,
   ToolContext,
-} from "../core/types.js";
-import type { MCPManager } from "../core/mcp-manager.js";
-import type { ConfigManager } from "../core/config-manager.js";
-import type { ToolRegistry } from "../core/tool-registry.js";
-import type { SlashEntry } from "../commands/slashRegistry.js";
+} from "../../core/types.js";
+import type { MCPManager } from "../../core/mcp-manager.js";
+import type { ConfigManager } from "../../core/config-manager.js";
+import type { ToolRegistry } from "../../core/tool-registry.js";
+import type { SlashEntry } from "../../commands/slashRegistry.js";
 import { extractFilePathCandidates } from "./path_candidates.js";
 
 export type ForkSkillSlashResult = {
