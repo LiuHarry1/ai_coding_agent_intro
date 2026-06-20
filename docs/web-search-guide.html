@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent Web Search 实现对比</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
+
+    :root {
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --blue: #0284c7;
+      --blue-light: #e0f2fe;
+      --purple: #7c3aed;
+      --purple-light: #ede9fe;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --green: #059669;
+      --green-light: #d1fae5;
+      --red-light: #fee2e2;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #134e4a 45%, #1e3a5f 100%);
+      color: white;
+      padding: 56px 24px 64px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 4vw, 38px);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .hero p {
+      max-width: 720px;
+      margin: 0 auto;
+      color: #cbd5e1;
+      font-size: 16px;
+    }
+
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 20px 80px;
+    }
+
+    section { margin-top: 48px; }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: white;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    h3 { font-size: 17px; margin: 24px 0 10px; }
+
+    .lead {
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-size: 14.5px;
+    }
+
+    .mono {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: #0f172a;
+    }
+
+    pre {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 14px 16px;
+      border-radius: 10px;
+      overflow-x: auto;
+      margin: 12px 0;
+      line-height: 1.55;
+    }
+
+    .callout {
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .callout.info {
+      background: var(--blue-light);
+      border-left: 4px solid var(--blue);
+      color: #0c4a6e;
+    }
+
+    .callout.warn {
+      background: var(--amber-light);
+      border-left: 4px solid var(--amber);
+      color: #92400e;
+    }
+
+    .callout.ok {
+      background: var(--green-light);
+      border-left: 4px solid var(--green);
+      color: #065f46;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #f8fafc; font-weight: 600; }
+    td { color: #475569; }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin: 2px 4px 2px 0;
+    }
+
+    .tag.blue { background: var(--blue-light); color: var(--blue); }
+    .tag.purple { background: var(--purple-light); color: var(--purple); }
+    .tag.amber { background: var(--amber-light); color: var(--amber); }
+    .tag.green { background: var(--green-light); color: var(--green); }
+
+    .cards-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      border-top: 4px solid var(--blue);
+    }
+
+    .card.purple { border-top-color: var(--purple); }
+    .card.amber { border-top-color: var(--amber); }
+    .card.green { border-top-color: var(--green); }
+
+    .card h3 { font-size: 16px; margin: 0 0 8px; }
+    .card p, .card li { font-size: 13.5px; color: #475569; }
+    .card ul { padding-left: 18px; margin-top: 8px; }
+    .card li { margin-bottom: 4px; }
+
+    .figure {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin: 20px 0;
+      box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    .figure-caption {
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 14px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    a { color: var(--blue); }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>AI Agent Web Search 实现对比</h1>
+  <p>
+    搜索后端（SearXNG / Exa / Tavily / Provider 原生）、各主流 Coding Agent 的选型，
+    以及本仓库 <span class="mono">examples/08-basic</span> 的可切换实现。
+  </p>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2><span class="num">1</span>先分清两种能力</h2>
+    <p class="lead">几乎所有 Agent 都把「发现链接」和「读页面正文」拆成两步，只是命名不同。</p>
+
+    <div class="cards-2">
+      <div class="card">
+        <h3>Discovery — 发现</h3>
+        <ul>
+          <li>工具名常见：<span class="mono">web_search</span> / <span class="mono">WebSearch</span> / <span class="mono">websearch</span></li>
+          <li>输入：自然语言 query</li>
+          <li>输出：标题、URL、snippet / highlights</li>
+          <li>后端：SearXNG、Exa、Tavily、Anthropic/OpenAI 服务端工具等</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <h3>Retrieval — 抓取</h3>
+        <ul>
+          <li>工具名常见：<span class="mono">web_fetch</span> / <span class="mono">WebFetch</span></li>
+          <li>输入：已知 URL</li>
+          <li>输出：正文、Readability 提取、或 Tavily Extract</li>
+          <li>与搜索解耦：先搜再 fetch，或 Exa/OpenAI 一次返回更多正文</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <strong>架构模式：</strong>Client-side tool（Agent 自己调搜索 API） vs Server-side / Hosted tool（模型厂商 API 内执行，客户端只解析结果块）。
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span>搜索后端对比</h2>
+    <p class="lead">面向 Agent 集成时的维度：是否要 Key、免费额度、返回格式、中文/实时新闻表现。</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>后端</th>
+          <th>类型</th>
+          <th>免费额度（概览）</th>
+          <th>集成方式</th>
+          <th>优点</th>
+          <th>缺点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>SearXNG</strong></td>
+          <td><span class="tag green">自托管</span></td>
+          <td>无 API 费（需自己运维）</td>
+          <td>HTTP <span class="mono">/search?format=json</span></td>
+          <td>隐私可控、可配引擎、零边际成本</td>
+          <td>引擎易挂、中文/娱乐类常 0 结果、要 Docker</td>
+        </tr>
+        <tr>
+          <td><strong>Exa</strong></td>
+          <td><span class="tag blue">SaaS</span></td>
+          <td>MCP 匿名 ~50–150 次/天/IP；配 Key 后 API ~2 万/月</td>
+          <td>REST 或 MCP <span class="mono">web_search_exa</span></td>
+          <td>语义搜索、长 Highlights、live crawl、中文实时内容较好</td>
+          <td>非无限免费；MCP 解析略复杂</td>
+        </tr>
+        <tr>
+          <td><strong>Tavily</strong></td>
+          <td><span class="tag blue">SaaS</span></td>
+          <td>~1000 credits/月（basic 搜索 ≈ 1 credit）</td>
+          <td>REST <span class="mono">api.tavily.com</span></td>
+          <td>专为 Agent 设计、JSON 规整、可选 AI answer、Extract/Crawl</td>
+          <td>必须 Key；免费档比 Exa 配 Key 后更紧</td>
+        </tr>
+        <tr>
+          <td><strong>Parallel</strong></td>
+          <td><span class="tag blue">SaaS</span></td>
+          <td>需 <span class="mono">PARALLEL_API_KEY</span></td>
+          <td>MCP <span class="mono">search.parallel.ai/mcp</span></td>
+          <td>OpenCode 可选第二后端</td>
+          <td>需付费 Key；生态小于 Exa/Tavily</td>
+        </tr>
+        <tr>
+          <td><strong>Brave Search API</strong></td>
+          <td><span class="tag blue">SaaS</span></td>
+          <td>有免费档（按 Brave 政策）</td>
+          <td>REST</td>
+          <td>便宜、快；OpenClaw 等支持</td>
+          <td>偏传统关键词搜索</td>
+        </tr>
+        <tr>
+          <td><strong>Anthropic Server Tool</strong></td>
+          <td><span class="tag purple">Hosted</span></td>
+          <td>含在 Anthropic API 用量（~$0.01/次量级）</td>
+          <td>Messages API <span class="mono">web_search_20250305</span></td>
+          <td>零自建；Claude Code 官方路径</td>
+          <td>仅 Anthropic 生态；底层引擎不公开</td>
+        </tr>
+        <tr>
+          <td><strong>OpenAI Responses <span class="mono">web_search</span></strong></td>
+          <td><span class="tag purple">Hosted</span></td>
+          <td>含在 OpenAI/Copilot 订阅或 API</td>
+          <td>Responses API <span class="mono">web_search_call</span></td>
+          <td>与 GPT 深度集成</td>
+          <td>Copilot 第三方 API 通常<strong>不支持</strong>暴露此工具</td>
+        </tr>
+        <tr>
+          <td><strong>DuckDuckGo HTML</strong></td>
+          <td><span class="tag green">抓取</span></td>
+          <td>免费、无 Key</td>
+          <td>HTML  scraping</td>
+          <td>Pi 扩展 <span class="mono">pi-websearch</span> 默认后端</td>
+          <td>不稳定、无官方 API、易变</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <strong>都不是「无限免费」：</strong>Exa 无 Key 有日限；Tavily 约 1000 次/月；SearXNG 免费但你要扛运维与引擎质量。
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span>各 AI Agent 用什么？</h2>
+    <p class="lead">基于公开源码 / 官方文档整理（2026-06）。闭源产品以文档与可观测行为为准。</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>产品</th>
+          <th>搜索工具名</th>
+          <th>实际后端</th>
+          <th>执行位置</th>
+          <th>配置要点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>本仓库 08-basic</strong></td>
+          <td><span class="mono">WebSearch</span> + <span class="mono">WebFetch</span></td>
+          <td>
+            <span class="tag green">SearXNG</span>
+            <span class="tag blue">Exa MCP</span>
+          </td>
+          <td>Client-side</td>
+          <td>
+            <span class="mono">WEB_SEARCH_PROVIDER=exa|searxng</span>（默认 exa）<br/>
+            <span class="mono">SEARXNG_URL</span> / <span class="mono">EXA_API_KEY</span>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Claude Code</strong></td>
+          <td><span class="mono">WebSearch</span></td>
+          <td>Anthropic <span class="mono">web_search_20250305</span></td>
+          <td><strong>Server-side</strong>（再发 Messages API）</td>
+          <td>First-party / Vertex / Foundry；无 Brave/Exa Key</td>
+        </tr>
+        <tr>
+          <td><strong>OpenCode</strong></td>
+          <td><span class="mono">websearch</span> + <span class="mono">webfetch</span></td>
+          <td>
+            <span class="tag blue">Exa MCP</span>
+            <span class="tag purple">Parallel MCP</span>
+          </td>
+          <td>Client-side（MCP HTTP）</td>
+          <td>
+            <span class="mono">OPENCODE_ENABLE_EXA=1</span><br/>
+            <span class="mono">OPENCODE_WEBSEARCH_PROVIDER=exa|parallel</span>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>OpenClaw</strong></td>
+          <td><span class="mono">web_search</span> + 各插件工具</td>
+          <td>
+            可配置：<span class="tag blue">Tavily</span>
+            <span class="tag blue">Exa</span>
+            Brave、Firecrawl、Perplexity 等
+          </td>
+          <td>Client-side（插件 + provider）</td>
+          <td>
+            <span class="mono">openclaw configure --section web</span><br/>
+            <span class="mono">TAVILY_API_KEY</span> / <span class="mono">EXA_API_KEY</span>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Pi Agent</strong><br/><small>（pi-coding-agent）</small></td>
+          <td>扩展注册 <span class="mono">web_search</span></td>
+          <td>
+            核心<strong>无内置</strong>；社区 <span class="mono">pi-websearch</span>：
+            OpenAI/Anthropic → 原生 hosted；其它 → DuckDuckGo HTML
+          </td>
+          <td>混合</td>
+          <td><span class="mono">~/.pi/agent/extensions/</span> 或 <span class="mono">--extension</span></td>
+        </tr>
+        <tr>
+          <td><strong>Cursor</strong></td>
+          <td>MCP 工具 + 官方插件</td>
+          <td>
+            无统一开源实现；常见：
+            <span class="tag blue">Exa MCP</span>
+            <span class="tag blue">Tavily MCP</span>
+            （Marketplace 官方插件）
+          </td>
+          <td>MCP / 插件</td>
+          <td><span class="mono">.cursor/mcp.json</span> 或安装 Exa/Tavily 插件</td>
+        </tr>
+        <tr>
+          <td><strong>GitHub Copilot Chat</strong></td>
+          <td>产品内联网（非公开 API 工具）</td>
+          <td>Model native search + Bing（github.com 上）</td>
+          <td>Server-side（产品内）</td>
+          <td>Copilot token <strong>不能</strong>当通用 web_search API 用</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span>架构对照（三种典型路径）</h2>
+
+    <div class="figure">
+      <pre>
+┌─────────────────────────────────────────────────────────────────────────┐
+│ A. Client-side 搜索（本仓库 / OpenCode / OpenClaw / Tavily REST）        │
+├─────────────────────────────────────────────────────────────────────────┤
+│  User → LLM → tool_call(web_search)                                      │
+│           → Agent 进程 → Exa MCP / SearXNG / Tavily API                  │
+│           → 结构化 JSON 回到 context →（可选）web_fetch(URL)            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ B. Server-side Hosted（Claude Code WebSearch）                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│  User → LLM → Agent 再发 Anthropic API + web_search_20250305 schema      │
+│           → Anthropic 服务端执行搜索                                      │
+│           → web_search_tool_result 流式返回 → 映射为 tool result         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ C. Provider-native + 扩展回退（Pi + pi-websearch）                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│  OpenAI/Anthropic 模型 → 用 provider 内置 web_search（hosted）           │
+│  其它模型 → DuckDuckGo HTML 或配置 Exa/Tavily/…                         │
+└─────────────────────────────────────────────────────────────────────────┘
+      </pre>
+      <p class="figure-caption">Discovery 与 Retrieval 可合并（Exa contents / Tavily extract）或拆分（SearXNG + web_fetch）。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">5</span>分产品细节</h2>
+
+    <h3>Claude Code</h3>
+    <p>
+      源码路径：<span class="mono">WebSearchTool.ts</span> → 注册
+      <span class="mono">type: web_search_20250305</span>，通过
+      <span class="mono">queryModelWithStreaming</span> 触发 Anthropic 服务端搜索。
+      客户端<strong>不</strong>调用 Exa/Tavily。Beta header：
+      <span class="mono">web-search-2025-03-05</span>（Vertex/Foundry）。
+    </p>
+
+    <h3>OpenCode</h3>
+    <p>
+      <span class="mono">packages/opencode/src/tool/websearch.ts</span>：
+      Exa MCP（<span class="mono">web_search_exa</span>）与 Parallel MCP 二选一；
+      默认 OpenCode provider 启用，其它 provider 需
+      <span class="mono">OPENCODE_ENABLE_EXA</span>。
+      与 <span class="mono">webfetch</span> 分工明确（文档：discovery vs retrieval）。
+    </p>
+
+    <h3>OpenClaw</h3>
+    <p>
+      基于 Pi 框架，搜索是<strong>一等配置项</strong>：
+      <span class="mono">tools.web.search.provider</span> 可选 tavily、exa、brave 等；
+      另有 <span class="mono">tavily_search</span> / <span class="mono">tavily_extract</span> 插件工具做高级参数。
+      Exa 支持 <span class="mono">contents</span> 一次返回摘要，减少二次 fetch。
+    </p>
+
+    <h3>Pi Agent</h3>
+    <p>
+      <span class="mono">pi-coding-agent</span> 本体只有 read/write/bash 等文件工具；
+      搜索靠 <span class="mono">pi.registerTool()</span> 扩展。
+      社区 <a href="https://github.com/code-yeongyu/pi-websearch">pi-websearch</a>：
+      OpenAI/Anthropic 会话自动 defer 到 provider-native search，其它走 DuckDuckGo 或配置文件里的多 provider 链。
+    </p>
+
+    <h3>Cursor</h3>
+    <p>
+      Agent 联网能力主要来自 <strong>MCP 生态</strong>，而非单一开源 core：
+      <a href="https://github.com/exa-labs/exa-cursor-plugin">exa-cursor-plugin</a>、
+      <a href="https://github.com/tavily-ai/tavily-cursor-plugin">tavily-cursor-plugin</a>
+      提供 Search / Fetch / Crawl / Research 等命令与 MCP。
+      典型 MCP 配置：
+    </p>
+    <pre>{
+  "mcpServers": {
+    "exa": { "url": "https://mcp.exa.ai/mcp" },
+    "tavily-mcp": {
+      "command": "npx",
+      "args": ["-y", "tavily-mcp@latest"],
+      "env": { "TAVILY_API_KEY": "tvly-..." }
+    }
+  }
+}</pre>
+
+    <h3>本仓库 examples/08-basic</h3>
+    <p>
+      实现目录：<span class="mono">tools/web-search/</span>（config / searxng / exa / index）。
+      切换方式：
+    </p>
+    <pre># .env
+WEB_SEARCH_PROVIDER=exa       # 默认
+WEB_SEARCH_PROVIDER=searxng   # 自托管 SearXNG
+
+SEARXNG_URL=http://localhost:8888
+EXA_API_KEY=                  # 可选，提高 Exa 配额</pre>
+    <p>
+      空结果时会返回 <span class="mono">warning</span> 字段，提示模型勿编造；
+      UI 见 <span class="mono">client/web/src/components/WebSearchCard.jsx</span>。
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">6</span>怎么选（给 Agent 作者）</h2>
+
+    <div class="cards-2">
+      <div class="card green">
+        <h3>优先 SearXNG</h3>
+        <ul>
+          <li>内网 / 多租户 / 零 API 成本</li>
+          <li>已有 Docker + 引擎维护能力</li>
+          <li>配合 <span class="mono">web_fetch</span> 读正文</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>优先 Exa</h3>
+        <ul>
+          <li>中文实时新闻、语义检索</li>
+          <li>想对齐 OpenCode 实现（MCP）</li>
+          <li>可无 Key 试用，正式用配 Key</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <h3>优先 Tavily</h3>
+        <ul>
+          <li>要最规整的 Agent JSON + optional answer</li>
+          <li>OpenClaw / LangChain 生态一致</li>
+          <li>月 &lt;1000 次搜索的固定配额可接受</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <h3>用 Provider Hosted</h3>
+        <ul>
+          <li>Claude Code 式：只走 Anthropic API</li>
+          <li>不想维护任何搜索基础设施</li>
+          <li>接受 vendor lock-in 与按次计费</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout ok">
+      <strong>本仓库默认：</strong>Exa MCP（<span class="mono">WEB_SEARCH_PROVIDER=exa</span>）；
+      内网/零 API 成本场景改 <span class="mono">searxng</span>；若后续要 Tavily，可仿照
+      <span class="mono">exa.ts</span> 增加 REST provider 与同一 env 开关。
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">7</span>参考链接</h2>
+    <ul style="padding-left: 20px; color: #475569; font-size: 14px;">
+      <li>Exa MCP：<a href="https://exa.ai/docs/reference/exa-mcp">exa.ai/docs/reference/exa-mcp</a></li>
+      <li>Exa Pricing：<a href="https://exa.ai/pricing">exa.ai/pricing</a></li>
+      <li>Tavily Credits：<a href="https://docs.tavily.com/documentation/api-credits">docs.tavily.com/documentation/api-credits</a></li>
+      <li>OpenClaw Tavily：<a href="https://docs.openclaw.ai/tools/tavily">docs.openclaw.ai/tools/tavily</a></li>
+      <li>OpenCode tools：<a href="https://opencode.ai/docs/tools">opencode.ai/docs/tools</a>（websearch / webfetch）</li>
+      <li>Pi extensions：<a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md">pi-coding-agent/docs/extensions.md</a></li>
+      <li>pi-websearch：<a href="https://github.com/code-yeongyu/pi-websearch">github.com/code-yeongyu/pi-websearch</a></li>
+    </ul>
+  </section>
+
+</div>
+
+<footer>
+  examples/08-basic · docs/web-search-guide.html · 用浏览器直接打开阅读
+</footer>
+
+</body>
+</html>

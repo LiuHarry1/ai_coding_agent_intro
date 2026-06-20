@@ -60,7 +60,7 @@ core/llm/
 | Tool | 说明 |
 |------|------|
 | `todo_write` | 结构化待办清单；支持 merge 更新；agent 结束时自动将未完成项标为 completed |
-| `web_search` | 对接本地 SearXNG（默认 `http://localhost:8888`），返回标题/摘要/链接 |
+| `web_search` | 默认 **Exa MCP**（`WEB_SEARCH_PROVIDER=exa`）；可切换 SearXNG（`SEARXNG_URL`，默认 `http://localhost:8888`） |
 | `web_fetch` | 抓取 URL，用 `@mozilla/readability` + `linkedom` 提取正文 |
 | `powershell` | Windows 专用 shell（与 `bash` 二选一注册，避免模型混用语法） |
 
@@ -242,7 +242,7 @@ Open http://localhost:5173 (Vite proxies API requests to port 4567).
 
 ### 可选：本地 Web 搜索
 
-`web_search` 默认连接 `http://localhost:8888`（SearXNG）。未启动时该工具会报错；可在配置中 `disabledTools` 关闭，或先启动 SearXNG 实例。
+`web_search` 默认走 **Exa MCP**（`.env` 中 `WEB_SEARCH_PROVIDER=exa`，可选 `EXA_API_KEY`）。切换 SearXNG 时设 `WEB_SEARCH_PROVIDER=searxng` 并启动本地实例（默认 `http://localhost:8888`）；未启动 SearXNG 时该模式会报错。
 
 ## Extending
 

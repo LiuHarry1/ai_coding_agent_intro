@@ -52,6 +52,7 @@ services:
       PREVIEW_ENABLED: "1"
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
       SEARXNG_URL: "${SEARXNG_URL:-http://localhost:8888}"
+      WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
       PREVIEW_PATH_PREFIX: "/preview"
       PREVIEW_PORT_MIN: "3000"
       PREVIEW_PORT_MAX: "9998"

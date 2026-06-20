@@ -94,6 +94,8 @@ export default function WebSearchCard({ part }) {
 
   const query = args.query || parsed?.query || "";
   const filter = [];
+  if (parsed?.provider === "exa") filter.push("Exa");
+  else if (parsed?.provider === "searxng") filter.push("SearXNG");
   if (args.time_range) filter.push(args.time_range);
   if (args.language) filter.push(args.language);
   if (args.categories) filter.push(args.categories);
@@ -181,7 +183,10 @@ export default function WebSearchCard({ part }) {
               ))}
             </div>
           )}
-          {!isError && isDone && results.length === 0 && parsed && (
+          {!isError && parsed?.content && results.length === 0 && (
+            <pre className="web-search-raw">{parsed.content}</pre>
+          )}
+          {!isError && isDone && results.length === 0 && parsed && !parsed.content && (
             <div className="web-search-empty">
               No results for {query ? `"${query}"` : "this query"}.
             </div>
