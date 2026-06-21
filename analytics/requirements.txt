@@ -1,0 +1,24 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30
+SQLAlchemy[asyncio]>=2.0,<2.1
+pydantic>=2.7,<3.0
+pydantic-settings>=2.2
+python-dateutil>=2.9
+
+# Async MySQL driver (default prod backend; mirrors knowbot/chat-service).
+# aiomysql builds on pymysql, which knowbot pins because 1.1.2 broke SQLAlchemy's
+# pre-ping. cryptography is required for MySQL 8's caching_sha2_password auth.
+aiomysql>=0.2.0
+pymysql>=1.1.0,<1.1.2
+cryptography>=42.0
+
+# Async SQLite driver for local dev / tests.
+aiosqlite>=0.20
+
+# Other optional production drivers (uncomment as needed):
+# asyncpg>=0.29              # PostgreSQL (async)
+
+# Dev / tests:
+httpx>=0.27
+pytest>=8.0
+pytest-asyncio>=0.23

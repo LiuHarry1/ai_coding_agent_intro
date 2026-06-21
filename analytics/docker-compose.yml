@@ -1,0 +1,40 @@
+# Analytics collector + MySQL (shared `knowbot` database, same as chat-service).
+# For dev without MySQL, set ANALYTICS_DATABASE_URL=sqlite:///./analytics.db
+# and run `docker compose up analytics` (omit the db service).
+services:
+  analytics:
+    build: .
+    environment:
+      ANALYTICS_DATABASE_URL: ""
+      MYSQL_HOST: "db"
+      MYSQL_PORT: "3306"
+      MYSQL_USER: "root"
+      MYSQL_PASSWORD: "root"
+      MYSQL_DATABASE: "knowbot"
+      ANALYTICS_INGEST_API_KEY: "${ANALYTICS_INGEST_API_KEY:-change-me-ingest}"
+      ANALYTICS_QUERY_API_KEY: "${ANALYTICS_QUERY_API_KEY:-change-me-query}"
+    ports:
+      - "${ANALYTICS_PORT:-8200}:8200"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: knowbot
+    volumes:
+      - analytics-mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  analytics-mysqldata:
