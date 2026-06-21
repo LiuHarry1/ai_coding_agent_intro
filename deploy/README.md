@@ -262,9 +262,25 @@ browser ─▶ nginx ─┬─ /              SPA (RequireAuth → /sso/authoriz
    agent call.
 3. The agent (`server/auth/identity.ts`) **verifies** the token with the
    shared `JWT_SECRET` (no DB, no network), then derives a fixed workspace
-   `${USERS_ROOT}/<slug(email)>`, creating it on first use. The client's
+   `${USERS_ROOT}/<slug(email)>`, creating it on first use. On that first
+   creation, files from `WORKSPACE_SEED_DIR` (default `/opt/workspace-seed`,
+   baked via `deploy/workspace-seed/` in the tenant image) are copied into
+   the user's directory — typically a starter `.ai-agent/` tree. The client's
    `workspace` field is ignored, and `/workspace/*` is sandboxed to that
    directory.
+
+4. **Session visibility:** regular users (`role=user`) and admins (`role=admin`)
+   only see their own chat sessions. Only users with **`role=super`** in the JWT
+   see **all users' sessions** in the session switcher (with owner email shown).
+   They can open and read any session's history; they can only **delete their
+   own** sessions. Assign `super` via your auth-service (e.g.
+   `PATCH /api/auth/users/{id}/role` with `role=super`).
+
+5. **Daily token quota (optional):** run the analytics service with
+   `ANALYTICS_DEFAULT_DAILY_TOKEN_LIMIT` set (UTC day). On the agent stack set
+   `QUOTA_ENABLED=true`, `ANALYTICS_URL`, and `ANALYTICS_INGEST_API_KEY`. Each
+   new chat request is checked once; tokens are committed when the request
+   ends. `role=super` is unlimited.
 
 Required env (put in `deploy/.env`):
 
@@ -274,6 +290,7 @@ Required env (put in `deploy/.env`):
 | `AUTH_SERVICE_URL` | web | Your external auth-service, e.g. `http://10.150.115.69:52320` |
 | `PUBLIC_ORIGIN` | web/agent | Origin users open, e.g. `http://10.150.117.195:9999` (default `http://localhost:8080`) |
 | `WEB_PORT` | web | Host port to publish (default `8080`) |
+| `WORKSPACE_SEED_DIR` | agent | Per-user template dir (default `/opt/workspace-seed`). Set to empty to disable. Edit `deploy/workspace-seed/` before building the tenant image. |
 
 On the **external auth-service**, add `PUBLIC_ORIGIN` to both
 `SSO_ALLOWED_RETURN_ORIGINS` and `CORS_ALLOWED_ORIGINS`, otherwise the SSO

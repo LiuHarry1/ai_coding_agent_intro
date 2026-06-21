@@ -132,6 +132,19 @@
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.session-dropdown-item-owner {
+  color: var(--accent);
+  font-weight: 500;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-dropdown-item-delete {

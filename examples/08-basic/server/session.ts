@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import type { Session, SessionInfo, Message } from "../core/types.js";
 import { createDefaultPermissionMode } from "../core/permission-mode.js";
 import type { ExternalMode } from "../core/permission-mode.js";
+import { isAuthEnabled, isSuperRole } from "./auth/identity.js";
 
 const SESSION_DIR = path.resolve(".sessions");
 const sessions = new Map<string, Session>();
@@ -19,12 +20,13 @@ function sessionPath(id: string): string {
   return path.join(SESSION_DIR, `${id}.jsonl`);
 }
 
-export function createSession(): Session {
+export function createSession(ownerEmail?: string): Session {
   const id = randomUUID();
   const session: Session = {
     id,
     messages: [],
     createdAt: Date.now(),
+    ownerEmail,
     readFileState: new Map(),
     permissionMode: createDefaultPermissionMode(),
     hasExitedPlanMode: false,
@@ -36,9 +38,28 @@ export function createSession(): Session {
     type: "session_created",
     id,
     createdAt: session.createdAt,
+    ownerEmail: ownerEmail ?? null,
     permissionMode: session.permissionMode,
   });
   return session;
+}
+
+/**
+ * Whether `requesterEmail` may read/modify `session`.
+ *
+ * - Auth off (legacy / local / password mode): always true.
+ * - Auth on: the requester must match the session's recorded owner, unless
+ *   their JWT role is `super` (may read any session). Sessions with no owner
+ *   are denied to non-super users so UUID guessing cannot leak history.
+ */
+export function canAccessSession(
+  session: Session,
+  requesterEmail: string | undefined,
+  requesterRole?: string,
+): boolean {
+  if (!isAuthEnabled()) return true;
+  if (isSuperRole(requesterRole)) return true;
+  return Boolean(requesterEmail) && session.ownerEmail === requesterEmail;
 }
 
 export function getSession(id: string): Session | null {
@@ -66,22 +87,32 @@ function extractPreview(session: Session | null): string | undefined {
   return text.slice(0, 80) || undefined;
 }
 
-export function listSessions(): SessionInfo[] {
+/**
+ * List sessions. In SSO mode pass the requester's email to return only that
+ * user's sessions; omit it (or run without auth) to list everything.
+ */
+export function listSessions(ownerEmail?: string): SessionInfo[] {
   if (!fs.existsSync(SESSION_DIR)) return [];
   return fs
     .readdirSync(SESSION_DIR)
     .filter((f: string) => f.endsWith(".jsonl"))
     .map((f: string) => {
       const id = f.replace(".jsonl", "");
-      const session = getSession(id);
-      return {
-        id,
-        createdAt: session?.createdAt,
-        messageCount: session?.messages.length ?? 0,
-        preview: extractPreview(session),
-        permissionMode: session?.permissionMode.mode,
-      };
+      return getSession(id);
     })
+    .filter((session: Session | null): session is Session => {
+      if (!session) return false;
+      if (ownerEmail === undefined) return true;
+      return session.ownerEmail === ownerEmail;
+    })
+    .map((session: Session) => ({
+      id: session.id,
+      createdAt: session.createdAt,
+      messageCount: session.messages.length,
+      preview: extractPreview(session),
+      permissionMode: session.permissionMode.mode,
+      ownerEmail: session.ownerEmail,
+    }))
     .sort((a: SessionInfo, b: SessionInfo) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }
 
@@ -129,6 +160,9 @@ function restoreFromDisk(id: string): Session {
   for (const line of lines) {
     if (line.type === "session_created") {
       session.createdAt = line.createdAt;
+      if (typeof line.ownerEmail === "string") {
+        session.ownerEmail = line.ownerEmail;
+      }
       if (line.permissionMode) {
         session.permissionMode = line.permissionMode as Session["permissionMode"];
       }

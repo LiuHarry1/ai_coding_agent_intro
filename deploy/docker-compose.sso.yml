@@ -41,6 +41,13 @@ services:
       # Parent dir for per-user workspaces; under the bind mount so each
       # user's files persist on the host.
       USERS_ROOT: /workspace/users
+      # Template copied into each user's workspace on first login.
+      # Curate deploy/workspace-seed/ before building the tenant image.
+      WORKSPACE_SEED_DIR: "/opt/workspace-seed"
+      # ── Analytics + daily token quota (optional) ─────────────────────
+      QUOTA_ENABLED: "${QUOTA_ENABLED:-false}"
+      ANALYTICS_URL: "${ANALYTICS_URL:-}"
+      ANALYTICS_INGEST_API_KEY: "${ANALYTICS_INGEST_API_KEY:-}"
       # ── Provider secrets ─────────────────────────────────────────────
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"

@@ -1,11 +1,13 @@
 import * as fs from "fs";
 import * as path from "path";
+import { randomUUID } from "crypto";
 import type { IncomingMessage, ServerResponse } from "http";
 import {
   createSession,
   getSession,
   appendMessage,
   appendModeChange,
+  canAccessSession,
 } from "../session.js";
 import { createSSETransport } from "../sse-transport.js";
 import { readBody, sendJSON, wantsStreamingResponse } from "../http.js";
@@ -18,6 +20,13 @@ import { applyPluginHooks, hasPluginHooks } from "../../core/plugins/index.js";
 import { createPlanModeGuardMiddleware } from "../../core/middleware/plan-mode-guard.js";
 import { defaultRegistry } from "../../tools/index.js";
 import { respondSkillFork } from "../../skills/respond-fork.js";
+import { attachUsageTelemetry, flushUsage, reportUserQuestion } from "../telemetry.js";
+import {
+  checkQuota,
+  commitQuota,
+  shouldEnforceQuota,
+  trackTurnTokens,
+} from "../quota.js";
 import { configManager } from "../../core/config-manager.js";
 import { prepareChatTurn } from "../../utils/processUserInput/prepare_chat_turn.js";
 import { mcpManager } from "../mcp-lifecycle.js";
@@ -66,15 +75,16 @@ export async function handleChat(
       ? path.resolve(workspace)
       : getDefaultWorkspace());
 
+  const requesterEmail = (req as AuthedRequest).user?.email;
   let session;
   if (session_id) {
     session = getSession(session_id);
-    if (!session) {
+    if (!session || !canAccessSession(session, requesterEmail, (req as AuthedRequest).user?.role)) {
       sendJSON(res, 404, { error: `Session not found: ${session_id}` });
       return;
     }
   } else {
-    session = createSession();
+    session = createSession(requesterEmail);
   }
 
   if (!session.permissionMode) {
@@ -93,6 +103,48 @@ export async function handleChat(
   );
 
   const eventBus = new EventBus();
+  const telemetryCtx = {
+    sessionId: session.id,
+    userEmail: session.ownerEmail,
+  };
+  const requesterRole = (req as AuthedRequest).user?.role;
+  const quotaUser = session.ownerEmail ?? requesterEmail;
+  const quotaEventId = `${session.id}:chat:${randomUUID()}`;
+  const turnUsage = { tokens: 0 };
+  const unsubTurnTokens = trackTurnTokens(eventBus, turnUsage);
+
+  const finishQuota = async (): Promise<void> => {
+    unsubTurnTokens();
+    if (shouldEnforceQuota(quotaUser, requesterRole)) {
+      try {
+        await commitQuota(quotaUser!, turnUsage.tokens, quotaEventId);
+      } catch (err) {
+        console.warn(`[quota] commit failed: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  if (shouldEnforceQuota(quotaUser, requesterRole)) {
+    try {
+      const q = await checkQuota(quotaUser!);
+      if (q.exceeded) {
+        unsubTurnTokens();
+        sendJSON(res, 429, {
+          error: "Daily token limit exceeded",
+          quota: q,
+        });
+        return;
+      }
+    } catch (err) {
+      console.warn(`[quota] status check failed: ${(err as Error).message}`);
+      // Fail open if analytics is unreachable — chat still works.
+    }
+  }
+
+  // One analytics event per user chat POST (question count).
+  reportUserQuestion(telemetryCtx, session.messages.length, message);
+  // Ship per-step LLM usage to analytics (no-op unless ANALYTICS_URL is set).
+  const unsubTelemetry = attachUsageTelemetry(eventBus, telemetryCtx);
   const middleware = new Middleware();
   middleware.use("afterTool", createTimingMiddleware(eventBus).afterTool);
   middleware.use("beforeTool", createPlanModeGuardMiddleware(session, cwd));
@@ -126,6 +178,8 @@ export async function handleChat(
       sseHeaders: { "X-Session-Id": session.id },
       jsonMeta: { session_id: session.id, reason: "skill_fork" },
     });
+    unsubTelemetry();
+    await finishQuota();
     return;
   }
 
@@ -175,6 +229,9 @@ export async function handleChat(
       });
     }
     unsubMode();
+    unsubTelemetry();
+    await finishQuota();
+    void flushUsage();
     return;
   }
 
@@ -242,6 +299,9 @@ export async function handleChat(
   } finally {
     unsubDiscover();
     unsubMode();
+    unsubTelemetry();
+    await finishQuota();
+    void flushUsage();
   }
 
   for (const msg of session.messages.slice(messagesBefore)) {

@@ -36,7 +36,16 @@ FROM ai-agent-base:${BASE_TAG}
 # Copy this deployment's agent config (agents/, skills/, commands/,
 # config.json, ...). Anything not present here falls back to the agent
 # code's built-in defaults.
+#
+# This path is the *platform* user-scope (~/.ai-agent in the container).
+# For SSO multi-tenant, prefer per-user defaults in deploy/workspace-seed/
+# (copied into each user's workspace on first login) instead of baking
+# private skills here.
 COPY .ai-agent/ /root/.ai-agent/
+
+# Per-user workspace template — copied on first SSO login into
+# /workspace/users/<slug>/. See deploy/workspace-seed/README.md.
+COPY deploy/workspace-seed/ /opt/workspace-seed/
 
 # Optional: override the example the base image runs by default.
 # CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"]

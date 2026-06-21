@@ -127,6 +127,7 @@ export default function InputArea() {
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const slashMenuRef = useRef(null);
+  const atMenuRef = useRef(null);
   const slashActiveRef = useRef(null);
   const [images, setImages] = useState([]);
   const [dragOver, setDragOver] = useState(false);
@@ -139,6 +140,8 @@ export default function InputArea() {
   const [atSuggestions, setAtSuggestions] = useState([]);
   const [atIndex, setAtIndex] = useState(0);
   const [uploadingDrop, setUploadingDrop] = useState(false);
+  const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
+  const [atMenuSuppressed, setAtMenuSuppressed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,7 +173,10 @@ export default function InputArea() {
   }, [slashEntries, slashFilter]);
 
   const showSlashMenu =
-    slashFilter !== null && slashEntries.length > 0 && slashMatches.length > 0;
+    !slashMenuSuppressed &&
+    slashFilter !== null &&
+    slashEntries.length > 0 &&
+    slashMatches.length > 0;
 
   const atToken = useMemo(() => {
     if (showSlashMenu) return null;
@@ -178,7 +184,10 @@ export default function InputArea() {
   }, [inputValue, cursorPos, showSlashMenu]);
 
   const showAtMenu =
-    atToken?.token.startsWith("@") && atSuggestions.length > 0 && !showSlashMenu;
+    !atMenuSuppressed &&
+    atToken?.token.startsWith("@") &&
+    atSuggestions.length > 0 &&
+    !showSlashMenu;
 
   const slashGroups = useMemo(() => groupEntries(slashMatches), [slashMatches]);
 
@@ -218,6 +227,7 @@ export default function InputArea() {
   }, []);
 
   useEffect(() => {
+    setSlashMenuSuppressed(false);
     if (slashFilter === null) {
       setSlashIndex(0);
       setExpandedSections(new Set());
@@ -225,6 +235,10 @@ export default function InputArea() {
     }
     setSlashIndex(0);
   }, [slashFilter]);
+
+  useEffect(() => {
+    setAtMenuSuppressed(false);
+  }, [atToken?.token]);
 
   useEffect(() => {
     setSlashIndex((i) => Math.min(i, Math.max(0, slashMenuRows.length - 1)));
@@ -266,6 +280,22 @@ export default function InputArea() {
       clearTimeout(timer);
     };
   }, [atToken, showSlashMenu, workspace]);
+
+  useEffect(() => {
+    if (!showSlashMenu && !showAtMenu) return undefined;
+
+    const onDocMouseDown = (e) => {
+      const target = e.target;
+      if (slashMenuRef.current?.contains(target)) return;
+      if (atMenuRef.current?.contains(target)) return;
+      if (textareaRef.current?.contains(target)) return;
+      if (showSlashMenu) setSlashMenuSuppressed(true);
+      if (showAtMenu) setAtMenuSuppressed(true);
+    };
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [showSlashMenu, showAtMenu]);
 
   const addImageFiles = useCallback(async (files) => {
     const remaining = MAX_IMAGES - images.length;
@@ -426,7 +456,7 @@ export default function InputArea() {
         }
         if (e.key === "Escape") {
           e.preventDefault();
-          setAtSuggestions([]);
+          setAtMenuSuppressed(true);
           return;
         }
       }
@@ -588,7 +618,7 @@ export default function InputArea() {
         </div>
       )}
       {showAtMenu && (
-        <div className="slash-menu at-menu" role="listbox" aria-label="File suggestions">
+        <div className="slash-menu at-menu" ref={atMenuRef} role="listbox" aria-label="File suggestions">
           <div className="slash-menu__section">Files</div>
           {atSuggestions.map((entry, idx) => (
             <button

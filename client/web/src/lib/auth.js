@@ -72,6 +72,13 @@ export function getUser() {
   };
 }
 
+/** Privileged role that may list/view all users' sessions (SSO mode). */
+const SUPER_ROLE = "super";
+
+export function isSuperUser(user = getUser()) {
+  return Boolean(user?.role && String(user.role).toLowerCase() === SUPER_ROLE);
+}
+
 function tokenExpired(token = getToken()) {
   const p = decodeToken(token);
   if (!p || typeof p.exp !== "number") return false;

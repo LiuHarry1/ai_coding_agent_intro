@@ -21,6 +21,7 @@ import { readBody, sendJSON, setCORS } from "./http.js";
 import {
   authenticateRequest,
   isAuthEnabled,
+  isSuperUser,
   AuthError,
   type AuthedRequest,
 } from "./auth/identity.js";
@@ -34,6 +35,7 @@ import {
   listSessions,
   deleteSession,
   appendModeChange,
+  canAccessSession,
 } from "./session.js";
 import { sessionToUIMessages } from "./session-ui.js";
 import type { RouterOptions, MCPServerConfig, LlmProfile } from "../core/types.js";
@@ -115,17 +117,42 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     if (await skillsApi(req, res)) return;
 
     if (method === "POST" && url === "/sessions") {
-      const session = createSession();
+      const session = createSession(authed.user?.email);
       console.log(`[server] new session: ${session.id}`);
       sendJSON(res, 200, { session_id: session.id });
       return;
     }
     if (method === "GET" && url === "/sessions") {
-      sendJSON(res, 200, { sessions: listSessions() });
+      // SSO: regular users see only their sessions; super see all.
+      const owner =
+        isAuthEnabled() && !isSuperUser(authed.user)
+          ? authed.user?.email
+          : undefined;
+      sendJSON(res, 200, {
+        sessions: listSessions(owner),
+        view_all: isSuperUser(authed.user),
+      });
       return;
     }
     if (method === "DELETE" && url?.startsWith("/sessions/")) {
       const id = url.split("/sessions/")[1];
+      const session = getSession(id);
+      // 404 (not 403) when the caller doesn't own it — don't leak existence.
+      // Super may view any session but may only delete their own.
+      if (session && !canAccessSession(session, authed.user?.email, authed.user?.role)) {
+        sendJSON(res, 404, { error: "Session not found" });
+        return;
+      }
+      if (
+        session &&
+        isAuthEnabled() &&
+        isSuperUser(authed.user) &&
+        session.ownerEmail &&
+        session.ownerEmail !== authed.user?.email
+      ) {
+        sendJSON(res, 403, { error: "Cannot delete another user's session" });
+        return;
+      }
       deleteSession(id);
       sendJSON(res, 200, { deleted: id });
       return;
@@ -133,7 +160,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
     if (method === "GET" && url?.match(/^\/sessions\/[^/]+\/messages$/)) {
       const id = url.split("/sessions/")[1].split("/messages")[0];
       const session = getSession(id);
-      if (!session) {
+      if (!session || !canAccessSession(session, authed.user?.email, authed.user?.role)) {
         sendJSON(res, 404, { error: "Session not found" });
         return;
       }
@@ -248,7 +275,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
         }
 
         const session = getSession(sessionId);
-        if (!session) {
+        if (!session || !canAccessSession(session, authed.user?.email, authed.user?.role)) {
           sendJSON(res, 404, { error: "Session not found" });
           return;
         }

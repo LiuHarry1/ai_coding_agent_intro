@@ -18,10 +18,12 @@
  * Falls back to the server's default workspace (CLI `--workspace`, env
  * `WORKSPACE`, or `process.cwd()`) when the caller omits it.
  *
- * Auth is intentionally absent here — this module assumes it sits behind
- * a trusted boundary (internal network, nginx allowlist, etc.). If you
- * ever expose this to untrusted callers, wrap the returned handler in an
- * auth middleware in router.ts BEFORE delegating.
+ * Multi-tenant note: when the SSO auth gate is on (`AUTH_ENABLED=true`),
+ * the router has already pinned `req.userWorkspace`. In that mode every
+ * endpoint here IGNORES the client-supplied `workspace` and uses the pinned
+ * directory instead — mirroring `/chat` — so an authenticated user can't
+ * list or invoke another user's skills via `?workspace=`. Without auth the
+ * module keeps its legacy behavior (trusted internal callers choose the cwd).
  */
 
 import * as fs from "fs";
@@ -42,6 +44,7 @@ import { defaultRegistry } from "../tools/index.js";
 import type { AgentDefinition, RunAgentFn } from "../core/types.js";
 import type { SkillDefinition } from "../skills/types.js";
 import { getDefaultWorkspace } from "../core/workspace.js";
+import { isAuthEnabled, type AuthedRequest } from "./auth/identity.js";
 
 function sendJSON(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -86,6 +89,21 @@ function resolveWorkspace(workspace: unknown): string {
     if (fs.existsSync(resolved)) return resolved;
   }
   return getDefaultWorkspace();
+}
+
+/**
+ * Pick the cwd for a request. When the auth gate pinned a user workspace
+ * (`req.userWorkspace`, set in SSO mode), that wins and the client-supplied
+ * `workspace` is ignored — preventing cross-tenant access. Otherwise fall
+ * back to the legacy client-chosen resolution.
+ */
+function resolveRequestWorkspace(
+  req: IncomingMessage,
+  clientWorkspace: unknown,
+): string {
+  const pinned = (req as AuthedRequest).userWorkspace;
+  if (isAuthEnabled() && pinned) return pinned;
+  return resolveWorkspace(clientWorkspace);
 }
 
 /** Public-friendly view of a SkillDefinition. */
@@ -166,9 +184,9 @@ export function createSkillsApi({ runAgent }: SkillsApiOptions) {
     const [pathOnly, queryString] = url.split("?");
     const query = new URLSearchParams(queryString ?? "");
 
-    // GET /skills?workspace=/path
+    // GET /skills?workspace=/path  (workspace ignored when auth-pinned)
     if (method === "GET" && pathOnly === "/skills") {
-      const cwd = resolveWorkspace(query.get("workspace"));
+      const cwd = resolveRequestWorkspace(req, query.get("workspace"));
       try {
         const { skills, errors } = await loadSkillsFromDisk(cwd);
         const unconditional = new Set(
@@ -187,9 +205,9 @@ export function createSkillsApi({ runAgent }: SkillsApiOptions) {
       return true;
     }
 
-    // GET /agents?workspace=/path
+    // GET /agents?workspace=/path  (workspace ignored when auth-pinned)
     if (method === "GET" && pathOnly === "/agents") {
-      const cwd = resolveWorkspace(query.get("workspace"));
+      const cwd = resolveRequestWorkspace(req, query.get("workspace"));
       try {
         // registerSubagents replaces the `task` tool as a side effect.
         // Acceptable here because /agents is rarely-called metadata —
@@ -224,6 +242,7 @@ export function createSkillsApi({ runAgent }: SkillsApiOptions) {
       const wantsStream =
         query.get("stream") !== "false" && body.stream !== false;
       await handleSkillInvoke({
+        req,
         res,
         skillName,
         body,
@@ -238,14 +257,15 @@ export function createSkillsApi({ runAgent }: SkillsApiOptions) {
 }
 
 async function handleSkillInvoke(args: {
+  req: IncomingMessage;
   res: ServerResponse;
   skillName: string;
   body: Record<string, unknown>;
   runAgent: RunAgentFn;
   wantsStream: boolean;
 }): Promise<void> {
-  const { res, skillName, body, runAgent, wantsStream } = args;
-  const cwd = resolveWorkspace(body.workspace);
+  const { req, res, skillName, body, runAgent, wantsStream } = args;
+  const cwd = resolveRequestWorkspace(req, body.workspace);
 
   const { skills } = await loadSkillsFromDisk(cwd);
   const skill = skills.find((s) => s.name === skillName);

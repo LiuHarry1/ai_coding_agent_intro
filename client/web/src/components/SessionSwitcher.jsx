@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useChatStore } from "../stores/chat-store.js";
 import { agentApi } from "../lib/api/agent.js";
 import { relativeTime } from "../lib/utils.js";
+import { getUser, isSuperUser } from "../lib/auth.js";
 
 /**
  * Cursor-style session switcher pill that lives in the chat header. Click
@@ -16,12 +17,16 @@ export default function SessionSwitcher() {
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [viewAll, setViewAll] = useState(false);
   const wrapRef = useRef(null);
+  const me = getUser();
+  const superUser = isSuperUser(me);
 
   const refresh = async () => {
     try {
       const data = await agentApi.listSessions();
       setSessions(data.sessions || []);
+      setViewAll(Boolean(data.view_all));
     } catch {}
   };
 
@@ -64,10 +69,17 @@ export default function SessionSwitcher() {
   };
 
   const filtered = query
-    ? sessions.filter((s) =>
-        (s.preview || "").toLowerCase().includes(query.toLowerCase())
-      )
+    ? sessions.filter((s) => {
+        const q = query.toLowerCase();
+        return (
+          (s.preview || "").toLowerCase().includes(q) ||
+          (s.ownerEmail || "").toLowerCase().includes(q)
+        );
+      })
     : sessions;
+
+  const canDeleteSession = (s) =>
+    !superUser || !s.ownerEmail || s.ownerEmail === me?.email;
 
   // Tooltip surfaces the current preview so users still know which session
   // they're in without taking horizontal space in the header.
@@ -109,7 +121,7 @@ export default function SessionSwitcher() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search sessions..."
+              placeholder={superUser ? "Search sessions or users..." : "Search sessions..."}
               autoFocus
             />
           </div>
@@ -130,9 +142,13 @@ export default function SessionSwitcher() {
                       {s.preview || "New Chat"}
                     </div>
                     <div className="session-dropdown-item-meta">
+                      {(viewAll || superUser) && s.ownerEmail && (
+                        <span className="session-dropdown-item-owner">{s.ownerEmail}</span>
+                      )}
                       {s.messageCount} msg · {relativeTime(s.createdAt)}
                     </div>
                   </div>
+                  {canDeleteSession(s) && (
                   <button
                     className="session-dropdown-item-delete"
                     onClick={(e) => handleDelete(s.id, e)}
@@ -142,6 +158,7 @@ export default function SessionSwitcher() {
                       <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                     </svg>
                   </button>
+                  )}
                 </div>
               ))
             )}

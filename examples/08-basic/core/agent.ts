@@ -516,6 +516,10 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         toolCallsLen: stepResult.toolCalls.length,
         usage,
         reactiveCompacted,
+        eventBus,
+        model: resolvedModel,
+        provider: provider.describe(),
+        sessionId,
       });
       return stepResult;
     } catch (err) {
@@ -589,6 +593,10 @@ interface LogArgs {
   toolCallsLen: number;
   usage: AttachedTokenUsage;
   reactiveCompacted: boolean;
+  eventBus: AgentOptions["eventBus"];
+  model: string;
+  provider?: string;
+  sessionId?: string;
 }
 
 function logStepCompletion(a: LogArgs): void {
@@ -623,4 +631,23 @@ function logStepCompletion(a: LogArgs): void {
       `step_total=${Date.now() - a.stepStart}ms` +
       (a.reactiveCompacted ? ", reactive_compaction=yes" : ""),
   );
+
+  // Telemetry: emit a structured usage event. Consumers (server layer) decide
+  // whether/where to ship it; core stays free of network + identity concerns.
+  a.eventBus.emit("usage", {
+    step: a.step,
+    sessionId: a.sessionId,
+    model: a.model,
+    provider: a.provider,
+    inputTokens: a.usage.inputTokens ?? 0,
+    outputTokens: a.usage.outputTokens ?? 0,
+    cachedInputTokens: a.usage.cachedInputTokens ?? 0,
+    reasoningTokens: a.usage.reasoningTokens ?? 0,
+    totalTokens:
+      a.usage.totalTokens ??
+      (a.usage.inputTokens ?? 0) + (a.usage.outputTokens ?? 0),
+    latencyMs: totalMs,
+    ttfbMs: ttfb >= 0 ? ttfb : undefined,
+    toolCalls: a.toolCallsLen,
+  });
 }

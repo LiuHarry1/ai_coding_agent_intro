@@ -251,6 +251,11 @@ export interface Session {
   id: string;
   messages: Message[];
   createdAt: number;
+  /**
+   * Email of the user who created the session (SSO mode only). Used to keep
+   * sessions private per-user. Undefined for sessions created without auth.
+   */
+  ownerEmail?: string;
   /** Tool names discovered via `tool_search` — activated in subsequent turns. */
   discoveredTools?: Set<string>;
   /** Tracks files read for @-mention dedup (mtime-based), per session. */
@@ -269,6 +274,8 @@ export interface SessionInfo {
   messageCount: number;
   preview?: string;
   permissionMode?: ExternalMode;
+  /** Present when SSO mode records session ownership (shown to super users). */
+  ownerEmail?: string;
 }
 
 // ── Server ──────────────────────────────────────

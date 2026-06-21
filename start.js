@@ -19,6 +19,9 @@ console.log(
   `[start] GLOB_NO_IGNORE=${process.env.GLOB_NO_IGNORE ?? "(unset → defaults true)"} ` +
     `GLOB_HIDDEN=${process.env.GLOB_HIDDEN ?? "(unset → defaults true)"}`
 );
+console.log(
+  `[start] ANALYTICS_URL=${process.env.ANALYTICS_URL ?? "(unset → telemetry disabled)"}`
+);
 
 // First positional that isn't a `--flag` is the example name.
 const positionals = process.argv.slice(2).filter((a) => !a.startsWith("--"));

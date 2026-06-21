@@ -61,7 +61,7 @@ COPY start.js ./
 
 # Pre-create the config dir so tenant images can COPY into it without
 # worrying about directory existence / ownership.
-RUN mkdir -p /root/.ai-agent
+RUN mkdir -p /root/.ai-agent /opt/workspace-seed
 
 ENV NODE_ENV=production
 ENV PORT=4567

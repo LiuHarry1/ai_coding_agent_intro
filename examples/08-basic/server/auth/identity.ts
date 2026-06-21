@@ -17,14 +17,19 @@
  *   AUTH_ENABLED   "true" to turn the gate on.
  *   JWT_SECRET     shared HMAC secret (same value as auth-service). Required.
  *   JWT_ALGORITHM  only HS256 is supported (default HS256).
- *   USERS_ROOT     parent dir for per-user workspaces (default: the server's
- *                  default workspace).
+ *   USERS_ROOT          parent dir for per-user workspaces (default: the
+ *                       server's default workspace).
+ *   WORKSPACE_SEED_DIR  template copied into a user's workspace on first
+ *                       login (default `/opt/workspace-seed`). Set to empty
+ *                       string to disable. Baked by tenant images — see
+ *                       `deploy/workspace-seed/`.
  */
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { IncomingMessage } from "http";
 import { getDefaultWorkspace } from "../../core/workspace.js";
+import { seedUserWorkspaceIfNeeded } from "./workspace-seed.js";
 
 export interface AuthIdentity {
   email: string;
@@ -50,6 +55,19 @@ export interface AuthedRequest extends IncomingMessage {
 
 export function isAuthEnabled(): boolean {
   return String(process.env.AUTH_ENABLED ?? "").trim().toLowerCase() === "true";
+}
+
+/** JWT role that may list/view any user's sessions (SSO mode). */
+const SUPER_ROLE = "super";
+
+/** True when the token carries the privileged `super` role. */
+export function isSuperRole(role: string | undefined): boolean {
+  if (!role) return false;
+  return role.trim().toLowerCase() === SUPER_ROLE;
+}
+
+export function isSuperUser(user?: Pick<AuthIdentity, "role"> | null): boolean {
+  return isSuperRole(user?.role);
 }
 
 function getSecret(): string {
@@ -150,7 +168,9 @@ export function getUsersRoot(): string {
 export function resolveUserWorkspace(email: string): string {
   const dir = path.join(getUsersRoot(), slugifyEmail(email));
   fs.mkdirSync(dir, { recursive: true });
-  return path.resolve(dir);
+  const resolved = path.resolve(dir);
+  seedUserWorkspaceIfNeeded(resolved);
+  return resolved;
 }
 
 function extractBearer(req: IncomingMessage): string | null {
