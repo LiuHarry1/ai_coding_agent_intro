@@ -228,6 +228,7 @@ export default function MessageBubble({ message }) {
       {groupedParts.map((part, i) => {
         switch (part.type) {
           case "text": {
+            if (!part.content?.trim()) return null;
             const partStreaming = messageStreaming && i === groupedParts.length - 1;
             const mdComponents = getMdComponents({ streaming: partStreaming });
             return (

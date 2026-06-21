@@ -46,13 +46,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 COPY requirements.txt ./
 RUN python3 -m venv "${VIRTUAL_ENV}" \
-  && pip install --no-cache-dir --upgrade pip \
-  && pip install --no-cache-dir -r requirements.txt
+  && pip install --no-cache-dir --default-timeout=600 --upgrade pip \
+  && pip install --no-cache-dir --default-timeout=600 -r requirements.txt
 
 COPY package.json package-lock.json ./
 # Runtime needs tsx to load TypeScript examples; keep prod deps lean.
 RUN npm ci --omit=dev \
-  && npm install tsx@^4.21.0 --no-save \
+  && npm install --no-save --ignore-scripts tsx@^4.21.0 \
+  && test -x node_modules/.bin/tsx \
   && npm cache clean --force
 
 COPY examples/ ./examples/
