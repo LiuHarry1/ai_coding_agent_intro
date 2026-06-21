@@ -1,0 +1,26 @@
+{
+  "provider": {
+    "provider": "openai-compatible",
+    "baseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "apiKey": "sk-xxx",
+    "model": "qwen3.7-max"
+  },
+  "compaction": {
+    "contextWindow": 200000,
+    "microCompactKeepRecent": 5,
+    "maxFilesToRestore": 5,
+    "maxTokensPerFile": 5000,
+    "fileBudget": 50000
+  },
+  "mcpServers": {
+
+    "mcp_server": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"]
+    }
+  },
+
+  "disabledTools": ["web_fetch"]
+}
+
+
