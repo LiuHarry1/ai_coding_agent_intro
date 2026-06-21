@@ -71,6 +71,9 @@ class Settings(BaseSettings):
 
     cors_allow_origins: str = "*"
 
+    # Daily token cap per user (UTC calendar day). 0 = unlimited (quota API still works).
+    default_daily_token_limit: int = 0
+
 
 def _to_async_url(url: str) -> str:
     """Map a (possibly sync) SQLAlchemy URL onto its async driver."""

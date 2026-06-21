@@ -58,3 +58,23 @@ CREATE TABLE IF NOT EXISTS events (
     KEY ix_event_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Generic append-only event log';
+
+CREATE TABLE IF NOT EXISTS user_daily_usage (
+    user_email   VARCHAR(320) NOT NULL,
+    usage_date   DATE         NOT NULL COMMENT 'UTC calendar day',
+    tokens_used  BIGINT       NOT NULL DEFAULT 0,
+    updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_email, usage_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Daily token counter for quota enforcement';
+
+CREATE TABLE IF NOT EXISTS quota_commit_log (
+    event_id       VARCHAR(128) NOT NULL COMMENT 'One chat request, e.g. session_id:chat:uuid',
+    user_email     VARCHAR(320) NOT NULL,
+    usage_date     DATE         NOT NULL COMMENT 'UTC calendar day',
+    tokens         INT          NOT NULL DEFAULT 0,
+    committed_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (event_id),
+    KEY ix_quota_commit_user_date (user_email, usage_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Idempotent quota commit log';

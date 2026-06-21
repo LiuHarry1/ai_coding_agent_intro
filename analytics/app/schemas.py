@@ -101,3 +101,28 @@ class SessionRollup(BaseModel):
     cost_usd: float
     first_seen: datetime | None
     last_seen: datetime | None
+
+
+# ── Quota (daily token cap, UTC day) ───────────────────────────────────────
+class QuotaStatus(BaseModel):
+    user_email: str
+    usage_date: str
+    used: int
+    limit: int
+    remaining: int
+    exceeded: bool
+    unlimited: bool
+    reset_at: datetime
+
+
+class QuotaCommitIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    user_email: str = Field(..., min_length=1, max_length=320)
+    tokens: int = Field(default=0, ge=0)
+    event_id: str = Field(..., min_length=1, max_length=128)
+
+
+class QuotaCommitResult(QuotaStatus):
+    accepted: bool
+    skipped: bool

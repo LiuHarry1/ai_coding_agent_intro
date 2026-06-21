@@ -52,6 +52,20 @@ The token fields mirror the agent's `AttachedTokenUsage`
 | POST | `/v1/usage` | a `UsageIn` object **or** `{ "records": [UsageIn, ...] }` |
 | POST | `/v1/events` | an `EventIn` object **or** `{ "events": [EventIn, ...] }` |
 
+### Quota (agent enforcement, same ingest API key)
+
+Daily token cap per user (**UTC calendar day**). The agent checks once per new
+`POST /chat`, commits total tokens when the request finishes.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/v1/quota/status?user_email=` | `{ used, limit, remaining, exceeded, reset_at }` |
+| POST | `/v1/quota/commit` | `{ user_email, tokens, event_id }` — idempotent |
+
+Set `ANALYTICS_DEFAULT_DAILY_TOKEN_LIMIT` (0 = unlimited). Agent env:
+`QUOTA_ENABLED=true`, `ANALYTICS_URL`, `ANALYTICS_INGEST_API_KEY`. `role=super`
+bypasses quota.
+
 ### Reporting (read, guarded by `ANALYTICS_QUERY_API_KEY`)
 
 | Method | Path | Notes |
@@ -132,7 +146,7 @@ The backend is chosen by this order (see `app/config.py`):
 | Script | Purpose |
 |--------|---------|
 | `create_database.sql` | Create shared `knowbot` database (skip if chat-service already did) |
-| `init_tables.sql` | Add `usage_records` + `events` into `knowbot` |
+| `init_tables.sql` | Add `usage_records`, `events`, `user_daily_usage`, `quota_commit_log` into `knowbot` |
 | `migrate_cost_usd_to_decimal.sql` | Upgrade existing `cost_usd` column from FLOAT → DECIMAL(18,8) |
 
 Bootstrap example (tables only — typical when chat-service is already deployed):

@@ -10,10 +10,12 @@ Both carry `user_email` and `session_id` so every query can slice by tenant.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
+    Date,
     DateTime,
     Index,
     Integer,
@@ -93,5 +95,37 @@ class Event(Base):
         Index("ix_event_type_ts", "type", "ts"),
         Index("ix_event_user_ts", "user_email", "ts"),
         Index("ix_event_session", "session_id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+
+
+class UserDailyUsage(Base):
+    """Rolling daily token counter for quota enforcement (UTC day)."""
+
+    __tablename__ = "user_daily_usage"
+
+    user_email: Mapped[str] = mapped_column(String(320), primary_key=True)
+    usage_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    tokens_used: Mapped[int] = mapped_column(BigInteger, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+
+
+class QuotaCommitLog(Base):
+    """Idempotency log — one row per chat request commit."""
+
+    __tablename__ = "quota_commit_log"
+
+    event_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    user_email: Mapped[str] = mapped_column(String(320))
+    usage_date: Mapped[date] = mapped_column(Date)
+    tokens: Mapped[int] = mapped_column(Integer, default=0)
+    committed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_quota_commit_user_date", "user_email", "usage_date"),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
     )

@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import __version__
 from .config import get_settings
 from .database import dispose_engine, init_db
-from .routers import dashboard, health, ingest, stats
+from .routers import dashboard, health, ingest, quota, stats
 
 
 @asynccontextmanager
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(ingest.router)
+    app.include_router(quota.router)
     app.include_router(stats.router)
     app.include_router(dashboard.router)
     return app
