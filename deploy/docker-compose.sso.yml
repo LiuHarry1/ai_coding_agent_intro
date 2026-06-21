@@ -31,6 +31,7 @@
 
 services:
   analytics:
+    image: agent-analytics:latest
     build: ../analytics
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -96,6 +97,8 @@ services:
       PREVIEW_PORT_MAX: "9998"
     volumes:
       - ../workspaces:/workspace:rw
+      # Chat history (.sessions/*.jsonl) — survives container recreate/redeploy.
+      - ../sessions:/app/.sessions:rw
     depends_on:
       analytics:
         condition: service_healthy

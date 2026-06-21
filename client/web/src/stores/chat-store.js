@@ -146,8 +146,11 @@ export const useChatStore = create((set, get) => ({
     try {
       const data = await agentApi.getSessionMessages(id);
       if (data.messages?.length > 0) set({ messages: data.messages });
-    } catch {
-      /* session history unavailable */
+    } catch (err) {
+      // Agent restart drops in-memory sessions; drop stale localStorage id.
+      if (err.status === 404 || String(err.message).includes("Session not found")) {
+        get().clearSession();
+      }
     }
   },
 
@@ -193,8 +196,28 @@ export const useChatStore = create((set, get) => ({
     };
     if (images.length > 0) body.images = images;
 
+    const postChat = (sessionId) =>
+      agentApi.postChat({ ...body, session_id: sessionId }, abortController.signal);
+
     try {
-      const res = await agentApi.postChat(body, abortController.signal);
+      let res = await postChat(get().currentSessionId);
+
+      if (!res.ok && res.status === 404) {
+        const errText = await res.text();
+        if (errText.includes("Session not found")) {
+          get().setSessionId(null);
+          set((s) => ({
+            messages: s.messages.slice(0, -2),
+            isStreaming: true,
+            abortController,
+          }));
+          res = await postChat(null);
+        } else {
+          get()._appendPart({ type: "error", message: `HTTP ${res.status}: ${errText}` });
+          set({ isStreaming: false, abortController: null });
+          return;
+        }
+      }
 
       if (!res.ok) {
         const errText = await res.text();
