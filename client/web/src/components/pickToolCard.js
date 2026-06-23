@@ -48,6 +48,13 @@ const TOOL_CARDS = {
 
 export function pickCard(item, options = {}) {
   const { nested = false } = options;
+  // Skills always render via SkillCard — mirroring Claude Code's unified
+  // skill renderer where the headline (skill name) comes straight from the
+  // tool input, so it's stable from the first frame (no inline/fork component
+  // swap). SkillCard itself shows fork nested-steps inline when present.
+  // This check must come BEFORE `isSubagent` (skills are flagged subagent
+  // server-side only so fork nested-step events route in the store).
+  if (item.name === SKILL) return SkillCard;
   if (item.isSubagent) return SubagentCard;
   const name = item.name;
   if (TOOL_CARDS[name]) return TOOL_CARDS[name];

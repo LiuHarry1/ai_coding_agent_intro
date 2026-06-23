@@ -95,7 +95,7 @@ export default function WorkspaceIDE() {
           <button
             className={`icon-btn ${showHiddenFiles ? "icon-btn--active" : ""}`}
             onClick={() => toggleShowHiddenFiles()}
-            title={showHiddenFiles ? "Hide hidden files" : "Show hidden files (.git, .env, …)"}
+            title={showHiddenFiles ? "Hide hidden files" : "Show hidden files (.git, …)"}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               {showHiddenFiles ? (

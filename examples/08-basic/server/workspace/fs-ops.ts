@@ -27,7 +27,7 @@ export interface ReadFileResult {
 }
 
 export interface ListDirOptions {
-  /** When true, include dotfiles/dotdirs (`.ai-agent` is always shown). */
+  /** When true, include dotfiles/dotdirs (`.ai-agent`, `.env` are always shown). */
   showHidden?: boolean;
 }
 

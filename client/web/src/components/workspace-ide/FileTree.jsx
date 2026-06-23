@@ -22,8 +22,14 @@ import {
  */
 const APP_CONFIG_DIR = ".ai-agent";
 
+function isEnvDotEntry(name) {
+  return name === ".env" || name.startsWith(".env.");
+}
+
+/** Dot entries shown without "show hidden files" — don't dim in the tree. */
 function isHiddenTreeEntry(name) {
-  return name.startsWith(".") && name !== APP_CONFIG_DIR;
+  if (name === APP_CONFIG_DIR || isEnvDotEntry(name)) return false;
+  return name.startsWith(".");
 }
 
 export default function FileTree({ rootPath }) {
