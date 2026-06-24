@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM 消息格式映射 — Anthropic / OpenAI / Vercel AI SDK</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
+
+    :root {
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --blue: #0284c7;
+      --blue-light: #e0f2fe;
+      --purple: #7c3aed;
+      --purple-light: #ede9fe;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --green: #059669;
+      --green-light: #d1fae5;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --border: #e2e8f0;
+      --anthropic: #d97706;
+      --openai: #059669;
+      --sdk: #2563eb;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 45%, #4338ca 100%);
+      color: white;
+      padding: 56px 24px 64px;
+      text-align: center;
+    }
+
+    .hero h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 700; margin-bottom: 12px; }
+    .hero p { max-width: 760px; margin: 0 auto; color: #cbd5e1; font-size: 16px; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 20px 80px; }
+
+    section { margin-top: 48px; }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #4338ca; color: white; font-size: 14px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    h3 { font-size: 16px; font-weight: 700; margin: 20px 0 10px; color: #334155; }
+
+    .lead { color: var(--muted); margin-bottom: 20px; font-size: 14.5px; }
+
+    .mono {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .callout {
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .callout.info { background: var(--blue-light); border-left: 4px solid var(--blue); color: #0c4a6e; }
+    .callout.ok { background: var(--green-light); border-left: 4px solid var(--green); color: #065f46; }
+    .callout.warn { background: var(--amber-light); border-left: 4px solid var(--amber); color: #92400e; }
+    .callout.err { background: var(--red-light); border-left: 4px solid var(--red); color: #991b1b; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0;
+    }
+
+    th, td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; font-weight: 600; }
+
+    td code, th code {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 11px;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    .tag.anthropic { background: #fef3c7; color: #92400e; }
+    .tag.openai { background: #d1fae5; color: #065f46; }
+    .tag.sdk { background: #dbeafe; color: #1d4ed8; }
+    .tag.cc { background: #ede9fe; color: #6d28d9; }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px 18px;
+      border-radius: 10px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    pre .k { color: #93c5fd; }
+    pre .s { color: #86efac; }
+    pre .c { color: #64748b; }
+    pre .t { color: #fcd34d; }
+
+    .cols-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+    }
+
+    .card h4 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card.anthropic h4 { color: var(--anthropic); }
+    .card.openai h4 { color: var(--openai); }
+    .card.sdk h4 { color: var(--sdk); }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+
+    .flow .box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 600;
+    }
+
+    .flow .arrow { color: var(--muted); font-size: 18px; }
+
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 12px 0;
+    }
+
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .pipeline-step .idx {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: #4338ca; color: white;
+      font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    footer { text-align: center; padding: 32px; color: var(--muted); font-size: 13px; }
+    footer a { color: #4338ca; }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>LLM 消息格式映射指南</h1>
+  <p>
+    Anthropic Messages API、OpenAI Responses / Chat Completions API 与 Vercel AI SDK 之间
+    的 role、content block、tool call / tool result 对照 — 以 08-basic 为例
+  </p>
+</header>
+
+<div class="container">
+
+  <!-- 1. 三层架构 -->
+  <section>
+    <h2><span class="num">1</span>三层架构：你在哪一层工作？</h2>
+    <p class="lead">
+      08-basic 在应用层维护 <span class="mono">Message[]</span>（AI SDK 风格），
+      经 <span class="mono">streamText({ messages, system, tools })</span> 交给 SDK，
+      SDK 再按 provider 转成各厂商原生 wire format。
+    </p>
+
+    <div class="flow">
+      <div class="box" style="border-color:#4338ca;color:#4338ca">08-basic 会话存储<br><small style="font-weight:400;color:#64748b">core/types.ts</small></div>
+      <span class="arrow">→</span>
+      <div class="box" style="border-color:#2563eb;color:#2563eb">Vercel AI SDK<br><small style="font-weight:400;color:#64748b">streamText / generateText</small></div>
+      <span class="arrow">→</span>
+      <div class="box" style="border-color:#d97706;color:#d97706">Anthropic<br><small style="font-weight:400;color:#64748b">/v1/messages</small></div>
+      <span style="color:#94a3b8">或</span>
+      <div class="box" style="border-color:#059669;color:#059669">OpenAI<br><small style="font-weight:400;color:#64748b">/v1/responses 或 /v1/chat/completions</small></div>
+    </div>
+
+    <div class="callout info">
+      <strong>Claude Code 对齐点：</strong>
+      CC 在 wire 层遵循 Anthropic 原生格式（user/assistant 交替、tool_result 在 user 里）。
+      08-basic 额外引入 <span class="mono">role: "tool"</span> 作为 SDK 抽象，持久化前由
+      <span class="mono">messageSanitize.ts</span> 保证配对合法。
+    </div>
+  </section>
+
+  <!-- 2. Role 映射 -->
+  <section>
+    <h2><span class="num">2</span>Role（角色）映射</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>语义</th>
+          <th><span class="tag sdk">AI SDK</span> 08-basic</th>
+          <th><span class="tag anthropic">Anthropic</span> Messages API</th>
+          <th><span class="tag openai">OpenAI</span> Responses / Chat</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>系统指令（全局）</td>
+          <td><code>streamText({ system: "..." })</code><br>不在 <code>messages[]</code> 里</td>
+          <td>顶层 <code>system</code> 参数字符串或 TextBlock 数组</td>
+          <td>Responses: <code>instructions</code><br>Chat: <code>messages[{ role: "system" }]</code>（首条）</td>
+        </tr>
+        <tr>
+          <td>系统指令（对话中途）</td>
+          <td>通常不单独建模；可注入 user 文本或刷新 <code>system</code></td>
+          <td>Opus 4.8+：<code>{ role: "system", content: "..." }</code> 插入 <code>messages</code>（位置受限）</td>
+          <td>Responses: 追加 <code>instructions</code> item；Chat 无标准中途 system</td>
+        </tr>
+        <tr>
+          <td>用户输入</td>
+          <td><code>{ role: "user", content: string | Part[] }</code></td>
+          <td><code>{ role: "user", content: ... }</code></td>
+          <td><code>{ role: "user", content: ... }</code></td>
+        </tr>
+        <tr>
+          <td>模型回复</td>
+          <td><code>{ role: "assistant", content: Part[] }</code></td>
+          <td><code>{ role: "assistant", content: ... }</code></td>
+          <td><code>{ role: "assistant", content: ... }</code></td>
+        </tr>
+        <tr>
+          <td>工具执行结果</td>
+          <td><code>{ role: "tool", content: ToolResultPart[] }</code><br><em>SDK 抽象，非 Anthropic 原生 role</em></td>
+          <td><strong>无 tool role</strong> — 结果放在 <code>role: "user"</code> 的 <code>tool_result</code> block 里</td>
+          <td>Responses: <code>function_call_output</code> item<br>Chat: <code>role: "tool"</code> + <code>tool_call_id</code></td>
+        </tr>
+        <tr>
+          <td>开发者指令</td>
+          <td>无专用 role</td>
+          <td>无</td>
+          <td>Chat Completions 有 <code>role: "developer"</code>（部分模型）；Responses 用 <code>instructions</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <strong>交替规则（Anthropic / CC 最严格）：</strong>
+      wire 层必须 <code>user ↔ assistant</code> 交替。
+      工具结果算 <strong>user 轮次</strong>，因此 Anthropic 上不会出现独立的 <code>role: "tool"</code> message。
+    </div>
+  </section>
+
+  <!-- 3. Content Block 映射 -->
+  <section>
+    <h2><span class="num">3</span>Content Block（内容块）映射</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>用途</th>
+          <th><span class="tag sdk">AI SDK</span></th>
+          <th><span class="tag anthropic">Anthropic</span></th>
+          <th><span class="tag openai">OpenAI</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>普通文本</td>
+          <td><code>{ type: "text", text: "..." }</code></td>
+          <td><code>{ type: "text", text: "..." }</code></td>
+          <td><code>{ type: "text", text: "..." }</code> 或 message string</td>
+        </tr>
+        <tr>
+          <td>图片</td>
+          <td><code>{ type: "image", image, mediaType }</code></td>
+          <td><code>{ type: "image", source: { type: "base64", ... } }</code></td>
+          <td><code>image_url</code> 或 Responses <code>input_image</code></td>
+        </tr>
+        <tr>
+          <td>模型发起工具调用</td>
+          <td><code>{ type: "tool-call", toolCallId, toolName, input }</code><br>在 <strong>assistant</strong> message 内</td>
+          <td><code>{ type: "tool_use", id, name, input }</code><br>在 assistant message 内</td>
+          <td>Responses: <code>{ type: "function_call", call_id, name, arguments }</code><br>Chat: <code>tool_calls[]</code> on assistant</td>
+        </tr>
+        <tr>
+          <td>工具执行结果</td>
+          <td><code>{ type: "tool-result", toolCallId, toolName, output: { type:"text", value } }</code><br>在 <strong>tool</strong> message 内（SDK）→ 发给 Anthropic 时合并进 user</td>
+          <td><code>{ type: "tool_result", tool_use_id, content, is_error? }</code><br>在 <strong>user</strong> message 内</td>
+          <td>Responses: <code>{ type: "function_call_output", call_id, output }</code><br>Chat: <code>{ role:"tool", tool_call_id, content }</code></td>
+        </tr>
+        <tr>
+          <td>推理 / Thinking</td>
+          <td><code>{ type: "reasoning", text, providerOptions? }</code></td>
+          <td><code>{ type: "thinking", thinking, signature? }</code>（extended thinking）</td>
+          <td>Responses: <code>{ type: "reasoning", encrypted_content, ... }</code>（需 replay item id）</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 4. 完整一轮工具调用 -->
+  <section>
+    <h2><span class="num">4</span>完整一轮 Tool Call → Tool Result</h2>
+    <p class="lead">以读取文件 <span class="mono">read_file</span> 为例，三种格式并排对照。</p>
+
+    <h3>4.1 08-basic 持久化格式（AI SDK 风格）</h3>
+    <pre><span class="c">// services/tools/tool_execution.ts → buildToolMessage()</span>
+[
+  {
+    <span class="k">"role"</span>: <span class="s">"assistant"</span>,
+    <span class="k">"content"</span>: [
+      { <span class="k">"type"</span>: <span class="s">"text"</span>, <span class="k">"text"</span>: <span class="s">"Let me read the file."</span> },
+      {
+        <span class="k">"type"</span>: <span class="s">"tool-call"</span>,
+        <span class="k">"toolCallId"</span>: <span class="s">"call_abc123"</span>,
+        <span class="k">"toolName"</span>: <span class="s">"read_file"</span>,
+        <span class="k">"input"</span>: { <span class="k">"path"</span>: <span class="s">"src/main.ts"</span> }
+      }
+    ]
+  },
+  {
+    <span class="k">"role"</span>: <span class="s">"tool"</span>,
+    <span class="k">"content"</span>: [
+      {
+        <span class="k">"type"</span>: <span class="s">"tool-result"</span>,
+        <span class="k">"toolCallId"</span>: <span class="s">"call_abc123"</span>,
+        <span class="k">"toolName"</span>: <span class="s">"read_file"</span>,
+        <span class="k">"output"</span>: { <span class="k">"type"</span>: <span class="s">"text"</span>, <span class="k">"value"</span>: <span class="s">"export function main() { ... }"</span> }
+      }
+    ]
+  }
+]</pre>
+
+    <h3>4.2 Anthropic 原生 wire format</h3>
+    <pre><span class="c">// POST /v1/messages — 注意 tool_result 在 user 里，无 role:"tool"</span>
+{
+  <span class="k">"model"</span>: <span class="s">"claude-sonnet-4-6"</span>,
+  <span class="k">"system"</span>: <span class="s">"You are a coding assistant..."</span>,
+  <span class="k">"tools"</span>: [{ <span class="k">"name"</span>: <span class="s">"read_file"</span>, <span class="k">"input_schema"</span>: { ... } }],
+  <span class="k">"messages"</span>: [
+    {
+      <span class="k">"role"</span>: <span class="s">"user"</span>,
+      <span class="k">"content"</span>: <span class="s">"What's in src/main.ts?"</span>
+    },
+    {
+      <span class="k">"role"</span>: <span class="s">"assistant"</span>,
+      <span class="k">"content"</span>: [
+        { <span class="k">"type"</span>: <span class="s">"text"</span>, <span class="k">"text"</span>: <span class="s">"Let me read the file."</span> },
+        {
+          <span class="k">"type"</span>: <span class="s">"tool_use"</span>,
+          <span class="k">"id"</span>: <span class="s">"toolu_01ABC..."</span>,
+          <span class="k">"name"</span>: <span class="s">"read_file"</span>,
+          <span class="k">"input"</span>: { <span class="k">"path"</span>: <span class="s">"src/main.ts"</span> }
+        }
+      ]
+    },
+    {
+      <span class="k">"role"</span>: <span class="s">"user"</span>,
+      <span class="k">"content"</span>: [
+        {
+          <span class="k">"type"</span>: <span class="s">"tool_result"</span>,
+          <span class="k">"tool_use_id"</span>: <span class="s">"toolu_01ABC..."</span>,
+          <span class="k">"content"</span>: <span class="s">"export function main() { ... }"</span>
+        }
+      ]
+    }
+  ]
+}</pre>
+
+    <h3>4.3 OpenAI Responses API（08-basic 默认 openai provider）</h3>
+    <pre><span class="c">// POST /v1/responses — 08-basic 使用 client.responses(id)</span>
+{
+  <span class="k">"model"</span>: <span class="s">"gpt-5.2"</span>,
+  <span class="k">"instructions"</span>: <span class="s">"You are a coding assistant..."</span>,
+  <span class="k">"tools"</span>: [{ <span class="k">"type"</span>: <span class="s">"function"</span>, <span class="k">"name"</span>: <span class="s">"read_file"</span>, <span class="k">"parameters"</span>: { ... } }],
+  <span class="k">"input"</span>: [
+    { <span class="k">"type"</span>: <span class="s">"message"</span>, <span class="k">"role"</span>: <span class="s">"user"</span>, <span class="k">"content"</span>: <span class="s">"What's in src/main.ts?"</span> },
+    {
+      <span class="k">"type"</span>: <span class="s">"message"</span>,
+      <span class="k">"role"</span>: <span class="s">"assistant"</span>,
+      <span class="k">"content"</span>: [{ <span class="k">"type"</span>: <span class="s">"output_text"</span>, <span class="k">"text"</span>: <span class="s">"Let me read the file."</span> }]
+    },
+    {
+      <span class="k">"type"</span>: <span class="s">"function_call"</span>,
+      <span class="k">"call_id"</span>: <span class="s">"call_abc123"</span>,
+      <span class="k">"name"</span>: <span class="s">"read_file"</span>,
+      <span class="k">"arguments"</span>: <span class="s">"{\"path\":\"src/main.ts\"}"</span>
+    },
+    {
+      <span class="k">"type"</span>: <span class="s">"function_call_output"</span>,
+      <span class="k">"call_id"</span>: <span class="s">"call_abc123"</span>,
+      <span class="k">"output"</span>: <span class="s">"export function main() { ... }"</span>
+    }
+  ]
+}</pre>
+
+    <h3>4.4 OpenAI Chat Completions（兼容层 / openai-compatible）</h3>
+    <pre><span class="c">// POST /v1/chat/completions — copilot-api 等代理常用</span>
+{
+  <span class="k">"messages"</span>: [
+    { <span class="k">"role"</span>: <span class="s">"system"</span>, <span class="k">"content"</span>: <span class="s">"You are..."</span> },
+    { <span class="k">"role"</span>: <span class="s">"user"</span>, <span class="k">"content"</span>: <span class="s">"What's in src/main.ts?"</span> },
+    {
+      <span class="k">"role"</span>: <span class="s">"assistant"</span>,
+      <span class="k">"content"</span>: <span class="s">"Let me read the file."</span>,
+      <span class="k">"tool_calls"</span>: [{
+        <span class="k">"id"</span>: <span class="s">"call_abc123"</span>,
+        <span class="k">"type"</span>: <span class="s">"function"</span>,
+        <span class="k">"function"</span>: { <span class="k">"name"</span>: <span class="s">"read_file"</span>, <span class="k">"arguments"</span>: <span class="s">"{\"path\":\"src/main.ts\"}"</span> }
+      }]
+    },
+    {
+      <span class="k">"role"</span>: <span class="s">"tool"</span>,
+      <span class="k">"tool_call_id"</span>: <span class="s">"call_abc123"</span>,
+      <span class="k">"content"</span>: <span class="s">"export function main() { ... }"</span>
+    }
+  ]
+}</pre>
+  </section>
+
+  <!-- 5. 字段名对照 -->
+  <section>
+    <h2><span class="num">5</span>Tool Call / Result 字段名速查</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>概念</th>
+          <th>AI SDK (08-basic)</th>
+          <th>Anthropic</th>
+          <th>OpenAI Responses</th>
+          <th>OpenAI Chat</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>调用 ID</td>
+          <td><code>toolCallId</code></td>
+          <td><code>id</code>（tool_use block）</td>
+          <td><code>call_id</code></td>
+          <td><code>tool_calls[].id</code></td>
+        </tr>
+        <tr>
+          <td>工具名</td>
+          <td><code>toolName</code></td>
+          <td><code>name</code></td>
+          <td><code>name</code></td>
+          <td><code>function.name</code></td>
+        </tr>
+        <tr>
+          <td>输入参数</td>
+          <td><code>input</code>（object）</td>
+          <td><code>input</code>（object）</td>
+          <td><code>arguments</code>（JSON string）</td>
+          <td><code>function.arguments</code>（JSON string）</td>
+        </tr>
+        <tr>
+          <td>结果载体</td>
+          <td><code>output.value</code>（text）</td>
+          <td><code>content</code>（string 或 block 数组）</td>
+          <td><code>output</code>（string）</td>
+          <td><code>content</code>（string）</td>
+        </tr>
+        <tr>
+          <td>错误标记</td>
+          <td>结果字符串前缀 <code>Error:</code> 或 synthetic placeholder</td>
+          <td><code>is_error: true</code></td>
+          <td>无标准字段；通常 output 含错误文本</td>
+          <td>无标准字段</td>
+        </tr>
+        <tr>
+          <td>工具 schema 注册</td>
+          <td><code>tools: Record&lt;string, Tool&gt;</code> → SDK 序列化</td>
+          <td>顶层 <code>tools[]</code> + <code>input_schema</code></td>
+          <td>顶层 <code>tools[]</code> type=function</td>
+          <td>顶层 <code>tools[]</code> type=function</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 6. System / Reminder 特殊模式 -->
+  <section>
+    <h2><span class="num">6</span>System Prompt 与 &lt;system-reminder&gt;</h2>
+
+    <div class="cols-3">
+      <div class="card anthropic">
+        <h4>Anthropic / Claude Code</h4>
+        <ul style="font-size:13px;padding-left:16px;color:#475569">
+          <li>全局指令 → 顶层 <code>system</code></li>
+          <li>Skills / deferred tools 列表 → 注入为 <strong>user 文本</strong>，包在 <code>&lt;system-reminder&gt;</code> 里</li>
+          <li>不是独立 message role</li>
+        </ul>
+      </div>
+      <div class="card openai">
+        <h4>OpenAI Responses</h4>
+        <ul style="font-size:13px;padding-left:16px;color:#475569">
+          <li>全局指令 → <code>instructions</code></li>
+          <li>中途追加 → 新 <code>instructions</code> input item</li>
+          <li>Reasoning item 需 <code>itemId</code> replay（08-basic 会 strip）</li>
+        </ul>
+      </div>
+      <div class="card sdk">
+        <h4>08-basic 做法</h4>
+        <ul style="font-size:13px;padding-left:16px;color:#475569">
+          <li><code>systemPrompt(cwd, rules)</code> → <code>streamText({ system })</code></li>
+          <li><code>skillListing</code> → user message with reminder tags</li>
+          <li>Plan mode 切换 → <code>refreshSystemPrompt()</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <pre><span class="c">// 08-basic: runAgent() 注入 skill listing — 仍是 role:"user"</span>
+{
+  <span class="k">"role"</span>: <span class="s">"user"</span>,
+  <span class="k">"content"</span>: <span class="s">"&lt;system-reminder&gt;\nAvailable skills: read, write, bash\n&lt;/system-reminder&gt;"</span>
+}</pre>
+  </section>
+
+  <!-- 7. 08-basic 预处理管线 -->
+  <section>
+    <h2><span class="num">7</span>08-basic 发给 SDK 前的四步预处理</h2>
+    <p class="lead">
+      入口：<span class="mono">core/agent.ts → runOneStep()</span>，
+      在 <span class="mono">streamText({ messages })</span> 之前执行（顺序固定）。
+    </p>
+
+    <div class="pipeline">
+      <div class="pipeline-step">
+        <span class="idx">1</span>
+        <span><strong>inlineReasoningAsText</strong> — 把 <code>reasoning</code> part 转成 <code>&lt;thinking&gt;…&lt;/thinking&gt;</code> 文本，避免无状态代理 404</span>
+      </div>
+      <div class="pipeline-step">
+        <span class="idx">2</span>
+        <span><strong>regroupToolResults</strong> — 把 tool-result 挪到对应 assistant tool-call 之后（CC 风格配对）</span>
+      </div>
+      <div class="pipeline-step">
+        <span class="idx">3</span>
+        <span><strong>ensureToolResultPairing</strong> — 缺 result 则合成 placeholder；孤儿 result 则删除</span>
+      </div>
+      <div class="pipeline-step">
+        <span class="idx">4</span>
+        <span><strong>applyCacheControlBreakpoint</strong> — Anthropic prompt caching：最后一条 message 打 <code>cache_control: ephemeral</code></span>
+      </div>
+    </div>
+
+    <div class="callout ok">
+      第 3 步的 synthetic result 文案：
+      <span class="mono">[Tool result missing due to internal error]</span>
+      （定义于 <span class="mono">messageSanitize.ts</span>）
+    </div>
+  </section>
+
+  <!-- 8. 执行与回写 -->
+  <section>
+    <h2><span class="num">8</span>工具执行生命周期（08-basic）</h2>
+
+    <table>
+      <thead>
+        <tr><th>阶段</th><th>代码位置</th><th>产出</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>模型输出 tool-call</td>
+          <td><code>streamConsumer.ts</code> 消费 <code>tool-call</code> / <code>tool-input-*</code> 事件</td>
+          <td>assistant message 含 <code>tool-call</code> parts</td>
+        </tr>
+        <tr>
+          <td>本地执行</td>
+          <td><code>tool_execution.ts → runToolCalls()</code></td>
+          <td>并发安全工具并行；写操作串行</td>
+        </tr>
+        <tr>
+          <td>构建 result message</td>
+          <td><code>buildToolMessage(results)</code></td>
+          <td><code>{ role: "tool", content: [tool-result, ...] }</code></td>
+        </tr>
+        <tr>
+          <td>大结果落盘</td>
+          <td><code>tool-storage/index.ts</code></td>
+          <td><code>.sessions/{id}/tool-results/{toolCallId}.txt</code>；message 仍保留摘要</td>
+        </tr>
+        <tr>
+          <td>持久化</td>
+          <td><code>server/routes/chat.ts</code> → session append</td>
+          <td>完整 <code>Message[]</code> 写入 JSONL</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 9. Provider 选择 -->
+  <section>
+    <h2><span class="num">9</span>08-basic Provider 配置对照</h2>
+
+    <table>
+      <thead>
+        <tr><th>配置 provider</th><th>SDK 包</th><th>API 端点</th><th>08-basic 特殊处理</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>anthropic</code></td>
+          <td><code>@ai-sdk/anthropic</code></td>
+          <td><code>/v1/messages</code></td>
+          <td>Extended thinking adaptive/enabled；prompt caching breakpoint</td>
+        </tr>
+        <tr>
+          <td><code>openai</code></td>
+          <td><code>@ai-sdk/openai</code></td>
+          <td><code>/v1/responses</code>（<code>client.responses(id)</code>）</td>
+          <td>strip <code>providerOptions.openai.itemId</code>；reasoning 不 replay</td>
+        </tr>
+        <tr>
+          <td><code>openai-compatible</code></td>
+          <td><code>@ai-sdk/openai-compatible</code></td>
+          <td>Chat Completions 兼容</td>
+          <td>copilot-api 等；inline reasoning 为纯文本</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="lead" style="margin-top:12px">
+      配置文件：<span class="mono">~/.ai-agent/config.json</span> 的 <code>provider</code> 段；
+      旧字段 <code>kind: "openai-responses"</code> 会映射到 <code>openai</code>。
+    </p>
+  </section>
+
+  <!-- 10. 常见坑 -->
+  <section>
+    <h2><span class="num">10</span>常见错误与 400 原因</h2>
+
+    <table>
+      <thead>
+        <tr><th>症状</th><th>根因</th><th>08-basic 对策</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Anthropic: tool_use_id 不匹配</td>
+          <td>result 的 id 与 call 不一致，或顺序错乱</td>
+          <td><code>regroupToolResults</code> + <code>ensureToolResultPairing</code></td>
+        </tr>
+        <tr>
+          <td>Anthropic: 连续两个 assistant</td>
+          <td>tool_result 误标为 assistant，或缺 user 轮次</td>
+          <td>持久化只用 user/assistant/tool 三种 SDK role</td>
+        </tr>
+        <tr>
+          <td>OpenAI Responses: item_reference 404</td>
+          <td>重放 encrypted reasoning / item id 但上游无状态</td>
+          <td><code>sanitizeReasoningParts</code> + <code>inlineReasoningAsText</code></td>
+        </tr>
+        <tr>
+          <td>Chat: tool_calls 无对应 tool message</td>
+          <td>流中断在 call 与 result 之间</td>
+          <td>合成 <code>SYNTHETIC_TOOL_RESULT_PLACEHOLDER</code></td>
+        </tr>
+        <tr>
+          <td>Compaction 后配对断裂</td>
+          <td>删了 assistant call 但留了 tool result</td>
+          <td>microCompact 只清 payload，保留 message 骨架与 id</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 11. 速记 -->
+  <section>
+    <h2><span class="num">11</span>一句话速记</h2>
+
+    <div class="callout info">
+      <strong>AI SDK</strong> 用 <code>user / assistant / tool</code> 三种 message role，
+      content 里用 <code>tool-call</code> 和 <code>tool-result</code> part 类型。
+    </div>
+    <div class="callout warn">
+      <strong>Anthropic</strong> 只有 <code>user / assistant</code>（+ 可选中途 <code>system</code>）；
+      工具结果是 <strong>user 消息里的 tool_result block</strong>，没有 tool role。
+    </div>
+    <div class="callout ok">
+      <strong>OpenAI</strong> Responses 用扁平 <code>input[]</code> items（function_call + function_call_output）；
+      Chat Completions 用 <code>assistant.tool_calls</code> + <code>role: tool</code> message。
+    </div>
+    <div class="callout err">
+      <strong>08-basic</strong> 在 SDK 层统一建模，发送前 sanitize；执行后
+      <code>buildToolMessage()</code> 回写；Claude Code 行为在 wire 层与 Anthropic 一致。
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <p>
+    相关代码：
+    <a href="../examples/08-basic/core/types.ts">core/types.ts</a> ·
+    <a href="../examples/08-basic/core/agent/messageSanitize.ts">messageSanitize.ts</a> ·
+    <a href="../examples/08-basic/services/tools/tool_execution.ts">tool_execution.ts</a> ·
+    <a href="../examples/08-basic/core/agent.ts">agent.ts</a>
+  </p>
+  <p style="margin-top:8px;color:#94a3b8">08-basic · LLM Message Mapping Guide</p>
+</footer>
+
+</body>
+</html>
