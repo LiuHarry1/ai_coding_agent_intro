@@ -141,6 +141,20 @@ export interface UserMessage {
 export interface AssistantMessage {
   role: "assistant";
   content: AssistantContentPart[];
+  /**
+   * API-round id (the provider's response id). One `streamText` call = one
+   * round, so all assistant records from the same response (incl. parallel
+   * tool-call splits) share this id. Used to group messages by API round for
+   * PTL truncation and token estimation — mirrors CC's `message.id`.
+   * Optional for backward-compat with sessions persisted before this field.
+   */
+  id?: string;
+  /**
+   * Epoch-ms when this assistant response was received. Used by time-based
+   * micro-compaction to measure the gap since the last model turn (the prompt
+   * cache has likely gone cold past the TTL). Optional for backward-compat.
+   */
+  timestamp?: number;
 }
 
 export interface ToolResultOutput {
@@ -391,6 +405,24 @@ export interface CompactionConfig {
   maxTokensPerFile: number;
   /** Total token budget for all restored files combined. */
   fileBudget: number;
+  /**
+   * Model's max output tokens. The compaction reserve is `min(this, 20_000)`,
+   * matching CC's `min(getMaxOutputTokensForModel(model), 20_000)`. When unset,
+   * the reserve defaults to 20_000 (same as before).
+   */
+  maxOutputTokens?: number;
+  /**
+   * Time-based micro-compaction (CC parity: `tengu_slate_heron`). When the gap
+   * since the last assistant message exceeds the TTL, the prompt cache is cold
+   * and the prefix will be rewritten anyway — so clearing old tool payloads
+   * first (content-mutating micro) is "free". Default off, like CC.
+   */
+  timeBasedMicroEnabled?: boolean;
+  /**
+   * Gap in minutes that marks the cache as cold. Set to match your prompt-cache
+   * TTL: 5 for the default 5-min ephemeral cache, 60 for 1h TTL. Default 5.
+   */
+  timeBasedMicroGapMinutes?: number;
 }
 
 export interface AppConfig {

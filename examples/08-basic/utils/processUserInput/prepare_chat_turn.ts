@@ -43,6 +43,8 @@ export interface SlashResolution {
   effectiveMessage: string;
   immediateReply: string | null;
   forkSkill: ForkSkillSlashResult | null;
+  /** Set when the user ran `/compact [instructions]`; handled by the chat route. */
+  manualCompact: { instructions: string } | null;
   modeChanged?: boolean;
 }
 
@@ -58,6 +60,7 @@ export async function resolveSlashCommand(
         effectiveMessage: planSlash.effectiveMessage ?? message,
         immediateReply: planSlash.immediateReply ?? null,
         forkSkill: null,
+        manualCompact: null,
         modeChanged: planSlash.modeChanged,
       };
     }
@@ -67,9 +70,12 @@ export async function resolveSlashCommand(
   let effectiveMessage = message;
   let immediateReply: string | null = null;
   let forkSkill: SlashResolution["forkSkill"] = null;
+  let manualCompact: SlashResolution["manualCompact"] = null;
 
   if (slashResult.kind === "reply") {
     immediateReply = slashResult.text;
+  } else if (slashResult.kind === "compact") {
+    manualCompact = { instructions: slashResult.instructions };
   } else if (slashResult.kind === "unknown") {
     immediateReply = `Unknown slash command: /${slashResult.name}\n\nTry /help to see all available commands.`;
   } else if (slashResult.kind === "run" && slashResult.mode === "inline") {
@@ -85,13 +91,14 @@ export async function resolveSlashCommand(
     forkSkill = slashResult as ForkSkillSlashResult;
   }
 
-  return { effectiveMessage, immediateReply, forkSkill };
+  return { effectiveMessage, immediateReply, forkSkill, manualCompact };
 }
 
 export interface PreparedChatTurn {
   effectiveMessage: string;
   immediateReply: string | null;
   forkSkill: SlashResolution["forkSkill"];
+  manualCompact: SlashResolution["manualCompact"];
   tools: Record<string, AnyTool>;
   /** Tools before mode filtering — used to refresh when mode changes mid-turn. */
   baseTools: Record<string, AnyTool>;
@@ -264,6 +271,7 @@ export async function prepareChatTurn(
     effectiveMessage: slash.effectiveMessage,
     immediateReply: slash.immediateReply,
     forkSkill: slash.forkSkill,
+    manualCompact: slash.manualCompact,
     tools,
     baseTools: enablementFiltered,
     modeTools,

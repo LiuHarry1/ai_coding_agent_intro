@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Compacting 功能详解</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#d97757; --accent2:#58a6ff;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+/* sidebar */
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.toc a.active{background:rgba(217,119,87,.15);color:var(--accent);font-weight:600}
+/* main */
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:30px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:23px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(217,119,87,.12);border:1px solid rgba(217,119,87,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:13px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(88,166,255,.07)}
+.callout.danger{border-color:var(--red);background:rgba(248,81,73,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.danger .tag{color:var(--red)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.layers{display:grid;gap:10px;margin:18px 0}
+.layer{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;padding:12px 16px}
+.layer .lvl{font-weight:800;font-size:13px;min-width:46px;text-align:center;padding:5px 0;border-radius:8px;
+  background:var(--panel2);color:var(--accent)}
+.layer .ld{flex:1}
+.layer .ld b{font-size:14.5px}
+.layer .ld span{display:block;color:var(--muted);font-size:12.5px}
+.flow{font-family:"JetBrains Mono",Consolas,monospace;font-size:13px}
+.pill{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11.5px;font-weight:600;margin:0 2px}
+.pill.flag{background:rgba(188,140,255,.14);color:var(--purple);border:1px solid rgba(188,140,255,.3)}
+.pill.env{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+.tag-file{font-family:monospace;font-size:12px;color:var(--amber)}
+.footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:24px;border-top:1px solid var(--border)}
+@media(max-width:920px){.sidebar{display:none}.main{padding:24px}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar">
+  <h1>CC Compacting</h1>
+  <div class="sub">上下文压缩系统 · 源码逆向解读</div>
+  <ul class="toc" id="toc">
+    <li><a href="#s1">1. 概述</a></li>
+    <li><a href="#s2">2. 架构总览</a></li>
+    <li><a href="#s3">3. 完整压缩 Full Compact</a></li>
+    <li><a href="#s4">4. 自动压缩 Auto Compact</a></li>
+    <li><a href="#s5">5. Session Memory Compact</a></li>
+    <li><a href="#s6">6. Microcompact</a></li>
+    <li><a href="#s7">7. API Microcompact</a></li>
+    <li><a href="#s8">8. Partial Compact</a></li>
+    <li><a href="#s9">9. Reactive Compact</a></li>
+    <li><a href="#s10">10. Snip Compact</a></li>
+    <li><a href="#s11">11. Post-Compact 状态恢复</a></li>
+    <li><a href="#s12">12. Hooks 集成</a></li>
+    <li><a href="#s13">13. 消息类型与视图</a></li>
+    <li><a href="#s14">14. /compact 命令</a></li>
+    <li><a href="#s15">15. UI 与体验</a></li>
+    <li><a href="#s16">16. 分析与遥测</a></li>
+    <li><a href="#s17">17. 配置速查</a></li>
+    <li><a href="#s18">18. 源码文件索引</a></li>
+    <li><a href="#s19">19. 设计要点总结</a></li>
+  </ul>
+</nav>
+<div class="main" id="main">
+
+<div class="hero">
+  <h1>Claude Code Compacting 功能详解</h1>
+  <p>基于源码目录 <code>C:\Users\Harry\cursor_workspace\public\claude-code-rev</code></p>
+  <p>核心代码位于 <code>src/services/compact/</code></p>
+  <p>本文档已逐条对照源码核对常量与逻辑 · 校订日期 2026-06-27</p>
+  <span class="badge">✓ 所有常量已对照源码验证</span>
+  <span class="badge">19 章 · 9 层压缩策略</span>
+</div>
+
+<section id="s1">
+<h2><span class="num">01</span> 概述</h2>
+<p>Claude Code（以下简称 CC）在长时间对话中会不断累积消息、工具结果、附件和系统上下文，最终逼近模型的 context window。<b>Compacting（上下文压缩）</b> 是一组分层策略，用于在<b>不丢失关键工作上下文</b>的前提下释放 token 空间。</p>
+<p>CC 的 compacting 不是单一功能，而是<b>多层协作</b>的上下文管理系统，从轻到重逐级释放：</p>
+<div class="layers">
+  <div class="layer"><div class="lvl">L0</div><div class="ld"><b>Snip 历史裁剪</b><span>每轮 query 前 · 移除用户标记为 snip 的旧消息（UI 保留 scrollback）</span></div></div>
+  <div class="layer"><div class="lvl">L1</div><div class="ld"><b>Microcompact 微压缩</b><span>每轮 API 调用前 · 清除旧 tool result，不改动对话结构</span></div></div>
+  <div class="layer"><div class="lvl">L1b</div><div class="ld"><b>API Microcompact</b><span>API 请求参数 · 服务端 context_management 策略</span></div></div>
+  <div class="layer"><div class="lvl">L2</div><div class="ld"><b>Context Collapse（实验）</b><span>每轮 query 前 · 结构化折叠旧上下文，保留粒度</span></div></div>
+  <div class="layer"><div class="lvl">L3</div><div class="ld"><b>Auto Compact 自动压缩</b><span>token 超阈值 · 主动总结整段对话</span></div></div>
+  <div class="layer"><div class="lvl">L3b</div><div class="ld"><b>Session Memory Compact</b><span>auto/manual 优先尝试 · 用 session memory 文件代替 LLM 总结</span></div></div>
+  <div class="layer"><div class="lvl">L4</div><div class="ld"><b>Reactive Compact 被动压缩</b><span>API 413 / prompt too long · 从尾部逐轮剥离再总结</span></div></div>
+  <div class="layer"><div class="lvl">手动</div><div class="ld"><b>/compact &amp; Partial Compact</b><span>用户命令 / 以某条消息为 pivot 做部分总结</span></div></div>
+</div>
+</section>
+
+<section id="s2">
+<h2><span class="num">02</span> 架构总览</h2>
+<h3>2.1 主循环中的执行顺序</h3>
+<p>每轮用户 query 进入 <code>src/query.ts</code> 后，在真正调用模型之前，按以下顺序处理消息：</p>
+<pre class="flow"><code>原始 messages
+  → content replacement（大结果替换）
+  → snipCompactIfNeeded         （HISTORY_SNIP）
+  → microcompactMessages
+  → applyCollapsesIfNeeded      （CONTEXT_COLLAPSE）
+  → autoCompactIfNeeded
+  → callModel（正常对话）
+  → 若 413 / prompt-too-long → tryReactiveCompact（REACTIVE_COMPACT）</code></pre>
+<p class="tag-file">关键源码：src/query.ts 约 396–543 行（snip → microcompact → collapse → autocompact）</p>
+<h3>2.2 模块依赖关系</h3>
+<pre><code>src/query/deps.ts
+  ├── microcompactMessages   ← microCompact.ts
+  └── autoCompactIfNeeded    ← autoCompact.ts
+        ├── trySessionMemoryCompaction  ← sessionMemoryCompact.ts
+        └── compactConversation         ← compact.ts
+              ├── streamCompactSummary（fork 或 streaming）
+              ├── executePreCompactHooks / executePostCompactHooks
+              └── createPostCompact*Attachments</code></pre>
+<p>手动命令入口：<code>src/commands/compact/compact.ts</code>（<code>/compact</code>）。</p>
+</section>
+
+<section id="s3">
+<h2><span class="num">03</span> 完整压缩 Full Compact</h2>
+<h3>3.1 核心函数 <code>compactConversation</code></h3>
+<p class="tag-file">文件：src/services/compact/compact.ts</p>
+<p><b>职责</b>：将<b>整段</b>（或 compact boundary 之后的）对话交给专门的 summarizer，生成结构化摘要，并用 boundary marker + summary 替换旧历史。</p>
+<p><b>流程</b>：</p>
+<ol>
+  <li><b>PreCompact Hooks</b> — <code>executePreCompactHooks({ trigger: 'auto'|'manual' })</code></li>
+  <li><b>生成摘要</b> — <code>streamCompactSummary()</code> 调用 LLM</li>
+  <li><b>清理本地状态</b> — 清空 <code>readFileState</code>、<code>loadedNestedMemoryPaths</code></li>
+  <li><b>并行重建附件</b> — 文件、plan、skill、deferred tools、MCP、async agent 等</li>
+  <li><b>SessionStart Hooks</b> — <code>processSessionStartHooks('compact')</code> 重新注入 CLAUDE.md 等</li>
+  <li><b>创建 boundary + summary 消息</b></li>
+  <li><b>PostCompact Hooks</b> — <code>executePostCompactHooks({ compactSummary })</code></li>
+  <li><b>返回 <code>CompactionResult</code></b></li>
+</ol>
+
+<h3>3.2 摘要生成 <code>streamCompactSummary</code></h3>
+<p>两种路径，优先 <b>Prompt Cache Sharing（fork 路径）</b>：</p>
+<h4>路径 A：Forked Agent（默认开启）</h4>
+<ul>
+  <li>Feature flag：<span class="pill flag">tengu_compact_cache_prefix</span>（3P 默认 <code>true</code>）</li>
+  <li>通过 <code>runForkedAgent()</code> 复用主对话的 system prompt / tools / messages prefix 的 prompt cache</li>
+  <li><code>querySource: 'compact'</code>，<code>maxTurns: 1</code>，<b>禁止 tool use</b>（<code>createCompactCanUseTool()</code> 一律 deny）</li>
+  <li><b>不能</b>设置 <code>maxOutputTokens</code>，否则 thinking config 不匹配导致 cache miss</li>
+</ul>
+<h4>路径 B：Streaming Fallback</h4>
+<ul>
+  <li>fork 失败或无文本输出时回退</li>
+  <li>独立 system prompt：<code>"You are a helpful AI assistant tasked with summarizing conversations."</code></li>
+  <li>thinking 关闭；可选 <code>FileReadTool</code> + <code>ToolSearchTool</code>（tool search 开启时）</li>
+  <li>发送前预处理：<code>stripImagesFromMessages</code>（图片/文档替换为 <code>[image]</code>/<code>[document]</code>）、<code>stripReinjectedAttachments</code>（去掉会在 post-compact 重新注入的 skill 附件）、<code>getMessagesAfterCompactBoundary</code>（只总结 boundary 之后）</li>
+</ul>
+<div class="callout note">
+  <p class="tag">CC-1180 · Prompt Too Long 重试</p>
+  <p>若 compact API 自身也 hit prompt-too-long：调用 <code>truncateHeadForPTLRetry()</code> 按 API round 分组丢弃最旧的组；最多重试 <b>3 次</b>（<code>MAX_PTL_RETRIES = 3</code>）；仍失败则抛出 <code>Conversation too long. Press esc twice…</code></p>
+</div>
+
+<h3>3.3 摘要 Prompt 结构</h3>
+<p class="tag-file">文件：src/services/compact/prompt.ts</p>
+<ul>
+  <li><code>getCompactPrompt</code> — 全量对话总结，<b>9 个 section</b>：Primary Request &amp; Intent、Key Technical Concepts、Files and Code Sections、Errors and fixes、Problem Solving、All user messages、Pending Tasks、Current Work、Optional Next Step</li>
+  <li>要求输出 <code>&lt;analysis&gt;</code> + <code>&lt;summary&gt;</code> XML 块；<code>formatCompactSummary()</code> 会 strip analysis（drafting scratchpad），格式化 summary</li>
+  <li><code>NO_TOOLS_PREAMBLE</code> — 强制纯文本，置于 prompt 最前。源码注释：Sonnet 4.6+ adaptive-thinking 在 maxTurns:1 下偶尔误调 tool 浪费唯一 turn（4.6 上 2.79% vs 4.5 的 0.01%）</li>
+</ul>
+
+<h3>3.4 压缩后消息组装</h3>
+<p><code>buildPostCompactMessages(result)</code> 固定顺序：</p>
+<pre><code>boundaryMarker
+→ summaryMessages（isCompactSummary: true）
+→ messagesToKeep（partial / reactive / SM-compact 才有）
+→ attachments（文件 / plan / skill / tools 等）
+→ hookResults（SessionStart hooks）</code></pre>
+<p>Boundary 消息类型：<code>system</code> + <code>subtype: 'compact_boundary'</code>，含 <code>compactMetadata</code>（trigger、preTokens、preCompactDiscoveredTools、preservedSegment 等）。</p>
+</section>
+
+<section id="s4">
+<h2><span class="num">04</span> 自动压缩 Auto Compact</h2>
+<p class="tag-file">文件：src/services/compact/autoCompact.ts</p>
+<h3>4.1 核心函数</h3>
+<ul>
+  <li><code>shouldAutoCompact</code> — 判断是否该压缩</li>
+  <li><code>autoCompactIfNeeded</code> — 执行压缩并返回 <code>CompactionResult</code></li>
+  <li><code>calculateTokenWarningState</code> — 计算 warning / error / blocking 阈值状态（供 UI <code>/context</code> 使用）</li>
+</ul>
+
+<h3>4.2 Token 阈值计算</h3>
+<pre><code>MAX_OUTPUT_TOKENS_FOR_SUMMARY = 20_000   // p99.99 摘要输出 17,387 tokens
+effectiveContextWindow = contextWindow(model) - min(maxOutputTokens, 20_000)
+
+autoCompactThreshold   = effectiveContextWindow - 13_000   // AUTOCOMPACT_BUFFER_TOKENS
+blockingLimit          = effectiveContextWindow - 3_000    // MANUAL_COMPACT_BUFFER_TOKENS
+
+// 注意：warning/error 基于 threshold，而非恒为 autoCompactThreshold
+threshold        = isAutoCompactEnabled() ? autoCompactThreshold : effectiveContextWindow
+warningThreshold = threshold - 20_000     // WARNING_THRESHOLD_BUFFER_TOKENS
+errorThreshold   = threshold - 20_000     // ERROR_THRESHOLD_BUFFER_TOKENS</code></pre>
+<div class="callout">
+  <p class="tag">校订说明</p>
+  <p>上一版文档把 <code>warningThreshold</code>/<code>errorThreshold</code> 写成恒等于 <code>autoCompactThreshold - 20_000</code>。源码中它们实际基于 <code>threshold</code>：自动压缩开启时 <code>threshold = autoCompactThreshold</code>（与原文一致）；<b>关闭</b>时 <code>threshold = effectiveContextWindow</code>，此时 warning/error 会相应抬高。</p>
+</div>
+<p><b>Token 计数 canonical 函数</b>：<code>tokenCountWithEstimation(messages)</code>（<code>src/utils/tokens.ts</code>）</p>
+<ul>
+  <li>使用最后一次 API response 的 usage（input + output + cache）</li>
+  <li>对之后新增的消息做 rough estimate</li>
+  <li>处理 parallel tool call 导致的 assistant 消息拆分（按 <code>message.id</code> 回溯 sibling）</li>
+</ul>
+
+<h3>4.3 启用 / 禁用条件</h3>
+<table>
+  <tr><th>条件</th><th>效果</th></tr>
+  <tr><td><span class="pill env">DISABLE_COMPACT=1</span></td><td>禁用所有 compact（含 manual）</td></tr>
+  <tr><td><span class="pill env">DISABLE_AUTO_COMPACT=1</span></td><td>仅禁用自动压缩，manual <code>/compact</code> 仍可用</td></tr>
+  <tr><td><code>config.autoCompactEnabled = false</code></td><td>用户设置关闭</td></tr>
+  <tr><td><code>querySource === 'compact' | 'session_memory'</code></td><td>防递归（forked agent 会死锁）</td></tr>
+  <tr><td><span class="pill flag">REACTIVE_COMPACT</span> + <span class="pill flag">tengu_cobalt_raccoon</span></td><td>抑制 proactive autocompact</td></tr>
+  <tr><td><span class="pill flag">CONTEXT_COLLAPSE</span> 开启</td><td>由 collapse 接管（含 <code>marble_origami</code> ctx-agent 防护），autocompact 关闭</td></tr>
+</table>
+<p>环境变量 override：</p>
+<ul>
+  <li><span class="pill env">CLAUDE_CODE_AUTO_COMPACT_WINDOW</span> — 限制有效 context window</li>
+  <li><span class="pill env">CLAUDE_AUTOCOMPACT_PCT_OVERRIDE</span> — 按百分比设置阈值（测试用）</li>
+  <li><span class="pill env">CLAUDE_CODE_BLOCKING_LIMIT_OVERRIDE</span> — 覆盖 blocking limit</li>
+</ul>
+
+<h3>4.4 自动压缩优先级</h3>
+<p><code>autoCompactIfNeeded</code> 内部顺序：</p>
+<ol>
+  <li><b>Circuit breaker</b> — 连续失败 ≥ 3 次则跳过（<code>MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3</code>）。源码注释：BQ 2026-03-10 发现 1,279 个 session 单会话 50+ 次连续失败，浪费 ~250K API 调用/天</li>
+  <li><b>Session Memory Compact</b> — <code>trySessionMemoryCompaction()</code>（实验，需 feature flags）</li>
+  <li><b>Legacy Full Compact</b> — <code>compactConversation(..., isAutoCompact: true, suppressFollowUpQuestions: true)</code></li>
+</ol>
+<p>成功后：<code>setLastSummarizedMessageId(undefined)</code> → <code>runPostCompactCleanup(querySource)</code> → 重置 <code>autoCompactTracking</code>（turnCounter、turnId、consecutiveFailures）。</p>
+<div class="callout warn">
+  <p class="tag">防螺旋</p>
+  <p>Autocompact 失败<b>不弹错误通知</b>（manual 才会）；下轮继续重试，直到 circuit breaker 触发。SM-compact 成功后还额外调用 <code>notifyCompaction()</code> 修正 prompt cache break 误报（compactConversation 内部已做，SM 路径需补）。</p>
+</div>
+</section>
+
+<section id="s5">
+<h2><span class="num">05</span> Session Memory Compact（实验）</h2>
+<p class="tag-file">文件：src/services/compact/sessionMemoryCompact.ts</p>
+<p><b>思路</b>：CC 在后台维护 session memory 文件（Markdown），持续提取对话要点。压缩时<b>直接读取该文件作为 summary</b>，无需再调 LLM，成本更低、速度更快。</p>
+<h3>5.1 启用条件</h3>
+<ul>
+  <li>GrowthBook：<span class="pill flag">tengu_session_memory</span> &amp;&amp; <span class="pill flag">tengu_sm_compact</span></li>
+  <li>或 env：<span class="pill env">ENABLE_CLAUDE_CODE_SM_COMPACT=1</span></li>
+  <li>禁用：<span class="pill env">DISABLE_CLAUDE_CODE_SM_COMPACT=1</span></li>
+</ul>
+<h3>5.2 保留消息策略</h3>
+<p>基于 <code>lastSummarizedMessageId</code>（上次 SM 提取覆盖到的消息 UUID）。配置 <code>DEFAULT_SM_COMPACT_CONFIG</code>（可被 <span class="pill flag">tengu_sm_compact_config</span> 覆盖）：</p>
+<ol>
+  <li>从该 ID 之后开始保留</li>
+  <li>向后扩展直到满足 <code>minTokens</code>（默认 <b>10,000</b>）与 <code>minTextBlockMessages</code>（默认 <b>5</b>）</li>
+  <li>不超过 <code>maxTokens</code>（默认 <b>40,000</b>）</li>
+  <li>扩展时 floor 在最后一个 compact boundary（避免越过 preserved-segment 的磁盘断点）</li>
+  <li><code>adjustIndexToPreserveAPIInvariants()</code> — 不拆分 tool_use/tool_result 对、不丢失共享 message.id 的 thinking 块</li>
+</ol>
+<h3>5.3 与 Full Compact 的差异</h3>
+<table>
+  <tr><th>项目</th><th>Session Memory</th><th>Full Compact</th></tr>
+  <tr><td>Summary 来源</td><td>磁盘 session memory 文件</td><td>LLM 实时生成</td></tr>
+  <tr><td>保留最近消息</td><td>是（messagesToKeep）</td><td>否（全替换）</td></tr>
+  <tr><td>额外 LLM 调用</td><td>无</td><td>有（compact API call）</td></tr>
+  <tr><td>自定义 instructions</td><td>不支持</td><td>支持（manual）</td></tr>
+  <tr><td>post-compact 附件</td><td>较少（仅 plan 等）</td><td>完整（文件/skill/tools 等）</td></tr>
+</table>
+<div class="callout warn">
+  <p class="tag">阈值回退</p>
+  <p>若 SM compact 后 token 仍 ≥ <code>autoCompactThreshold</code>，则<b>放弃</b> SM 路径（返回 null），回退 legacy compact。此外 session memory 文件不存在、仅含模板、summarized ID 找不到时也都回退。</p>
+</div>
+</section>
+
+<section id="s6">
+<h2><span class="num">06</span> Microcompact 微压缩</h2>
+<p class="tag-file">文件：src/services/compact/microCompact.ts</p>
+<p><b>目标</b>：在每轮 API 调用前<b>轻量</b>释放空间，<b>不改变对话语义结构</b>（不做 LLM 总结）。</p>
+<h3>6.1 三条路径（按优先级）</h3>
+<h4>① Time-based Microcompact</h4>
+<ul>
+  <li>Config：<span class="pill flag">tengu_slate_heron</span>（默认 disabled）</li>
+  <li>当距上次 assistant 消息超过 <code>gapThresholdMinutes</code>（默认 60 分钟）时触发</li>
+  <li>逻辑：服务端 prompt cache 已过期，反正要全量 rewrite → 提前把旧 tool result 内容替换为 <code>[Old tool result content cleared]</code></li>
+  <li>保留最近 N 个 compactable tool results（<code>keepRecent</code>，floor 至少 1）</li>
+  <li><b>直接修改本地 message content</b>（与 cached MC 不同），随后 <code>resetMicrocompactState()</code> 清理 stale cached-MC 状态</li>
+</ul>
+<h4>② Cached Microcompact（内部 / ant 构建）</h4>
+<ul>
+  <li>Feature：<span class="pill flag">CACHED_MICROCOMPACT</span></li>
+  <li>通过 API 的 <b>cache_edits</b> 机制删除旧 tool result，<b>不修改本地 messages</b></li>
+  <li>仅 main thread 运行（<code>querySource.startsWith('repl_main_thread')</code>，prefix-match 兼容 outputStyle 变体）</li>
+  <li>可 compact 的工具（<code>COMPACTABLE_TOOLS</code>）：Read、Bash/Shell、Grep、Glob、WebSearch、WebFetch、Edit、Write</li>
+  <li>状态：<code>cachedMCState</code>（registeredTools、deletedRefs、pinnedEdits）；API 层插入 <code>cache_reference</code> + <code>cache_edits</code> blocks</li>
+</ul>
+<h4>③ Legacy path</h4>
+<ul>
+  <li>已移除（<span class="pill flag">tengu_cache_plum_violet</span> 恒为 true）；外部构建若 cached MC 不可用，microcompact 为 no-op，依赖 autocompact</li>
+</ul>
+<h3>6.2 与 Autocompact 的关系</h3>
+<p>Microcompact 在 autocompact <b>之前</b>运行（<code>query.ts</code>）。若 microcompact 释放足够 token，可能避免触发 autocompact。</p>
+<p>Snip 释放的 token 通过 <code>snipTokensFreed</code> 参数传给 <code>shouldAutoCompact</code>，因为 <code>tokenCountWithEstimation</code> 读的是 assistant usage，看不到 snip 节省的空间。</p>
+</section>
+
+<section id="s7">
+<h2><span class="num">07</span> API Microcompact</h2>
+<p class="tag-file">文件：src/services/compact/apiMicrocompact.ts</p>
+<p>在 API 请求中附加 <code>context_management.edits</code> 策略，由<b>服务端</b>执行 tool result / thinking 清理：</p>
+<table>
+  <tr><th>策略类型</th><th>作用</th></tr>
+  <tr><td><code>clear_thinking_20251015</code></td><td>清理 thinking（redact-thinking 活跃时跳过以保留）</td></tr>
+  <tr><td><code>clear_tool_uses_20250919</code></td><td>按 input_tokens 阈值清除 tool uses / results</td></tr>
+</table>
+<p>环境变量（ant-only tool clearing）：</p>
+<ul>
+  <li><span class="pill env">USE_API_CLEAR_TOOL_RESULTS=1</span> — 清除 Read/Shell/Grep 等<b>结果</b></li>
+  <li><span class="pill env">USE_API_CLEAR_TOOL_USES=1</span> — 清除 Edit/Write 等<b>调用</b>（exclude_tools 反向配置）</li>
+</ul>
+<p>默认阈值：<code>DEFAULT_MAX_INPUT_TOKENS = 180_000</code>（trigger）、<code>DEFAULT_TARGET_INPUT_TOKENS = 40_000</code>（保留目标）。</p>
+</section>
+
+<section id="s8">
+<h2><span class="num">08</span> Partial Compact 部分压缩</h2>
+<p class="tag-file">文件：src/services/compact/compact.ts → partialCompactConversation</p>
+<p>入口：<code>src/screens/REPL.tsx</code> 消息选择器的 compact 操作。</p>
+<h3>8.1 两种方向</h3>
+<table>
+  <tr><th>方向</th><th>总结范围</th><th>保留范围</th><th>Prompt Cache</th></tr>
+  <tr><td><code>from</code></td><td>pivot 之后的消息</td><td>pivot 之前</td><td>部分失效（summary 在 kept 之后）</td></tr>
+  <tr><td><code>up_to</code></td><td>pivot 之前的消息</td><td>pivot 之后</td><td>prefix 可命中 cache</td></tr>
+</table>
+<p><code>up_to</code> 会从 kept 消息中过滤旧的 compact boundary 和 summary，避免 <code>findLastCompactBoundaryIndex</code> 误选旧 boundary。</p>
+<h3>8.2 元数据</h3>
+<pre><code>// Summary 消息可带 summarizeMetadata
+{ messagesSummarized, userContext, direction }</code></pre>
+<p>UI 组件 <code>CompactSummary.tsx</code> 据此显示 "Summarized N messages from / up to this point"。</p>
+</section>
+
+<section id="s9">
+<h2><span class="num">09</span> Reactive Compact 被动压缩</h2>
+<p class="tag-file">文件：src/services/compact/reactiveCompact.ts</p>
+<div class="callout danger">
+  <p class="tag">公开仓库为 stub</p>
+  <p>公开逆向仓库中该文件为 <b>stub</b>（<code>runReactiveCompact</code> 直接返回原 messages）。完整实现依赖 <span class="pill flag">REACTIVE_COMPACT</span> feature flag，在 ant 内部构建中可用。</p>
+</div>
+<h3>9.1 触发场景</h3>
+<p><code>src/query.ts</code> 在 API 返回 withheld 413 或 media size error 时调用 <code>tryReactiveCompact</code>：</p>
+<ol>
+  <li>若 <span class="pill flag">CONTEXT_COLLAPSE</span> 开启，先尝试 <code>recoverFromOverflow</code>（drain collapses）</li>
+  <li>仍 413 → reactive compact</li>
+  <li><code>hasAttemptedReactiveCompact</code> 防止无限循环</li>
+</ol>
+<h3>9.2 Reactive-only 模式</h3>
+<p>当 <span class="pill flag">tengu_cobalt_raccoon</span> 开启时：抑制 proactive autocompact；<code>/compact</code> 命令路由到 <code>reactiveCompactOnPromptTooLong</code>；依赖 API 的 prompt-too-long 作为压缩信号。</p>
+<h3>9.3 消息分组</h3>
+<p><code>groupMessagesByApiRound()</code>（<code>grouping.ts</code>）：按 assistant <code>message.id</code> 变化划分 API round，比旧的 "human turn" 分组更细，支持单轮 agentic 长会话（SDK/CCR）。</p>
+<div class="callout note">
+  <p class="tag">方向对比</p>
+  <p>Reactive compact 从<b>尾部</b>逐轮剥离再总结；PTL retry 则从<b>头部</b>丢弃（<code>truncateHeadForPTLRetry</code>）。</p>
+</div>
+</section>
+
+<section id="s10">
+<h2><span class="num">10</span> Snip Compact 历史裁剪</h2>
+<p class="tag-file">文件：src/services/compact/snipCompact.ts（公开仓库为 stub）</p>
+<ul>
+  <li>Feature：<span class="pill flag">HISTORY_SNIP</span></li>
+  <li>用户可将旧消息 snip 掉；REPL 保留完整 scrollback，但模型只看 snip boundary 之后</li>
+  <li><code>getMessagesAfterCompactBoundary</code> 默认也会应用 <code>projectSnippedView</code></li>
+  <li>Snip 与 microcompact <b>不互斥</b>，snip 先运行</li>
+</ul>
+</section>
+
+<section id="s11">
+<h2><span class="num">11</span> Post-Compact 状态恢复</h2>
+<p>压缩会丢失大量上下文，CC 通过 <b>attachments + hooks</b> 重建关键状态。</p>
+<h3>11.1 文件恢复</h3>
+<p><code>createPostCompactFileAttachments()</code>：</p>
+<table>
+  <tr><th>常量</th><th>值</th><th>含义</th></tr>
+  <tr><td><code>POST_COMPACT_MAX_FILES_TO_RESTORE</code></td><td>5</td><td>最多恢复文件数</td></tr>
+  <tr><td><code>POST_COMPACT_TOKEN_BUDGET</code></td><td>50,000</td><td>总 token 预算</td></tr>
+  <tr><td><code>POST_COMPACT_MAX_TOKENS_PER_FILE</code></td><td>5,000</td><td>单文件上限</td></tr>
+</table>
+<ul>
+  <li>按 <code>readFileState</code> 时间戳取最近访问的文件，经 <code>FileReadTool</code> 重新读取（带 validation）</li>
+  <li>跳过 plan 文件、CLAUDE.md/memory 文件；跳过 preserved tail 中已有 Read 结果的路径</li>
+</ul>
+<h3>11.2 Skill 恢复</h3>
+<p><code>createSkillAttachmentIfNeeded()</code>：</p>
+<table>
+  <tr><th>常量</th><th>值</th><th>含义</th></tr>
+  <tr><td><code>POST_COMPACT_MAX_TOKENS_PER_SKILL</code></td><td>5,000</td><td>单 skill 上限</td></tr>
+  <tr><td><code>POST_COMPACT_SKILLS_TOKEN_BUDGET</code></td><td>25,000</td><td>skill 总预算</td></tr>
+</table>
+<ul>
+  <li>从 <code>getInvokedSkillsForAgent()</code> 取已 invoke 的 skills，按最近 invoke 排序</li>
+  <li><b>故意不</b> reset <code>sentSkillNames</code>（避免每轮 re-inject 4K+ skill_listing）</li>
+</ul>
+<h3>11.3 其他附件</h3>
+<ul>
+  <li><code>createPlanAttachmentIfNeeded</code> — plan 文件</li>
+  <li><code>createPlanModeAttachmentIfNeeded</code> — plan mode 指令</li>
+  <li><code>createAsyncAgentAttachmentsIfNeeded</code> — 后台 running/finished 的 local agent</li>
+  <li><code>getDeferredToolsDeltaAttachment</code> — 重新公告 deferred/MCP tools</li>
+  <li><code>getAgentListingDeltaAttachment</code> — agent 列表</li>
+  <li><code>getMcpInstructionsDeltaAttachment</code> — MCP 指令</li>
+</ul>
+<h3>11.4 Post-Compact Cleanup</h3>
+<p><code>runPostCompactCleanup(querySource)</code>（<code>postCompactCleanup.ts</code>）：</p>
+<ul>
+  <li><code>resetMicrocompactState()</code></li>
+  <li><code>resetContextCollapse()</code>（main thread only）</li>
+  <li><code>getUserContext.cache.clear()</code> + <code>resetGetMemoryFilesCache('compact')</code></li>
+  <li><code>clearSystemPromptSections()</code>、<code>clearClassifierApprovals()</code>、<code>clearSpeculativeChecks()</code></li>
+  <li><code>clearSessionMessagesCache()</code>、<code>clearBetaTracingState()</code></li>
+  <li><b>不</b>清除 invoked skill content</li>
+</ul>
+</section>
+
+<section id="s12">
+<h2><span class="num">12</span> Hooks 集成</h2>
+<p class="tag-file">文件：src/utils/hooks.ts</p>
+<h3>PreCompact</h3>
+<pre><code>{
+  hook_event_name: 'PreCompact',
+  trigger: 'manual' | 'auto',
+  custom_instructions: string | null
+}
+// 返回 newCustomInstructions → 合并进 compact prompt</code></pre>
+<h3>PostCompact</h3>
+<pre><code>{
+  hook_event_name: 'PostCompact',
+  trigger: 'manual' | 'auto',
+  compact_summary: string
+}</code></pre>
+<h3>SessionStart（compact 触发）</h3>
+<p><code>processSessionStartHooks('compact')</code> — 压缩成功后重新加载 CLAUDE.md 等环境上下文。</p>
+</section>
+
+<section id="s13">
+<h2><span class="num">13</span> 消息类型与 Transcript 语义</h2>
+<h3>13.1 Compact Boundary</h3>
+<pre><code>// createCompactBoundaryMessage
+{
+  type: 'system',
+  subtype: 'compact_boundary',
+  content: 'Conversation compacted',
+  compactMetadata: {
+    trigger: 'manual' | 'auto',
+    preTokens: number,
+    userContext?: string,
+    messagesSummarized?: number,
+    preCompactDiscoveredTools?: string[],
+    preservedSegment?: { headUuid, anchorUuid, tailUuid }
+  }
+}</code></pre>
+<h3>13.2 Compact Summary</h3>
+<pre><code>{
+  type: 'user',
+  isCompactSummary: true,
+  isVisibleInTranscriptOnly: true,  // 默认 UI 折叠，Ctrl+O 展开
+  content: getCompactUserSummaryMessage(...)
+}</code></pre>
+<h3>13.3 视图投影</h3>
+<ul>
+  <li><code>getMessagesAfterCompactBoundary(messages)</code> — 模型 / API 只看最后一个 boundary 之后</li>
+  <li><code>findLastCompactBoundaryIndex</code> — 从尾部扫描</li>
+  <li>Partial/SM compact 的 <code>preservedSegment</code> — 磁盘 dedup 后 loader 用 metadata 修复 parent chain</li>
+</ul>
+</section>
+
+<section id="s14">
+<h2><span class="num">14</span> 手动 /compact 命令</h2>
+<p class="tag-file">文件：src/commands/compact/compact.ts</p>
+<p>执行顺序：</p>
+<ol>
+  <li><code>getMessagesAfterCompactBoundary</code> — 排除已 snip 内容</li>
+  <li>无 custom instructions → <b>trySessionMemoryCompaction</b></li>
+  <li>Reactive-only 模式 → <code>compactViaReactive</code></li>
+  <li>否则：<code>microcompactMessages</code> → <code>compactConversation</code></li>
+  <li>成功后：<code>suppressCompactWarning()</code>、<code>runPostCompactCleanup()</code>、<code>getUserContext.cache.clear()</code></li>
+</ol>
+<p>Custom instructions 通过命令参数传入：<code>/compact focus on test output</code>。</p>
+</section>
+
+<section id="s15">
+<h2><span class="num">15</span> UI 与用户体验</h2>
+<table>
+  <tr><th>组件</th><th>作用</th></tr>
+  <tr><td><code>CompactBoundaryMessage.tsx</code></td><td>显示 "✻ Conversation compacted (Ctrl+O for history)"</td></tr>
+  <tr><td><code>CompactSummary.tsx</code></td><td>折叠/展开 summary；partial compact 显示 metadata</td></tr>
+  <tr><td><code>compactWarningState.ts</code></td><td>压缩成功后 suppress "context left until autocompact" 警告</td></tr>
+  <tr><td><code>usePostCompactSurvey.tsx</code></td><td>压缩后反馈调查</td></tr>
+</table>
+<p>Autocompact 进行中：<code>context.setSDKStatus('compacting')</code>，stream mode 在 requesting / responding 间切换。</p>
+</section>
+
+<section id="s16">
+<h2><span class="num">16</span> 分析与遥测</h2>
+<p>主要 Statsig 事件：</p>
+<table>
+  <tr><th>事件</th><th>含义</th></tr>
+  <tr><td><code>tengu_compact</code></td><td>Full compact 成功</td></tr>
+  <tr><td><code>tengu_partial_compact</code></td><td>Partial compact</td></tr>
+  <tr><td><code>tengu_compact_failed</code></td><td>失败（reason: prompt_too_long / no_summary / api_error 等）</td></tr>
+  <tr><td><code>tengu_compact_ptl_retry</code></td><td>PTL 重试</td></tr>
+  <tr><td><code>tengu_compact_cache_sharing_success/fallback</code></td><td>Fork cache 路径</td></tr>
+  <tr><td><code>tengu_auto_compact_succeeded</code></td><td>Autocompact 成功</td></tr>
+  <tr><td><code>tengu_cached_microcompact</code></td><td>Cached MC</td></tr>
+  <tr><td><code>tengu_time_based_microcompact</code></td><td>Time-based MC</td></tr>
+  <tr><td><code>tengu_sm_compact_*</code></td><td>Session memory compact 各阶段</td></tr>
+</table>
+<p><code>/context</code> 命令通过 <code>analyzeContext.ts</code> 模拟 microcompact 后展示 token 分布和建议。</p>
+</section>
+
+<section id="s17">
+<h2><span class="num">17</span> 配置速查</h2>
+<h3>用户配置（~/.claude/settings.json）</h3>
+<pre><code>{
+  "autoCompactEnabled": true
+}</code></pre>
+<h3>环境变量</h3>
+<table>
+  <tr><th>变量</th><th>作用</th></tr>
+  <tr><td><code>DISABLE_COMPACT</code></td><td>禁用全部 compact</td></tr>
+  <tr><td><code>DISABLE_AUTO_COMPACT</code></td><td>仅禁用自动</td></tr>
+  <tr><td><code>CLAUDE_CODE_AUTO_COMPACT_WINDOW</code></td><td>限制有效 window</td></tr>
+  <tr><td><code>CLAUDE_AUTOCOMPACT_PCT_OVERRIDE</code></td><td>阈值百分比 override</td></tr>
+  <tr><td><code>CLAUDE_CODE_BLOCKING_LIMIT_OVERRIDE</code></td><td>覆盖 blocking limit</td></tr>
+  <tr><td><code>ENABLE_CLAUDE_CODE_SM_COMPACT</code></td><td>强制 SM compact</td></tr>
+  <tr><td><code>DISABLE_CLAUDE_CODE_SM_COMPACT</code></td><td>禁用 SM compact</td></tr>
+  <tr><td><code>USE_API_CLEAR_TOOL_RESULTS</code></td><td>API 端清除 tool results</td></tr>
+  <tr><td><code>USE_API_CLEAR_TOOL_USES</code></td><td>API 端清除 tool uses</td></tr>
+</table>
+<h3>GrowthBook Feature Flags（部分）</h3>
+<table>
+  <tr><th>Flag</th><th>作用</th></tr>
+  <tr><td><code>tengu_compact_cache_prefix</code></td><td>Compact fork cache sharing</td></tr>
+  <tr><td><code>tengu_compact_streaming_retry</code></td><td>Streaming 失败重试</td></tr>
+  <tr><td><code>tengu_session_memory</code> + <code>tengu_sm_compact</code></td><td>Session memory compact</td></tr>
+  <tr><td><code>tengu_sm_compact_config</code></td><td>SM compact 阈值 remote config</td></tr>
+  <tr><td><code>tengu_slate_heron</code></td><td>Time-based microcompact</td></tr>
+  <tr><td><code>tengu_cobalt_raccoon</code></td><td>Reactive-only 模式</td></tr>
+  <tr><td><code>tengu_cache_plum_violet</code></td><td>Legacy microcompact（已 always true，路径已移除）</td></tr>
+</table>
+</section>
+
+<section id="s18">
+<h2><span class="num">18</span> 源码文件索引</h2>
+<pre><code>src/services/compact/
+├── compact.ts              # 核心：full/partial compact、streamCompactSummary、post-compact attachments
+├── autoCompact.ts          # 自动压缩阈值、shouldAutoCompact、autoCompactIfNeeded
+├── microCompact.ts         # 微压缩：time-based / cached MC
+├── apiMicrocompact.ts      # API context_management 策略
+├── sessionMemoryCompact.ts # Session memory 实验路径
+├── reactiveCompact.ts      # 被动压缩（公开仓库为 stub）
+├── snipCompact.ts          # Snip（公开仓库为 stub）
+├── snipProjection.ts       # Snip 视图投影
+├── postCompactCleanup.ts   # 压缩后 cache/state 清理
+├── prompt.ts               # Compact prompt 模板与 summary 格式化
+├── grouping.ts             # API round 消息分组
+├── compactWarningState.ts  # UI 警告 suppress 状态
+├── compactWarningHook.ts   # React hook
+├── timeBasedMCConfig.ts    # Time-based MC GrowthBook config
+└── cachedMCConfig.ts       # Cached MC config（公开仓库 stub）
+
+src/commands/compact/compact.ts   # /compact 命令
+src/query.ts                      # 主循环集成点
+src/query/deps.ts                 # 依赖注入（便于测试 mock）
+src/utils/messages.ts             # boundary/summary 消息工厂
+src/utils/tokens.ts               # tokenCountWithEstimation
+src/utils/hooks.ts                # PreCompact / PostCompact hooks
+src/components/CompactSummary.tsx
+src/components/messages/CompactBoundaryMessage.tsx</code></pre>
+</section>
+
+<section id="s19">
+<h2><span class="num">19</span> 设计要点总结</h2>
+<ol>
+  <li><b>分层释放</b>：Snip → Micro → Collapse → Auto → Reactive，从轻到重，尽量保留语义粒度。</li>
+  <li><b>Cache 感知</b>：Fork compact 复用 prompt cache；cached microcompact 用 cache_edits 避免 invalidate prefix；time-based MC 在 cache 已 cold 时主动清 tool results。</li>
+  <li><b>状态重建</b>：Compact 不是简单删消息——通过 attachments 恢复文件、skills、plan、tools、async agents。</li>
+  <li><b>API 安全</b>：SM/partial compact 用 <code>adjustIndexToPreserveAPIInvariants</code> 保证 tool_use/tool_result 配对；PTL retry 用 synthetic user marker 保证首条为 user。</li>
+  <li><b>防螺旋</b>：Autocompact circuit breaker（3 次）、reactive <code>hasAttemptedReactiveCompact</code>、SM compact threshold 回退。</li>
+  <li><b>Transcript vs Model view</b>：REPL 保留完整历史 + compact boundary 标记；模型通过 <code>getMessagesAfterCompactBoundary</code> + snip projection 看裁剪视图。</li>
+</ol>
+</section>
+
+<div class="footer">
+  Claude Code Compacting 功能详解 · 基于源码逆向 claude-code-rev · 校订 2026-06-27<br>
+  全部常量与逻辑已逐条对照 <code>src/services/compact/</code> 源码验证
+</div>
+
+</div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.toc a')];
+const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){
+  links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id));}});},
+  {rootMargin:'-10% 0px -80% 0px'});
+window.addEventListener('load',()=>document.querySelectorAll('section').forEach(s=>obs.observe(s)));
+</script>
+</body>
+</html>

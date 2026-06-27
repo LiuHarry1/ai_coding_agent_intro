@@ -98,12 +98,26 @@ export function tokenCountWithEstimation(messages: Message[]): {
     // (parallel tool calls produce multiple assistant records with usage
     // on only the last one; interleaved tool_results between them must
     // be included in the estimate).
+    //
+    // CC parity: when the usage-bearing assistant carries a round `id`, group
+    // only same-id siblings (the true parallel-tool group) and stop at the
+    // previous round. Without an id (older sessions), fall back to the
+    // heuristic of "all assistants since the last user message".
+    const usageMsg = messages[i];
+    const usageRoundId = usageMsg.role === "assistant" ? usageMsg.id : undefined;
     let anchor = i;
     for (let j = i - 1; j >= 0; j--) {
-      if (messages[j].role === "assistant") {
-        anchor = j;
-      } else if (messages[j].role === "user") {
+      const mj = messages[j];
+      if (mj.role === "user") {
         break;
+      }
+      if (mj.role === "assistant") {
+        if (usageRoundId !== undefined) {
+          if (mj.id === usageRoundId) anchor = j;
+          else break; // previous API round — don't fold it in
+        } else {
+          anchor = j;
+        }
       }
       // tool messages between assistants: keep walking
     }

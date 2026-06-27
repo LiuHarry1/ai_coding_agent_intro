@@ -70,6 +70,13 @@ export const BUILTIN_SLASH_ENTRIES: SlashEntry[] = [
     name: "plugins",
     description: "List installed plugins and any load errors.",
   },
+  {
+    kind: "built-in",
+    name: "compact",
+    description:
+      "Summarize the conversation now to free context. Optionally focus the summary.",
+    argumentHint: "[focus instructions]",
+  },
 ];
 
 const BUILTIN_NAMES = new Set(BUILTIN_SLASH_ENTRIES.map((e) => e.name));

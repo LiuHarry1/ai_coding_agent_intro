@@ -13,6 +13,8 @@ const DEFAULTS: AppConfig = {
     maxFilesToRestore: 5,
     maxTokensPerFile: 5_000,
     fileBudget: 50_000,
+    timeBasedMicroEnabled: false,
+    timeBasedMicroGapMinutes: 5,
   },
   mcpServers: {},
   disabledTools: [],

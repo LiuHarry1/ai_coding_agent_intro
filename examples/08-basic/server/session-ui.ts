@@ -7,9 +7,20 @@ function isSystemReminderContent(content: string): boolean {
   return t.startsWith("<system-reminder>") && t.endsWith("</system-reminder>");
 }
 
+type UIPart = {
+  type: string;
+  content?: string;
+  toolCallId?: string;
+  result?: string;
+  name?: string;
+  args?: unknown;
+  status?: string;
+  isSubagent?: boolean;
+};
+
 type UIAssistantMessage = {
   type: "assistant";
-  parts: Array<{ type: string; toolCallId?: string; result?: string }>;
+  parts: UIPart[];
   status: "done";
 };
 

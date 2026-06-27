@@ -278,6 +278,14 @@
       </tbody>
     </table>
 
+    <div class="callout info">
+      <strong>环境变量覆盖（<span class="mono">getCompactionConfig</span>）：</strong>
+      <span class="mono">DISABLE_COMPACT=1</span> / <span class="mono">DISABLE_AUTO_COMPACT=1</span> 关闭 proactive；
+      <span class="mono">COMPACT_CONTEXT_WINDOW</span> 覆盖 contextWindow（影响阈值）；
+      <span class="mono">COMPACT_MICRO_KEEP</span> 覆盖 micro 保留条数。
+      注意阈值常量（20K / 13K / 27K / 20K）是代码内常量，不可由配置改。
+    </div>
+
     <div class="figure">
       <div class="svg-wrap">
         <svg viewBox="0 0 880 120" xmlns="http://www.w3.org/2000/svg">
@@ -309,17 +317,19 @@
     <div class="tier-row">
       <div class="tier micro">
         <h3>🟢 读类工具 → 清 OUTPUT</h3>
-        <p class="sub">tool result 被替换</p>
+        <p class="sub">tool result 被替换（CLEARABLE_TOOL_RESULTS）</p>
         <ul>
-          <li><span class="mono">read</span> · <span class="mono">grep</span> · <span class="mono">glob</span></li>
-          <li><span class="mono">bash</span> · <span class="mono">web_fetch</span> · <span class="mono">web_search</span></li>
+          <li><span class="mono">read_file</span> · <span class="mono">grep</span> · <span class="mono">glob</span></li>
+          <li><span class="mono">bash</span> · <span class="mono">shell</span> · <span class="mono">powershell</span></li>
+          <li><span class="mono">web_fetch</span> · <span class="mono">web_search</span></li>
         </ul>
       </div>
       <div class="tier micro">
         <h3>🟢 写类工具 → 清 INPUT</h3>
-        <p class="sub">assistant 里 tool-call 的 args</p>
+        <p class="sub">assistant 里 tool-call 的 args（CLEARABLE_TOOL_INPUTS）</p>
         <ul>
-          <li><span class="mono">write</span> · <span class="mono">edit_file</span></li>
+          <li><span class="mono">write_file</span> · <span class="mono">edit_file</span></li>
+          <li><span class="mono">create_file</span> · <span class="mono">apply_patch</span> · <span class="mono">NotebookEdit</span></li>
           <li>保留 tool-call 结构，input 变占位 JSON</li>
         </ul>
       </div>
@@ -338,7 +348,7 @@
 
       <div class="msg-row">
         <div class="msg-role tool">tool #1</div>
-        <div class="msg-body cleared">read result → "[Old tool result content cleared…]" 或 &lt;persisted-output path="…"&gt;</div>
+        <div class="msg-body cleared">read result → "[Old tool result content cleared to save context]" 或磁盘引用占位</div>
       </div>
       <div class="msg-row">
         <div class="msg-role tool">tool #2</div>
@@ -419,6 +429,21 @@
       Full compact 之后 <span class="mono">agent.ts</span> 还会 <span class="mono">attachTodoReminderAfterCompaction</span>：
       若 todo 列表非空，把 reminder 追加到最后一条 assistant 的 text 上（full compact 后通常只有 user 消息，此逻辑主要防 edge case）。
     </div>
+
+    <div class="callout warn">
+      <strong>Prompt-Too-Long 自救（summarizer 自身超长）：</strong>
+      若摘要这一次 <span class="mono">generateText</span> 调用本身报 413 / context length / too long
+      （<span class="mono">isLikelyTooLong</span>），会丢弃<strong>最旧 30%</strong> 消息
+      （<span class="mono">slice(floor(len*0.3))</span>）后重试。最多重试 <span class="mono">MAX_SUMMARIZE_RETRIES = 1</span> 次；
+      仍失败则抛错，由上层熔断器计数。另外 <span class="mono">compactConversation</span> 在 messages &lt; 2 时直接返回 null（不压缩）。
+    </div>
+
+    <div class="callout info">
+      <strong>恢复哪些文件？</strong><span class="mono">extractRecentlyReadFiles</span> 从后往前扫 assistant 的
+      <span class="mono">read_file</span> tool-call，取最近去重的文件路径；
+      <span class="mono">restoreRecentFiles</span> 跳过目录与 &gt; 512KB 的文件，逐个读盘，单文件超
+      <span class="mono">maxTokensPerFile</span> 截断，合计受 <span class="mono">fileBudget</span> 限制。
+    </div>
   </section>
 
   <!-- 5. Reactive -->
@@ -432,6 +457,7 @@
         <ul>
           <li><span class="mono">isContextLengthError(err)</span></li>
           <li>413 / "context length" / "too long"</li>
+          <li>仅首次重试（<span class="mono">ctxLengthAttempt === 0</span>），发 <span class="mono">compaction_reactive</span> 事件</li>
         </ul>
       </div>
       <div class="tier react">

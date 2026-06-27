@@ -7,8 +7,11 @@ import {
   getSession,
   appendMessage,
   appendModeChange,
+  appendCompaction,
   canAccessSession,
 } from "../session.js";
+import { compactIfNeeded, tokenCountWithEstimation } from "../../services/compact/index.js";
+import { defaultManager } from "../../core/provider-manager.js";
 import { createSSETransport } from "../sse-transport.js";
 import { readBody, sendJSON, wantsStreamingResponse } from "../http.js";
 import { sessionToUIMessages } from "../session-ui.js";
@@ -214,6 +217,72 @@ export async function handleChat(
     console.log("[server] client disconnected");
     eventBus.removeAllListeners();
   });
+
+  // Manual /compact: summarize the existing history now (no agent run). Runs
+  // force-compaction over the whole session, persists a compaction checkpoint,
+  // then returns a short status line. Token-pressure events stream over SSE.
+  if (prepared.manualCompact) {
+    const instructions = prepared.manualCompact.instructions.trim();
+    const msgsBefore = session.messages.length;
+    const tokensBefore = tokenCountWithEstimation(session.messages).total;
+    let replyText: string;
+    try {
+      const model = defaultManager.get().defaultModelId();
+      const managed = await compactIfNeeded(
+        session.messages,
+        eventBus,
+        model,
+        cwd,
+        [],
+        { force: true, instructions: instructions || undefined },
+        session.id,
+      );
+      if (managed !== session.messages && managed.length > 0) {
+        session.messages.length = 0;
+        session.messages.push(...managed);
+        appendCompaction(session.id, session.messages);
+        const tokensAfter = tokenCountWithEstimation(session.messages).total;
+        const tokenLine = `~${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens`;
+        // Full summarization collapses everything to a single message. If more
+        // than one remains, only micro-compaction ran (the LLM summary step
+        // failed or returned nothing) — report that honestly.
+        if (session.messages.length === 1) {
+          replyText =
+            `Compacted: ${msgsBefore} → 1 message, ${tokenLine}.` +
+            (instructions ? `\nFocus: ${instructions}` : "");
+        } else {
+          replyText =
+            `Partially compacted (full summary unavailable — cleared old tool ` +
+            `outputs only): ${msgsBefore} → ${session.messages.length} messages, ${tokenLine}.`;
+        }
+      } else {
+        replyText =
+          msgsBefore < 2
+            ? "Nothing to compact yet — the conversation is too short."
+            : "Compaction did not reduce the conversation (summarizer returned no change).";
+      }
+    } catch (e) {
+      replyText = `Compaction failed: ${(e as Error).message}`;
+    }
+
+    if (transport) {
+      transport.send("text_delta", { delta: replyText });
+      transport.send("finish", { reason: "compact" });
+      transport.end();
+    } else {
+      sendJSON(res, 200, {
+        session_id: session.id,
+        mode: session.permissionMode.mode,
+        text: replyText,
+        reason: "compact",
+      });
+    }
+    unsubMode();
+    unsubTelemetry();
+    await finishQuota();
+    void flushUsage();
+    return;
+  }
 
   if (prepared.immediateReply !== null) {
     if (transport) {

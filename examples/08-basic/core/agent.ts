@@ -10,6 +10,7 @@ import { isContextLengthError, isTransientStreamError } from "./stream-errors.js
 import type {
   AgentOptions,
   Message,
+  AssistantMessage,
   UserMessage,
   UserContentPart,
   TodoItem,
@@ -476,6 +477,17 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         (m) => m.role !== "tool",
       );
       sanitizeReasoningParts(sdkMessages);
+      // Stamp every assistant record from this response with the round id so
+      // they group as one API round (matches CC's per-response message.id),
+      // plus a receive timestamp for time-based micro-compaction.
+      const roundId = response.id;
+      const receivedAt = Date.now();
+      for (const m of sdkMessages) {
+        if (m.role === "assistant") {
+          if (roundId) (m as AssistantMessage).id = roundId;
+          (m as AssistantMessage).timestamp = receivedAt;
+        }
+      }
       messages.push(...sdkMessages);
 
       if (stepResult.toolResults.length > 0) {

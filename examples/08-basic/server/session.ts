@@ -128,6 +128,21 @@ export function appendMessage(sessionId: string, message: Message): void {
   appendLine(sessionId, { type: "message", ...message, timestamp: Date.now() });
 }
 
+/**
+ * Record a compaction in the append-only log. Compaction REPLACES the whole
+ * message list (with a summary + restored context), so a plain append would
+ * leave the pre-compaction messages in the log and resurrect them on restore.
+ * We write a `compacted` checkpoint; restoreFromDisk resets the in-memory
+ * messages to this snapshot when it replays the line.
+ */
+export function appendCompaction(sessionId: string, messages: Message[]): void {
+  appendLine(sessionId, {
+    type: "compacted",
+    messages,
+    timestamp: Date.now(),
+  });
+}
+
 export function appendModeChange(sessionId: string, session: Session): void {
   appendLine(sessionId, {
     type: "mode_changed",
@@ -176,6 +191,12 @@ function restoreFromDisk(id: string): Session {
       if (typeof line.needsPlanModeExitAttachment === "boolean") {
         session.needsPlanModeExitAttachment = line.needsPlanModeExitAttachment;
       }
+    } else if (line.type === "compacted") {
+      // Checkpoint: discard everything accumulated so far and adopt the
+      // post-compaction snapshot. Subsequent `message` lines append normally.
+      session.messages = Array.isArray(line.messages)
+        ? (line.messages as Message[])
+        : [];
     } else if (line.type === "message") {
       const { type: _, timestamp: __, ...msg } = line;
       session.messages.push(msg as Message);

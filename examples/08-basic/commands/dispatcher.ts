@@ -42,6 +42,7 @@ function parseSlashLine(message: string): ParsedSlash | null {
 export type DispatchResult =
   | { kind: "passthrough" }
   | { kind: "reply"; text: string }
+  | { kind: "compact"; instructions: string }
   | {
       kind: "run";
       /** `inline` feeds expanded text to the main agent; `fork` runs a subagent. */
@@ -86,6 +87,11 @@ export async function dispatchSlashCommand(
     }
     if (entry.name === "plugins") {
       return { kind: "reply", text: await formatPluginsReply(deps.cwd) };
+    }
+    if (entry.name === "compact") {
+      // Manual compaction. Args (if any) steer the summary focus; the actual
+      // summarization runs in the chat route, which holds the session history.
+      return { kind: "compact", instructions: parsed.args };
     }
     return { kind: "reply", text: `Built-in /${entry.name} not implemented` };
   }
