@@ -1,0 +1,23 @@
+/**
+ * @ai-agent/protocol — the single source of truth for the wire format
+ * spoken between the coding-agent engine and any GUI.
+ *
+ * Layout (mirrors Claude Code's sdk schemas):
+ *   - version   — PROTOCOL_VERSION
+ *   - common    — shared primitives (envelope, todo, mode, usage)
+ *   - control   — bidirectional control_request / response / cancel
+ *   - server    — engine → client messages (ServerMessage)
+ *   - client    — client → engine messages (ClientMessage)
+ *   - wire      — direction-split aggregates (Outgoing / Incoming)
+ *   - from-legacy — adapter from today's eventBus events
+ *
+ * Consumers (backend transports, web frontend, CLI, future ACP adapter)
+ * import from here and nowhere else.
+ */
+export * from "./version.js";
+export * from "./common.js";
+export * from "./control.js";
+export * from "./server.js";
+export * from "./client.js";
+export * from "./wire.js";
+export * from "./from-legacy.js";
