@@ -36,4 +36,4 @@ export NO_PROXY=localhost,127.0.0.1,::1
 docker build -f deploy/Dockerfile.agent-base -t ai-agent-base:latest .
 docker build -f deploy/Dockerfile.agent.example -t ai-agent-tenant:latest .
 docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .
-docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.admin.yml up -d

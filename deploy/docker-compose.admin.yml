@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────
+# DEPLOY MODE: admin — FULLY SEPARATED frontend / backend, shared password
+#
+# Like the sso mode, this runs the frontend and backend as INDEPENDENT
+# services on DIFFERENT origins (web static + headless agent). The difference
+# is the gate: a single shared Basic-Auth password on the WEB origin instead
+# of per-user SSO.
+#
+#       browser
+#         │  loads SPA (Basic Auth) ┌──────────────┐
+#         ├─────────────────────────▶│  web (nginx) │  static SPA only,
+#         │   ${FRONTEND_ORIGIN}      └──────────────┘  password-gated
+#         │
+#         │  API calls (no auth)     ┌──────────────┐
+#         └─────────────────────────▶│    agent     │  headless API,
+#             ${AGENT_PUBLIC_URL}     └──────────────┘  CORS-allows web origin
+#
+#   • The Basic-Auth password gates WHO CAN LOAD THE UI (the web origin only).
+#   • The agent origin is NOT authenticated at the app layer (by design —
+#     chosen for this mode). PROTECT IT AT THE NETWORK LAYER: bind it to a
+#     private network / VPN / firewall so only trusted clients can reach
+#     ${AGENT_PUBLIC_URL}. Do NOT expose the agent port to the public internet.
+#   • Users can freely switch workspace (no per-user pinning).
+#
+# Rotate the password by changing WEB_PASSWORD and re-running `up -d`
+# (no image rebuild — the hash is regenerated at container startup).
+#
+# Set in deploy/.env:
+#   FRONTEND_ORIGIN   = http://localhost:9999   (where the SPA is served)
+#   AGENT_PUBLIC_URL  = http://localhost:4567   (browser → agent API)
+#
+# Bring up:
+#   docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
+# Open:
+#   ${FRONTEND_ORIGIN}   (login: WEB_USERNAME / WEB_PASSWORD)
+#
+# Prereq images:
+#   docker build -f deploy/Dockerfile.agent-base    -t ai-agent-base:latest .
+#   docker build -f deploy/Dockerfile.agent.example -t ai-agent-tenant:latest deploy/tenant-example
+#   docker build -f deploy/Dockerfile.web           -t ai-agent-web:latest .
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+  agent:
+    image: ai-agent-tenant:latest
+    # Published (NOT just `expose`) — in split mode the browser reaches the
+    # agent directly at ${AGENT_PUBLIC_URL}, which must map to this port.
+    # Keep this port on a private network / behind a firewall (see header).
+    ports:
+      - "${AGENT_PORT:-4567}:4567"
+    environment:
+      NODE_ENV: production
+      PORT: "4567"
+      WORKSPACE: /workspace
+      # ── Headless: do NOT serve the SPA; the web service owns the frontend ─
+      SERVE_STATIC: "0"
+      # ── CORS allowlist: the browser calls this API from the web origin ────
+      ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://localhost:9999}"
+      # ── Provider secrets (pass via host env or deploy/.env) ──────────────
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      GOOGLE_GENERATIVE_AI_API_KEY: "${GOOGLE_GENERATIVE_AI_API_KEY:-}"
+      # ── Preview disabled (split mode has no path-proxy in front of the
+      #     agent's dynamic dev-server ports — see deploy/README.md) ─────────
+      PREVIEW_ENABLED: "0"
+      SEARXNG_URL: "${SEARXNG_URL:-http://localhost:8888}"
+      WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
+    volumes:
+      - ../workspaces:/workspace:rw
+      # Chat history (.sessions/*.jsonl) — survives container recreate.
+      - ../sessions:/app/.sessions:rw
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "node", "-e",
+         "require('http').get('http://127.0.0.1:4567/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  web:
+    image: ai-agent-web:latest
+    # The image serves the SPA as a static site (nginx.static.conf is baked
+    # in) — no agent upstream, so this container is independent of the agent
+    # and starts even if the agent is unreachable.
+    environment:
+      # ── Password gate ON (gates loading the UI on THIS origin only) ──────
+      # WEB_PASSWORD non-empty → nginx requires Basic Auth before serving the
+      # SPA. Override via host env / .env.
+      WEB_USERNAME: "${WEB_USERNAME:-admin}"
+      WEB_PASSWORD: "${WEB_PASSWORD:-admin}"
+      # ── No SSO: plain password mode (no bearer tokens) ───────────────────
+      # AUTH_ENABLED intentionally unset → SPA does not run the SSO flow.
+      # Browser → agent API origin (cross-origin). Baked into app-config.js.
+      API_BASE: "${AGENT_PUBLIC_URL:-http://localhost:4567}"
+    ports:
+      - "${WEB_PORT:-9999}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

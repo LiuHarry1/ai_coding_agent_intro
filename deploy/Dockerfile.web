@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 #
-# Frontend image: builds the Vite UI, then serves it (plus reverse-proxies
-# the agent API) from nginx. Pair with deploy/Dockerfile.agent via
-# deploy/docker-compose.yml.
+# Frontend image: builds the Vite UI, then serves it as a STATIC site from
+# nginx (no reverse proxy — the SPA calls the agent cross-origin via API_BASE).
+# Pair with deploy/Dockerfile.agent via deploy/docker-compose.admin.yml or
+# deploy/docker-compose.sso.yml.
 #
 # Build from repo root:
 #   docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .
@@ -18,25 +19,22 @@ FROM nginx:alpine
 # `htpasswd` (apache2-utils) is used by the startup script to hash the
 # optional Basic Auth password from the WEB_PASSWORD env var.
 RUN apk add --no-cache apache2-utils
-# Static assets live where nginx.conf points its `root` directive.
+# Static assets live where nginx.static.conf points its `root` directive.
 COPY --from=build /ui/dist /usr/share/nginx/html
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/nginx.static.conf /etc/nginx/conf.d/default.conf
 # Startup hook: the stock nginx entrypoint runs *.sh in this dir before
 # launching nginx. It (re)generates auth.inc from WEB_PASSWORD on every
 # `docker run` / `compose up`, so the password is a RUNTIME setting — no
 # rebuild needed to change it, and it never lands in `docker history`.
 COPY deploy/web-auth.sh /docker-entrypoint.d/40-web-auth.sh
-# Runtime SPA config (auth on/off) — regenerates app-config.js from
-# AUTH_ENABLED so one image serves every deploy mode (password/local/SSO).
+# Runtime SPA config — regenerates app-config.js from AUTH_ENABLED / API_BASE /
+# AUTH_BASE so one image serves every deploy mode (admin/sso) without a rebuild.
 COPY deploy/web-runtime-config.sh /docker-entrypoint.d/45-web-runtime-config.sh
-# SSO reverse-proxy block — generated from AUTH_SERVICE_URL so /sso and
-# /api/auth forward to an external auth-service (empty when unset).
-COPY deploy/web-auth-proxy.sh /docker-entrypoint.d/46-web-auth-proxy.sh
-# Pre-create empty includes so `nginx -t` is valid before the hooks run,
-# strip any CRLF (scripts may be authored on Windows), make them runnable.
-RUN touch /etc/nginx/conf.d/auth.inc /etc/nginx/conf.d/auth-proxy.inc \
- && sed -i 's/\r$//' /docker-entrypoint.d/40-web-auth.sh /docker-entrypoint.d/45-web-runtime-config.sh /docker-entrypoint.d/46-web-auth-proxy.sh \
- && chmod +x /docker-entrypoint.d/40-web-auth.sh /docker-entrypoint.d/45-web-runtime-config.sh /docker-entrypoint.d/46-web-auth-proxy.sh
+# Pre-create the empty auth include so `nginx -t` is valid before the hook
+# runs, strip any CRLF (scripts may be authored on Windows), make runnable.
+RUN touch /etc/nginx/conf.d/auth.inc \
+ && sed -i 's/\r$//' /docker-entrypoint.d/40-web-auth.sh /docker-entrypoint.d/45-web-runtime-config.sh \
+ && chmod +x /docker-entrypoint.d/40-web-auth.sh /docker-entrypoint.d/45-web-runtime-config.sh
 
 EXPOSE 80
 

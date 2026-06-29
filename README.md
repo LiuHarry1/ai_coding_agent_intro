@@ -21,18 +21,22 @@ cp .env.example .env   # 如有示例文件
 
 用户级配置位于 `~/.ai-agent/config.json`（provider、model、skills 等）。项目级配置可放在 `.ai-agent/` 目录。
 
-### 3. 启动后端
+本地开发前后端分开跑,**用两个终端**:
+
+### 3. 启动后端(终端 A)
 
 ```bash
 npm start              # 默认加载 08-basic，监听 http://localhost:4567
 ```
 
-### 4. 启动 Web UI（开发模式，支持热更新）
+### 4. 启动 Web UI(终端 B,开发模式,支持热更新)
 
 ```bash
 cd client/web
-npm run dev            # http://localhost:5173，API 代理到 4567
+npm run dev            # http://localhost:5173
 ```
+
+浏览器打开 **http://localhost:5173**。前端 dev server 会把 `/chat`、`/workspace` 等 API 代理到后端的 4567,所以本地没有跨域问题(代理配置见 `client/web/vite.config.js`)。
 
 ## 桌面版
 
@@ -49,8 +53,8 @@ Electron 会自动启动 agent 子进程，窗口加载 `http://127.0.0.1:4567`�
 使用 Docker 一键部署 Web 版，详见 [`deploy/README.md`](deploy/README.md)。
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d
-# 访问 http://localhost:8080
+docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
+# 访问 http://localhost:9999（账号/密码：WEB_USERNAME / WEB_PASSWORD）
 ```
 
 ## 项目结构

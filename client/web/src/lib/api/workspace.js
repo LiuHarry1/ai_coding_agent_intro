@@ -6,7 +6,7 @@
  * this file, and nothing here should import from `agent.js` — the only
  * shared code is the tiny `fetchJSON` helper.
  */
-import { fetchJSON } from "./_http.js";
+import { fetchJSON, apiUrl } from "./_http.js";
 import { authHeader } from "../auth.js";
 
 const json = (body) => ({
@@ -76,7 +76,7 @@ export const workspaceApi = {
       for (const f of files) form.append("file", f);
 
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/workspace/upload");
+      xhr.open("POST", apiUrl("/workspace/upload"));
       const auth = authHeader();
       if (auth.Authorization) xhr.setRequestHeader("Authorization", auth.Authorization);
       xhr.upload.onprogress = (e) => {
@@ -100,7 +100,7 @@ export const workspaceApi = {
     }),
 
   /** URL that streams a file (or a zip of a directory) as a download. */
-  downloadUrl: (path) => `/workspace/download?path=${encodeURIComponent(path)}`,
+  downloadUrl: (path) => apiUrl(`/workspace/download?path=${encodeURIComponent(path)}`),
 
   // ── Git (read-only) ─────────────────────────────────────
   gitStatus: () => fetchJSON("/workspace/git/status"),

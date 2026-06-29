@@ -1,32 +1,50 @@
 # ─────────────────────────────────────────────────────────────────────────
-# DEPLOY MODE 3 — SSO login (EXTERNAL auth-service) + per-user pinned workspace
+# DEPLOY MODE: sso — FULLY SEPARATED frontend / backend, SSO login
 #
-#   • Users log in through your already-deployed auth-service (HS256 JWT).
-#     No login, no access.
-#   • Each user is PINNED to /workspace/users/<slug(email)> — created on
-#     first request, enforced server-side. They CANNOT switch workspace
-#     (the UI switcher is hidden and the API ignores client-sent paths).
-#   • The shared password gate (Basic Auth) is OFF here.
+# Unlike the admin mode (single origin, nginx reverse-proxies everything),
+# this stack runs the frontend and backend as INDEPENDENT services on THREE
+# different origins:
 #
-# This stack runs ONLY the agent + web. The auth-service + its database are
-# deployed separately; nginx just reverse-proxies /sso/* and /api/auth/* to
-# AUTH_SERVICE_URL, so the browser stays on one origin.
+#       browser
+#         │  loads SPA            ┌──────────────┐
+#         ├──────────────────────▶│  web (nginx) │   static SPA only,
+#         │   ${FRONTEND_ORIGIN}  └──────────────┘   no proxy to agent
+#         │
+#         │  Bearer JWT, CORS     ┌──────────────┐
+#         ├──────────────────────▶│    agent     │   headless API
+#         │   ${AGENT_PUBLIC_URL} └──────┬───────┘   (SERVE_STATIC=0)
+#         │                              │ quota
+#         │  SSO redirects        ┌──────▼───────┐   ┌───────────┐
+#         └──────────────────────▶│ auth-service │   │ analytics │
+#             ${AUTH_PUBLIC_URL}   │  (external)  │   └───────────┘
+#                                  └──────────────┘
 #
-# Required setup:
-#   • JWT_SECRET MUST equal the secret your auth-service signs with — that
-#     is the trust anchor (the agent verifies tokens, no DB/network).
-#   • On the auth-service, add this web origin (PUBLIC_ORIGIN) to both
+#   • The web image serves ONLY the built SPA (nginx.static.conf — no agent
+#     upstream, no /sso proxy). It can be deployed/scaled on its own host/CDN.
+#   • The browser calls the agent directly at API_BASE (cross-origin → the
+#     agent must allow ${FRONTEND_ORIGIN} via ALLOWED_ORIGINS) and redirects
+#     to the auth-service directly at AUTH_BASE for login.
+#   • Each user is PINNED to /workspace/users/<slug(email)>, enforced
+#     server-side. The workspace switcher is hidden; client-sent paths ignored.
+#
+# Required setup (split-origin):
+#   • JWT_SECRET MUST equal the secret your auth-service signs with — that is
+#     the trust anchor (the agent verifies tokens statelessly, no DB/network).
+#   • On the auth-service, add ${FRONTEND_ORIGIN} to BOTH
 #     SSO_ALLOWED_RETURN_ORIGINS and CORS_ALLOWED_ORIGINS.
+#   • Set the three public origins in deploy/.env:
+#       FRONTEND_ORIGIN   = https://app.example.com   (where the SPA is served)
+#       AGENT_PUBLIC_URL  = https://agent.example.com  (browser → agent API)
+#       AUTH_PUBLIC_URL   = https://auth.example.com   (browser → auth-service)
+#
+# NOTE: web preview (generated dev-server apps) is DISABLED in this mode —
+# it needs a path-based proxy in front of the agent's dynamic ports, which
+# the single-origin admin mode provides but a split deployment does not.
 #
 # Bring up:
 #   docker compose -f deploy/docker-compose.sso.yml --env-file deploy/.env up -d
 # Open:
-#   ${PUBLIC_ORIGIN}   (defaults to http://localhost:8090)
-#
-# Analytics (token quota) runs in the same compose network. Agent reaches it
-# at http://analytics:8200. Reuses your existing MySQL (knowbot DB, same as
-# auth-service) — set MYSQL_* in deploy/.env. On Docker Desktop use
-# MYSQL_HOST=host.docker.internal to reach a MySQL published on the host.
+#   ${FRONTEND_ORIGIN}   (defaults to http://localhost:8090)
 # ─────────────────────────────────────────────────────────────────────────
 
 services:
@@ -59,42 +77,39 @@ services:
 
   agent:
     image: ai-agent-tenant:latest
-    expose:
-      - "4567"
+    # Published (NOT just `expose`) — in split mode the browser reaches the
+    # agent directly at ${AGENT_PUBLIC_URL}, which must map to this port.
+    ports:
+      - "${AGENT_PORT:-4567}:4567"
     environment:
       NODE_ENV: production
       PORT: "4567"
       WORKSPACE: /workspace
-      # ── Auth + per-user workspace pinning ────────────────────────────
+      # ── Headless: do NOT serve the SPA; the web service owns the frontend ─
+      SERVE_STATIC: "0"
+      # ── CORS allowlist: the browser calls this API from the web origin ────
+      # Must list every frontend origin that talks to this agent.
+      ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://localhost:8090}"
+      # ── Auth + per-user workspace pinning ────────────────────────────────
       AUTH_ENABLED: "true"
       # MUST match the external auth-service's secret. Required.
       JWT_SECRET: "${JWT_SECRET}"
       JWT_ALGORITHM: "HS256"
-      # Parent dir for per-user workspaces; under the bind mount so each
-      # user's files persist on the host.
       USERS_ROOT: /workspace/users
-      # Template copied into each user's workspace on first login.
-      # Curate deploy/workspace-seed/ before building the tenant image.
       WORKSPACE_SEED_DIR: "/opt/workspace-seed"
-      # ── Analytics + daily token quota (optional) ─────────────────────
+      # ── Analytics + daily token quota (optional) ─────────────────────────
       QUOTA_ENABLED: "${QUOTA_ENABLED:-false}"
       ANALYTICS_URL: "${ANALYTICS_URL:-http://analytics:8200}"
       ANALYTICS_INGEST_API_KEY: "${ANALYTICS_INGEST_API_KEY:-}"
-      # ── Provider secrets ─────────────────────────────────────────────
+      # ── Provider secrets ─────────────────────────────────────────────────
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       GOOGLE_GENERATIVE_AI_API_KEY: "${GOOGLE_GENERATIVE_AI_API_KEY:-}"
-      # ── Preview ──────────────────────────────────────────────────────
-      # MUST match the web service's published origin (the ${WEB_PORT} below),
-      # otherwise preview links point at a port nothing is listening on.
-      PREVIEW_ENABLED: "1"
-      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+      # ── Preview disabled (see header note) ───────────────────────────────
+      PREVIEW_ENABLED: "0"
       SEARXNG_URL: "${SEARXNG_URL:-http://localhost:8888}"
       WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
-      PREVIEW_PATH_PREFIX: "/preview"
-      PREVIEW_PORT_MIN: "3000"
-      PREVIEW_PORT_MAX: "9998"
     volumes:
       - ../workspaces:/workspace:rw
       # Chat history (.sessions/*.jsonl) — survives container recreate/redeploy.
@@ -114,19 +129,19 @@ services:
 
   web:
     image: ai-agent-web:latest
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # The image serves the SPA as a static site (nginx.static.conf is baked
+    # in) — no agent upstream and no /sso proxy, so this container is fully
+    # independent of the agent and starts even if the agent is unreachable.
     environment:
       # Turns on the SPA's SSO login flow (window.__APP_CONFIG__.authEnabled).
       AUTH_ENABLED: "true"
-      # External auth-service that nginx proxies /sso + /api/auth to.
-      AUTH_SERVICE_URL: "${AUTH_SERVICE_URL:-http://host.docker.internal:8010}"
+      # Browser → agent API origin (cross-origin). Baked into app-config.js.
+      API_BASE: "${AGENT_PUBLIC_URL:-http://localhost:4567}"
+      # Browser → auth-service origin for /sso/authorize + /sso/logout.
+      AUTH_BASE: "${AUTH_PUBLIC_URL:-http://localhost:8010}"
       # WEB_PASSWORD intentionally unset → Basic Auth OFF (login = auth-service).
     ports:
       - "${WEB_PORT:-8090}:80"
-    depends_on:
-      agent:
-        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]

@@ -191,8 +191,18 @@ export async function handleChat(
     "X-Permission-Mode": session.permissionMode.mode,
   };
 
+  // Opt-in protocol framing: `?protocol=1` makes the SSE stream carry
+  // @ai-agent/protocol ServerMessages instead of the legacy event pairs.
+  // Default is unchanged, so the existing web UI keeps working.
+  const useProtocol =
+    new URLSearchParams(req.url?.split("?")[1] ?? "").get("protocol") === "1";
+
   const transport = wantsStream
-    ? createSSETransport(res, eventBus, sseHeaders)
+    ? createSSETransport(res, eventBus, sseHeaders, {
+        protocol: useProtocol,
+        sessionId: session.id,
+        mode: session.permissionMode.mode,
+      })
     : null;
   transport?.send("session", {
     session_id: session.id,

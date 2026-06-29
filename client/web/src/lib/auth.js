@@ -17,6 +17,18 @@ export function authEnabled() {
   return Boolean(globalThis.__APP_CONFIG__?.authEnabled);
 }
 
+/**
+ * Origin of the external auth-service for the SSO browser flow. Empty
+ * string = same-origin (the default; nginx reverse-proxies /sso/*). Set
+ * window.__APP_CONFIG__.authBase (from AUTH_BASE) when the frontend is
+ * deployed SEPARATELY and the browser must redirect to the auth-service
+ * directly, cross-origin.
+ */
+function authBase() {
+  const v = globalThis.__APP_CONFIG__?.authBase;
+  return typeof v === "string" && v ? v.replace(/\/$/, "") : "";
+}
+
 export function getToken() {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -102,14 +114,14 @@ export function consumeTokenFromUrl() {
 /** Send the browser to the auth-service login, returning here afterwards. */
 export function redirectToLogin() {
   const returnTo = window.location.origin + window.location.pathname;
-  window.location.href = `/sso/authorize?return_to=${encodeURIComponent(returnTo)}`;
+  window.location.href = `${authBase()}/sso/authorize?return_to=${encodeURIComponent(returnTo)}`;
 }
 
 /** Clear local token and ask the auth-service to drop the SSO cookie. */
 export function logout() {
   clearToken();
   const returnTo = window.location.origin + window.location.pathname;
-  window.location.href = `/sso/logout?return_to=${encodeURIComponent(returnTo)}`;
+  window.location.href = `${authBase()}/sso/logout?return_to=${encodeURIComponent(returnTo)}`;
 }
 
 /**

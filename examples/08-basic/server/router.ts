@@ -51,7 +51,7 @@ export function createRouter({ runAgent, systemPrompt, staticDir }: RouterOption
   const skillsApi = createSkillsApi({ runAgent });
 
   return async (req: IncomingMessage, res: ServerResponse) => {
-    setCORS(res);
+    setCORS(res, req);
 
     const { method, url } = req;
     if (method === "OPTIONS") {

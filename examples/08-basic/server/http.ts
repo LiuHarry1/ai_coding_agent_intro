@@ -44,8 +44,31 @@ export function sendJSON(res: ServerResponse, status: number, data: unknown): vo
   res.end(JSON.stringify(data));
 }
 
-export function setCORS(res: ServerResponse): void {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+/**
+ * Comma-separated origin allowlist from `ALLOWED_ORIGINS`. When unset we
+ * fall back to `*` (the previous behavior — fine for same-origin and local
+ * dev). Once the frontend is deployed on a different origin, set e.g.
+ * `ALLOWED_ORIGINS=https://app.example.com` so the browser allows the
+ * cross-origin (and credentialed) requests only from known frontends.
+ */
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+export function setCORS(res: ServerResponse, req?: IncomingMessage): void {
+  if (allowedOrigins.length === 0) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  } else {
+    const origin = req?.headers.origin;
+    if (origin && allowedOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+    // A specific allowlist varies the response by Origin, so caches must
+    // key on it; without this a cached `*`-less response could leak.
+    res.setHeader("Vary", "Origin");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }

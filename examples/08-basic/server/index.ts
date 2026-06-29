@@ -23,10 +23,19 @@ export function startServer({ runAgent, systemPrompt }: ServerOptions): void {
     console.error("[server] uncaughtException:", err.stack ?? err.message);
   });
 
+  // Static hosting is opt-out via SERVE_STATIC=0 (or "false"). Default keeps
+  // serving the bundled SPA so local `npm start` and the Electron shell are
+  // unchanged. Set SERVE_STATIC=0 to run a pure headless API — the mode you
+  // want when the frontend is deployed separately and talks cross-origin.
+  const serveStatic = !["0", "false", "no"].includes(
+    (process.env.SERVE_STATIC ?? "").toLowerCase(),
+  );
   const distDir = path.resolve(__dirname, "../../../client/web/dist");
-  const staticDir = fs.existsSync(distDir) ? distDir : null;
+  const staticDir = serveStatic && fs.existsSync(distDir) ? distDir : null;
 
-  if (!staticDir) {
+  if (!serveStatic) {
+    console.log(`[server] Headless mode (SERVE_STATIC=0): not serving any SPA.`);
+  } else if (!staticDir) {
     console.log(`[server] Warning: client/web/dist not found.`);
     console.log(`[server] Run: cd client/web && npm install && npm run build`);
     console.log(`[server] Or use dev mode: cd client/web && npm run dev`);

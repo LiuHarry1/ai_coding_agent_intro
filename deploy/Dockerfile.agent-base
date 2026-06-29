@@ -58,6 +58,9 @@ RUN npm ci --omit=dev \
 
 COPY examples/ ./examples/
 COPY shared/ ./shared/
+# Shared wire-protocol package, imported by the server transports at
+# runtime (tsx loads its .ts directly; zod resolves from /app/node_modules).
+COPY protocol/ ./protocol/
 COPY start.js ./
 
 # Pre-create the config dir so tenant images can COPY into it without
@@ -67,7 +70,7 @@ RUN mkdir -p /root/.ai-agent /opt/workspace-seed
 ENV NODE_ENV=production
 ENV PORT=4567
 # Default workspace inside the container. The tenant deployment is expected
-# to bind-mount the host project tree at this path (see docker-compose.yml).
+# to bind-mount the host project tree at this path (see docker-compose.admin.yml).
 # Override per-instance via `-e WORKSPACE=/other` or `--workspace=/path`
 # after the example name in CMD.
 ENV WORKSPACE=/workspace

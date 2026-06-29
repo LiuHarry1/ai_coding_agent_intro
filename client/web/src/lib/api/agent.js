@@ -2,12 +2,12 @@
  * Coding-agent HTTP client. Sessions, chat streaming, and any future
  * settings/MCP endpoints live here. Independent of the workspace module.
  */
-import { fetchJSON, withAuth } from "./_http.js";
+import { fetchJSON, withAuth, apiUrl } from "./_http.js";
 
 export const agentApi = {
   listSessions: () => fetchJSON("/sessions"),
   createSession: () => fetchJSON("/sessions", { method: "POST" }),
-  deleteSession: (id) => fetch(`/sessions/${id}`, withAuth({ method: "DELETE" })),
+  deleteSession: (id) => fetch(apiUrl(`/sessions/${id}`), withAuth({ method: "DELETE" })),
   getSessionMessages: (id) => fetchJSON(`/sessions/${id}/messages`),
 
   getSlashCommands: (workspace) => {
@@ -16,7 +16,7 @@ export const agentApi = {
   },
 
   postChat: (body, signal) =>
-    fetch("/chat", withAuth({
+    fetch(apiUrl("/chat"), withAuth({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
