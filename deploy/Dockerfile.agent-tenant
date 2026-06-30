@@ -10,25 +10,27 @@
 #   1. Build the base image (slow — only when agent code changes):
 #        docker build -f deploy/Dockerfile.agent-base -t ai-agent-base:latest .
 #
-#   2. Ensure your build context contains `.ai-agent/` (e.g. the repo root).
-#      At minimum it should include `config.json`.
+#   2. Lay down your project config under `deploy/tenant-example/.ai-agent/`
+#      (or copy that directory to your own deployment repo). At minimum it
+#      should contain a `config.json`. See `deploy/tenant-example/` for a
+#      skeleton.
 #
 #   3. Build the tenant image:
 #        docker build -f deploy/Dockerfile.agent.example \
 #          --build-arg BASE_TAG=latest \
 #          -t ai-agent-tenant:latest \
-#          .
+#          deploy/tenant-example
 #
 #   4. Run via compose (which already references ai-agent-tenant:latest):
-#        docker compose -f deploy/docker-compose.admin.yml up -d
+#        docker compose -f deploy/docker-compose.yml up -d
 #
 # Secrets:
 #   DO NOT commit API keys into config.json — they will end up in image
 #   layers and are recoverable via `docker history` even if a later layer
-#   overwrites them. Reference env vars in config.json with ${VAR_NAME}
+#   overwrites them.  Reference env vars in config.json with ${VAR_NAME}
 #   placeholders (if your config loader supports them) or pass them at
 #   runtime via the agent process env and have the agent read them.
-#   docker-compose.admin.yml shows the env-injection pattern.
+#   docker-compose.yml shows the env-injection pattern.
 
 ARG BASE_TAG=latest
 FROM ai-agent-base:${BASE_TAG}
@@ -36,11 +38,6 @@ FROM ai-agent-base:${BASE_TAG}
 # Copy this deployment's agent config (agents/, skills/, commands/,
 # config.json, ...). Anything not present here falls back to the agent
 # code's built-in defaults.
-#
-# This path is the *platform* user-scope (~/.ai-agent in the container).
-# For SSO multi-tenant, prefer per-user defaults in deploy/workspace-seed/
-# (copied into each user's workspace on first login) instead of baking
-# private skills here.
 COPY .ai-agent/ /root/.ai-agent/
 
 # Per-user workspace template — copied on first SSO login into
