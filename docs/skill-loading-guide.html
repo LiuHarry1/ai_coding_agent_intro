@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skill 加载与调用 — 08-basic 图文详解</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
+
+    :root {
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --blue: #0284c7;
+      --blue-light: #e0f2fe;
+      --purple: #7c3aed;
+      --purple-light: #ede9fe;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --green: #059669;
+      --green-light: #d1fae5;
+      --teal: #0d9488;
+      --teal-light: #ccfbf1;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --indigo: #4f46e5;
+      --indigo-light: #eef2ff;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0f766e 0%, #0891b2 45%, #4338ca 100%);
+      color: white;
+      padding: 56px 24px 64px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 4vw, 38px);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .hero p {
+      max-width: 720px;
+      margin: 0 auto;
+      color: #ccfbf1;
+      font-size: 16px;
+    }
+
+    .nav {
+      display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+      margin-top: 20px;
+    }
+
+    .nav a {
+      font-size: 12px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(255,255,255,.15); color: #e0e7ff; text-decoration: none;
+    }
+
+    .nav a:hover { background: rgba(255,255,255,.25); }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 20px 80px; }
+
+    section { margin-top: 48px; }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--teal); color: white; font-size: 14px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    h3 { font-size: 17px; margin: 24px 0 10px; color: #334155; }
+
+    .lead { color: var(--muted); margin-bottom: 20px; font-size: 14.5px; }
+
+    .figure {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin: 20px 0;
+      box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    .figure-caption {
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 14px;
+    }
+
+    .svg-wrap { width: 100%; overflow-x: auto; }
+    svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+
+    .cards-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 12px rgba(15,23,42,.04);
+    }
+
+    .card h4 { font-size: 15px; margin-bottom: 8px; }
+    .card p { font-size: 13.5px; color: var(--muted); }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-right: 6px;
+    }
+
+    .tag-inline { background: var(--blue-light); color: var(--blue); }
+    .tag-fork { background: var(--purple-light); color: var(--purple); }
+    .tag-project { background: var(--green-light); color: var(--green); }
+    .tag-user { background: var(--teal-light); color: var(--teal); }
+    .tag-plugin { background: var(--amber-light); color: var(--amber); }
+
+    .callout {
+      border-left: 4px solid var(--teal);
+      background: var(--teal-light);
+      padding: 14px 18px;
+      border-radius: 0 10px 10px 0;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .callout-warn {
+      border-left-color: var(--amber);
+      background: var(--amber-light);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin: 16px 0;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+    }
+
+    th { background: #f8fafc; font-weight: 600; }
+
+    code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px 18px;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
+      line-height: 1.55;
+      margin: 14px 0;
+    }
+
+    pre .cm { color: #64748b; }
+    pre .kw { color: #c084fc; }
+    pre .str { color: #86efac; }
+
+    .flow-step {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin: 12px 0;
+    }
+
+    .flow-step .badge {
+      min-width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .flow-step .body { flex: 1; }
+    .flow-step .body strong { display: block; margin-bottom: 2px; }
+    .flow-step .body span { font-size: 13.5px; color: var(--muted); }
+
+    footer {
+      text-align: center;
+      padding: 32px 20px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    footer a { color: var(--teal); margin: 0 6px; }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>Skill 加载与调用</h1>
+  <p>仅 <strong>examples/08-basic</strong> · 文件夹 + <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#ccfbf1">SKILL.md</code> · 单一 <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#ccfbf1">Skill</code> 工具 · inline / fork 双模式</p>
+  <div class="nav">
+    <a href="#tool-prompt">Tool 提示词</a>
+    <a href="#paths">paths 条件激活</a>
+    <a href="#invoke">调用入口</a>
+    <a href="subagent-loading-guide.html">Subagent</a>
+    <a href="deferred-mcp-tools-skills-guide.html">Deferred</a>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ── 1. 核心设计 ── -->
+  <section id="design">
+    <h2><span class="num">1</span>核心设计：文件夹 Skill + 单一调度器</h2>
+    <p class="lead">
+      Skill 是可复用的「流程模板」，以<strong>目录</strong>形式存放（不是 flat <code>.md</code>）。
+      与 Subagent 对称：多个 skill 合并进一个 <code>Skill</code> 工具，模型用 <code>skill_name</code> 选型。
+    </p>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 340" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans SC, sans-serif">
+          <!-- Folder -->
+          <rect x="30" y="40" width="170" height="100" rx="10" fill="#d1fae5" stroke="#059669"/>
+          <text x="115" y="75" text-anchor="middle" font-size="12" font-weight="700">my-skill/</text>
+          <text x="115" y="95" text-anchor="middle" font-size="10" fill="#64748b">SKILL.md + 资源文件</text>
+          <text x="115" y="115" text-anchor="middle" font-size="10" fill="#64748b">文件夹名 = skill name</text>
+
+          <!-- SkillDefinition -->
+          <rect x="240" y="50" width="150" height="80" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="315" y="80" text-anchor="middle" font-size="11" font-weight="600">SkillDefinition</text>
+          <text x="315" y="100" text-anchor="middle" font-size="9" fill="#64748b">frontmatter + loadBody()</text>
+
+          <!-- Skill tool -->
+          <rect x="430" y="40" width="160" height="100" rx="12" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+          <text x="510" y="75" text-anchor="middle" font-size="13" font-weight="700">Skill 工具</text>
+          <text x="510" y="98" text-anchor="middle" font-size="10" fill="#64748b">createSkillTool()</text>
+          <text x="510" y="118" text-anchor="middle" font-size="10" fill="#64748b">skill_name · arguments</text>
+
+          <!-- Modes -->
+          <rect x="640" y="20" width="200" height="70" rx="10" fill="#e0f2fe" stroke="#0284c7"/>
+          <text x="740" y="48" text-anchor="middle" font-size="12" font-weight="700">inline</text>
+          <text x="740" y="68" text-anchor="middle" font-size="10" fill="#64748b">expand → 返回 tool result</text>
+          <text x="740" y="82" text-anchor="middle" font-size="9" fill="#64748b">主 agent 下一轮「记住」流程</text>
+
+          <rect x="640" y="110" width="200" height="70" rx="10" fill="#ccfbf1" stroke="#0d9488"/>
+          <text x="740" y="138" text-anchor="middle" font-size="12" font-weight="700">fork</text>
+          <text x="740" y="158" text-anchor="middle" font-size="10" fill="#64748b">runSkillFork → runAgent</text>
+          <text x="740" y="172" text-anchor="middle" font-size="9" fill="#64748b">隔离子循环，不占主上下文</text>
+
+          <!-- Slash -->
+          <rect x="30" y="200" width="140" height="50" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+          <text x="100" y="230" text-anchor="middle" font-size="11">/skill-name</text>
+
+          <rect x="200" y="200" width="160" height="50" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+          <text x="280" y="230" text-anchor="middle" font-size="11">POST /skills/:name/invoke</text>
+
+          <rect x="390" y="200" width="130" height="50" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+          <text x="455" y="230" text-anchor="middle" font-size="11">Skill 工具</text>
+
+          <text x="580" y="228" font-size="10" fill="#64748b">三条入口共用 expandSkillBody</text>
+
+          <path d="M200 90 L235 90" stroke="#64748b" stroke-width="1.5" marker-end="url(#s1)"/>
+          <path d="M390 90 L425 90" stroke="#64748b" stroke-width="1.5" marker-end="url(#s1)"/>
+          <path d="M590 90 L635 55" stroke="#64748b" stroke-width="1.5" marker-end="url(#s1)"/>
+          <path d="M590 90 L635 145" stroke="#64748b" stroke-width="1.5" marker-end="url(#s1)"/>
+
+          <path d="M170 225 L195 225 L280 250" stroke="#a78bfa" stroke-width="1" stroke-dasharray="3 3"/>
+          <path d="M360 225 L385 225 L455 250" stroke="#a78bfa" stroke-width="1" stroke-dasharray="3 3"/>
+
+          <defs>
+            <marker id="s1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6" fill="#64748b"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+      <p class="figure-caption">图 1 · Skill 是目录；扫描只读 frontmatter，body 懒加载；执行分 inline / fork 两路</p>
+    </div>
+
+    <div class="cards-3">
+      <div class="card">
+        <h4><span class="tag tag-inline">inline</span> 默认模式</h4>
+        <p>展开 SKILL.md body 后直接作为 tool result 返回。主 agent 在下一轮把它当「刚想起来的流程」继续执行。</p>
+      </div>
+      <div class="card">
+        <h4><span class="tag tag-fork">fork</span> 子 agent 模式</h4>
+        <p>展开 body 后交给 <code>runSkillFork</code>：用指定 subagent 的 systemPrompt + 工具集，body 作为 user message 跑隔离 <code>runAgent</code>。</p>
+      </div>
+      <div class="card">
+        <h4>与 Agent 工具的区别</h4>
+        <p>Skill 是用户/项目定义的<strong>流程模板</strong>；Agent 是内置/自定义的<strong>角色型 subagent</strong>。Fork skill 会借用 Agent 定义的工具裁剪逻辑。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2. 加载策略 ── -->
+  <section id="loading">
+    <h2><span class="num">2</span>加载策略：每轮热加载 + 懒读 body</h2>
+    <p class="lead">
+      与 <code>registerSubagents</code> 对称：每次 chat 请求在 <code>prepareChatTurn</code> 里调用 <code>registerSkills</code>，
+      扫描磁盘与插件，合并后按需注册 <code>Skill</code> 工具。<strong>若无任何 active skill，则不注册该工具</strong>（避免空目录浪费 token）。
+    </p>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 380" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans SC, sans-serif">
+          <rect x="30" y="20" width="820" height="150" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+          <text x="50" y="48" font-size="13" font-weight="700" fill="#334155">prepareChatTurn 每轮 pipeline</text>
+
+          <rect x="50" y="65" width="110" height="44" rx="8" fill="#fef3c7" stroke="#d97706"/>
+          <text x="105" y="92" text-anchor="middle" font-size="10">loadPlugins</text>
+
+          <rect x="180" y="65" width="130" height="44" rx="8" fill="#d1fae5" stroke="#059669"/>
+          <text x="245" y="92" text-anchor="middle" font-size="10">loadSkillsFromDisk</text>
+
+          <rect x="330" y="65" width="120" height="44" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+          <text x="390" y="92" text-anchor="middle" font-size="10">mergeSkillsByName</text>
+
+          <rect x="470" y="65" width="130" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="535" y="92" text-anchor="middle" font-size="10">filterSkillsByPaths</text>
+
+          <rect x="620" y="65" width="110" height="44" rx="8" fill="#ccfbf1" stroke="#0d9488"/>
+          <text x="675" y="92" text-anchor="middle" font-size="10">registerSkills</text>
+
+          <rect x="750" y="65" width="80" height="44" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+          <text x="790" y="92" text-anchor="middle" font-size="10">runAgent</text>
+
+          <path d="M160 87 L175 87" stroke="#64748b" stroke-width="1.5" marker-end="url(#s2)"/>
+          <path d="M310 87 L325 87" stroke="#64748b" stroke-width="1.5" marker-end="url(#s2)"/>
+          <path d="M450 87 L465 87" stroke="#64748b" stroke-width="1.5" marker-end="url(#s2)"/>
+          <path d="M600 87 L615 87" stroke="#64748b" stroke-width="1.5" marker-end="url(#s2)"/>
+          <path d="M730 87 L745 87" stroke="#64748b" stroke-width="1.5" marker-end="url(#s2)"/>
+
+          <text x="50" y="135" font-size="11" fill="#64748b">registerSubagents 与 registerSkills 同轮执行；activeSkills 同时喂给 createSkillTool 与 formatSkillListing</text>
+
+          <!-- Scan detail -->
+          <rect x="30" y="190" width="820" height="170" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+          <text x="50" y="218" font-size="13" font-weight="700" fill="#334155">loadSkillsFromDir — 扫描规则</text>
+
+          <text x="50" y="248" font-size="12" fill="#334155">路径布局</text>
+          <text x="50" y="268" font-size="11" fill="#64748b"><tspan fill="#059669">project</tspan>  &lt;ancestor&gt;/.ai-agent/skills/&lt;name&gt;/SKILL.md  （cwd → home，深层覆盖浅层）</text>
+          <text x="50" y="286" font-size="11" fill="#64748b"><tspan fill="#0d9488">user</tspan>     ~/.ai-agent/skills/&lt;name&gt;/SKILL.md</text>
+          <text x="50" y="304" font-size="11" fill="#64748b"><tspan fill="#d97706">plugin</tspan>   .ai-agent/plugins/&lt;p&gt;/skills/&lt;name&gt;/SKILL.md</text>
+
+          <text x="450" y="248" font-size="12" fill="#334155">性能策略</text>
+          <text x="450" y="268" font-size="11" fill="#64748b">· 只读 SKILL.md 前 16KB 解析 frontmatter</text>
+          <text x="450" y="286" font-size="11" fill="#64748b">· body 通过 loadBody() 首次调用时再读</text>
+          <text x="450" y="304" font-size="11" fill="#64748b">· 同 skill 同轮内 body 缓存一次</text>
+          <text x="450" y="322" font-size="11" fill="#64748b">· 目录下必须有 SKILL.md；flat .md 忽略</text>
+          <text x="450" y="340" font-size="11" fill="#64748b">· 文件夹名须匹配 [a-z0-9][a-z0-9_-]*</text>
+
+          <defs>
+            <marker id="s2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6" fill="#64748b"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+      <p class="figure-caption">图 2 · 每 chat turn 扫描 + merge + paths 过滤；无 active skill 时不注册 Skill 工具</p>
+    </div>
+
+    <h3>优先级（同名 skill 后者覆盖）</h3>
+    <table>
+      <thead>
+        <tr><th>来源</th><th>路径</th><th>优先级</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-plugin">plugin</span></td>
+          <td><code>.ai-agent/plugins/&lt;name&gt;/skills/&lt;skill&gt;/SKILL.md</code></td>
+          <td>最低；body 内 <code>${PLUGIN_ROOT}</code> 会被替换</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-user">user</span></td>
+          <td><code>~/.ai-agent/skills/&lt;skill&gt;/SKILL.md</code></td>
+          <td>中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-project">project</span></td>
+          <td><code>&lt;ancestor&gt;/.ai-agent/skills/&lt;skill&gt;/SKILL.md</code></td>
+          <td>最高（深层 project 目录 &gt; 浅层）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <strong>merge 顺序：</strong><code>mergeSkillsByName(pluginSkills, diskSkills)</code> — 列表按优先级从低到高传入，后者覆盖前者。
+      Skill 名称来自<strong>文件夹名</strong>，frontmatter 不支持 <code>name:</code> 覆盖。
+    </div>
+  </section>
+
+  <!-- ── 3. SkillDefinition ── -->
+  <section id="definition">
+    <h2><span class="num">3</span>SKILL.md 格式与 SkillDefinition</h2>
+
+    <pre><span class="cm"># .ai-agent/skills/code-review/SKILL.md</span>
+<span class="cm">---</span>
+<span class="kw">description:</span> <span class="str">Run a structured code review checklist before opening a PR.</span>
+<span class="kw">context:</span> inline          <span class="cm"># inline（默认）| fork</span>
+<span class="kw">agent:</span> general-purpose   <span class="cm"># context: fork 时指定 subagent_type</span>
+<span class="kw">arguments:</span> <span class="str">"branch"</span>       <span class="cm"># 启用 $branch / $1 / $ARGUMENTS</span>
+<span class="kw">paths:</span> <span class="str">"src/**, tests/**"</span>  <span class="cm"># 可选；条件激活（见第 4 节）</span>
+<span class="cm">---</span>
+
+<span class="cm"># Markdown body = 流程正文（lazy load）</span>
+Review the diff on branch $branch …
+Use scripts in ${SKILL_DIR}/checklist.md …</pre>
+
+    <table>
+      <thead>
+        <tr><th>Frontmatter</th><th>映射</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>（文件夹名）</td><td><code>name</code></td><td>唯一标识；斜杠 <code>/code-review</code> 与 tool <code>skill_name</code> 用它</td></tr>
+        <tr><td><code>description</code></td><td><code>description</code></td><td>必填；写入 Skill 工具目录 + system-reminder 列表</td></tr>
+        <tr><td><code>context</code></td><td><code>context</code></td><td><code>inline</code> 或 <code>fork</code>，默认 inline</td></tr>
+        <tr><td><code>agent</code></td><td><code>agent</code></td><td>fork 目标 subagent；默认 <code>general_purpose</code>（须与已注册 agentType 匹配）</td></tr>
+        <tr><td><code>arguments</code></td><td><code>argumentNames</code></td><td>声明命名参数，供 <code>$name</code> 替换</td></tr>
+        <tr><td><code>paths</code></td><td><code>paths</code></td><td>gitignore 风格；有条件才激活（见下节）</td></tr>
+        <tr><td>body</td><td><code>loadBody()</code></td><td>扫描时不加载；invoke 时读取并 strip frontmatter</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 4. paths 条件激活 ── -->
+  <section id="paths">
+    <h2><span class="num">4</span>条件激活：<code>paths:</code> 过滤</h2>
+    <p class="lead">
+      带 <code>paths:</code> 的 skill 是<strong>条件 skill</strong>：只有本轮「候选文件」与其 pattern 匹配时才进入 <code>activeSkills</code>，
+      才会注册进 Skill 工具并出现在 system-reminder 列表。
+    </p>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans SC, sans-serif">
+          <rect x="30" y="50" width="180" height="60" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+          <text x="120" y="78" text-anchor="middle" font-size="11" font-weight="600">用户消息</text>
+          <text x="120" y="96" text-anchor="middle" font-size="9" fill="#64748b">extractFilePathCandidates</text>
+
+          <rect x="250" y="50" width="180" height="60" rx="8" fill="#fef3c7" stroke="#d97706"/>
+          <text x="340" y="78" text-anchor="middle" font-size="11" font-weight="600">candidateFiles[]</text>
+          <text x="340" y="96" text-anchor="middle" font-size="9" fill="#64748b">`src/foo.ts` · bare paths</text>
+
+          <rect x="470" y="50" width="180" height="60" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="560" y="78" text-anchor="middle" font-size="11" font-weight="600">filterSkillsByPaths</text>
+          <text x="560" y="96" text-anchor="middle" font-size="9" fill="#64748b">ignore() gitignore 语义</text>
+
+          <rect x="690" y="50" width="160" height="60" rx="8" fill="#d1fae5" stroke="#059669"/>
+          <text x="770" y="78" text-anchor="middle" font-size="11" font-weight="600">activeSkills</text>
+          <text x="770" y="96" text-anchor="middle" font-size="9" fill="#64748b">无 paths 的始终 active</text>
+
+          <path d="M210 80 L245 80" stroke="#64748b" stroke-width="1.5" marker-end="url(#s3)"/>
+          <path d="M430 80 L465 80" stroke="#64748b" stroke-width="1.5" marker-end="url(#s3)"/>
+          <path d="M650 80 L685 80" stroke="#64748b" stroke-width="1.5" marker-end="url(#s3)"/>
+
+          <text x="120" y="145" text-anchor="middle" font-size="10" fill="#64748b">candidateFiles === undefined → 条件 skill 全部隐藏（fail-safe）</text>
+          <text x="560" y="145" text-anchor="middle" font-size="10" fill="#64748b">candidateFiles === [] → 同上，表示「查过，无匹配」</text>
+
+          <defs>
+            <marker id="s3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6" fill="#64748b"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+      <p class="figure-caption">图 3 · 从用户输入提取路径 token，与 skill 的 paths pattern 做 gitignore 匹配</p>
+    </div>
+
+    <p class="lead">
+      候选路径提取：<code>utils/processUserInput/path_candidates.ts</code> — 反引号内路径 + bare 形如 <code>src/foo.ts</code> 的 token。
+      日志会打印 <code>(+N conditional hidden)</code> 表示本轮被隐藏的 conditional skill 数量。
+    </p>
+  </section>
+
+  <!-- ── 5. expandSkillBody ── -->
+  <section id="expand">
+    <h2><span class="num">5</span>展开管道：<code>expandSkillBody</code></h2>
+    <p class="lead">
+      <code>Skill</code> 工具、斜杠命令、HTTP invoke 三条路径<strong>共用</strong>同一展开逻辑（<code>skills/expand.ts</code>），保证字节级一致。
+    </p>
+
+    <div class="flow-step">
+      <div class="badge">1</div>
+      <div class="body">
+        <strong>loadBody()</strong>
+        <span>懒读 SKILL.md，gray-matter 去掉 frontmatter。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="badge">2</div>
+      <div class="body">
+        <strong>substituteArguments</strong>
+        <span><code>$ARGUMENTS</code>、<code>$1</code>、<code>$name</code>（与 slash command 同一套）。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="badge">3</div>
+      <div class="body">
+        <strong>expandInlineDirectives</strong>
+        <span><code>!`shell`</code> 执行命令、<code>@file</code> 嵌入文件内容。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="badge">4</div>
+      <div class="body">
+        <strong>${SKILL_DIR}</strong>
+        <span>替换为 skill 文件夹绝对路径（Windows 转 forward slash）。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="badge">5</div>
+      <div class="body">
+        <strong>preamble</strong>
+        <span><code>Base directory for this skill: …</code> 前缀 + expanded body → <code>combined</code>。</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 6. Skill 工具提示词 ── -->
+  <section id="tool-prompt">
+    <h2><span class="num">6</span><code>createSkillTool</code> 工具提示词</h2>
+    <p class="lead">
+      工具名 <code>Skill</code>（<code>SKILL_TOOL_NAME</code>）。description 为固定模板 + 动态 <code>validSkills</code> 列表。
+      完整 skill 目录还通过 <code>&lt;system-reminder&gt;</code> 注入对话（见第 7 节）。
+    </p>
+
+    <pre>Invoke a reusable skill — a parameterized procedure the user (or this project) has defined for repeatable workflows.
+
+Important:
+- Available skills are listed in &lt;system-reminder&gt; messages in the conversation.
+- When a skill matches the user's request, invoke the relevant skill BEFORE generating any other response.
+
+Two execution modes:
+- **inline** skills return their expanded body as the tool result. Use them when you want to *remember* a procedure mid-thought …
+- **fork** skills run as a fresh subagent with the body as system prompt. Use them when the skill needs many tool calls …
+
+Arguments:
+- `skill_name`: one of [code-review, canvas, …]   <span class="cm">← 动态 enum</span>
+- `arguments`: raw argument string (optional). Substituted into the skill body as `$ARGUMENTS`, `$1`, or `$name` …
+
+Prefer skills over reinventing a procedure inline — they encode user/project conventions.</pre>
+
+    <table>
+      <thead>
+        <tr><th>参数</th><th>.describe() 原文</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>skill_name</code></td>
+          <td>Which skill to invoke. Must be a registered skill name.</td>
+        </tr>
+        <tr>
+          <td><code>arguments</code></td>
+          <td>Raw argument string. Substituted via $ARGUMENTS / $1 / $name. Pass an empty string if the skill takes none.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-warn">
+      <strong>注意：</strong>description 里 fork 模式写「body as system prompt」是简化表述。
+      实际 <code>runSkillFork</code> 使用 target agent 的 <code>systemPrompt</code>，展开后的 <code>combined</code> 作为 <code>runAgent</code> 的 user message。
+    </div>
+  </section>
+
+  <!-- ── 7. system-reminder 注入 ── -->
+  <section id="listing">
+    <h2><span class="num">7</span>Skill 列表注入主 agent</h2>
+    <p class="lead">
+      <code>prepareChatTurn</code> 用 <code>formatSkillListing(activeSkills)</code> 生成紧凑目录，
+      作为 <code>skillListing</code> 传给 <code>runAgent</code>，在首轮以 synthetic user message 注入：
+    </p>
+
+    <pre>&lt;system-reminder&gt;
+The following skills are available for use with the skill tool:
+
+- code-review (inline): Run a structured code review checklist…
+- canvas (inline): A Cursor Canvas is a live React app…
+&lt;/system-reminder&gt;</pre>
+
+    <p class="lead">
+      预算感知：默认约 8000 字符，或 context window 的 1%（<code>formatSkillListing</code>）。
+      超出时截断各 skill 的 description。与 deferred tools 列表可合并进同一条 reminder。
+    </p>
+  </section>
+
+  <!-- ── 8. 调用入口 ── -->
+  <section id="invoke">
+    <h2><span class="num">8</span>四条调用路径</h2>
+
+    <div class="figure">
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans SC, sans-serif">
+          <!-- Path A -->
+          <text x="50" y="30" font-size="12" font-weight="700" fill="#334155">A · 模型 Skill 工具</text>
+          <rect x="50" y="40" width="780" height="70" rx="10" fill="#fef3c7" stroke="#d97706"/>
+          <text x="70" y="65" font-size="11">Skill({ skill_name, arguments })</text>
+          <text x="70" y="85" font-size="10" fill="#64748b">expandSkillBody → inline: return combined | fork: runSkillFork</text>
+
+          <!-- Path B inline -->
+          <text x="50" y="130" font-size="12" font-weight="700" fill="#334155">B · 斜杠 /skill-name</text>
+          <rect x="50" y="140" width="380" height="80" rx="10" fill="#e0f2fe" stroke="#0284c7"/>
+          <text x="70" y="165" font-size="11">context: inline</text>
+          <text x="70" y="185" font-size="10" fill="#64748b">effectiveMessage = expanded body (+ User request 后缀)</text>
+          <text x="70" y="205" font-size="10" fill="#64748b">→ 正常 runAgent 主循环</text>
+
+          <rect x="450" y="140" width="380" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488"/>
+          <text x="470" y="165" font-size="11">context: fork</text>
+          <text x="470" y="185" font-size="10" fill="#64748b">forkSkill → respondSkillFork</text>
+          <text x="470" y="205" font-size="10" fill="#64748b">/chat 短路，不跑主 agent</text>
+
+          <!-- Path C -->
+          <text x="50" y="245" font-size="12" font-weight="700" fill="#334155">C · HTTP API</text>
+          <rect x="50" y="255" width="250" height="60" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="175" y="280" text-anchor="middle" font-size="11">GET /skills</text>
+          <text x="175" y="298" text-anchor="middle" font-size="9" fill="#64748b">发现 + active 标记</text>
+
+          <rect x="320" y="255" width="510" height="60" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+          <text x="340" y="280" font-size="11">POST /skills/:name/invoke</text>
+          <text x="340" y="298" font-size="10" fill="#64748b">inline → JSON result · fork → SSE 或 JSON（respondSkillFork）</text>
+
+          <!-- Path D -->
+          <text x="50" y="340" font-size="12" font-weight="700" fill="#334155">D · 斜杠注册表</text>
+          <rect x="50" y="350" width="780" height="55" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
+          <text x="70" y="375" font-size="11">loadSlashRegistry — skill 与 command 共用 /name 命名空间</text>
+          <text x="70" y="393" font-size="10" fill="#64748b">优先级：skill &gt; command &gt; built-in · GET /slash-commands · /help</text>
+        </svg>
+      </div>
+      <p class="figure-caption">图 4 · Skill 的四条入口；展开逻辑统一，fork 最终都到 runSkillFork</p>
+    </div>
+
+    <h3>fork 执行细节（<code>runSkillFork</code>）</h3>
+    <table>
+      <thead>
+        <tr><th>步骤</th><th>行为</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>解析 agent</td><td><code>skill.agent ?? "general_purpose"</code> → 在 activeAgents 中查找</td></tr>
+        <tr><td>工具集</td><td>同 Agent 工具：allow/deny 裁剪；额外删除 <code>Skill</code> + <code>Agent</code>（防套娃）</td></tr>
+        <tr><td>runAgent</td><td><code>runAgent(combined, { systemPrompt: targetAgent.systemPrompt, messages: [], … })</code></td></tr>
+        <tr><td>事件</td><td><code>eventBus.scoped(`skill_${name}`)</code>；HTTP fork 可走 SSE</td></tr>
+      </tbody>
+    </table>
+
+    <h3>斜杠 inline 的特殊处理</h3>
+    <p class="lead">
+      若 skill body 未消费 <code>$ARGUMENTS</code>（参考型 skill 如 /pdf），dispatcher 会在 expanded body 后追加
+      <code>---\n\nUser request: …</code>，避免用户意图被静默丢弃。
+    </p>
+  </section>
+
+  <!-- ── 9. 与 Subagent 的关系 ── -->
+  <section id="relation">
+    <h2><span class="num">9</span>与 Subagent 的协作</h2>
+    <div class="cards-3">
+      <div class="card">
+        <h4>registerSkills 依赖 agents</h4>
+        <p><code>createSkillTool(activeSkills, forkableAgents)</code> — fork skill 需要已 merge 的 <code>AgentDefinition[]</code> 做工具裁剪。</p>
+      </div>
+      <div class="card">
+        <h4>同轮注册</h4>
+        <p><code>prepareChatTurn</code> 先 <code>registerSubagents</code> 再 <code>registerSkills</code>，保证 fork 目标 agent 已就绪。</p>
+      </div>
+      <div class="card">
+        <h4>UI 标记</h4>
+        <p><code>Skill</code> 工具 <code>isSubagent: true</code> — fork 时在 UI 渲染为 SubagentCard 风格。</p>
+      </div>
+    </div>
+    <p class="lead">Subagent 调度细节见 <a href="subagent-loading-guide.html">subagent-loading-guide.html</a>。</p>
+  </section>
+
+  <!-- ── 10. 源码地图 ── -->
+  <section id="source-map">
+    <h2><span class="num">10</span>源码地图</h2>
+    <table>
+      <thead>
+        <tr><th>职责</th><th>文件</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>类型定义</td><td><code>examples/08-basic/skills/types.ts</code></td></tr>
+        <tr><td>磁盘扫描 + paths 过滤</td><td><code>examples/08-basic/skills/loadSkillsDir.ts</code></td></tr>
+        <tr><td>每轮注册</td><td><code>examples/08-basic/skills/index.ts</code> → <code>registerSkills</code></td></tr>
+        <tr><td>展开管道</td><td><code>examples/08-basic/skills/expand.ts</code></td></tr>
+        <tr><td>Skill 工具</td><td><code>examples/08-basic/tools/skill.ts</code> → <code>createSkillTool</code></td></tr>
+        <tr><td>fork 执行</td><td><code>examples/08-basic/skills/run-fork.ts</code></td></tr>
+        <tr><td>HTTP/SSE 响应</td><td><code>examples/08-basic/skills/respond-fork.ts</code></td></tr>
+        <tr><td>斜杠分发</td><td><code>examples/08-basic/commands/dispatcher.ts</code></td></tr>
+        <tr><td>斜杠注册表</td><td><code>examples/08-basic/commands/slashRegistry.ts</code></td></tr>
+        <tr><td>每轮 orchestration</td><td><code>examples/08-basic/utils/processUserInput/prepare_chat_turn.ts</code></td></tr>
+        <tr><td>路径候选提取</td><td><code>examples/08-basic/utils/processUserInput/path_candidates.ts</code></td></tr>
+        <tr><td>HTTP API</td><td><code>examples/08-basic/server/skills-api.ts</code></td></tr>
+        <tr><td>插件 skill</td><td><code>examples/08-basic/core/plugins/loader.ts</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 11. 要点回顾 ── -->
+  <section id="takeaways">
+    <h2><span class="num">11</span>设计要点回顾</h2>
+    <div class="cards-3">
+      <div class="card">
+        <h4>文件夹 ≠ flat md</h4>
+        <p>Skill 是 <code>&lt;name&gt;/SKILL.md</code> 目录，可 bundling 脚本与资源；Agent/Command 才是 flat <code>.md</code>。</p>
+      </div>
+      <div class="card">
+        <h4>懒加载 body</h4>
+        <p>扫描只 parse frontmatter（16KB 上限）；100+ skill 也不拖慢每轮 register。</p>
+      </div>
+      <div class="card">
+        <h4>无 skill 无工具</h4>
+        <p><code>activeSkills.length === 0</code> 时不注册 Skill 工具，模型看不到空 dispatcher。</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  examples/08-basic only · Skill Loading Guide ·
+  <a href="subagent-loading-guide.html">Subagent</a>
+  <a href="deferred-mcp-tools-skills-guide.html">Deferred / Skills</a>
+  <a href="coding-agent-architecture-guide.html">架构图集</a>
+</footer>
+
+</body>
+</html>
