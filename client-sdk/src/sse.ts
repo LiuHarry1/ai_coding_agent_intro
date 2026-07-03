@@ -1,30 +1,21 @@
 /**
- * Minimal SSE parser tailored to the agent backend's wire format.
- *
- * We don't use the browser's `EventSource` because:
- *   - It can't POST a body, which `/chat` requires.
- *   - It auto-reconnects on close, which we want to control ourselves
- *     (a finished agent run should NOT trigger a new turn).
- *   - It's browser-only — we need this in Node too.
- *
- * The protocol the agent emits is a strict subset of the SSE spec:
- *
- *   event: <name>\n
- *   data: <json>\n
- *   \n
- *
- * No `id:` / `retry:` / multi-line `data:` blocks — so the parser stays
- * tiny. If the server ever starts emitting those, extend `flushEvent`.
+ * SSE parser and stream helpers for the agent backend wire format.
  */
 
+import { AgentClientError } from "./errors.js";
 import type { AgentEvent } from "./types.js";
 
-/**
- * Wrap a fetch `ReadableStream<Uint8Array>` and yield one decoded event
- * per SSE record. Surfaces unrecognized event names as
- * `{ type: "unknown", event, data }` so additive server changes don't
- * crash existing callers.
- */
+const KNOWN_EVENTS = new Set([
+  "session",
+  "skill_start",
+  "text_delta",
+  "reasoning_delta",
+  "tool_call",
+  "tool_result",
+  "finish",
+  "error",
+]);
+
 export async function* parseSSE(
   stream: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
@@ -33,8 +24,6 @@ export async function* parseSSE(
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
-  // If the caller aborts, propagate to the underlying reader so the
-  // upstream agent stops being charged for tokens we'll never read.
   const onAbort = () => {
     void reader.cancel().catch(() => {});
   };
@@ -46,8 +35,6 @@ export async function* parseSSE(
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      // Events are delimited by a blank line. Split on \n\n and keep
-      // the trailing partial in `buffer` for the next chunk.
       let sep: number;
       while ((sep = buffer.indexOf("\n\n")) !== -1) {
         const raw = buffer.slice(0, sep);
@@ -56,7 +43,6 @@ export async function* parseSSE(
         if (ev) yield ev;
       }
     }
-    // Flush trailing record (server may not always send a final \n\n).
     if (buffer.trim().length > 0) {
       const ev = parseOneEvent(buffer);
       if (ev) yield ev;
@@ -71,13 +57,35 @@ export async function* parseSSE(
   }
 }
 
+/** Drain an event stream; prefer finish.text, else join text_delta chunks. */
+export async function collectText(
+  events: AsyncIterable<AgentEvent>,
+): Promise<string> {
+  const deltas: string[] = [];
+  let final: string | undefined;
+
+  for await (const ev of events) {
+    switch (ev.type) {
+      case "text_delta":
+        deltas.push(ev.delta);
+        break;
+      case "finish":
+        if (typeof ev.text === "string") final = ev.text;
+        break;
+      case "error":
+        throw new AgentClientError(ev.message || "stream error", 0, ev);
+    }
+  }
+
+  return final ?? deltas.join("");
+}
+
 function parseOneEvent(raw: string): AgentEvent | null {
   let eventName = "message";
   let dataLine = "";
   for (const line of raw.split("\n")) {
     if (line.startsWith("event:")) eventName = line.slice(6).trim();
     else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
-    // Other SSE fields (id:, retry:, comments) are intentionally ignored.
   }
   if (!dataLine) return null;
 
@@ -85,8 +93,6 @@ function parseOneEvent(raw: string): AgentEvent | null {
   try {
     parsed = JSON.parse(dataLine);
   } catch {
-    // Server sent a non-JSON data field — wrap as unknown so callers can
-    // still observe it instead of having the whole stream die.
     return { type: "unknown", event: eventName, data: dataLine };
   }
 
@@ -94,43 +100,12 @@ function parseOneEvent(raw: string): AgentEvent | null {
 }
 
 function discriminate(event: string, data: unknown): AgentEvent {
-  const d = (data ?? {}) as Record<string, unknown>;
-  switch (event) {
-    case "session":
-      return { type: "session", session_id: String(d.session_id ?? "") };
-    case "skill_start":
-      return {
-        type: "skill_start",
-        skill: String(d.skill ?? ""),
-        agentType: String(d.agentType ?? ""),
-        workspace: String(d.workspace ?? ""),
-      };
-    case "text_delta":
-      return { type: "text_delta", delta: String(d.delta ?? "") };
-    case "reasoning_delta":
-      return { type: "reasoning_delta", delta: String(d.delta ?? "") };
-    case "tool_call":
-      return {
-        type: "tool_call",
-        name: String(d.name ?? ""),
-        toolCallId: String(d.toolCallId ?? ""),
-        args: d.args,
-      };
-    case "tool_result":
-      return {
-        type: "tool_result",
-        toolCallId: String(d.toolCallId ?? ""),
-        result: String(d.result ?? ""),
-      };
-    case "finish":
-      return {
-        type: "finish",
-        reason: String(d.reason ?? ""),
-        text: typeof d.text === "string" ? d.text : undefined,
-      };
-    case "error":
-      return { type: "error", message: String(d.message ?? "") };
-    default:
-      return { type: "unknown", event, data };
+  if (!KNOWN_EVENTS.has(event)) {
+    return { type: "unknown", event, data };
   }
+  const fields =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : {};
+  return { type: event, ...fields } as AgentEvent;
 }

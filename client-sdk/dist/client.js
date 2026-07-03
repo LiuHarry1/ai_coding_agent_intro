@@ -3,41 +3,26 @@
  *
  * One class, three thin layers:
  *
- *   - Discovery:   listSkills(), listAgents()
+ *   - Discovery:   listSkills(), listAgents(), health()
  *   - Direct:      invokeSkill(name, …) — JSON for inline, async-iter for fork
- *   - Free-form:   chat({...}) / chatComplete({...}) / chatStream({...})
+ *   - Free-form:   chat({...}) / chatComplete({...})
  *
  * Streaming methods return an `AsyncIterable<AgentEvent>`. Buffered
- * methods (`chatComplete`, `invokeSkill` for inline) resolve to plain
- * objects. No EventSource dependency — works in Node ≥18, browsers,
- * Bun, edge runtimes; anywhere `fetch` + `ReadableStream` exist.
- *
- * Errors thrown:
- *   - `AgentClientError`        — server returned a non-2xx
- *   - `TypeError`               — fetch-level failure (network, DNS)
- *   - `SyntaxError`             — server sent bad JSON
- *   - Cancellation via the optional `AbortSignal` parameter.
+ * methods resolve to plain objects. Works in Node ≥18, browsers, Bun,
+ * edge runtimes — anywhere `fetch` + `ReadableStream` exist.
  */
+import { mintJwt } from "./auth.js";
+import { AgentClientError } from "./errors.js";
 import { parseSSE } from "./sse.js";
-export class AgentClientError extends Error {
-    status;
-    body;
-    constructor(message, status, body) {
-        super(message);
-        this.status = status;
-        this.body = body;
-        this.name = "AgentClientError";
-    }
-}
 export class AgentClient {
     #baseURL;
     #defaultWorkspace;
     #headers;
     #fetch;
+    #token;
     constructor(opts) {
         if (!opts.baseURL)
             throw new Error("AgentClient: baseURL is required");
-        // Strip trailing slash so URL joining never doubles it.
         this.#baseURL = opts.baseURL.replace(/\/$/, "");
         this.#defaultWorkspace = opts.defaultWorkspace;
         this.#headers = opts.headers ?? {};
@@ -45,77 +30,74 @@ export class AgentClient {
         if (!this.#fetch) {
             throw new Error("AgentClient: no fetch available; pass `fetch` in options on runtimes <Node18.");
         }
+        if (opts.token) {
+            this.#token = opts.token;
+        }
+        else if (opts.jwtSecret) {
+            if (!opts.email) {
+                throw new Error("AgentClient: email is required when minting from jwtSecret");
+            }
+            this.#token = mintJwt(opts.jwtSecret, opts.email, {
+                username: opts.username,
+                role: opts.role,
+                ttlSeconds: opts.tokenTtl,
+            });
+        }
     }
-    // ── discovery ──────────────────────────────────────────────────────
-    /** List skills discoverable for a workspace (active + conditional). */
+    async health() {
+        return this.#getJSON("/health");
+    }
     async listSkills(workspace) {
-        const ws = workspace ?? this.#defaultWorkspace;
-        const qs = ws ? `?workspace=${encodeURIComponent(ws)}` : "";
-        return this.#getJSON(`/skills${qs}`);
+        return this.#getJSON(this.#workspacePath("/skills", workspace));
     }
-    /** List subagents (built-in + project-level `.agents/`). */
     async listAgents(workspace) {
-        const ws = workspace ?? this.#defaultWorkspace;
-        const qs = ws ? `?workspace=${encodeURIComponent(ws)}` : "";
-        return this.#getJSON(`/agents${qs}`);
+        return this.#getJSON(this.#workspacePath("/agents", workspace));
     }
-    // ── direct skill invocation ────────────────────────────────────────
-    /**
-     * Run a skill directly, bypassing the model's "should I use this skill"
-     * decision. For `context: "inline"` skills this is a pure template
-     * expansion — no LLM call. For `context: "fork"` skills it spins up a
-     * subagent and waits for completion (use `invokeSkillStream` for SSE).
-     */
     async invokeSkill(name, req = {}) {
-        const body = {
-            ...req,
-            workspace: req.workspace ?? this.#defaultWorkspace,
-            stream: false,
-        };
-        return this.#postJSON(`/skills/${encodeURIComponent(name)}/invoke?stream=false`, body);
+        return this.#postJSON(`/skills/${encodeURIComponent(name)}/invoke?stream=false`, this.#skillBody(req));
     }
-    /**
-     * Streaming variant of `invokeSkill`. Inline skills surface as a
-     * single text_delta + finish; fork skills emit the full subagent event
-     * stream (text_delta / tool_call / tool_result / finish).
-     */
     invokeSkillStream(name, req = {}, signal) {
-        const body = {
-            ...req,
-            workspace: req.workspace ?? this.#defaultWorkspace,
-        };
-        return this.#postSSE(`/skills/${encodeURIComponent(name)}/invoke`, body, signal);
+        return this.#postSSE(`/skills/${encodeURIComponent(name)}/invoke`, this.#skillBody(req), signal);
     }
-    // ── free-form chat ─────────────────────────────────────────────────
-    /**
-     * One-shot chat: fires a turn, waits for the agent's final text,
-     * resolves to JSON. Easier than SSE when you don't need progress
-     * updates ("review this diff and tell me what's wrong").
-     */
     async chatComplete(req) {
-        const body = {
-            ...req,
-            workspace: req.workspace ?? this.#defaultWorkspace,
-            stream: false,
-        };
-        return this.#postJSON("/chat?stream=false", body);
+        return this.#postJSON("/chat?stream=false", this.#chatBody(req));
     }
-    /**
-     * Streaming chat. Use when you want to render tokens as they arrive,
-     * see tool calls live, or cancel mid-turn via the AbortSignal.
-     */
     chat(req, signal) {
+        return this.#postSSE("/chat", this.#chatBody(req), signal);
+    }
+    #workspacePath(path, workspace) {
+        const ws = workspace ?? this.#defaultWorkspace;
+        return ws ? `${path}?workspace=${encodeURIComponent(ws)}` : path;
+    }
+    #skillBody(req) {
         const body = {
-            ...req,
             workspace: req.workspace ?? this.#defaultWorkspace,
         };
-        return this.#postSSE("/chat", body, signal);
+        if (req.arguments !== undefined)
+            body.arguments = req.arguments;
+        return body;
     }
-    // ── low-level helpers ──────────────────────────────────────────────
+    #chatBody(req) {
+        const body = {
+            message: req.message,
+            workspace: req.workspace ?? this.#defaultWorkspace,
+        };
+        if (req.session_id)
+            body.session_id = req.session_id;
+        if (req.images?.length)
+            body.images = req.images;
+        return body;
+    }
+    #authHeaders() {
+        const h = { ...this.#headers };
+        if (this.#token)
+            h.Authorization = `Bearer ${this.#token}`;
+        return h;
+    }
     async #getJSON(path) {
         const res = await this.#fetch(this.#baseURL + path, {
             method: "GET",
-            headers: { Accept: "application/json", ...this.#headers },
+            headers: { Accept: "application/json", ...this.#authHeaders() },
         });
         return this.#parseJSON(res);
     }
@@ -125,7 +107,7 @@ export class AgentClient {
             headers: {
                 "Content-Type": "application/json",
                 Accept: "application/json",
-                ...this.#headers,
+                ...this.#authHeaders(),
             },
             body: JSON.stringify(body),
         });
@@ -141,11 +123,15 @@ export class AgentClient {
             throw new AgentClientError(`Invalid JSON from server: ${e.message}`, res.status, text);
         }
         if (!res.ok) {
-            const msg = parsed?.error ??
-                `HTTP ${res.status}`;
-            throw new AgentClientError(msg, res.status, parsed);
+            const { message, body } = errorFromBody(parsed, res.status);
+            throw new AgentClientError(message, res.status, body);
         }
-        return parsed;
+        if (parsed !== null &&
+            typeof parsed === "object" &&
+            !Array.isArray(parsed)) {
+            return parsed;
+        }
+        return { result: parsed };
     }
     async *#postSSE(path, body, signal) {
         const res = await this.#fetch(this.#baseURL + path, {
@@ -153,27 +139,42 @@ export class AgentClient {
             headers: {
                 "Content-Type": "application/json",
                 Accept: "text/event-stream",
-                ...this.#headers,
+                ...this.#authHeaders(),
             },
             body: JSON.stringify(body),
             signal,
         });
         if (!res.ok) {
             const text = await res.text().catch(() => "");
-            let parsed = text;
-            try {
-                parsed = JSON.parse(text);
-            }
-            catch {
-                /* leave as raw text */
-            }
-            const msg = parsed?.error ?? `HTTP ${res.status}`;
-            throw new AgentClientError(msg, res.status, parsed);
+            const { message, body: errBody } = parseErrorText(text, res.status);
+            throw new AgentClientError(message, res.status, errBody);
         }
         if (!res.body) {
             throw new AgentClientError("Empty response body", res.status, null);
         }
         yield* parseSSE(res.body, signal);
     }
+}
+function errorFromBody(parsed, status) {
+    return { message: errorMessage(parsed, status), body: parsed };
+}
+function parseErrorText(text, status) {
+    let parsed = text;
+    try {
+        parsed = text ? JSON.parse(text) : null;
+    }
+    catch {
+        /* keep raw text */
+    }
+    return errorFromBody(parsed, status);
+}
+function errorMessage(parsed, status) {
+    if (parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed) &&
+        typeof parsed.error === "string") {
+        return parsed.error;
+    }
+    return `HTTP ${status}`;
 }
 //# sourceMappingURL=client.js.map

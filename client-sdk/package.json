@@ -15,11 +15,13 @@
   "files": [
     "dist",
     "src",
+    "examples",
     "README.md"
   ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "example": "node --import tsx examples/use-cases.ts",
     "clean": "rm -rf dist"
   },
   "engines": {
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0"
   }
 }
