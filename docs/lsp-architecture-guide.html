@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LSP 架构与用法 — 08-basic Coding Agent</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
+
+    :root {
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --blue: #0284c7;
+      --blue-light: #e0f2fe;
+      --purple: #7c3aed;
+      --purple-light: #ede9fe;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --green: #059669;
+      --green-light: #d1fae5;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --border: #e2e8f0;
+      --code: #0f172a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 48%, #0f766e 100%);
+      color: white;
+      padding: 56px 24px 64px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(26px, 4vw, 40px);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .hero p {
+      max-width: 820px;
+      margin: 0 auto;
+      color: #dbeafe;
+      font-size: 16px;
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 22px;
+    }
+
+    .nav a {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.15);
+      color: #e0f2fe;
+      text-decoration: none;
+    }
+
+    .nav a:hover { background: rgba(255,255,255,.25); }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 0 20px 80px;
+    }
+
+    section { margin-top: 48px; }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    h3 {
+      font-size: 17px;
+      margin: 20px 0 10px;
+    }
+
+    p { margin-bottom: 12px; }
+
+    ul, ol { padding-left: 22px; margin: 10px 0; }
+
+    li { margin: 6px 0; }
+
+    code {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      background: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 13px;
+    }
+
+    pre {
+      background: var(--code);
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      border: 0;
+      padding: 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+      margin-top: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .grid.two { grid-template-columns: repeat(2, 1fr); }
+
+    .pill {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 999px;
+      margin: 0 4px 6px 0;
+    }
+
+    .blue { background: var(--blue-light); color: var(--blue); }
+    .purple { background: var(--purple-light); color: var(--purple); }
+    .green { background: var(--green-light); color: var(--green); }
+    .amber { background: var(--amber-light); color: var(--amber); }
+    .red { background: var(--red-light); color: var(--red); }
+
+    .callout {
+      border-left: 4px solid var(--blue);
+      background: var(--blue-light);
+      padding: 14px 16px;
+      border-radius: 10px;
+      margin: 14px 0;
+    }
+
+    .callout.warn {
+      border-left-color: var(--amber);
+      background: var(--amber-light);
+    }
+
+    .callout.ok {
+      border-left-color: var(--green);
+      background: var(--green-light);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      min-height: 132px;
+      position: relative;
+    }
+
+    .step strong {
+      display: block;
+      color: var(--blue);
+      margin-bottom: 6px;
+    }
+
+    .step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -14px;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-weight: 700;
+      z-index: 2;
+    }
+
+    .diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 16px;
+      overflow-x: auto;
+    }
+
+    .mermaid-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 16px;
+      overflow-x: auto;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+    }
+
+    .mermaid {
+      min-width: 0;
+      text-align: center;
+    }
+
+    pre.mermaid {
+      background: #ffffff;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 18px;
+      border-radius: 14px;
+      margin-top: 12px;
+    }
+
+    .mermaid svg {
+      width: 100%;
+      max-width: 980px;
+      height: auto;
+      margin: 0 auto;
+      display: block;
+    }
+
+    .diagram-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .lane {
+      display: grid;
+      grid-template-columns: 170px repeat(5, minmax(145px, 1fr));
+      gap: 10px;
+      min-width: 920px;
+      align-items: stretch;
+      margin-bottom: 10px;
+    }
+
+    .lane-label {
+      border-radius: 12px;
+      padding: 12px;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, #0369a1, #0f766e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .node {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #f8fafc;
+      position: relative;
+      min-height: 84px;
+    }
+
+    .node strong {
+      display: block;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .node p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .file-ref {
+      display: block;
+      margin-top: 8px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 11px;
+      color: #475569;
+      background: #e2e8f0;
+      border-radius: 6px;
+      padding: 4px 6px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .node.arrow::after {
+      content: "→";
+      position: absolute;
+      right: -16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--blue);
+      font-weight: 700;
+      font-size: 18px;
+      z-index: 3;
+    }
+
+    .node.down::before {
+      content: "↓";
+      position: absolute;
+      left: 50%;
+      bottom: -22px;
+      transform: translateX(-50%);
+      color: var(--purple);
+      font-weight: 700;
+      font-size: 18px;
+      z-index: 3;
+    }
+
+    .node.empty {
+      opacity: .25;
+      background: transparent;
+      border-style: dashed;
+    }
+
+    .sequence {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(140px, 1fr));
+      gap: 10px;
+      min-width: 900px;
+      margin-top: 12px;
+    }
+
+    .sequence .node {
+      min-height: 112px;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fafc;
+      font-weight: 700;
+    }
+
+    .small { color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 860px) {
+      .grid, .grid.two, .flow { grid-template-columns: 1fr; }
+      .step:not(:last-child)::after { display: none; }
+      .lane, .sequence { min-width: 760px; }
+      .mermaid svg { max-width: 760px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <h1>LSP 架构与用法</h1>
+    <p>
+      这份文档总结当前 08-basic coding agent 中新增的 LSP 能力：它为什么存在、怎么接入 agent、怎么配置、怎么在真实写代码时发挥作用，以及如何测试。
+    </p>
+    <nav class="nav">
+      <a href="#purpose">目的</a>
+      <a href="#architecture">架构</a>
+      <a href="#diagrams">流程图</a>
+      <a href="#timing">同步/异步</a>
+      <a href="#flow">调用流程</a>
+      <a href="#config">配置</a>
+      <a href="#usage">用法</a>
+      <a href="#diagnostics">诊断反馈</a>
+      <a href="#test">测试</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section id="purpose">
+      <h2>1. LSP 的目的</h2>
+      <div class="card">
+        <p>
+          LSP 不是让网页编辑器获得鼠标悬停弹窗，而是给 coding agent 增加一组“语义代码理解工具”。以前 agent 主要靠 <code>Grep</code>、<code>Glob</code>、<code>Read</code> 搜文本和读文件；现在它可以通过语言服务器询问更精确的问题。
+        </p>
+        <div>
+          <span class="pill blue">hover 类型信息</span>
+          <span class="pill purple">go to definition</span>
+          <span class="pill green">find references</span>
+          <span class="pill amber">document/workspace symbols</span>
+          <span class="pill red">diagnostics feedback</span>
+        </div>
+        <div class="callout ok">
+          <strong>真实价值：</strong>
+          当 agent 要改接口、重构函数、追踪类型、修类型错误时，LSP 可以减少“猜”和纯文本搜索带来的误判。
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2>2. 总体架构</h2>
+      <div class="flow">
+        <div class="step">
+          <strong>settings.json</strong>
+          <p>用户在 <code>.ai-agent/settings.json</code> 中配置 <code>lspServers</code>。</p>
+        </div>
+        <div class="step">
+          <strong>LSP Tool</strong>
+          <p>模型通过 deferred 的 <code>LSP</code> 工具发起 hover、definition、references 等请求。</p>
+        </div>
+        <div class="step">
+          <strong>Workspace Manager</strong>
+          <p>按 workspace 和配置 hash 缓存 manager，并按文件扩展路由到 server。</p>
+        </div>
+        <div class="step">
+          <strong>Language Server</strong>
+          <p>通过 stdio JSON-RPC 与真实语言服务器通信。</p>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <h3>核心文件</h3>
+          <ul>
+            <li><code>examples/08-basic/services/lsp/client.ts</code>: stdio JSON-RPC 客户端。</li>
+            <li><code>examples/08-basic/services/lsp/server-instance.ts</code>: 单个 language server 生命周期。</li>
+            <li><code>examples/08-basic/services/lsp/server-manager.ts</code>: 扩展名路由、文件同步、诊断注册。</li>
+            <li><code>examples/08-basic/services/lsp/manager.ts</code>: workspace-scoped manager 缓存和 shutdown。</li>
+            <li><code>examples/08-basic/tools/lsp.ts</code>: agent 可调用的 <code>LSP</code> 工具。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>接入点</h3>
+          <ul>
+            <li><code>core/settings-manager.ts</code>: 读取并合并 <code>lspServers</code>。</li>
+            <li><code>prepare_chat_turn.ts</code>: 将 LSP 配置传给工具上下文。</li>
+            <li><code>tools/write_file.ts</code> 和 <code>tools/edit_file.ts</code>: 写入后同步 <code>didChange</code>/<code>didSave</code>。</li>
+            <li><code>core/agent.ts</code>: 每个 step 前注入新的 LSP diagnostics。</li>
+            <li><code>server/index.ts</code>: 进程退出时关闭 LSP 子进程。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="diagrams">
+      <h2>3. Mermaid 流程图</h2>
+
+      <div class="mermaid-wrap">
+        <div class="diagram-title">
+          <span class="pill blue">Flowchart 1</span>
+          LSP 加载流程
+        </div>
+        <pre class="mermaid">
+flowchart TD
+  Start["npm start<br/><b>start.js</b>"]
+  Chat["处理 Chat 请求<br/><b>server/routes/chat.ts</b>"]
+  Settings["读取并合并 lspServers<br/><b>core/settings-manager.ts</b>"]
+  Prepare["写入 ToolContext.lspServers<br/><b>utils/processUserInput/prepare_chat_turn.ts</b>"]
+  Register["注册 LSP tool<br/><b>tools/index.ts</b><br/><b>tools/lsp.ts</b>"]
+  Deferred["作为 deferred tool 暂不进主提示词<br/><b>core/tool-registry.ts</b>"]
+  ToolSearch["模型需要时通过 ToolSearch 激活<br/><b>tools/tool_search.ts</b>"]
+  Ready["LSP schema 进入 active tools<br/><b>core/agent.ts</b>"]
+  Lazy["首次查询时懒启动 language server<br/><b>services/lsp/manager.ts</b>"]
+
+  Start --> Chat --> Settings --> Prepare --> Register --> Deferred --> ToolSearch --> Ready --> Lazy
+        </pre>
+      </div>
+
+      <div class="mermaid-wrap">
+        <div class="diagram-title">
+          <span class="pill purple">Flowchart 2</span>
+          Coding agent 调用 LSP server
+        </div>
+        <pre class="mermaid">
+flowchart TD
+  User["用户任务<br/>例如: 查看 AppConfig 类型"]
+  Model["模型决定使用 LSP<br/><b>core/agent.ts</b>"]
+  ToolSearch["激活 LSP tool<br/><b>tools/tool_search.ts</b>"]
+  LspTool["调用 LSP tool<br/><b>tools/lsp.ts</b><br/>operation: hover"]
+
+  subgraph Service["LSP Service"]
+    Manager["获取 workspace manager<br/><b>services/lsp/manager.ts</b>"]
+    Route["按扩展名路由<br/><b>services/lsp/server-manager.ts</b><br/>.ts → typescript"]
+    Ensure["确保 server 已启动<br/><b>services/lsp/server-instance.ts</b>"]
+    Client["JSON-RPC stdio client<br/><b>services/lsp/client.ts</b>"]
+  end
+
+  Server["typescript-language-server<br/>--stdio"]
+  Response["返回 hover / definition / references"]
+  Format["格式化为纯文本<br/><b>tools/lsp.ts</b>"]
+  ToolResult["写回 tool-result message<br/><b>services/tools/tool_execution.ts</b>"]
+  Continue["模型读取结果继续推理或写代码<br/><b>core/agent.ts</b>"]
+
+  User --> Model --> ToolSearch --> LspTool
+  LspTool --> Manager --> Route --> Ensure --> Client --> Server
+  Server --> Response --> Format --> ToolResult --> Continue
+        </pre>
+      </div>
+
+      <div class="mermaid-wrap">
+        <div class="diagram-title">
+          <span class="pill green">Flowchart 3</span>
+          LSP diagnostics 反馈流程
+        </div>
+        <pre class="mermaid">
+flowchart TD
+  Edit["agent 写代码<br/><b>tools/write_file.ts</b><br/><b>tools/edit_file.ts</b>"]
+  Clear["清除旧诊断去重<br/><b>services/lsp/diagnostics.ts</b>"]
+  Change["发送 didChange<br/><b>services/lsp/server-manager.ts</b>"]
+  Save["发送 didSave<br/><b>services/lsp/server-manager.ts</b>"]
+  LangServer["language server 分析文件<br/><b>typescript-language-server</b>"]
+  Publish["publishDiagnostics notification<br/><b>services/lsp/client.ts</b>"]
+  Registry["注册 pending diagnostics<br/><b>services/lsp/diagnostics.ts</b>"]
+  Drain["下一步前 drain<br/><b>utils/attachments/lsp-diagnostics.ts</b>"]
+  Reminder["注入 system-reminder<br/><b>core/agent.ts</b>"]
+  Fix["模型看到错误并继续修复"]
+
+  Edit --> Clear --> Change --> Save --> LangServer --> Publish --> Registry --> Drain --> Reminder --> Fix
+        </pre>
+      </div>
+
+      <div class="mermaid-wrap">
+        <div class="diagram-title">
+          <span class="pill amber">Flowchart 4</span>
+          同步请求 vs 异步反馈
+        </div>
+        <pre class="mermaid">
+flowchart TD
+  subgraph syncFlow ["同步等待: LSP 查询"]
+    S1["LSP tool call<br/><b>tools/lsp.ts</b>"] --> S2["await manager.sendRequest<br/><b>services/lsp/server-manager.ts</b>"]
+    S2 --> S3["await JSON-RPC response<br/><b>services/lsp/client.ts</b>"]
+    S3 --> S4["返回 tool result<br/><b>core/agent.ts</b>"]
+  end
+
+  subgraph asyncFlow ["异步反馈: diagnostics"]
+    A1["Write/Edit 返回<br/><b>tools/write_file.ts / edit_file.ts</b>"] --> A2["fire-and-forget didChange didSave<br/><b>services/lsp/server-manager.ts</b>"]
+    A2 --> A3["later publishDiagnostics<br/>language server"]
+    A3 --> A4["registry 暂存<br/><b>services/lsp/diagnostics.ts</b>"]
+    A4 --> A5["next step 注入上下文<br/><b>core/agent.ts</b>"]
+  end
+        </pre>
+      </div>
+
+      <div class="diagram">
+        <div class="diagram-title">
+          <span class="pill amber">文件级总览</span>
+          从启动到 LSP 能力可用，哪些文件参与
+        </div>
+        <p>
+          这张图按源码文件串起 LSP 的加载路径。注意：这里加载的是配置和工具能力，不是立即启动 language server。
+        </p>
+        <div class="sequence">
+          <div class="node arrow">
+            <strong>启动入口</strong>
+            <p>选择 08-basic 示例并导入 server。</p>
+            <span class="file-ref">start.js</span>
+          </div>
+          <div class="node arrow">
+            <strong>HTTP 路由</strong>
+            <p>每次 chat 请求解析 workspace、settings 和 session。</p>
+            <span class="file-ref">examples/08-basic/server/routes/chat.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>读取配置</strong>
+            <p>合并 user/project/local settings，包括 <code>lspServers</code>。</p>
+            <span class="file-ref">examples/08-basic/core/settings-manager.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>准备工具上下文</strong>
+            <p>把 <code>config.lspServers</code> 放进 <code>ToolContext</code>。</p>
+            <span class="file-ref">examples/08-basic/utils/processUserInput/prepare_chat_turn.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>注册工具</strong>
+            <p>默认注册 <code>LSP</code>，作为 deferred tool 等待 ToolSearch 激活。</p>
+            <span class="file-ref">examples/08-basic/tools/index.ts<br>examples/08-basic/tools/lsp.ts</span>
+          </div>
+          <div class="node">
+            <strong>等待首次使用</strong>
+            <p>真正调用时才创建 manager、路由 server、启动子进程。</p>
+            <span class="file-ref">examples/08-basic/services/lsp/manager.ts</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="diagram">
+        <div class="diagram-title">
+          <span class="pill blue">加载流程</span>
+          LSP 怎么被加载
+        </div>
+        <p>
+          LSP 不在启动时直接拉起 language server。启动阶段只把配置读入工具上下文；真正的 language server 在第一次 LSP 查询或文件同步时懒启动。
+        </p>
+        <div class="sequence">
+          <div class="node arrow">
+            <strong>1. npm start</strong>
+            <p>启动 08-basic server，加载 workspace 和 settings。</p>
+            <span class="file-ref">start.js<br>server/index.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>2. resolveSettings</strong>
+            <p><code>settings-manager.ts</code> 合并 <code>lspServers</code>。</p>
+            <span class="file-ref">core/settings-manager.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>3. prepareChatTurn</strong>
+            <p>把 <code>config.lspServers</code> 放进 <code>ToolContext</code>。</p>
+            <span class="file-ref">utils/processUserInput/prepare_chat_turn.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>4. ToolRegistry</strong>
+            <p>注册 <code>LSP</code>，但它是 deferred tool。</p>
+            <span class="file-ref">core/tool-registry.ts<br>tools/index.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>5. ToolSearch</strong>
+            <p>模型需要时先加载 <code>LSP</code> 工具 schema。</p>
+            <span class="file-ref">tools/tool_search.ts</span>
+          </div>
+          <div class="node">
+            <strong>6. Lazy Start</strong>
+            <p>第一次对 <code>.ts</code> 文件查询时才启动 TypeScript server。</p>
+            <span class="file-ref">tools/lsp.ts<br>services/lsp/manager.ts</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="diagram">
+        <div class="diagram-title">
+          <span class="pill purple">请求流程</span>
+          Coding agent 怎么调用 LSP server
+        </div>
+        <div class="callout ok">
+          <strong>这是同步等待流程：</strong>
+          agent 调用 <code>LSP</code> tool 后，tool 会一路 <code>await manager.sendRequest(...)</code>，直到 language server 返回 hover / definition / references 结果，才把 tool result 交还给模型。
+        </div>
+        <div class="lane">
+          <div class="lane-label">Agent / Model</div>
+          <div class="node arrow">
+            <strong>用户任务</strong>
+            <p>例如“查看 AppConfig 的类型和引用”。</p>
+            <span class="file-ref">core/agent.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>ToolSearch</strong>
+            <p>激活 deferred 的 <code>LSP</code> 工具。</p>
+            <span class="file-ref">tools/tool_search.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>LSP Tool Call</strong>
+            <p><code>operation: hover</code><br><code>file_path</code> + 位置。</p>
+            <span class="file-ref">tools/lsp.ts</span>
+          </div>
+          <div class="node empty"></div>
+          <div class="node empty"></div>
+        </div>
+        <div class="lane">
+          <div class="lane-label">LSP Service</div>
+          <div class="node empty"></div>
+          <div class="node empty"></div>
+          <div class="node arrow">
+            <strong>getLspManager</strong>
+            <p>按 workspace + config hash 复用 manager。</p>
+            <span class="file-ref">services/lsp/manager.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>Route By Extension</strong>
+            <p><code>.ts</code> → <code>typescript</code> server。</p>
+            <span class="file-ref">services/lsp/server-manager.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>ensureServerStarted</strong>
+            <p>如未启动，spawn + initialize。</p>
+            <span class="file-ref">services/lsp/server-instance.ts</span>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-label">Language Server</div>
+          <div class="node empty"></div>
+          <div class="node empty"></div>
+          <div class="node empty"></div>
+          <div class="node arrow">
+            <strong>didOpen</strong>
+            <p>把当前文件内容同步给 server。</p>
+            <span class="file-ref">services/lsp/server-manager.ts</span>
+          </div>
+          <div class="node">
+            <strong>textDocument/hover</strong>
+            <p>通过 JSON-RPC stdio 返回 hover 内容。</p>
+            <span class="file-ref">services/lsp/client.ts<br>typescript-language-server</span>
+          </div>
+        </div>
+        <div class="callout">
+          返回路径是反向的：language server → <code>LspClient</code> → <code>LspServerManager</code> → <code>LSP</code> tool result → agent 继续推理。
+        </div>
+      </div>
+
+      <div class="diagram">
+        <div class="diagram-title">
+          <span class="pill green">反馈流程</span>
+          LSP server 怎么把 diagnostics 反馈回来
+        </div>
+        <p>
+          diagnostics 不是模型主动问出来的，而是 language server 在文件变更后通过 notification 主动推送回来。
+        </p>
+        <div class="callout warn">
+          <strong>这是异步反馈流程：</strong>
+          <code>Write</code> / <code>Edit</code> 不会等待 diagnostics 返回。写工具只 best-effort 发送 <code>didChange</code> 和 <code>didSave</code>，之后 language server 什么时候发 <code>publishDiagnostics</code>，就由注册表暂存，并在下一次 agent step 前注入上下文。
+        </div>
+        <div class="sequence">
+          <div class="node arrow">
+            <strong>1. Write / Edit</strong>
+            <p>agent 成功写入或编辑 <code>.ts</code> 文件。</p>
+            <span class="file-ref">tools/write_file.ts<br>tools/edit_file.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>2. didChange</strong>
+            <p><code>write_file.ts</code> / <code>edit_file.ts</code> 同步新内容。</p>
+            <span class="file-ref">services/lsp/server-manager.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>3. didSave</strong>
+            <p>通知 language server 文件已保存。</p>
+            <span class="file-ref">services/lsp/server-manager.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>4. publishDiagnostics</strong>
+            <p>server 主动返回类型错误、警告等。</p>
+            <span class="file-ref">services/lsp/client.ts<br>language server</span>
+          </div>
+          <div class="node arrow">
+            <strong>5. Registry</strong>
+            <p><code>diagnostics.ts</code> 去重、排序、限流。</p>
+            <span class="file-ref">services/lsp/diagnostics.ts</span>
+          </div>
+          <div class="node">
+            <strong>6. Next Step</strong>
+            <p><code>agent.ts</code> 在下一步前注入 system-reminder。</p>
+            <span class="file-ref">utils/attachments/lsp-diagnostics.ts<br>core/agent.ts</span>
+          </div>
+        </div>
+        <pre><code>Write/Edit result
+  → manager.changeFile(abs, newContent)
+  → manager.saveFile(abs)
+  → textDocument/publishDiagnostics
+  → drainPendingLspDiagnostics(workspaceKey)
+  → messages.push(system-reminder)
+  → agent reads diagnostics and fixes code</code></pre>
+      </div>
+
+      <div class="diagram">
+        <div class="diagram-title">
+          <span class="pill blue">返回路径</span>
+          LSP 查询结果怎么回到模型
+        </div>
+        <p>
+          <code>hover</code>、<code>definition</code> 这类查询结果不是直接展示给用户，而是先作为 tool result 写回 agent 的消息历史，模型再基于结果回答或继续调用工具。
+        </p>
+        <div class="sequence">
+          <div class="node arrow">
+            <strong>Language Server Response</strong>
+            <p>返回 LSP JSON-RPC response。</p>
+            <span class="file-ref">typescript-language-server</span>
+          </div>
+          <div class="node arrow">
+            <strong>LspClient</strong>
+            <p><code>connection.sendRequest()</code> 的 promise resolve。</p>
+            <span class="file-ref">services/lsp/client.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>LspServerInstance</strong>
+            <p>处理 transient retry、错误包装。</p>
+            <span class="file-ref">services/lsp/server-instance.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>LSP Tool Formatter</strong>
+            <p>把 Location/Hover/Symbol 转成纯文本。</p>
+            <span class="file-ref">tools/lsp.ts</span>
+          </div>
+          <div class="node arrow">
+            <strong>Tool Execution</strong>
+            <p>把结果变成 <code>tool-result</code> message。</p>
+            <span class="file-ref">services/tools/tool_execution.ts</span>
+          </div>
+          <div class="node">
+            <strong>Agent Continues</strong>
+            <p>模型读取 tool result，继续解释、编辑或再次查询。</p>
+            <span class="file-ref">core/agent.ts</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="timing">
+      <h2>4. 同步与异步时序</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3><span class="pill purple">同步 await</span> LSP 查询</h3>
+          <p>
+            <code>hover</code>、<code>go_to_definition</code>、<code>find_references</code> 等 request 型操作都是同步等待结果的。这里的“同步”不是阻塞整个 Node 进程，而是当前 tool call 会 await promise，模型要等 tool result 回来后才能继续下一步。
+          </p>
+          <pre><code>agent calls LSP tool
+→ await manager.sendRequest(...)
+→ await server.sendRequest(...)
+→ await JSON-RPC response
+→ return tool result
+→ model continues</code></pre>
+        </div>
+
+        <div class="card">
+          <h3><span class="pill green">异步 notification</span> 诊断反馈</h3>
+          <p>
+            <code>didChange</code>、<code>didSave</code> 和 <code>publishDiagnostics</code> 是 notification/反馈链路。写文件工具不会等 TypeScript server 完成诊断；诊断稍后到达后会进入 registry。
+          </p>
+          <pre><code>Write/Edit returns to model
+→ language server later publishes diagnostics
+→ diagnostics registry stores them
+→ next agent step drains registry
+→ system-reminder is injected</code></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="pill blue">懒启动</span> 第一次请求会更慢</h3>
+        <p>
+          server 不在 <code>npm start</code> 时启动。第一次查询某个扩展名，或者第一次编辑需要同步到某个 language server 时，才会执行 <code>ensureServerStarted()</code>。所以第一次 <code>hover</code> 可能包含启动、initialize、indexing 的开销；后续复用同一个 workspace manager，会快很多。
+        </p>
+        <pre><code>first .ts LSP request
+→ no server running
+→ spawn npx typescript-language-server --stdio
+→ initialize workspace
+→ send actual LSP request
+
+later .ts LSP request
+→ reuse existing server
+→ send request directly</code></pre>
+      </div>
+    </section>
+
+    <section id="flow">
+      <h2>5. 一次 hover 的调用流程</h2>
+      <div class="card">
+        <ol>
+          <li>用户让 agent 查询某个文件某个位置的类型或文档。</li>
+          <li>如果 <code>LSP</code> 是 deferred tool，模型先用 <code>ToolSearch</code> 加载它。</li>
+          <li><code>LSP</code> 工具读取 <code>file_path</code>、<code>line</code>、<code>character</code>。</li>
+          <li><code>getLspManager(cwd, lspServers)</code> 获取当前 workspace 的 manager。</li>
+          <li>manager 按扩展名，比如 <code>.ts</code>，选择 TypeScript server。</li>
+          <li>如果 server 还没启动，<code>server-instance</code> 会懒启动 language server 并发送 <code>initialize</code>。</li>
+          <li>工具先发送 <code>textDocument/didOpen</code>，再发送 <code>textDocument/hover</code>。</li>
+          <li>返回结果被格式化成纯文本，作为 tool result 给模型继续推理。</li>
+        </ol>
+      </div>
+
+      <pre><code>用户请求
+  → ToolSearch 激活 LSP
+  → LSP({ operation: "hover", file_path, line, character })
+  → LspServerManager
+  → LspServerInstance
+  → LspClient
+  → typescript-language-server --stdio
+  → hover result</code></pre>
+    </section>
+
+    <section id="config">
+      <h2>6. 配置方式</h2>
+      <div class="card">
+        <p>
+          LSP server 配置放在项目的 <code>.ai-agent/settings.json</code> 中。当前项目已经配置了 TypeScript LSP：
+        </p>
+        <pre><code>{
+  "lspServers": {
+    "typescript": {
+      "command": "npx",
+      "args": ["--yes", "typescript-language-server", "--stdio"],
+      "extensionToLanguage": {
+        ".ts": "typescript",
+        ".tsx": "typescriptreact"
+      },
+      "startupTimeout": 30000
+    }
+  }
+}</code></pre>
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>作用</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>command</code></td>
+              <td>启动 language server 的命令。Windows 下当前实现使用 shell spawn，因此 <code>npx</code> 可用。</td>
+            </tr>
+            <tr>
+              <td><code>args</code></td>
+              <td>传给命令的参数，例如 <code>--stdio</code>。</td>
+            </tr>
+            <tr>
+              <td><code>extensionToLanguage</code></td>
+              <td>文件扩展名到 LSP language id 的映射，也是 manager 路由 server 的依据。</td>
+            </tr>
+            <tr>
+              <td><code>startupTimeout</code></td>
+              <td>初始化超时时间，避免 language server 卡住 agent。</td>
+            </tr>
+            <tr>
+              <td><code>env</code> / <code>workspaceFolder</code> / <code>initializationOptions</code></td>
+              <td>可选字段，用于给特定 language server 传环境变量、工作区路径和初始化参数。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="usage">
+      <h2>7. Agent 怎么使用 LSP</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Hover</h3>
+          <p>查询某个位置的类型、签名或文档。</p>
+          <pre><code>{
+  "operation": "hover",
+  "file_path": "examples/08-basic/core/types.ts",
+  "line": 446,
+  "character": 18
+}</code></pre>
+        </div>
+        <div class="card">
+          <h3>Go To Definition</h3>
+          <p>找当前位置符号的定义位置。</p>
+          <pre><code>{
+  "operation": "go_to_definition",
+  "file_path": "examples/08-basic/core/types.ts",
+  "line": 446,
+  "character": 18
+}</code></pre>
+        </div>
+        <div class="card">
+          <h3>Find References</h3>
+          <p>找某个符号的引用，适合重构前看影响面。</p>
+          <pre><code>{
+  "operation": "find_references",
+  "file_path": "examples/08-basic/core/types.ts",
+  "line": 446,
+  "character": 18
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>推荐提示词</h3>
+        <p>在聊天里可以这样让 agent 使用 LSP：</p>
+        <pre><code>先用 ToolSearch 加载 LSP 工具。
+然后对 examples/08-basic/core/types.ts 里的 AppConfig 执行 hover，
+再查找它的 references，告诉我哪些地方依赖这个配置类型。</code></pre>
+        <p>或者在复杂修改前这样说：</p>
+        <pre><code>这次修改涉及类型和跨文件引用。
+请优先用 LSP 的 hover / go_to_definition / find_references 理解影响面，
+再开始编辑。</code></pre>
+      </div>
+    </section>
+
+    <section id="diagnostics">
+      <h2>8. 写代码时的诊断反馈</h2>
+      <div class="card">
+        <p>
+          当前 LSP 不只是查询工具，也会在 agent 写文件后同步给 language server。成功执行 <code>Write</code> 或 <code>Edit</code> 后，会触发：
+        </p>
+        <pre><code>clear delivered diagnostics
+→ textDocument/didChange
+→ textDocument/didSave
+→ language server publishDiagnostics
+→ diagnostics registry
+→ next agent step system-reminder</code></pre>
+        <p>
+          诊断消息在 <code>examples/08-basic/utils/attachments/lsp-diagnostics.ts</code> 中被转换为普通 <code>system-reminder</code> 用户消息，注入到后续模型上下文里。
+        </p>
+        <div class="callout">
+          这意味着 agent 写完代码后，如果 TypeScript server 报“属性不存在”“类型不匹配”“缺少 import”等问题，下一步模型可以直接看到并继续修。
+        </div>
+      </div>
+    </section>
+
+    <section id="test">
+      <h2>9. 如何测试</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>启动前检查</h3>
+          <ol>
+            <li>确认 <code>.ai-agent/settings.json</code> 有 <code>lspServers</code>。</li>
+            <li>运行 <code>npm install</code>，确保依赖存在。</li>
+            <li>运行 <code>npm run typecheck</code>，确认代码编译通过。</li>
+            <li>运行 <code>npm start</code> 启动 agent server。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>聊天内测试</h3>
+          <ol>
+            <li>让 agent 用 <code>ToolSearch</code> 加载 <code>LSP</code>。</li>
+            <li>对一个 <code>.ts</code> 文件执行 <code>hover</code>。</li>
+            <li>再执行 <code>go_to_definition</code> 或 <code>find_references</code>。</li>
+            <li>让 agent 故意制造一个小的 TypeScript 类型错误，观察下一步是否收到 diagnostics。</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>底层验证命令</h3>
+        <p>之前已经用下面等价方式验证过 TypeScript LSP hover 能返回结果：</p>
+        <pre><code>npx typescript-language-server --stdio
+textDocument/hover
+→ LSP hover verification: ok</code></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>10. 限制和注意点</h2>
+      <div class="card">
+        <ul>
+          <li>当前是 agent 工具能力，不是网页编辑器的鼠标 hover 弹窗。</li>
+          <li>LSP tool 是 deferred，模型通常需要先通过 <code>ToolSearch</code> 激活。</li>
+          <li>只实现了 stdio transport，没有实现 socket transport。</li>
+          <li>diagnostics 是文本 system-reminder，暂未做前端专用诊断卡片。</li>
+          <li>LSP diagnostics 不能完全替代 <code>npm run typecheck</code>，复杂构建错误仍应跑项目命令验证。</li>
+          <li>如果多个 server 支持同一扩展名，当前使用第一个匹配的 server。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>11. 一句话总结</h2>
+      <div class="card">
+        <p>
+          这个 LSP 实现给 coding agent 增加了“语义代码理解”和“写后诊断反馈”能力：它让 agent 在真实写代码时可以先问语言服务器理解类型和引用，再编辑文件，编辑后再根据语言服务器 diagnostics 继续修正。
+        </p>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      theme: "base",
+      themeVariables: {
+        background: "#ffffff",
+        mainBkg: "#f8fafc",
+        secondBkg: "#eef2ff",
+        primaryColor: "#e0f2fe",
+        primaryTextColor: "#0f172a",
+        primaryBorderColor: "#0284c7",
+        lineColor: "#2563eb",
+        textColor: "#0f172a",
+        clusterBkg: "#f8fafc",
+        clusterBorder: "#94a3b8",
+        edgeLabelBackground: "#ffffff",
+        fontFamily: "Noto Sans SC, Segoe UI, sans-serif"
+      },
+      flowchart: {
+        htmlLabels: true,
+        curve: "basis",
+        nodeSpacing: 48,
+        rankSpacing: 52
+      }
+    });
+  </script>
+</body>
+</html>

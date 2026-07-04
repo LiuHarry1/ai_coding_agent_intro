@@ -14,6 +14,17 @@
     "timeBasedMicroEnabled": true,
     "timeBasedMicroGapMinutes": 5
   },
+  "lspServers": {
+    "typescript": {
+      "command": "npx",
+      "args": ["--yes", "typescript-language-server", "--stdio"],
+      "extensionToLanguage": {
+        ".ts": "typescript",
+        ".tsx": "typescriptreact"
+      },
+      "startupTimeout": 30000
+    }
+  },
   "mcpServers": {
     "mcp_server": {
       "command": "python",

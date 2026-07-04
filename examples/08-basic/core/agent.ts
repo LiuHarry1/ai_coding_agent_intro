@@ -206,6 +206,7 @@ export async function runAgent(
     concurrencyPolicy,
     sessionId,
     attachmentMessages,
+    lspDiagnosticMessages,
     refreshTools,
     refreshSystemPrompt,
     provider: configuredProvider,
@@ -272,6 +273,13 @@ export async function runAgent(
     for (let step = 0; step < maxSteps; step++) {
       eventBus.emit('step_start', { step })
       const stepStart = Date.now()
+
+      if (lspDiagnosticMessages) {
+        const diagnostics = await lspDiagnosticMessages()
+        if (diagnostics.length > 0) {
+          messages.push(...diagnostics)
+        }
+      }
 
       await runCompactionAndLog(
         messages,

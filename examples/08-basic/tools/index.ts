@@ -11,6 +11,7 @@ import { definition as webSearch } from './web_search.js'
 import { definition as webFetch } from './web_fetch.js'
 import { definition as globTool } from './glob.js'
 import { definition as grepTool } from './grep.js'
+import { definition as lspTool } from './lsp.js'
 import { definition as askUserQuestion } from './ask_user_question.js'
 import { definition as publishPreview } from './publish_preview.js'
 
@@ -24,6 +25,7 @@ const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])]
   editFile,
   globTool,
   grepTool,
+  lspTool,
   todoWrite,
   webSearch,
   webFetch,

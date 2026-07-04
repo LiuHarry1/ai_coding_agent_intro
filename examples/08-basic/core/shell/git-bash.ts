@@ -1,7 +1,6 @@
 import { existsSync } from 'fs'
 import * as path from 'path'
 import { spawnSync } from 'child_process'
-import { isWindows } from '../platform.js'
 
 let cached: string | null | undefined
 
@@ -9,7 +8,7 @@ let cached: string | null | undefined
  * Locate Git for Windows bash.exe. Callers get `null` and spawn fails with a clear error.
  */
 export function findGitBashPath(): string | null {
-  if (!isWindows) return null
+  if (process.platform !== 'win32') return null
   if (cached !== undefined) return cached
 
   const defaults = [

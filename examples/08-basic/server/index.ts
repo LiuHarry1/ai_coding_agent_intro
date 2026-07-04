@@ -4,6 +4,7 @@ import * as fs from 'fs'
 import { fileURLToPath } from 'url'
 import { createRouter } from './router.js'
 import type { ServerOptions } from '../core/types.js'
+import { shutdownAllLspManagers } from '../services/lsp/manager.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -47,6 +48,17 @@ export function startServer({ runAgent }: ServerOptions): void {
   const handler = createRouter({ runAgent, staticDir })
 
   const server = http.createServer(handler)
+  let shuttingDown = false
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return
+    shuttingDown = true
+    console.log(`[server] ${signal}: shutting down`)
+    server.close(() => {
+      void shutdownAllLspManagers().finally(() => process.exit(0))
+    })
+  }
+  process.once('SIGINT', () => shutdown('SIGINT'))
+  process.once('SIGTERM', () => shutdown('SIGTERM'))
 
   server.listen(PORT, () => {
     console.log(`[server] listening on http://localhost:${PORT}`)

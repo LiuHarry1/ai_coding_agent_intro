@@ -14,6 +14,7 @@ export const WEB_SEARCH_TOOL_NAME = 'WebSearch'
 export const WEB_FETCH_TOOL_NAME = 'WebFetch'
 export const GLOB_TOOL_NAME = 'Glob'
 export const GREP_TOOL_NAME = 'Grep'
+export const LSP_TOOL_NAME = 'LSP'
 export const ASK_USER_QUESTION_TOOL_NAME = 'AskUserQuestion'
 export const PUBLISH_PREVIEW_TOOL_NAME = 'PublishPreview'
 export const TOOL_SEARCH_TOOL_NAME = 'ToolSearch'
@@ -37,6 +38,7 @@ export const READ_ONLY_TOOLS: readonly string[] = [
   READ_FILE_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
+  LSP_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
 ]

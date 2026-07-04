@@ -5,12 +5,14 @@ import { resolvePath } from './utils.js'
 import { assertPathInWorkspace } from '../core/workspace.js'
 import type { ToolDefinition } from '../core/types.js'
 import { EDIT_FILE_TOOL_NAME } from '../constants/tool_names.js'
+import { clearDeliveredLspDiagnosticsForFile } from '../services/lsp/diagnostics.js'
+import { getLspManager, getLspWorkspaceKey } from '../services/lsp/manager.js'
 
 export const definition: ToolDefinition = {
   name: EDIT_FILE_TOOL_NAME,
   description: 'Make targeted edits by replacing specific text in a file',
   isConcurrencySafe: () => false,
-  create(cwd) {
+  create(cwd, context) {
     return tool({
       description:
         'Replace a specific string in an existing file. ' +
@@ -84,6 +86,24 @@ export const definition: ToolDefinition = {
           : content.replace(search, new_string)
 
         fs.writeFileSync(abs, newContent, 'utf-8')
+
+        const manager = getLspManager(cwd, context.lspServers)
+        if (manager) {
+          const workspaceKey = getLspWorkspaceKey(cwd, context.lspServers)
+          clearDeliveredLspDiagnosticsForFile(workspaceKey, abs)
+          void (async () => {
+            try {
+              await manager.changeFile(abs, newContent)
+              await manager.saveFile(abs)
+            } catch (err) {
+              console.warn(
+                `[lsp] failed to sync edit for ${abs}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              )
+            }
+          })()
+        }
 
         const oldLines = content.split('\n').length
         const newLines = newContent.split('\n').length

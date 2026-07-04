@@ -36,6 +36,9 @@
     "multer": "^2.1.1",
     "pdf-parse": "^1.1.4",
     "sharp": "^0.33.5",
+    "vscode-jsonrpc": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.18.2",
+    "vscode-languageserver-types": "^3.18.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

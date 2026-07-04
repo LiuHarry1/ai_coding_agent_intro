@@ -56,6 +56,8 @@ export interface ToolContext {
   /** Request-scoped provider and compaction settings inherited by subagents. */
   provider?: IProvider
   compaction?: CompactionConfig
+  /** Request-scoped LSP server configs from effective settings. */
+  lspServers?: Record<string, LspServerConfig>
   /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
   sessionId?: string
   /** Active session — set on main-agent runs for mode/plan tools. */
@@ -234,6 +236,8 @@ export interface AgentOptions {
    * getAttachmentMessages pattern).
    */
   attachmentMessages?: Message[]
+  /** Fresh async diagnostics injected before each model step. */
+  lspDiagnosticMessages?: () => Promise<Message[]> | Message[]
   /**
    * Rebuild the active tool set when permission mode changes mid-turn
    * (e.g. ExitPlanMode approval unlocks Write/Bash after planning).
@@ -446,6 +450,18 @@ export interface AppConfig {
   provider: LlmProfile
   compaction: CompactionConfig
   mcpServers: Record<string, MCPServerConfig>
+  lspServers: Record<string, LspServerConfig>
   /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */
   disabledTools?: string[]
+}
+
+export interface LspServerConfig {
+  command: string
+  args?: string[]
+  extensionToLanguage: Record<string, string>
+  env?: Record<string, string>
+  initializationOptions?: unknown
+  workspaceFolder?: string
+  startupTimeout?: number
+  maxRestarts?: number
 }

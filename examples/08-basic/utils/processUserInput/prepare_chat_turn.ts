@@ -20,6 +20,7 @@ import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { createToolSearchDefinition } from '../../tools/tool_search.js'
 import { TOOL_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
 import { buildAttachmentMessages } from '../attachments/index.js'
+import { buildLspDiagnosticMessages } from '../attachments/lsp-diagnostics.js'
 import { buildPlanModeAttachments } from '../attachments/plan-mode.js'
 import { applyModeRestrictions } from '../../core/mode-restrictions.js'
 import { definition as enterPlanModeDef } from '../../tools/enter_plan_mode.js'
@@ -116,6 +117,7 @@ export interface PreparedChatTurn {
   skillListing?: string
   projectRules: string
   attachmentMessages: Message[]
+  lspDiagnosticMessages: () => Message[]
   subagentNames: Set<string>
   concurrencyPolicy: ReturnType<typeof buildConcurrencyPolicy>
   permissionMode: Session['permissionMode']['mode']
@@ -197,6 +199,7 @@ export async function prepareChatTurn(
     toolEnablement,
     provider,
     compaction: config.compaction,
+    lspServers: config.lspServers,
     sessionId: session.id,
     session,
     cwd,
@@ -302,6 +305,8 @@ export async function prepareChatTurn(
     skillListing,
     projectRules,
     attachmentMessages,
+    lspDiagnosticMessages: () =>
+      buildLspDiagnosticMessages(cwd, config.lspServers),
     subagentNames: getSubagentNames(registry),
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(tools)),
     permissionMode: session.permissionMode.mode,

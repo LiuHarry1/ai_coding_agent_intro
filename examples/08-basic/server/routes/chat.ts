@@ -397,6 +397,7 @@ export async function handleChat(
         prepared.attachmentMessages.length > 0
           ? prepared.attachmentMessages
           : undefined,
+      lspDiagnosticMessages: prepared.lspDiagnosticMessages,
       refreshTools,
       refreshSystemPrompt,
     })

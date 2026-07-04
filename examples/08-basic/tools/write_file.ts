@@ -6,12 +6,14 @@ import { resolvePath } from './utils.js'
 import { assertPathInWorkspace } from '../core/workspace.js'
 import type { ToolDefinition } from '../core/types.js'
 import { WRITE_FILE_TOOL_NAME } from '../constants/tool_names.js'
+import { clearDeliveredLspDiagnosticsForFile } from '../services/lsp/diagnostics.js'
+import { getLspManager, getLspWorkspaceKey } from '../services/lsp/manager.js'
 
 export const definition: ToolDefinition = {
   name: WRITE_FILE_TOOL_NAME,
   description: 'Create or overwrite a file',
   isConcurrencySafe: () => false,
-  create(cwd) {
+  create(cwd, context) {
     return tool({
       description:
         'Create a new file or fully overwrite an existing one. ' +
@@ -40,6 +42,24 @@ export const definition: ToolDefinition = {
 
         fs.mkdirSync(path.dirname(abs), { recursive: true })
         fs.writeFileSync(abs, content, 'utf-8')
+
+        const manager = getLspManager(cwd, context.lspServers)
+        if (manager) {
+          const workspaceKey = getLspWorkspaceKey(cwd, context.lspServers)
+          clearDeliveredLspDiagnosticsForFile(workspaceKey, abs)
+          void (async () => {
+            try {
+              await manager.changeFile(abs, content)
+              await manager.saveFile(abs)
+            } catch (err) {
+              console.warn(
+                `[lsp] failed to sync write for ${abs}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              )
+            }
+          })()
+        }
 
         const lines = content.split('\n').length
         return `Wrote ${file_path} (${lines} lines, ${content.length} chars)`

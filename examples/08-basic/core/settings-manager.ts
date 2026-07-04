@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import type { AppConfig, MCPServerConfig } from './types.js'
+import type { AppConfig, LspServerConfig, MCPServerConfig } from './types.js'
 import {
   DEFAULT_PROFILE,
   profileToRecord,
@@ -27,6 +27,7 @@ export const DEFAULTS: AppConfig = {
     timeBasedMicroGapMinutes: 5,
   },
   mcpServers: {},
+  lspServers: {},
   disabledTools: [],
 }
 
@@ -59,6 +60,7 @@ type PartialAppConfig = Partial<{
   provider: Record<string, unknown>
   compaction: Record<string, unknown>
   mcpServers: Record<string, MCPServerConfig>
+  lspServers: Record<string, LspServerConfig>
   disabledTools: unknown[]
 }>
 
@@ -176,6 +178,13 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
     config.mcpServers = {
       ...config.mcpServers,
       ...layer.mcpServers,
+    }
+  }
+
+  if (layer.lspServers && typeof layer.lspServers === 'object') {
+    config.lspServers = {
+      ...config.lspServers,
+      ...layer.lspServers,
     }
   }
 
@@ -330,6 +339,12 @@ function mergePatch(
     next.mcpServers = {
       ...((next.mcpServers as Record<string, unknown> | undefined) ?? {}),
       ...patch.mcpServers,
+    }
+  }
+  if (patch.lspServers) {
+    next.lspServers = {
+      ...((next.lspServers as Record<string, unknown> | undefined) ?? {}),
+      ...patch.lspServers,
     }
   }
   if (patch.disabledTools) {
