@@ -32,8 +32,7 @@ npm start              # 默认加载 08-basic，监听 http://localhost:4567
 ### 4. 启动 Web UI(终端 B,开发模式,支持热更新)
 
 ```bash
-cd client/web
-npm run dev            # http://localhost:5173
+npm run dev:web        # http://localhost:5173
 ```
 
 浏览器打开 **http://localhost:5173**。前端 dev server 会把 `/chat`、`/workspace` 等 API 代理到后端的 4567,所以本地没有跨域问题(代理配置见 `client/web/vite.config.js`)。
@@ -41,9 +40,10 @@ npm run dev            # http://localhost:5173
 ## 桌面版
 
 ```bash
-npm run desktop:dev    # 构建前端 + 启动 Electron 窗口
-npm run desktop:start  # dist 已存在时直接启动
-npm run desktop:pack:win   # 打包 Windows 安装包
+npm run desktop:dev      # 构建前端 + 启动 Electron 窗口
+npm run desktop:start    # dist 已存在时直接启动
+npm run desktop:pack     # 打包当前平台安装包（macOS → dmg 等）
+npm run desktop:pack:win # 打包 Windows 安装包
 ```
 
 Electron 会自动启动 agent 子进程，窗口加载 `http://127.0.0.1:4567`。
@@ -75,10 +75,14 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 | 命令 | 说明 |
 |------|------|
 | `npm start` | 启动 agent 后端 |
+| `npm run dev:web` | 启动 Web UI 开发服务器（热更新） |
 | `npm run server:stop` | 释放 4567 端口 |
+| `npm run server:restart` | 重启后端 |
 | `npm run build:web` | 构建前端到 `client/web/dist` |
 | `npm run desktop:dev` | 启动桌面版 |
-| `npm run typecheck` | TypeScript 类型检查 |
+| `npm run desktop:pack` | 打包当前平台桌面安装包 |
+| `npm run typecheck` | TypeScript 类型检查（08-basic + protocol + client-sdk） |
+| `npm run format` | 按项目 Prettier 规则格式化代码 |
 
 ## 更多文档
 

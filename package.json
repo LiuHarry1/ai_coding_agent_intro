@@ -6,17 +6,16 @@
   "main": "electron/main.mjs",
   "scripts": {
     "start": "tsx start.js",
-    "start:js": "node start.js",
     "server:stop": "node ./shared/kill-port.cjs 4567",
     "server:restart": "npm run server:stop && npm run start",
+    "dev:web": "npm --prefix client/web run dev",
     "build:web": "npm --prefix client/web run build",
     "desktop:start": "electron .",
     "desktop:dev": "npm run build:web && npm run desktop:start",
     "desktop:pack": "npm run build:web && electron-builder",
     "desktop:pack:win": "npm run build:web && electron-builder --win",
-    "typecheck": "tsc --noEmit -p examples/08-basic/tsconfig.json",
-    "format": "npx prettier --write \"examples/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\"",
-    "format:check": "npx prettier --check \"examples/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\""
+    "typecheck": "tsc --noEmit -p examples/08-basic/tsconfig.json && npm --prefix protocol run typecheck && npm --prefix client-sdk run typecheck",
+    "format": "npx prettier --write \"examples/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\""
   },
   "keywords": [],
   "author": "",
