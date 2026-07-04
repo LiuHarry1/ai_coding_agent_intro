@@ -9,29 +9,29 @@
  * Seeding runs at most once per user workspace (`.workspace-seeded` marker).
  * Existing files are never overwritten (`errorOnExist: false`).
  */
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs'
+import * as path from 'path'
 
-export const WORKSPACE_SEEDED_MARKER = ".workspace-seeded";
+export const WORKSPACE_SEEDED_MARKER = '.workspace-seeded'
 
-const DEFAULT_SEED_DIR = "/opt/workspace-seed";
+const DEFAULT_SEED_DIR = '/opt/workspace-seed'
 
 /** Resolved seed dir, or null when seeding is disabled / nothing to copy. */
 export function getWorkspaceSeedDir(): string | null {
-  const raw = process.env.WORKSPACE_SEED_DIR;
+  const raw = process.env.WORKSPACE_SEED_DIR
   // Explicit empty string disables seeding even if the default path exists.
-  if (raw != null && raw.trim() === "") return null;
+  if (raw != null && raw.trim() === '') return null
 
-  const dir = path.resolve(raw?.trim() || DEFAULT_SEED_DIR);
-  if (!fs.existsSync(dir)) return null;
+  const dir = path.resolve(raw?.trim() || DEFAULT_SEED_DIR)
+  if (!fs.existsSync(dir)) return null
 
   try {
-    if (fs.readdirSync(dir).length === 0) return null;
+    if (fs.readdirSync(dir).length === 0) return null
   } catch {
-    return null;
+    return null
   }
 
-  return dir;
+  return dir
 }
 
 function copyEntry(src: string, dest: string): void {
@@ -39,25 +39,28 @@ function copyEntry(src: string, dest: string): void {
     recursive: true,
     force: false,
     errorOnExist: false,
-  });
+  })
 }
 
 /**
  * Copy everything under `seedDir` into `userWorkspace` without overwriting
  * existing paths. Returns true when at least one entry was copied.
  */
-export function applyWorkspaceSeed(userWorkspace: string, seedDir: string): boolean {
-  let copied = false;
+export function applyWorkspaceSeed(
+  userWorkspace: string,
+  seedDir: string,
+): boolean {
+  let copied = false
   for (const name of fs.readdirSync(seedDir)) {
-    if (name === WORKSPACE_SEEDED_MARKER) continue;
-    copyEntry(path.join(seedDir, name), path.join(userWorkspace, name));
-    copied = true;
+    if (name === WORKSPACE_SEEDED_MARKER) continue
+    copyEntry(path.join(seedDir, name), path.join(userWorkspace, name))
+    copied = true
   }
-  return copied;
+  return copied
 }
 
 function writeSeedMarker(userWorkspace: string, seedDir: string): void {
-  const markerPath = path.join(userWorkspace, WORKSPACE_SEEDED_MARKER);
+  const markerPath = path.join(userWorkspace, WORKSPACE_SEEDED_MARKER)
   fs.writeFileSync(
     markerPath,
     JSON.stringify(
@@ -67,9 +70,9 @@ function writeSeedMarker(userWorkspace: string, seedDir: string): void {
       },
       null,
       2,
-    ) + "\n",
-    "utf-8",
-  );
+    ) + '\n',
+    'utf-8',
+  )
 }
 
 /**
@@ -77,29 +80,27 @@ function writeSeedMarker(userWorkspace: string, seedDir: string): void {
  * Idempotent — safe to call on every authenticated request.
  */
 export function seedUserWorkspaceIfNeeded(userWorkspace: string): boolean {
-  const markerPath = path.join(userWorkspace, WORKSPACE_SEEDED_MARKER);
-  if (fs.existsSync(markerPath)) return false;
+  const markerPath = path.join(userWorkspace, WORKSPACE_SEEDED_MARKER)
+  if (fs.existsSync(markerPath)) return false
 
-  const raw = process.env.WORKSPACE_SEED_DIR;
-  if (raw != null && raw.trim() === "") {
-    writeSeedMarker(userWorkspace, "");
-    return false;
+  const raw = process.env.WORKSPACE_SEED_DIR
+  if (raw != null && raw.trim() === '') {
+    writeSeedMarker(userWorkspace, '')
+    return false
   }
 
-  const seedDir = getWorkspaceSeedDir();
-  if (!seedDir) return false;
+  const seedDir = getWorkspaceSeedDir()
+  if (!seedDir) return false
 
   try {
-    applyWorkspaceSeed(userWorkspace, seedDir);
-    writeSeedMarker(userWorkspace, seedDir);
-    console.log(
-      `[auth] seeded workspace ${userWorkspace} from ${seedDir}`,
-    );
-    return true;
+    applyWorkspaceSeed(userWorkspace, seedDir)
+    writeSeedMarker(userWorkspace, seedDir)
+    console.log(`[auth] seeded workspace ${userWorkspace} from ${seedDir}`)
+    return true
   } catch (err) {
     console.error(
       `[auth] workspace seed failed for ${userWorkspace}: ${(err as Error).message}`,
-    );
-    return false;
+    )
+    return false
   }
 }

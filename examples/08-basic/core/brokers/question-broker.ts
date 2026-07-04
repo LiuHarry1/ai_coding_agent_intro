@@ -15,66 +15,69 @@
  */
 
 export interface QuestionAnnotation {
-  preview?: string;
-  notes?: string;
+  preview?: string
+  notes?: string
 }
 
 export interface QuestionAnswer {
-  answers: Record<string, string>;
-  annotations?: Record<string, QuestionAnnotation>;
+  answers: Record<string, string>
+  annotations?: Record<string, QuestionAnnotation>
 }
 
 interface PendingQuestion {
-  id: string;
-  resolve: (answer: QuestionAnswer) => void;
-  reject: (err: Error) => void;
-  timer: NodeJS.Timeout;
+  id: string
+  resolve: (answer: QuestionAnswer) => void
+  reject: (err: Error) => void
+  timer: NodeJS.Timeout
 }
 
-const pending = new Map<string, PendingQuestion>();
+const pending = new Map<string, PendingQuestion>()
 
 export type RegisterResult =
   | { answered: true; value: QuestionAnswer }
-  | { answered: false; reason: "timeout" | "cancelled" };
+  | { answered: false; reason: 'timeout' | 'cancelled' }
 
-export function registerQuestion(id: string, timeoutMs: number): Promise<RegisterResult> {
-  return new Promise((resolve) => {
+export function registerQuestion(
+  id: string,
+  timeoutMs: number,
+): Promise<RegisterResult> {
+  return new Promise(resolve => {
     const timer = setTimeout(() => {
-      pending.delete(id);
-      resolve({ answered: false, reason: "timeout" });
-    }, timeoutMs);
+      pending.delete(id)
+      resolve({ answered: false, reason: 'timeout' })
+    }, timeoutMs)
 
     pending.set(id, {
       id,
-      resolve: (value) => {
-        clearTimeout(timer);
-        pending.delete(id);
-        resolve({ answered: true, value });
+      resolve: value => {
+        clearTimeout(timer)
+        pending.delete(id)
+        resolve({ answered: true, value })
       },
       reject: () => {
-        clearTimeout(timer);
-        pending.delete(id);
-        resolve({ answered: false, reason: "cancelled" });
+        clearTimeout(timer)
+        pending.delete(id)
+        resolve({ answered: false, reason: 'cancelled' })
       },
       timer,
-    });
-  });
+    })
+  })
 }
 
 export function answerQuestion(id: string, value: QuestionAnswer): boolean {
-  const q = pending.get(id);
-  if (!q) return false;
-  q.resolve(value);
-  return true;
+  const q = pending.get(id)
+  if (!q) return false
+  q.resolve(value)
+  return true
 }
 
 export function rejectQuestion(id: string, err: Error): boolean {
-  const q = pending.get(id);
-  if (!q) return false;
-  q.reject(err);
-  return true;
+  const q = pending.get(id)
+  if (!q) return false
+  q.reject(err)
+  return true
 }
 
 export function listPendingQuestionIds(): string[] {
-  return [...pending.keys()];
+  return [...pending.keys()]
 }

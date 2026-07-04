@@ -1,35 +1,43 @@
-import type { streamText } from "ai";
-import type { AgentOptions } from "../types.js";
-import { appendPreviewDelta, maybeStartPreview, type PreviewState } from "./previewStream.js";
-import { formatToolError } from "./toolErrors.js";
+import type { streamText } from 'ai'
+import type { AgentOptions } from '../types.js'
+import {
+  appendPreviewDelta,
+  maybeStartPreview,
+  type PreviewState,
+} from './previewStream.js'
+import { formatToolError } from './toolErrors.js'
 
-import type { ExecutedToolResult } from "../../services/tools/tool_execution.js";
+import type { ExecutedToolResult } from '../../services/tools/tool_execution.js'
 
 export interface StreamResult {
-  text: string;
-  toolCalls: Array<{ toolCallId: string; toolName: string; input: Record<string, unknown> }>;
-  toolResults: ExecutedToolResult[];
+  text: string
+  toolCalls: Array<{
+    toolCallId: string
+    toolName: string
+    input: Record<string, unknown>
+  }>
+  toolResults: ExecutedToolResult[]
 }
 
 // Event types that represent actual upstream content (not SDK-side
 // bookkeeping like "start" / "start-step"). We tag the first occurrence of
 // any of these as our real time-to-first-byte.
 const CONTENT_EVENT_TYPES = new Set([
-  "reasoning-start",
-  "reasoning-delta",
-  "text-delta",
-  "tool-input-start",
-  "tool-input-delta",
-  "tool-call",
-]);
+  'reasoning-start',
+  'reasoning-delta',
+  'text-delta',
+  'tool-input-start',
+  'tool-input-delta',
+  'tool-call',
+])
 
 /** AI SDK maps provider `delta` → `text` in most paths; read both for safety. */
 function streamPartText(e: { text?: string; delta?: string }): string {
-  const t = e.text;
-  const d = e.delta;
-  if (typeof t === "string" && t.length > 0) return t;
-  if (typeof d === "string" && d.length > 0) return d;
-  return typeof t === "string" ? t : typeof d === "string" ? d : "";
+  const t = e.text
+  const d = e.delta
+  if (typeof t === 'string' && t.length > 0) return t
+  if (typeof d === 'string' && d.length > 0) return d
+  return typeof t === 'string' ? t : typeof d === 'string' ? d : ''
 }
 
 /**
@@ -41,12 +49,12 @@ function streamPartText(e: { text?: string; delta?: string }): string {
  */
 function readInputDelta(event: unknown): { id?: string; delta?: string } {
   const e = event as {
-    id?: string;
-    toolCallId?: string;
-    delta?: string;
-    inputTextDelta?: string;
-  };
-  return { id: e.id ?? e.toolCallId, delta: e.inputTextDelta ?? e.delta };
+    id?: string
+    toolCallId?: string
+    delta?: string
+    inputTextDelta?: string
+  }
+  return { id: e.id ?? e.toolCallId, delta: e.inputTextDelta ?? e.delta }
 }
 
 /**
@@ -67,35 +75,35 @@ function readInputDelta(event: unknown): { id?: string; delta?: string } {
  */
 export interface ConsumeStreamOptions {
   /** When true, skip backfill — caller executes tools manually. */
-  manualToolExecution?: boolean;
+  manualToolExecution?: boolean
 }
 
 export async function consumeStream(
   stream: ReturnType<typeof streamText>,
-  eventBus: AgentOptions["eventBus"],
+  eventBus: AgentOptions['eventBus'],
   timing?: { firstEventMs: number },
   subagentNames?: Set<string>,
   options?: ConsumeStreamOptions,
 ): Promise<StreamResult> {
   const isSubagentName = (n?: string): boolean =>
-    !!(n && subagentNames && subagentNames.has(n));
+    !!(n && subagentNames && subagentNames.has(n))
 
-  const toolCalls: StreamResult["toolCalls"] = [];
-  const toolResults: StreamResult["toolResults"] = [];
-  let text = "";
-  let reasoningStarted = false;
+  const toolCalls: StreamResult['toolCalls'] = []
+  const toolResults: StreamResult['toolResults'] = []
+  let text = ''
+  let reasoningStarted = false
 
   /** Per-toolCallId preview state. Cleared on tool-call / tool-error. */
-  const previewStates = new Map<string, PreviewState>();
+  const previewStates = new Map<string, PreviewState>()
   /** Every toolCallId that fired tool-input-start. Drained on tool-call / tool-error / tool-result; survivors become synthetic results. */
-  const startedInputs = new Map<string, string | undefined>();
+  const startedInputs = new Map<string, string | undefined>()
 
   const flushReasoning = (): void => {
     if (reasoningStarted) {
-      eventBus.emit("reasoning_end", {});
-      reasoningStarted = false;
+      eventBus.emit('reasoning_end', {})
+      reasoningStarted = false
     }
-  };
+  }
 
   /**
    * Push a synthetic (toolCall, toolResult) pair onto the bus + local
@@ -109,106 +117,113 @@ export async function consumeStream(
     input: Record<string, unknown>,
     result: string,
   ): void => {
-    eventBus.emit("tool_call", {
+    eventBus.emit('tool_call', {
       name,
       args: input,
       toolCallId: id,
       isSubagent: isSubagentName(name),
-    });
-    eventBus.emit("tool_result", { name, result, toolCallId: id });
-    toolCalls.push({ toolCallId: id, toolName: name, input });
-    toolResults.push({ toolCallId: id, toolName: name, result });
-    previewStates.delete(id);
-    startedInputs.delete(id);
-  };
+    })
+    eventBus.emit('tool_result', { name, result, toolCallId: id })
+    toolCalls.push({ toolCallId: id, toolName: name, input })
+    toolResults.push({ toolCallId: id, toolName: name, result })
+    previewStates.delete(id)
+    startedInputs.delete(id)
+  }
 
   for await (const event of stream.fullStream) {
     if (timing && !timing.firstEventMs && CONTENT_EVENT_TYPES.has(event.type)) {
-      timing.firstEventMs = Date.now();
+      timing.firstEventMs = Date.now()
     }
     switch (event.type) {
-      case "reasoning-start":
-        reasoningStarted = true;
-        eventBus.emit("reasoning_start", {});
-        break;
+      case 'reasoning-start':
+        reasoningStarted = true
+        eventBus.emit('reasoning_start', {})
+        break
 
-      case "reasoning-delta": {
+      case 'reasoning-delta': {
         if (!reasoningStarted) {
-          reasoningStarted = true;
-          eventBus.emit("reasoning_start", {});
+          reasoningStarted = true
+          eventBus.emit('reasoning_start', {})
         }
-        const delta = streamPartText(event);
-        if (delta) eventBus.emit("reasoning_delta", { delta });
-        break;
+        const delta = streamPartText(event)
+        if (delta) eventBus.emit('reasoning_delta', { delta })
+        break
       }
 
-      case "reasoning-end":
-        flushReasoning();
-        break;
+      case 'reasoning-end':
+        flushReasoning()
+        break
 
-      case "text-delta": {
-        flushReasoning();
-        const delta = streamPartText(event);
+      case 'text-delta': {
+        flushReasoning()
+        const delta = streamPartText(event)
         if (delta) {
-          text += delta;
-          eventBus.emit("text_delta", { delta });
+          text += delta
+          eventBus.emit('text_delta', { delta })
         }
-        break;
+        break
       }
 
-      case "tool-input-start": {
-        flushReasoning();
-        const e = event as { id?: string; toolCallId?: string; toolName?: string };
-        const id = e.id ?? e.toolCallId;
-        if (!id) break;
-        startedInputs.set(id, e.toolName);
-        eventBus.emit("tool_input_start", {
+      case 'tool-input-start': {
+        flushReasoning()
+        const e = event as {
+          id?: string
+          toolCallId?: string
+          toolName?: string
+        }
+        const id = e.id ?? e.toolCallId
+        if (!id) break
+        startedInputs.set(id, e.toolName)
+        eventBus.emit('tool_input_start', {
           toolCallId: id,
           name: e.toolName,
           isSubagent: isSubagentName(e.toolName),
-        });
-        const preview = maybeStartPreview(e.toolName);
-        if (preview) previewStates.set(id, preview);
-        break;
+        })
+        const preview = maybeStartPreview(e.toolName)
+        if (preview) previewStates.set(id, preview)
+        break
       }
 
-      case "tool-input-delta": {
-        const { id, delta } = readInputDelta(event);
-        if (!id || !delta) break;
+      case 'tool-input-delta': {
+        const { id, delta } = readInputDelta(event)
+        if (!id || !delta) break
 
-        eventBus.emit("tool_input_delta", { toolCallId: id, bytes: delta.length });
+        eventBus.emit('tool_input_delta', {
+          toolCallId: id,
+          bytes: delta.length,
+        })
 
-        const state = previewStates.get(id);
+        const state = previewStates.get(id)
         if (state) {
-          const newlyDecoded = appendPreviewDelta(state, delta);
+          const newlyDecoded = appendPreviewDelta(state, delta)
           if (newlyDecoded) {
-            eventBus.emit("tool_input_preview_delta", {
+            eventBus.emit('tool_input_preview_delta', {
               toolCallId: id,
               delta: newlyDecoded,
-            });
+            })
           }
         }
-        break;
+        break
       }
 
-      case "tool-call":
-        flushReasoning();
-        eventBus.emit("tool_call", {
+      case 'tool-call':
+        flushReasoning()
+        eventBus.emit('tool_call', {
           name: event.toolName,
           args: event.input,
           toolCallId: event.toolCallId,
           isSubagent: isSubagentName(event.toolName),
-        });
+        })
         toolCalls.push({
           toolCallId: event.toolCallId,
           toolName: event.toolName,
           input: event.input as Record<string, unknown>,
-        });
-        previewStates.delete(event.toolCallId);
-        startedInputs.delete(event.toolCallId);
-        break;
+        })
+        previewStates.delete(event.toolCallId)
+        startedInputs.delete(event.toolCallId)
+        break
 
-      case "tool-error": {
+      case 'tool-error': {
         // SDK emits this when (a) inputSchema validation fails — the
         // single most common cause of the synthetic "Missing tool result"
         // we used to surface — or (b) execute() threw. Either way the SDK
@@ -216,44 +231,44 @@ export async function consumeStream(
         // ourselves; otherwise the Responses API 400s on an unmatched
         // tool_call_id, and the frontend's tool card hangs forever.
         const e = event as {
-          toolCallId: string;
-          toolName: string;
-          error?: unknown;
-          input?: unknown;
-        };
+          toolCallId: string
+          toolName: string
+          error?: unknown
+          input?: unknown
+        }
         synthesizePair(
           e.toolCallId,
           e.toolName,
           (e.input ?? {}) as Record<string, unknown>,
           `Error: ${formatToolError(e.toolName, e.error)}`,
-        );
-        break;
+        )
+        break
       }
 
-      case "tool-result": {
-        const raw = event.output;
-        const result = typeof raw === "string" ? raw : JSON.stringify(raw);
-        eventBus.emit("tool_result", {
+      case 'tool-result': {
+        const raw = event.output
+        const result = typeof raw === 'string' ? raw : JSON.stringify(raw)
+        eventBus.emit('tool_result', {
           name: event.toolName,
           result,
           toolCallId: event.toolCallId,
-        });
+        })
         toolResults.push({
           toolCallId: event.toolCallId,
           toolName: event.toolName,
           result,
-        });
-        startedInputs.delete(event.toolCallId);
-        break;
+        })
+        startedInputs.delete(event.toolCallId)
+        break
       }
 
-      case "error":
-        eventBus.emit("error", { message: String(event.error) });
-        break;
+      case 'error':
+        eventBus.emit('error', { message: String(event.error) })
+        break
     }
   }
 
-  flushReasoning();
+  flushReasoning()
 
   // Any toolCallId still in `startedInputs` had a `tool-input-start` but
   // never reached `tool-call` / `tool-error` / `tool-result`. That means
@@ -263,18 +278,18 @@ export async function consumeStream(
   for (const [id, toolName] of startedInputs.entries()) {
     synthesizePair(
       id,
-      toolName ?? "unknown",
+      toolName ?? 'unknown',
       {},
-      "Error: Tool call was started but never completed " +
-        "(upstream stream interrupted before arguments finished — " +
-        "likely a proxy timeout or the model hit its output token limit).",
-    );
+      'Error: Tool call was started but never completed ' +
+        '(upstream stream interrupted before arguments finished — ' +
+        'likely a proxy timeout or the model hit its output token limit).',
+    )
   }
 
   if (!options?.manualToolExecution) {
-    backfillMissingResults(toolCalls, toolResults, eventBus);
+    backfillMissingResults(toolCalls, toolResults, eventBus)
   }
-  return { text, toolCalls, toolResults };
+  return { text, toolCalls, toolResults }
 }
 
 /**
@@ -287,20 +302,28 @@ export async function consumeStream(
  * input-schema phantoms again.
  */
 function backfillMissingResults(
-  toolCalls: StreamResult["toolCalls"],
-  toolResults: StreamResult["toolResults"],
-  eventBus: AgentOptions["eventBus"],
+  toolCalls: StreamResult['toolCalls'],
+  toolResults: StreamResult['toolResults'],
+  eventBus: AgentOptions['eventBus'],
 ): void {
-  const seen = new Set(toolResults.map((tr) => tr.toolCallId));
+  const seen = new Set(toolResults.map(tr => tr.toolCallId))
   for (const tc of toolCalls) {
-    if (seen.has(tc.toolCallId)) continue;
+    if (seen.has(tc.toolCallId)) continue
     const result =
       `Error: Internal — tool-call for ${tc.toolName} (id ${tc.toolCallId}) ` +
       `was received but neither tool-result nor tool-error followed. ` +
       `This indicates a bug in the AI SDK runtime, not a problem with ` +
-      `the tool's arguments. Please retry.`;
-    console.error(`[agent] ${result}`);
-    eventBus.emit("tool_result", { name: tc.toolName, result, toolCallId: tc.toolCallId });
-    toolResults.push({ toolCallId: tc.toolCallId, toolName: tc.toolName, result });
+      `the tool's arguments. Please retry.`
+    console.error(`[agent] ${result}`)
+    eventBus.emit('tool_result', {
+      name: tc.toolName,
+      result,
+      toolCallId: tc.toolCallId,
+    })
+    toolResults.push({
+      toolCallId: tc.toolCallId,
+      toolName: tc.toolName,
+      result,
+    })
   }
 }

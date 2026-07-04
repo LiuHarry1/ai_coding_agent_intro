@@ -1,55 +1,57 @@
-import type { LlmProfile, ProviderId, ThinkingConfig } from "./types.js";
+import type { LlmProfile, ProviderId, ThinkingConfig } from './types.js'
 
-const PROVIDERS: ProviderId[] = ["openai", "anthropic", "openai-compatible"];
+const PROVIDERS: ProviderId[] = ['openai', 'anthropic', 'openai-compatible']
 
 /** Older examples used `"kind": "anthropic"` instead of `"provider": "anthropic"`. */
 const LEGACY_KIND_TO_PROVIDER: Record<string, ProviderId> = {
-  anthropic: "anthropic",
-  openai: "openai",
-  "openai-compatible": "openai-compatible",
-  "openai-responses": "openai",
-};
+  anthropic: 'anthropic',
+  openai: 'openai',
+  'openai-compatible': 'openai-compatible',
+  'openai-responses': 'openai',
+}
 
 export const DEFAULT_PROFILE: LlmProfile = {
-  provider: "openai-compatible",
-  name: "copilot-proxy",
-  baseURL: "http://localhost:4141/v1",
-  apiKey: "not-needed",
-  model: "gpt-5.2",
-  thinking: { mode: "off" },
-};
+  provider: 'openai-compatible',
+  name: 'copilot-proxy',
+  baseURL: 'http://localhost:4141/v1',
+  apiKey: 'not-needed',
+  model: 'gpt-5.2',
+  thinking: { mode: 'off' },
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
 function parseThinking(raw: unknown): ThinkingConfig {
-  if (raw === undefined || raw === null) return { mode: "off" };
-  if (!isRecord(raw)) return { mode: "off" };
+  if (raw === undefined || raw === null) return { mode: 'off' }
+  if (!isRecord(raw)) return { mode: 'off' }
 
-  const mode = raw.mode;
+  const mode = raw.mode
   // User JSON often has `"thinking": {}` — treat absent mode like "off".
-  if (mode === undefined || mode === null) return { mode: "off" };
+  if (mode === undefined || mode === null) return { mode: 'off' }
   switch (mode) {
-    case "off":
-      return { mode: "off" };
-    case "auto":
-      return { mode: "auto" };
-    case "low":
-      return { mode: "low" };
-    case "medium":
-      return { mode: "medium" };
-    case "high":
-      return { mode: "high" };
-    case "budget": {
-      const tokens = typeof raw.tokens === "number" ? raw.tokens : 0;
+    case 'off':
+      return { mode: 'off' }
+    case 'auto':
+      return { mode: 'auto' }
+    case 'low':
+      return { mode: 'low' }
+    case 'medium':
+      return { mode: 'medium' }
+    case 'high':
+      return { mode: 'high' }
+    case 'budget': {
+      const tokens = typeof raw.tokens === 'number' ? raw.tokens : 0
       if (!(tokens > 0)) {
-        throw new Error(`thinking.mode "budget" requires positive "tokens" (got ${raw.tokens})`);
+        throw new Error(
+          `thinking.mode "budget" requires positive "tokens" (got ${raw.tokens})`,
+        )
       }
-      return { mode: "budget", tokens };
+      return { mode: 'budget', tokens }
     }
     default:
-      throw new Error(`Unknown thinking.mode: ${String(mode)}`);
+      throw new Error(`Unknown thinking.mode: ${String(mode)}`)
   }
 }
 
@@ -58,40 +60,43 @@ function parseThinking(raw: unknown): ThinkingConfig {
  * Falls back to {@link DEFAULT_PROFILE} only when `raw` is empty/undefined.
  */
 export function resolveProfile(raw: unknown): LlmProfile {
-  if (raw === undefined || raw === null) return { ...DEFAULT_PROFILE };
+  if (raw === undefined || raw === null) return { ...DEFAULT_PROFILE }
   if (!isRecord(raw)) {
-    throw new Error("LLM profile must be an object");
+    throw new Error('LLM profile must be an object')
   }
 
-  const merged = { ...DEFAULT_PROFILE, ...raw } as Record<string, unknown>;
+  const merged = { ...DEFAULT_PROFILE, ...raw } as Record<string, unknown>
 
-  if (typeof merged.kind === "string") {
-    const mapped = LEGACY_KIND_TO_PROVIDER[merged.kind];
-    if (mapped) merged.provider = mapped;
+  if (typeof merged.kind === 'string') {
+    const mapped = LEGACY_KIND_TO_PROVIDER[merged.kind]
+    if (mapped) merged.provider = mapped
   }
 
-  const provider = merged.provider;
-  if (typeof provider !== "string" || !PROVIDERS.includes(provider as ProviderId)) {
+  const provider = merged.provider
+  if (
+    typeof provider !== 'string' ||
+    !PROVIDERS.includes(provider as ProviderId)
+  ) {
     throw new Error(
-      `Invalid provider "${String(provider)}". Expected one of: ${PROVIDERS.join(", ")}`
-    );
+      `Invalid provider "${String(provider)}". Expected one of: ${PROVIDERS.join(', ')}`,
+    )
   }
 
-  const required = ["baseURL", "apiKey", "model"] as const;
+  const required = ['baseURL', 'apiKey', 'model'] as const
   for (const key of required) {
-    if (typeof merged[key] !== "string" || !merged[key]) {
-      throw new Error(`LLM profile missing required field: ${key}`);
+    if (typeof merged[key] !== 'string' || !merged[key]) {
+      throw new Error(`LLM profile missing required field: ${key}`)
     }
   }
 
   return {
     provider: provider as ProviderId,
-    name: typeof merged.name === "string" ? merged.name : undefined,
+    name: typeof merged.name === 'string' ? merged.name : undefined,
     baseURL: merged.baseURL as string,
     apiKey: merged.apiKey as string,
     model: merged.model as string,
     thinking: parseThinking(merged.thinking),
-  };
+  }
 }
 
 /** Round-trip a resolved profile back to a JSON-mergeable record. */
@@ -103,5 +108,5 @@ export function profileToRecord(p: LlmProfile): Record<string, unknown> {
     apiKey: p.apiKey,
     model: p.model,
     thinking: p.thinking,
-  };
+  }
 }

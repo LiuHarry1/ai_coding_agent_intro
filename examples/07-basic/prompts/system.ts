@@ -1,16 +1,16 @@
-import { isWindows, platformLabel } from "../core/platform.js";
-import { SHELL_TOOL_NAME } from "../subagents/prompt-fragments.js";
+import { isWindows, platformLabel } from '../core/platform.js'
+import { SHELL_TOOL_NAME } from '../subagents/prompt-fragments.js'
 
 export function systemPrompt(cwd: string, projectRules?: string): string {
   const rulesBlock = projectRules
     ? `\n<project_rules source="AGENTS.md">\nThe following rules were loaded from the project's AGENTS.md. They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>\n`
-    : "";
+    : ''
 
   // Per-platform syntax warning so the model doesn't reach for bash idioms
   // (\`&&\`, \`||\`, redirects) when it's actually talking to PowerShell 5.1.
   const shellSyntaxNote = isWindows
     ? `Shell is PowerShell 5.1+. Bash-style \`&&\` / \`||\` are NOT supported — use \`;\` to chain or split into separate calls.`
-    : `Shell is bash. Use \`&&\` / \`||\` / \`;\` to chain commands.`;
+    : `Shell is bash. Use \`&&\` / \`||\` / \`;\` to chain commands.`
 
   return `You are an autonomous coding agent. You help the user by writing, editing, and running code.
 
@@ -71,5 +71,5 @@ Don't use destructive actions as shortcuts (no \`--no-verify\`, no deleting unfa
 
 <agents_md>
 Only create or update AGENTS.md when the user explicitly asks. Never offer proactively.
-</agents_md>`;
+</agents_md>`
 }

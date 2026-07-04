@@ -1,1 +1,1 @@
-export { systemPrompt } from "./prompts/system.js";
+export { systemPrompt } from './prompts/system.js'

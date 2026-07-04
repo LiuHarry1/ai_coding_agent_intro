@@ -6,5 +6,5 @@
  * Mirrors Claude Code's habit of pinning a protocol version on the init
  * message rather than relying on the package version.
  */
-export const PROTOCOL_VERSION = "1" as const;
-export type ProtocolVersion = typeof PROTOCOL_VERSION;
+export const PROTOCOL_VERSION = '1' as const
+export type ProtocolVersion = typeof PROTOCOL_VERSION

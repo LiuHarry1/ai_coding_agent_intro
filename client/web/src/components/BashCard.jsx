@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import CopyButton from "./CopyButton.jsx";
-import ToolRowHeader from "./ToolRowHeader.jsx";
-import { detectError } from "../lib/utils.js";
+import React, { useState } from 'react'
+import CopyButton from './CopyButton.jsx'
+import ToolRowHeader from './ToolRowHeader.jsx'
+import { detectError } from '../lib/utils.js'
 
 /**
  * Compact one-line card for bash. Four modes:
@@ -22,37 +22,37 @@ import { detectError } from "../lib/utils.js";
  */
 
 function describeBash(args) {
-  if (!args || typeof args !== "object") return { verb: "Ran", text: "" };
+  if (!args || typeof args !== 'object') return { verb: 'Ran', text: '' }
 
-  const cmd = typeof args.command === "string" ? args.command.trim() : "";
+  const cmd = typeof args.command === 'string' ? args.command.trim() : ''
   if (cmd) {
-    return { verb: args.background ? "Started" : "Ran", text: cmd };
+    return { verb: args.background ? 'Started' : 'Ran', text: cmd }
   }
 
   // Only honor pid when it's a real OS pid (>0). Strict-tools `pid: 0` is
   // a no-op default that gets confused for an intentional pid check.
-  const pid = typeof args.pid === "number" && args.pid > 0 ? args.pid : null;
+  const pid = typeof args.pid === 'number' && args.pid > 0 ? args.pid : null
   if (pid != null) {
-    return { verb: args.kill ? "Killed" : "Checked", text: `pid ${pid}` };
+    return { verb: args.kill ? 'Killed' : 'Checked', text: `pid ${pid}` }
   }
 
-  return { verb: "Ran", text: "" };
+  return { verb: 'Ran', text: '' }
 }
 
 export default function BashCard({ part }) {
-  const [expanded, setExpanded] = useState(false);
-  const args = part.args || {};
-  const result = part.result;
-  const isDone = part.status === "done";
-  const isError = isDone && detectError(part.name || "Bash", result);
-  const { verb, text } = describeBash(args);
-  const hasOutput = typeof result === "string" && result.length > 0;
+  const [expanded, setExpanded] = useState(false)
+  const args = part.args || {}
+  const result = part.result
+  const isDone = part.status === 'done'
+  const isError = isDone && detectError(part.name || 'Bash', result)
+  const { verb, text } = describeBash(args)
+  const hasOutput = typeof result === 'string' && result.length > 0
 
   return (
-    <div className={`tool-row bash-card ${isError ? "has-error" : ""}`}>
+    <div className={`tool-row bash-card ${isError ? 'has-error' : ''}`}>
       <ToolRowHeader
         expanded={expanded}
-        onToggle={() => setExpanded((v) => !v)}
+        onToggle={() => setExpanded(v => !v)}
         label={verb}
         title={text}
         titlePlain
@@ -62,19 +62,21 @@ export default function BashCard({ part }) {
         isError={isError}
         actions={
           isDone && !isError && hasOutput ? (
-            <CopyButton text={result} label="Copy output" inline />
+            <CopyButton text={result} label='Copy output' inline />
           ) : null
         }
       />
 
       {expanded && isDone && hasOutput && (
-        <pre className={`tool-row-body ${isError ? "tool-row-body--error" : ""}`}>
+        <pre
+          className={`tool-row-body ${isError ? 'tool-row-body--error' : ''}`}
+        >
           {result}
         </pre>
       )}
       {expanded && isDone && !hasOutput && (
-        <div className="tool-row-empty">(no output)</div>
+        <div className='tool-row-empty'>(no output)</div>
       )}
     </div>
-  );
+  )
 }

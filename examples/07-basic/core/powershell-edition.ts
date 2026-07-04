@@ -1,5 +1,5 @@
-import { spawnSync } from "child_process";
-import { isWindows } from "./platform.js";
+import { spawnSync } from 'child_process'
+import { isWindows } from './platform.js'
 
 /**
  * "desktop" = Windows PowerShell 5.1 (powershell.exe — bundled with Windows).
@@ -11,9 +11,9 @@ import { isWindows } from "./platform.js";
  * the running edition once and embed it into the tool's description.
  *
  */
-export type PowerShellEdition = "desktop" | "core" | null;
+export type PowerShellEdition = 'desktop' | 'core' | null
 
-let cached: PowerShellEdition | undefined;
+let cached: PowerShellEdition | undefined
 
 /**
  * Synchronously detect the PowerShell edition. Blocks Node startup on
@@ -25,42 +25,47 @@ let cached: PowerShellEdition | undefined;
  * Returns `null` on non-Windows or if powershell isn't installed.
  */
 export function detectPowerShellEdition(): PowerShellEdition {
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return cached
   if (!isWindows) {
-    cached = null;
-    return cached;
+    cached = null
+    return cached
   }
   try {
     const result = spawnSync(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSEdition.ToString()"],
-      { encoding: "utf8", timeout: 5_000 },
-    );
-    const out = (result.stdout ?? "").trim().toLowerCase();
-    if (out === "desktop") {
-      cached = "desktop";
-    } else if (out === "core") {
-      cached = "core";
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '$PSVersionTable.PSEdition.ToString()',
+      ],
+      { encoding: 'utf8', timeout: 5_000 },
+    )
+    const out = (result.stdout ?? '').trim().toLowerCase()
+    if (out === 'desktop') {
+      cached = 'desktop'
+    } else if (out === 'core') {
+      cached = 'core'
     } else {
       // PS spawned but emitted something we didn't expect (locale-translated
       // output? PS 2.0 without PSEdition?). Log so devs can see why the
       // edition-aware prompt section degraded to "unknown".
-      cached = null;
-      const stderr = (result.stderr ?? "").trim();
+      cached = null
+      const stderr = (result.stderr ?? '').trim()
       console.warn(
         `[powershell-edition] detection produced unexpected output; ` +
           `falling back to conservative 5.1 prompt. stdout=${JSON.stringify(out)} ` +
           `stderr=${JSON.stringify(stderr.slice(0, 200))} ` +
-          `signal=${result.signal ?? "none"} status=${result.status}`,
-      );
+          `signal=${result.signal ?? 'none'} status=${result.status}`,
+      )
     }
   } catch (err) {
     // powershell.exe missing from PATH, blocked by AppLocker, etc.
-    cached = null;
+    cached = null
     console.warn(
       `[powershell-edition] failed to spawn powershell.exe; ` +
         `falling back to conservative 5.1 prompt. error=${(err as Error).message}`,
-    );
+    )
   }
-  return cached;
+  return cached
 }

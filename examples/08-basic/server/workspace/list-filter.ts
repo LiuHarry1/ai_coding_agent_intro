@@ -1,11 +1,11 @@
-import { getAppDirName } from "../../utils/app-dir.js";
+import { getAppDirName } from '../../utils/app-dir.js'
 
 /** Dot entries always listed without enabling full hidden-file mode. */
 function isAlwaysVisibleDotEntry(name: string): boolean {
-  if (name === getAppDirName()) return true;
+  if (name === getAppDirName()) return true
   // Skill/runtime config — users edit these from the IDE file tree.
-  if (name === ".env" || name.startsWith(".env.")) return true;
-  return false;
+  if (name === '.env' || name.startsWith('.env.')) return true
+  return false
 }
 
 /**
@@ -18,8 +18,8 @@ function isAlwaysVisibleDotEntry(name: string): boolean {
  * - Other dot entries: only when `showHidden` is true.
  */
 export function shouldListDirEntry(name: string, showHidden: boolean): boolean {
-  if (name === "." || name === "..") return false;
-  if (!name.startsWith(".")) return true;
-  if (isAlwaysVisibleDotEntry(name)) return true;
-  return showHidden;
+  if (name === '.' || name === '..') return false
+  if (!name.startsWith('.')) return true
+  if (isAlwaysVisibleDotEntry(name)) return true
+  return showHidden
 }

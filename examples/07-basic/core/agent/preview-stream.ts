@@ -18,39 +18,39 @@
  */
 
 export const PREVIEW_FIELDS: Record<string, string> = {
-  edit_file: "new_string",
-  write_file: "content",
-};
+  edit_file: 'new_string',
+  write_file: 'content',
+}
 
 export interface PreviewState {
-  toolName: string;
-  fieldName: string;
-  buffer: string;
+  toolName: string
+  fieldName: string
+  buffer: string
   /** -1 = field's opening quote not yet seen in the buffer. */
-  fieldStartIdx: number;
+  fieldStartIdx: number
   /** How many decoded chars we've already emitted via `tool_input_preview_delta`. */
-  emittedLen: number;
-  ended: boolean;
+  emittedLen: number
+  ended: boolean
 }
 
 /** Locate the opening quote of `"<fieldName>":"…"` in a partial JSON buffer. */
 export function findFieldValueStart(buffer: string, fieldName: string): number {
-  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`"${escaped}"\\s*:\\s*"`);
-  const m = re.exec(buffer);
-  return m ? m.index + m[0].length : -1;
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`"${escaped}"\\s*:\\s*"`)
+  const m = re.exec(buffer)
+  return m ? m.index + m[0].length : -1
 }
 
 const ESCAPE_MAP: Record<string, string> = {
   '"': '"',
-  "\\": "\\",
-  "/": "/",
-  n: "\n",
-  t: "\t",
-  r: "\r",
-  b: "\b",
-  f: "\f",
-};
+  '\\': '\\',
+  '/': '/',
+  n: '\n',
+  t: '\t',
+  r: '\r',
+  b: '\b',
+  f: '\f',
+}
 
 /**
  * Decode a JSON string starting at `startIdx` in `buffer`, stopping at the
@@ -63,30 +63,30 @@ export function decodeStreamingJsonString(
   buffer: string,
   startIdx: number,
 ): { value: string; ended: boolean } {
-  let out = "";
-  let i = startIdx;
+  let out = ''
+  let i = startIdx
   while (i < buffer.length) {
-    const ch = buffer[i];
-    if (ch === '"') return { value: out, ended: true };
-    if (ch === "\\") {
-      if (i + 1 >= buffer.length) break; // wait for the escape char
-      const esc = buffer[i + 1];
-      if (esc === "u") {
-        if (i + 6 > buffer.length) break; // wait for all 4 hex digits
-        const hex = buffer.slice(i + 2, i + 6);
-        const code = parseInt(hex, 16);
-        if (!Number.isNaN(code)) out += String.fromCharCode(code);
-        i += 6;
-        continue;
+    const ch = buffer[i]
+    if (ch === '"') return { value: out, ended: true }
+    if (ch === '\\') {
+      if (i + 1 >= buffer.length) break // wait for the escape char
+      const esc = buffer[i + 1]
+      if (esc === 'u') {
+        if (i + 6 > buffer.length) break // wait for all 4 hex digits
+        const hex = buffer.slice(i + 2, i + 6)
+        const code = parseInt(hex, 16)
+        if (!Number.isNaN(code)) out += String.fromCharCode(code)
+        i += 6
+        continue
       }
-      out += ESCAPE_MAP[esc] ?? esc;
-      i += 2;
-      continue;
+      out += ESCAPE_MAP[esc] ?? esc
+      i += 2
+      continue
     }
-    out += ch;
-    i++;
+    out += ch
+    i++
   }
-  return { value: out, ended: false };
+  return { value: out, ended: false }
 }
 
 /**
@@ -99,18 +99,21 @@ export function appendPreviewDelta(
   state: PreviewState,
   deltaText: string,
 ): string {
-  if (state.ended) return "";
-  state.buffer += deltaText;
+  if (state.ended) return ''
+  state.buffer += deltaText
   if (state.fieldStartIdx === -1) {
-    state.fieldStartIdx = findFieldValueStart(state.buffer, state.fieldName);
-    if (state.fieldStartIdx === -1) return "";
+    state.fieldStartIdx = findFieldValueStart(state.buffer, state.fieldName)
+    if (state.fieldStartIdx === -1) return ''
   }
-  const { value, ended } = decodeStreamingJsonString(state.buffer, state.fieldStartIdx);
-  if (ended) state.ended = true;
-  if (value.length <= state.emittedLen) return "";
-  const out = value.slice(state.emittedLen);
-  state.emittedLen = value.length;
-  return out;
+  const { value, ended } = decodeStreamingJsonString(
+    state.buffer,
+    state.fieldStartIdx,
+  )
+  if (ended) state.ended = true
+  if (value.length <= state.emittedLen) return ''
+  const out = value.slice(state.emittedLen)
+  state.emittedLen = value.length
+  return out
 }
 
 /**
@@ -118,16 +121,18 @@ export function appendPreviewDelta(
  * listed in `PREVIEW_FIELDS` (no preview desired, fall back to byte
  * counter).
  */
-export function maybeStartPreview(toolName: string | undefined): PreviewState | null {
-  if (!toolName) return null;
-  const fieldName = PREVIEW_FIELDS[toolName];
-  if (!fieldName) return null;
+export function maybeStartPreview(
+  toolName: string | undefined,
+): PreviewState | null {
+  if (!toolName) return null
+  const fieldName = PREVIEW_FIELDS[toolName]
+  if (!fieldName) return null
   return {
     toolName,
     fieldName,
-    buffer: "",
+    buffer: '',
     fieldStartIdx: -1,
     emittedLen: 0,
     ended: false,
-  };
+  }
 }

@@ -1,44 +1,44 @@
-import type { ReadOutput } from "../read/types.js";
+import type { ReadOutput } from '../read/types.js'
 
 export type FileAttachment = {
-  type: "file";
-  filename: string;
-  displayPath: string;
-  content: ReadOutput;
-  truncated?: boolean;
-};
+  type: 'file'
+  filename: string
+  displayPath: string
+  content: ReadOutput
+  truncated?: boolean
+}
 
 export type PdfReferenceAttachment = {
-  type: "pdf_reference";
-  filename: string;
-  displayPath: string;
-  pageCount: number;
-  fileSize: number;
-};
+  type: 'pdf_reference'
+  filename: string
+  displayPath: string
+  pageCount: number
+  fileSize: number
+}
 
 export type DirectoryAttachment = {
-  type: "directory";
-  path: string;
-  displayPath: string;
-  content: string;
-};
+  type: 'directory'
+  path: string
+  displayPath: string
+  content: string
+}
 
 export type AlreadyReadFileAttachment = {
-  type: "already_read_file";
-  filename: string;
-  displayPath: string;
-  content: ReadOutput;
-};
+  type: 'already_read_file'
+  filename: string
+  displayPath: string
+  content: ReadOutput
+}
 
 export type Attachment =
   | FileAttachment
   | PdfReferenceAttachment
   | DirectoryAttachment
-  | AlreadyReadFileAttachment;
+  | AlreadyReadFileAttachment
 
 export interface ReadFileStateEntry {
-  content: string;
-  timestamp: number;
+  content: string
+  timestamp: number
 }
 
-export type ReadFileState = Map<string, ReadFileStateEntry>;
+export type ReadFileState = Map<string, ReadFileStateEntry>

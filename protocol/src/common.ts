@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 /**
  * Shared primitives used across server, client, and control messages.
@@ -18,35 +18,35 @@ export const envelopeFields = {
    * matched. Optional because incremental stream deltas often omit it.
    */
   uuid: z.string().optional(),
-};
+}
 
 /**
  * Permission / operating mode. Mirrors the backend's external modes
  * (`isValidExternalMode`) and maps cleanly onto ACP's `session/set_mode`.
  */
-export const PermissionModeSchema = z.enum(["ask", "agent", "plan"]);
-export type PermissionMode = z.infer<typeof PermissionModeSchema>;
+export const PermissionModeSchema = z.enum(['ask', 'agent', 'plan'])
+export type PermissionMode = z.infer<typeof PermissionModeSchema>
 
 /** A single TODO item as produced by the `TodoWrite` tool. */
 export const TodoStatusSchema = z.enum([
-  "pending",
-  "in_progress",
-  "completed",
-  "cancelled",
-]);
-export type TodoStatus = z.infer<typeof TodoStatusSchema>;
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+])
+export type TodoStatus = z.infer<typeof TodoStatusSchema>
 
 export const TodoItemSchema = z.object({
   id: z.string(),
   content: z.string(),
   status: TodoStatusSchema,
-});
-export type TodoItem = z.infer<typeof TodoItemSchema>;
+})
+export type TodoItem = z.infer<typeof TodoItemSchema>
 
 /** Token accounting attached to terminal `result` messages. */
 export const UsageSchema = z.object({
   input_tokens: z.number().optional(),
   output_tokens: z.number().optional(),
   total_tokens: z.number().optional(),
-});
-export type Usage = z.infer<typeof UsageSchema>;
+})
+export type Usage = z.infer<typeof UsageSchema>

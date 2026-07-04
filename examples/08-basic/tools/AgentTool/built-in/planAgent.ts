@@ -1,8 +1,12 @@
-import { createAgentDefinition } from "../base.js";
-import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "../promptFragments.js";
-import { AGENT_TOOL_NAME, INTERACTIVE_TOOLS, MUTATING_TOOLS } from "../../../constants/tool_names.js";
+import { createAgentDefinition } from '../base.js'
+import { READ_ONLY_MODE, READ_ONLY_TOOLS } from '../promptFragments.js'
+import {
+  AGENT_TOOL_NAME,
+  INTERACTIVE_TOOLS,
+  MUTATING_TOOLS,
+} from '../../../constants/tool_names.js'
 
-export const PLAN_AGENT_TYPE = "Plan";
+export const PLAN_AGENT_TYPE = 'Plan'
 
 const PLAN_SYSTEM = `You are a software architect. Explore the codebase and design a concrete implementation plan — NOT to write code.
 
@@ -25,7 +29,7 @@ Numbered, in execution order. Each step = 1-2 sentences naming the file(s) and t
 
 Be specific (file paths, line numbers, function names) so the parent can execute without re-discovering the code.
 
-REMEMBER: You can ONLY explore and plan — file-mutating tools are disabled. Produce the plan and stop; don't promise changes.`;
+REMEMBER: You can ONLY explore and plan — file-mutating tools are disabled. Produce the plan and stop; don't promise changes.`
 
 export const definition = createAgentDefinition({
   agentType: PLAN_AGENT_TYPE,
@@ -38,10 +42,10 @@ export const definition = createAgentDefinition({
     'returns numbered steps + a list of critical files to edit. Prefer ' +
     '"explore" for pure fact-finding and "general_purpose" for tasks that ' +
     'should also execute changes.',
-  description: "Implementation planning",
+  description: 'Implementation planning',
   systemPrompt: PLAN_SYSTEM,
   disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 25,
-  label: "Plan",
+  label: 'Plan',
   omitProjectRules: true,
-});
+})

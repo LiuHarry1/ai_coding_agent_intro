@@ -1,17 +1,17 @@
-import ToolCallCard from "./ToolCallCard.jsx";
-import FileChangeCard from "./FileChangeCard.jsx";
-import ReadFileCard from "./ReadFileCard.jsx";
-import ListDirCard from "./ListDirCard.jsx";
-import BashCard from "./BashCard.jsx";
-import WebSearchCard from "./WebSearchCard.jsx";
-import WebFetchCard from "./WebFetchCard.jsx";
-import SubagentCard from "./SubagentCard.jsx";
-import GlobCard from "./GlobCard.jsx";
-import GrepCard from "./GrepCard.jsx";
-import ToolSearchCard from "./ToolSearchCard.jsx";
-import SkillCard from "./SkillCard.jsx";
-import SubagentStepFallback from "./SubagentStepFallback.jsx";
-import { isFetchTool, isSearchTool } from "../lib/tool-kind.js";
+import ToolCallCard from './ToolCallCard.jsx'
+import FileChangeCard from './FileChangeCard.jsx'
+import ReadFileCard from './ReadFileCard.jsx'
+import ListDirCard from './ListDirCard.jsx'
+import BashCard from './BashCard.jsx'
+import WebSearchCard from './WebSearchCard.jsx'
+import WebFetchCard from './WebFetchCard.jsx'
+import SubagentCard from './SubagentCard.jsx'
+import GlobCard from './GlobCard.jsx'
+import GrepCard from './GrepCard.jsx'
+import ToolSearchCard from './ToolSearchCard.jsx'
+import SkillCard from './SkillCard.jsx'
+import SubagentStepFallback from './SubagentStepFallback.jsx'
+import { isFetchTool, isSearchTool } from '../lib/tool-kind.js'
 import {
   BASH,
   POWERSHELL,
@@ -27,9 +27,9 @@ import {
   SKILL,
   SUPPRESSED_TOOL_CARDS,
   SUBAGENT_SUPPRESSED,
-} from "../lib/tool-names.js";
+} from '../lib/tool-names.js'
 
-export { SUPPRESSED_TOOL_CARDS, SUBAGENT_SUPPRESSED };
+export { SUPPRESSED_TOOL_CARDS, SUBAGENT_SUPPRESSED }
 
 const TOOL_CARDS = {
   [WRITE]: FileChangeCard,
@@ -44,22 +44,22 @@ const TOOL_CARDS = {
   [GREP]: GrepCard,
   [TOOL_SEARCH]: ToolSearchCard,
   [SKILL]: SkillCard,
-};
+}
 
 export function pickCard(item, options = {}) {
-  const { nested = false } = options;
+  const { nested = false } = options
   // Skills always render via SkillCard — mirroring Claude Code's unified
   // skill renderer where the headline (skill name) comes straight from the
   // tool input, so it's stable from the first frame (no inline/fork component
   // swap). SkillCard itself shows fork nested-steps inline when present.
   // This check must come BEFORE `isSubagent` (skills are flagged subagent
   // server-side only so fork nested-step events route in the store).
-  if (item.name === SKILL) return SkillCard;
-  if (item.isSubagent) return SubagentCard;
-  const name = item.name;
-  if (TOOL_CARDS[name]) return TOOL_CARDS[name];
-  if (isFetchTool(name)) return WebFetchCard;
-  if (isSearchTool(name)) return WebSearchCard;
-  if (nested) return SubagentStepFallback;
-  return ToolCallCard;
+  if (item.name === SKILL) return SkillCard
+  if (item.isSubagent) return SubagentCard
+  const name = item.name
+  if (TOOL_CARDS[name]) return TOOL_CARDS[name]
+  if (isFetchTool(name)) return WebFetchCard
+  if (isSearchTool(name)) return WebSearchCard
+  if (nested) return SubagentStepFallback
+  return ToolCallCard
 }

@@ -33,8 +33,8 @@
  * @see https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
  */
 
-import type { IProvider } from "../llm/types.js";
-import type { Message } from "../types.js";
+import type { IProvider } from '../llm/types.js'
+import type { Message } from '../types.js'
 
 /**
  * Returns a NEW messages array with the cache-control marker attached to
@@ -50,11 +50,11 @@ export function applyCacheControlBreakpoint(
   messages: Message[],
   provider: IProvider,
 ): Message[] {
-  const opts = provider.cacheControlOptions?.();
-  if (!opts || messages.length === 0) return messages;
+  const opts = provider.cacheControlOptions?.()
+  if (!opts || messages.length === 0) return messages
 
-  const lastIdx = messages.length - 1;
-  const last = messages[lastIdx];
+  const lastIdx = messages.length - 1
+  const last = messages[lastIdx]
 
   // providerOptions isn't on our Message union but the AI SDK accepts
   // arbitrary extra fields on messages, so we type-erase via `unknown`
@@ -62,9 +62,9 @@ export function applyCacheControlBreakpoint(
   const lastWithCache = {
     ...last,
     providerOptions: opts,
-  } as unknown as Message;
+  } as unknown as Message
 
-  const out = messages.slice();
-  out[lastIdx] = lastWithCache;
-  return out;
+  const out = messages.slice()
+  out[lastIdx] = lastWithCache
+  return out
 }

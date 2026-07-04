@@ -12,9 +12,9 @@
  * edge runtimes — anywhere `fetch` + `ReadableStream` exist.
  */
 
-import { mintJwt } from "./auth.js";
-import { AgentClientError } from "./errors.js";
-import { parseSSE } from "./sse.js";
+import { mintJwt } from './auth.js'
+import { AgentClientError } from './errors.js'
+import { parseSSE } from './sse.js'
 import type {
   AgentEvent,
   AgentsListResponse,
@@ -23,66 +23,70 @@ import type {
   SkillInvokeRequest,
   SkillInvokeResult,
   SkillsListResponse,
-} from "./types.js";
+} from './types.js'
 
 export interface AgentClientOptions {
-  baseURL: string;
-  token?: string;
-  jwtSecret?: string;
-  email?: string;
-  username?: string;
-  role?: string;
-  tokenTtl?: number;
-  defaultWorkspace?: string;
-  headers?: Record<string, string>;
-  fetch?: typeof fetch;
+  baseURL: string
+  token?: string
+  jwtSecret?: string
+  email?: string
+  username?: string
+  role?: string
+  tokenTtl?: number
+  defaultWorkspace?: string
+  headers?: Record<string, string>
+  fetch?: typeof fetch
 }
 
 export class AgentClient {
-  readonly #baseURL: string;
-  readonly #defaultWorkspace?: string;
-  readonly #headers: Record<string, string>;
-  readonly #fetch: typeof fetch;
-  readonly #token?: string;
+  readonly #baseURL: string
+  readonly #defaultWorkspace?: string
+  readonly #headers: Record<string, string>
+  readonly #fetch: typeof fetch
+  readonly #token?: string
 
   constructor(opts: AgentClientOptions) {
-    if (!opts.baseURL) throw new Error("AgentClient: baseURL is required");
-    this.#baseURL = opts.baseURL.replace(/\/$/, "");
-    this.#defaultWorkspace = opts.defaultWorkspace;
-    this.#headers = opts.headers ?? {};
-    this.#fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
+    if (!opts.baseURL) throw new Error('AgentClient: baseURL is required')
+    this.#baseURL = opts.baseURL.replace(/\/$/, '')
+    this.#defaultWorkspace = opts.defaultWorkspace
+    this.#headers = opts.headers ?? {}
+    this.#fetch = opts.fetch ?? globalThis.fetch.bind(globalThis)
     if (!this.#fetch) {
       throw new Error(
-        "AgentClient: no fetch available; pass `fetch` in options on runtimes <Node18.",
-      );
+        'AgentClient: no fetch available; pass `fetch` in options on runtimes <Node18.',
+      )
     }
 
     if (opts.token) {
-      this.#token = opts.token;
+      this.#token = opts.token
     } else if (opts.jwtSecret) {
       if (!opts.email) {
         throw new Error(
-          "AgentClient: email is required when minting from jwtSecret",
-        );
+          'AgentClient: email is required when minting from jwtSecret',
+        )
       }
       this.#token = mintJwt(opts.jwtSecret, opts.email, {
         username: opts.username,
         role: opts.role,
         ttlSeconds: opts.tokenTtl,
-      });
+      })
     }
   }
 
   async health(): Promise<{ ok: boolean }> {
-    return this.#getJSON<{ ok: boolean }>("/health");
+    return this.#getJSON<{ ok: boolean }>('/health')
   }
 
   async listSkills(workspace?: string): Promise<SkillsListResponse> {
-    return this.#getJSON<SkillsListResponse>(this.#workspacePath("/skills", workspace));
+    return this.#getJSON<SkillsListResponse>(
+      this.#workspacePath('/skills', workspace),
+    )
   }
 
   async listAgents(workspace?: string): Promise<AgentsListResponse> {
-    return this.#getJSON<AgentsListResponse>(this.#workspacePath("/agents", workspace));
+    return this.#getJSON<AgentsListResponse>(
+      this.#workspacePath('/agents', workspace),
+    )
   }
 
   async invokeSkill(
@@ -92,7 +96,7 @@ export class AgentClient {
     return this.#postJSON<SkillInvokeResult>(
       `/skills/${encodeURIComponent(name)}/invoke?stream=false`,
       this.#skillBody(req),
-    );
+    )
   }
 
   invokeSkillStream(
@@ -104,94 +108,94 @@ export class AgentClient {
       `/skills/${encodeURIComponent(name)}/invoke`,
       this.#skillBody(req),
       signal,
-    );
+    )
   }
 
   async chatComplete(req: ChatRequest): Promise<ChatJSONResult> {
     return this.#postJSON<ChatJSONResult>(
-      "/chat?stream=false",
+      '/chat?stream=false',
       this.#chatBody(req),
-    );
+    )
   }
 
   chat(req: ChatRequest, signal?: AbortSignal): AsyncIterable<AgentEvent> {
-    return this.#postSSE("/chat", this.#chatBody(req), signal);
+    return this.#postSSE('/chat', this.#chatBody(req), signal)
   }
 
   #workspacePath(path: string, workspace?: string): string {
-    const ws = workspace ?? this.#defaultWorkspace;
-    return ws ? `${path}?workspace=${encodeURIComponent(ws)}` : path;
+    const ws = workspace ?? this.#defaultWorkspace
+    return ws ? `${path}?workspace=${encodeURIComponent(ws)}` : path
   }
 
   #skillBody(req: SkillInvokeRequest): Record<string, unknown> {
     const body: Record<string, unknown> = {
       workspace: req.workspace ?? this.#defaultWorkspace,
-    };
-    if (req.arguments !== undefined) body.arguments = req.arguments;
-    return body;
+    }
+    if (req.arguments !== undefined) body.arguments = req.arguments
+    return body
   }
 
   #chatBody(req: ChatRequest): Record<string, unknown> {
     const body: Record<string, unknown> = {
       message: req.message,
       workspace: req.workspace ?? this.#defaultWorkspace,
-    };
-    if (req.session_id) body.session_id = req.session_id;
-    if (req.images?.length) body.images = req.images;
-    return body;
+    }
+    if (req.session_id) body.session_id = req.session_id
+    if (req.images?.length) body.images = req.images
+    return body
   }
 
   #authHeaders(): Record<string, string> {
-    const h = { ...this.#headers };
-    if (this.#token) h.Authorization = `Bearer ${this.#token}`;
-    return h;
+    const h = { ...this.#headers }
+    if (this.#token) h.Authorization = `Bearer ${this.#token}`
+    return h
   }
 
   async #getJSON<T>(path: string): Promise<T> {
     const res = await this.#fetch(this.#baseURL + path, {
-      method: "GET",
-      headers: { Accept: "application/json", ...this.#authHeaders() },
-    });
-    return this.#parseJSON<T>(res);
+      method: 'GET',
+      headers: { Accept: 'application/json', ...this.#authHeaders() },
+    })
+    return this.#parseJSON<T>(res)
   }
 
   async #postJSON<T>(path: string, body: unknown): Promise<T> {
     const res = await this.#fetch(this.#baseURL + path, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
         ...this.#authHeaders(),
       },
       body: JSON.stringify(body),
-    });
-    return this.#parseJSON<T>(res);
+    })
+    return this.#parseJSON<T>(res)
   }
 
   async #parseJSON<T>(res: Response): Promise<T> {
-    const text = await res.text();
-    let parsed: unknown;
+    const text = await res.text()
+    let parsed: unknown
     try {
-      parsed = text.length > 0 ? JSON.parse(text) : null;
+      parsed = text.length > 0 ? JSON.parse(text) : null
     } catch (e) {
       throw new AgentClientError(
         `Invalid JSON from server: ${(e as Error).message}`,
         res.status,
         text,
-      );
+      )
     }
     if (!res.ok) {
-      const { message, body } = errorFromBody(parsed, res.status);
-      throw new AgentClientError(message, res.status, body);
+      const { message, body } = errorFromBody(parsed, res.status)
+      throw new AgentClientError(message, res.status, body)
     }
     if (
       parsed !== null &&
-      typeof parsed === "object" &&
+      typeof parsed === 'object' &&
       !Array.isArray(parsed)
     ) {
-      return parsed as T;
+      return parsed as T
     }
-    return { result: parsed } as T;
+    return { result: parsed } as T
   }
 
   async *#postSSE(
@@ -200,49 +204,49 @@ export class AgentClient {
     signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent> {
     const res = await this.#fetch(this.#baseURL + path, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
         ...this.#authHeaders(),
       },
       body: JSON.stringify(body),
       signal,
-    });
+    })
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      const { message, body: errBody } = parseErrorText(text, res.status);
-      throw new AgentClientError(message, res.status, errBody);
+      const text = await res.text().catch(() => '')
+      const { message, body: errBody } = parseErrorText(text, res.status)
+      throw new AgentClientError(message, res.status, errBody)
     }
     if (!res.body) {
-      throw new AgentClientError("Empty response body", res.status, null);
+      throw new AgentClientError('Empty response body', res.status, null)
     }
-    yield* parseSSE(res.body, signal);
+    yield* parseSSE(res.body, signal)
   }
 }
 
 function errorFromBody(parsed: unknown, status: number) {
-  return { message: errorMessage(parsed, status), body: parsed };
+  return { message: errorMessage(parsed, status), body: parsed }
 }
 
 function parseErrorText(text: string, status: number) {
-  let parsed: unknown = text;
+  let parsed: unknown = text
   try {
-    parsed = text ? JSON.parse(text) : null;
+    parsed = text ? JSON.parse(text) : null
   } catch {
     /* keep raw text */
   }
-  return errorFromBody(parsed, status);
+  return errorFromBody(parsed, status)
 }
 
 function errorMessage(parsed: unknown, status: number): string {
   if (
     parsed &&
-    typeof parsed === "object" &&
+    typeof parsed === 'object' &&
     !Array.isArray(parsed) &&
-    typeof (parsed as { error?: unknown }).error === "string"
+    typeof (parsed as { error?: unknown }).error === 'string'
   ) {
-    return (parsed as { error: string }).error;
+    return (parsed as { error: string }).error
   }
-  return `HTTP ${status}`;
+  return `HTTP ${status}`
 }

@@ -1,1 +1,1 @@
-export { startServer } from "./server/index.js";
+export { startServer } from './server/index.js'

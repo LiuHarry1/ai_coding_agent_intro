@@ -1,13 +1,13 @@
-import { streamText } from "ai";
-import { defaultManager } from "./provider-manager.js";
+import { streamText } from 'ai'
+import { defaultManager } from './provider-manager.js'
 import {
   attachTokenUsage,
   compactIfNeeded,
   isContextLengthError,
   isTransientStreamError,
   tokenCountWithEstimation,
-} from "./context.js";
-import type { AttachedTokenUsage } from "./context.js";
+} from './context.js'
+import type { AttachedTokenUsage } from './context.js'
 import type {
   AgentOptions,
   Message,
@@ -15,52 +15,55 @@ import type {
   UserContentPart,
   TodoItem,
   TodoStatus,
-} from "./types.js";
+} from './types.js'
 import {
   ensureToolResultPairing,
   inlineReasoningAsText,
   sanitizeReasoningParts,
-} from "./agent/message-sanitize.js";
-import { consumeStream, type StreamResult } from "./agent/stream-consumer.js";
+} from './agent/message-sanitize.js'
+import { consumeStream, type StreamResult } from './agent/stream-consumer.js'
 
 // ── User-message helpers ────────────────────────────
 
 function parseDataUrl(dataUrl: string): { buffer: Buffer; mediaType: string } {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) throw new Error("Invalid data URL");
-  return { mediaType: match[1], buffer: Buffer.from(match[2], "base64") };
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+  if (!match) throw new Error('Invalid data URL')
+  return { mediaType: match[1], buffer: Buffer.from(match[2], 'base64') }
 }
 
 function buildUserMessage(text: string, images?: string[]): UserMessage {
   if (!images || images.length === 0) {
-    return { role: "user", content: text };
+    return { role: 'user', content: text }
   }
-  const parts: UserContentPart[] = [{ type: "text", text }];
+  const parts: UserContentPart[] = [{ type: 'text', text }]
   for (const dataUrl of images) {
-    const { buffer, mediaType } = parseDataUrl(dataUrl);
-    parts.push({ type: "image", image: buffer, mediaType });
+    const { buffer, mediaType } = parseDataUrl(dataUrl)
+    parts.push({ type: 'image', image: buffer, mediaType })
   }
-  return { role: "user", content: parts };
+  return { role: 'user', content: parts }
 }
 
 // ── Todo helpers ────────────────────────────────────
 
-function autoCompleteTodos(todos: TodoItem[], eventBus: AgentOptions["eventBus"]): void {
+function autoCompleteTodos(
+  todos: TodoItem[],
+  eventBus: AgentOptions['eventBus'],
+): void {
   const hasIncomplete = todos.some(
-    (t) => t.status === "pending" || t.status === "in_progress",
-  );
-  if (!hasIncomplete) return;
-  const updated = todos.map((t) =>
-    t.status === "pending" || t.status === "in_progress"
-      ? { ...t, status: "completed" as TodoStatus }
+    t => t.status === 'pending' || t.status === 'in_progress',
+  )
+  if (!hasIncomplete) return
+  const updated = todos.map(t =>
+    t.status === 'pending' || t.status === 'in_progress'
+      ? { ...t, status: 'completed' as TodoStatus }
       : t,
-  );
-  eventBus.emit("todo_update", { todos: updated });
+  )
+  eventBus.emit('todo_update', { todos: updated })
 }
 
 function formatTodoReminder(todos: TodoItem[]): string {
-  const lines = todos.map((t) => `- [${t.status}] ${t.id}: ${t.content}`);
-  return `[Active todo list — update via todo_write(merge=true) as you complete items]\n${lines.join("\n")}`;
+  const lines = todos.map(t => `- [${t.status}] ${t.id}: ${t.content}`)
+  return `[Active todo list — update via todo_write(merge=true) as you complete items]\n${lines.join('\n')}`
 }
 
 /**
@@ -73,15 +76,15 @@ function attachTodoReminderAfterCompaction(
   messages: Message[],
   todos: TodoItem[],
 ): void {
-  if (todos.length === 0) return;
-  const last = messages[messages.length - 1];
-  if (last?.role !== "assistant" || !Array.isArray(last.content)) return;
-  const existing = last.content.find((p) => p.type === "text");
-  const reminder = "\n\n" + formatTodoReminder(todos);
-  if (existing && "text" in existing) {
-    existing.text += reminder;
+  if (todos.length === 0) return
+  const last = messages[messages.length - 1]
+  if (last?.role !== 'assistant' || !Array.isArray(last.content)) return
+  const existing = last.content.find(p => p.type === 'text')
+  const reminder = '\n\n' + formatTodoReminder(todos)
+  if (existing && 'text' in existing) {
+    existing.text += reminder
   } else {
-    last.content.push({ type: "text", text: reminder });
+    last.content.push({ type: 'text', text: reminder })
   }
 }
 
@@ -93,7 +96,7 @@ function attachTodoReminderAfterCompaction(
 //   - transientAttempt (max 2): on socket-closed / 5xx / undici
 //     "terminated", just resend with backoff (proxy hiccup, no
 //     compaction needed). Common with copilot-api on long bodies.
-const MAX_TRANSIENT_RETRIES = 2;
+const MAX_TRANSIENT_RETRIES = 2
 
 export async function runAgent(
   userMessage: string,
@@ -108,11 +111,11 @@ export async function runAgent(
     subagentNames,
   }: AgentOptions,
 ): Promise<string> {
-  messages.push(buildUserMessage(userMessage, images));
+  messages.push(buildUserMessage(userMessage, images))
 
-  let finalText = "";
-  const provider = defaultManager.get();
-  const resolvedModel = model ?? provider.defaultModelId();
+  let finalText = ''
+  const provider = defaultManager.get()
+  const resolvedModel = model ?? provider.defaultModelId()
 
   // Debug: dump the system prompt once per chat turn so it's easy to
   // inspect what the model actually sees (project rules + tool list +
@@ -122,17 +125,24 @@ export async function runAgent(
   //   console.log(`\n${sep}\n[agent] system prompt (${systemPrompt.length} chars, model=${resolvedModel}):\n${sep}\n${systemPrompt}\n${sep}\n`);
   // }
 
-  let currentTodos: TodoItem[] = [];
-  const unsubTodo = eventBus.on("todo_update", (data) => {
-    currentTodos = (data as { todos: TodoItem[] }).todos;
-  });
+  let currentTodos: TodoItem[] = []
+  const unsubTodo = eventBus.on('todo_update', data => {
+    currentTodos = (data as { todos: TodoItem[] }).todos
+  })
 
   try {
     for (let step = 0; step < maxSteps; step++) {
-      eventBus.emit("step_start", { step });
-      const stepStart = Date.now();
+      eventBus.emit('step_start', { step })
+      const stepStart = Date.now()
 
-      await runCompactionAndLog(messages, eventBus, step, resolvedModel, provider, currentTodos);
+      await runCompactionAndLog(
+        messages,
+        eventBus,
+        step,
+        resolvedModel,
+        provider,
+        currentTodos,
+      )
 
       const stepResult = await runOneStep({
         messages,
@@ -145,76 +155,76 @@ export async function runAgent(
         step,
         stepStart,
         currentTodos,
-      });
+      })
 
       if (stepResult === null) {
         // Step failed terminally (already emitted error + done events).
-        return finalText;
+        return finalText
       }
 
-      const { text, toolCalls } = stepResult;
-      if (text) finalText = text;
+      const { text, toolCalls } = stepResult
+      if (text) finalText = text
 
       if (toolCalls.length === 0) {
-        autoCompleteTodos(currentTodos, eventBus);
-        eventBus.emit("done", { steps: step + 1 });
-        return finalText;
+        autoCompleteTodos(currentTodos, eventBus)
+        eventBus.emit('done', { steps: step + 1 })
+        return finalText
       }
 
-      eventBus.emit("thinking", {});
+      eventBus.emit('thinking', {})
     }
 
-    autoCompleteTodos(currentTodos, eventBus);
-    eventBus.emit("error", { message: `Reached max steps (${maxSteps})` });
-    eventBus.emit("done", { steps: maxSteps });
-    return finalText;
+    autoCompleteTodos(currentTodos, eventBus)
+    eventBus.emit('error', { message: `Reached max steps (${maxSteps})` })
+    eventBus.emit('done', { steps: maxSteps })
+    return finalText
   } finally {
-    unsubTodo();
+    unsubTodo()
   }
 }
 
 async function runCompactionAndLog(
   messages: Message[],
-  eventBus: AgentOptions["eventBus"],
+  eventBus: AgentOptions['eventBus'],
   step: number,
   resolvedModel: string,
   provider: ReturnType<typeof defaultManager.get>,
   currentTodos: TodoItem[],
 ): Promise<void> {
-  const compactStart = Date.now();
-  const managed = await compactIfNeeded(messages, eventBus);
-  const compactMs = Date.now() - compactStart;
+  const compactStart = Date.now()
+  const managed = await compactIfNeeded(messages, eventBus)
+  const compactMs = Date.now() - compactStart
 
-  const counted = tokenCountWithEstimation(messages);
+  const counted = tokenCountWithEstimation(messages)
   const tokenLabel =
-    counted.source === "real+est"
+    counted.source === 'real+est'
       ? `${counted.total.toLocaleString()} tokens ` +
         `(${counted.realBaseline?.toLocaleString()} real + ${counted.estimatedDelta?.toLocaleString()} est)`
-      : `~${counted.total.toLocaleString()} tokens (est, no usage cached yet)`;
+      : `~${counted.total.toLocaleString()} tokens (est, no usage cached yet)`
   console.log(
     `[agent] step ${step} start — ${messages.length} msgs, ${tokenLabel}, ` +
       `model=${resolvedModel}, llm=${provider.describe()}` +
-      (compactMs > 50 ? `, compaction=${compactMs}ms` : ""),
-  );
+      (compactMs > 50 ? `, compaction=${compactMs}ms` : ''),
+  )
 
   if (managed !== messages) {
-    messages.length = 0;
-    messages.push(...managed);
-    attachTodoReminderAfterCompaction(messages, currentTodos);
+    messages.length = 0
+    messages.push(...managed)
+    attachTodoReminderAfterCompaction(messages, currentTodos)
   }
 }
 
 interface RunOneStepArgs {
-  messages: Message[];
-  tools: AgentOptions["tools"];
-  systemPrompt: string;
-  provider: ReturnType<typeof defaultManager.get>;
-  resolvedModel: string;
-  eventBus: AgentOptions["eventBus"];
-  subagentNames?: Set<string>;
-  step: number;
-  stepStart: number;
-  currentTodos: TodoItem[];
+  messages: Message[]
+  tools: AgentOptions['tools']
+  systemPrompt: string
+  provider: ReturnType<typeof defaultManager.get>
+  resolvedModel: string
+  eventBus: AgentOptions['eventBus']
+  subagentNames?: Set<string>
+  step: number
+  stepStart: number
+  currentTodos: TodoItem[]
 }
 
 /**
@@ -235,12 +245,12 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     subagentNames,
     step,
     stepStart,
-  } = args;
+  } = args
 
-  let ctxLengthAttempt = 0;
-  let transientAttempt = 0;
-  let reactiveCompacted = false;
-  let requestStart = Date.now();
+  let ctxLengthAttempt = 0
+  let transientAttempt = 0
+  let reactiveCompacted = false
+  let requestStart = Date.now()
 
   while (true) {
     try {
@@ -261,24 +271,29 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         tools,
         maxRetries: 3,
         ...provider.streamTextExtras(),
-      });
+      })
 
-      const timing = { firstEventMs: 0 };
-      const stepResult = await consumeStream(stream, eventBus, timing, subagentNames);
+      const timing = { firstEventMs: 0 }
+      const stepResult = await consumeStream(
+        stream,
+        eventBus,
+        timing,
+        subagentNames,
+      )
 
       // Trust the SDK's response.messages for ordering (reasoning → text
       // → tool-call → tool-result). Then strip OpenAI-specific
       // providerOptions so what we persist is the human-readable summary.
-      const response = await stream.response;
-      const sdkMessages = response.messages as unknown as Message[];
-      sanitizeReasoningParts(sdkMessages);
-      messages.push(...sdkMessages);
+      const response = await stream.response
+      const sdkMessages = response.messages as unknown as Message[]
+      sanitizeReasoningParts(sdkMessages)
+      messages.push(...sdkMessages)
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless
       // proxies that drop the final SSE event may leave fields undefined.
-      let usage: AttachedTokenUsage = {};
+      let usage: AttachedTokenUsage = {}
       try {
-        usage = (await stream.usage) ?? {};
+        usage = (await stream.usage) ?? {}
       } catch {
         // Don't fail the step over a missing telemetry counter.
       }
@@ -287,9 +302,9 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       // precise baseline.
       if (usage.inputTokens != null || usage.totalTokens != null) {
         for (let i = sdkMessages.length - 1; i >= 0; i--) {
-          if (sdkMessages[i].role === "assistant") {
-            attachTokenUsage(sdkMessages[i], usage);
-            break;
+          if (sdkMessages[i].role === 'assistant') {
+            attachTokenUsage(sdkMessages[i], usage)
+            break
           }
         }
       }
@@ -303,103 +318,114 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         toolCallsLen: stepResult.toolCalls.length,
         usage,
         reactiveCompacted,
-      });
-      return stepResult;
+      })
+      return stepResult
     } catch (err) {
       if (ctxLengthAttempt === 0 && isContextLengthError(err)) {
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const errMsg = err instanceof Error ? err.message : String(err)
         console.warn(
           `[agent] step ${step} hit context-length error → reactive aggressive compaction. ${errMsg}`,
-        );
-        eventBus.emit("compaction_reactive", { error: errMsg });
+        )
+        eventBus.emit('compaction_reactive', { error: errMsg })
         const recompacted = await compactIfNeeded(messages, eventBus, {
           force: true,
           aggressive: true,
-        });
+        })
         if (recompacted !== messages) {
-          messages.length = 0;
-          messages.push(...recompacted);
+          messages.length = 0
+          messages.push(...recompacted)
         }
-        ctxLengthAttempt++;
-        reactiveCompacted = true;
-        requestStart = Date.now();
-        continue;
+        ctxLengthAttempt++
+        reactiveCompacted = true
+        requestStart = Date.now()
+        continue
       }
-      if (transientAttempt < MAX_TRANSIENT_RETRIES && isTransientStreamError(err)) {
-        transientAttempt++;
+      if (
+        transientAttempt < MAX_TRANSIENT_RETRIES &&
+        isTransientStreamError(err)
+      ) {
+        transientAttempt++
         // Exponential backoff: 500ms, 1500ms.
-        const backoffMs = 500 * Math.pow(3, transientAttempt - 1);
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const backoffMs = 500 * Math.pow(3, transientAttempt - 1)
+        const errMsg = err instanceof Error ? err.message : String(err)
         console.warn(
           `[agent] step ${step} transient stream error (attempt ${transientAttempt}/${MAX_TRANSIENT_RETRIES}), retrying in ${backoffMs}ms: ${errMsg}`,
-        );
-        eventBus.emit("transient_retry", {
+        )
+        eventBus.emit('transient_retry', {
           attempt: transientAttempt,
           max: MAX_TRANSIENT_RETRIES,
           backoffMs,
           error: errMsg,
-        });
-        await new Promise((r) => setTimeout(r, backoffMs));
-        requestStart = Date.now();
-        continue;
+        })
+        await new Promise(r => setTimeout(r, backoffMs))
+        requestStart = Date.now()
+        continue
       }
       // Terminal failure: surface to UI, end the agent loop gracefully so
       // the SSE stream closes cleanly and the session stays usable.
-      const message = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err)
       const cause =
-        err instanceof Error && err.cause instanceof Error ? ` (${err.cause.message})` : "";
-      console.error(`[agent] step ${step} failed: ${message}${cause}`);
-      eventBus.emit("error", {
+        err instanceof Error && err.cause instanceof Error
+          ? ` (${err.cause.message})`
+          : ''
+      console.error(`[agent] step ${step} failed: ${message}${cause}`)
+      eventBus.emit('error', {
         message: `Upstream stream failed: ${message}${cause}. Try again or check your proxy logs.`,
-      });
-      autoCompleteTodos(args.currentTodos, eventBus);
-      eventBus.emit("done", { steps: step + 1 });
-      return null;
+      })
+      autoCompleteTodos(args.currentTodos, eventBus)
+      eventBus.emit('done', { steps: step + 1 })
+      return null
     }
   }
 }
 
 interface LogArgs {
-  step: number;
-  stepStart: number;
-  requestStart: number;
-  firstEventMs: number;
-  sdkMessages: Message[];
-  toolCallsLen: number;
-  usage: AttachedTokenUsage;
-  reactiveCompacted: boolean;
+  step: number
+  stepStart: number
+  requestStart: number
+  firstEventMs: number
+  sdkMessages: Message[]
+  toolCallsLen: number
+  usage: AttachedTokenUsage
+  reactiveCompacted: boolean
 }
 
 function logStepCompletion(a: LogArgs): void {
   const fmt = (n: number | undefined): string =>
-    typeof n === "number" ? n.toLocaleString() : "?";
-  const totalMs = Date.now() - a.requestStart;
-  const ttfb = a.firstEventMs ? a.firstEventMs - a.requestStart : -1;
-  const generationMs = ttfb >= 0 ? totalMs - ttfb : -1;
+    typeof n === 'number' ? n.toLocaleString() : '?'
+  const totalMs = Date.now() - a.requestStart
+  const ttfb = a.firstEventMs ? a.firstEventMs - a.requestStart : -1
+  const generationMs = ttfb >= 0 ? totalMs - ttfb : -1
   const reasoningCount = a.sdkMessages.reduce(
     (n, m) =>
       n +
-      (m.role === "assistant" && Array.isArray(m.content)
-        ? m.content.filter((p) => p.type === "reasoning").length
+      (m.role === 'assistant' && Array.isArray(m.content)
+        ? m.content.filter(p => p.type === 'reasoning').length
         : 0),
     0,
-  );
+  )
   const usageParts = [
     `in=${fmt(a.usage.inputTokens)}`,
     `out=${fmt(a.usage.outputTokens)}`,
-  ];
-  if (typeof a.usage.reasoningTokens === "number" && a.usage.reasoningTokens > 0) {
-    usageParts.push(`reasoning=${fmt(a.usage.reasoningTokens)}`);
+  ]
+  if (
+    typeof a.usage.reasoningTokens === 'number' &&
+    a.usage.reasoningTokens > 0
+  ) {
+    usageParts.push(`reasoning=${fmt(a.usage.reasoningTokens)}`)
   }
-  if (typeof a.usage.cachedInputTokens === "number" && a.usage.cachedInputTokens > 0) {
-    usageParts.push(`cached=${fmt(a.usage.cachedInputTokens)}`);
+  if (
+    typeof a.usage.cachedInputTokens === 'number' &&
+    a.usage.cachedInputTokens > 0
+  ) {
+    usageParts.push(`cached=${fmt(a.usage.cachedInputTokens)}`)
   }
   console.log(
     `[agent] step ${a.step} done — total=${totalMs}ms ` +
       `(ttfb=${ttfb}ms upstream-wait, gen=${generationMs}ms streaming), ` +
-      `usage[${usageParts.join(" ")}], ` +
+      `usage[${usageParts.join(' ')}], ` +
       `reasoning_blocks=${reasoningCount}, tool_calls=${a.toolCallsLen}, ` +
       `step_total=${Date.now() - a.stepStart}ms` +
-      (a.reactiveCompacted ? ", reactive_compaction=yes" : ""),
-  );
+      (a.reactiveCompacted ? ', reactive_compaction=yes' : ''),
+  )
 }

@@ -1,7 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer } from 'electron'
 
-contextBridge.exposeInMainWorld("desktop", {
+contextBridge.exposeInMainWorld('desktop', {
   isDesktop: true,
-  pickWorkspace: () => ipcRenderer.invoke("pick-workspace"),
-  getAgentUrl: () => ipcRenderer.invoke("get-agent-url"),
-});
+  pickWorkspace: () => ipcRenderer.invoke('pick-workspace'),
+  getAgentUrl: () => ipcRenderer.invoke('get-agent-url'),
+})

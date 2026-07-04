@@ -3,13 +3,13 @@
  * summarizes ALL messages (no tail preservation), then re-injects
  * recently-read file contents, todo list, and skill references.
  */
-import * as fs from "fs";
-import * as path from "path";
-import { generateText } from "ai";
-import { defaultManager } from "../../core/provider-manager.js";
-import type { Message, TodoItem } from "../../core/types.js";
-import { READ_FILE_TOOL_NAME } from "../../constants/tool_names.js";
-import { estimateConversationTokens, clearTokenUsages } from "./tokens.js";
+import * as fs from 'fs'
+import * as path from 'path'
+import { generateText } from 'ai'
+import { defaultManager } from '../../core/provider-manager.js'
+import type { Message, TodoItem } from '../../core/types.js'
+import { READ_FILE_TOOL_NAME } from '../../constants/tool_names.js'
+import { estimateConversationTokens, clearTokenUsages } from './tokens.js'
 
 // ── Prompt (analysis + summary) ─────────────────────────
 
@@ -23,13 +23,13 @@ const NO_TOOLS_PREAMBLE = `CRITICAL: Respond with TEXT ONLY. Do NOT call any too
 - Tool calls will be REJECTED and will waste your only turn — you will fail the task.
 - Your entire response must be plain text: an <analysis> block followed by a <summary> block.
 
-`;
+`
 
 // CC parity: weaker reminder repeated at the very end as a trailer.
 const NO_TOOLS_TRAILER =
-  "\n\nREMINDER: Do NOT call any tools. Respond with plain text only — " +
-  "an <analysis> block followed by a <summary> block. " +
-  "Tool calls will be rejected and you will fail the task.";
+  '\n\nREMINDER: Do NOT call any tools. Respond with plain text only — ' +
+  'an <analysis> block followed by a <summary> block. ' +
+  'Tool calls will be rejected and you will fail the task.'
 
 const BASE_COMPACT_PROMPT = `You are compacting an AI coding agent's conversation to save context space.
 
@@ -116,7 +116,7 @@ Here's an example of how your output should be structured:
 </summary>
 </example>
 
-Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.`;
+Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.`
 
 /**
  * Assemble the summarizer system prompt. Mirrors CC's getCompactPrompt():
@@ -127,43 +127,43 @@ Please provide your summary based on the conversation so far, following this str
  * focuses on (e.g. "focus on the test failures and the API changes").
  */
 export function buildSummarySystem(customInstructions?: string): string {
-  let prompt = NO_TOOLS_PREAMBLE + BASE_COMPACT_PROMPT;
-  if (customInstructions && customInstructions.trim() !== "") {
-    prompt += `\n\nAdditional Instructions:\n${customInstructions.trim()}`;
+  let prompt = NO_TOOLS_PREAMBLE + BASE_COMPACT_PROMPT
+  if (customInstructions && customInstructions.trim() !== '') {
+    prompt += `\n\nAdditional Instructions:\n${customInstructions.trim()}`
   }
-  prompt += NO_TOOLS_TRAILER;
-  return prompt;
+  prompt += NO_TOOLS_TRAILER
+  return prompt
 }
 
 // ── File restoration config ─────────────────────────────
 
 export interface FileRestoreConfig {
-  maxFiles: number;
-  maxTokensPerFile: number;
-  totalBudget: number;
+  maxFiles: number
+  maxTokensPerFile: number
+  totalBudget: number
 }
 
 // ── Public API ──────────────────────────────────────────
 
 export interface CompactResult {
-  messages: Message[];
+  messages: Message[]
   /** Raw summary text (without restored files/todos) — for UI display. */
-  summary: string;
-  summaryLength: number;
-  estimatedTokensAfter: number;
+  summary: string
+  summaryLength: number
+  estimatedTokensAfter: number
 }
 
 export interface CompactContext {
-  cwd: string;
-  todos: TodoItem[];
-  fileRestore: FileRestoreConfig;
+  cwd: string
+  todos: TodoItem[]
+  fileRestore: FileRestoreConfig
   /** Optional steering text from a manual `/compact <instructions>` call. */
-  instructions?: string;
+  instructions?: string
 }
 
 // CC parity: MAX_PTL_RETRIES = 3. If the summarizer call itself overflows,
 // drop the oldest API round and retry, up to this many times.
-const MAX_SUMMARIZE_RETRIES = 3;
+const MAX_SUMMARIZE_RETRIES = 3
 
 /**
  * Drop the oldest "API round" from the message list for prompt-too-long
@@ -183,42 +183,42 @@ const MAX_SUMMARIZE_RETRIES = 3;
 function dropOldestApiRound(messages: Message[]): Message[] {
   // 1) id-based: find the first assistant id, then the first index whose round
   //    differs from it. Everything before that index is the oldest round.
-  const firstId = firstAssistantRoundId(messages);
+  const firstId = firstAssistantRoundId(messages)
   if (firstId !== undefined) {
     for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
-      if (m.role === "assistant" && m.id !== undefined && m.id !== firstId) {
-        return messages.slice(i);
+      const m = messages[i]
+      if (m.role === 'assistant' && m.id !== undefined && m.id !== firstId) {
+        return messages.slice(i)
       }
     }
     // Only one round carries an id — fall through to coarser strategies.
   }
 
   // 2) user-boundary: drop up to the second user message.
-  let firstUser = -1;
+  let firstUser = -1
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === "user") {
-      firstUser = i;
-      break;
+    if (messages[i].role === 'user') {
+      firstUser = i
+      break
     }
   }
   for (let i = firstUser + 1; i < messages.length; i++) {
-    if (messages[i].role === "user") {
-      return messages.slice(i);
+    if (messages[i].role === 'user') {
+      return messages.slice(i)
     }
   }
 
   // 3) blunt fallback: drop oldest ~30%.
-  const at = Math.max(1, Math.floor(messages.length * 0.3));
-  return messages.slice(at);
+  const at = Math.max(1, Math.floor(messages.length * 0.3))
+  return messages.slice(at)
 }
 
 /** First assistant message's round id, or undefined if none carry one. */
 function firstAssistantRoundId(messages: Message[]): string | undefined {
   for (const m of messages) {
-    if (m.role === "assistant" && m.id !== undefined) return m.id;
+    if (m.role === 'assistant' && m.id !== undefined) return m.id
   }
-  return undefined;
+  return undefined
 }
 
 /**
@@ -232,58 +232,58 @@ export async function compactConversation(
   model: string,
   ctx: CompactContext,
 ): Promise<CompactResult | null> {
-  if (messages.length < 2) return null;
+  if (messages.length < 2) return null
 
-  let pending = messages;
-  let summary: string | undefined;
+  let pending = messages
+  let summary: string | undefined
 
   for (let attempt = 0; attempt <= MAX_SUMMARIZE_RETRIES; attempt++) {
-    const formatted = pending.map(formatForSummary).join("\n\n---\n\n");
+    const formatted = pending.map(formatForSummary).join('\n\n---\n\n')
     try {
-      const provider = defaultManager.get();
+      const provider = defaultManager.get()
       const result = await generateText({
         model: provider.chatModel(model),
         system: buildSummarySystem(ctx.instructions),
         messages: [
           {
-            role: "user",
+            role: 'user',
             content: `Compact the following agent conversation into a structured summary:\n\n${formatted}`,
           },
         ],
-      });
-      summary = formatCompactSummary(result.text);
-      break;
+      })
+      summary = formatCompactSummary(result.text)
+      break
     } catch (error) {
       if (attempt < MAX_SUMMARIZE_RETRIES && isLikelyTooLong(error)) {
-        const before = pending.length;
-        pending = dropOldestApiRound(pending);
+        const before = pending.length
+        pending = dropOldestApiRound(pending)
         if (pending.length === before || pending.length < 2) {
           // Couldn't shrink further — give up rather than loop uselessly.
-          throw error;
+          throw error
         }
         console.warn(
           `[compact] PTL recovery: dropped oldest API round (${before} → ${pending.length} msgs), retrying`,
-        );
-        continue;
+        )
+        continue
       }
-      throw error;
+      throw error
     }
   }
 
-  if (!summary) return null;
+  if (!summary) return null
 
-  clearTokenUsages(messages);
+  clearTokenUsages(messages)
 
-  const recentFiles = extractRecentlyReadFiles(messages);
-  const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore);
-  const built = buildPostCompactMessages(summary, fileSection, ctx.todos);
+  const recentFiles = extractRecentlyReadFiles(messages)
+  const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore)
+  const built = buildPostCompactMessages(summary, fileSection, ctx.todos)
 
   return {
     messages: built,
     summary,
     summaryLength: summary.length,
     estimatedTokensAfter: estimateConversationTokens(built),
-  };
+  }
 }
 
 // ── Post-compact message construction ───────────────────
@@ -293,40 +293,43 @@ function buildPostCompactMessages(
   fileSection: string,
   todos: TodoItem[],
 ): Message[] {
-  let content = `[Previous conversation compacted — context continues below]\n\n${summary}`;
+  let content = `[Previous conversation compacted — context continues below]\n\n${summary}`
 
   if (fileSection) {
-    content += `\n\n${fileSection}`;
+    content += `\n\n${fileSection}`
   }
 
   if (todos.length > 0) {
-    const todoLines = todos.map((t) => `- [${t.status}] ${t.id}: ${t.content}`);
-    content += `\n\n## Active Todo List\nUpdate via todo_write(merge=true) as you complete items:\n${todoLines.join("\n")}`;
+    const todoLines = todos.map(t => `- [${t.status}] ${t.id}: ${t.content}`)
+    content += `\n\n## Active Todo List\nUpdate via todo_write(merge=true) as you complete items:\n${todoLines.join('\n')}`
   }
 
-  content += `\n\nContinue from where you left off without asking questions. Resume directly — do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.`;
+  content += `\n\nContinue from where you left off without asking questions. Resume directly — do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.`
 
-  return [{ role: "user", content }];
+  return [{ role: 'user', content }]
 }
 
 // ── File restoration ────────────────────────────────────
 
 function extractRecentlyReadFiles(messages: Message[], maxFiles = 8): string[] {
-  const files: string[] = [];
+  const files: string[] = []
   for (let i = messages.length - 1; i >= 0 && files.length < maxFiles; i--) {
-    const m = messages[i];
-    if (m.role !== "assistant") continue;
+    const m = messages[i]
+    if (m.role !== 'assistant') continue
     for (const part of m.content) {
-      if (part.type !== "tool-call" || part.toolName !== READ_FILE_TOOL_NAME) continue;
+      if (part.type !== 'tool-call' || part.toolName !== READ_FILE_TOOL_NAME)
+        continue
       const filePath =
-        (part.input as Record<string, unknown>)?.file_path as string | undefined ??
-        (part.input as Record<string, unknown>)?.path as string | undefined;
+        ((part.input as Record<string, unknown>)?.file_path as
+          | string
+          | undefined) ??
+        ((part.input as Record<string, unknown>)?.path as string | undefined)
       if (filePath && !files.includes(filePath)) {
-        files.push(filePath);
+        files.push(filePath)
       }
     }
   }
-  return files;
+  return files
 }
 
 function restoreRecentFiles(
@@ -334,94 +337,101 @@ function restoreRecentFiles(
   cwd: string,
   config: FileRestoreConfig,
 ): string {
-  if (recentPaths.length === 0) return "";
+  if (recentPaths.length === 0) return ''
 
-  const maxCharPerFile = config.maxTokensPerFile * 4;
-  const totalCharBudget = config.totalBudget * 4;
-  let usedChars = 0;
-  const sections: string[] = [];
+  const maxCharPerFile = config.maxTokensPerFile * 4
+  const totalCharBudget = config.totalBudget * 4
+  let usedChars = 0
+  const sections: string[] = []
 
   for (const filePath of recentPaths.slice(0, config.maxFiles)) {
-    const abs = path.isAbsolute(filePath) ? filePath : path.resolve(cwd, filePath);
+    const abs = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(cwd, filePath)
     try {
-      if (!fs.existsSync(abs)) continue;
-      const stat = fs.statSync(abs);
-      if (stat.isDirectory() || stat.size > 512 * 1024) continue;
+      if (!fs.existsSync(abs)) continue
+      const stat = fs.statSync(abs)
+      if (stat.isDirectory() || stat.size > 512 * 1024) continue
 
-      let content = fs.readFileSync(abs, "utf-8");
+      let content = fs.readFileSync(abs, 'utf-8')
       if (content.length > maxCharPerFile) {
-        content = content.slice(0, maxCharPerFile) + "\n[... truncated for compaction]";
+        content =
+          content.slice(0, maxCharPerFile) + '\n[... truncated for compaction]'
       }
 
-      if (usedChars + content.length > totalCharBudget) break;
-      usedChars += content.length;
+      if (usedChars + content.length > totalCharBudget) break
+      usedChars += content.length
 
-      sections.push(`### ${filePath}\n\`\`\`\n${content}\n\`\`\``);
+      sections.push(`### ${filePath}\n\`\`\`\n${content}\n\`\`\``)
     } catch {
-      continue;
+      continue
     }
   }
 
-  if (sections.length === 0) return "";
-  return `## Restored File Contents\nThese files were recently accessed. Their current content is included so you can continue working immediately.\n\n${sections.join("\n\n")}`;
+  if (sections.length === 0) return ''
+  return `## Restored File Contents\nThese files were recently accessed. Their current content is included so you can continue working immediately.\n\n${sections.join('\n\n')}`
 }
 
 // ── Format compact summary (strip analysis scratchpad) ──
 
 function formatCompactSummary(raw: string): string {
-  let result = raw;
-  result = result.replace(/<analysis>[\s\S]*?<\/analysis>/, "");
-  const summaryMatch = result.match(/<summary>([\s\S]*?)<\/summary>/);
+  let result = raw
+  result = result.replace(/<analysis>[\s\S]*?<\/analysis>/, '')
+  const summaryMatch = result.match(/<summary>([\s\S]*?)<\/summary>/)
   if (summaryMatch) {
-    result = summaryMatch[1]!.trim();
+    result = summaryMatch[1]!.trim()
   }
-  result = result.replace(/\n\n\n+/g, "\n\n");
-  return result.trim();
+  result = result.replace(/\n\n\n+/g, '\n\n')
+  return result.trim()
 }
 
 // ── Formatting helpers ──────────────────────────────────
 
 function formatForSummary(msg: Message): string {
-  if (msg.role === "user") {
-    if (typeof msg.content === "string") return `USER: ${msg.content}`;
+  if (msg.role === 'user') {
+    if (typeof msg.content === 'string') return `USER: ${msg.content}`
     const text = msg.content
-      .map((p) => (p.type === "text" ? p.text : "[image]"))
+      .map(p => (p.type === 'text' ? p.text : '[image]'))
       .filter(Boolean)
-      .join("\n");
-    return `USER: ${text}`;
+      .join('\n')
+    return `USER: ${text}`
   }
 
-  if (msg.role === "assistant") {
+  if (msg.role === 'assistant') {
     const formatted = msg.content
-      .map((p) => {
-        if (p.type === "text") return p.text;
-        if (p.type === "reasoning") return "";
-        if (p.type === "tool-call") {
-          const args = JSON.stringify(p.input || {});
-          const short = args.length > 300 ? args.slice(0, 300) + "..." : args;
-          return `[Called ${p.toolName}(${short})]`;
+      .map(p => {
+        if (p.type === 'text') return p.text
+        if (p.type === 'reasoning') return ''
+        if (p.type === 'tool-call') {
+          const args = JSON.stringify(p.input || {})
+          const short = args.length > 300 ? args.slice(0, 300) + '...' : args
+          return `[Called ${p.toolName}(${short})]`
         }
-        return "";
+        return ''
       })
-      .filter(Boolean);
-    return `ASSISTANT: ${formatted.join("\n")}`;
+      .filter(Boolean)
+    return `ASSISTANT: ${formatted.join('\n')}`
   }
 
   return msg.content
-    .map((p) => {
-      const v = p.output?.value ?? "";
-      const text = typeof v === "string" ? v : JSON.stringify(v);
-      const short = text.length > 500 ? text.slice(0, 500) + "..." : text;
-      return `[${p.toolName} result]: ${short}`;
+    .map(p => {
+      const v = p.output?.value ?? ''
+      const text = typeof v === 'string' ? v : JSON.stringify(v)
+      const short = text.length > 500 ? text.slice(0, 500) + '...' : text
+      return `[${p.toolName} result]: ${short}`
     })
-    .join("\n");
+    .join('\n')
 }
 
 function isLikelyTooLong(err: unknown): boolean {
-  if (!err) return false;
-  const e = err as { statusCode?: number; status?: number; message?: string };
-  const status = e.statusCode ?? e.status;
-  if (status === 413) return true;
-  const msg = (e.message ?? "").toLowerCase();
-  return msg.includes("context length") || msg.includes("too long") || msg.includes("token");
+  if (!err) return false
+  const e = err as { statusCode?: number; status?: number; message?: string }
+  const status = e.statusCode ?? e.status
+  if (status === 413) return true
+  const msg = (e.message ?? '').toLowerCase()
+  return (
+    msg.includes('context length') ||
+    msg.includes('too long') ||
+    msg.includes('token')
+  )
 }

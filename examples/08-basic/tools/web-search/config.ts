@@ -1,4 +1,4 @@
-export type WebSearchProvider = "searxng" | "exa";
+export type WebSearchProvider = 'searxng' | 'exa'
 
 /**
  * Switch web search backend:
@@ -6,10 +6,10 @@ export type WebSearchProvider = "searxng" | "exa";
  *   WEB_SEARCH_PROVIDER=searxng   — self-hosted SearXNG
  */
 export function getWebSearchProvider(): WebSearchProvider {
-  const raw = (process.env.WEB_SEARCH_PROVIDER || "exa").trim().toLowerCase();
-  return raw === "searxng" ? "searxng" : "exa";
+  const raw = (process.env.WEB_SEARCH_PROVIDER || 'exa').trim().toLowerCase()
+  return raw === 'searxng' ? 'searxng' : 'exa'
 }
 
 export function webSearchProviderLabel(provider: WebSearchProvider): string {
-  return provider === "exa" ? "Exa Web Search" : "SearXNG Web Search";
+  return provider === 'exa' ? 'Exa Web Search' : 'SearXNG Web Search'
 }

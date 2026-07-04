@@ -38,32 +38,26 @@
  * - All file IO across dirs runs in parallel (`Promise.all`).
  */
 
-import { promises as fs } from "fs";
-import * as path from "path";
-import matter from "gray-matter";
-import ignore from "ignore";
-import type { SkillDefinition, SkillContextMode } from "./types.js";
-import type { ExtensionSource } from "../utils/markdownConfigLoader.js";
-import {
-  getProjectAppDirsUpToHome,
-  getUserSubdir,
-} from "../utils/app-dir.js";
-import {
-  parseArgumentNames,
-  parseString,
-} from "../utils/frontmatterParser.js";
+import { promises as fs } from 'fs'
+import * as path from 'path'
+import matter from 'gray-matter'
+import ignore from 'ignore'
+import type { SkillDefinition, SkillContextMode } from './types.js'
+import type { ExtensionSource } from '../utils/markdownConfigLoader.js'
+import { getProjectAppDirsUpToHome, getUserSubdir } from '../utils/app-dir.js'
+import { parseArgumentNames, parseString } from '../utils/frontmatterParser.js'
 
 export interface SkillLoadResult {
-  skill: SkillDefinition | null;
-  filePath: string;
-  error?: string;
+  skill: SkillDefinition | null
+  filePath: string
+  error?: string
 }
 
 function parseContextMode(value: unknown): SkillContextMode | null {
-  if (value === undefined || value === null) return "inline";
-  const v = parseString(value);
-  if (v === "inline" || v === "fork") return v;
-  return null;
+  if (value === undefined || value === null) return 'inline'
+  const v = parseString(value)
+  if (v === 'inline' || v === 'fork') return v
+  return null
 }
 
 /**
@@ -71,7 +65,7 @@ function parseContextMode(value: unknown): SkillContextMode | null {
  * use the name verbatim in tool inputs / URLs without escaping.
  */
 function isValidSkillFolderName(name: string): boolean {
-  return /^[a-z0-9][a-z0-9_-]*$/i.test(name);
+  return /^[a-z0-9][a-z0-9_-]*$/i.test(name)
 }
 
 /**
@@ -82,26 +76,26 @@ function isValidSkillFolderName(name: string): boolean {
  * inside it — trailing `/**` is stripped for consistency with gitignore-style matching.
  */
 function parseSkillPaths(value: unknown): string[] | undefined {
-  if (value === undefined || value === null) return undefined;
+  if (value === undefined || value === null) return undefined
 
-  let raw: string[];
+  let raw: string[]
   if (Array.isArray(value)) {
-    raw = value.filter((v): v is string => typeof v === "string");
-  } else if (typeof value === "string") {
-    raw = value.split(",");
+    raw = value.filter((v): v is string => typeof v === 'string')
+  } else if (typeof value === 'string') {
+    raw = value.split(',')
   } else {
-    return undefined;
+    return undefined
   }
 
   const patterns = raw
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0)
-    .map((p) => (p.endsWith("/**") ? p.slice(0, -3) : p));
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+    .map(p => (p.endsWith('/**') ? p.slice(0, -3) : p))
 
-  if (patterns.length === 0 || patterns.every((p) => p === "**")) {
-    return undefined;
+  if (patterns.length === 0 || patterns.every(p => p === '**')) {
+    return undefined
   }
-  return patterns;
+  return patterns
 }
 
 /**
@@ -115,13 +109,13 @@ async function readFrontmatterChunk(
   filePath: string,
   maxBytes = 16 * 1024,
 ): Promise<string> {
-  const fh = await fs.open(filePath, "r");
+  const fh = await fs.open(filePath, 'r')
   try {
-    const buf = Buffer.alloc(maxBytes);
-    const { bytesRead } = await fh.read(buf, 0, maxBytes, 0);
-    return buf.subarray(0, bytesRead).toString("utf-8");
+    const buf = Buffer.alloc(maxBytes)
+    const { bytesRead } = await fh.read(buf, 0, maxBytes, 0)
+    return buf.subarray(0, bytesRead).toString('utf-8')
   } finally {
-    await fh.close();
+    await fh.close()
   }
 }
 
@@ -132,12 +126,12 @@ async function readFrontmatterChunk(
  * pathological case where someone wrote a >16KB YAML header.
  */
 function chunkContainsCompleteFrontmatter(text: string): boolean {
-  if (!text.startsWith("---")) {
+  if (!text.startsWith('---')) {
     // No frontmatter at all is "complete" — gray-matter handles it.
-    return true;
+    return true
   }
   // Look for a second `---` on its own line after position 3.
-  return /\n---\s*(\r?\n|$)/.test(text.slice(3));
+  return /\n---\s*(\r?\n|$)/.test(text.slice(3))
 }
 
 /**
@@ -147,20 +141,20 @@ function chunkContainsCompleteFrontmatter(text: string): boolean {
  * promise rejected so a transient failure doesn't poison subsequent calls.
  */
 function makeBodyLoader(filePath: string): () => Promise<string> {
-  let cached: Promise<string> | null = null;
+  let cached: Promise<string> | null = null
   return () => {
-    if (cached !== null) return cached;
+    if (cached !== null) return cached
     cached = (async () => {
       try {
-        const raw = await fs.readFile(filePath, "utf-8");
-        return matter(raw).content ?? "";
+        const raw = await fs.readFile(filePath, 'utf-8')
+        return matter(raw).content ?? ''
       } catch (e) {
-        cached = null; // allow retry next call
-        throw e;
+        cached = null // allow retry next call
+        throw e
       }
-    })();
-    return cached;
-  };
+    })()
+    return cached
+  }
 }
 
 /**
@@ -173,90 +167,90 @@ export async function loadSkillsFromDir(
   basePath: string,
   source: ExtensionSource,
 ): Promise<SkillLoadResult[]> {
-  let entries: import("fs").Dirent[];
+  let entries: import('fs').Dirent[]
   try {
-    entries = await fs.readdir(basePath, { withFileTypes: true });
+    entries = await fs.readdir(basePath, { withFileTypes: true })
   } catch (e: unknown) {
-    const code = (e as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "EACCES" || code === "ENOTDIR") return [];
-    throw e;
+    const code = (e as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'EACCES' || code === 'ENOTDIR') return []
+    throw e
   }
 
   const results = await Promise.all(
     entries.map(async (entry): Promise<SkillLoadResult | null> => {
       // Only folders (or symlinks pointing at folders) are skills — flat
       // .md files directly under `.ai-agent/skills/` are intentionally ignored.
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) return null;
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) return null
 
-      const skillDir = path.join(basePath, entry.name);
-      const skillFile = path.join(skillDir, "SKILL.md");
+      const skillDir = path.join(basePath, entry.name)
+      const skillFile = path.join(skillDir, 'SKILL.md')
 
       // Bounded read for frontmatter; full body deferred until invocation.
-      let chunk: string;
+      let chunk: string
       try {
-        chunk = await readFrontmatterChunk(skillFile);
+        chunk = await readFrontmatterChunk(skillFile)
       } catch (e: unknown) {
-        const code = (e as NodeJS.ErrnoException).code;
-        if (code !== "ENOENT") {
+        const code = (e as NodeJS.ErrnoException).code
+        if (code !== 'ENOENT') {
           console.warn(
             `[skills] failed to read ${skillFile}: ${(e as Error).message}`,
-          );
+          )
         }
-        return null;
+        return null
       }
 
       // Fallback for pathologically large headers — re-read whole file.
       // Common case (header fits in 16 KB) avoids ever reading the body.
-      let frontmatterSource = chunk;
+      let frontmatterSource = chunk
       if (!chunkContainsCompleteFrontmatter(chunk)) {
         try {
-          frontmatterSource = await fs.readFile(skillFile, "utf-8");
+          frontmatterSource = await fs.readFile(skillFile, 'utf-8')
         } catch (e) {
           console.warn(
             `[skills] failed to re-read ${skillFile} for oversized frontmatter: ${(e as Error).message}`,
-          );
-          return null;
+          )
+          return null
         }
       }
 
-      const skillName = entry.name;
+      const skillName = entry.name
       if (!isValidSkillFolderName(skillName)) {
         return {
           skill: null,
           filePath: skillFile,
           error: `skill: invalid folder name '${skillName}' (must match [a-z0-9][a-z0-9_-]*)`,
-        };
+        }
       }
 
-      let parsed: matter.GrayMatterFile<string>;
+      let parsed: matter.GrayMatterFile<string>
       try {
-        parsed = matter(frontmatterSource);
+        parsed = matter(frontmatterSource)
       } catch (e: unknown) {
         return {
           skill: null,
           filePath: skillFile,
           error: `skill '${skillName}': invalid YAML frontmatter: ${(e as Error).message}`,
-        };
+        }
       }
 
-      const fm = (parsed.data ?? {}) as Record<string, unknown>;
+      const fm = (parsed.data ?? {}) as Record<string, unknown>
 
-      const description = parseString(fm.description);
+      const description = parseString(fm.description)
       if (!description) {
         return {
           skill: null,
           filePath: skillFile,
           error: `skill '${skillName}': missing or empty 'description' in frontmatter`,
-        };
+        }
       }
 
-      const ctx = parseContextMode(fm.context);
+      const ctx = parseContextMode(fm.context)
       if (ctx === null) {
         return {
           skill: null,
           filePath: skillFile,
           error: `skill '${skillName}': invalid 'context' value (must be 'inline' or 'fork')`,
-        };
+        }
       }
 
       // Body emptiness is checked lazily on first invocation — we don't
@@ -278,11 +272,11 @@ export async function loadSkillsFromDir(
           loadBody: makeBodyLoader(skillFile),
         },
         filePath: skillFile,
-      };
+      }
     }),
-  );
+  )
 
-  return results.filter((r): r is SkillLoadResult => r !== null);
+  return results.filter((r): r is SkillLoadResult => r !== null)
 }
 
 /**
@@ -292,9 +286,9 @@ export async function loadSkillsFromDir(
  *
  */
 function getProjectSkillsDirsUpToHome(cwd: string): string[] {
-  return getProjectAppDirsUpToHome(cwd).map((appDir) =>
-    path.join(appDir, "skills"),
-  );
+  return getProjectAppDirsUpToHome(cwd).map(appDir =>
+    path.join(appDir, 'skills'),
+  )
 }
 
 /**
@@ -310,18 +304,18 @@ function getProjectSkillsDirsUpToHome(cwd: string): string[] {
  * cost low even with dozens of skills.
  */
 export async function loadSkillsFromDisk(cwd: string): Promise<{
-  skills: SkillDefinition[];
-  errors: Array<{ filePath: string; error: string }>;
+  skills: SkillDefinition[]
+  errors: Array<{ filePath: string; error: string }>
 }> {
-  const userDir = getUserSubdir("skills");
-  const projectDirs = getProjectSkillsDirsUpToHome(cwd);
+  const userDir = getUserSubdir('skills')
+  const projectDirs = getProjectSkillsDirsUpToHome(cwd)
 
   const [userResults, ...projectResultsByDir] = await Promise.all([
-    loadSkillsFromDir(userDir, "user"),
-    ...projectDirs.map((d) => loadSkillsFromDir(d, "project")),
-  ]);
+    loadSkillsFromDir(userDir, 'user'),
+    ...projectDirs.map(d => loadSkillsFromDir(d, 'project')),
+  ])
 
-  const errors: Array<{ filePath: string; error: string }> = [];
+  const errors: Array<{ filePath: string; error: string }> = []
 
   // Fill order: user first (lowest priority), then project dirs SHALLOWEST
   // → DEEPEST so the deepest dir overwrites everything. `projectDirs` is
@@ -330,25 +324,23 @@ export async function loadSkillsFromDisk(cwd: string): Promise<{
   const orderedResults = [
     ...userResults,
     ...projectResultsByDir.slice().reverse().flat(),
-  ];
+  ]
 
-  const byName = new Map<string, SkillDefinition>();
+  const byName = new Map<string, SkillDefinition>()
   for (const r of orderedResults) {
     if (r.error) {
-      errors.push({ filePath: r.filePath, error: r.error });
-      console.warn(`[skills] ${r.error} (${r.filePath})`);
+      errors.push({ filePath: r.filePath, error: r.error })
+      console.warn(`[skills] ${r.error} (${r.filePath})`)
     }
     if (r.skill) {
       if (byName.has(r.skill.name)) {
-        console.log(
-          `[skills] overriding '${r.skill.name}' from ${r.filePath}`,
-        );
+        console.log(`[skills] overriding '${r.skill.name}' from ${r.filePath}`)
       }
-      byName.set(r.skill.name, r.skill);
+      byName.set(r.skill.name, r.skill)
     }
   }
 
-  return { skills: [...byName.values()], errors };
+  return { skills: [...byName.values()], errors }
 }
 
 /**
@@ -359,16 +351,18 @@ export async function loadSkillsFromDisk(cwd: string): Promise<{
 export function mergeSkillsByName(
   ...lists: ReadonlyArray<readonly SkillDefinition[]>
 ): SkillDefinition[] {
-  const byName = new Map<string, SkillDefinition>();
+  const byName = new Map<string, SkillDefinition>()
   for (const list of lists) {
     for (const skill of list) {
       if (byName.has(skill.name)) {
-        console.log(`[skills] overriding '${skill.name}' from ${skill.filePath ?? skill.baseDir}`);
+        console.log(
+          `[skills] overriding '${skill.name}' from ${skill.filePath ?? skill.baseDir}`,
+        )
       }
-      byName.set(skill.name, skill);
+      byName.set(skill.name, skill)
     }
   }
-  return [...byName.values()];
+  return [...byName.values()]
 }
 
 /**
@@ -395,31 +389,31 @@ export function filterSkillsByPaths(
   candidateFiles: readonly string[] | undefined,
   cwd: string,
 ): SkillDefinition[] {
-  if (skills.every((s) => !s.paths || s.paths.length === 0)) {
+  if (skills.every(s => !s.paths || s.paths.length === 0)) {
     // Hot path: no conditional skills at all — skip ignore() construction.
-    return [...skills];
+    return [...skills]
   }
 
   if (candidateFiles === undefined) {
-    return skills.filter((s) => !s.paths || s.paths.length === 0);
+    return skills.filter(s => !s.paths || s.paths.length === 0)
   }
 
-  const cwdResolved = path.resolve(cwd);
+  const cwdResolved = path.resolve(cwd)
   // Pre-normalize candidate files to cwd-relative POSIX paths. ignore()
   // expects forward slashes on every OS.
   const relCandidates = candidateFiles
-    .map((f) => {
-      const abs = path.isAbsolute(f) ? f : path.resolve(cwdResolved, f);
-      const rel = path.relative(cwdResolved, abs);
-      if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
-      return rel.split(path.sep).join("/");
+    .map(f => {
+      const abs = path.isAbsolute(f) ? f : path.resolve(cwdResolved, f)
+      const rel = path.relative(cwdResolved, abs)
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null
+      return rel.split(path.sep).join('/')
     })
-    .filter((p): p is string => p !== null);
+    .filter((p): p is string => p !== null)
 
-  return skills.filter((skill) => {
-    if (!skill.paths || skill.paths.length === 0) return true;
-    if (relCandidates.length === 0) return false;
-    const matcher = ignore().add(skill.paths);
-    return relCandidates.some((f) => matcher.ignores(f));
-  });
+  return skills.filter(skill => {
+    if (!skill.paths || skill.paths.length === 0) return true
+    if (relCandidates.length === 0) return false
+    const matcher = ignore().add(skill.paths)
+    return relCandidates.some(f => matcher.ignores(f))
+  })
 }

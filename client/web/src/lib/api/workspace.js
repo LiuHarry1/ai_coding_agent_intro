@@ -6,21 +6,21 @@
  * this file, and nothing here should import from `agent.js` — the only
  * shared code is the tiny `fetchJSON` helper.
  */
-import { fetchJSON, apiUrl } from "./_http.js";
-import { authHeader } from "../auth.js";
+import { fetchJSON, apiUrl } from './_http.js'
+import { authHeader } from '../auth.js'
 
-const json = (body) => ({
-  headers: { "Content-Type": "application/json" },
+const json = body => ({
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(body),
-});
+})
 
 export const workspaceApi = {
-  getRoot: () => fetchJSON("/workspace"),
+  getRoot: () => fetchJSON('/workspace'),
 
   listDir: (dir, showHidden = false) => {
-    const params = new URLSearchParams({ dir });
-    if (showHidden) params.set("showHidden", "1");
-    return fetchJSON(`/workspace/list?${params}`);
+    const params = new URLSearchParams({ dir })
+    if (showHidden) params.set('showHidden', '1')
+    return fetchJSON(`/workspace/list?${params}`)
   },
 
   /** @-mention autocomplete — fuzzy search over workspace files. */
@@ -28,17 +28,21 @@ export const workspaceApi = {
     const params = new URLSearchParams({
       q,
       limit: String(limit),
-    });
-    if (dir) params.set("dir", dir);
-    if (showHidden) params.set("showHidden", "1");
-    return fetchJSON(`/workspace/search?${params}`);
+    })
+    if (dir) params.set('dir', dir)
+    if (showHidden) params.set('showHidden', '1')
+    return fetchJSON(`/workspace/search?${params}`)
   },
 
-  getFile: (path) => fetchJSON(`/workspace/file?path=${encodeURIComponent(path)}`),
+  getFile: path =>
+    fetchJSON(`/workspace/file?path=${encodeURIComponent(path)}`),
 
   /** Create a new file. Fails (409) if it already exists. */
-  createFile: (path, content = "") =>
-    fetchJSON("/workspace/file", { method: "POST", ...json({ path, content }) }),
+  createFile: (path, content = '') =>
+    fetchJSON('/workspace/file', {
+      method: 'POST',
+      ...json({ path, content }),
+    }),
 
   /**
    * Save edits to an existing file. Pass `mtimeMs` (from a prior read) to
@@ -46,17 +50,17 @@ export const workspaceApi = {
    * modified externally since then.
    */
   saveFile: (path, content, mtimeMs) =>
-    fetchJSON("/workspace/file", {
-      method: "PUT",
+    fetchJSON('/workspace/file', {
+      method: 'PUT',
       ...json({ path, content, mtimeMs }),
     }),
 
-  createFolder: (path) =>
-    fetchJSON("/workspace/mkdir", { method: "POST", ...json({ path }) }),
+  createFolder: path =>
+    fetchJSON('/workspace/mkdir', { method: 'POST', ...json({ path }) }),
 
-  removeEntry: (path) =>
+  removeEntry: path =>
     fetchJSON(`/workspace/entry?path=${encodeURIComponent(path)}`, {
-      method: "DELETE",
+      method: 'DELETE',
     }),
 
   // ── Binary transfer ─────────────────────────────────────
@@ -71,42 +75,48 @@ export const workspaceApi = {
    */
   uploadFiles: (dir, files, onProgress) =>
     new Promise((resolve, reject) => {
-      const form = new FormData();
-      form.append("dir", dir);
-      for (const f of files) form.append("file", f);
+      const form = new FormData()
+      form.append('dir', dir)
+      for (const f of files) form.append('file', f)
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", apiUrl("/workspace/upload"));
-      const auth = authHeader();
-      if (auth.Authorization) xhr.setRequestHeader("Authorization", auth.Authorization);
-      xhr.upload.onprogress = (e) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', apiUrl('/workspace/upload'))
+      const auth = authHeader()
+      if (auth.Authorization)
+        xhr.setRequestHeader('Authorization', auth.Authorization)
+      xhr.upload.onprogress = e => {
         if (onProgress && e.lengthComputable) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
+          onProgress(Math.round((e.loaded / e.total) * 100))
         }
-      };
+      }
       xhr.onload = () => {
-        let body = null;
-        try { body = JSON.parse(xhr.responseText); } catch {}
+        let body = null
+        try {
+          body = JSON.parse(xhr.responseText)
+        } catch {}
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(body ?? {});
+          resolve(body ?? {})
         } else {
-          const err = new Error(`HTTP ${xhr.status}${body?.error ? `: ${body.error}` : ""}`);
-          err.status = xhr.status;
-          reject(err);
+          const err = new Error(
+            `HTTP ${xhr.status}${body?.error ? `: ${body.error}` : ''}`,
+          )
+          err.status = xhr.status
+          reject(err)
         }
-      };
-      xhr.onerror = () => reject(new Error("Upload failed (network error)"));
-      xhr.send(form);
+      }
+      xhr.onerror = () => reject(new Error('Upload failed (network error)'))
+      xhr.send(form)
     }),
 
   /** URL that streams a file (or a zip of a directory) as a download. */
-  downloadUrl: (path) => apiUrl(`/workspace/download?path=${encodeURIComponent(path)}`),
+  downloadUrl: path =>
+    apiUrl(`/workspace/download?path=${encodeURIComponent(path)}`),
 
   // ── Git (read-only) ─────────────────────────────────────
-  gitStatus: () => fetchJSON("/workspace/git/status"),
-  gitDiff: (path) =>
+  gitStatus: () => fetchJSON('/workspace/git/status'),
+  gitDiff: path =>
     fetchJSON(`/workspace/git/diff?path=${encodeURIComponent(path)}`),
-};
+}
 
 /**
  * Trigger a browser download for `path` (file or directory-as-zip) by
@@ -114,10 +124,10 @@ export const workspaceApi = {
  * the DOM rather than the network.
  */
 export function triggerDownload(path) {
-  const a = document.createElement("a");
-  a.href = workspaceApi.downloadUrl(path);
-  a.download = "";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const a = document.createElement('a')
+  a.href = workspaceApi.downloadUrl(path)
+  a.download = ''
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
 }

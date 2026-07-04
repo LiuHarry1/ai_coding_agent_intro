@@ -24,14 +24,14 @@
  *   <ancestor>/.ai-agent/plugins/     (project scope, walked up to home)
  */
 
-import type { MCPServerConfig } from "../types.js";
-import type { MarkdownFile } from "../../utils/markdownConfigLoader.js";
-import type { SkillDefinition } from "../../skills/types.js";
+import type { MCPServerConfig } from '../types.js'
+import type { MarkdownFile } from '../../utils/markdownConfigLoader.js'
+import type { SkillDefinition } from '../../skills/types.js'
 
 export interface PluginAuthor {
-  name: string;
-  email?: string;
-  url?: string;
+  name: string
+  email?: string
+  url?: string
 }
 
 /**
@@ -40,26 +40,26 @@ export interface PluginAuthor {
  * Claude Code's `PluginManifestSchema`; unknown keys are preserved.
  */
 export interface PluginManifest {
-  name?: string;
-  version?: string;
-  description?: string;
-  author?: string | PluginAuthor;
+  name?: string
+  version?: string
+  description?: string
+  author?: string | PluginAuthor
   /** Override/add command source paths (relative to plugin root). */
-  commands?: string | string[];
+  commands?: string | string[]
   /** Override/add agent source paths (relative to plugin root). */
-  agents?: string | string[];
+  agents?: string | string[]
   /** Override/add skill source paths (relative to plugin root). */
-  skills?: string | string[];
+  skills?: string | string[]
   /**
    * MCP servers: a path to a JSON file (relative to plugin root) or an inline
    * record of `{ serverName: config }`.
    */
-  mcpServers?: string | Record<string, MCPServerConfig>;
-  [key: string]: unknown;
+  mcpServers?: string | Record<string, MCPServerConfig>
+  [key: string]: unknown
 }
 
 /** Scope a plugin was discovered in (used for override precedence). */
-export type PluginScope = "user" | "project";
+export type PluginScope = 'user' | 'project'
 
 /**
  * A discovered plugin on disk. Paths are absolute and only present when the
@@ -68,20 +68,20 @@ export type PluginScope = "user" | "project";
  */
 export interface LoadedPlugin {
   /** Resolved name (manifest.name ?? directory basename). */
-  name: string;
+  name: string
   /** Absolute path to the plugin root directory. */
-  path: string;
+  path: string
   /** Parsed manifest (empty object if none on disk). */
-  manifest: PluginManifest;
-  scope: PluginScope;
+  manifest: PluginManifest
+  scope: PluginScope
   /** Absolute agent source paths (dirs and/or .md files). */
-  agentPaths: string[];
+  agentPaths: string[]
   /** Absolute command source paths (dirs and/or .md files). */
-  commandPaths: string[];
+  commandPaths: string[]
   /** Absolute skill source directories (each containing `<name>/SKILL.md`). */
-  skillPaths: string[];
+  skillPaths: string[]
   /** Absolute MCP config file paths and/or inline server records. */
-  mcpSources: Array<string | Record<string, MCPServerConfig>>;
+  mcpSources: Array<string | Record<string, MCPServerConfig>>
 }
 
 /**
@@ -91,50 +91,50 @@ export interface LoadedPlugin {
  * branch on `type` instead of string-matching messages.
  */
 export type PluginError =
-  | { type: "manifest-invalid"; source: string; detail: string }
-  | { type: "invalid-name"; source: string; name: string }
-  | { type: "mcp-read-failed"; source: string; detail: string }
-  | { type: "mcp-invalid-json"; source: string; detail: string }
-  | { type: "mcp-collision"; plugin: string; server: string; shadowed: string }
-  | { type: "skill-load-failed"; source: string; detail: string }
-  | { type: "skill-invalid"; source: string; detail: string };
+  | { type: 'manifest-invalid'; source: string; detail: string }
+  | { type: 'invalid-name'; source: string; name: string }
+  | { type: 'mcp-read-failed'; source: string; detail: string }
+  | { type: 'mcp-invalid-json'; source: string; detail: string }
+  | { type: 'mcp-collision'; plugin: string; server: string; shadowed: string }
+  | { type: 'skill-load-failed'; source: string; detail: string }
+  | { type: 'skill-invalid'; source: string; detail: string }
 
 /** Human-readable one-liner for a structured plugin error. */
 export function pluginErrorMessage(e: PluginError): string {
   switch (e.type) {
-    case "manifest-invalid":
-      return `invalid manifest: ${e.detail}`;
-    case "invalid-name":
-      return `invalid plugin name '${e.name}'`;
-    case "mcp-read-failed":
-      return `failed to read MCP config: ${e.detail}`;
-    case "mcp-invalid-json":
-      return `invalid MCP config JSON: ${e.detail}`;
-    case "mcp-collision":
-      return `MCP server '${e.server}' from plugin '${e.plugin}' shadows the one from '${e.shadowed}'`;
-    case "skill-load-failed":
-      return `failed to load skills: ${e.detail}`;
-    case "skill-invalid":
-      return `invalid skill: ${e.detail}`;
+    case 'manifest-invalid':
+      return `invalid manifest: ${e.detail}`
+    case 'invalid-name':
+      return `invalid plugin name '${e.name}'`
+    case 'mcp-read-failed':
+      return `failed to read MCP config: ${e.detail}`
+    case 'mcp-invalid-json':
+      return `invalid MCP config JSON: ${e.detail}`
+    case 'mcp-collision':
+      return `MCP server '${e.server}' from plugin '${e.plugin}' shadows the one from '${e.shadowed}'`
+    case 'skill-load-failed':
+      return `failed to load skills: ${e.detail}`
+    case 'skill-invalid':
+      return `invalid skill: ${e.detail}`
   }
 }
 
 /** The on-disk location (plugin path, file, or plugin name) an error refers to. */
 export function pluginErrorSource(e: PluginError): string {
-  return "source" in e ? e.source : e.plugin;
+  return 'source' in e ? e.source : e.plugin
 }
 
 /** Everything plugins contribute, ready to merge into the existing pipeline. */
 export interface PluginContributions {
-  plugins: LoadedPlugin[];
+  plugins: LoadedPlugin[]
   /** Agent markdown files (source: "plugin"), `${PLUGIN_ROOT}` already substituted. */
-  agentFiles: MarkdownFile[];
+  agentFiles: MarkdownFile[]
   /** Command markdown files (source: "plugin"), `${PLUGIN_ROOT}` already substituted. */
-  commandFiles: MarkdownFile[];
+  commandFiles: MarkdownFile[]
   /** Skills (source: "plugin"), bodies substitute `${PLUGIN_ROOT}` lazily. */
-  skills: SkillDefinition[];
+  skills: SkillDefinition[]
   /** MCP servers keyed by (flat) server name. Config-level servers win on collision. */
-  mcpServers: Record<string, MCPServerConfig>;
+  mcpServers: Record<string, MCPServerConfig>
   /** Non-fatal load errors, surfaced by `/plugins` and logs. */
-  errors: PluginError[];
+  errors: PluginError[]
 }

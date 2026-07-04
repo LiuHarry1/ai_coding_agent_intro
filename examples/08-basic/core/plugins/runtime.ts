@@ -22,25 +22,25 @@ import type {
   MiddlewareHandler,
   MiddlewareHook,
   IToolRegistry,
-} from "../types.js";
+} from '../types.js'
 
 interface RecordedMiddleware {
-  hook: MiddlewareHook;
-  handler: MiddlewareHandler;
+  hook: MiddlewareHook
+  handler: MiddlewareHandler
 }
 
 interface RecordedEvent {
-  event: string;
-  handler: EventHandler;
+  event: string
+  handler: EventHandler
 }
 
-const recordedMiddleware: RecordedMiddleware[] = [];
-const recordedEvents: RecordedEvent[] = [];
+const recordedMiddleware: RecordedMiddleware[] = []
+const recordedEvents: RecordedEvent[] = []
 
 /** IMiddleware that records `use()` calls instead of binding to one instance. */
 class RecordingMiddleware implements IMiddleware {
   use(hook: MiddlewareHook, handler: MiddlewareHandler): void {
-    recordedMiddleware.push({ hook, handler });
+    recordedMiddleware.push({ hook, handler })
   }
   // Code plugins register hooks via `use`; `wrap` is only used internally by
   // the per-request Middleware, so it's a no-op pass-through here.
@@ -48,25 +48,25 @@ class RecordingMiddleware implements IMiddleware {
     _name: string,
     executeFn: (args: unknown, options?: unknown) => Promise<unknown>,
   ): (args: unknown, options?: unknown) => Promise<unknown> {
-    return executeFn;
+    return executeFn
   }
 }
 
 /** IEventBus that records `on()` subscriptions for later replay. */
 class RecordingEventBus implements IEventBus {
-  #prefix: string;
-  constructor(prefix = "") {
-    this.#prefix = prefix;
+  #prefix: string
+  constructor(prefix = '') {
+    this.#prefix = prefix
   }
   on(event: string, handler: EventHandler): () => void {
-    const full = this.#prefix + event;
-    recordedEvents.push({ event: full, handler });
+    const full = this.#prefix + event
+    recordedEvents.push({ event: full, handler })
     return () => {
       const i = recordedEvents.findIndex(
-        (r) => r.event === full && r.handler === handler,
-      );
-      if (i >= 0) recordedEvents.splice(i, 1);
-    };
+        r => r.event === full && r.handler === handler,
+      )
+      if (i >= 0) recordedEvents.splice(i, 1)
+    }
   }
   off(): void {
     /* no-op at boot */
@@ -75,7 +75,7 @@ class RecordingEventBus implements IEventBus {
     /* no-op at boot — nothing to emit to yet */
   }
   scoped(prefix: string): IEventBus {
-    return new RecordingEventBus(this.#prefix + prefix);
+    return new RecordingEventBus(this.#prefix + prefix)
   }
   removeAllListeners(): void {
     /* no-op */
@@ -88,7 +88,7 @@ export function createCodePluginContext(tools: IToolRegistry) {
     tools,
     events: new RecordingEventBus(),
     middleware: new RecordingMiddleware(),
-  };
+  }
 }
 
 /**
@@ -101,14 +101,14 @@ export function applyPluginHooks(
   eventBus: IEventBus,
 ): void {
   for (const { hook, handler } of recordedMiddleware) {
-    middleware.use(hook, handler);
+    middleware.use(hook, handler)
   }
   for (const { event, handler } of recordedEvents) {
-    eventBus.on(event, handler);
+    eventBus.on(event, handler)
   }
 }
 
 /** True once any code plugin has registered a hook (lets callers skip work). */
 export function hasPluginHooks(): boolean {
-  return recordedMiddleware.length > 0 || recordedEvents.length > 0;
+  return recordedMiddleware.length > 0 || recordedEvents.length > 0
 }

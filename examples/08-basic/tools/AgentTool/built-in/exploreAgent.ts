@@ -1,4 +1,4 @@
-import { createAgentDefinition } from "../base.js";
+import { createAgentDefinition } from '../base.js'
 import {
   BASH_TOOL_NAME,
   GLOB_TOOL_NAME,
@@ -7,7 +7,7 @@ import {
   MUTATING_TOOLS,
   READ_FILE_TOOL_NAME,
   AGENT_TOOL_NAME,
-} from "../../../constants/tool_names.js";
+} from '../../../constants/tool_names.js'
 
 const EXPLORE_SYSTEM = `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
 
@@ -41,10 +41,10 @@ NOTE: You are meant to be a fast agent that returns output as quickly as possibl
 - Make efficient use of the tools that you have at your disposal: be smart about how you search for files and implementations
 - Wherever possible you should try to spawn multiple parallel tool calls for grepping and reading files
 
-Complete the user's search request efficiently and report your findings clearly.`;
+Complete the user's search request efficiently and report your findings clearly.`
 
-export const EXPLORE_AGENT_TYPE = "Explore";
-export const EXPLORE_AGENT_MIN_QUERIES = 3;
+export const EXPLORE_AGENT_TYPE = 'Explore'
+export const EXPLORE_AGENT_MIN_QUERIES = 3
 
 export const definition = createAgentDefinition({
   agentType: EXPLORE_AGENT_TYPE,
@@ -56,10 +56,10 @@ export const definition = createAgentDefinition({
     'desired thoroughness level: "quick" for basic searches, "medium" for moderate ' +
     'exploration, or "very thorough" for comprehensive analysis across multiple ' +
     'locations and naming conventions.',
-  description: "Codebase exploration",
+  description: 'Codebase exploration',
   systemPrompt: EXPLORE_SYSTEM,
   disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
   maxSteps: 20,
-  label: "Explore",
+  label: 'Explore',
   omitProjectRules: true,
-});
+})

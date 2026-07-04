@@ -1,6 +1,6 @@
-import { createShellTool } from "./shell-runner.js";
-import { bashShell } from "../core/platform.js";
-import { BASH_TOOL_NAME } from "./tool-names.js";
+import { createShellTool } from './shell-runner.js'
+import { bashShell } from '../core/platform.js'
+import { BASH_TOOL_NAME } from './tool-names.js'
 
 const DESCRIPTION = `Run bash commands in the workspace shell.
 
@@ -33,11 +33,11 @@ Constraints:
 - Combined stdout+stderr capped at ~100KB; older output is truncated.
 - Default timeout 120s. Pass \`timeout\` for slower commands.
 
-Prefer dedicated tools when available — \`read_file\` over \`cat\` / \`head\` / \`tail\`, \`list_dir\` over \`ls\`, \`edit_file\` over \`sed\`, \`write_file\` over heredoc redirection. Reserve this tool for actual system operations (git, package managers, build/test runners).`;
+Prefer dedicated tools when available — \`read_file\` over \`cat\` / \`head\` / \`tail\`, \`list_dir\` over \`ls\`, \`edit_file\` over \`sed\`, \`write_file\` over heredoc redirection. Reserve this tool for actual system operations (git, package managers, build/test runners).`
 
 export const definition = createShellTool({
   name: BASH_TOOL_NAME,
   description: DESCRIPTION,
-  commandFieldDesc: "The bash command to execute.",
+  commandFieldDesc: 'The bash command to execute.',
   shellConfig: bashShell,
-});
+})

@@ -25,6 +25,6 @@
  *   export const CODE_PLUGINS: Plugin[] = [auditPlugin];
  */
 
-import type { Plugin } from "../types.js";
+import type { Plugin } from '../types.js'
 
-export const CODE_PLUGINS: Plugin[] = [];
+export const CODE_PLUGINS: Plugin[] = []

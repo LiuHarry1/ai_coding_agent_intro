@@ -1,9 +1,9 @@
-import type { AgentDefinition, IToolRegistry } from "../core/types.js";
-import { definition as exploreDef } from "./explore.js";
-import { definition as planDef } from "./plan.js";
-import { definition as generalPurposeDef } from "./general_purpose.js";
-import { createTaskTool } from "../tools/task.js";
-import { TASK_TOOL_NAME } from "../tools/tool-names.js";
+import type { AgentDefinition, IToolRegistry } from '../core/types.js'
+import { definition as exploreDef } from './explore.js'
+import { definition as planDef } from './plan.js'
+import { definition as generalPurposeDef } from './general_purpose.js'
+import { createTaskTool } from '../tools/task.js'
+import { TASK_TOOL_NAME } from '../tools/tool-names.js'
 
 /**
  * Single source of truth for built-in subagents.
@@ -20,7 +20,7 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
   exploreDef,
   planDef,
   generalPurposeDef,
-];
+]
 
 /**
  * Register the single `task` tool against the given registry. The tool
@@ -30,7 +30,7 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
  * callers in router.ts work unchanged.
  */
 export function registerBuiltinSubagents(registry: IToolRegistry): void {
-  registry.register(createTaskTool(BUILTIN_AGENTS));
+  registry.register(createTaskTool(BUILTIN_AGENTS))
 }
 
 /**
@@ -44,13 +44,13 @@ export function registerBuiltinSubagents(registry: IToolRegistry): void {
  * discovery — exactly the contract router.ts + stream-consumer.ts use.
  */
 export function getSubagentNames(registry: IToolRegistry): Set<string> {
-  const names = new Set<string>();
+  const names = new Set<string>()
   for (const { name } of registry.list()) {
-    if (registry.get(name)?.isSubagent) names.add(name);
+    if (registry.get(name)?.isSubagent) names.add(name)
   }
   // Belt-and-braces: the task tool name is always part of the set even
   // before registration, so test code that calls getSubagentNames on an
   // empty registry still produces correct UI tagging.
-  names.add(TASK_TOOL_NAME);
-  return names;
+  names.add(TASK_TOOL_NAME)
+  return names
 }

@@ -1,7 +1,10 @@
-import { createShellTool } from "./shell-runner.js";
-import { powershellShell } from "../core/platform.js";
-import { POWERSHELL_TOOL_NAME } from "./tool-names.js";
-import { detectPowerShellEdition, type PowerShellEdition } from "../core/powershell-edition.js";
+import { createShellTool } from './shell-runner.js'
+import { powershellShell } from '../core/platform.js'
+import { POWERSHELL_TOOL_NAME } from './tool-names.js'
+import {
+  detectPowerShellEdition,
+  type PowerShellEdition,
+} from '../core/powershell-edition.js'
 
 /**
  * Edition-specific syntax guidance. Without this branch the model either
@@ -9,25 +12,25 @@ import { detectPowerShellEdition, type PowerShellEdition } from "../core/powersh
  * or (b) needlessly avoids them on a 7+ host.
  */
 function getEditionSection(edition: PowerShellEdition): string {
-  if (edition === "desktop") {
+  if (edition === 'desktop') {
     return `PowerShell edition: Windows PowerShell 5.1 (powershell.exe)
 - Pipeline chain operators \`&&\` and \`||\` are NOT available — they cause a parser error. To run B only if A succeeds: \`A; if ($?) { B }\`. To chain unconditionally: \`A; B\`.
 - Ternary (\`?:\`), null-coalescing (\`??\`), and null-conditional (\`?.\`) operators are NOT available. Use \`if/else\` and explicit \`$null -eq\` checks instead.
 - Avoid \`2>&1\` on native executables. In 5.1, redirecting a native command's stderr inside PowerShell wraps each line in a NativeCommandError ErrorRecord and sets \`$?\` to \`$false\` even when the exe returned exit code 0. stderr is already captured for you — don't redirect it.
 - Default file encoding is UTF-16 LE with BOM. When writing files other tools will read, pass \`-Encoding utf8\` to \`Out-File\` / \`Set-Content\`.
-- \`ConvertFrom-Json\` returns a PSCustomObject, not a hashtable. \`-AsHashtable\` is not available.`;
+- \`ConvertFrom-Json\` returns a PSCustomObject, not a hashtable. \`-AsHashtable\` is not available.`
   }
-  if (edition === "core") {
+  if (edition === 'core') {
     return `PowerShell edition: PowerShell 7+ (pwsh)
 - Pipeline chain operators \`&&\` and \`||\` ARE available and work like bash. Prefer \`A && B\` over \`A; B\` when B should only run if A succeeds.
 - Ternary (\`$cond ? $a : $b\`), null-coalescing (\`??\`), and null-conditional (\`?.\`) operators are available.
-- Default file encoding is UTF-8 without BOM.`;
+- Default file encoding is UTF-8 without BOM.`
   }
   // Detection failed (PS not installed?) or running on non-Windows test env.
   // Give the conservative 5.1-safe guidance — works on either edition.
   return `PowerShell edition: unknown — assume Windows PowerShell 5.1 for compatibility
 - Do NOT use \`&&\`, \`||\`, ternary \`?:\`, null-coalescing \`??\`, or null-conditional \`?.\`. These are PowerShell 7+ only and parser-error on 5.1.
-- To chain commands conditionally: \`A; if ($?) { B }\`. Unconditionally: \`A; B\`.`;
+- To chain commands conditionally: \`A; if ($?) { B }\`. Unconditionally: \`A; B\`.`
 }
 
 const DESCRIPTION = `Run PowerShell commands in the workspace shell. Working directory persists between calls; shell state (variables, functions) does not.
@@ -80,11 +83,11 @@ Constraints:
 - Combined stdout+stderr capped at ~100KB; older output is truncated.
 - Default timeout 120s. Pass \`timeout\` for slower commands.
 
-Prefer dedicated tools — \`read_file\` over \`Get-Content\`, \`list_dir\` over \`Get-ChildItem\`, \`edit_file\` for surgical edits, \`write_file\` for new files. Reserve this tool for actual system operations (git, npm/pnpm, build/test runners).`;
+Prefer dedicated tools — \`read_file\` over \`Get-Content\`, \`list_dir\` over \`Get-ChildItem\`, \`edit_file\` for surgical edits, \`write_file\` for new files. Reserve this tool for actual system operations (git, npm/pnpm, build/test runners).`
 
 export const definition = createShellTool({
   name: POWERSHELL_TOOL_NAME,
   description: DESCRIPTION,
-  commandFieldDesc: "The PowerShell command to execute.",
+  commandFieldDesc: 'The PowerShell command to execute.',
   shellConfig: powershellShell,
-});
+})

@@ -16,38 +16,38 @@
  *                      agent's context clean.
  */
 
-import type { ExtensionSource } from "../utils/markdownConfigLoader.js";
+import type { ExtensionSource } from '../utils/markdownConfigLoader.js'
 
-export type SkillContextMode = "inline" | "fork";
+export type SkillContextMode = 'inline' | 'fork'
 
 export interface SkillDefinition {
   /** Name as the model invokes it via the `skill` tool. */
-  name: string;
+  name: string
   /** One-line "when to use" rendered into the skill tool's directory. */
-  description: string;
+  description: string
   /** Where the file was discovered. */
-  source: "built-in" | ExtensionSource;
+  source: 'built-in' | ExtensionSource
   /** Original file path of `SKILL.md` (file-loaded skills only). */
-  filePath?: string;
+  filePath?: string
   /**
    * Absolute path to the skill's folder (the directory containing `SKILL.md`).
    * Surfaced to the model so it can reference bundled assets — scripts, data
    * files, sub-prompts — that live next to the skill body.
    * Code's `skillRoot` / `${CLAUDE_SKILL_DIR}` mechanism.
    */
-  baseDir?: string;
+  baseDir?: string
   /**
    * "inline" — expand body, return as tool result.
    * "fork"   — run as a subagent with body as system prompt.
    */
-  context: SkillContextMode;
+  context: SkillContextMode
   /**
    * When `context === "fork"`, which subagent_type to dispatch to.
    * Defaults to "general_purpose" if omitted.
    */
-  agent?: string;
+  agent?: string
   /** Named arg list for `$name` substitution (mirrors slash commands). */
-  argumentNames: string[];
+  argumentNames: string[]
   /**
    * Gitignore-style path patterns (frontmatter `paths:`). When set
    * and non-empty, the skill is **conditional**: it stays hidden from the
@@ -56,7 +56,7 @@ export interface SkillDefinition {
    * so patterns like `src/**` + `*.py`, `!vendor/**` work as
    * users would expect from `.gitignore`.
    */
-  paths?: string[];
+  paths?: string[]
   /**
    * Lazy body loader. We deliberately do NOT keep the full `SKILL.md`
    * body in memory after scanning — for 100+ skills with multi-KB bodies
@@ -65,5 +65,5 @@ export interface SkillDefinition {
    * skill-invocation time. The result is cached per skill so repeated
    * invocations in the same chat request only pay one read.
    */
-  loadBody: () => Promise<string>;
+  loadBody: () => Promise<string>
 }

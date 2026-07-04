@@ -6,7 +6,11 @@
  * Tool blocks are preserved (only payloads replaced) so tool_call ↔
  * tool_result pairing stays intact.
  */
-import type { AssistantMessage, Message, ToolMessage } from "../../core/types.js";
+import type {
+  AssistantMessage,
+  Message,
+  ToolMessage,
+} from '../../core/types.js'
 import {
   BASH_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
@@ -17,47 +21,50 @@ import {
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
-} from "../../constants/tool_names.js";
-import { estimateMessageTokens } from "./tokens.js";
+} from '../../constants/tool_names.js'
+import { estimateMessageTokens } from './tokens.js'
 import {
   isPersistedReference,
   offloadReferenceForCompact,
-} from "../tool-storage/index.js";
+} from '../tool-storage/index.js'
 
-const MICRO_COMPACT_MARKER = "[Old tool result content cleared to save context]";
+const MICRO_COMPACT_MARKER = '[Old tool result content cleared to save context]'
 
-const MICRO_COMPACT_INPUT_MARKER = { _cleared: true, note: "Old tool input cleared to save context" };
+const MICRO_COMPACT_INPUT_MARKER = {
+  _cleared: true,
+  note: 'Old tool input cleared to save context',
+}
 
 const CLEARABLE_TOOL_RESULTS = new Set<string>([
   BASH_TOOL_NAME,
-  "shell",
+  'shell',
   POWERSHELL_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
-]);
+])
 
 const CLEARABLE_TOOL_INPUTS = new Set<string>([
   WRITE_FILE_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
-  "create_file",
-  "apply_patch",
-  "NotebookEdit",
-]);
+  'create_file',
+  'apply_patch',
+  'NotebookEdit',
+])
 
 function estStr(s: string): number {
-  return Math.ceil(s.length / 4);
+  return Math.ceil(s.length / 4)
 }
 
-const MARKER_INPUT_JSON = JSON.stringify(MICRO_COMPACT_INPUT_MARKER);
-const MARKER_INPUT_COST = estStr(MARKER_INPUT_JSON);
+const MARKER_INPUT_JSON = JSON.stringify(MICRO_COMPACT_INPUT_MARKER)
+const MARKER_INPUT_COST = estStr(MARKER_INPUT_JSON)
 
 export interface MicroCompactResult {
-  messages: Message[];
-  tokensFreed: number;
-  cleared: number;
+  messages: Message[]
+  tokensFreed: number
+  cleared: number
 }
 
 export function microCompact(
@@ -65,26 +72,37 @@ export function microCompact(
   keepRecent: number,
   sessionId?: string,
 ): MicroCompactResult {
-  const toolMsgIdx: number[] = [];
+  const toolMsgIdx: number[] = []
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === "tool") toolMsgIdx.push(i);
+    if (messages[i].role === 'tool') toolMsgIdx.push(i)
   }
   if (toolMsgIdx.length <= Math.max(0, keepRecent)) {
-    return { messages, tokensFreed: 0, cleared: 0 };
+    return { messages, tokensFreed: 0, cleared: 0 }
   }
 
-  const clearUpToExclusive = toolMsgIdx[toolMsgIdx.length - keepRecent - 1] + 1;
+  const clearUpToExclusive = toolMsgIdx[toolMsgIdx.length - keepRecent - 1] + 1
 
-  let tokensFreed = 0;
-  let cleared = 0;
+  let tokensFreed = 0
+  let cleared = 0
 
   const out = messages.map((m, i) => {
-    if (i >= clearUpToExclusive) return m;
-    if (m.role === "tool") return clearToolResults(m, sessionId, () => cleared++, (n) => (tokensFreed += n));
-    if (m.role === "assistant") return clearToolInputs(m, () => cleared++, (n) => (tokensFreed += n));
-    return m;
-  });
-  return { messages: out, tokensFreed, cleared };
+    if (i >= clearUpToExclusive) return m
+    if (m.role === 'tool')
+      return clearToolResults(
+        m,
+        sessionId,
+        () => cleared++,
+        n => (tokensFreed += n),
+      )
+    if (m.role === 'assistant')
+      return clearToolInputs(
+        m,
+        () => cleared++,
+        n => (tokensFreed += n),
+      )
+    return m
+  })
+  return { messages: out, tokensFreed, cleared }
 }
 
 /**
@@ -96,10 +114,10 @@ export function estimateAfterMicroCompact(
   priorTotal: number,
   freed: number,
 ): number {
-  if (freed > 0) return priorTotal - freed;
-  let t = 0;
-  for (const m of messages) t += estimateMessageTokens(m);
-  return t;
+  if (freed > 0) return priorTotal - freed
+  let t = 0
+  for (const m of messages) t += estimateMessageTokens(m)
+  return t
 }
 
 // ── Internals ───────────────────────────────────────────
@@ -110,25 +128,25 @@ function clearToolResults(
   bumpCleared: () => void,
   addFreed: (n: number) => void,
 ): ToolMessage {
-  let touched = false;
-  const newContent = m.content.map((part) => {
-    if (!CLEARABLE_TOOL_RESULTS.has(part.toolName)) return part;
-    const v = part.output?.value ?? "";
-    const text = typeof v === "string" ? v : JSON.stringify(v);
-    if (text === MICRO_COMPACT_MARKER || isPersistedReference(text)) return part;
+  let touched = false
+  const newContent = m.content.map(part => {
+    if (!CLEARABLE_TOOL_RESULTS.has(part.toolName)) return part
+    const v = part.output?.value ?? ''
+    const text = typeof v === 'string' ? v : JSON.stringify(v)
+    if (text === MICRO_COMPACT_MARKER || isPersistedReference(text)) return part
     const replacement = offloadReferenceForCompact(
       sessionId,
       part.toolCallId,
       part.toolName,
       text,
       MICRO_COMPACT_MARKER,
-    );
-    addFreed(Math.max(0, estStr(text) - estStr(replacement)));
-    bumpCleared();
-    touched = true;
-    return { ...part, output: { type: "text" as const, value: replacement } };
-  });
-  return touched ? ({ ...m, content: newContent } as ToolMessage) : m;
+    )
+    addFreed(Math.max(0, estStr(text) - estStr(replacement)))
+    bumpCleared()
+    touched = true
+    return { ...part, output: { type: 'text' as const, value: replacement } }
+  })
+  return touched ? ({ ...m, content: newContent } as ToolMessage) : m
 }
 
 function clearToolInputs(
@@ -136,16 +154,16 @@ function clearToolInputs(
   bumpCleared: () => void,
   addFreed: (n: number) => void,
 ): AssistantMessage {
-  let touched = false;
-  const newContent = m.content.map((part) => {
-    if (part.type !== "tool-call") return part;
-    if (!CLEARABLE_TOOL_INPUTS.has(part.toolName)) return part;
-    const argsJson = JSON.stringify(part.input ?? {});
-    if (argsJson === MARKER_INPUT_JSON) return part;
-    addFreed(Math.max(0, estStr(argsJson) - MARKER_INPUT_COST));
-    bumpCleared();
-    touched = true;
-    return { ...part, input: { ...MICRO_COMPACT_INPUT_MARKER } };
-  });
-  return touched ? ({ ...m, content: newContent } as AssistantMessage) : m;
+  let touched = false
+  const newContent = m.content.map(part => {
+    if (part.type !== 'tool-call') return part
+    if (!CLEARABLE_TOOL_INPUTS.has(part.toolName)) return part
+    const argsJson = JSON.stringify(part.input ?? {})
+    if (argsJson === MARKER_INPUT_JSON) return part
+    addFreed(Math.max(0, estStr(argsJson) - MARKER_INPUT_COST))
+    bumpCleared()
+    touched = true
+    return { ...part, input: { ...MICRO_COMPACT_INPUT_MARKER } }
+  })
+  return touched ? ({ ...m, content: newContent } as AssistantMessage) : m
 }

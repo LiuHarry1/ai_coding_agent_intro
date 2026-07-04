@@ -1,55 +1,59 @@
-import type { Message } from "../core/types.js";
-import { getSubagentNames } from "../tools/AgentTool/index.js";
-import { defaultRegistry } from "../tools/index.js";
+import type { Message } from '../core/types.js'
+import { getSubagentNames } from '../tools/AgentTool/index.js'
+import { defaultRegistry } from '../tools/index.js'
 
 function isSystemReminderContent(content: string): boolean {
-  const t = content.trim();
-  return t.startsWith("<system-reminder>") && t.endsWith("</system-reminder>");
+  const t = content.trim()
+  return t.startsWith('<system-reminder>') && t.endsWith('</system-reminder>')
 }
 
 type UIPart = {
-  type: string;
-  content?: string;
-  toolCallId?: string;
-  result?: string;
-  name?: string;
-  args?: unknown;
-  status?: string;
-  isSubagent?: boolean;
-};
+  type: string
+  content?: string
+  toolCallId?: string
+  result?: string
+  name?: string
+  args?: unknown
+  status?: string
+  isSubagent?: boolean
+}
 
 type UIAssistantMessage = {
-  type: "assistant";
-  parts: UIPart[];
-  status: "done";
-};
+  type: 'assistant'
+  parts: UIPart[]
+  status: 'done'
+}
 
 /** Append one stored assistant message's displayable parts onto a UI turn. */
 function appendAssistantParts(
   target: UIAssistantMessage,
   content: Array<{
-    type: string;
-    text?: string;
-    toolCallId?: string;
-    toolName?: string;
-    input?: unknown;
+    type: string
+    text?: string
+    toolCallId?: string
+    toolName?: string
+    input?: unknown
   }>,
   subagentNames: Set<string>,
 ): void {
   for (const part of content) {
-    if (part.type === "text" && part.text?.trim()) {
-      target.parts.push({ type: "text", content: part.text });
-    } else if (part.type === "reasoning" && part.text?.trim()) {
-      target.parts.push({ type: "reasoning", content: part.text, status: "done" });
-    } else if (part.type === "tool-call") {
+    if (part.type === 'text' && part.text?.trim()) {
+      target.parts.push({ type: 'text', content: part.text })
+    } else if (part.type === 'reasoning' && part.text?.trim()) {
       target.parts.push({
-        type: "tool_call",
+        type: 'reasoning',
+        content: part.text,
+        status: 'done',
+      })
+    } else if (part.type === 'tool-call') {
+      target.parts.push({
+        type: 'tool_call',
         name: part.toolName,
         toolCallId: part.toolCallId,
         args: part.input,
-        status: "done",
-        isSubagent: subagentNames.has(part.toolName ?? ""),
-      });
+        status: 'done',
+        isSubagent: subagentNames.has(part.toolName ?? ''),
+      })
     }
   }
 }
@@ -63,54 +67,54 @@ function appendAssistantParts(
  * so session reload matches that layout.
  */
 export function sessionToUIMessages(messages: Message[]): unknown[] {
-  const uiMessages: unknown[] = [];
-  const subagentNames = getSubagentNames(defaultRegistry);
-  let currentAssistant: UIAssistantMessage | null = null;
+  const uiMessages: unknown[] = []
+  const subagentNames = getSubagentNames(defaultRegistry)
+  let currentAssistant: UIAssistantMessage | null = null
 
   for (const msg of messages) {
-    if (msg.role === "user") {
-      currentAssistant = null;
+    if (msg.role === 'user') {
+      currentAssistant = null
       const content =
-        typeof msg.content === "string"
+        typeof msg.content === 'string'
           ? msg.content
           : (msg.content as Array<{ type: string; text?: string }>)
-              .filter((p) => p.type === "text")
-              .map((p) => p.text)
-              .join("");
-      if (isSystemReminderContent(content)) continue;
-      uiMessages.push({ type: "user", content });
-    } else if (msg.role === "assistant") {
+              .filter(p => p.type === 'text')
+              .map(p => p.text)
+              .join('')
+      if (isSystemReminderContent(content)) continue
+      uiMessages.push({ type: 'user', content })
+    } else if (msg.role === 'assistant') {
       if (!currentAssistant) {
-        currentAssistant = { type: "assistant", parts: [], status: "done" };
-        uiMessages.push(currentAssistant);
+        currentAssistant = { type: 'assistant', parts: [], status: 'done' }
+        uiMessages.push(currentAssistant)
       }
       appendAssistantParts(
         currentAssistant,
         msg.content as Array<{
-          type: string;
-          text?: string;
-          toolCallId?: string;
-          toolName?: string;
-          input?: unknown;
+          type: string
+          text?: string
+          toolCallId?: string
+          toolName?: string
+          input?: unknown
         }>,
         subagentNames,
-      );
-    } else if (msg.role === "tool") {
+      )
+    } else if (msg.role === 'tool') {
       if (currentAssistant) {
         for (const tr of msg.content as Array<{
-          type: string;
-          toolCallId: string;
-          toolName: string;
-          output: { value: string };
+          type: string
+          toolCallId: string
+          toolName: string
+          output: { value: string }
         }>) {
           const tc = currentAssistant.parts.find(
-            (p) => p.type === "tool_call" && p.toolCallId === tr.toolCallId,
-          );
-          if (tc) tc.result = tr.output?.value ?? "";
+            p => p.type === 'tool_call' && p.toolCallId === tr.toolCallId,
+          )
+          if (tc) tc.result = tr.output?.value ?? ''
         }
       }
     }
   }
 
-  return uiMessages;
+  return uiMessages
 }

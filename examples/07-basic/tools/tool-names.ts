@@ -13,21 +13,21 @@
  * before tooling lands to verify the constants match the definitions.
  */
 
-export const BASH_TOOL_NAME = "bash";
-export const POWERSHELL_TOOL_NAME = "powershell";
-export const READ_FILE_TOOL_NAME = "read_file";
-export const WRITE_FILE_TOOL_NAME = "write_file";
-export const EDIT_FILE_TOOL_NAME = "edit_file";
-export const LIST_DIR_TOOL_NAME = "list_dir";
-export const TODO_WRITE_TOOL_NAME = "todo_write";
-export const WEB_SEARCH_TOOL_NAME = "web_search";
-export const WEB_FETCH_TOOL_NAME = "web_fetch";
+export const BASH_TOOL_NAME = 'bash'
+export const POWERSHELL_TOOL_NAME = 'powershell'
+export const READ_FILE_TOOL_NAME = 'read_file'
+export const WRITE_FILE_TOOL_NAME = 'write_file'
+export const EDIT_FILE_TOOL_NAME = 'edit_file'
+export const LIST_DIR_TOOL_NAME = 'list_dir'
+export const TODO_WRITE_TOOL_NAME = 'todo_write'
+export const WEB_SEARCH_TOOL_NAME = 'web_search'
+export const WEB_FETCH_TOOL_NAME = 'web_fetch'
 
 /**
  * Single tool that dispatches to all built-in subagents via a
  * `subagent_type` parameter.
  */
-export const TASK_TOOL_NAME = "task";
+export const TASK_TOOL_NAME = 'task'
 
 /**
  * Tools that mutate the filesystem or system state. Used as the deny-list
@@ -43,4 +43,4 @@ export const MUTATING_TOOLS: readonly string[] = [
   WRITE_FILE_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
-];
+]

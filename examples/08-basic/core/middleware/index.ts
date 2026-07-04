@@ -4,21 +4,21 @@ import type {
   MiddlewareHook,
   MiddlewareHandler,
   MiddlewareContext,
-} from "../types.js";
+} from '../types.js'
 
 export class Middleware implements IMiddleware {
-  #hooks = new Map<MiddlewareHook, MiddlewareHandler[]>();
+  #hooks = new Map<MiddlewareHook, MiddlewareHandler[]>()
 
   use(hook: MiddlewareHook, handler: MiddlewareHandler): void {
-    if (!this.#hooks.has(hook)) this.#hooks.set(hook, []);
-    this.#hooks.get(hook)!.push(handler);
+    if (!this.#hooks.has(hook)) this.#hooks.set(hook, [])
+    this.#hooks.get(hook)!.push(handler)
   }
 
   async #run(hook: MiddlewareHook, ctx: MiddlewareContext): Promise<void> {
-    const handlers = this.#hooks.get(hook);
-    if (!handlers) return;
+    const handlers = this.#hooks.get(hook)
+    if (!handlers) return
     for (const handler of handlers) {
-      await handler(ctx);
+      await handler(ctx)
     }
   }
 
@@ -26,31 +26,31 @@ export class Middleware implements IMiddleware {
     name: string,
     executeFn: (args: unknown, options?: unknown) => Promise<unknown>,
   ): (args: unknown, options?: unknown) => Promise<unknown> {
-    const self = this;
+    const self = this
     return async (args: unknown, options?: unknown) => {
-      const ctx: MiddlewareContext = { name, args, startTime: Date.now() };
-      await self.#run("beforeTool", ctx);
+      const ctx: MiddlewareContext = { name, args, startTime: Date.now() }
+      await self.#run('beforeTool', ctx)
       try {
-        const result = await executeFn(args, options);
-        ctx.result = result;
-        ctx.duration = Date.now() - ctx.startTime;
-        await self.#run("afterTool", ctx);
-        return result;
+        const result = await executeFn(args, options)
+        ctx.result = result
+        ctx.duration = Date.now() - ctx.startTime
+        await self.#run('afterTool', ctx)
+        return result
       } catch (error) {
-        ctx.error = error;
-        ctx.duration = Date.now() - ctx.startTime;
-        await self.#run("onError", ctx);
-        throw error;
+        ctx.error = error
+        ctx.duration = Date.now() - ctx.startTime
+        await self.#run('onError', ctx)
+        throw error
       }
-    };
+    }
   }
 }
 
 export function createTimingMiddleware(eventBus: IEventBus) {
   return {
     afterTool(ctx: MiddlewareContext): void {
-      console.log("tool_timing", ctx.name, ctx.duration);
-      eventBus.emit("tool_timing", { name: ctx.name, duration: ctx.duration });
+      console.log('tool_timing', ctx.name, ctx.duration)
+      eventBus.emit('tool_timing', { name: ctx.name, duration: ctx.duration })
     },
-  };
+  }
 }

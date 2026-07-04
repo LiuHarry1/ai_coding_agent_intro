@@ -1,4 +1,4 @@
-import type { EventHandler, IEventBus } from "../types.js";
+import type { EventHandler, IEventBus } from '../types.js'
 
 /**
  * Scoped event bus for a single subagent invocation. Every emitted payload
@@ -10,31 +10,35 @@ export function createSubagentEventBus(
   parentToolCallId: string,
   scopeLabel: string,
 ): IEventBus {
-  const scoped = parent.scoped(scopeLabel);
+  const scoped = parent.scoped(scopeLabel)
 
   const withParent = (data?: unknown): Record<string, unknown> => {
-    if (data != null && typeof data === "object" && !Array.isArray(data)) {
-      return { ...(data as Record<string, unknown>), parentToolCallId };
+    if (data != null && typeof data === 'object' && !Array.isArray(data)) {
+      return { ...(data as Record<string, unknown>), parentToolCallId }
     }
-    if (data === undefined) return { parentToolCallId };
-    return { parentToolCallId, value: data };
-  };
+    if (data === undefined) return { parentToolCallId }
+    return { parentToolCallId, value: data }
+  }
 
   return {
     emit(event: string, data?: unknown) {
-      scoped.emit(event, withParent(data));
+      scoped.emit(event, withParent(data))
     },
     on(event: string, handler: EventHandler) {
-      return scoped.on(event, handler);
+      return scoped.on(event, handler)
     },
     off(event: string, handler: EventHandler) {
-      scoped.off(event, handler);
+      scoped.off(event, handler)
     },
     scoped(childPrefix: string) {
-      return createSubagentEventBus(parent, parentToolCallId, `${scopeLabel}_${childPrefix}`);
+      return createSubagentEventBus(
+        parent,
+        parentToolCallId,
+        `${scopeLabel}_${childPrefix}`,
+      )
     },
     removeAllListeners() {
-      scoped.removeAllListeners();
+      scoped.removeAllListeners()
     },
-  };
+  }
 }

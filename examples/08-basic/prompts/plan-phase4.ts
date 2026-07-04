@@ -6,4 +6,4 @@ Goal: Write your final plan to the plan file (the only file you can edit).
 - Ensure that the plan file is concise enough to scan quickly, but detailed enough to execute effectively
 - Include the paths of critical files to be modified
 - Reference existing functions and utilities you found that should be reused, with their file paths
-- Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)`;
+- Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)`

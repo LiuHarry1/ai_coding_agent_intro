@@ -1,1 +1,1 @@
-export { defaultRegistry } from "./tools/index.js";
+export { defaultRegistry } from './tools/index.js'

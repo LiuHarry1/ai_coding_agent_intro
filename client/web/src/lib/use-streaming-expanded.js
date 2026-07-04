@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * Tool cards should auto-expand ONLY while the tool is running so the
@@ -12,18 +12,18 @@ import { useEffect, useRef, useState } from "react";
  *   <ToolRowHeader expanded={expanded} onToggle={toggle} … />
  */
 export function useStreamingExpanded(isRunning) {
-  const [expanded, setExpanded] = useState(Boolean(isRunning));
-  const userToggled = useRef(false);
+  const [expanded, setExpanded] = useState(Boolean(isRunning))
+  const userToggled = useRef(false)
 
   useEffect(() => {
-    if (userToggled.current) return;
-    setExpanded(Boolean(isRunning));
-  }, [isRunning]);
+    if (userToggled.current) return
+    setExpanded(Boolean(isRunning))
+  }, [isRunning])
 
   const toggle = () => {
-    userToggled.current = true;
-    setExpanded((v) => !v);
-  };
+    userToggled.current = true
+    setExpanded(v => !v)
+  }
 
-  return [expanded, toggle, setExpanded];
+  return [expanded, toggle, setExpanded]
 }

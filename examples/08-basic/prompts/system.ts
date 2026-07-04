@@ -1,8 +1,8 @@
-import { isWindows, platformLabel } from "../core/platform.js";
+import { isWindows, platformLabel } from '../core/platform.js'
 import {
   EXPLORE_AGENT_MIN_QUERIES,
   EXPLORE_AGENT_TYPE,
-} from "../tools/AgentTool/built-in/exploreAgent.js";
+} from '../tools/AgentTool/built-in/exploreAgent.js'
 import {
   AGENT_TOOL_NAME,
   BASH_TOOL_NAME,
@@ -13,43 +13,43 @@ import {
   TODO_WRITE_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
-} from "../constants/tool_names.js";
-import { SKILL_TOOL_NAME } from "../tools/skill.js";
-import { previewSection } from "./preview.js";
+} from '../constants/tool_names.js'
+import { SKILL_TOOL_NAME } from '../tools/skill.js'
+import { previewSection } from './preview.js'
 
 // Static system prompt sections. Uses tool/agent names via constants.
 
 function shellInfoLine(): string {
   if (isWindows) {
-    return "Shell: bash (use Unix shell syntax, not Windows — e.g. /dev/null not NUL, forward slashes in paths)";
+    return 'Shell: bash (use Unix shell syntax, not Windows — e.g. /dev/null not NUL, forward slashes in paths)'
   }
-  return `Shell: ${BASH_TOOL_NAME}`;
+  return `Shell: ${BASH_TOOL_NAME}`
 }
 
 /** Agent tool usage guidance. */
 function agentToolSection(): string {
-  return `Use the ${AGENT_TOOL_NAME} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`;
+  return `Use the ${AGENT_TOOL_NAME} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`
 }
 
 /** Explore subagent guidance (non-embedded search tools). */
 function exploreGuidanceSection(): string {
-  const searchTools = `the ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME}`;
+  const searchTools = `the ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME}`
   return [
     `For simple, directed codebase searches (e.g. for a specific file/class/function) use ${searchTools} directly.`,
     `For broader codebase exploration and deep research, use the ${AGENT_TOOL_NAME} tool with subagent_type=${EXPLORE_AGENT_TYPE}. This is slower than using ${searchTools} directly, so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more than ${EXPLORE_AGENT_MIN_QUERIES} queries.`,
-  ].join("\n - ");
+  ].join('\n - ')
 }
 
 function skillGuidanceSection(): string {
-  return `/<skill-name> is shorthand for users to invoke a skill. When executed, the skill gets expanded to a full prompt. Use the ${SKILL_TOOL_NAME} tool to execute them. Only use ${SKILL_TOOL_NAME} for skills listed in <system-reminder> messages — do not guess or fabricate skill names.`;
+  return `/<skill-name> is shorthand for users to invoke a skill. When executed, the skill gets expanded to a full prompt. Use the ${SKILL_TOOL_NAME} tool to execute them. Only use ${SKILL_TOOL_NAME} for skills listed in <system-reminder> messages — do not guess or fabricate skill names.`
 }
 
 function toolSearchGuidanceSection(): string {
-  return `Some tools are deferred — their names are listed in <system-reminder> messages but their full schemas are not loaded. When you need a deferred tool, call ${TOOL_SEARCH_TOOL_NAME} first (with \`select:tool_name\` for exact lookup or keywords for search). The tool will be activated and available for your next action. Do not attempt to call a deferred tool without discovering it first — the call will fail.`;
+  return `Some tools are deferred — their names are listed in <system-reminder> messages but their full schemas are not loaded. When you need a deferred tool, call ${TOOL_SEARCH_TOOL_NAME} first (with \`select:tool_name\` for exact lookup or keywords for search). The tool will be activated and available for your next action. Do not attempt to call a deferred tool without discovering it first — the call will fail.`
 }
 
 export function systemPrompt(cwd: string, projectRules?: string): string {
-  const rulesAppend = projectRules ? `\n\n${projectRules}` : "";
+  const rulesAppend = projectRules ? `\n\n${projectRules}` : ''
 
   return `You are an interactive agent1 that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
@@ -121,5 +121,5 @@ Tool results and user messages may include \`<system-reminder>\` tags. They cont
  - ${agentToolSection()}
  - ${exploreGuidanceSection()}
  - ${skillGuidanceSection()}
- - ${toolSearchGuidanceSection()}${rulesAppend}`;
+ - ${toolSearchGuidanceSection()}${rulesAppend}`
 }

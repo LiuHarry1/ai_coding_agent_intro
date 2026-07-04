@@ -1,28 +1,31 @@
-import type { AgentDefinition, IToolRegistry } from "../core/types.js";
+import type { AgentDefinition, IToolRegistry } from '../core/types.js'
 import {
   loadSkillsFromDisk,
   filterSkillsByPaths,
   mergeSkillsByName,
-} from "./loadSkillsDir.js";
-import { createSkillTool, SKILL_TOOL_NAME } from "../tools/skill.js";
-import type { SkillDefinition } from "./types.js";
+} from './loadSkillsDir.js'
+import { createSkillTool, SKILL_TOOL_NAME } from '../tools/skill.js'
+import type { SkillDefinition } from './types.js'
 
-export { SKILL_TOOL_NAME, filterSkillsByPaths };
-export type { SkillDefinition };
+export { SKILL_TOOL_NAME, filterSkillsByPaths }
+export type { SkillDefinition }
 
 // ── Skill listing for <system-reminder> injection ────────────────────────
 
-const DEFAULT_LISTING_BUDGET = 8_000;
-const BUDGET_CONTEXT_PERCENT = 0.01;
+const DEFAULT_LISTING_BUDGET = 8_000
+const BUDGET_CONTEXT_PERCENT = 0.01
 
 function getCharBudget(contextWindowTokens?: number): number {
-  if (!contextWindowTokens) return DEFAULT_LISTING_BUDGET;
-  return Math.max(2_000, Math.floor(contextWindowTokens * BUDGET_CONTEXT_PERCENT));
+  if (!contextWindowTokens) return DEFAULT_LISTING_BUDGET
+  return Math.max(
+    2_000,
+    Math.floor(contextWindowTokens * BUDGET_CONTEXT_PERCENT),
+  )
 }
 
 function truncateDesc(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 1) + "\u2026";
+  if (text.length <= maxLen) return text
+  return text.slice(0, maxLen - 1) + '\u2026'
 }
 
 /**
@@ -33,26 +36,27 @@ export function formatSkillListing(
   skills: readonly SkillDefinition[],
   contextWindowTokens?: number,
 ): string {
-  if (skills.length === 0) return "";
+  if (skills.length === 0) return ''
 
-  const budget = getCharBudget(contextWindowTokens);
-  const lines = skills.map(
-    (s) => `- ${s.name} (${s.context}): ${s.description}`,
-  );
-  const full = lines.join("\n");
+  const budget = getCharBudget(contextWindowTokens)
+  const lines = skills.map(s => `- ${s.name} (${s.context}): ${s.description}`)
+  const full = lines.join('\n')
 
-  if (full.length <= budget) return full;
+  if (full.length <= budget) return full
 
   const nameOverhead = skills.reduce(
     (sum, s) => sum + s.name.length + s.context.length + 8,
     0,
-  );
-  const available = budget - nameOverhead;
-  const maxDesc = Math.max(30, Math.floor(available / skills.length));
+  )
+  const available = budget - nameOverhead
+  const maxDesc = Math.max(30, Math.floor(available / skills.length))
 
   return skills
-    .map((s) => `- ${s.name} (${s.context}): ${truncateDesc(s.description, maxDesc)}`)
-    .join("\n");
+    .map(
+      s =>
+        `- ${s.name} (${s.context}): ${truncateDesc(s.description, maxDesc)}`,
+    )
+    .join('\n')
 }
 
 export interface RegisterSkillsOptions {
@@ -60,7 +64,7 @@ export interface RegisterSkillsOptions {
    * Skills contributed by plugins (source "plugin"). Merged at the LOWEST
    * priority, so a disk skill (`.ai-agent/skills/`) with the same name wins.
    */
-  pluginSkills?: readonly SkillDefinition[];
+  pluginSkills?: readonly SkillDefinition[]
   /**
    * File paths to evaluate `paths:` frontmatter against. Skills whose
    * `paths` patterns match at least one of these become active for this
@@ -74,7 +78,7 @@ export interface RegisterSkillsOptions {
    * (same effect: conditional skills hidden, unconditional still active).
    * Skills WITHOUT `paths:` are always active regardless of this option.
    */
-  candidateFiles?: readonly string[];
+  candidateFiles?: readonly string[]
 }
 
 /**
@@ -97,23 +101,19 @@ export async function registerSkills(
   options: RegisterSkillsOptions = {},
 ): Promise<{
   /** All discovered skills, including conditional ones not active this turn. */
-  allSkills: SkillDefinition[];
+  allSkills: SkillDefinition[]
   /** Skills exposed to the model this turn (after `paths:` filtering). */
-  activeSkills: SkillDefinition[];
-  errors: Array<{ filePath: string; error: string }>;
+  activeSkills: SkillDefinition[]
+  errors: Array<{ filePath: string; error: string }>
 }> {
-  const { skills: diskSkills, errors } = await loadSkillsFromDisk(cwd);
+  const { skills: diskSkills, errors } = await loadSkillsFromDisk(cwd)
   // plugin skills first (lowest priority) → disk skills override on collision.
-  const skills = mergeSkillsByName(options.pluginSkills ?? [], diskSkills);
-  const activeSkills = filterSkillsByPaths(
-    skills,
-    options.candidateFiles,
-    cwd,
-  );
+  const skills = mergeSkillsByName(options.pluginSkills ?? [], diskSkills)
+  const activeSkills = filterSkillsByPaths(skills, options.candidateFiles, cwd)
 
   if (activeSkills.length > 0) {
-    registry.register(createSkillTool(activeSkills, forkableAgents));
+    registry.register(createSkillTool(activeSkills, forkableAgents))
   }
 
-  return { allSkills: skills, activeSkills, errors };
+  return { allSkills: skills, activeSkills, errors }
 }

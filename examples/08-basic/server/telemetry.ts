@@ -14,116 +14,118 @@
  *   ANALYTICS_INGEST_API_KEY   shared secret sent as X-API-Key (optional)
  *   ANALYTICS_FLUSH_MS         batch flush interval (default 5000)
  */
-import type { IEventBus } from "../core/types.js";
+import type { IEventBus } from '../core/types.js'
 
 interface UsageEvent {
-  step: number;
-  sessionId?: string;
-  model?: string;
-  provider?: string;
-  inputTokens: number;
-  outputTokens: number;
-  cachedInputTokens: number;
-  reasoningTokens: number;
-  totalTokens: number;
-  latencyMs?: number;
-  ttfbMs?: number;
-  toolCalls: number;
+  step: number
+  sessionId?: string
+  model?: string
+  provider?: string
+  inputTokens: number
+  outputTokens: number
+  cachedInputTokens: number
+  reasoningTokens: number
+  totalTokens: number
+  latencyMs?: number
+  ttfbMs?: number
+  toolCalls: number
 }
 
 interface UsageReport {
-  event_id?: string;
-  ts?: string;
-  user_email?: string;
-  session_id?: string;
-  turn_index?: number;
-  model?: string;
-  provider?: string;
-  source?: string;
-  input_tokens?: number;
-  output_tokens?: number;
-  cached_input_tokens?: number;
-  reasoning_tokens?: number;
-  total_tokens?: number;
-  latency_ms?: number;
-  ttfb_ms?: number;
-  tool_calls?: number;
+  event_id?: string
+  ts?: string
+  user_email?: string
+  session_id?: string
+  turn_index?: number
+  model?: string
+  provider?: string
+  source?: string
+  input_tokens?: number
+  output_tokens?: number
+  cached_input_tokens?: number
+  reasoning_tokens?: number
+  total_tokens?: number
+  latency_ms?: number
+  ttfb_ms?: number
+  tool_calls?: number
 }
 
 interface EventReport {
-  event_id?: string;
-  ts?: string;
-  type: string;
-  user_email?: string;
-  session_id?: string;
-  payload?: Record<string, unknown>;
+  event_id?: string
+  ts?: string
+  type: string
+  user_email?: string
+  session_id?: string
+  payload?: Record<string, unknown>
 }
 
 /** Analytics event type for one user chat POST. */
-export const USER_QUESTION_EVENT = "chat.user_message";
+export const USER_QUESTION_EVENT = 'chat.user_message'
 
-const ENDPOINT = (process.env.ANALYTICS_URL ?? "").replace(/\/+$/, "");
-const API_KEY = process.env.ANALYTICS_INGEST_API_KEY ?? "";
+const ENDPOINT = (process.env.ANALYTICS_URL ?? '').replace(/\/+$/, '')
+const API_KEY = process.env.ANALYTICS_INGEST_API_KEY ?? ''
 const FLUSH_MS = (() => {
-  const n = parseInt(process.env.ANALYTICS_FLUSH_MS ?? "", 10);
-  return Number.isFinite(n) && n > 0 ? n : 5000;
-})();
-const MAX_BATCH = 200;
+  const n = parseInt(process.env.ANALYTICS_FLUSH_MS ?? '', 10)
+  return Number.isFinite(n) && n > 0 ? n : 5000
+})()
+const MAX_BATCH = 200
 
 export function isTelemetryEnabled(): boolean {
-  return ENDPOINT.length > 0;
+  return ENDPOINT.length > 0
 }
 
 // Module-level queues shared across requests; one flush timer.
-const usageQueue: UsageReport[] = [];
-const eventQueue: EventReport[] = [];
-let timer: ReturnType<typeof setTimeout> | null = null;
+const usageQueue: UsageReport[] = []
+const eventQueue: EventReport[] = []
+let timer: ReturnType<typeof setTimeout> | null = null
 
 function scheduleFlush(): void {
-  const pending = usageQueue.length + eventQueue.length;
+  const pending = usageQueue.length + eventQueue.length
   if (pending >= MAX_BATCH) {
-    void flushUsage();
+    void flushUsage()
   } else if (!timer) {
-    timer = setTimeout(() => void flushUsage(), FLUSH_MS);
+    timer = setTimeout(() => void flushUsage(), FLUSH_MS)
   }
 }
 
 async function postIngest(path: string, body: unknown): Promise<void> {
   const res = await fetch(`${ENDPOINT}${path}`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+      'Content-Type': 'application/json',
+      ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
     },
     body: JSON.stringify(body),
-  });
+  })
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.warn(`[telemetry] ${path} HTTP ${res.status}: ${text.slice(0, 200)}`);
+    const text = await res.text().catch(() => '')
+    console.warn(
+      `[telemetry] ${path} HTTP ${res.status}: ${text.slice(0, 200)}`,
+    )
   }
 }
 
 export async function flushUsage(): Promise<void> {
   if (timer) {
-    clearTimeout(timer);
-    timer = null;
+    clearTimeout(timer)
+    timer = null
   }
-  if (!ENDPOINT) return;
+  if (!ENDPOINT) return
 
-  const records = usageQueue.splice(0, usageQueue.length);
-  const events = eventQueue.splice(0, eventQueue.length);
-  if (records.length === 0 && events.length === 0) return;
+  const records = usageQueue.splice(0, usageQueue.length)
+  const events = eventQueue.splice(0, eventQueue.length)
+  if (records.length === 0 && events.length === 0) return
 
   try {
     if (records.length > 0) {
-      await postIngest("/v1/usage", { records });
+      await postIngest('/v1/usage', { records })
     }
     if (events.length > 0) {
-      await postIngest("/v1/events", { events });
+      await postIngest('/v1/events', { events })
     }
   } catch (err) {
     // Telemetry must never break the agent. Drop on failure.
-    console.warn(`[telemetry] flush failed: ${(err as Error).message}`);
+    console.warn(`[telemetry] flush failed: ${(err as Error).message}`)
   }
 }
 
@@ -136,7 +138,7 @@ export function reportUserQuestion(
   messageIndex: number,
   preview?: string,
 ): void {
-  if (!isTelemetryEnabled()) return;
+  if (!isTelemetryEnabled()) return
   eventQueue.push({
     event_id: `${ctx.sessionId}:q:${messageIndex}`,
     ts: new Date().toISOString(),
@@ -144,13 +146,13 @@ export function reportUserQuestion(
     user_email: ctx.userEmail,
     session_id: ctx.sessionId,
     payload: preview ? { preview: preview.slice(0, 200) } : {},
-  });
-  scheduleFlush();
+  })
+  scheduleFlush()
 }
 
 export interface TelemetryContext {
-  sessionId: string;
-  userEmail?: string;
+  sessionId: string
+  userEmail?: string
 }
 
 /**
@@ -162,10 +164,10 @@ export function attachUsageTelemetry(
   eventBus: IEventBus,
   ctx: TelemetryContext,
 ): () => void {
-  if (!isTelemetryEnabled()) return () => {};
+  if (!isTelemetryEnabled()) return () => {}
 
-  return eventBus.on("usage", (data) => {
-    const e = data as UsageEvent;
+  return eventBus.on('usage', data => {
+    const e = data as UsageEvent
     usageQueue.push({
       event_id: ctx.sessionId ? `${ctx.sessionId}:${e.step}` : undefined,
       ts: new Date().toISOString(),
@@ -174,7 +176,7 @@ export function attachUsageTelemetry(
       turn_index: e.step,
       model: e.model,
       provider: e.provider,
-      source: "agent",
+      source: 'agent',
       input_tokens: e.inputTokens,
       output_tokens: e.outputTokens,
       cached_input_tokens: e.cachedInputTokens,
@@ -183,7 +185,7 @@ export function attachUsageTelemetry(
       latency_ms: e.latencyMs,
       ttfb_ms: e.ttfbMs,
       tool_calls: e.toolCalls,
-    });
-    scheduleFlush();
-  });
+    })
+    scheduleFlush()
+  })
 }

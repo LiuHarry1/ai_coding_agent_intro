@@ -1,8 +1,8 @@
-declare module "pdf-parse" {
+declare module 'pdf-parse' {
   interface PdfData {
-    numpages?: number;
-    text?: string;
+    numpages?: number
+    text?: string
   }
-  function pdfParse(buffer: Buffer): Promise<PdfData>;
-  export default pdfParse;
+  function pdfParse(buffer: Buffer): Promise<PdfData>
+  export default pdfParse
 }

@@ -1,6 +1,6 @@
-import { createAgentDefinition } from "./base.js";
-import { READ_ONLY_MODE, READ_ONLY_TOOLS } from "./prompt-fragments.js";
-import { MUTATING_TOOLS, TASK_TOOL_NAME } from "../tools/tool-names.js";
+import { createAgentDefinition } from './base.js'
+import { READ_ONLY_MODE, READ_ONLY_TOOLS } from './prompt-fragments.js'
+import { MUTATING_TOOLS, TASK_TOOL_NAME } from '../tools/tool-names.js'
 
 const EXPLORE_SYSTEM = `You are a read-only codebase exploration specialist. Search, read, synthesize.
 
@@ -20,10 +20,10 @@ Default report shape (follow the parent's format if they specified one — e.g. 
 - File:line citations of the most relevant code, each with a 1-line description.
 - Function names, patterns, or call sites only if structurally useful.
 
-Be specific so the parent can act without re-discovering the code.`;
+Be specific so the parent can act without re-discovering the code.`
 
 export const definition = createAgentDefinition({
-  agentType: "explore",
+  agentType: 'explore',
   whenToUse:
     'Fast read-only subagent for exploring codebases. Use when you need to ' +
     'find files by patterns (e.g. "src/components/**/*.tsx"), search code for ' +
@@ -33,11 +33,11 @@ export const definition = createAgentDefinition({
     'Returns a structured summary with file paths and line numbers. Slower ' +
     'than direct grep/read for a single targeted lookup, so prefer this only ' +
     'when the search is broad or open-ended.',
-  description: "Codebase exploration",
+  description: 'Codebase exploration',
   systemPrompt: EXPLORE_SYSTEM,
   // Inherit every parent tool except mutating ones AND the task tool itself
   // (anti-recursion: subagents must not spawn further subagents).
   disallowedTools: [...MUTATING_TOOLS, TASK_TOOL_NAME],
   maxSteps: 20,
-  label: "Explore",
-});
+  label: 'Explore',
+})

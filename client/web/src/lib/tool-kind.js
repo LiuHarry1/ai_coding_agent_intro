@@ -5,16 +5,16 @@
 
 /** Built-in `WebFetch` and MCP names like `mcp_server_fetch`. */
 export function isFetchTool(name) {
-  if (!name) return false;
-  if (name === "WebFetch" || name === "fetch") return true;
-  return name.endsWith("_fetch");
+  if (!name) return false
+  if (name === 'WebFetch' || name === 'fetch') return true
+  return name.endsWith('_fetch')
 }
 
 /** Built-in `WebSearch` and MCP search tools (`*_search`, `*_web_search`). */
 export function isSearchTool(name) {
-  if (!name) return false;
-  if (name === "WebSearch" || name === "search") return true;
-  return name.endsWith("_search") || name.endsWith("_web_search");
+  if (!name) return false
+  if (name === 'WebSearch' || name === 'search') return true
+  return name.endsWith('_search') || name.endsWith('_web_search')
 }
 
 /**
@@ -22,13 +22,13 @@ export function isSearchTool(name) {
  * `mcp_server_fetch` → { server: "mcp_server", tool: "fetch" }
  */
 export function parseMcpToolName(name) {
-  if (!name) return { server: null, tool: "" };
-  const suffixes = ["WebSearch", "WebFetch", "fetch", "search"];
+  if (!name) return { server: null, tool: '' }
+  const suffixes = ['WebSearch', 'WebFetch', 'fetch', 'search']
   for (const suffix of suffixes) {
-    const marker = `_${suffix}`;
+    const marker = `_${suffix}`
     if (name.endsWith(marker)) {
-      return { server: name.slice(0, -marker.length) || null, tool: suffix };
+      return { server: name.slice(0, -marker.length) || null, tool: suffix }
     }
   }
-  return { server: null, tool: name };
+  return { server: null, tool: name }
 }

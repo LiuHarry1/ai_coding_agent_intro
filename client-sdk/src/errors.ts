@@ -6,11 +6,11 @@ export class AgentClientError extends Error {
     readonly status: number,
     readonly body: unknown,
   ) {
-    super(message);
-    this.name = "AgentClientError";
+    super(message)
+    this.name = 'AgentClientError'
   }
 
   override toString(): string {
-    return `${this.message} (HTTP ${this.status})`;
+    return `${this.message} (HTTP ${this.status})`
   }
 }

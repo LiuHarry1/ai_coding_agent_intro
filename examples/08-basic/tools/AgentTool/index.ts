@@ -1,23 +1,23 @@
-import type { AgentDefinition, IToolRegistry } from "../../core/types.js";
-import { definition as exploreDef } from "./built-in/exploreAgent.js";
-import { definition as planDef } from "./built-in/planAgent.js";
-import { definition as generalPurposeDef } from "./built-in/generalPurposeAgent.js";
-import { createTaskTool } from "./AgentTool.js";
-import { AGENT_TOOL_NAME } from "../../constants/tool_names.js";
+import type { AgentDefinition, IToolRegistry } from '../../core/types.js'
+import { definition as exploreDef } from './built-in/exploreAgent.js'
+import { definition as planDef } from './built-in/planAgent.js'
+import { definition as generalPurposeDef } from './built-in/generalPurposeAgent.js'
+import { createTaskTool } from './AgentTool.js'
+import { AGENT_TOOL_NAME } from '../../constants/tool_names.js'
 import {
   loadMarkdownConfigs,
   type MarkdownFile,
-} from "../../utils/markdownConfigLoader.js";
-import { mergeAgents } from "./mergeAgents.js";
+} from '../../utils/markdownConfigLoader.js'
+import { mergeAgents } from './mergeAgents.js'
 
 export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
   exploreDef,
   planDef,
   generalPurposeDef,
-];
+]
 
 export function registerBuiltinSubagents(registry: IToolRegistry): void {
-  registry.register(createTaskTool(BUILTIN_AGENTS));
+  registry.register(createTaskTool(BUILTIN_AGENTS))
 }
 
 export async function registerSubagents(
@@ -25,27 +25,30 @@ export async function registerSubagents(
   cwd: string,
   pluginAgentFiles: readonly MarkdownFile[] = [],
 ): Promise<{
-  activeAgents: AgentDefinition[];
-  errors: Array<{ filePath: string; error: string }>;
+  activeAgents: AgentDefinition[]
+  errors: Array<{ filePath: string; error: string }>
 }> {
-  const files = await loadMarkdownConfigs("agents", cwd);
+  const files = await loadMarkdownConfigs('agents', cwd)
   // Plugin files carry source "plugin" (lowest priority); `mergeAgents` sorts
   // by `sourceRank` so disk agents override plugin agents of the same name.
-  const { agents, errors } = mergeAgents(BUILTIN_AGENTS, [...pluginAgentFiles, ...files]);
-  registry.register(createTaskTool(agents));
-  return { activeAgents: agents, errors };
+  const { agents, errors } = mergeAgents(BUILTIN_AGENTS, [
+    ...pluginAgentFiles,
+    ...files,
+  ])
+  registry.register(createTaskTool(agents))
+  return { activeAgents: agents, errors }
 }
 
 export function getSubagentNames(registry: IToolRegistry): Set<string> {
-  const names = new Set<string>();
+  const names = new Set<string>()
   for (const { name } of registry.list()) {
-    if (registry.get(name)?.isSubagent) names.add(name);
+    if (registry.get(name)?.isSubagent) names.add(name)
   }
-  names.add(AGENT_TOOL_NAME);
-  return names;
+  names.add(AGENT_TOOL_NAME)
+  return names
 }
 
 // Re-export built-in agent types for prompts / tool description examples.
-export { EXPLORE_AGENT_TYPE } from "./built-in/exploreAgent.js";
-export { PLAN_AGENT_TYPE } from "./built-in/planAgent.js";
-export { GENERAL_PURPOSE_AGENT_TYPE } from "./built-in/generalPurposeAgent.js";
+export { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
+export { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
+export { GENERAL_PURPOSE_AGENT_TYPE } from './built-in/generalPurposeAgent.js'

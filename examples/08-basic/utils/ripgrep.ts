@@ -20,36 +20,39 @@
  *     Docker images that don't ship ripgrep).
  */
 
-import type { ChildProcess, ExecFileException } from "child_process";
-import { execFile } from "child_process";
-import { isWindows } from "../core/platform.js";
-import { ripGrepFallback } from "./ripgrep-fallback.js";
+import type { ChildProcess, ExecFileException } from 'child_process'
+import { execFile } from 'child_process'
+import { isWindows } from '../core/platform.js'
+import { ripGrepFallback } from './ripgrep-fallback.js'
 
-const MAX_BUFFER_SIZE = 20_000_000; // 20MB; large monorepos can have 200k+ files
+const MAX_BUFFER_SIZE = 20_000_000 // 20MB; large monorepos can have 200k+ files
 
 function isEagainError(stderr: string): boolean {
   return (
-    stderr.includes("os error 11") ||
-    stderr.includes("Resource temporarily unavailable")
-  );
+    stderr.includes('os error 11') ||
+    stderr.includes('Resource temporarily unavailable')
+  )
 }
 
 export class RipgrepTimeoutError extends Error {
-  constructor(message: string, public readonly partialResults: string[]) {
-    super(message);
-    this.name = "RipgrepTimeoutError";
+  constructor(
+    message: string,
+    public readonly partialResults: string[],
+  ) {
+    super(message)
+    this.name = 'RipgrepTimeoutError'
   }
 }
 
 export class RipgrepNotFoundError extends Error {
   constructor() {
     super(
-      "ripgrep (`rg`) is not installed or not on PATH. Install it:\n" +
-        "  Windows: winget install BurntSushi.ripgrep.MSVC  (or `choco install ripgrep`)\n" +
-        "  macOS:   brew install ripgrep\n" +
-        "  Linux:   apt install ripgrep / dnf install ripgrep / pacman -S ripgrep"
-    );
-    this.name = "RipgrepNotFoundError";
+      'ripgrep (`rg`) is not installed or not on PATH. Install it:\n' +
+        '  Windows: winget install BurntSushi.ripgrep.MSVC  (or `choco install ripgrep`)\n' +
+        '  macOS:   brew install ripgrep\n' +
+        '  Linux:   apt install ripgrep / dnf install ripgrep / pacman -S ripgrep',
+    )
+    this.name = 'RipgrepNotFoundError'
   }
 }
 
@@ -65,20 +68,20 @@ export class RipgrepNotFoundError extends Error {
  *   - RG_FALLBACK=off    → never use fallback; throw RipgrepNotFoundError
  *     on ENOENT.
  */
-let rgKnownMissing = false;
+let rgKnownMissing = false
 function shouldUseFallback(): boolean {
-  if (process.env.RG_FALLBACK === "force") return true;
-  if (process.env.RG_FALLBACK === "off") return false;
-  return rgKnownMissing;
+  if (process.env.RG_FALLBACK === 'force') return true
+  if (process.env.RG_FALLBACK === 'off') return false
+  return rgKnownMissing
 }
 function markRgMissing(): void {
   if (!rgKnownMissing) {
-    rgKnownMissing = true;
+    rgKnownMissing = true
     console.warn(
-      "[ripgrep] system `rg` not found on PATH — falling back to pure-Node implementation. " +
-        "Install `rg` for much better performance (winget install BurntSushi.ripgrep.MSVC / brew install ripgrep / apt install ripgrep). " +
-        "Set RG_FALLBACK=off to disable the fallback."
-    );
+      '[ripgrep] system `rg` not found on PATH — falling back to pure-Node implementation. ' +
+        'Install `rg` for much better performance (winget install BurntSushi.ripgrep.MSVC / brew install ripgrep / apt install ripgrep). ' +
+        'Set RG_FALLBACK=off to disable the fallback.',
+    )
   }
 }
 
@@ -86,7 +89,7 @@ function markRgMissing(): void {
 // resolved by `which`. If we used a resolved path, a malicious `./rg.exe`
 // in cwd could be executed; with just 'rg' the OS resolves it safely
 // (NoDefaultCurrentDirectoryInExePath on Windows etc.).
-const RG_COMMAND = "rg";
+const RG_COMMAND = 'rg'
 
 function ripGrepRaw(
   args: string[],
@@ -95,19 +98,20 @@ function ripGrepRaw(
   callback: (
     error: ExecFileException | null,
     stdout: string,
-    stderr: string
+    stderr: string,
   ) => void,
-  singleThread = false
+  singleThread = false,
 ): ChildProcess {
   // NB: When running interactively, ripgrep does not require a path as its
   // last argument, but when run non-interactively, it will hang unless a
   // path or file pattern is provided.
-  const threadArgs = singleThread ? ["-j", "1"] : [];
-  const fullArgs = [...threadArgs, ...args, target];
+  const threadArgs = singleThread ? ['-j', '1'] : []
+  const fullArgs = [...threadArgs, ...args, target]
 
-  const timeout = parseInt(process.env.RG_TIMEOUT_SECONDS || "", 10) > 0
-    ? parseInt(process.env.RG_TIMEOUT_SECONDS!, 10) * 1000
-    : 20_000;
+  const timeout =
+    parseInt(process.env.RG_TIMEOUT_SECONDS || '', 10) > 0
+      ? parseInt(process.env.RG_TIMEOUT_SECONDS!, 10) * 1000
+      : 20_000
 
   // Use SIGKILL as killSignal because SIGTERM may not terminate ripgrep
   // when it's blocked in uninterruptible filesystem I/O. On Windows,
@@ -119,22 +123,22 @@ function ripGrepRaw(
       maxBuffer: MAX_BUFFER_SIZE,
       signal: abortSignal,
       timeout,
-      killSignal: isWindows ? undefined : "SIGKILL",
+      killSignal: isWindows ? undefined : 'SIGKILL',
       windowsHide: true,
     },
-    callback
-  );
+    callback,
+  )
 }
 
 export async function ripGrep(
   args: string[],
   target: string,
-  abortSignal: AbortSignal
+  abortSignal: AbortSignal,
 ): Promise<string[]> {
   // Fast path: we've already learned that system rg is missing (or the
   // user forced fallback via env). Skip the spawn and run pure-Node.
   if (shouldUseFallback()) {
-    return ripGrepFallback(args, target);
+    return ripGrepFallback(args, target)
   }
 
   return new Promise((resolve, reject) => {
@@ -142,47 +146,47 @@ export async function ripGrep(
       error: ExecFileException | null,
       stdout: string,
       stderr: string,
-      isRetry: boolean
+      isRetry: boolean,
     ): void => {
       // Success case
       if (!error) {
         resolve(
           stdout
             .trim()
-            .split("\n")
-            .map((line) => line.replace(/\r$/, ""))
-            .filter(Boolean)
-        );
-        return;
+            .split('\n')
+            .map(line => line.replace(/\r$/, ''))
+            .filter(Boolean),
+        )
+        return
       }
 
       // Exit code 1 is normal "no matches"
       if (error.code === 1) {
-        resolve([]);
-        return;
+        resolve([])
+        return
       }
 
       // ENOENT here means `rg` itself wasn't found. Mark it missing,
       // print a one-time warning, and route this call (and all future
       // ones) to the pure-Node fallback. If RG_FALLBACK=off, throw
       // RipgrepNotFoundError with an install hint instead.
-      if (error.code === "ENOENT") {
-        if (process.env.RG_FALLBACK === "off") {
-          reject(new RipgrepNotFoundError());
-          return;
+      if (error.code === 'ENOENT') {
+        if (process.env.RG_FALLBACK === 'off') {
+          reject(new RipgrepNotFoundError())
+          return
         }
-        markRgMissing();
-        ripGrepFallback(args, target).then(resolve, reject);
-        return;
+        markRgMissing()
+        ripGrepFallback(args, target).then(resolve, reject)
+        return
       }
 
       // Critical errors that indicate ripgrep is broken, not "no matches".
       // These should be surfaced to the user rather than silently
       // returning empty results.
-      const CRITICAL_ERROR_CODES = ["EACCES", "EPERM"];
+      const CRITICAL_ERROR_CODES = ['EACCES', 'EPERM']
       if (CRITICAL_ERROR_CODES.includes(error.code as string)) {
-        reject(error);
-        return;
+        reject(error)
+        return
       }
 
       // If we hit EAGAIN and haven't retried yet, retry with single-
@@ -196,32 +200,33 @@ export async function ripGrep(
           target,
           abortSignal,
           (retryError, retryStdout, retryStderr) => {
-            handleResult(retryError, retryStdout, retryStderr, true);
+            handleResult(retryError, retryStdout, retryStderr, true)
           },
-          true
-        );
-        return;
+          true,
+        )
+        return
       }
 
       // For all other errors, try to return partial results if available.
-      const hasOutput = stdout && stdout.trim().length > 0;
+      const hasOutput = stdout && stdout.trim().length > 0
       const isTimeout =
-        error.signal === "SIGTERM" ||
-        error.signal === "SIGKILL" ||
-        error.code === "ABORT_ERR";
-      const isBufferOverflow = error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+        error.signal === 'SIGTERM' ||
+        error.signal === 'SIGKILL' ||
+        error.code === 'ABORT_ERR'
+      const isBufferOverflow =
+        error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
 
-      let lines: string[] = [];
+      let lines: string[] = []
       if (hasOutput) {
         lines = stdout
           .trim()
-          .split("\n")
-          .map((line) => line.replace(/\r$/, ""))
-          .filter(Boolean);
+          .split('\n')
+          .map(line => line.replace(/\r$/, ''))
+          .filter(Boolean)
         // Drop last line for timeouts and buffer overflow — it may be
         // incomplete.
         if (lines.length > 0 && (isTimeout || isBufferOverflow)) {
-          lines = lines.slice(0, -1);
+          lines = lines.slice(0, -1)
         }
       }
 
@@ -231,20 +236,20 @@ export async function ripGrep(
       if (isTimeout && lines.length === 0) {
         reject(
           new RipgrepTimeoutError(
-            `ripgrep timed out after ${Math.round((parseInt(process.env.RG_TIMEOUT_SECONDS || "20", 10)) || 20)}s with no results`,
-            lines
-          )
-        );
-        return;
+            `ripgrep timed out after ${Math.round(parseInt(process.env.RG_TIMEOUT_SECONDS || '20', 10) || 20)}s with no results`,
+            lines,
+          ),
+        )
+        return
       }
 
       // Otherwise, return whatever partial output we have. The agent can
       // decide whether to narrow the search.
-      resolve(lines);
-    };
+      resolve(lines)
+    }
 
     ripGrepRaw(args, target, abortSignal, (error, stdout, stderr) => {
-      handleResult(error, stdout, stderr, false);
-    });
-  });
+      handleResult(error, stdout, stderr, false)
+    })
+  })
 }

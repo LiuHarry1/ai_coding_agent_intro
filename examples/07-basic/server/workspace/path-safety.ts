@@ -1,4 +1,4 @@
-import * as path from "path";
+import * as path from 'path'
 
 /**
  * Expand `~` and resolve to an absolute path. **Does not sandbox** — this
@@ -10,11 +10,11 @@ import * as path from "path";
  * `process.cwd()` is used.
  */
 export function resolvePath(input: string, cwd?: string): string {
-  if (!input) throw new Error("Empty path");
-  const expanded = input.replace(/^~/, process.env.HOME || "/");
+  if (!input) throw new Error('Empty path')
+  const expanded = input.replace(/^~/, process.env.HOME || '/')
   return path.isAbsolute(expanded)
     ? path.normalize(expanded)
-    : path.resolve(cwd || process.cwd(), expanded);
+    : path.resolve(cwd || process.cwd(), expanded)
 }
 
 /**
@@ -23,7 +23,8 @@ export function resolvePath(input: string, cwd?: string): string {
  * names that would silently traverse or break the tree.
  */
 export function assertSafeName(name: string): void {
-  if (!name || name === "." || name === "..") throw new Error("Invalid name");
-  if (name.includes("/") || name.includes("\\")) throw new Error("Name must not contain path separators");
-  if (name.includes("\0")) throw new Error("Invalid name");
+  if (!name || name === '.' || name === '..') throw new Error('Invalid name')
+  if (name.includes('/') || name.includes('\\'))
+    throw new Error('Name must not contain path separators')
+  if (name.includes('\0')) throw new Error('Invalid name')
 }

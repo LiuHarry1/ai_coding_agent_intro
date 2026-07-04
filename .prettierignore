@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-desktop
+client/web/dist
+protocol/dist
+client-sdk/dist
+.ai-agent

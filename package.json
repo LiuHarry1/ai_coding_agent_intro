@@ -14,7 +14,9 @@
     "desktop:dev": "npm run build:web && npm run desktop:start",
     "desktop:pack": "npm run build:web && electron-builder",
     "desktop:pack:win": "npm run build:web && electron-builder --win",
-    "typecheck": "tsc --noEmit -p examples/08-basic/tsconfig.json"
+    "typecheck": "tsc --noEmit -p examples/08-basic/tsconfig.json",
+    "format": "npx prettier --write \"examples/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\"",
+    "format:check": "npx prettier --check \"examples/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\""
   },
   "keywords": [],
   "author": "",
@@ -42,6 +44,7 @@
     "@types/node": "^25.6.0",
     "electron": "^35.7.5",
     "electron-builder": "^25.1.8",
+    "prettier": "^3.5.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },

@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { PermissionModeSchema } from "./common.js";
+import { z } from 'zod'
+import { PermissionModeSchema } from './common.js'
 
 /**
  * Bidirectional control sub-protocol.
@@ -23,74 +23,74 @@ import { PermissionModeSchema } from "./common.js";
  */
 
 export const CanUseToolRequestSchema = z.object({
-  subtype: z.literal("can_use_tool"),
+  subtype: z.literal('can_use_tool'),
   tool_name: z.string(),
   tool_use_id: z.string(),
   input: z.record(z.string(), z.unknown()),
   /** Optional human-facing hints the GUI can render in the prompt. */
   title: z.string().optional(),
   description: z.string().optional(),
-});
+})
 
 export const AskUserQuestionRequestSchema = z.object({
-  subtype: z.literal("ask_user_question"),
+  subtype: z.literal('ask_user_question'),
   /** Correlates with the tool invocation that raised the question. */
   question_id: z.string(),
   questions: z.array(z.unknown()),
-});
+})
 
 export const ApprovePlanRequestSchema = z.object({
-  subtype: z.literal("approve_plan"),
+  subtype: z.literal('approve_plan'),
   request_id: z.string().optional(),
   plan: z.string(),
-});
+})
 
 export const SetPermissionModeRequestSchema = z.object({
-  subtype: z.literal("set_permission_mode"),
+  subtype: z.literal('set_permission_mode'),
   mode: PermissionModeSchema,
-});
+})
 
 export const InterruptRequestSchema = z.object({
-  subtype: z.literal("interrupt"),
-});
+  subtype: z.literal('interrupt'),
+})
 
 /** Inner request payload, discriminated by `subtype` (CC convention). */
-export const ControlRequestInnerSchema = z.discriminatedUnion("subtype", [
+export const ControlRequestInnerSchema = z.discriminatedUnion('subtype', [
   CanUseToolRequestSchema,
   AskUserQuestionRequestSchema,
   ApprovePlanRequestSchema,
   SetPermissionModeRequestSchema,
   InterruptRequestSchema,
-]);
-export type ControlRequestInner = z.infer<typeof ControlRequestInnerSchema>;
+])
+export type ControlRequestInner = z.infer<typeof ControlRequestInnerSchema>
 
 export const ControlRequestSchema = z.object({
-  type: z.literal("control_request"),
+  type: z.literal('control_request'),
   request_id: z.string(),
   request: ControlRequestInnerSchema,
-});
-export type ControlRequest = z.infer<typeof ControlRequestSchema>;
+})
+export type ControlRequest = z.infer<typeof ControlRequestSchema>
 
 const ControlSuccessSchema = z.object({
-  subtype: z.literal("success"),
+  subtype: z.literal('success'),
   request_id: z.string(),
   response: z.record(z.string(), z.unknown()).optional(),
-});
+})
 
 const ControlErrorSchema = z.object({
-  subtype: z.literal("error"),
+  subtype: z.literal('error'),
   request_id: z.string(),
   error: z.string(),
-});
+})
 
 export const ControlResponseSchema = z.object({
-  type: z.literal("control_response"),
+  type: z.literal('control_response'),
   response: z.union([ControlSuccessSchema, ControlErrorSchema]),
-});
-export type ControlResponse = z.infer<typeof ControlResponseSchema>;
+})
+export type ControlResponse = z.infer<typeof ControlResponseSchema>
 
 export const ControlCancelRequestSchema = z.object({
-  type: z.literal("control_cancel_request"),
+  type: z.literal('control_cancel_request'),
   request_id: z.string(),
-});
-export type ControlCancelRequest = z.infer<typeof ControlCancelRequestSchema>;
+})
+export type ControlCancelRequest = z.infer<typeof ControlCancelRequestSchema>

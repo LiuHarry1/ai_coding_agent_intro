@@ -1,35 +1,40 @@
 /**
  * ExitPlanMode — end plan mode and request user approval before execution.
  */
-import { tool } from "ai";
-import { z } from "zod";
-import { randomUUID } from "crypto";
-import type { ToolDefinition } from "../core/types.js";
-import { EXIT_PLAN_MODE_TOOL_NAME } from "../constants/tool_names.js";
+import { tool } from 'ai'
+import { z } from 'zod'
+import { randomUUID } from 'crypto'
+import type { ToolDefinition } from '../core/types.js'
+import { EXIT_PLAN_MODE_TOOL_NAME } from '../constants/tool_names.js'
 import {
   handlePlanModeTransition,
   transitionPermissionMode,
-} from "../core/permission-mode.js";
-import { registerPlanApproval } from "../core/brokers/plan-approval-broker.js";
-import { getPlan, getPlanFilePath, planExists, writePlan } from "../utils/plans.js";
-import { buildPlanApprovedFollowUps } from "../utils/attachments/plan-mode.js";
+} from '../core/permission-mode.js'
+import { registerPlanApproval } from '../core/brokers/plan-approval-broker.js'
+import {
+  getPlan,
+  getPlanFilePath,
+  planExists,
+  writePlan,
+} from '../utils/plans.js'
+import { buildPlanApprovedFollowUps } from '../utils/attachments/plan-mode.js'
 
 const DESCRIPTION =
-  "Exit plan mode and submit the plan for user approval before implementation.";
+  'Exit plan mode and submit the plan for user approval before implementation.'
 
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 
 function approvedToolResult(plan: string, filePath: string): string {
   return [
-    "User has approved your plan. You can now start coding.",
-    "Start with updating your todo list if applicable, then implement Phase 1 immediately using Write/Edit/Bash.",
-    "Do NOT end your turn with only text — make at least one code change before stopping.",
-    "",
+    'User has approved your plan. You can now start coding.',
+    'Start with updating your todo list if applicable, then implement Phase 1 immediately using Write/Edit/Bash.',
+    'Do NOT end your turn with only text — make at least one code change before stopping.',
+    '',
     `Your plan has been saved to: ${filePath}`,
-    "",
-    "## Approved Plan:",
+    '',
+    '## Approved Plan:',
     plan,
-  ].join("\n");
+  ].join('\n')
 }
 
 export const definition: ToolDefinition = {
@@ -44,63 +49,66 @@ Call when your plan is complete and ready for review. The user will approve or r
 Read the plan from the plan file — do not pass the plan as a parameter.`,
       inputSchema: z.strictObject({}),
       execute: async () => {
-        const session = context.session;
-        const cwd = context.cwd;
+        const session = context.session
+        const cwd = context.cwd
         if (!session || !cwd) {
-          return "Error: missing session context for ExitPlanMode.";
+          return 'Error: missing session context for ExitPlanMode.'
         }
 
-        if (session.permissionMode.mode !== "plan") {
-          return "Error: ExitPlanMode is only available in plan mode.";
+        if (session.permissionMode.mode !== 'plan') {
+          return 'Error: ExitPlanMode is only available in plan mode.'
         }
 
-        let plan = getPlan(session, cwd);
-        const filePath = getPlanFilePath(session, cwd);
+        let plan = getPlan(session, cwd)
+        const filePath = getPlanFilePath(session, cwd)
 
         if (!plan?.trim()) {
           return (
-            "Error: No plan written yet. Write the plan to the plan file first, " +
+            'Error: No plan written yet. Write the plan to the plan file first, ' +
             `then call ${EXIT_PLAN_MODE_TOOL_NAME} again.`
-          );
+          )
         }
 
-        const requestId = randomUUID();
+        const requestId = randomUUID()
 
-        context.eventBus.emit("plan_approval_request", {
+        context.eventBus.emit('plan_approval_request', {
           requestId,
           plan,
           filePath,
-        });
+        })
 
-        const approval = await registerPlanApproval(requestId, DEFAULT_TIMEOUT_MS);
+        const approval = await registerPlanApproval(
+          requestId,
+          DEFAULT_TIMEOUT_MS,
+        )
 
         if (!approval.approved) {
-          const reason = approval.reason ?? "rejected";
+          const reason = approval.reason ?? 'rejected'
           return [
             `Plan not approved (${reason}).`,
-            "Stay in plan mode: revise the plan file based on user feedback, then call ExitPlanMode again.",
-            "",
+            'Stay in plan mode: revise the plan file based on user feedback, then call ExitPlanMode again.',
+            '',
             `Current plan file: ${filePath}`,
-          ].join("\n");
+          ].join('\n')
         }
 
         if (approval.editedPlan?.trim()) {
-          plan = approval.editedPlan;
-          writePlan(session, cwd, plan);
+          plan = approval.editedPlan
+          writePlan(session, cwd, plan)
         }
 
-        const targetMode = approval.targetMode ?? "agent";
-        handlePlanModeTransition("plan", targetMode, session);
+        const targetMode = approval.targetMode ?? 'agent'
+        handlePlanModeTransition('plan', targetMode, session)
         // Follow-ups are injected via tool result; skip duplicate exit attachment on mode_changed.
-        session.needsPlanModeExitAttachment = false;
+        session.needsPlanModeExitAttachment = false
         session.permissionMode = transitionPermissionMode(
-          "plan",
+          'plan',
           targetMode,
           session.permissionMode,
-        );
+        )
 
-        context.eventBus.emit("plan_ready", { plan, filePath, approved: true });
-        context.eventBus.emit("mode_changed", { mode: targetMode });
+        context.eventBus.emit('plan_ready', { plan, filePath, approved: true })
+        context.eventBus.emit('mode_changed', { mode: targetMode })
 
         return {
           result: approvedToolResult(plan, filePath),
@@ -108,9 +116,8 @@ Read the plan from the plan file — do not pass the plan as a parameter.`,
             filePath,
             planExists(session, cwd),
           ),
-        };
+        }
       },
-    });
+    })
   },
-};
-
+}

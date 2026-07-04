@@ -17,48 +17,48 @@
  * added automatically.
  */
 
-import * as os from "os";
-import * as path from "path";
+import * as os from 'os'
+import * as path from 'path'
 
 /** Default basename — change here if the product name ever moves off `.ai-agent`. */
-export const DEFAULT_APP_DIR_NAME = ".ai-agent";
+export const DEFAULT_APP_DIR_NAME = '.ai-agent'
 
-export const CONFIG_FILE_NAME = "config.json";
+export const CONFIG_FILE_NAME = 'config.json'
 
-export type AppSubdir = "agents" | "skills" | "commands";
+export type AppSubdir = 'agents' | 'skills' | 'commands'
 
 /**
  * Resolved app-directory basename (includes leading dot).
  * Set `AI_AGENT_DIR` to override without touching code.
  */
 export function getAppDirName(): string {
-  const raw = process.env.AI_AGENT_DIR?.trim();
-  if (!raw) return DEFAULT_APP_DIR_NAME;
-  return raw.startsWith(".") ? raw : `.${raw}`;
+  const raw = process.env.AI_AGENT_DIR?.trim()
+  if (!raw) return DEFAULT_APP_DIR_NAME
+  return raw.startsWith('.') ? raw : `.${raw}`
 }
 
 /** User-scope root: `~/.ai-agent` (or whatever `getAppDirName()` returns). */
 export function getUserAppDir(): string {
-  return path.join(os.homedir(), getAppDirName());
+  return path.join(os.homedir(), getAppDirName())
 }
 
 export function getUserConfigPath(): string {
-  return path.join(getUserAppDir(), CONFIG_FILE_NAME);
+  return path.join(getUserAppDir(), CONFIG_FILE_NAME)
 }
 
 /** User-scope subdir, e.g. `~/.ai-agent/skills`. */
 export function getUserSubdir(kind: AppSubdir): string {
-  return path.join(getUserAppDir(), kind);
+  return path.join(getUserAppDir(), kind)
 }
 
 /** Project-scope app dir at a single ancestor: `<dir>/.ai-agent`. */
 export function getProjectAppDir(dir: string): string {
-  return path.join(path.resolve(dir), getAppDirName());
+  return path.join(path.resolve(dir), getAppDirName())
 }
 
 /** Project-scope subdir at a single ancestor, e.g. `<dir>/.ai-agent/agents`. */
 export function getProjectSubdir(kind: AppSubdir, dir: string): string {
-  return path.join(getProjectAppDir(dir), kind);
+  return path.join(getProjectAppDir(dir), kind)
 }
 
 /**
@@ -67,20 +67,20 @@ export function getProjectSubdir(kind: AppSubdir, dir: string): string {
  * (exclusive — home is user-scope, not project-scope).
  */
 export function getProjectAppDirsUpToHome(cwd: string): string[] {
-  const home = os.homedir();
-  const dirs: string[] = [];
+  const home = os.homedir()
+  const dirs: string[] = []
 
-  let current = path.resolve(cwd);
+  let current = path.resolve(cwd)
   while (true) {
-    if (current === home) break;
+    if (current === home) break
 
-    dirs.push(getProjectAppDir(current));
+    dirs.push(getProjectAppDir(current))
 
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    if (parent === home) break;
-    current = parent;
+    const parent = path.dirname(current)
+    if (parent === current) break
+    if (parent === home) break
+    current = parent
   }
 
-  return dirs;
+  return dirs
 }

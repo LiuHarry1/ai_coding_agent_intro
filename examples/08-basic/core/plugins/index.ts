@@ -12,25 +12,22 @@
  *      compiled `Plugin` objects can register tools/middleware/events.
  */
 
-import { PluginManager } from "../plugin-manager.js";
-import type { IToolRegistry } from "../types.js";
-import { CODE_PLUGINS } from "./code-plugins.js";
-import { createCodePluginContext } from "./runtime.js";
+import { PluginManager } from '../plugin-manager.js'
+import type { IToolRegistry } from '../types.js'
+import { CODE_PLUGINS } from './code-plugins.js'
+import { createCodePluginContext } from './runtime.js'
 
-export { loadPlugins } from "./loader.js";
-export { applyPluginHooks, hasPluginHooks } from "./runtime.js";
-export {
-  pluginErrorMessage,
-  pluginErrorSource,
-} from "./types.js";
+export { loadPlugins } from './loader.js'
+export { applyPluginHooks, hasPluginHooks } from './runtime.js'
+export { pluginErrorMessage, pluginErrorSource } from './types.js'
 export type {
   LoadedPlugin,
   PluginContributions,
   PluginError,
   PluginManifest,
-} from "./types.js";
+} from './types.js'
 
-let manager: PluginManager | null = null;
+let manager: PluginManager | null = null
 
 /**
  * Instantiate the PluginManager and initialize all code plugins. Idempotent —
@@ -38,17 +35,17 @@ let manager: PluginManager | null = null;
  * immediately; middleware/event hooks are recorded for per-request replay.
  */
 export async function initCodePlugins(registry: IToolRegistry): Promise<void> {
-  if (manager) return;
-  manager = new PluginManager(createCodePluginContext(registry));
+  if (manager) return
+  manager = new PluginManager(createCodePluginContext(registry))
   for (const plugin of CODE_PLUGINS) {
-    manager.register(plugin);
+    manager.register(plugin)
   }
-  await manager.initAll();
+  await manager.initAll()
   if (CODE_PLUGINS.length > 0) {
-    console.log(`[plugins] initialized ${CODE_PLUGINS.length} code plugin(s)`);
+    console.log(`[plugins] initialized ${CODE_PLUGINS.length} code plugin(s)`)
   }
 }
 
 export function getPluginManager(): PluginManager | null {
-  return manager;
+  return manager
 }

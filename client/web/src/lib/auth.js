@@ -10,11 +10,11 @@
  * local deploy modes (and `npm run dev`) are completely unaffected.
  */
 
-const TOKEN_KEY = "coding_agent_auth_token";
+const TOKEN_KEY = 'coding_agent_auth_token'
 
 /** Runtime flag injected via /app-config.js (see deploy/web-runtime-config.sh). */
 export function authEnabled() {
-  return Boolean(globalThis.__APP_CONFIG__?.authEnabled);
+  return Boolean(globalThis.__APP_CONFIG__?.authEnabled)
 }
 
 /**
@@ -25,21 +25,21 @@ export function authEnabled() {
  * directly, cross-origin.
  */
 function authBase() {
-  const v = globalThis.__APP_CONFIG__?.authBase;
-  return typeof v === "string" && v ? v.replace(/\/$/, "") : "";
+  const v = globalThis.__APP_CONFIG__?.authBase
+  return typeof v === 'string' && v ? v.replace(/\/$/, '') : ''
 }
 
 export function getToken() {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY)
   } catch {
-    return null;
+    return null
   }
 }
 
 export function setToken(token) {
   try {
-    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_KEY, token)
   } catch {
     /* storage unavailable */
   }
@@ -47,7 +47,7 @@ export function setToken(token) {
 
 export function clearToken() {
   try {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY)
   } catch {
     /* ignore */
   }
@@ -55,46 +55,46 @@ export function clearToken() {
 
 /** Authorization header object (empty when no token / auth disabled). */
 export function authHeader() {
-  const t = authEnabled() ? getToken() : null;
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  const t = authEnabled() ? getToken() : null
+  return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
 /** Decode (NOT verify) a JWT payload for display purposes only. */
 export function decodeToken(token = getToken()) {
-  if (!token) return null;
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
   try {
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
-    return JSON.parse(atob(b64 + pad));
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4))
+    return JSON.parse(atob(b64 + pad))
   } catch {
-    return null;
+    return null
   }
 }
 
 /** Best-effort current user from the token. */
 export function getUser() {
-  const p = decodeToken();
-  if (!p) return null;
+  const p = decodeToken()
+  if (!p) return null
   return {
-    email: p.sub || p.email || "",
-    username: p.username || p.sub || "",
-    role: p.role || "user",
-  };
+    email: p.sub || p.email || '',
+    username: p.username || p.sub || '',
+    role: p.role || 'user',
+  }
 }
 
 /** Privileged role that may list/view all users' sessions (SSO mode). */
-const SUPER_ROLE = "super";
+const SUPER_ROLE = 'super'
 
 export function isSuperUser(user = getUser()) {
-  return Boolean(user?.role && String(user.role).toLowerCase() === SUPER_ROLE);
+  return Boolean(user?.role && String(user.role).toLowerCase() === SUPER_ROLE)
 }
 
 function tokenExpired(token = getToken()) {
-  const p = decodeToken(token);
-  if (!p || typeof p.exp !== "number") return false;
-  return Math.floor(Date.now() / 1000) >= p.exp;
+  const p = decodeToken(token)
+  if (!p || typeof p.exp !== 'number') return false
+  return Math.floor(Date.now() / 1000) >= p.exp
 }
 
 /**
@@ -102,26 +102,26 @@ function tokenExpired(token = getToken()) {
  * fragment from the URL so it doesn't linger in history / get shared.
  */
 export function consumeTokenFromUrl() {
-  const hash = window.location.hash || "";
-  const m = hash.match(/[#&]token=([^&]+)/);
-  if (!m) return false;
-  setToken(decodeURIComponent(m[1]));
-  const clean = window.location.pathname + window.location.search;
-  window.history.replaceState(null, "", clean);
-  return true;
+  const hash = window.location.hash || ''
+  const m = hash.match(/[#&]token=([^&]+)/)
+  if (!m) return false
+  setToken(decodeURIComponent(m[1]))
+  const clean = window.location.pathname + window.location.search
+  window.history.replaceState(null, '', clean)
+  return true
 }
 
 /** Send the browser to the auth-service login, returning here afterwards. */
 export function redirectToLogin() {
-  const returnTo = window.location.origin + window.location.pathname;
-  window.location.href = `${authBase()}/sso/authorize?return_to=${encodeURIComponent(returnTo)}`;
+  const returnTo = window.location.origin + window.location.pathname
+  window.location.href = `${authBase()}/sso/authorize?return_to=${encodeURIComponent(returnTo)}`
 }
 
 /** Clear local token and ask the auth-service to drop the SSO cookie. */
 export function logout() {
-  clearToken();
-  const returnTo = window.location.origin + window.location.pathname;
-  window.location.href = `${authBase()}/sso/logout?return_to=${encodeURIComponent(returnTo)}`;
+  clearToken()
+  const returnTo = window.location.origin + window.location.pathname
+  window.location.href = `${authBase()}/sso/logout?return_to=${encodeURIComponent(returnTo)}`
 }
 
 /**
@@ -129,20 +129,20 @@ export function logout() {
  * are redirecting to login (so main.jsx should not paint a flash of UI).
  */
 export function ensureAuth() {
-  if (!authEnabled()) return true;
-  consumeTokenFromUrl();
-  const token = getToken();
+  if (!authEnabled()) return true
+  consumeTokenFromUrl()
+  const token = getToken()
   if (!token || tokenExpired(token)) {
-    clearToken();
-    redirectToLogin();
-    return false;
+    clearToken()
+    redirectToLogin()
+    return false
   }
-  return true;
+  return true
 }
 
 /** Shared 401 handler: drop the stale token and re-login. */
 export function handleUnauthorized() {
-  if (!authEnabled()) return;
-  clearToken();
-  redirectToLogin();
+  if (!authEnabled()) return
+  clearToken()
+  redirectToLogin()
 }

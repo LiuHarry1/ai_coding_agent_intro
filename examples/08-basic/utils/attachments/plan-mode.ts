@@ -4,9 +4,9 @@
 
  */
 
-import type { Message, Session } from "../../core/types.js";
+import type { Message, Session } from '../../core/types.js'
 
-import type { ExternalMode } from "../../core/permission-mode.js";
+import type { ExternalMode } from '../../core/permission-mode.js'
 
 import {
   ASK_USER_QUESTION_TOOL_NAME,
@@ -15,51 +15,36 @@ import {
   EXIT_PLAN_MODE_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
-} from "../../constants/tool_names.js";
+} from '../../constants/tool_names.js'
 
-import { getPlanFilePath, planExists } from "../plans.js";
-
-
+import { getPlanFilePath, planExists } from '../plans.js'
 
 export const PLAN_MODE_ATTACHMENT_CONFIG = {
-
   TURNS_BETWEEN_ATTACHMENTS: 5,
 
   FULL_REMINDER_EVERY_N_ATTACHMENTS: 5,
+} as const
 
-} as const;
-
-
-
-function countHumanTurns(messages: Session["messages"]): number {
-
-  return messages.filter((m) => m.role === "user").length;
-
+function countHumanTurns(messages: Session['messages']): number {
+  return messages.filter(m => m.role === 'user').length
 }
 
-
-
 function sparsePlanReminder(planFilePath: string): string {
-
   return `<system-reminder>
 
 Plan mode still active (see full instructions earlier in conversation). Read-only except plan file (${planFilePath}). Follow 5-phase workflow. End turns with ${ASK_USER_QUESTION_TOOL_NAME} (for clarifications) or ${EXIT_PLAN_MODE_TOOL_NAME} (for plan approval). Never ask about plan approval via text or AskUserQuestion.
 
-</system-reminder>`;
-
+</system-reminder>`
 }
 
-
-
 function fullPlanReminder(planFilePath: string, exists: boolean): string {
-
   return `<system-reminder>
 
 Plan mode is active. You MUST NOT make any edits except the plan file, run shell commands on the main thread, or spawn non-Explore/Plan subagents.
 
 
 
-Plan file: ${planFilePath}${exists ? " (exists — read it first)" : " (not created yet)"}
+Plan file: ${planFilePath}${exists ? ' (exists — read it first)' : ' (not created yet)'}
 
 
 
@@ -67,14 +52,10 @@ Workflow: Phase 1 Explore agents → Phase 2 Plan agents → Phase 3 Review/Ask 
 
 End each turn with ${ASK_USER_QUESTION_TOOL_NAME} or ${EXIT_PLAN_MODE_TOOL_NAME} — not plain text alone.
 
-</system-reminder>`;
-
+</system-reminder>`
 }
 
-
-
 function planReentryReminder(planFilePath: string): string {
-
   return `<system-reminder>
 
 ## Re-entering Plan Mode
@@ -103,21 +84,18 @@ You are returning to plan mode after having previously exited it. A plan file ex
 
 Treat this as a fresh planning session. Do not assume the existing plan is relevant without evaluating it first.
 
-</system-reminder>`;
-
+</system-reminder>`
 }
-
-
 
 function planExitReminder(planFilePath: string, exists: boolean): string {
   const planReference = exists
     ? ` The plan file is located at ${planFilePath} if you need to reference it.`
-    : "";
+    : ''
   return `<system-reminder>
 ## Exited Plan Mode
 
 You have exited plan mode. You can now make edits, run tools, and take actions.${planReference}
-</system-reminder>`;
+</system-reminder>`
 }
 
 /** Strong kickoff after Build — model must not stop with text-only. */
@@ -133,11 +111,11 @@ The user clicked **Build** and approved your plan. You are in Agent mode with fu
 3. Do NOT end your turn with only text. You must call at least one mutating tool before stopping.
 
 Approved plan file: ${planFilePath}
-</system-reminder>`;
+</system-reminder>`
 }
 
 function attachmentToMessage(text: string): Message {
-  return { role: "user", content: text };
+  return { role: 'user', content: text }
 }
 
 /** Follow-up messages injected after ExitPlanMode approval (after tool result). */
@@ -148,102 +126,62 @@ export function buildPlanApprovedFollowUps(
   return [
     attachmentToMessage(planExitReminder(planFilePath, exists)),
     attachmentToMessage(planBuildKickoffReminder(planFilePath)),
-  ];
+  ]
 }
 
-
-
 export function buildPlanModeAttachments(
-
   session: Session,
 
   cwd: string,
 
   mode: ExternalMode,
-
 ): Message[] {
+  const messages: Message[] = []
 
-  const messages: Message[] = [];
+  const planFilePath = getPlanFilePath(session, cwd)
 
-  const planFilePath = getPlanFilePath(session, cwd);
+  const exists = planExists(session, cwd)
 
-  const exists = planExists(session, cwd);
+  if (session.needsPlanModeExitAttachment && mode !== 'plan') {
+    session.needsPlanModeExitAttachment = false
 
+    messages.push(attachmentToMessage(planExitReminder(planFilePath, exists)))
 
-
-  if (session.needsPlanModeExitAttachment && mode !== "plan") {
-
-    session.needsPlanModeExitAttachment = false;
-
-    messages.push(
-
-      attachmentToMessage(planExitReminder(planFilePath, exists)),
-
-    );
-
-    return messages;
-
+    return messages
   }
 
+  if (mode !== 'plan') return messages
 
+  const humanTurns = countHumanTurns(session.messages)
 
-  if (mode !== "plan") return messages;
-
-
-
-  const humanTurns = countHumanTurns(session.messages);
-
-  const throttle = PLAN_MODE_ATTACHMENT_CONFIG.TURNS_BETWEEN_ATTACHMENTS;
-
-
+  const throttle = PLAN_MODE_ATTACHMENT_CONFIG.TURNS_BETWEEN_ATTACHMENTS
 
   if (session.hasExitedPlanMode && exists) {
+    session.hasExitedPlanMode = false
 
-    session.hasExitedPlanMode = false;
+    messages.push(attachmentToMessage(planReentryReminder(planFilePath)))
 
-    messages.push(attachmentToMessage(planReentryReminder(planFilePath)));
-
-    return messages;
-
+    return messages
   }
-
-
 
   if (humanTurns % throttle !== 0 && humanTurns > 0) {
-
-    return messages;
-
+    return messages
   }
 
-
-
-  const attachmentCount = Math.floor(humanTurns / throttle);
+  const attachmentCount = Math.floor(humanTurns / throttle)
 
   const isFull =
-
-    attachmentCount % PLAN_MODE_ATTACHMENT_CONFIG.FULL_REMINDER_EVERY_N_ATTACHMENTS ===
-
-    0;
-
-
+    attachmentCount %
+      PLAN_MODE_ATTACHMENT_CONFIG.FULL_REMINDER_EVERY_N_ATTACHMENTS ===
+    0
 
   messages.push(
-
     attachmentToMessage(
-
       isFull
-
         ? fullPlanReminder(planFilePath, exists)
-
         : sparsePlanReminder(planFilePath),
-
     ),
+  )
 
-  );
-
-
-
-  return messages;
-
+  return messages
 }
-

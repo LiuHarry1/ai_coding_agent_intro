@@ -1,5 +1,5 @@
-import React from "react";
-import { formatDuration } from "../lib/utils.js";
+import React from 'react'
+import { formatDuration } from '../lib/utils.js'
 
 /**
  * Shared single-row tool header used by every compact card
@@ -40,70 +40,81 @@ export default function ToolRowHeader({
   emptyHint,
   showSuccess,
 }) {
-  const stop = (e) => e.stopPropagation();
-  const dur = typeof duration === "string" ? duration : formatDuration(duration);
+  const stop = e => e.stopPropagation()
+  const dur = typeof duration === 'string' ? duration : formatDuration(duration)
 
   return (
     <button
-      type="button"
-      className="tool-row-header"
+      type='button'
+      className='tool-row-header'
       onClick={onToggle}
       aria-expanded={expanded}
     >
       {showChevron && (
         <span
-          className={`tool-row-chevron ${expanded ? "open" : ""}`}
-          aria-hidden="true"
+          className={`tool-row-chevron ${expanded ? 'open' : ''}`}
+          aria-hidden='true'
         >
-          {"\u25B6"}
+          {'\u25B6'}
         </span>
       )}
       {icon != null && (
-        <span className="tool-row-icon" aria-hidden="true">
+        <span className='tool-row-icon' aria-hidden='true'>
           {icon}
         </span>
       )}
-      {label && <span className="tool-row-label">{label}</span>}
+      {label && <span className='tool-row-label'>{label}</span>}
       {title != null && (
         <span
-          className={`tool-row-title ${titlePlain ? "tool-row-title--plain" : ""}`}
-          title={titleTooltip ?? (typeof title === "string" ? title : undefined)}
+          className={`tool-row-title ${titlePlain ? 'tool-row-title--plain' : ''}`}
+          title={
+            titleTooltip ?? (typeof title === 'string' ? title : undefined)
+          }
         >
           {title}
         </span>
       )}
       {subtitle && (
         <span
-          className="tool-row-subtitle"
-          title={subtitleTooltip ?? (typeof subtitle === "string" ? subtitle : undefined)}
+          className='tool-row-subtitle'
+          title={
+            subtitleTooltip ??
+            (typeof subtitle === 'string' ? subtitle : undefined)
+          }
         >
           {subtitle}
         </span>
       )}
-      <span className="tool-row-spacer" />
+      <span className='tool-row-spacer' />
       {meta}
-      {dur && isDone && <span className="tool-row-duration">{dur}</span>}
-      {!isDone && <span className="spinner spinner-sm" />}
+      {dur && isDone && <span className='tool-row-duration'>{dur}</span>}
+      {!isDone && <span className='spinner spinner-sm' />}
       {isDone && isError && (
-        <span className="tool-row-status tool-row-status--error" aria-label="failed">
-          {"\u2717"}
+        <span
+          className='tool-row-status tool-row-status--error'
+          aria-label='failed'
+        >
+          {'\u2717'}
         </span>
       )}
       {isDone && !isError && emptyHint && (
-        <span className="tool-row-status tool-row-status--empty" title={emptyHint}>
-          {"\u2205"}
+        <span
+          className='tool-row-status tool-row-status--empty'
+          title={emptyHint}
+        >
+          {'\u2205'}
         </span>
       )}
       {isDone && !isError && !emptyHint && showSuccess && (
-        <span className="tool-row-status tool-row-status--ok" aria-label="done">
-          {"\u2713"}
+        <span className='tool-row-status tool-row-status--ok' aria-label='done'>
+          {'\u2713'}
         </span>
       )}
       {actions && (
-        <span className="tool-row-actions" onClick={stop}>
+        <span className='tool-row-actions' onClick={stop}>
           {actions}
         </span>
       )}
     </button>
-  );
+  )
 }

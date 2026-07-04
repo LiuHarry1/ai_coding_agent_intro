@@ -2,9 +2,9 @@
  * Persist large tool outputs to disk. Execute time: write + return full text.
  * Micro-compact time: replace cleared payloads with a re-readable path reference.
  */
-import * as fs from "fs";
-import * as path from "path";
-import { getToolResultFilePath } from "../../server/session.js";
+import * as fs from 'fs'
+import * as path from 'path'
+import { getToolResultFilePath } from '../../server/session.js'
 import {
   BASH_TOOL_NAME,
   GLOB_TOOL_NAME,
@@ -13,10 +13,10 @@ import {
   READ_FILE_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
-} from "../../constants/tool_names.js";
+} from '../../constants/tool_names.js'
 
-export const PERSISTED_OUTPUT_OPEN = "<persisted-output";
-export const PERSISTED_OUTPUT_CLOSE = "</persisted-output>";
+export const PERSISTED_OUTPUT_OPEN = '<persisted-output'
+export const PERSISTED_OUTPUT_CLOSE = '</persisted-output>'
 
 const PERSISTABLE_TOOLS = new Set([
   READ_FILE_TOOL_NAME,
@@ -26,32 +26,32 @@ const PERSISTABLE_TOOLS = new Set([
   POWERSHELL_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
-]);
+])
 
 function parseEnvInt(name: string, fallback: number): number {
-  const v = process.env[name];
-  if (v == null || v === "") return fallback;
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
+  const v = process.env[name]
+  if (v == null || v === '') return fallback
+  const n = parseInt(v, 10)
+  return Number.isFinite(n) && n > 0 ? n : fallback
 }
 
 /** Min output size (chars) before we write a sidecar file on tool execute. */
 export function getPersistThresholdChars(): number {
-  return parseEnvInt("TOOL_PERSIST_THRESHOLD_CHARS", 32_768);
+  return parseEnvInt('TOOL_PERSIST_THRESHOLD_CHARS', 32_768)
 }
 
 export function isPersistableTool(toolName: string): boolean {
-  return PERSISTABLE_TOOLS.has(toolName);
+  return PERSISTABLE_TOOLS.has(toolName)
 }
 
 export function isPersistedReference(text: string): boolean {
-  return text.includes(PERSISTED_OUTPUT_OPEN);
+  return text.includes(PERSISTED_OUTPUT_OPEN)
 }
 
 function formatBytes(chars: number): string {
-  if (chars >= 1024 * 1024) return `${(chars / (1024 * 1024)).toFixed(1)} MB`;
-  if (chars >= 1024) return `${(chars / 1024).toFixed(1)} KB`;
-  return `${chars} chars`;
+  if (chars >= 1024 * 1024) return `${(chars / (1024 * 1024)).toFixed(1)} MB`
+  if (chars >= 1024) return `${(chars / 1024).toFixed(1)} KB`
+  return `${chars} chars`
 }
 
 /**
@@ -64,23 +64,23 @@ export function persistToolResult(
   toolName: string,
   content: string,
 ): string | null {
-  if (!sessionId || !isPersistableTool(toolName)) return null;
-  const threshold = getPersistThresholdChars();
-  if (content.length <= threshold) return null;
+  if (!sessionId || !isPersistableTool(toolName)) return null
+  const threshold = getPersistThresholdChars()
+  if (content.length <= threshold) return null
 
-  const filePath = getToolResultFilePath(sessionId, toolCallId);
+  const filePath = getToolResultFilePath(sessionId, toolCallId)
   try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, content, "utf-8");
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, content, 'utf-8')
     console.log(
       `[tool-storage] PERSIST ${toolName} ${toolCallId.slice(0, 12)}… — ` +
         `${formatBytes(content.length)} → ${filePath} (full content still in tool_result)`,
-    );
-    return filePath;
+    )
+    return filePath
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[tool-storage] persist failed for ${toolCallId}: ${msg}`);
-    return null;
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(`[tool-storage] persist failed for ${toolCallId}: ${msg}`)
+    return null
   }
 }
 
@@ -95,7 +95,7 @@ export function buildPersistedReference(
     `[Previous ${toolName} output (${formatBytes(originalChars)}) offloaded to disk to save context. ` +
     `Use read_file on this path to retrieve the full content if needed.\n` +
     `${PERSISTED_OUTPUT_CLOSE}`
-  );
+  )
 }
 
 /**
@@ -108,8 +108,8 @@ export function maybePersistAfterExecute(
   toolName: string,
   result: string,
 ): string {
-  persistToolResult(sessionId, toolCallId, toolName, result);
-  return result;
+  persistToolResult(sessionId, toolCallId, toolName, result)
+  return result
 }
 
 /**
@@ -123,25 +123,25 @@ export function offloadReferenceForCompact(
   content: string,
   fallbackMarker: string,
 ): string {
-  if (isPersistedReference(content)) return content;
+  if (isPersistedReference(content)) return content
 
   if (sessionId && isPersistableTool(toolName)) {
-    let filePath = getToolResultFilePath(sessionId, toolCallId);
+    let filePath = getToolResultFilePath(sessionId, toolCallId)
     if (!fs.existsSync(filePath) && content.length > 0) {
       try {
-        fs.mkdirSync(path.dirname(filePath), { recursive: true });
-        fs.writeFileSync(filePath, content, "utf-8");
+        fs.mkdirSync(path.dirname(filePath), { recursive: true })
+        fs.writeFileSync(filePath, content, 'utf-8')
         console.log(
           `[tool-storage] PERSIST (on compact) ${toolName} ${toolCallId.slice(0, 12)}… → ${filePath}`,
-        );
+        )
       } catch {
-        return fallbackMarker;
+        return fallbackMarker
       }
     }
     if (fs.existsSync(filePath)) {
-      return buildPersistedReference(filePath, toolName, content.length);
+      return buildPersistedReference(filePath, toolName, content.length)
     }
   }
 
-  return fallbackMarker;
+  return fallbackMarker
 }

@@ -1,11 +1,11 @@
-import type { ExternalMode } from "../core/permission-mode.js";
-import { systemPrompt } from "./system.js";
-import { askSystemPrompt } from "./ask.js";
-import { planSystemPrompt } from "./plan.js";
+import type { ExternalMode } from '../core/permission-mode.js'
+import { systemPrompt } from './system.js'
+import { askSystemPrompt } from './ask.js'
+import { planSystemPrompt } from './plan.js'
 
 export interface SystemPromptOptions {
-  planFilePath?: string;
-  planExists?: boolean;
+  planFilePath?: string
+  planExists?: boolean
 }
 
 export function getSystemPromptForMode(
@@ -15,14 +15,14 @@ export function getSystemPromptForMode(
   options: SystemPromptOptions = {},
 ): string {
   switch (mode) {
-    case "ask":
-      return askSystemPrompt(cwd, projectRules);
-    case "plan":
+    case 'ask':
+      return askSystemPrompt(cwd, projectRules)
+    case 'plan':
       return planSystemPrompt(cwd, projectRules, {
-        planFilePath: options.planFilePath ?? ".ai-agent/plans/plan.md",
+        planFilePath: options.planFilePath ?? '.ai-agent/plans/plan.md',
         planExists: options.planExists ?? false,
-      });
+      })
     default:
-      return systemPrompt(cwd, projectRules);
+      return systemPrompt(cwd, projectRules)
   }
 }

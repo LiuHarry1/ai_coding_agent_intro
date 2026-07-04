@@ -1,21 +1,29 @@
-import { generateText } from "ai";
-import { configManager } from "./config-manager.js";
-import { defaultManager } from "./provider-manager.js";
-import type { AssistantMessage, IEventBus, Message, ToolMessage } from "./types.js";
+import { generateText } from 'ai'
+import { configManager } from './config-manager.js'
+import { defaultManager } from './provider-manager.js'
+import type {
+  AssistantMessage,
+  IEventBus,
+  Message,
+  ToolMessage,
+} from './types.js'
 
 /**
  * Marker we leave in place of an old tool result's text content. The
  * tool_result block itself stays — removing it would orphan the matching
  * tool_call in the preceding assistant message and break API requests.
  */
-const MICRO_COMPACT_MARKER = "[Old tool result content cleared to save context]";
+const MICRO_COMPACT_MARKER = '[Old tool result content cleared to save context]'
 
 /**
  * Marker for cleared tool_call inputs. The tool_call block (id + name)
  * stays so the matching tool_result still has something to pair with;
  * only the bulky `input` payload is replaced.
  */
-const MICRO_COMPACT_INPUT_MARKER = { _cleared: true, note: "Old tool input cleared to save context" };
+const MICRO_COMPACT_INPUT_MARKER = {
+  _cleared: true,
+  note: 'Old tool input cleared to save context',
+}
 
 /**
  * Tools whose RESULT (output) is the bulk and is safe to clear once old.
@@ -25,14 +33,14 @@ const MICRO_COMPACT_INPUT_MARKER = { _cleared: true, note: "Old tool input clear
  *   [SHELL_TOOL_NAMES, GLOB, GREP, FILE_READ, WEB_FETCH, WEB_SEARCH]
  */
 const CLEARABLE_TOOL_RESULTS = new Set<string>([
-  "bash",
-  "shell",
-  "list_dir",
-  "grep",
-  "read_file",
-  "web_fetch",
-  "web_search",
-]);
+  'bash',
+  'shell',
+  'list_dir',
+  'grep',
+  'read_file',
+  'web_fetch',
+  'web_search',
+])
 
 /**
  * Tools whose INPUT (args) is the bulk and is safe to clear once old.
@@ -46,29 +54,35 @@ const CLEARABLE_TOOL_RESULTS = new Set<string>([
  * output is the bulk; they belong in CLEARABLE_TOOL_RESULTS.
  */
 const CLEARABLE_TOOL_INPUTS = new Set<string>([
-  "write_file",
-  "edit_file",
-  "create_file",
-  "apply_patch",
-  "notebook_edit",
-]);
+  'write_file',
+  'edit_file',
+  'create_file',
+  'apply_patch',
+  'notebook_edit',
+])
 
 function parseEnvInt(name: string, fallback: number): number {
-  const v = process.env[name];
-  if (v == null || v === "") return fallback;
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : fallback;
+  const v = process.env[name]
+  if (v == null || v === '') return fallback
+  const n = parseInt(v, 10)
+  return Number.isFinite(n) ? n : fallback
 }
 
 function getCompactionConfig() {
-  const c = configManager.get("compaction");
+  const c = configManager.get('compaction')
   return {
-    tokenThreshold: parseEnvInt("COMPACT_TOKEN_THRESHOLD", c.tokenThreshold),
-    microCompactThreshold: parseEnvInt("COMPACT_MICRO_THRESHOLD", c.microCompactThreshold),
-    tailTokenBudget: parseEnvInt("COMPACT_TAIL_BUDGET", c.tailTokenBudget),
-    microCompactKeepRecent: parseEnvInt("COMPACT_MICRO_KEEP", c.microCompactKeepRecent),
+    tokenThreshold: parseEnvInt('COMPACT_TOKEN_THRESHOLD', c.tokenThreshold),
+    microCompactThreshold: parseEnvInt(
+      'COMPACT_MICRO_THRESHOLD',
+      c.microCompactThreshold,
+    ),
+    tailTokenBudget: parseEnvInt('COMPACT_TAIL_BUDGET', c.tailTokenBudget),
+    microCompactKeepRecent: parseEnvInt(
+      'COMPACT_MICRO_KEEP',
+      c.microCompactKeepRecent,
+    ),
     model: process.env.COMPACT_MODEL || c.model,
-  };
+  }
 }
 
 const SUMMARY_SYSTEM = `You are compacting an AI coding agent's conversation to save context space.
@@ -98,7 +112,7 @@ Rules:
 - Be SPECIFIC: include file paths, line counts, error messages, test results
 - Focus on WHAT EXISTS NOW, not the history of how it got there
 - Do NOT narrate the conversation ("first the agent did X, then Y")
-- Include everything the agent needs to continue working without re-reading files`;
+- Include everything the agent needs to continue working without re-reading files`
 
 // ── Token estimation ────────────────────────────────────
 
@@ -108,42 +122,45 @@ Rules:
  * but the conservative 4/3 padding in callers compensates.
  */
 function estStr(s: string): number {
-  return Math.ceil(s.length / 4);
+  return Math.ceil(s.length / 4)
 }
 
-const IMAGE_TOKEN_ESTIMATE = 1500;
+const IMAGE_TOKEN_ESTIMATE = 1500
 
 export function estimateMessageTokens(msg: Message): number {
-  let total = 0;
-  if (msg.role === "user") {
-    if (typeof msg.content === "string") return estStr(msg.content);
+  let total = 0
+  if (msg.role === 'user') {
+    if (typeof msg.content === 'string') return estStr(msg.content)
     for (const part of msg.content) {
-      if (part.type === "text") total += estStr(part.text);
-      else if (part.type === "image") total += IMAGE_TOKEN_ESTIMATE;
+      if (part.type === 'text') total += estStr(part.text)
+      else if (part.type === 'image') total += IMAGE_TOKEN_ESTIMATE
     }
-    return total;
+    return total
   }
-  if (msg.role === "assistant") {
+  if (msg.role === 'assistant') {
     for (const part of msg.content) {
-      if (part.type === "text") total += estStr(part.text);
-      else if (part.type === "reasoning") total += estStr(part.text ?? "");
-      else if (part.type === "tool-call") {
-        total += estStr(part.toolName) + estStr(JSON.stringify(part.input ?? {}));
+      if (part.type === 'text') total += estStr(part.text)
+      else if (part.type === 'reasoning') total += estStr(part.text ?? '')
+      else if (part.type === 'tool-call') {
+        total +=
+          estStr(part.toolName) + estStr(JSON.stringify(part.input ?? {}))
       }
     }
-    return total;
+    return total
   }
   for (const part of msg.content) {
-    const v = part.output?.value ?? "";
-    total += estStr(part.toolName) + estStr(typeof v === "string" ? v : JSON.stringify(v));
+    const v = part.output?.value ?? ''
+    total +=
+      estStr(part.toolName) +
+      estStr(typeof v === 'string' ? v : JSON.stringify(v))
   }
-  return total;
+  return total
 }
 
 export function estimateConversationTokens(messages: Message[]): number {
-  let t = 0;
-  for (const m of messages) t += estimateMessageTokens(m);
-  return t;
+  let t = 0
+  for (const m of messages) t += estimateMessageTokens(m)
+  return t
 }
 
 // ── Hybrid token counting ─────────────────────────────────
@@ -156,21 +173,24 @@ export function estimateConversationTokens(messages: Message[]): number {
  * up in token-counting code, only in SDK requests).
  */
 export interface AttachedTokenUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  cachedInputTokens?: number;
-  reasoningTokens?: number;
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  cachedInputTokens?: number
+  reasoningTokens?: number
 }
 
-const tokenUsageMap = new WeakMap<object, AttachedTokenUsage>();
+const tokenUsageMap = new WeakMap<object, AttachedTokenUsage>()
 
-export function attachTokenUsage(msg: Message, usage: AttachedTokenUsage): void {
-  tokenUsageMap.set(msg, usage);
+export function attachTokenUsage(
+  msg: Message,
+  usage: AttachedTokenUsage,
+): void {
+  tokenUsageMap.set(msg, usage)
 }
 
 export function readTokenUsage(msg: Message): AttachedTokenUsage | undefined {
-  return tokenUsageMap.get(msg);
+  return tokenUsageMap.get(msg)
 }
 
 /**
@@ -180,7 +200,7 @@ export function readTokenUsage(msg: Message): AttachedTokenUsage | undefined {
  * step to erroneously trigger compaction again.
  */
 function clearTokenUsages(messages: Message[]): void {
-  for (const m of messages) tokenUsageMap.delete(m);
+  for (const m of messages) tokenUsageMap.delete(m)
 }
 
 /**
@@ -188,8 +208,9 @@ function clearTokenUsages(messages: Message[]): void {
  * when the provider gave us one, otherwise sum the components we have.
  */
 function tokenCountFromUsage(u: AttachedTokenUsage): number {
-  if (typeof u.totalTokens === "number" && u.totalTokens > 0) return u.totalTokens;
-  return (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
+  if (typeof u.totalTokens === 'number' && u.totalTokens > 0)
+    return u.totalTokens
+  return (u.inputTokens ?? 0) + (u.outputTokens ?? 0)
 }
 
 /**
@@ -203,40 +224,40 @@ function tokenCountFromUsage(u: AttachedTokenUsage): number {
  * first turn before any API response has been recorded).
  */
 export function tokenCountWithEstimation(messages: Message[]): {
-  total: number;
-  source: "real+est" | "est";
-  realBaseline?: number;
-  estimatedDelta?: number;
+  total: number
+  source: 'real+est' | 'est'
+  realBaseline?: number
+  estimatedDelta?: number
 } {
   for (let i = messages.length - 1; i >= 0; i--) {
-    const usage = readTokenUsage(messages[i]);
+    const usage = readTokenUsage(messages[i])
     if (usage) {
-      const realBaseline = tokenCountFromUsage(usage);
-      let estimatedDelta = 0;
+      const realBaseline = tokenCountFromUsage(usage)
+      let estimatedDelta = 0
       for (let j = i + 1; j < messages.length; j++) {
-        estimatedDelta += estimateMessageTokens(messages[j]);
+        estimatedDelta += estimateMessageTokens(messages[j])
       }
       return {
         total: realBaseline + estimatedDelta,
-        source: "real+est",
+        source: 'real+est',
         realBaseline,
         estimatedDelta,
-      };
+      }
     }
   }
   return {
     total: estimateConversationTokens(messages),
-    source: "est",
-  };
+    source: 'est',
+  }
 }
 
 // ── Micro-compaction (no LLM) ───────────────────────────
 
 // Pre-computed once: the marker payloads and their estimated token cost.
 // Used in the per-message hot loop in `microCompact` below.
-const MARKER_RESULT_COST = estStr(MICRO_COMPACT_MARKER);
-const MARKER_INPUT_JSON = JSON.stringify(MICRO_COMPACT_INPUT_MARKER);
-const MARKER_INPUT_COST = estStr(MARKER_INPUT_JSON);
+const MARKER_RESULT_COST = estStr(MICRO_COMPACT_MARKER)
+const MARKER_INPUT_JSON = JSON.stringify(MICRO_COMPACT_INPUT_MARKER)
+const MARKER_INPUT_COST = estStr(MARKER_INPUT_JSON)
 
 /**
  * Cheap, no-LLM compaction pass. For everything older than the most-recent
@@ -257,66 +278,79 @@ const MARKER_INPUT_COST = estStr(MARKER_INPUT_JSON);
  */
 export function microCompact(
   messages: Message[],
-  keepRecent: number
+  keepRecent: number,
 ): { messages: Message[]; tokensFreed: number; cleared: number } {
-  const toolMsgIdx: number[] = [];
+  const toolMsgIdx: number[] = []
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === "tool") toolMsgIdx.push(i);
+    if (messages[i].role === 'tool') toolMsgIdx.push(i)
   }
   if (toolMsgIdx.length <= Math.max(0, keepRecent)) {
-    return { messages, tokensFreed: 0, cleared: 0 };
+    return { messages, tokensFreed: 0, cleared: 0 }
   }
 
-  const clearUpToExclusive = toolMsgIdx[toolMsgIdx.length - keepRecent - 1] + 1;
+  const clearUpToExclusive = toolMsgIdx[toolMsgIdx.length - keepRecent - 1] + 1
 
-  let tokensFreed = 0;
-  let cleared = 0;
+  let tokensFreed = 0
+  let cleared = 0
 
   const out = messages.map((m, i) => {
-    if (i >= clearUpToExclusive) return m;
-    if (m.role === "tool") return clearToolResults(m, () => cleared++, (n) => (tokensFreed += n));
-    if (m.role === "assistant") return clearToolInputs(m, () => cleared++, (n) => (tokensFreed += n));
-    return m;
-  });
-  return { messages: out, tokensFreed, cleared };
+    if (i >= clearUpToExclusive) return m
+    if (m.role === 'tool')
+      return clearToolResults(
+        m,
+        () => cleared++,
+        n => (tokensFreed += n),
+      )
+    if (m.role === 'assistant')
+      return clearToolInputs(
+        m,
+        () => cleared++,
+        n => (tokensFreed += n),
+      )
+    return m
+  })
+  return { messages: out, tokensFreed, cleared }
 }
 
 function clearToolResults(
   m: ToolMessage,
   bumpCleared: () => void,
-  addFreed: (n: number) => void
+  addFreed: (n: number) => void,
 ): ToolMessage {
-  let touched = false;
-  const newContent = m.content.map((part) => {
-    if (!CLEARABLE_TOOL_RESULTS.has(part.toolName)) return part;
-    const v = part.output?.value ?? "";
-    const text = typeof v === "string" ? v : JSON.stringify(v);
-    if (text === MICRO_COMPACT_MARKER) return part;
-    addFreed(Math.max(0, estStr(text) - MARKER_RESULT_COST));
-    bumpCleared();
-    touched = true;
-    return { ...part, output: { type: "text" as const, value: MICRO_COMPACT_MARKER } };
-  });
-  return touched ? ({ ...m, content: newContent } as ToolMessage) : m;
+  let touched = false
+  const newContent = m.content.map(part => {
+    if (!CLEARABLE_TOOL_RESULTS.has(part.toolName)) return part
+    const v = part.output?.value ?? ''
+    const text = typeof v === 'string' ? v : JSON.stringify(v)
+    if (text === MICRO_COMPACT_MARKER) return part
+    addFreed(Math.max(0, estStr(text) - MARKER_RESULT_COST))
+    bumpCleared()
+    touched = true
+    return {
+      ...part,
+      output: { type: 'text' as const, value: MICRO_COMPACT_MARKER },
+    }
+  })
+  return touched ? ({ ...m, content: newContent } as ToolMessage) : m
 }
 
 function clearToolInputs(
   m: AssistantMessage,
   bumpCleared: () => void,
-  addFreed: (n: number) => void
+  addFreed: (n: number) => void,
 ): AssistantMessage {
-  let touched = false;
-  const newContent = m.content.map((part) => {
-    if (part.type !== "tool-call") return part;
-    if (!CLEARABLE_TOOL_INPUTS.has(part.toolName)) return part;
-    const argsJson = JSON.stringify(part.input ?? {});
-    if (argsJson === MARKER_INPUT_JSON) return part;
-    addFreed(Math.max(0, estStr(argsJson) - MARKER_INPUT_COST));
-    bumpCleared();
-    touched = true;
-    return { ...part, input: { ...MICRO_COMPACT_INPUT_MARKER } };
-  });
-  return touched ? ({ ...m, content: newContent } as AssistantMessage) : m;
+  let touched = false
+  const newContent = m.content.map(part => {
+    if (part.type !== 'tool-call') return part
+    if (!CLEARABLE_TOOL_INPUTS.has(part.toolName)) return part
+    const argsJson = JSON.stringify(part.input ?? {})
+    if (argsJson === MARKER_INPUT_JSON) return part
+    addFreed(Math.max(0, estStr(argsJson) - MARKER_INPUT_COST))
+    bumpCleared()
+    touched = true
+    return { ...part, input: { ...MICRO_COMPACT_INPUT_MARKER } }
+  })
+  return touched ? ({ ...m, content: newContent } as AssistantMessage) : m
 }
 
 // ── Split-point selection ───────────────────────────────
@@ -328,13 +362,16 @@ function clearToolInputs(
  *
  * (apiMicrocompact.ts:17): "Keep last 40k tokens like client-side".
  */
-function pickTailByTokenBudget(messages: Message[], tailBudget: number): number {
-  let acc = 0;
+function pickTailByTokenBudget(
+  messages: Message[],
+  tailBudget: number,
+): number {
+  let acc = 0
   for (let i = messages.length - 1; i >= 0; i--) {
-    acc += estimateMessageTokens(messages[i]);
-    if (acc >= tailBudget) return i;
+    acc += estimateMessageTokens(messages[i])
+    if (acc >= tailBudget) return i
   }
-  return 0;
+  return 0
 }
 
 /**
@@ -354,37 +391,37 @@ function pickTailByTokenBudget(messages: Message[], tailBudget: number): number 
  * Returns -1 if no usable split exists (e.g. desired collapses to 0).
  */
 function pickCleanSplitPoint(messages: Message[], desired: number): number {
-  let p = Math.max(1, Math.min(desired, messages.length - 1));
-  while (p > 0 && messages[p].role === "tool") p--;
-  if (p <= 0) return -1;
-  return p;
+  let p = Math.max(1, Math.min(desired, messages.length - 1))
+  while (p > 0 && messages[p].role === 'tool') p--
+  if (p <= 0) return -1
+  return p
 }
 
 // ── Main entry ──────────────────────────────────────────
 
 export interface CompactOptions {
   /** Run both passes regardless of the token threshold. */
-  force?: boolean;
+  force?: boolean
   /**
    * Aggressive mode: keep only the most recent tool result and shrink the
    * preserved tail to ~5K tokens. Used by the reactive 413 fallback path
    * when the model rejected the previous request as too long.
    */
-  aggressive?: boolean;
+  aggressive?: boolean
 }
 
 export async function compactIfNeeded(
   messages: Message[],
   eventBus: IEventBus,
-  opts: CompactOptions = {}
+  opts: CompactOptions = {},
 ): Promise<Message[]> {
-  const cfg = getCompactionConfig();
-  const force = !!opts.force;
-  const aggressive = !!opts.aggressive;
+  const cfg = getCompactionConfig()
+  const force = !!opts.force
+  const aggressive = !!opts.aggressive
 
-  if (messages.length === 0) return messages;
+  if (messages.length === 0) return messages
 
-  let tokens = tokenCountWithEstimation(messages).total;
+  let tokens = tokenCountWithEstimation(messages).total
 
   // STEP 1 — cheap micro-compaction. Clears old tool_result/tool_input
   // *content* (not the blocks). 0 LLM calls.
@@ -393,102 +430,106 @@ export async function compactIfNeeded(
   // configured a full-summarize threshold *below* the micro threshold,
   // we still want micro to run as a free pre-pass before paying for the
   // LLM call — it might cut enough that summarize becomes unnecessary.
-  let working = messages;
-  const microKeep = aggressive ? 1 : cfg.microCompactKeepRecent;
-  const microTrigger = Math.min(cfg.microCompactThreshold, cfg.tokenThreshold);
-  const microThresholdMet = aggressive || force || tokens >= microTrigger;
+  let working = messages
+  const microKeep = aggressive ? 1 : cfg.microCompactKeepRecent
+  const microTrigger = Math.min(cfg.microCompactThreshold, cfg.tokenThreshold)
+  const microThresholdMet = aggressive || force || tokens >= microTrigger
   if (microThresholdMet) {
-    const r = microCompact(working, microKeep);
+    const r = microCompact(working, microKeep)
     // Always log so it's visible micro ran, even if it found nothing
     // clearable (e.g. a session full of mcp_* tools, which aren't on
     // the CLEARABLE_* whitelists).
     console.log(
       `[compaction] micro: cleared ${r.cleared} block(s), ~${r.tokensFreed} tokens freed` +
-        (r.cleared === 0 ? " (nothing eligible — all tools outside CLEARABLE_* whitelists)" : "")
-    );
+        (r.cleared === 0
+          ? ' (nothing eligible — all tools outside CLEARABLE_* whitelists)'
+          : ''),
+    )
     if (r.cleared > 0) {
-      eventBus.emit("compaction_micro", {
+      eventBus.emit('compaction_micro', {
         cleared: r.cleared,
         tokensFreed: r.tokensFreed,
-      });
-      working = r.messages;
-      tokens = estimateConversationTokens(working);
+      })
+      working = r.messages
+      tokens = estimateConversationTokens(working)
     }
   }
 
   // STEP 2 — only run the expensive LLM summarization if micro wasn't enough.
   if (!force && !aggressive && tokens < cfg.tokenThreshold) {
-    return working;
+    return working
   }
 
   // Aggressive mode preserves only the most recent ~5K tokens (just enough
   // for the model to see the last turn that triggered the 413). Normal
   // mode preserves the full configured tail budget.
-  const tailBudget = aggressive ? 5_000 : cfg.tailTokenBudget;
-  const desired = pickTailByTokenBudget(working, tailBudget);
-  const splitPoint = pickCleanSplitPoint(working, desired);
+  const tailBudget = aggressive ? 5_000 : cfg.tailTokenBudget
+  const desired = pickTailByTokenBudget(working, tailBudget)
+  const splitPoint = pickCleanSplitPoint(working, desired)
   if (splitPoint <= 1 || splitPoint >= working.length) {
-    console.log(`[compaction] no clean split point — skipping LLM summarize`);
-    return working;
+    console.log(`[compaction] no clean split point — skipping LLM summarize`)
+    return working
   }
 
-  const toSummarize = working.slice(0, splitPoint);
-  const toKeep = working.slice(splitPoint);
+  const toSummarize = working.slice(0, splitPoint)
+  const toKeep = working.slice(splitPoint)
 
   console.log(
     `[compaction] LLM summarize: ${working.length} msgs / ~${tokens} tok → ` +
       `summarizing ${toSummarize.length}, keeping ${toKeep.length}` +
-      (aggressive ? " [aggressive]" : "")
-  );
+      (aggressive ? ' [aggressive]' : ''),
+  )
 
-  eventBus.emit("compaction_start", {
+  eventBus.emit('compaction_start', {
     totalMessages: working.length,
     summarizing: toSummarize.length,
     keeping: toKeep.length,
     estimatedTokens: tokens,
     aggressive,
-  });
+  })
 
-  const formatted = toSummarize.map(formatForSummary).join("\n\n---\n\n");
+  const formatted = toSummarize.map(formatForSummary).join('\n\n---\n\n')
 
-  let summary: string;
+  let summary: string
   try {
-    const provider = defaultManager.get();
+    const provider = defaultManager.get()
     const result = await generateText({
       model: provider.chatModel(cfg.model),
       system: SUMMARY_SYSTEM,
       messages: [
         {
-          role: "user",
+          role: 'user',
           content: `Compact the following agent conversation into a working-state summary:\n\n${formatted}`,
         },
       ],
-    });
-    summary = result.text;
+    })
+    summary = result.text
   } catch (error) {
-    console.error(`[compaction] LLM summarize failed: ${(error as Error).message}`);
-    eventBus.emit("compaction_error", {
+    console.error(
+      `[compaction] LLM summarize failed: ${(error as Error).message}`,
+    )
+    eventBus.emit('compaction_error', {
       error: (error as Error).message,
-      message: "Failed to summarize. Returning micro-compacted messages.",
-    });
+      message: 'Failed to summarize. Returning micro-compacted messages.',
+    })
     // Even if summarize blew up, the micro-compact savings still apply.
-    return working;
+    return working
   }
 
-  console.log(`[compaction] summary done — ${summary.length} chars`);
+  console.log(`[compaction] summary done — ${summary.length} chars`)
 
-  eventBus.emit("compaction_done", {
+  eventBus.emit('compaction_done', {
     summaryLength: summary.length,
     summary,
     estimatedTokensAfter: estStr(summary) + estimateConversationTokens(toKeep),
-  });
+  })
 
   // Cached usages on toKeep describe the PRE-compact prefix and would
   // overstate post-compact context size by 3-4x — strip them so the next
   // step gets a fresh real baseline from the API response.
-  clearTokenUsages(toKeep);
+  clearTokenUsages(toKeep)
 
-  return buildPostCompactMessages(summary, toKeep);
+  return buildPostCompactMessages(summary, toKeep)
 }
 
 /**
@@ -496,26 +537,29 @@ export async function compactIfNeeded(
  * toKeep[0] is a user message — Anthropic requires strict user/assistant
  * alternation, so summary(user) → user(toKeep[0]) would 400 without it.
  */
-function buildPostCompactMessages(summary: string, toKeep: Message[]): Message[] {
+function buildPostCompactMessages(
+  summary: string,
+  toKeep: Message[],
+): Message[] {
   const out: Message[] = [
     {
-      role: "user",
+      role: 'user',
       content: `[Previous work summary — refer to this for context]\n\n${summary}`,
     },
-  ];
-  if (toKeep[0]?.role === "user") {
+  ]
+  if (toKeep[0]?.role === 'user') {
     out.push({
-      role: "assistant",
+      role: 'assistant',
       content: [
         {
-          type: "text",
+          type: 'text',
           text: "I have the context from the summary. I'll continue working on the task.",
         },
       ],
-    });
+    })
   }
-  out.push(...toKeep);
-  return out;
+  out.push(...toKeep)
+  return out
 }
 
 // ── Reactive 413 / context-length detection ─────────────
@@ -528,27 +572,27 @@ function buildPostCompactMessages(summary: string, toKeep: Message[]): Message[]
  * compaction (cheaper than a hung session).
  */
 export function isContextLengthError(err: unknown): boolean {
-  if (!err) return false;
+  if (!err) return false
   const e = err as {
-    statusCode?: number;
-    status?: number;
-    message?: string;
-    cause?: { message?: string };
-  };
-  const status = e.statusCode ?? e.status;
-  if (status === 413) return true;
-  const msg = ((e.message ?? "") + " " + (e.cause?.message ?? "")).toLowerCase();
+    statusCode?: number
+    status?: number
+    message?: string
+    cause?: { message?: string }
+  }
+  const status = e.statusCode ?? e.status
+  if (status === 413) return true
+  const msg = ((e.message ?? '') + ' ' + (e.cause?.message ?? '')).toLowerCase()
   return (
-    msg.includes("context length") ||
-    msg.includes("context_length") ||
-    msg.includes("context window") ||
-    msg.includes("prompt is too long") ||
-    msg.includes("prompt too long") ||
-    msg.includes("maximum context") ||
-    msg.includes("too many tokens") ||
-    msg.includes("token count exceeds") ||
-    msg.includes("token limit")
-  );
+    msg.includes('context length') ||
+    msg.includes('context_length') ||
+    msg.includes('context window') ||
+    msg.includes('prompt is too long') ||
+    msg.includes('prompt too long') ||
+    msg.includes('maximum context') ||
+    msg.includes('too many tokens') ||
+    msg.includes('token count exceeds') ||
+    msg.includes('token limit')
+  )
 }
 
 /**
@@ -558,71 +602,71 @@ export function isContextLengthError(err: unknown): boolean {
  * to retry the same request, not to compact.
  */
 export function isTransientStreamError(err: unknown): boolean {
-  if (!err) return false;
+  if (!err) return false
   const e = err as {
-    statusCode?: number;
-    status?: number;
-    code?: string;
-    message?: string;
-    cause?: { message?: string; code?: string };
-  };
-  const status = e.statusCode ?? e.status;
-  if (status === 502 || status === 503 || status === 504) return true;
-  const code = e.code ?? e.cause?.code ?? "";
-  if (
-    code === "ECONNRESET" ||
-    code === "ETIMEDOUT" ||
-    code === "EPIPE" ||
-    code === "UND_ERR_SOCKET"
-  ) {
-    return true;
+    statusCode?: number
+    status?: number
+    code?: string
+    message?: string
+    cause?: { message?: string; code?: string }
   }
-  const msg = ((e.message ?? "") + " " + (e.cause?.message ?? "")).toLowerCase();
+  const status = e.statusCode ?? e.status
+  if (status === 502 || status === 503 || status === 504) return true
+  const code = e.code ?? e.cause?.code ?? ''
+  if (
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'EPIPE' ||
+    code === 'UND_ERR_SOCKET'
+  ) {
+    return true
+  }
+  const msg = ((e.message ?? '') + ' ' + (e.cause?.message ?? '')).toLowerCase()
   return (
-    msg.includes("terminated") ||
-    msg.includes("other side closed") ||
-    msg.includes("socket hang up") ||
-    msg.includes("connection reset") ||
-    msg.includes("network error") ||
-    msg.includes("fetch failed") ||
-    msg.includes("no output generated") // AI SDK: stream closed before any chunk
-  );
+    msg.includes('terminated') ||
+    msg.includes('other side closed') ||
+    msg.includes('socket hang up') ||
+    msg.includes('connection reset') ||
+    msg.includes('network error') ||
+    msg.includes('fetch failed') ||
+    msg.includes('no output generated') // AI SDK: stream closed before any chunk
+  )
 }
 
 // ── Formatting for summary ──────────────────────────────
 
 function formatForSummary(msg: Message): string {
-  if (msg.role === "user") {
-    if (typeof msg.content === "string") return `USER: ${msg.content}`;
+  if (msg.role === 'user') {
+    if (typeof msg.content === 'string') return `USER: ${msg.content}`
     const text = msg.content
-      .map((p) => (p.type === "text" ? p.text : "[image]"))
+      .map(p => (p.type === 'text' ? p.text : '[image]'))
       .filter(Boolean)
-      .join("\n");
-    return `USER: ${text}`;
+      .join('\n')
+    return `USER: ${text}`
   }
 
-  if (msg.role === "assistant") {
+  if (msg.role === 'assistant') {
     const formatted = msg.content
-      .map((p) => {
-        if (p.type === "text") return p.text;
-        if (p.type === "reasoning") return "";
-        if (p.type === "tool-call") {
-          const args = JSON.stringify(p.input || {});
-          const short = args.length > 300 ? args.slice(0, 300) + "..." : args;
-          return `[Called ${p.toolName}(${short})]`;
+      .map(p => {
+        if (p.type === 'text') return p.text
+        if (p.type === 'reasoning') return ''
+        if (p.type === 'tool-call') {
+          const args = JSON.stringify(p.input || {})
+          const short = args.length > 300 ? args.slice(0, 300) + '...' : args
+          return `[Called ${p.toolName}(${short})]`
         }
-        return "";
+        return ''
       })
-      .filter(Boolean);
-    return `ASSISTANT: ${formatted.join("\n")}`;
+      .filter(Boolean)
+    return `ASSISTANT: ${formatted.join('\n')}`
   }
 
   return msg.content
-    .map((p) => {
-      const v = p.output?.value ?? "";
-      const text = typeof v === "string" ? v : JSON.stringify(v);
-      const short = text.length > 500 ? text.slice(0, 500) + "..." : text;
-      return `[${p.toolName} result]: ${short}`;
+    .map(p => {
+      const v = p.output?.value ?? ''
+      const text = typeof v === 'string' ? v : JSON.stringify(v)
+      const short = text.length > 500 ? text.slice(0, 500) + '...' : text
+      return `[${p.toolName} result]: ${short}`
     })
-    .join("\n");
+    .join('\n')
 }

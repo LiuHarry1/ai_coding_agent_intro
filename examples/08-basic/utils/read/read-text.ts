@@ -1,17 +1,17 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs'
+import * as path from 'path'
 import {
   MAX_LINES_TO_READ,
   MAX_OUTPUT_SIZE_BYTES,
-} from "../../constants/api_limits.js";
-import { isBinaryContent } from "../../constants/files.js";
-import type { ReadTextOutput } from "./types.js";
-import { FileTooLargeError } from "./types.js";
+} from '../../constants/api_limits.js'
+import { isBinaryContent } from '../../constants/files.js'
+import type { ReadTextOutput } from './types.js'
+import { FileTooLargeError } from './types.js'
 
 function addLineNumbers(lines: string[], startLine: number): string {
   return lines
     .map((line, i) => `${String(startLine + i).padStart(4)}│${line}`)
-    .join("\n");
+    .join('\n')
 }
 
 export function readTextFile(
@@ -20,41 +20,41 @@ export function readTextFile(
   options?: { offset?: number; limit?: number },
 ): ReadTextOutput {
   if (!fs.existsSync(absPath)) {
-    throw new Error(`file not found: ${displayPath}`);
+    throw new Error(`file not found: ${displayPath}`)
   }
-  const stat = fs.statSync(absPath);
+  const stat = fs.statSync(absPath)
   if (stat.isDirectory()) {
-    throw new Error(`${displayPath} is a directory, not a file`);
+    throw new Error(`${displayPath} is a directory, not a file`)
   }
   if (stat.size > MAX_OUTPUT_SIZE_BYTES) {
-    throw new FileTooLargeError(stat.size, MAX_OUTPUT_SIZE_BYTES);
+    throw new FileTooLargeError(stat.size, MAX_OUTPUT_SIZE_BYTES)
   }
 
-  const buf = fs.readFileSync(absPath);
+  const buf = fs.readFileSync(absPath)
   if (isBinaryContent(buf)) {
-    throw new Error(`binary file detected — cannot display ${displayPath}`);
+    throw new Error(`binary file detected — cannot display ${displayPath}`)
   }
 
-  let lines = buf.toString("utf-8").split("\n");
-  const totalLines = lines.length;
+  let lines = buf.toString('utf-8').split('\n')
+  const totalLines = lines.length
 
-  let startLine = 1;
-  const { offset, limit } = options ?? {};
+  let startLine = 1
+  const { offset, limit } = options ?? {}
   if (offset != null && offset < 0) {
-    startLine = Math.max(1, totalLines + offset + 1);
-    lines = lines.slice(startLine - 1);
+    startLine = Math.max(1, totalLines + offset + 1)
+    lines = lines.slice(startLine - 1)
   } else if (offset != null && offset > 0) {
-    startLine = offset;
-    lines = lines.slice(offset - 1);
+    startLine = offset
+    lines = lines.slice(offset - 1)
   }
-  if (limit != null && limit > 0) lines = lines.slice(0, limit);
+  if (limit != null && limit > 0) lines = lines.slice(0, limit)
 
-  const endLine = startLine + lines.length - 1;
-  const numbered = addLineNumbers(lines, startLine);
-  const header = `${displayPath} (lines ${startLine}-${endLine} of ${totalLines})`;
+  const endLine = startLine + lines.length - 1
+  const numbered = addLineNumbers(lines, startLine)
+  const header = `${displayPath} (lines ${startLine}-${endLine} of ${totalLines})`
 
   return {
-    type: "text",
+    type: 'text',
     file: {
       filePath: displayPath,
       content: `${header}\n${numbered}`,
@@ -62,7 +62,7 @@ export function readTextFile(
       startLine,
       totalLines,
     },
-  };
+  }
 }
 
 /** Read first N lines when file exceeds token/line budget (attachment truncation). */
@@ -71,19 +71,22 @@ export function readTextFileTruncated(
   displayPath: string,
   options?: { offset?: number; limit?: number },
 ): ReadTextOutput {
-  const lineLimit = options?.limit ?? MAX_LINES_TO_READ;
-  const offset = options?.offset ?? 1;
-  return readTextFile(absPath, displayPath, { offset, limit: lineLimit });
+  const lineLimit = options?.limit ?? MAX_LINES_TO_READ
+  const offset = options?.offset ?? 1
+  return readTextFile(absPath, displayPath, { offset, limit: lineLimit })
 }
 
-export function isFileWithinReadSizeLimit(absPath: string, maxBytes = MAX_OUTPUT_SIZE_BYTES): boolean {
+export function isFileWithinReadSizeLimit(
+  absPath: string,
+  maxBytes = MAX_OUTPUT_SIZE_BYTES,
+): boolean {
   try {
-    return fs.statSync(absPath).size <= maxBytes;
+    return fs.statSync(absPath).size <= maxBytes
   } catch {
-    return false;
+    return false
   }
 }
 
 export function fileExtension(absPath: string): string {
-  return path.extname(absPath).replace(/^\./, "").toLowerCase();
+  return path.extname(absPath).replace(/^\./, '').toLowerCase()
 }

@@ -1,7 +1,7 @@
-import type { LanguageModel } from "ai";
-import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import type { LanguageModel } from 'ai'
+import type { ProviderOptions } from '@ai-sdk/provider-utils'
 
-export type ProviderId = "openai" | "anthropic" | "openai-compatible";
+export type ProviderId = 'openai' | 'anthropic' | 'openai-compatible'
 
 /**
  * Provider-agnostic thinking/reasoning intent.
@@ -16,36 +16,36 @@ export type ProviderId = "openai" | "anthropic" | "openai-compatible";
  * - `budget`  — explicit token budget (Anthropic native; OpenAI maps to `high`).
  */
 export type ThinkingConfig =
-  | { mode: "off" }
-  | { mode: "auto" }
-  | { mode: "low" | "medium" | "high" }
-  | { mode: "budget"; tokens: number };
+  | { mode: 'off' }
+  | { mode: 'auto' }
+  | { mode: 'low' | 'medium' | 'high' }
+  | { mode: 'budget'; tokens: number }
 
 /**
  * Single, flat user-facing config — the only shape stored on disk / sent over
  * the wire. Switching provider is a one-line change.
  */
 export interface LlmProfile {
-  provider: ProviderId;
-  name?: string;
-  baseURL: string;
-  apiKey: string;
-  model: string;
-  thinking: ThinkingConfig;
+  provider: ProviderId
+  name?: string
+  baseURL: string
+  apiKey: string
+  model: string
+  thinking: ThinkingConfig
 }
 
 export type AgentStreamTextExtras = {
-  providerOptions?: ProviderOptions;
-};
+  providerOptions?: ProviderOptions
+}
 
 export interface IProvider {
-  chatModel(modelId: string): LanguageModel;
-  streamTextExtras(): AgentStreamTextExtras;
-  defaultModelId(): string;
-  describe(): string;
+  chatModel(modelId: string): LanguageModel
+  streamTextExtras(): AgentStreamTextExtras
+  defaultModelId(): string
+  describe(): string
 }
 
 export interface ProviderStrategy {
-  readonly id: ProviderId;
-  build(profile: LlmProfile): IProvider;
+  readonly id: ProviderId
+  build(profile: LlmProfile): IProvider
 }

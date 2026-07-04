@@ -1,1 +1,1 @@
-export { default } from "./WorkspaceIDE.jsx";
+export { default } from './WorkspaceIDE.jsx'

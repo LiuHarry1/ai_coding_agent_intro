@@ -1,12 +1,12 @@
-import { createShellTool } from "./shell-runner.js";
-import { bashShell, isWindows } from "../core/platform.js";
-import { BASH_TOOL_NAME } from "../constants/tool_names.js";
+import { createShellTool } from './shell-runner.js'
+import { bashShell, isWindows } from '../core/platform.js'
+import { BASH_TOOL_NAME } from '../constants/tool_names.js'
 
 const windowsNote = isWindows
   ? `
 On Windows this tool runs Git Bash (bash.exe from Git for Windows), not cmd.exe. Install Git for Windows if commands fail with "bash not found".
 `
-  : "";
+  : ''
 
 const DESCRIPTION = `Run bash commands in the workspace shell.${windowsNote}
 
@@ -50,11 +50,11 @@ IMPORTANT: Avoid using this tool to run \`find\`, \`grep\`, \`cat\`, \`head\`, \
 - Edit files: Use \`edit_file\` (NOT sed/awk)
 - Write files: Use \`write_file\` (NOT echo >/cat <<EOF)
 
-Reserve this tool for system commands and terminal operations (git, package managers, build/test runners) and read-only directory checks (\`ls\`, \`git status\`, etc.).`;
+Reserve this tool for system commands and terminal operations (git, package managers, build/test runners) and read-only directory checks (\`ls\`, \`git status\`, etc.).`
 
 export const definition = createShellTool({
   name: BASH_TOOL_NAME,
   description: DESCRIPTION,
-  commandFieldDesc: "The bash command to execute.",
+  commandFieldDesc: 'The bash command to execute.',
   shellConfig: bashShell,
-});
+})

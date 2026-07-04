@@ -16,28 +16,26 @@
  * want to feed the result back into the agent.
  */
 
-import { substituteArguments } from "../commands/argumentSubstitution.js";
-import { expandInlineDirectives } from "../commands/promptExpansion.js";
-import type { SkillDefinition } from "./types.js";
+import { substituteArguments } from '../commands/argumentSubstitution.js'
+import { expandInlineDirectives } from '../commands/promptExpansion.js'
+import type { SkillDefinition } from './types.js'
 
 export interface ExpandedSkill {
   /** `Base directory for this skill: <path>\n\n`, or empty if no baseDir. */
-  preamble: string;
+  preamble: string
   /** Body after all substitution / `!` / `@` / `${SKILL_DIR}` expansion. */
-  expanded: string;
+  expanded: string
   /** `preamble + expanded` — what callers usually want. */
-  combined: string;
+  combined: string
 }
 
 export class SkillExpansionError extends Error {
   constructor(
     message: string,
-    readonly code:
-      | "BODY_READ_FAILED"
-      | "EMPTY_BODY",
+    readonly code: 'BODY_READ_FAILED' | 'EMPTY_BODY',
   ) {
-    super(message);
-    this.name = "SkillExpansionError";
+    super(message)
+    this.name = 'SkillExpansionError'
   }
 }
 
@@ -52,41 +50,41 @@ export async function expandSkillBody(
   rawArgs: string,
   cwd: string,
 ): Promise<ExpandedSkill> {
-  let body: string;
+  let body: string
   try {
-    body = await skill.loadBody();
+    body = await skill.loadBody()
   } catch (e) {
     throw new SkillExpansionError(
       `failed to read SKILL.md for '${skill.name}': ${(e as Error).message}`,
-      "BODY_READ_FAILED",
-    );
+      'BODY_READ_FAILED',
+    )
   }
   if (!body.trim()) {
     throw new SkillExpansionError(
       `skill '${skill.name}' has an empty SKILL.md body`,
-      "EMPTY_BODY",
-    );
+      'EMPTY_BODY',
+    )
   }
 
-  const substituted = substituteArguments(body, rawArgs, skill.argumentNames);
-  let expanded = await expandInlineDirectives(substituted, cwd);
+  const substituted = substituteArguments(body, rawArgs, skill.argumentNames)
+  let expanded = await expandInlineDirectives(substituted, cwd)
 
   // `${SKILL_DIR}` → skill folder. Normalize backslashes on Windows so
   // shell snippets don't treat them as escape sequences.
   // `${CLAUDE_SKILL_DIR}`.
   if (skill.baseDir) {
     const dir =
-      process.platform === "win32"
-        ? skill.baseDir.replace(/\\/g, "/")
-        : skill.baseDir;
-    expanded = expanded.replace(/\$\{SKILL_DIR\}/g, dir);
+      process.platform === 'win32'
+        ? skill.baseDir.replace(/\\/g, '/')
+        : skill.baseDir
+    expanded = expanded.replace(/\$\{SKILL_DIR\}/g, dir)
   }
 
   const preamble = skill.baseDir
     ? `Base directory for this skill: ${skill.baseDir}\n\n`
-    : "";
+    : ''
 
-  return { preamble, expanded, combined: preamble + expanded };
+  return { preamble, expanded, combined: preamble + expanded }
 }
 
 /**
@@ -107,16 +105,16 @@ export async function expandSkillBody(
 export function normalizeSkillArguments(
   input: string | Record<string, string | number | boolean> | undefined,
 ): string {
-  if (input == null) return "";
-  if (typeof input === "string") return input;
-  if (typeof input !== "object") return "";
+  if (input == null) return ''
+  if (typeof input === 'string') return input
+  if (typeof input !== 'object') return ''
 
   return Object.entries(input)
     .map(([k, v]) => {
-      const s = String(v);
+      const s = String(v)
       // Quote values with whitespace; backslash-escape inner double quotes.
       // Simple-by-design; mirrors how a CLI user would type the same arg.
-      return /\s/.test(s) ? `${k}="${s.replace(/"/g, '\\"')}"` : `${k}=${s}`;
+      return /\s/.test(s) ? `${k}="${s.replace(/"/g, '\\"')}"` : `${k}=${s}`
     })
-    .join(" ");
+    .join(' ')
 }

@@ -1,12 +1,12 @@
-import { tool } from "ai";
-import { z } from "zod";
+import { tool } from 'ai'
+import { z } from 'zod'
 import type {
   AgentDefinition,
   AnyTool,
   ToolContext,
   ToolDefinition,
-} from "../core/types.js";
-import { TASK_TOOL_NAME } from "./tool-names.js";
+} from '../core/types.js'
+import { TASK_TOOL_NAME } from './tool-names.js'
 
 /**
  * Single tool that dispatches to all built-in subagents via a
@@ -30,20 +30,22 @@ import { TASK_TOOL_NAME } from "./tool-names.js";
  * `task` entry from `subTools` below so a misconfigured agent definition
  * cannot spawn nested subagents.
  */
-export function createTaskTool(agents: readonly AgentDefinition[]): ToolDefinition {
+export function createTaskTool(
+  agents: readonly AgentDefinition[],
+): ToolDefinition {
   if (agents.length === 0) {
-    throw new Error("createTaskTool: at least one AgentDefinition required");
+    throw new Error('createTaskTool: at least one AgentDefinition required')
   }
 
   // Index the agents by agentType for O(1) dispatch and to detect duplicates.
-  const byType = new Map<string, AgentDefinition>();
+  const byType = new Map<string, AgentDefinition>()
   for (const a of agents) {
     if (byType.has(a.agentType)) {
-      throw new Error(`Duplicate agentType '${a.agentType}' in BUILTIN_AGENTS`);
+      throw new Error(`Duplicate agentType '${a.agentType}' in BUILTIN_AGENTS`)
     }
-    byType.set(a.agentType, a);
+    byType.set(a.agentType, a)
   }
-  const validTypes = [...byType.keys()];
+  const validTypes = [...byType.keys()]
 
   // Build the static portion of the description ONCE at registration time.
   // Each entry surfaces the agent's `whenToUse` paragraph so the model has
@@ -53,8 +55,8 @@ export function createTaskTool(agents: readonly AgentDefinition[]): ToolDefiniti
   // "full toolset", etc.), and dumping every denied tool name was noise
   // that didn't change selection behavior.
   const directory = agents
-    .map((a) => `- ${a.agentType}: ${a.whenToUse}`)
-    .join("\n");
+    .map(a => `- ${a.agentType}: ${a.whenToUse}`)
+    .join('\n')
 
   const description = `Launch a new subagent to handle complex, multi-step tasks autonomously.
 
@@ -88,7 +90,7 @@ Writing the prompt — brief the subagent like a smart colleague who just walked
 - Never delegate understanding. Don't write "based on your findings, fix the bug" — that pushes synthesis onto the subagent. Write prompts that prove you understood: file paths, line numbers, what specifically to change.
 
 Required arguments:
-- \`subagent_type\`: one of [${validTypes.join(", ")}]
+- \`subagent_type\`: one of [${validTypes.join(', ')}]
 - \`description\`: 3-5 word title shown in the activity log.
 - \`prompt\`: self-contained task description (see writing-the-prompt rules above).
 
@@ -107,14 +109,14 @@ User: "Add retry logic to core/llm/strategies/openai.ts."
 <example>
 User: "Refactor the agent loop to support cancellation."
 → Non-trivial architecture. Call \`task\` with \`subagent_type: "plan"\`; it explores and designs. Then implement its plan.
-</example>`;
+</example>`
 
   return {
     name: TASK_TOOL_NAME,
     description,
     isSubagent: true,
     create(cwd: string, context: ToolContext) {
-      const { runAgent, eventBus, registry, toolEnablement } = context;
+      const { runAgent, eventBus, registry, toolEnablement } = context
 
       return tool({
         description,
@@ -122,17 +124,17 @@ User: "Refactor the agent loop to support cancellation."
           subagent_type: z
             .enum(validTypes as [string, ...string[]])
             .describe(
-              "Which subagent to dispatch to. Must be one of the registered agent types.",
+              'Which subagent to dispatch to. Must be one of the registered agent types.',
             ),
           description: z
             .string()
             .min(1)
-            .describe("Short 3-5 word title for the task, shown in the UI."),
+            .describe('Short 3-5 word title for the task, shown in the UI.'),
           prompt: z
             .string()
             .min(1)
             .describe(
-              "Self-contained, detailed task description. The subagent does NOT see prior conversation, so include all needed context, file paths, and what to return.",
+              'Self-contained, detailed task description. The subagent does NOT see prior conversation, so include all needed context, file paths, and what to return.',
             ),
         }),
         execute: async ({
@@ -140,28 +142,28 @@ User: "Refactor the agent loop to support cancellation."
           description: shortDesc,
           prompt,
         }: {
-          subagent_type: string;
-          description: string;
-          prompt: string;
+          subagent_type: string
+          description: string
+          prompt: string
         }) => {
-          const def = byType.get(subagent_type);
+          const def = byType.get(subagent_type)
           if (!def) {
-            return `Error: unknown subagent_type '${subagent_type}'. Valid: ${validTypes.join(", ")}`;
+            return `Error: unknown subagent_type '${subagent_type}'. Valid: ${validTypes.join(', ')}`
           }
           if (!runAgent || !registry) {
-            return `Error: task tool requires runAgent + registry in ToolContext`;
+            return `Error: task tool requires runAgent + registry in ToolContext`
           }
 
           // Scope event bus by the subagent_type so the front-end's
           // SubagentCard groups nested tool events correctly and applies
           // the per-type styling (purple/amber/slate).
-          const subBus = eventBus.scoped(`subagent_${subagent_type}`);
+          const subBus = eventBus.scoped(`subagent_${subagent_type}`)
 
-          subBus.emit("step_start", {
+          subBus.emit('step_start', {
             step: 0,
             task: shortDesc.slice(0, 80),
             label: def.label || subagent_type,
-          });
+          })
 
           // Build the subagent's tool surface. The allow/deny lists from
           // the AgentDefinition are honored here, plus we always strip the
@@ -171,20 +173,20 @@ User: "Refactor the agent loop to support cancellation."
             registry,
             runAgent,
             toolEnablement,
-          };
+          }
 
-          let subTools: Record<string, AnyTool>;
+          let subTools: Record<string, AnyTool>
           if (def.tools) {
-            subTools = registry.createAll(cwd, subContext, def.tools);
+            subTools = registry.createAll(cwd, subContext, def.tools)
           } else {
-            subTools = registry.createAll(cwd, subContext);
-            const denied = new Set(def.disallowedTools ?? []);
-            denied.add(TASK_TOOL_NAME);
-            for (const n of denied) delete subTools[n];
+            subTools = registry.createAll(cwd, subContext)
+            const denied = new Set(def.disallowedTools ?? [])
+            denied.add(TASK_TOOL_NAME)
+            for (const n of denied) delete subTools[n]
           }
           // Defense in depth: even with neither list set, the parent's
           // task tool itself must never be in the subagent's toolset.
-          delete subTools[TASK_TOOL_NAME];
+          delete subTools[TASK_TOOL_NAME]
 
           const result = await runAgent(prompt, {
             tools: subTools,
@@ -193,11 +195,11 @@ User: "Refactor the agent loop to support cancellation."
             messages: [],
             maxSteps: def.maxSteps ?? 20,
             model: def.model,
-          });
+          })
 
-          return result || `(${subagent_type} subagent returned no result)`;
+          return result || `(${subagent_type} subagent returned no result)`
         },
-      });
+      })
     },
-  };
+  }
 }

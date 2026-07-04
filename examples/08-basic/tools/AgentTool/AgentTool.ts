@@ -1,44 +1,50 @@
-import { tool } from "ai";
-import { z } from "zod";
+import { tool } from 'ai'
+import { z } from 'zod'
 import type {
   AgentDefinition,
   AnyTool,
   ToolContext,
   ToolDefinition,
-} from "../../core/types.js";
-import { AGENT_TOOL_NAME, GLOB_TOOL_NAME, READ_FILE_TOOL_NAME } from "../../constants/tool_names.js";
-import { EXPLORE_AGENT_TYPE } from "./built-in/exploreAgent.js";
-import { PLAN_AGENT_TYPE } from "./built-in/planAgent.js";
-import { loadProjectRules } from "../../utils/rules-loader.js";
-import { buildConcurrencyPolicy } from "../../core/concurrency-policy.js";
-import { createSubagentEventBus } from "../../core/brokers/subagent-bus.js";
-import { randomUUID } from "crypto";
+} from '../../core/types.js'
+import {
+  AGENT_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  READ_FILE_TOOL_NAME,
+} from '../../constants/tool_names.js'
+import { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
+import { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
+import { loadProjectRules } from '../../utils/rules-loader.js'
+import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
+import { createSubagentEventBus } from '../../core/brokers/subagent-bus.js'
+import { randomUUID } from 'crypto'
 
 /** CC: tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
-export function createTaskTool(agents: readonly AgentDefinition[]): ToolDefinition {
+export function createTaskTool(
+  agents: readonly AgentDefinition[],
+): ToolDefinition {
   if (agents.length === 0) {
-    throw new Error("createTaskTool: at least one AgentDefinition required");
+    throw new Error('createTaskTool: at least one AgentDefinition required')
   }
 
-  const byType = new Map<string, AgentDefinition>();
+  const byType = new Map<string, AgentDefinition>()
   for (const a of agents) {
     if (byType.has(a.agentType)) {
-      throw new Error(`Duplicate agentType '${a.agentType}' in BUILTIN_AGENTS`);
+      throw new Error(`Duplicate agentType '${a.agentType}' in BUILTIN_AGENTS`)
     }
-    byType.set(a.agentType, a);
+    byType.set(a.agentType, a)
   }
-  const validTypes = [...byType.keys()];
+  const validTypes = [...byType.keys()]
 
   const directory = agents
-    .map((a) => {
+    .map(a => {
       const toolsDesc = a.disallowedTools?.length
-        ? `All tools except ${a.disallowedTools.join(", ")}`
+        ? `All tools except ${a.disallowedTools.join(', ')}`
         : a.tools?.length
-          ? a.tools.join(", ")
-          : "All tools";
-      return `- ${a.agentType}: ${a.whenToUse} (Tools: ${toolsDesc})`;
+          ? a.tools.join(', ')
+          : 'All tools'
+      return `- ${a.agentType}: ${a.whenToUse} (Tools: ${toolsDesc})`
     })
-    .join("\n");
+    .join('\n')
 
   const description = `Launch a new agent to handle complex, multi-step tasks autonomously.
 
@@ -95,7 +101,7 @@ user: "Refactor the agent loop to support cancellation."
 Non-trivial architecture change. Use the ${PLAN_AGENT_TYPE} agent to explore and design first, then implement.
 </commentary>
 assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} agent
-</example>`;
+</example>`
 
   return {
     name: AGENT_TOOL_NAME,
@@ -103,7 +109,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
     isSubagent: true,
     isConcurrencySafe: () => false,
     create(cwd: string, context: ToolContext) {
-      const { runAgent, eventBus, registry, toolEnablement } = context;
+      const { runAgent, eventBus, registry, toolEnablement } = context
 
       return tool({
         description,
@@ -111,17 +117,17 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           subagent_type: z
             .enum(validTypes as [string, ...string[]])
             .describe(
-              "Which subagent to dispatch to. Must be one of the registered agent types.",
+              'Which subagent to dispatch to. Must be one of the registered agent types.',
             ),
           description: z
             .string()
             .min(1)
-            .describe("Short 3-5 word title for the task, shown in the UI."),
+            .describe('Short 3-5 word title for the task, shown in the UI.'),
           prompt: z
             .string()
             .min(1)
             .describe(
-              "Self-contained, detailed task description. The subagent does NOT see prior conversation, so include all needed context, file paths, and what to return.",
+              'Self-contained, detailed task description. The subagent does NOT see prior conversation, so include all needed context, file paths, and what to return.',
             ),
         }),
         execute: async (
@@ -130,48 +136,48 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             description: shortDesc,
             prompt,
           }: {
-            subagent_type: string;
-            description: string;
-            prompt: string;
+            subagent_type: string
+            description: string
+            prompt: string
           },
           options?: { toolCallId?: string },
         ) => {
-          const def = byType.get(subagent_type);
+          const def = byType.get(subagent_type)
           if (!def) {
-            return `Error: unknown subagent_type '${subagent_type}'. Valid: ${validTypes.join(", ")}`;
+            return `Error: unknown subagent_type '${subagent_type}'. Valid: ${validTypes.join(', ')}`
           }
 
-          if (context.session?.permissionMode.mode === "plan") {
-            const allowedInPlan = new Set([EXPLORE_AGENT_TYPE, PLAN_AGENT_TYPE]);
+          if (context.session?.permissionMode.mode === 'plan') {
+            const allowedInPlan = new Set([EXPLORE_AGENT_TYPE, PLAN_AGENT_TYPE])
             if (!allowedInPlan.has(subagent_type)) {
               return (
                 `Error: plan mode only allows ${EXPLORE_AGENT_TYPE} (Phase 1) and ` +
                 `${PLAN_AGENT_TYPE} (Phase 2) subagents. Got '${subagent_type}'.`
-              );
+              )
             }
           }
           if (!runAgent || !registry) {
-            return `Error: task tool requires runAgent + registry in ToolContext`;
+            return `Error: task tool requires runAgent + registry in ToolContext`
           }
 
-          const parentToolCallId = options?.toolCallId;
+          const parentToolCallId = options?.toolCallId
           if (!parentToolCallId) {
             console.warn(
               `[Agent] missing toolCallId for subagent ${subagent_type} — nested UI routing may be wrong`,
-            );
+            )
           }
-          const resolvedParentId = parentToolCallId ?? randomUUID();
+          const resolvedParentId = parentToolCallId ?? randomUUID()
           const subBus = createSubagentEventBus(
             eventBus,
             resolvedParentId,
             `subagent_${subagent_type}_${resolvedParentId}`,
-          );
+          )
 
-          subBus.emit("step_start", {
+          subBus.emit('step_start', {
             step: 0,
             task: shortDesc.slice(0, 80),
             label: def.label || subagent_type,
-          });
+          })
 
           const subContext: ToolContext = {
             eventBus: subBus,
@@ -179,23 +185,23 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             runAgent,
             toolEnablement,
             sessionId: context.sessionId,
-          };
-
-          let subTools: Record<string, AnyTool>;
-          if (def.tools) {
-            subTools = registry.createAll(cwd, subContext, def.tools);
-          } else {
-            subTools = registry.createAll(cwd, subContext);
-            const denied = new Set(def.disallowedTools ?? []);
-            denied.add(AGENT_TOOL_NAME);
-            for (const n of denied) delete subTools[n];
           }
-          delete subTools[AGENT_TOOL_NAME];
 
-          const projectRules = def.omitProjectRules ? "" : loadProjectRules(cwd);
+          let subTools: Record<string, AnyTool>
+          if (def.tools) {
+            subTools = registry.createAll(cwd, subContext, def.tools)
+          } else {
+            subTools = registry.createAll(cwd, subContext)
+            const denied = new Set(def.disallowedTools ?? [])
+            denied.add(AGENT_TOOL_NAME)
+            for (const n of denied) delete subTools[n]
+          }
+          delete subTools[AGENT_TOOL_NAME]
+
+          const projectRules = def.omitProjectRules ? '' : loadProjectRules(cwd)
           const subSystemPrompt = projectRules
             ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
-            : def.systemPrompt;
+            : def.systemPrompt
 
           const result = await runAgent(prompt, {
             tools: subTools,
@@ -208,11 +214,11 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
               ? buildConcurrencyPolicy(registry, Object.keys(subTools))
               : undefined,
             sessionId: context.sessionId,
-          });
+          })
 
-          return result || `(${subagent_type} subagent returned no result)`;
+          return result || `(${subagent_type} subagent returned no result)`
         },
-      });
+      })
     },
-  };
+  }
 }

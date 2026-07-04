@@ -1,16 +1,19 @@
-import type { Message, UserContentPart, UserMessage } from "../../core/types.js";
-import type { Attachment } from "./types.js";
-import { BASH_TOOL_NAME, READ_FILE_TOOL_NAME } from "../../constants/tool_names.js";
-import { MAX_LINES_TO_READ } from "../../constants/api_limits.js";
-import { formatReadOutputAsToolString } from "../read/index.js";
-import type { ReadOutput } from "../read/types.js";
+import type { Message, UserContentPart, UserMessage } from '../../core/types.js'
+import type { Attachment } from './types.js'
+import {
+  BASH_TOOL_NAME,
+  READ_FILE_TOOL_NAME,
+} from '../../constants/tool_names.js'
+import { MAX_LINES_TO_READ } from '../../constants/api_limits.js'
+import { formatReadOutputAsToolString } from '../read/index.js'
+import type { ReadOutput } from '../read/types.js'
 
 function wrapInSystemReminder(content: string): string {
-  return `<system-reminder>\n${content}\n</system-reminder>`;
+  return `<system-reminder>\n${content}\n</system-reminder>`
 }
 
 function metaUserMessage(content: string | UserContentPart[]): UserMessage {
-  return { role: "user", content };
+  return { role: 'user', content }
 }
 
 function createToolUseMessage(
@@ -21,53 +24,60 @@ function createToolUseMessage(
     wrapInSystemReminder(
       `Called the ${toolName} tool with the following input: ${JSON.stringify(input)}`,
     ),
-  );
+  )
 }
 
-function createToolResultTextMessage(toolName: string, resultText: string): UserMessage {
+function createToolResultTextMessage(
+  toolName: string,
+  resultText: string,
+): UserMessage {
   return metaUserMessage(
-    wrapInSystemReminder(`Result of calling the ${toolName} tool:\n${resultText}`),
-  );
+    wrapInSystemReminder(
+      `Result of calling the ${toolName} tool:\n${resultText}`,
+    ),
+  )
 }
 
 function createToolResultImageMessage(
   toolName: string,
-  output: Extract<ReadOutput, { type: "image" }>,
+  output: Extract<ReadOutput, { type: 'image' }>,
 ): UserMessage {
   const parts: UserContentPart[] = [
     {
-      type: "text",
+      type: 'text',
       text: wrapInSystemReminder(
         `Result of calling the ${toolName} tool: [Image ${output.file.filePath}]`,
       ),
     },
     {
-      type: "image",
-      image: Buffer.from(output.file.base64, "base64"),
+      type: 'image',
+      image: Buffer.from(output.file.base64, 'base64'),
       mediaType: output.file.mediaType,
     },
-  ];
-  return { role: "user", content: parts };
+  ]
+  return { role: 'user', content: parts }
 }
 
 function fileAttachmentToMessages(attachment: {
-  filename: string;
-  displayPath: string;
-  content: ReadOutput;
-  truncated?: boolean;
+  filename: string
+  displayPath: string
+  content: ReadOutput
+  truncated?: boolean
 }): Message[] {
-  const input = { file_path: attachment.displayPath };
-  const msgs: Message[] = [createToolUseMessage(READ_FILE_TOOL_NAME, input)];
+  const input = { file_path: attachment.displayPath }
+  const msgs: Message[] = [createToolUseMessage(READ_FILE_TOOL_NAME, input)]
 
-  if (attachment.content.type === "image") {
-    msgs.push(createToolResultImageMessage(READ_FILE_TOOL_NAME, attachment.content));
+  if (attachment.content.type === 'image') {
+    msgs.push(
+      createToolResultImageMessage(READ_FILE_TOOL_NAME, attachment.content),
+    )
   } else {
     msgs.push(
       createToolResultTextMessage(
         READ_FILE_TOOL_NAME,
         formatReadOutputAsToolString(attachment.content),
       ),
-    );
+    )
   }
 
   if (attachment.truncated) {
@@ -77,34 +87,34 @@ function fileAttachmentToMessages(attachment: {
           `Note: The file ${attachment.displayPath} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${READ_FILE_TOOL_NAME} to read more of the file if you need.`,
         ),
       ),
-    );
+    )
   }
 
-  return msgs;
+  return msgs
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 export function attachmentToMessages(attachment: Attachment): Message[] {
   switch (attachment.type) {
-    case "directory":
+    case 'directory':
       return [
         createToolUseMessage(BASH_TOOL_NAME, {
           command: `ls ${JSON.stringify(attachment.path)}`,
           description: `Lists files in ${attachment.displayPath}`,
         }),
         createToolResultTextMessage(BASH_TOOL_NAME, attachment.content),
-      ];
+      ]
 
-    case "file":
-    case "already_read_file":
-      return fileAttachmentToMessages(attachment);
+    case 'file':
+    case 'already_read_file':
+      return fileAttachmentToMessages(attachment)
 
-    case "pdf_reference":
+    case 'pdf_reference':
       return [
         metaUserMessage(
           wrapInSystemReminder(
@@ -115,10 +125,10 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
               `Maximum 20 pages per request.`,
           ),
         ),
-      ];
+      ]
   }
 }
 
 export function attachmentsToMessages(attachments: Attachment[]): Message[] {
-  return attachments.flatMap((a) => attachmentToMessages(a));
+  return attachments.flatMap(a => attachmentToMessages(a))
 }

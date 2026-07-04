@@ -1,7 +1,7 @@
-import { z } from "zod";
-import { ServerMessageSchema } from "./server.js";
-import { ClientMessageSchema } from "./client.js";
-import { ControlResponseSchema } from "./control.js";
+import { z } from 'zod'
+import { ServerMessageSchema } from './server.js'
+import { ClientMessageSchema } from './client.js'
+import { ControlResponseSchema } from './control.js'
 
 /**
  * Direction-split aggregate unions, mirroring CC's StdoutMessage /
@@ -16,8 +16,8 @@ import { ControlResponseSchema } from "./control.js";
 export const OutgoingMessageSchema = z.union([
   ServerMessageSchema,
   ControlResponseSchema,
-]);
-export type OutgoingMessage = z.infer<typeof OutgoingMessageSchema>;
+])
+export type OutgoingMessage = z.infer<typeof OutgoingMessageSchema>
 
-export const IncomingMessageSchema = ClientMessageSchema;
-export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
+export const IncomingMessageSchema = ClientMessageSchema
+export type IncomingMessage = z.infer<typeof IncomingMessageSchema>

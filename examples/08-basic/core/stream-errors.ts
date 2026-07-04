@@ -8,27 +8,27 @@
  * too long? Covers OpenAI, Anthropic (413), Gemini, and proxy variants.
  */
 export function isContextLengthError(err: unknown): boolean {
-  if (!err) return false;
+  if (!err) return false
   const e = err as {
-    statusCode?: number;
-    status?: number;
-    message?: string;
-    cause?: { message?: string };
-  };
-  const status = e.statusCode ?? e.status;
-  if (status === 413) return true;
-  const msg = ((e.message ?? "") + " " + (e.cause?.message ?? "")).toLowerCase();
+    statusCode?: number
+    status?: number
+    message?: string
+    cause?: { message?: string }
+  }
+  const status = e.statusCode ?? e.status
+  if (status === 413) return true
+  const msg = ((e.message ?? '') + ' ' + (e.cause?.message ?? '')).toLowerCase()
   return (
-    msg.includes("context length") ||
-    msg.includes("context_length") ||
-    msg.includes("context window") ||
-    msg.includes("prompt is too long") ||
-    msg.includes("prompt too long") ||
-    msg.includes("maximum context") ||
-    msg.includes("too many tokens") ||
-    msg.includes("token count exceeds") ||
-    msg.includes("token limit")
-  );
+    msg.includes('context length') ||
+    msg.includes('context_length') ||
+    msg.includes('context window') ||
+    msg.includes('prompt is too long') ||
+    msg.includes('prompt too long') ||
+    msg.includes('maximum context') ||
+    msg.includes('too many tokens') ||
+    msg.includes('token count exceeds') ||
+    msg.includes('token limit')
+  )
 }
 
 /**
@@ -37,33 +37,33 @@ export function isContextLengthError(err: unknown): boolean {
  * For these the right move is to retry the same request, not to compact.
  */
 export function isTransientStreamError(err: unknown): boolean {
-  if (!err) return false;
+  if (!err) return false
   const e = err as {
-    statusCode?: number;
-    status?: number;
-    code?: string;
-    message?: string;
-    cause?: { message?: string; code?: string };
-  };
-  const status = e.statusCode ?? e.status;
-  if (status === 502 || status === 503 || status === 504) return true;
-  const code = e.code ?? e.cause?.code ?? "";
-  if (
-    code === "ECONNRESET" ||
-    code === "ETIMEDOUT" ||
-    code === "EPIPE" ||
-    code === "UND_ERR_SOCKET"
-  ) {
-    return true;
+    statusCode?: number
+    status?: number
+    code?: string
+    message?: string
+    cause?: { message?: string; code?: string }
   }
-  const msg = ((e.message ?? "") + " " + (e.cause?.message ?? "")).toLowerCase();
+  const status = e.statusCode ?? e.status
+  if (status === 502 || status === 503 || status === 504) return true
+  const code = e.code ?? e.cause?.code ?? ''
+  if (
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'EPIPE' ||
+    code === 'UND_ERR_SOCKET'
+  ) {
+    return true
+  }
+  const msg = ((e.message ?? '') + ' ' + (e.cause?.message ?? '')).toLowerCase()
   return (
-    msg.includes("terminated") ||
-    msg.includes("other side closed") ||
-    msg.includes("socket hang up") ||
-    msg.includes("connection reset") ||
-    msg.includes("network error") ||
-    msg.includes("fetch failed") ||
-    msg.includes("no output generated")
-  );
+    msg.includes('terminated') ||
+    msg.includes('other side closed') ||
+    msg.includes('socket hang up') ||
+    msg.includes('connection reset') ||
+    msg.includes('network error') ||
+    msg.includes('fetch failed') ||
+    msg.includes('no output generated')
+  )
 }
