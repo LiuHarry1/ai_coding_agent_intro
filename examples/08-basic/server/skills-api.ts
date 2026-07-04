@@ -26,8 +26,6 @@
  * module keeps its legacy behavior (trusted internal callers choose the cwd).
  */
 
-import * as fs from 'fs'
-import * as path from 'path'
 import type { IncomingMessage, ServerResponse } from 'http'
 import {
   loadSkillsFromDisk,
@@ -43,8 +41,9 @@ import { registerSubagents, BUILTIN_AGENTS } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools/index.js'
 import type { AgentDefinition, RunAgentFn } from '../core/types.js'
 import type { SkillDefinition } from '../skills/types.js'
-import { getDefaultWorkspace } from '../core/workspace.js'
-import { isAuthEnabled, type AuthedRequest } from './auth/identity.js'
+import { resolveRequestCwd } from './request-cwd.js'
+import { resolveSettings } from '../core/settings-manager.js'
+import { buildProvider } from '../core/llm/index.js'
 
 function sendJSON(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json' })
@@ -77,33 +76,11 @@ function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   })
 }
 
-/**
- * Resolve a caller-provided `workspace` path against the server's notion
- * of "where it's safe to chdir". For now we accept any absolute path
- * that exists. If you ever want to add allowlisting (e.g. force every
- * workspace under `/workspaces/`), this is the single place to do it.
- */
-function resolveWorkspace(workspace: unknown): string {
-  if (typeof workspace === 'string' && workspace.length > 0) {
-    const resolved = path.resolve(workspace)
-    if (fs.existsSync(resolved)) return resolved
-  }
-  return getDefaultWorkspace()
-}
-
-/**
- * Pick the cwd for a request. When the auth gate pinned a user workspace
- * (`req.userWorkspace`, set in SSO mode), that wins and the client-supplied
- * `workspace` is ignored — preventing cross-tenant access. Otherwise fall
- * back to the legacy client-chosen resolution.
- */
 function resolveRequestWorkspace(
   req: IncomingMessage,
   clientWorkspace: unknown,
 ): string {
-  const pinned = (req as AuthedRequest).userWorkspace
-  if (isAuthEnabled() && pinned) return pinned
-  return resolveWorkspace(clientWorkspace)
+  return resolveRequestCwd(req, clientWorkspace)
 }
 
 /** Public-friendly view of a SkillDefinition. */
@@ -264,6 +241,8 @@ async function handleSkillInvoke(args: {
 }): Promise<void> {
   const { req, res, skillName, body, runAgent, wantsStream } = args
   const cwd = resolveRequestWorkspace(req, body.workspace)
+  const resolvedSettings = resolveSettings(cwd)
+  const provider = buildProvider(resolvedSettings.config.provider)
 
   const { skills } = await loadSkillsFromDisk(cwd)
   const skill = skills.find(s => s.name === skillName)
@@ -315,6 +294,8 @@ async function handleSkillInvoke(args: {
     combined,
     cwd,
     runAgent,
+    provider,
+    config: resolvedSettings.config,
     wantsStream,
     sseHeaders: { 'X-Skill': skillName },
   })

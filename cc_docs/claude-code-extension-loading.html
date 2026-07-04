@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 扩展加载机制详解</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --accent2:#d97757;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.toc a.active{background:rgba(88,166,255,.15);color:var(--accent);font-weight:600}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:30px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:23px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:13px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(217,119,87,.07)}
+.callout.danger{border-color:var(--red);background:rgba(248,81,73,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.danger .tag{color:var(--red)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.tree{font-family:"JetBrains Mono",Consolas,monospace;font-size:13px;background:var(--panel);
+  border:1px solid var(--border);border-radius:10px;padding:16px 20px;line-height:1.7}
+.flow{font-family:"JetBrains Mono",Consolas,monospace;font-size:13px}
+.pill{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11.5px;font-weight:600;margin:0 2px}
+.pill.user{background:rgba(88,166,255,.14);color:var(--accent);border:1px solid rgba(88,166,255,.3)}
+.pill.project{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+.pill.plugin{background:rgba(210,153,34,.12);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+.pill.managed{background:rgba(188,140,255,.14);color:var(--purple);border:1px solid rgba(188,140,255,.3)}
+.tag-file{font-family:monospace;font-size:12px;color:var(--amber)}
+.footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:24px;border-top:1px solid var(--border)}
+@media(max-width:920px){.sidebar{display:none}.main{padding:24px}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar">
+  <h1>CC 扩展加载</h1>
+  <div class="sub">Agents · Skills · Plugins · MCP · Rules</div>
+  <ul class="toc" id="toc">
+    <li><a href="#s1">1. 概述</a></li>
+    <li><a href="#s2">2. 目录布局</a></li>
+    <li><a href="#s3">3. Settings 加载</a></li>
+    <li><a href="#s4">4. Agents 加载</a></li>
+    <li><a href="#s5">5. Skills &amp; Commands</a></li>
+    <li><a href="#s6">6. Plugins 加载</a></li>
+    <li><a href="#s7">7. MCP 加载</a></li>
+    <li><a href="#s8">8. Memory &amp; Rules</a></li>
+    <li><a href="#s9">9. Boot vs Per-Turn</a></li>
+    <li><a href="#s10">10. 聊天回合流程</a></li>
+    <li><a href="#s11">11. 优先级速查表</a></li>
+    <li><a href="#s12">12. 源码文件索引</a></li>
+    <li><a href="#s13">13. 与本仓库对比</a></li>
+  </ul>
+</nav>
+<div class="main" id="main">
+
+<div class="hero">
+  <h1>Claude Code 扩展加载机制详解</h1>
+  <p>基于源码目录 <code>/Users/harry/cursor_workspace/public_repo/claude-code-rev</code></p>
+  <p>覆盖 Agents、Skills、Plugins、Commands、MCP、Settings、Memory/Rules 的发现、合并与注入时机</p>
+  <span class="badge">源码逆向</span>
+  <span class="badge">2026-07-04</span>
+</div>
+
+<section id="s1">
+<h2><span class="num">1</span> 概述</h2>
+<p>Claude Code（以下简称 <b>CC</b>）的扩展体系不是单一配置文件，而是<b>多层 scope + 多种 loader + memoized cache</b> 的组合。核心设计原则：</p>
+<ul>
+  <li><b>Scope 分层</b>：Managed（企业策略）→ User（<code>~/.claude</code>）→ Project（<code>.claude/</code>）→ Local（gitignored）→ Plugin → Flag/CLI</li>
+  <li><b>共享发现层</b>：<code>markdownConfigLoader.ts</code> 统一扫描 <code>.claude/{agents,skills,commands,...}</code></li>
+  <li><b>专用 loader</b>：Plugins 走 <code>pluginLoader.ts</code> + 各 component loader；MCP 走 <code>services/mcp/config.ts</code></li>
+  <li><b>缓存 + 热重载</b>：Boot 时 memoize 加载；Skills 文件 watcher、<code>/reload-plugins</code> 可刷新</li>
+  <li><b>两种冲突策略</b>：Commands/Skills 用<b>先注册先匹配</b>；Agents 用<b>后层覆盖前层</b></li>
+</ul>
+<div class="callout note">
+  <p class="tag">注意</p>
+  <p>CC <b>没有</b>名为 <code>component-loader</code> 的模块。Plugin 组件刷新由 <code>refreshActivePlugins()</code> 统一 orchestrate。也没有原生 <code>AGENTS.md</code> loader——项目记忆走 <code>CLAUDE.md</code> 和 <code>.claude/rules/</code>。</p>
+</div>
+</section>
+
+<section id="s2">
+<h2><span class="num">2</span> 目录布局</h2>
+
+<h3>2.1 配置根目录</h3>
+<p>默认 home：<code>~/.claude/</code>（<code>getClaudeConfigHomeDir()</code>，可用 <code>CLAUDE_CONFIG_DIR</code> 覆盖）</p>
+
+<h3>2.2 User scope — <code>~/.claude/</code></h3>
+<div class="tree">
+~/.claude/
+├── settings.json              # 用户级 settings（可被 project/local 覆盖）
+├── skills/&lt;name&gt;/SKILL.md    # 用户 skills
+├── commands/                  # 旧版 slash commands（deprecated 布局）
+├── agents/*.md                # 自定义 subagent
+├── CLAUDE.md                  # 全局用户 memory
+├── rules/*.md                 # 用户 rules（支持 paths 条件）
+├── plugins/                   # 已安装 plugin 缓存
+└── .claude.json               # 全局 app 状态（OAuth、projects map、user MCP）
+</div>
+
+<h3>2.3 Project scope — 从 cwd 向上 walk 到 git root</h3>
+<div class="tree">
+&lt;repo&gt;/
+├── CLAUDE.md                  # 项目 memory（checked-in）
+├── CLAUDE.local.md            # 本地 memory（gitignored）
+├── .mcp.json                  # 项目 MCP（walk root → cwd，需 approved）
+└── .claude/
+    ├── settings.json          # 共享项目 settings
+    ├── settings.local.json    # 本地 settings（gitignored）
+    ├── skills/&lt;name&gt;/SKILL.md
+    ├── commands/              # deprecated
+    ├── agents/*.md
+    └── rules/*.md             # 条件 + 无条件 rules
+</div>
+
+<h3>2.4 Managed / Enterprise scope</h3>
+<table>
+  <tr><th>平台</th><th>路径</th></tr>
+  <tr><td>Linux</td><td><code>/etc/claude-code/</code></td></tr>
+  <tr><td>macOS</td><td><code>/Library/Application Support/ClaudeCode</code></td></tr>
+  <tr><td>Windows</td><td><code>C:\Program Files\ClaudeCode</code></td></tr>
+</table>
+<p>包含 <code>managed-settings.json</code>、<code>managed-settings.d/*.json</code>、<code>.claude/{agents,skills,...}</code>、<code>CLAUDE.md</code>、<code>managed-mcp.json</code>（存在时<b>独占</b>所有 MCP）。</p>
+
+<h3>2.5 Plugin 目录结构</h3>
+<div class="tree">
+my-plugin/
+├── .claude-plugin/plugin.json   # manifest（Zod 校验）
+├── commands/                    # slash commands 或 skill dirs
+├── skills/&lt;name&gt;/SKILL.md
+├── agents/*.md
+├── hooks/hooks.json
+├── .mcp.json
+└── output-styles/               # 可选
+</div>
+<p>安装缓存：<code>~/.claude/plugins/</code>（或 <code>CLAUDE_CODE_PLUGIN_CACHE_DIR</code>）。Session 临时 plugin：<code>--plugin-dir</code> CLI 注入。</p>
+</section>
+
+<section id="s3">
+<h2><span class="num">3</span> Settings 加载</h2>
+<p>CC 使用 <b>settings.json 级联</b>，而非单一 <code>config.json</code>。全局 app 状态在 <code>~/.claude/.claude.json</code>（legacy fallback：<code>.config.json</code>）。</p>
+
+<h3>3.1 Settings 合并顺序（低 → 高）</h3>
+<table>
+  <tr><th>优先级</th><th>Source</th><th>文件/来源</th></tr>
+  <tr><td>1（最低）</td><td>Plugin settings</td><td>Plugin manifest 中 allowlisted keys</td></tr>
+  <tr><td>2</td><td><span class="pill user">userSettings</span></td><td><code>~/.claude/settings.json</code></td></tr>
+  <tr><td>3</td><td><span class="pill project">projectSettings</span></td><td><code>.claude/settings.json</code></td></tr>
+  <tr><td>4</td><td><span class="pill project">localSettings</span></td><td><code>.claude/settings.local.json</code></td></tr>
+  <tr><td>5</td><td>flagSettings</td><td><code>--settings</code> / SDK inline</td></tr>
+  <tr><td>6（最高）</td><td><span class="pill managed">policySettings</span></td><td>managed-settings（first source wins，不 merge）</td></tr>
+</table>
+<p>定义于 <span class="tag-file">src/utils/settings/constants.ts</span> 的 <code>SETTING_SOURCES</code>。入口：<code>getInitialSettings()</code> / <code>loadSettingsFromDisk()</code>。</p>
+
+<h3>3.2 全局 config（.claude.json）</h3>
+<p><code>getGlobalConfig()</code> / <code>getCurrentProjectConfig()</code> 在 <span class="tag-file">src/utils/config.ts</span>：存储 OAuth token、per-project overlay（含 local MCP）、theme、migrations 等。与 settings 级联是<b>两套系统</b>。</p>
+</section>
+
+<section id="s4">
+<h2><span class="num">4</span> Agents 加载</h2>
+
+<h3>4.1 入口函数</h3>
+<pre><code>// src/tools/AgentTool/loadAgentsDir.ts
+export const getAgentDefinitionsWithOverrides = memoize(async (cwd) => {
+  const markdownFiles = await loadMarkdownFilesForSubdir('agents', cwd)
+  const customAgents = markdownFiles.map(parseAgentFromMarkdown)
+  const pluginAgents = await loadPluginAgents()
+  const allAgentsList = [...builtInAgents, ...pluginAgents, ...customAgents]
+  const activeAgents = getActiveAgentsFromList(allAgentsList)
+  return { activeAgents, allAgents, failedFiles }
+})</code></pre>
+
+<h3>4.2 文件发现（loadMarkdownFilesForSubdir）</h3>
+<p>扫描顺序（全部加载，再按 source 去重）：</p>
+<ol>
+  <li><span class="pill managed">policySettings</span> — <code>/etc/claude-code/.claude/agents/</code></li>
+  <li><span class="pill user">userSettings</span> — <code>~/.claude/agents/</code></li>
+  <li><span class="pill project">projectSettings</span> — <code>&lt;ancestor&gt;/.claude/agents/</code>（cwd → git root，deepest first）</li>
+</ol>
+<p>Walk 边界由 <code>getProjectDirsUpToHome()</code> 决定：默认停在最近 git root；子模块场景有特殊 widen 逻辑。</p>
+
+<h3>4.3 名称冲突 — 后层覆盖前层</h3>
+<pre><code>// getActiveAgentsFromList — 按 source tier 顺序写入 Map
+const agentGroups = [
+  builtInAgents,    // 最低
+  pluginAgents,
+  userAgents,
+  projectAgents,
+  flagAgents,
+  managedAgents,    // 最高
+]
+for (const agents of agentGroups) {
+  for (const agent of agents) agentMap.set(agent.agentType, agent)
+}</code></pre>
+<p>Plugin agent 命名空间：<code>{pluginName}:{namespace}:{agentName}</code>。Plugin agent 的 frontmatter 中 <code>permissionMode</code>、<code>hooks</code>、<code>mcpServers</code> 被忽略（安全边界）。</p>
+
+<h3>4.4 Agent frontmatter 关键字段</h3>
+<table>
+  <tr><th>字段</th><th>用途</th></tr>
+  <tr><td><code>name</code></td><td>agentType（必填）</td></tr>
+  <tr><td><code>description</code></td><td>Task tool 描述（必填）</td></tr>
+  <tr><td><code>tools</code> / <code>disallowedTools</code></td><td>工具白/黑名单</td></tr>
+  <tr><td><code>model</code></td><td>覆盖默认模型</td></tr>
+  <tr><td><code>color</code></td><td>UI 颜色</td></tr>
+  <tr><td><code>memory</code></td><td>Agent 专属 memory scope</td></tr>
+</table>
+</section>
+
+<section id="s5">
+<h2><span class="num">5</span> Skills &amp; Commands 加载</h2>
+
+<h3>5.1 统一命令列表 — getCommands()</h3>
+<pre><code>// src/commands.ts — loadAllCommands 合并顺序（数组顺序 = 匹配优先级）
+return [
+  ...bundledSkills,        // 内置 bundle
+  ...builtinPluginSkills,  // 内置 plugin skills
+  ...skillDirCommands,     // filesystem: managed → user → project
+  ...workflowCommands,     // feature-flagged
+  ...pluginCommands,       // plugin slash commands
+  ...pluginSkills,         // plugin skills
+  ...COMMANDS(),           // 内置 /compact /help 等
+]</code></pre>
+<p><code>findCommand(name, commands)</code> 用 <code>Array.find</code> —— <b>先出现在数组中的同名 command 获胜</b>。因此 bundled/builtin 优先于 filesystem，filesystem 优先于 plugin，plugin 优先于内置 slash commands。</p>
+
+<h3>5.2 Filesystem Skills 扫描</h3>
+<p><span class="tag-file">src/skills/loadSkillsDir.ts</span>：</p>
+<ul>
+  <li>目录：<code>skills/&lt;skill-name&gt;/SKILL.md</code>（新布局）+ legacy <code>commands/*.md</code></li>
+  <li>Scope 路径：<code>getSkillsPath(source, dir)</code> 映射 managed/user/project</li>
+  <li><b>Lazy body load</b>：列表阶段只读 frontmatter（name、description、whenToUse）；模型调用时才加载完整 SKILL.md body</li>
+  <li><b>Conditional skills</b>：frontmatter <code>paths:</code> glob — 文件被 touch 时才激活</li>
+  <li><b>Dynamic skills</b>：文件操作过程中动态发现，通过 <code>getDynamicSkills()</code> 追加</li>
+</ul>
+
+<h3>5.3 Skill frontmatter 关键字段</h3>
+<table>
+  <tr><th>字段</th><th>用途</th></tr>
+  <tr><td><code>name</code></td><td>skill / command 名称</td></tr>
+  <tr><td><code>description</code></td><td>模型可见描述</td></tr>
+  <tr><td><code>when-to-use</code> / <code>whenToUse</code></td><td>使用场景提示</td></tr>
+  <tr><td><code>paths</code></td><td>条件激活 glob</td></tr>
+  <tr><td><code>disable-model-invocation</code></td><td>禁止模型自动调用</td></tr>
+  <tr><td><code>context</code></td><td><code>inline</code>（默认）或 <code>fork</code>（spawn subagent）</td></tr>
+  <tr><td><code>agent</code></td><td>fork 模式使用的 subagent type</td></tr>
+</table>
+
+<h3>5.4 缓存与热重载</h3>
+<pre><code>// clearCommandsCache() 级联清除：
+clearCommandMemoizationCaches()
+clearPluginCommandCache()
+clearPluginSkillsCache()
+clearSkillCaches()</code></pre>
+<p>Skills 文件 watcher（<code>useSkillsChange</code>）触发 <code>clearCommandsCache()</code>，下一条消息生效。</p>
+</section>
+
+<section id="s6">
+<h2><span class="num">6</span> Plugins 加载</h2>
+
+<h3>6.1 两种加载模式</h3>
+<table>
+  <tr><th>函数</th><th>时机</th><th>行为</th></tr>
+  <tr><td><code>loadAllPluginsCacheOnly()</code></td><td>Boot 快速路径</td><td>只读本地 cache，不联网</td></tr>
+  <tr><td><code>loadAllPlugins()</code></td><td><code>/reload-plugins</code>、marketplace install</td><td>完整 refresh，可联网 fetch</td></tr>
+</table>
+
+<h3>6.2 Plugin 来源合并（assemblePluginLoadResult）</h3>
+<ol>
+  <li>Marketplace 已安装 plugins</li>
+  <li>Session <code>--plugin-dir</code> plugins（覆盖同名 installed，除非 managed-locked）</li>
+  <li>Built-in plugins</li>
+</ol>
+<p>Dependency 解析失败会将 plugin demote 为 disabled（session-local，不写 settings）。</p>
+
+<h3>6.3 Manifest 与贡献类型</h3>
+<p>Manifest：<code>.claude-plugin/plugin.json</code>，Schema 在 <span class="tag-file">src/utils/plugins/schemas.ts</span>（<code>PluginManifestSchema</code>）。</p>
+<table>
+  <tr><th>贡献类型</th><th>默认路径</th><th>Loader</th></tr>
+  <tr><td>Commands</td><td><code>commands/</code></td><td><code>getPluginCommands()</code></td></tr>
+  <tr><td>Skills</td><td><code>skills/</code></td><td><code>getPluginSkills()</code></td></tr>
+  <tr><td>Agents</td><td><code>agents/</code></td><td><code>loadPluginAgents()</code></td></tr>
+  <tr><td>Hooks</td><td><code>hooks/hooks.json</code></td><td><code>loadPluginHooks()</code></td></tr>
+  <tr><td>MCP</td><td><code>.mcp.json</code></td><td><code>loadPluginMcpServers()</code></td></tr>
+  <tr><td>LSP</td><td>conventional dir</td><td><code>loadPluginLspServers()</code></td></tr>
+  <tr><td>Settings</td><td>manifest inline</td><td><code>cachePluginSettings()</code>（allowlisted keys）</td></tr>
+</table>
+
+<h3>6.4 三层 Refresh 模型</h3>
+<div class="callout note">
+  <p class="tag">refresh.ts 注释</p>
+  <p>Layer 1: intent (settings) → Layer 2: materialization (~/.claude/plugins/) → Layer 3: active components (AppState)</p>
+</div>
+<p><code>refreshActivePlugins()</code> 清除所有 plugin cache，重新加载 commands/agents/hooks/MCP/LSP，更新 AppState，递增 <code>mcp.pluginReconnectKey</code> 触发 MCP 重连。</p>
+</section>
+
+<section id="s7">
+<h2><span class="num">7</span> MCP 加载</h2>
+
+<h3>7.1 入口 — getClaudeCodeMcpConfigs()</h3>
+<p><span class="tag-file">src/services/mcp/config.ts</span></p>
+
+<h3>7.2 Enterprise 独占</h3>
+<p>若 <code>managed-mcp.json</code> 存在 → <b>只使用 enterprise MCP</b>，block 所有 user/project/plugin MCP。</p>
+
+<h3>7.3 普通模式合并顺序（低 → 高）</h3>
+<pre><code>// Object.assign — 后者覆盖前者
+const configs = Object.assign(
+  {},
+  dedupedPluginServers,   // plugin: 命名空间 plugin:x:y
+  userServers,            // ~/.claude/.claude.json mcpServers
+  approvedProjectServers, // .mcp.json（仅 approved）
+  localServers,           // per-project config overlay
+)</code></pre>
+<p>Plugin MCP 与 manual MCP 做 content-based dedup（相同底层 process 会被 suppress 并记录 <code>mcp-server-suppressed-duplicate</code> 错误）。</p>
+
+<h3>7.4 MCP 配置来源</h3>
+<table>
+  <tr><th>Scope</th><th>来源</th></tr>
+  <tr><td>plugin</td><td>Plugin <code>.mcp.json</code>，key 前缀 <code>plugin:{name}:</code></td></tr>
+  <tr><td>user</td><td><code>getGlobalConfig().mcpServers</code></td></tr>
+  <tr><td>project</td><td><code>.mcp.json</code> walk root→cwd，需用户 approve</td></tr>
+  <tr><td>local</td><td><code>getCurrentProjectConfig().mcpServers</code></td></tr>
+  <tr><td>claude.ai</td><td><code>getAllMcpConfigs()</code> 额外 merge connectors（最低优先级）</td></tr>
+</table>
+</section>
+
+<section id="s8">
+<h2><span class="num">8</span> Memory &amp; Rules（CLAUDE.md）</h2>
+
+<h3>8.1 加载顺序（低 attention → 高 attention）</h3>
+<p><span class="tag-file">src/utils/claudemd.ts</span> 文件头注释：</p>
+<ol>
+  <li>Managed <code>CLAUDE.md</code> + managed <code>.claude/rules/</code></li>
+  <li>User <code>~/.claude/CLAUDE.md</code> + <code>~/.claude/rules/</code></li>
+  <li>Project：cwd → root walk，每目录检查 <code>CLAUDE.md</code>、<code>.claude/CLAUDE.md</code>、<code>.claude/rules/*.md</code></li>
+  <li>Local <code>CLAUDE.local.md</code></li>
+</ol>
+<p>后加载的文件在 prompt 中位置更靠后 → 模型 attention 更高。</p>
+
+<h3>8.2 Rules 条件激活</h3>
+<p><code>.claude/rules/*.md</code> 支持 frontmatter <code>paths:</code> glob。与 conditional skills 类似，文件被 read/edit/write 时通过 <span class="tag-file">src/utils/attachments.ts</span> 懒注入 <code>nested_memory</code> attachment。</p>
+
+<h3>8.3 @include 指令</h3>
+<p>Memory 文件支持 <code>@path</code> 语法引入其他文件（leaf text node only，防循环引用）。</p>
+
+<h3>8.4 注入时机</h3>
+<ul>
+  <li><b>Session boot</b>：<code>getUserContext()</code> memoized prefetch</li>
+  <li><b>Per file touch</b>：<code>getAttachmentMessages()</code> 遍历 CWD→target 路径注入 nested rules</li>
+  <li><b>Compact 后</b>：可能 clear <code>getUserContext</code> cache，SessionStart hooks 重建</li>
+</ul>
+</section>
+
+<section id="s9">
+<h2><span class="num">9</span> Boot-Time vs Per-Turn 加载</h2>
+
+<h3>9.1 Boot-Time（memoized，session-stable）</h3>
+<table>
+  <tr><th>资源</th><th>函数</th><th>Cache 清除</th></tr>
+  <tr><td>Settings</td><td><code>getInitialSettings()</code></td><td>文件变更 / plugin cache clear</td></tr>
+  <tr><td>Plugins</td><td><code>loadAllPluginsCacheOnly()</code></td><td><code>refreshActivePlugins()</code></td></tr>
+  <tr><td>Commands/Skills</td><td><code>getCommands(cwd)</code></td><td><code>clearCommandsCache()</code></td></tr>
+  <tr><td>Agents</td><td><code>getAgentDefinitionsWithOverrides(cwd)</code></td><td><code>clearAgentDefinitionsCache()</code></td></tr>
+  <tr><td>MCP configs</td><td><code>getClaudeCodeMcpConfigs()</code></td><td>plugin reconnect key</td></tr>
+  <tr><td>CLAUDE.md</td><td><code>getUserContext()</code></td><td>compact / injection change</td></tr>
+</table>
+
+<h3>9.2 Per-Turn / Lazy</h3>
+<table>
+  <tr><th>行为</th><th>触发</th></tr>
+  <tr><td>Slash command dispatch</td><td><code>processUserInput</code> → <code>findCommand</code></td></tr>
+  <tr><td>Nested CLAUDE.md / conditional rules</td><td>文件 read/edit/write</td></tr>
+  <tr><td>Conditional skills 激活</td><td>文件 touch 匹配 <code>paths</code></td></tr>
+  <tr><td>Dynamic skills</td><td>文件操作中发现</td></tr>
+  <tr><td>Skill body 完整加载</td><td>模型调用 Skill tool 时</td></tr>
+  <tr><td>Agent spawn</td><td>从 cached <code>agentDefinitions</code> resolve</td></tr>
+  <tr><td>Availability 过滤</td><td>每次 <code>getCommands()</code> 重新评估（post-login 立即生效）</td></tr>
+  <tr><td>UserPromptSubmit hooks</td><td>每条用户消息</td></tr>
+</table>
+</section>
+
+<section id="s10">
+<h2><span class="num">10</span> 聊天回合流程</h2>
+<pre class="flow"><code>┌─────────────────────────────────────────────────────────────┐
+│ BOOT (main.tsx)                                              │
+│  initBuiltinPlugins() + initBundledSkills()                  │
+│  setup() ∥ getCommands(cwd) ∥ getAgentDefinitionsWithOverrides│
+│  loadAllPluginsCacheOnly()  (background)                     │
+│  getClaudeCodeMcpConfigs() → MCP connections                 │
+│  getUserContext() prefetch (CLAUDE.md, memoized)             │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ USER INPUT — processUserInput()                              │
+│  ├─ UserPromptSubmit hooks                                   │
+│  ├─ Slash? → findCommand(commands) → local JSX or prompt      │
+│  ├─ getAttachmentMessages() — @files, IDE, agent mentions  │
+│  └─ shouldQuery? → enter model loop                          │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ BUILD API CONTEXT (each model turn)                          │
+│  systemPrompt = getSystemPrompt(tools, agents, MCP...)       │
+│  userContext  = getUserContext()  [cached CLAUDE.md]         │
+│  systemContext = getSystemContext() [cached git snapshot]    │
+│  + attachments: nested rules, activated skills, plan files   │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ MODEL LOOP                                                   │
+│  Tool calls → more attachments (memory, skills)              │
+│  AgentTool → spawn from cached agentDefinitions              │
+│  SkillTool → load full SKILL.md on demand                    │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ SESSION EVENTS (not every turn)                              │
+│  /reload-plugins → refreshActivePlugins()                    │
+│  Skill file change → clearCommandsCache()                    │
+│  Compact → clear getUserContext cache                        │
+└─────────────────────────────────────────────────────────────┘</code></pre>
+</section>
+
+<section id="s11">
+<h2><span class="num">11</span> 优先级速查表</h2>
+<table>
+  <tr><th>扩展类型</th><th>冲突策略</th><th>优先级（高者胜 / 先匹配）</th></tr>
+  <tr><td>Settings</td><td>Deep merge + policy first-wins</td><td>policy &gt; flag &gt; local &gt; project &gt; user &gt; plugin</td></tr>
+  <tr><td>Agents</td><td>Map overwrite（后写覆盖）</td><td>managed &gt; flag &gt; project &gt; user &gt; plugin &gt; built-in</td></tr>
+  <tr><td>Commands/Skills</td><td>Array.find（先注册先匹配）</td><td>bundled &gt; fs(managed→user→project) &gt; plugin &gt; built-in /commands</td></tr>
+  <tr><td>MCP</td><td>Object.assign（后覆盖前）</td><td>local &gt; project &gt; user &gt; plugin；enterprise 独占</td></tr>
+  <tr><td>CLAUDE.md/Rules</td><td>Concat（后段 attention 更高）</td><td>local &gt; nearer dir &gt; farther dir &gt; user &gt; managed</td></tr>
+  <tr><td>Plugins (同名)</td><td>Project/session 覆盖 installed</td><td>session --plugin-dir &gt; installed（除非 managed-locked）</td></tr>
+</table>
+<div class="callout warn">
+  <p class="tag">关键差异</p>
+  <p>Agents 和 Commands 的冲突策略<b>相反</b>：Agents 是"后者覆盖前者"，Commands 是"前者屏蔽后者"。设计意图：Agent 允许项目定制覆盖内置；Command 让 bundled/内置安全命令不被 plugin 同名劫持。</p>
+</div>
+</section>
+
+<section id="s12">
+<h2><span class="num">12</span> 源码文件索引</h2>
+<pre><code>src/utils/markdownConfigLoader.ts     # 共享 filesystem 发现层
+  CLAUDE_CONFIG_DIRECTORIES, getProjectDirsUpToHome, loadMarkdownFilesForSubdir
+
+src/tools/AgentTool/loadAgentsDir.ts  # Agent 加载 + 冲突合并
+  getAgentDefinitionsWithOverrides, getActiveAgentsFromList
+
+src/skills/loadSkillsDir.ts           # Filesystem skills/commands
+  getSkillDirCommands, getSkillsPath, conditional activation
+
+src/commands.ts                       # 命令总线
+  loadAllCommands, getCommands, findCommand, clearCommandsCache
+
+src/utils/plugins/pluginLoader.ts     # Plugin 发现 + 安装
+  loadAllPlugins, loadAllPluginsCacheOnly, assemblePluginLoadResult
+
+src/utils/plugins/loadPluginCommands.ts
+  getPluginCommands, getPluginSkills
+
+src/utils/plugins/loadPluginAgents.ts
+  loadPluginAgents, loadAgentsFromDirectory
+
+src/utils/plugins/mcpPluginIntegration.ts
+  loadPluginMcpServers, getPluginMcpServers
+
+src/utils/plugins/loadPluginHooks.ts
+  loadPluginHooks
+
+src/utils/plugins/refresh.ts          # Layer-3 热重载
+  refreshActivePlugins
+
+src/utils/plugins/schemas.ts          # PluginManifestSchema
+
+src/services/mcp/config.ts          # MCP 合并
+  getClaudeCodeMcpConfigs, getMcpConfigsByScope
+
+src/utils/claudemd.ts                 # CLAUDE.md + rules
+  getMemoryFiles, getClaudeMds
+
+src/utils/settings/settings.ts        # Settings 级联
+  getInitialSettings, loadSettingsFromDisk
+
+src/utils/settings/constants.ts       # SETTING_SOURCES
+
+src/utils/config.ts                   # .claude.json 全局状态
+
+src/context.ts                        # getUserContext, getSystemContext
+
+src/utils/processUserInput/processUserInput.ts  # 每轮输入处理
+
+src/utils/attachments.ts              # nested memory / conditional rules 注入
+
+src/main.tsx                          # Boot 并行加载入口</code></pre>
+</section>
+
+<section id="s13">
+<h2><span class="num">13</span> 与本仓库（ai_coding_agent_test）对比</h2>
+<p>本仓库 <code>examples/08-basic</code> 刻意 mirror CC 架构，但简化为 flat <code>.ai-agent/</code> 模型：</p>
+<table>
+  <tr><th>维度</th><th>Claude Code</th><th>本仓库 08-basic</th></tr>
+  <tr><td>配置目录</td><td><code>~/.claude</code> + <code>.claude/</code></td><td><code>~/.ai-agent</code> + <code>&lt;project&gt;/.ai-agent/</code></td></tr>
+  <tr><td>config.json</td><td>无单一 config.json；settings.json 级联 + .claude.json</td><td><b>仅</b> <code>~/.ai-agent/config.json</code>（项目级不加载）</td></tr>
+  <tr><td>Memory/Rules</td><td>CLAUDE.md + .claude/rules/</td><td>AGENTS.md walk + .cursor/rules（部分示例）</td></tr>
+  <tr><td>加载时机</td><td>Boot memoize + 文件 watcher 热重载</td><td><b>Per chat turn</b> 重新 scan（agents/skills/plugins）</td></tr>
+  <tr><td>Plugin</td><td>Marketplace + cache + manifest</td><td>Declarative <code>.ai-agent/plugins/*</code> + code plugins</td></tr>
+  <tr><td>Agent 冲突</td><td>后层覆盖（managed 最高）</td><td>project 覆盖 user 覆盖 plugin</td></tr>
+  <tr><td>Skill 冲突</td><td>先注册先匹配</td><td>deepest project dir 覆盖 shallow</td></tr>
+  <tr><td>MCP merge</td><td>plugin &lt; user &lt; project &lt; local</td><td>config.json mcpServers + plugin 贡献</td></tr>
+  <tr><td>Managed/Enterprise</td><td>完整 policy 层</td><td>未实现</td></tr>
+</table>
+<p>对应本仓库实现入口：<span class="tag-file">examples/08-basic/utils/processUserInput/prepare_chat_turn.ts</span>（每轮 orchestrate）、<span class="tag-file">examples/08-basic/core/plugins/loader.ts</span>（mirror CC 的 loadAllPlugins split）。</p>
+</section>
+
+<div class="footer">
+  Claude Code 扩展加载机制详解 · 基于源码逆向 claude-code-rev · 2026-07-04<br>
+  核心逻辑已对照 <code>src/utils/markdownConfigLoader.ts</code>、<code>src/commands.ts</code>、<code>src/tools/AgentTool/loadAgentsDir.ts</code>、<code>src/services/mcp/config.ts</code> 验证
+</div>
+
+</div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.toc a')];
+const obs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){
+  links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id));}});},
+  {rootMargin:'-10% 0px -80% 0px'});
+window.addEventListener('load',()=>document.querySelectorAll('section').forEach(s=>obs.observe(s)));
+</script>
+</body>
+</html>

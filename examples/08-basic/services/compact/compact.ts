@@ -6,8 +6,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { generateText } from 'ai'
-import { defaultManager } from '../../core/provider-manager.js'
-import type { Message, TodoItem } from '../../core/types.js'
+import type { IProvider, Message, TodoItem } from '../../core/types.js'
 import { READ_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { estimateConversationTokens, clearTokenUsages } from './tokens.js'
 
@@ -159,6 +158,8 @@ export interface CompactContext {
   fileRestore: FileRestoreConfig
   /** Optional steering text from a manual `/compact <instructions>` call. */
   instructions?: string
+  /** Request-scoped provider; falls back to default provider when absent. */
+  provider?: IProvider
 }
 
 // CC parity: MAX_PTL_RETRIES = 3. If the summarizer call itself overflows,
@@ -240,7 +241,10 @@ export async function compactConversation(
   for (let attempt = 0; attempt <= MAX_SUMMARIZE_RETRIES; attempt++) {
     const formatted = pending.map(formatForSummary).join('\n\n---\n\n')
     try {
-      const provider = defaultManager.get()
+      if (!ctx.provider) {
+        throw new Error('compactConversation requires a request-scoped provider')
+      }
+      const provider = ctx.provider
       const result = await generateText({
         model: provider.chatModel(model),
         system: buildSummarySystem(ctx.instructions),

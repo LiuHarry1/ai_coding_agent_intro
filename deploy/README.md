@@ -22,8 +22,8 @@
 # 1. base 镜像(含 agent 代码+依赖,慢,代码变了才重建)
 docker build -f deploy/Dockerfile.agent-base -t ai-agent-base:latest .
 
-# 2. tenant 镜像(FROM base + 你的 .ai-agent/ 配置,秒级)
-docker build -f deploy/Dockerfile.agent.example --build-arg BASE_TAG=latest -t ai-agent-tenant:latest .
+# 2. tenant 镜像(FROM base + 你的 .ai-agent/ settings,秒级)
+docker build -f deploy/Dockerfile.agent-tenant --build-arg BASE_TAG=latest -t ai-agent-tenant:latest .
 
 # 3. web 镜像(vite 构建 → nginx 静态站)
 docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .

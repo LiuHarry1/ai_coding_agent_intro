@@ -109,7 +109,8 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
     isSubagent: true,
     isConcurrencySafe: () => false,
     create(cwd: string, context: ToolContext) {
-      const { runAgent, eventBus, registry, toolEnablement } = context
+      const { runAgent, eventBus, registry, toolEnablement, provider, compaction } =
+        context
 
       return tool({
         description,
@@ -179,11 +180,17 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             label: def.label || subagent_type,
           })
 
+          if (!provider) {
+            return 'Error: task tool requires provider in ToolContext'
+          }
+
           const subContext: ToolContext = {
             eventBus: subBus,
             registry,
             runAgent,
             toolEnablement,
+            provider,
+            compaction,
             sessionId: context.sessionId,
           }
 
@@ -210,6 +217,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             messages: [],
             maxSteps: def.maxSteps ?? 20,
             model: def.model,
+            provider,
+            cwd,
+            compaction,
             concurrencyPolicy: registry
               ? buildConcurrencyPolicy(registry, Object.keys(subTools))
               : undefined,

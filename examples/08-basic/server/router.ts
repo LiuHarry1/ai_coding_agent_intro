@@ -16,7 +16,6 @@ import {
   transitionPermissionMode,
 } from '../core/permission-mode.js'
 import { getPlanFilePath } from '../utils/plans.js'
-import { configManager } from '../core/config-manager.js'
 import { readBody, sendJSON, setCORS } from './http.js'
 import {
   authenticateRequest,
@@ -26,9 +25,21 @@ import {
   type AuthedRequest,
 } from './auth/identity.js'
 import { serveStaticFile } from './static.js'
-import { initMcpLifecycle, mcpManager } from './mcp-lifecycle.js'
+import {
+  getMCPManagerForServers,
+  initMcpLifecycle,
+  invalidateMCPManagersForCwd,
+} from './mcp-lifecycle.js'
 import { initCodePlugins } from '../core/plugins/index.js'
 import { handleChat } from './routes/chat.js'
+import {
+  getSafeSettings,
+  parseWritableScope,
+  patchSettings,
+  resolveEffectiveSettings,
+  setMCPServer,
+} from '../core/settings-manager.js'
+import { resolveRequestCwd, resolveSettingsRequestCwd } from './request-cwd.js'
 import {
   createSession,
   getSession,
@@ -38,11 +49,7 @@ import {
   canAccessSession,
 } from './session.js'
 import { sessionToUIMessages } from './session-ui.js'
-import type {
-  RouterOptions,
-  MCPServerConfig,
-  LlmProfile,
-} from '../core/types.js'
+import type { RouterOptions, MCPServerConfig, LlmProfile } from '../core/types.js'
 
 registerBuiltinSubagents(defaultRegistry)
 initCodePlugins(defaultRegistry).catch(err => {
@@ -50,9 +57,16 @@ initCodePlugins(defaultRegistry).catch(err => {
 })
 initMcpLifecycle()
 
+async function getMCPStatusForCwd(
+  cwd: string,
+  mcpServers: Record<string, import('../core/types.js').MCPServerConfig>,
+) {
+  const manager = await getMCPManagerForServers(cwd, mcpServers)
+  return manager.getStatus()
+}
+
 export function createRouter({
   runAgent,
-  systemPrompt,
   staticDir,
 }: RouterOptions) {
   const workspaceRouter = createWorkspaceRouter({ root: getDefaultWorkspace() })
@@ -182,21 +196,41 @@ export function createRouter({
       return
     }
 
-    if (method === 'GET' && url === '/settings') {
+    if (method === 'GET' && url?.startsWith('/settings')) {
+      const cwd = resolveSettingsRequestCwd(authed, url)
+      const effective = await resolveEffectiveSettings(cwd)
       sendJSON(res, 200, {
-        ...configManager.getSafe(),
-        mcpStatus: mcpManager.getStatus(),
-        configPath: configManager.configPath,
+        ...getSafeSettings(effective),
+        cwd,
+        sources: effective.sources,
+        userDir: effective.userDir,
+        projectDir: effective.projectDir,
+        settingsPath: effective.projectPath,
+        mcpServers: effective.config.mcpServers,
+        effectiveMcpServers: effective.effectiveMcpServers,
+        mcpStatus: await getMCPStatusForCwd(cwd, effective.effectiveMcpServers),
       })
       return
     }
     if (method === 'PATCH' && url === '/settings/provider') {
       try {
         const body = await readBody(req)
-        configManager.patch('provider', body as Partial<LlmProfile>)
-        sendJSON(res, 200, { provider: configManager.getSafe().provider })
-      } catch {
-        sendJSON(res, 400, { error: 'Invalid JSON' })
+        const cwd = resolveSettingsRequestCwd(authed, url)
+        const scope = parseWritableScope(body.scope, {
+          ssoMode: isAuthEnabled() && !!authed.userWorkspace,
+        })
+        const providerPatch = { ...(body as Record<string, unknown>) }
+        delete providerPatch.scope
+        const resolved = patchSettings(cwd, scope, {
+          provider: providerPatch as Partial<LlmProfile> as LlmProfile,
+        })
+        sendJSON(res, 200, {
+          provider: getSafeSettings(resolved).provider,
+          scope,
+          sources: resolved.sources,
+        })
+      } catch (e) {
+        sendJSON(res, 400, { error: (e as Error).message })
       }
       return
     }
@@ -204,6 +238,11 @@ export function createRouter({
       try {
         const body = await readBody(req)
         const action = body.action as string
+        const cwd = resolveSettingsRequestCwd(authed, url)
+        const scope = parseWritableScope(body.scope, {
+          ssoMode: isAuthEnabled() && !!authed.userWorkspace,
+        })
+        let resolved = await resolveEffectiveSettings(cwd)
 
         if (action === 'add') {
           const name = body.name as string
@@ -212,35 +251,43 @@ export function createRouter({
             sendJSON(res, 400, { error: "Missing 'name' and/or 'config'" })
             return
           }
-          const servers = configManager.get('mcpServers')
-          servers[name] = config
-          configManager.set('mcpServers', servers)
+          setMCPServer(cwd, scope, name, config)
         } else if (action === 'remove') {
           const name = body.name as string
           if (!name) {
             sendJSON(res, 400, { error: "Missing 'name'" })
             return
           }
-          const servers = configManager.get('mcpServers')
-          delete servers[name]
-          configManager.set('mcpServers', servers)
+          setMCPServer(cwd, scope, name, null)
         } else {
           sendJSON(res, 400, { error: "action must be 'add' or 'remove'" })
           return
         }
 
+        invalidateMCPManagersForCwd(cwd)
+        resolved = await resolveEffectiveSettings(cwd)
         sendJSON(res, 200, {
-          mcpServers: configManager.get('mcpServers'),
-          mcpStatus: mcpManager.getStatus(),
+          mcpServers: resolved.config.mcpServers,
+          effectiveMcpServers: resolved.effectiveMcpServers,
+          mcpStatus: await getMCPStatusForCwd(
+            cwd,
+            resolved.effectiveMcpServers,
+          ),
+          scope,
+          sources: resolved.sources,
         })
-      } catch {
-        sendJSON(res, 400, { error: 'Invalid JSON' })
+      } catch (e) {
+        sendJSON(res, 400, { error: (e as Error).message })
       }
       return
     }
 
-    if (method === 'GET' && url === '/mcp') {
-      sendJSON(res, 200, { servers: mcpManager.getStatus() })
+    if (method === 'GET' && url?.startsWith('/mcp')) {
+      const cwd = resolveSettingsRequestCwd(authed, url)
+      const effective = await resolveEffectiveSettings(cwd)
+      sendJSON(res, 200, {
+        servers: await getMCPStatusForCwd(cwd, effective.effectiveMcpServers),
+      })
       return
     }
 

@@ -9,11 +9,10 @@
 
 import type { ServerResponse } from 'http'
 import { EventBus } from '../core/event-bus.js'
-import { configManager } from '../core/config-manager.js'
 import { createSSETransport } from '../server/sse-transport.js'
 import { registerSubagents } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools/index.js'
-import type { RunAgentFn } from '../core/types.js'
+import type { AppConfig, IProvider, RunAgentFn } from '../core/types.js'
 import { runSkillFork } from './run-fork.js'
 import type { SkillDefinition } from './types.js'
 
@@ -24,6 +23,8 @@ export interface RespondSkillForkOptions {
   combined: string
   cwd: string
   runAgent: RunAgentFn
+  provider: IProvider
+  config: AppConfig
   wantsStream: boolean
   /** Extra HTTP headers to attach to the SSE response. */
   sseHeaders?: Record<string, string>
@@ -50,6 +51,8 @@ export async function respondSkillFork(
     combined,
     cwd,
     runAgent,
+    provider,
+    config,
     wantsStream,
     sseHeaders,
     jsonMeta,
@@ -67,8 +70,7 @@ export async function respondSkillFork(
   }
 
   const eventBus = new EventBus()
-  const { disabledTools } = configManager.getAll()
-  const toolEnablement = { disabledTools }
+  const toolEnablement = { disabledTools: config.disabledTools }
 
   const runOpts = {
     skill,
@@ -79,6 +81,8 @@ export async function respondSkillFork(
     activeAgents,
     eventBus,
     toolEnablement,
+    provider,
+    compaction: config.compaction,
   }
 
   if (wantsStream) {

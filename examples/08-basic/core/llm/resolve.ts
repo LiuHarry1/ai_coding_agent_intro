@@ -2,14 +2,6 @@ import type { LlmProfile, ProviderId, ThinkingConfig } from './types.js'
 
 const PROVIDERS: ProviderId[] = ['openai', 'anthropic', 'openai-compatible']
 
-/** Older examples used `"kind": "anthropic"` instead of `"provider": "anthropic"`. */
-const LEGACY_KIND_TO_PROVIDER: Record<string, ProviderId> = {
-  anthropic: 'anthropic',
-  openai: 'openai',
-  'openai-compatible': 'openai-compatible',
-  'openai-responses': 'openai',
-}
-
 export const DEFAULT_PROFILE: LlmProfile = {
   provider: 'openai-compatible',
   name: 'copilot-proxy',
@@ -66,11 +58,6 @@ export function resolveProfile(raw: unknown): LlmProfile {
   }
 
   const merged = { ...DEFAULT_PROFILE, ...raw } as Record<string, unknown>
-
-  if (typeof merged.kind === 'string') {
-    const mapped = LEGACY_KIND_TO_PROVIDER[merged.kind]
-    if (mapped) merged.provider = mapped
-  }
 
   const provider = merged.provider
   if (

@@ -12,7 +12,7 @@
 #
 #   2. Lay down your project config under `deploy/tenant-example/.ai-agent/`
 #      (or copy that directory to your own deployment repo). At minimum it
-#      should contain a `config.json`. See `deploy/tenant-example/` for a
+#      should contain a `settings.json`. See `deploy/tenant-example/` for a
 #      skeleton.
 #
 #   3. Build the tenant image:
@@ -25,9 +25,9 @@
 #        docker compose -f deploy/docker-compose.yml up -d
 #
 # Secrets:
-#   DO NOT commit API keys into config.json — they will end up in image
+#   DO NOT commit API keys into settings.json — they will end up in image
 #   layers and are recoverable via `docker history` even if a later layer
-#   overwrites them.  Reference env vars in config.json with ${VAR_NAME}
+#   overwrites them.  Reference env vars in settings.json with ${VAR_NAME}
 #   placeholders (if your config loader supports them) or pass them at
 #   runtime via the agent process env and have the agent read them.
 #   docker-compose.yml shows the env-injection pattern.
@@ -36,7 +36,7 @@ ARG BASE_TAG=latest
 FROM ai-agent-base:${BASE_TAG}
 
 # Copy this deployment's agent config (agents/, skills/, commands/,
-# config.json, ...). Anything not present here falls back to the agent
+# settings.json, ...). Anything not present here falls back to the agent
 # code's built-in defaults.
 COPY .ai-agent/ /root/.ai-agent/
 

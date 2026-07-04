@@ -29,6 +29,7 @@
     "@mozilla/readability": "^0.6.0",
     "ai": "^6.0.116",
     "archiver": "^8.0.0",
+    "glob": "^10.5.0",
     "gray-matter": "^4.0.3",
     "ignore": "^7.0.5",
     "linkedom": "^0.18.12",
@@ -41,8 +42,8 @@
     "@types/archiver": "^7.0.0",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.6.0",
-    "electron": "^35.7.5",
-    "electron-builder": "^25.1.8",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "prettier": "^3.5.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"

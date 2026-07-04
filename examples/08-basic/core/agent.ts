@@ -1,5 +1,4 @@
 import { streamText } from 'ai'
-import { defaultManager } from './provider-manager.js'
 import {
   attachTokenUsage,
   compactIfNeeded,
@@ -19,6 +18,7 @@ import type {
   TodoItem,
   TodoStatus,
 } from './types.js'
+import type { IProvider } from './llm/types.js'
 import {
   ensureToolResultPairing,
   inlineReasoningAsText,
@@ -36,7 +36,6 @@ import {
   TOOL_SEARCH_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
 } from '../constants/tool_names.js'
-import { getDefaultWorkspace } from './workspace.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type { AnyTool } from './types.js'
 
@@ -209,6 +208,9 @@ export async function runAgent(
     attachmentMessages,
     refreshTools,
     refreshSystemPrompt,
+    provider: configuredProvider,
+    cwd,
+    compaction,
   }: AgentOptions,
 ): Promise<string> {
   if (skillListing) {
@@ -223,7 +225,10 @@ export async function runAgent(
   messages.push(buildUserMessage(userMessage, images))
 
   let finalText = ''
-  const provider = defaultManager.get()
+  if (!configuredProvider) {
+    throw new Error('runAgent requires a request-scoped provider')
+  }
+  const provider = configuredProvider
   const resolvedModel = model ?? provider.defaultModelId()
 
   let currentTodos: TodoItem[] = []
@@ -275,6 +280,8 @@ export async function runAgent(
         resolvedModel,
         provider,
         currentTodos,
+        cwd,
+        compaction,
         sessionId,
       )
 
@@ -290,6 +297,8 @@ export async function runAgent(
         stepStart,
         currentTodos,
         concurrencyPolicy: toolPolicy,
+        cwd,
+        compaction,
         sessionId,
       })
 
@@ -351,8 +360,10 @@ async function runCompactionAndLog(
   eventBus: AgentOptions['eventBus'],
   step: number,
   resolvedModel: string,
-  provider: ReturnType<typeof defaultManager.get>,
+  provider: IProvider,
   currentTodos: TodoItem[],
+  cwd?: string,
+  compaction?: AgentOptions['compaction'],
   sessionId?: string,
 ): Promise<void> {
   const compactStart = Date.now()
@@ -360,9 +371,11 @@ async function runCompactionAndLog(
     messages,
     eventBus,
     resolvedModel,
-    getDefaultWorkspace(),
+    cwd ?? process.cwd(),
     currentTodos,
     {},
+    compaction,
+    provider,
     sessionId,
   )
   const compactMs = Date.now() - compactStart
@@ -390,7 +403,7 @@ interface RunOneStepArgs {
   messages: Message[]
   tools: AgentOptions['tools']
   systemPrompt: string
-  provider: ReturnType<typeof defaultManager.get>
+  provider: IProvider
   resolvedModel: string
   eventBus: AgentOptions['eventBus']
   subagentNames?: Set<string>
@@ -398,6 +411,8 @@ interface RunOneStepArgs {
   stepStart: number
   currentTodos: TodoItem[]
   concurrencyPolicy: ConcurrencyPolicyFn
+  cwd?: string
+  compaction?: AgentOptions['compaction']
   sessionId?: string
 }
 
@@ -420,6 +435,8 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     step,
     stepStart,
     concurrencyPolicy,
+    cwd,
+    compaction,
     sessionId,
   } = args
 
@@ -572,12 +589,14 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           messages,
           eventBus,
           resolvedModel,
-          getDefaultWorkspace(),
+          cwd ?? process.cwd(),
           args.currentTodos,
           {
             force: true,
             aggressive: true,
           },
+          compaction,
+          provider,
           sessionId,
         )
         if (recompacted !== messages) {

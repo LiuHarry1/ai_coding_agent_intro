@@ -23,12 +23,12 @@
 
 ### 1. 多 Provider LLM 层（`core/llm/`）
 
-06 在 `provider-manager.ts` 里硬编码 `createOpenAI`。07 引入可插拔策略：
+06 在旧版里硬编码 `createOpenAI`。07 引入可插拔策略：
 
 ```
 core/llm/
 ├── types.ts              # LlmProfile, ThinkingConfig, IProvider
-├── resolve.ts            # 从 config.json 解析 / 校验 profile
+├── resolve.ts            # 从 settings.json 解析 / 校验 profile
 ├── index.ts              # buildProvider(profile)
 └── strategies/
     ├── openai.ts         # OpenAI Responses API + reasoningEffort
@@ -68,7 +68,7 @@ core/llm/
 
 ### 4. 工具启用 / 禁用
 
-`~/.ai-agent/config.json` 支持：
+`~/.ai-agent/settings.json` 和 `<project>/.ai-agent/settings.json` 支持：
 
 ```json
 {
@@ -130,8 +130,8 @@ core/llm/
 │   ├── agent.ts                 # Agent 主循环
 │   ├── tool-enablement.ts       # disabledTools 过滤
 │   ├── powershell-edition.ts
-│   ├── config-manager.ts        # + disabledTools, LlmProfile
-│   ├── provider-manager.ts      # → buildProvider()
+│   ├── settings-manager.ts      # layered settings (user/project/local)
+│   ├── llm/                     # buildProvider() + strategies
 │   └── …（同 06：mcp, rules, platform, event-bus, …）
 ├── tools/
 │   ├── bash.ts / powershell.ts  # 薄包装 → shell-runner.ts
@@ -161,7 +161,7 @@ core/llm/
 
 ## Configuration
 
-配置仍位于 `~/.ai-agent/config.json`，在 06 的 provider / MCP / compaction 基础上扩展。
+配置位于 `~/.ai-agent/settings.json`（用户级）和 `<project>/.ai-agent/settings.json`（项目级），项目级优先级更高；`settings.local.json` 可作为项目本地私有覆盖。
 
 ### Provider（LlmProfile）
 
@@ -178,8 +178,6 @@ core/llm/
 ```
 
 `thinking.mode` 可选：`off` | `auto` | `low` | `medium` | `high` | `budget`（budget 需配 `tokens`）。
-
-兼容旧配置：若使用 `"kind": "anthropic"` 会自动映射为 `"provider": "anthropic"`。
 
 ### 禁用工具
 
@@ -261,7 +259,7 @@ Open http://localhost:5173 (Vite proxies API requests to port 4567).
 
 | 优先级 | 目录 | 备注 |
 |--------|------|------|
-| 低 | `~/.ai-agent/agents/*.md` | 用户级（与 `config.json` 同目录） |
+| 低 | `~/.ai-agent/agents/*.md` | 用户级（与 `settings.json` 同目录） |
 | 高 | `<ancestor>/.ai-agent/agents/*.md` | 项目级，沿 `cwd` 向上；最深覆盖浅层、用户级、内置 |
 
 文件格式：
@@ -341,7 +339,7 @@ Skill 由**模型而不是用户**触发——通过 `skill` dispatcher tool。�
 
 | 优先级 | 路径 | 备注 |
 |--------|------|------|
-| 低 | `~/.ai-agent/skills/<skill-name>/SKILL.md` | 用户级（和 `~/.ai-agent/config.json` 同目录） |
+| 低 | `~/.ai-agent/skills/<skill-name>/SKILL.md` | 用户级（和 `~/.ai-agent/settings.json` 同目录） |
 | 中 | `<ancestor>/.ai-agent/skills/<skill-name>/SKILL.md` | 沿 `cwd` 向上每一级（monorepo 友好） |
 | 高 | `<cwd>/.ai-agent/skills/<skill-name>/SKILL.md` | 最深一级，同名覆盖上面所有 |
 
@@ -419,12 +417,14 @@ agents / commands / skills 三者共用：
 
 ```text
 ~/.ai-agent/
-├── config.json
+├── settings.json
 ├── agents/*.md
 ├── commands/*.md
 └── skills/<name>/SKILL.md
 
 <project>/.ai-agent/
+├── settings.json
+├── settings.local.json
 ├── agents/*.md
 ├── commands/*.md
 └── skills/<name>/SKILL.md

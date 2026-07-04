@@ -2,8 +2,14 @@
  * Auto-compact orchestrator: dynamic threshold, circuit breaker, config,
  * and the main compactIfNeeded entry point.
  */
-import { configManager } from '../../core/config-manager.js'
-import type { IEventBus, Message, TodoItem } from '../../core/types.js'
+import type {
+  CompactionConfig,
+  IEventBus,
+  IProvider,
+  Message,
+  TodoItem,
+} from '../../core/types.js'
+import { DEFAULTS } from '../../core/settings-manager.js'
 import {
   tokenCountWithEstimation,
   estimateConversationTokens,
@@ -32,8 +38,8 @@ function parseEnvInt(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback
 }
 
-function getCompactionConfig() {
-  const c = configManager.get('compaction')
+function getCompactionConfig(base?: CompactionConfig) {
+  const c = base ?? DEFAULTS.compaction
   return {
     enabled:
       process.env.DISABLE_AUTO_COMPACT === '1'
@@ -176,9 +182,11 @@ export async function compactIfNeeded(
   cwd: string,
   currentTodos: TodoItem[],
   opts: CompactOptions = {},
+  compaction?: CompactionConfig,
+  provider?: IProvider,
   sessionId?: string,
 ): Promise<Message[]> {
-  const cfg = getCompactionConfig()
+  const cfg = getCompactionConfig(compaction)
   const force = !!opts.force
   const aggressive = !!opts.aggressive
 
@@ -299,6 +307,7 @@ export async function compactIfNeeded(
       totalBudget: cfg.fileBudget,
     },
     instructions: opts.instructions,
+    provider,
   }
 
   try {

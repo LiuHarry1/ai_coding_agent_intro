@@ -22,7 +22,7 @@ prepare  →  run  →  evaluate
 |---|---|
 | **Python (conda `py311`)** | 跑评测脚本；Python 题用 `pytest` 打分。 |
 | **Node.js** | 启动本地 agent 服务（`npm start`）。 |
-| **Agent 配置** | `~/.ai-agent/config.json` 里配好模型。 |
+| **Agent 配置** | `~/.ai-agent/settings.json` 里配好模型。 |
 | 网络 | 首次需联网 `git clone` 题库；之后离线即可。 |
 | （可选）其它语言工具链 | 评测 Go/Rust 等需要 `go` / `cargo` 在 PATH 上，否则自动跳过。 |
 

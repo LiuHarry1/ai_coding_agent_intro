@@ -22,9 +22,6 @@ export const AGENT_TOOL_NAME = 'Agent'
 export const ENTER_PLAN_MODE_TOOL_NAME = 'EnterPlanMode'
 export const EXIT_PLAN_MODE_TOOL_NAME = 'ExitPlanMode'
 
-/** @deprecated Use {@link AGENT_TOOL_NAME}. */
-export const TASK_TOOL_NAME = AGENT_TOOL_NAME
-
 export const MUTATING_TOOLS: readonly string[] = [
   WRITE_FILE_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,

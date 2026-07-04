@@ -19,7 +19,7 @@ prepare  →  run  →  collect  →  evaluate
 | **Python (conda `llm_ft`)** | 跑评测脚本。本仓库约定 `conda activate llm_ft`。 |
 | **Docker Desktop** | `evaluate` 步骤在容器里跑测试，必须先启动 Docker。 |
 | **Node.js** | 启动本地 agent 服务（`npm start`）。 |
-| **Agent 配置** | `~/.ai-agent/config.json` 里配好 `provider`（模型地址 / model 名）。 |
+| **Agent 配置** | `~/.ai-agent/settings.json` 里配好 `provider`（模型地址 / model 名）。 |
 | 网络 | 首次需联网下载数据集和拉取镜像；之后可离线。 |
 
 **macOS 注意**
@@ -301,7 +301,7 @@ chmod +x run_one.sh   # 首次需要
 | Agent | 本仓库 HTTP agent（`npm start`） | Mini-SWE-Agent（官方 bash loop） |
 | 工作环境 | 宿主机 `workspaces/` | **每条实例一个 Docker 容器** |
 | 需要 Node.js | 是 | 否 |
-| 需要模型 API | 在 `~/.ai-agent/config.json` | LiteLLM 环境变量（见下） |
+| 需要模型 API | 在 `~/.ai-agent/settings.json` | LiteLLM 环境变量（见下） |
 | 产出 | `runs/predictions.jsonl` | `mini-runs/<run-id>/preds.json` |
 
 ### 安装

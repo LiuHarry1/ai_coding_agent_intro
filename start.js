@@ -36,13 +36,17 @@ async function tryImport(base) {
   return import(tsExists ? tsPath : jsPath)
 }
 
-let runAgent, createTools, systemPrompt, startServer
+let runAgent, systemPrompt, startServer
 try {
   ;({ runAgent } = await tryImport('agent'))
-  ;({ createTools } = await tryImport('tools'))
-  ;({ systemPrompt } = await tryImport('prompts'))
 
   ;({ startServer } = await tryImport('server'))
+  // 07-basic still wires systemPrompt into its router; 08-basic ignores it.
+  try {
+    ;({ systemPrompt } = await tryImport('prompts'))
+  } catch {
+    systemPrompt = undefined
+  }
   console.log(`[start] Using server from ${example}/`)
 } catch (err) {
   console.error(`[start] Failed to load example "${example}": ${err.message}`)
@@ -69,4 +73,4 @@ try {
   }
 }
 
-startServer({ runAgent, createTools, systemPrompt })
+startServer({ runAgent, ...(systemPrompt ? { systemPrompt } : {}) })

@@ -1,5 +1,3 @@
-import * as fs from 'fs'
-import * as path from 'path'
 import { randomUUID } from 'crypto'
 import type { IncomingMessage, ServerResponse } from 'http'
 import {
@@ -14,11 +12,11 @@ import {
   compactIfNeeded,
   tokenCountWithEstimation,
 } from '../../services/compact/index.js'
-import { defaultManager } from '../../core/provider-manager.js'
+import { buildProvider } from '../../core/llm/index.js'
 import { createSSETransport } from '../sse-transport.js'
 import { readBody, sendJSON, wantsStreamingResponse } from '../http.js'
 import { sessionToUIMessages } from '../session-ui.js'
-import { getDefaultWorkspace } from '../../core/workspace.js'
+import { resolveRequestCwd } from '../request-cwd.js'
 import type { AuthedRequest } from '../auth/identity.js'
 import { EventBus } from '../../core/event-bus.js'
 import {
@@ -40,9 +38,8 @@ import {
   shouldEnforceQuota,
   trackTurnTokens,
 } from '../quota.js'
-import { configManager } from '../../core/config-manager.js'
 import { prepareChatTurn } from '../../utils/processUserInput/prepare_chat_turn.js'
-import { mcpManager } from '../mcp-lifecycle.js'
+import { resolveSettings } from '../../core/settings-manager.js'
 import {
   handlePlanModeTransition,
   isValidExternalMode,
@@ -82,11 +79,9 @@ export async function handleChat(
   // When auth is on, the workspace is pinned to the authenticated user
   // (set by the router's auth gate); the client-supplied `workspace` is
   // intentionally ignored so a user cannot escape their own directory.
-  const cwd =
-    (req as AuthedRequest).userWorkspace ??
-    (workspace && fs.existsSync(workspace)
-      ? path.resolve(workspace)
-      : getDefaultWorkspace())
+  const cwd = resolveRequestCwd(req, workspace)
+  const resolvedSettings = resolveSettings(cwd)
+  const provider = buildProvider(resolvedSettings.config.provider)
 
   const requesterEmail = (req as AuthedRequest).user?.email
   let session
@@ -185,8 +180,8 @@ export async function handleChat(
     cwd,
     session,
     registry: defaultRegistry,
-    mcpManager,
-    configManager,
+    config: resolvedSettings.config,
+    provider,
     eventBus,
     middleware,
     runAgent,
@@ -202,6 +197,8 @@ export async function handleChat(
       combined: prepared.forkSkill.text,
       cwd,
       runAgent,
+      provider,
+      config: resolvedSettings.config,
       wantsStream,
       sseHeaders: { 'X-Session-Id': session.id },
       jsonMeta: { session_id: session.id, reason: 'skill_fork' },
@@ -262,7 +259,7 @@ export async function handleChat(
     const tokensBefore = tokenCountWithEstimation(session.messages).total
     let replyText: string
     try {
-      const model = defaultManager.get().defaultModelId()
+      const model = provider.defaultModelId()
       const managed = await compactIfNeeded(
         session.messages,
         eventBus,
@@ -270,6 +267,8 @@ export async function handleChat(
         cwd,
         [],
         { force: true, instructions: instructions || undefined },
+        resolvedSettings.config.compaction,
+        provider,
         session.id,
       )
       if (managed !== session.messages && managed.length > 0) {
@@ -384,6 +383,9 @@ export async function handleChat(
       tools: prepared.tools,
       systemPrompt,
       eventBus,
+      provider,
+      cwd,
+      compaction: resolvedSettings.config.compaction,
       messages: session.messages,
       images: images?.length ? images : undefined,
       subagentNames: prepared.subagentNames,

@@ -45,7 +45,3 @@ export async function initCodePlugins(registry: IToolRegistry): Promise<void> {
     console.log(`[plugins] initialized ${CODE_PLUGINS.length} code plugin(s)`)
   }
 }
-
-export function getPluginManager(): PluginManager | null {
-  return manager
-}

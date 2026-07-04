@@ -28,16 +28,18 @@ import { getPlanFilePath, planExists } from '../plans.js'
 import type { ReadFileState } from '../attachments/types.js'
 import type {
   AnyTool,
+  IProvider,
   IToolRegistry,
   Message,
   Session,
   ToolContext,
+  AppConfig,
 } from '../../core/types.js'
-import type { MCPManager } from '../../core/mcp-manager.js'
-import type { ConfigManager } from '../../core/config-manager.js'
 import type { ToolRegistry } from '../../core/tool-registry.js'
 import type { SlashEntry } from '../../commands/slashRegistry.js'
 import { extractFilePathCandidates } from './path_candidates.js'
+import { mergeMCPServers } from '../../core/settings-manager.js'
+import { getMCPManagerForServers } from '../../server/mcp-lifecycle.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -126,8 +128,8 @@ export interface PrepareChatTurnInput {
   cwd: string
   session: Session
   registry: IToolRegistry
-  mcpManager: MCPManager
-  configManager: ConfigManager
+  config: AppConfig
+  provider: IProvider
   eventBus: ToolContext['eventBus']
   middleware: ToolContext['middleware']
   runAgent: NonNullable<ToolContext['runAgent']>
@@ -141,8 +143,8 @@ export async function prepareChatTurn(
     cwd,
     session,
     registry,
-    mcpManager,
-    configManager,
+    config,
+    provider,
     eventBus,
     middleware,
     runAgent,
@@ -163,6 +165,8 @@ export async function prepareChatTurn(
   for (const e of plugins.errors) {
     console.warn(`[plugins] ${pluginErrorSource(e)}: ${pluginErrorMessage(e)}`)
   }
+  const mcpServers = mergeMCPServers(plugins.mcpServers, config.mcpServers)
+  const mcpManager = await getMCPManagerForServers(cwd, mcpServers)
 
   const { activeAgents } = await registerSubagents(
     registry,
@@ -182,8 +186,7 @@ export async function prepareChatTurn(
   )
 
   const projectRules = loadProjectRules(cwd)
-  const enablement = configManager.getAll()
-  const toolEnablement = { disabledTools: enablement.disabledTools }
+  const toolEnablement = { disabledTools: config.disabledTools }
 
   const toolContext: ToolContext = {
     eventBus,
@@ -192,6 +195,8 @@ export async function prepareChatTurn(
     registry,
     mcpTools: mcpManager.getAllTools(),
     toolEnablement,
+    provider,
+    compaction: config.compaction,
     sessionId: session.id,
     session,
     cwd,

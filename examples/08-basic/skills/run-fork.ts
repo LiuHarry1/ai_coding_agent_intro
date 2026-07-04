@@ -7,7 +7,9 @@
 import type {
   AgentDefinition,
   AnyTool,
+  CompactionConfig,
   IEventBus,
+  IProvider,
   IToolRegistry,
   RunAgentFn,
   ToolContext,
@@ -27,6 +29,8 @@ export interface RunSkillForkOptions {
   activeAgents: readonly AgentDefinition[]
   eventBus: IEventBus
   toolEnablement?: ToolContext['toolEnablement']
+  provider?: IProvider
+  compaction?: CompactionConfig
   sessionId?: string
 }
 
@@ -40,6 +44,8 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     activeAgents,
     eventBus,
     toolEnablement,
+    provider,
+    compaction,
     sessionId,
   } = opts
 
@@ -63,6 +69,8 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     registry,
     runAgent,
     toolEnablement,
+    provider,
+    compaction,
     sessionId,
   }
 
@@ -79,6 +87,10 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
   delete subTools[AGENT_TOOL_NAME]
   delete subTools[SKILL_TOOL_NAME]
 
+  if (!provider) {
+    throw new Error(`Skill '${skill.name}' fork requires a request-scoped provider`)
+  }
+
   const result = await runAgent(combined, {
     tools: subTools,
     systemPrompt: targetAgent.systemPrompt,
@@ -86,6 +98,9 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     messages: [],
     maxSteps: targetAgent.maxSteps ?? 20,
     model: targetAgent.model,
+    provider,
+    cwd,
+    compaction,
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(subTools)),
     sessionId,
   })

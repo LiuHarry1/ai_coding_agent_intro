@@ -3,11 +3,13 @@
  *
  * All extension types live under one dot-folder:
  *
- *   ~/.ai-agent/config.json
+ *   ~/.ai-agent/settings.json
  *   ~/.ai-agent/agents/*.md
  *   ~/.ai-agent/commands/*.md
  *   ~/.ai-agent/skills/<name>/SKILL.md
  *
+ *   <ancestor>/.ai-agent/settings.json
+ *   <ancestor>/.ai-agent/settings.local.json
  *   <ancestor>/.ai-agent/agents/*.md
  *   <ancestor>/.ai-agent/commands/*.md
  *   <ancestor>/.ai-agent/skills/<name>/SKILL.md
@@ -23,7 +25,8 @@ import * as path from 'path'
 /** Default basename — change here if the product name ever moves off `.ai-agent`. */
 export const DEFAULT_APP_DIR_NAME = '.ai-agent'
 
-export const CONFIG_FILE_NAME = 'config.json'
+export const SETTINGS_FILE_NAME = 'settings.json'
+export const LOCAL_SETTINGS_FILE_NAME = 'settings.local.json'
 
 export type AppSubdir = 'agents' | 'skills' | 'commands'
 
@@ -40,10 +43,6 @@ export function getAppDirName(): string {
 /** User-scope root: `~/.ai-agent` (or whatever `getAppDirName()` returns). */
 export function getUserAppDir(): string {
   return path.join(os.homedir(), getAppDirName())
-}
-
-export function getUserConfigPath(): string {
-  return path.join(getUserAppDir(), CONFIG_FILE_NAME)
 }
 
 /** User-scope subdir, e.g. `~/.ai-agent/skills`. */

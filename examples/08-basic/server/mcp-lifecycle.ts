@@ -1,50 +1,83 @@
+import * as crypto from 'crypto'
+import * as path from 'path'
 import { MCPManager } from '../core/mcp-manager.js'
-import { configManager } from '../core/config-manager.js'
-import { getDefaultWorkspace } from '../core/workspace.js'
-import { loadPlugins } from '../core/plugins/index.js'
 import type { MCPServerConfig } from '../core/types.js'
 
-export const mcpManager = new MCPManager()
-
-/**
- * Resolve MCP servers from config plus declarative plugins (scoped to the
- * default workspace). Config-level servers WIN on name collision — a plugin
- * shouldn't be able to silently shadow a user-configured server.
- */
-async function resolveMCPServers(): Promise<Record<string, MCPServerConfig>> {
-  const configServers = configManager.get('mcpServers')
-  let pluginServers: Record<string, MCPServerConfig> = {}
-  try {
-    pluginServers = (await loadPlugins(getDefaultWorkspace())).mcpServers
-  } catch (err) {
-    console.warn(`[mcp] plugin MCP discovery failed: ${(err as Error).message}`)
-  }
-  return { ...pluginServers, ...configServers }
+interface ManagedMCPPoolEntry {
+  manager: MCPManager
+  lastUsed: number
+  cwd: string
 }
 
-export async function syncMCPFromConfig(): Promise<void> {
-  await mcpManager.closeAll()
-  const servers = await resolveMCPServers()
-  for (const [name, config] of Object.entries(servers)) {
-    await mcpManager.addServer(name, config)
+const managers = new Map<string, ManagedMCPPoolEntry>()
+const IDLE_TTL_MS = 30 * 60 * 1000
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`
   }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record)
+      .sort()
+      .map(key => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function poolKey(cwd: string, servers: Record<string, MCPServerConfig>): string {
+  return crypto
+    .createHash('sha256')
+    .update(cwd)
+    .update('\0')
+    .update(stableStringify(servers))
+    .digest('hex')
+}
+
+function sweepIdleManagers(): void {
+  const now = Date.now()
+  for (const [key, entry] of managers) {
+    if (now - entry.lastUsed <= IDLE_TTL_MS) continue
+    managers.delete(key)
+    entry.manager.closeAll().catch(() => {})
+  }
+}
+
+/** CC parity: clear stale MCP connections after settings write. */
+export function invalidateMCPManagersForCwd(cwd: string): void {
+  const resolved = path.resolve(cwd)
+  for (const [key, entry] of managers) {
+    if (entry.cwd !== resolved) continue
+    managers.delete(key)
+    entry.manager.closeAll().catch(() => {})
+  }
+}
+
+export async function getMCPManagerForServers(
+  cwd: string,
+  servers: Record<string, MCPServerConfig>,
+): Promise<MCPManager> {
+  sweepIdleManagers()
+  const key = poolKey(cwd, servers)
+  const existing = managers.get(key)
+  if (existing) {
+    existing.lastUsed = Date.now()
+    return existing.manager
+  }
+
+  const manager = new MCPManager()
+  for (const [name, config] of Object.entries(servers)) {
+    await manager.addServer(name, config)
+  }
+  managers.set(key, { manager, lastUsed: Date.now(), cwd: path.resolve(cwd) })
+  return manager
 }
 
 export function initMcpLifecycle(): void {
-  configManager.load()
-  syncMCPFromConfig().catch(err => {
-    console.error(`[mcp] Failed to sync from config: ${err.message}`)
-  })
-
-  configManager.onChange('mcpServers', () => {
-    syncMCPFromConfig().catch(err => {
-      console.error(
-        `[mcp] Failed to re-sync after config change: ${err.message}`,
-      )
-    })
-  })
-
   process.on('exit', () => {
-    mcpManager.closeAll().catch(() => {})
+    for (const entry of managers.values()) {
+      entry.manager.closeAll().catch(() => {})
+    }
   })
 }

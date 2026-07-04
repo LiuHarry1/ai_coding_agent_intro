@@ -1,6 +1,6 @@
 import type { Tool } from 'ai'
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
-import type { LlmProfile } from './llm/types.js'
+import type { IProvider, LlmProfile } from './llm/types.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type { ExternalMode, PermissionModeContext } from './permission-mode.js'
 
@@ -53,6 +53,9 @@ export interface ToolContext {
   mcpTools?: Record<string, AnyTool>
   /** From AppConfig: omit disabled tools in registry.createAll; subagents pass through for MCP merge + filter */
   toolEnablement?: Pick<AppConfig, 'disabledTools'>
+  /** Request-scoped provider and compaction settings inherited by subagents. */
+  provider?: IProvider
+  compaction?: CompactionConfig
   /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
   sessionId?: string
   /** Active session — set on main-agent runs for mode/plan tools. */
@@ -193,6 +196,12 @@ export interface AgentOptions {
   images?: string[]
   maxSteps?: number
   model?: string
+  /** Request-scoped provider built from the resolved settings for this cwd. */
+  provider: IProvider
+  /** Request workspace; used by compaction and subagent runs. */
+  cwd?: string
+  /** Request-scoped compaction settings. */
+  compaction?: CompactionConfig
   /**
    * Names of tools that are subagent wrappers. Used purely for UI: when
    * provided, the agent tags `tool_call` / `tool_input_start` events with
@@ -306,12 +315,10 @@ export interface SessionInfo {
 
 export interface ServerOptions {
   runAgent: RunAgentFn
-  systemPrompt: (cwd: string, projectRules?: string) => string
 }
 
 export interface RouterOptions {
   runAgent: RunAgentFn
-  systemPrompt: (cwd: string, projectRules?: string) => string
   staticDir: string | null
 }
 

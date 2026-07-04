@@ -1,9 +1,9 @@
 {
   "provider": {
     "provider": "openai-compatible",
-    "baseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "baseURL": "http://localhost:4141/v1",
     "apiKey": "sk-xxx",
-    "model": "qwen3.7-max"
+    "model": "claude-opus-4.7"
   },
   "compaction": {
     "contextWindow": 200000,
@@ -13,17 +13,12 @@
     "fileBudget": 50000,
     "timeBasedMicroEnabled": true,
     "timeBasedMicroGapMinutes": 5
-
   },
   "mcpServers": {
-
     "mcp_server": {
       "command": "python",
       "args": ["-m", "mcp_server_fetch"]
     }
   },
-
   "disabledTools": ["web_fetch"]
 }
-
-
