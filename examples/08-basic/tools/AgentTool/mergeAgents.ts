@@ -118,8 +118,8 @@ export function mergeAgents(
     }
     if (agent) {
       // Trust boundary: third-party plugins must not shadow built-in agents.
-      // CC enforces this structurally via `{plugin}:{name}` namespacing; we use
-      // flat names, so guard explicitly. User/project agents may still override.
+      // Some implementations enforce this structurally via `{plugin}:{name}`
+      // namespacing; we use flat names, so guard explicitly.
       if (f.source === 'plugin' && builtinTypes.has(agent.agentType)) {
         const msg = `plugin agent '${agent.agentType}' may not override a built-in agent; ignored`
         errors.push({ filePath, error: msg })

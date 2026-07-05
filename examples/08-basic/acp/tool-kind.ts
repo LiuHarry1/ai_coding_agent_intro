@@ -42,7 +42,7 @@ function toDisplayPath(filePath: string, cwd?: string): string {
   return filePath
 }
 
-/** CC ref: claude-code-acp `toolInfoFromToolUse` — map engine tool names to ACP. */
+/** 
 export function toolInfoFromCall(
   name: string,
   args: unknown,

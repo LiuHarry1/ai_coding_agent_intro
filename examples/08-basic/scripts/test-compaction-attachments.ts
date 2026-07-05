@@ -49,7 +49,7 @@ function restoreMessagesFromJsonl(id: string): Message[] {
 }
 
 async function main(): Promise<void> {
-  console.log('=== Read tool (CC parity) ===')
+ console.log('=== Read tool () ===')
   const huge = path.join(WORKSPACE, 'huge_file.txt')
   try {
     readTextFile(huge, 'huge_file.txt')
@@ -123,7 +123,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
   console.log(
-    '[PASS] attachment records cleared from in-memory history (CC: re-injected next turn)',
+ '[PASS] attachment records cleared from in-memory history (re-injected next turn)',
   )
 
   // Simulate JSONL compacted checkpoint + reload
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
   )
 
   console.log(
-    '\nNote: skill_listing / file attachments are re-injected on the next user turn via getAttachmentMessages (CC post-compact pattern).',
+    '\nNote: skill_listing / file attachments are re-injected on the next user turn via getAttachmentMessages.',
   )
   console.log('\nAll compaction + read tests passed.')
 }

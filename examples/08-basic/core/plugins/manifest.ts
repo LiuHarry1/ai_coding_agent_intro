@@ -1,12 +1,10 @@
 /**
  * Plugin manifest loading + validation.
  *
- * Claude Code validates `.claude-plugin/plugin.json` against a large Zod
- * schema (`PluginManifestSchema` in `src/utils/plugins/schemas.ts`). We keep
- * a lean equivalent: the manifest is entirely optional, lenient about unknown
- * keys, and only the fields we actually consume are typed. A malformed
- * manifest degrades to "no manifest" (the plugin still loads from its
- * conventional directories) rather than failing the whole load.
+ * Validates `.ai-agent-plugin/plugin.json` (or root `plugin.json`) against a
+ * lean schema. A malformed manifest degrades to "no manifest" (the plugin
+ * still loads from its conventional directories) rather than failing the
+ * whole load.
  */
 
 import { promises as fs } from 'fs'
@@ -115,7 +113,7 @@ export async function loadPluginManifest(
 }
 
 /**
- * Substitute `${PLUGIN_ROOT}` (and the CC-compatible `${CLAUDE_PLUGIN_ROOT}`)
+ * Substitute `${PLUGIN_ROOT}` (and `${CLAUDE_PLUGIN_ROOT}` when present).
  * with the plugin's absolute path so bundled scripts/assets can be referenced
  * from agent prompts, command bodies, skill bodies, and MCP configs.
  */

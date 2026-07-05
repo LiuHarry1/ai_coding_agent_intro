@@ -3,7 +3,7 @@ import { z } from 'zod'
 /**
  * Shared primitives used across server, client, and control messages.
  *
- * Design note (aligned with Claude Code's coreSchemas.ts): every message
+ * Design note (aligned with coreSchemas.ts): every message
  * that crosses the wire carries a correlation envelope (`session_id` +
  * optional `uuid`). The transport may fill in `uuid` if the engine
  * doesn't, so it stays optional here.
@@ -20,7 +20,7 @@ export const envelopeFields = {
   uuid: z.string().optional(),
   /**
    * When set, this message belongs to a nested subagent/tool invocation.
-   * Mirrors CC's `parent_tool_use_id` on SDK messages.
+ * Mirrors the `parent_tool_use_id` on SDK messages.
    */
   parent_tool_use_id: z.string().optional(),
 }

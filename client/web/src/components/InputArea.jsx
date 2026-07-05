@@ -278,7 +278,7 @@ export default function InputArea() {
     setAtSuggestions([])
   }, [workspace])
 
-  // Debounced @ file search (CC useTypeahead debouncedFetchFileSuggestions)
+  // Debounced @ file search
   useEffect(() => {
     if (!atToken?.token.startsWith('@') || showSlashMenu || !workspace) {
       setAtSuggestions([])

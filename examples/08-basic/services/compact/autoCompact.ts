@@ -26,7 +26,7 @@ const RESERVED_FOR_OUTPUT = 20_000
 const AUTOCOMPACT_BUFFER = 13_000
 const MICRO_COMPACT_HEADSTART = 27_000
 const WARNING_BUFFER = 20_000
-// CC parity: hard limit = effectiveWindow - 3_000 (MANUAL_COMPACT_BUFFER).
+// Hard limit = effectiveWindow - 3_000 (MANUAL_COMPACT_BUFFER).
 // Past this point even a manual compact can't reliably fit, so the loop
 // should refuse to grow context further. We surface it via an event.
 const MANUAL_COMPACT_BUFFER = 3_000
@@ -70,8 +70,8 @@ function getCompactionConfig(base?: CompactionConfig) {
 }
 
 /**
- * CC parity (tengu_slate_heron): the prompt cache has almost certainly expired
- * once the gap since the last assistant message exceeds the TTL, so the prefix
+ * When the gap since the last assistant message exceeds the TTL, the prompt
+ * cache has almost certainly expired, so the prefix will be rewritten anyway.
  * will be rewritten regardless. Clearing old tool payloads (content-mutating
  * micro) before the next request shrinks what gets rewritten — and only does
  * so when the mutation is "free" (cache already cold).
@@ -103,7 +103,7 @@ function shouldTimeBasedMicro(
 
 /**
  * Tokens reserved for the model's output during compaction.
- * CC parity: `min(model max output, 20_000)`. When the model's max output is
+ * `min(model max output, 20_000)`. When the model's max output is
  * unknown (maxOutputTokens unset) we fall back to the full 20_000 reserve.
  */
 function getReservedForOutput(maxOutputTokens?: number): number {
@@ -142,7 +142,7 @@ function getMicroCompactThreshold(autoCompactThreshold: number): number {
 }
 
 /**
- * CC parity: the blocking limit is effectiveWindow - 3_000. Crossing it means
+ * The blocking limit is effectiveWindow - 3_000. Crossing it means
  * context is effectively unrecoverable for the next request.
  */
 function getBlockingLimit(
@@ -234,7 +234,7 @@ export async function compactIfNeeded(
     })
   }
 
-  // CC parity: surface the hard blocking limit. Context past this point can't
+  // Surface the hard blocking limit. Context past this point can't
   // be reliably recovered by compaction; the host loop should stop growing it.
   if (tokens >= blockingLimit) {
     eventBus.emit('compaction_blocking', {

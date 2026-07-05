@@ -158,7 +158,7 @@ export interface UserMessage {
   /** Meta attachments expanded for API — hidden from UI when true. */
   isMeta?: boolean
   /**
-   * Full-compact summary injected for the model (CC: isCompactSummary).
+   * Full-compact summary injected for the model (isCompactSummary).
    * Hidden from chat view; UI shows a compact_boundary marker instead.
    */
   isCompactSummary?: boolean
@@ -181,7 +181,7 @@ export interface AssistantMessage {
    * API-round id (the provider's response id). One `streamText` call = one
    * round, so all assistant records from the same response (incl. parallel
    * tool-call splits) share this id. Used to group messages by API round for
-   * PTL truncation and token estimation — mirrors CC's `message.id`.
+   * PTL truncation and token estimation.
    * Optional for backward-compat with sessions persisted before this field.
    */
   id?: string
@@ -223,7 +223,7 @@ export function isRoleMessage(msg: Message): msg is RoleMessage {
   return !isAttachmentMessage(msg)
 }
 
-/** CC ToolUseContext — minimal fields for attachment collection. */
+/** minimal fields for attachment collection. */
 export interface ToolUseContext {
   cwd: string
   session: Session
@@ -272,7 +272,7 @@ export interface AgentOptions {
   concurrencyPolicy?: ConcurrencyPolicyFn
   /** Persists large tool outputs; inherited by subagent runs. */
   sessionId?: string
-  /** Request-scoped context for getAttachmentMessages (CC pattern). */
+  /** Request-scoped context for getAttachmentMessages. */
   toolUseContext?: ToolUseContext
   /**
    * Rebuild the active tool set when permission mode changes mid-turn
@@ -285,9 +285,8 @@ export interface AgentOptions {
   onPermissionModeChange?: () => Message[]
   /**
    * Called after a full LLM compaction replaces the in-memory history.
-   * Host (chat route) uses this to write a `compacted` JSONL checkpoint —
-   * CC parity: useLogMessages passes the full post-compact array to
-   * recordTranscript when the first message uuid changes.
+   * Host (chat route) uses this to write a `compacted` JSONL checkpoint when
+   * the first message uuid changes.
    */
   onFullCompaction?: (messages: readonly Message[]) => void
 }
@@ -412,7 +411,7 @@ export interface AgentDefinition {
   /** Display label used in the UI's SubagentCard. Defaults to titlecased agentType. */
   label?: string
   /**
-   * Skip injecting project rules (AGENTS.md / CLAUDE.md / .cursor/rules/*)
+ * Skip injecting project rules (AGENTS.md / CLAUDE.md / .cursor/rules/*)
    * into this subagent's system prompt. Set true for fast read-only
    * exploration agents — the rules carry commit/PR/lint guidance the
    * subagent will never act on, and the parent already interprets results
@@ -470,16 +469,15 @@ export interface CompactionConfig {
   /** Total token budget for all restored files combined. */
   fileBudget: number
   /**
-   * Model's max output tokens. The compaction reserve is `min(this, 20_000)`,
-   * matching CC's `min(getMaxOutputTokensForModel(model), 20_000)`. When unset,
-   * the reserve defaults to 20_000 (same as before).
+   * Model's max output tokens. The compaction reserve is `min(this, 20_000)`.
+   * When unset, the reserve defaults to 20_000.
    */
   maxOutputTokens?: number
   /**
-   * Time-based micro-compaction (CC parity: `tengu_slate_heron`). When the gap
-   * since the last assistant message exceeds the TTL, the prompt cache is cold
-   * and the prefix will be rewritten anyway — so clearing old tool payloads
-   * first (content-mutating micro) is "free". Default off, like CC.
+   * Time-based micro-compaction. When the gap since the last assistant message
+   * exceeds the TTL, the prompt cache is cold and the prefix will be rewritten
+   * anyway — so clearing old tool payloads first (content-mutating micro) is
+   * "free". Default off.
    */
   timeBasedMicroEnabled?: boolean
   /**

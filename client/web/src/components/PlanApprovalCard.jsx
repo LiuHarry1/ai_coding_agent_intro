@@ -17,7 +17,7 @@ export default function PlanApprovalCard({ part }) {
   const done = part.status === 'answered'
   const pending = part.status === 'pending'
 
-  // CC: user cannot see the plan until ExitPlanMode — only pending/answered render.
+  // User cannot see the plan until ExitPlanMode — only pending/answered render.
   if (!pending && !done) return null
 
   useEffect(() => {

@@ -7,7 +7,7 @@
  *   description: Run lints and auto-fix all reported issues.
  *   argument-hint: "[file-glob]"          # shown in autocomplete
  *   arguments: "scope severity"           # enables $scope / $severity
- *   model: claude-sonnet-4-5              # optional override
+ *   model: my-model-name              # optional override
  *   ---
  *
  *   Body uses $ARGUMENTS / $1 / $name plus !`shell` and @file directives.

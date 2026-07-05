@@ -13,7 +13,7 @@ import { estimateConversationTokens, clearTokenUsages } from './tokens.js'
 
 // ── Prompt (analysis + summary) ─────────────────────────
 
-// CC parity: aggressive no-tools preamble FIRST. On adaptive-thinking models
+// aggressive no-tools preamble FIRST. On adaptive-thinking models
 // the summarizer sometimes attempts a tool call despite a weak instruction;
 // being explicit about rejection consequences up front prevents a wasted turn.
 const NO_TOOLS_PREAMBLE = `CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
@@ -25,7 +25,7 @@ const NO_TOOLS_PREAMBLE = `CRITICAL: Respond with TEXT ONLY. Do NOT call any too
 
 `
 
-// CC parity: weaker reminder repeated at the very end as a trailer.
+// weaker reminder repeated at the very end as a trailer.
 const NO_TOOLS_TRAILER =
   '\n\nREMINDER: Do NOT call any tools. Respond with plain text only — ' +
   'an <analysis> block followed by a <summary> block. ' +
@@ -119,7 +119,7 @@ Here's an example of how your output should be structured:
 Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.`
 
 /**
- * Assemble the summarizer system prompt. Mirrors CC's getCompactPrompt():
+ * Assemble the summarizer system prompt:
  *   preamble + base + (optional "Additional Instructions") + trailer.
  *
  * `customInstructions` come from a manual `/compact <instructions>` invocation
@@ -163,15 +163,14 @@ export interface CompactContext {
   provider?: IProvider
 }
 
-// CC parity: MAX_PTL_RETRIES = 3. If the summarizer call itself overflows,
+// MAX_PTL_RETRIES = 3. If the summarizer call itself overflows,
 // drop the oldest API round and retry, up to this many times.
 const MAX_SUMMARIZE_RETRIES = 3
 
 /**
- * Drop the oldest "API round" from the message list for prompt-too-long
- * recovery. Mirrors CC's truncateHeadForPTLRetry.
+ * Drop the oldest "API round" from the message list for prompt-too-long recovery.
  *
- * Primary strategy (CC parity): group by the assistant round `id` (the
+ * Primary strategy: group by the assistant round `id` (the
  * provider's response id). The first round is everything up to and including
  * the messages sharing the first assistant id; we drop it and keep the rest.
  * This stays correct for long single-user-turn agentic sessions (where

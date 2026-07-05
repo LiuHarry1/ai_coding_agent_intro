@@ -1,4 +1,4 @@
-/** @-mention extraction — from claude-code-rev `utils/attachments.ts`, + CJK-before-@. */
+/** @-mention extraction — from `utils/attachments.ts`, + CJK-before-@. */
 
 /** Whitespace, line start, or CJK/Hangul/Kana immediately before `@`. */
 const AT_MENTION_PREFIX =

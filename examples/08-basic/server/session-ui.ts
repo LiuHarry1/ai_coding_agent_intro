@@ -22,7 +22,7 @@ function userMessageText(msg: Message): string {
         .join('')
 }
 
-/** CC parity: compact summary is model-only; UI gets a boundary marker. */
+/** compact summary is model-only; UI gets a boundary marker. */
 function isCompactSummaryMessage(msg: Message): boolean {
   if (!isRoleMessage(msg) || msg.role !== 'user') return false
   if (msg.isCompactSummary) return true
@@ -104,7 +104,7 @@ function appendAssistantParts(
  * those into a single assistant bubble; merge consecutive assistant parts here
  * so session reload matches that layout.
  *
- * CC parity: isCompactSummary user messages become compact_boundary markers,
+ * isCompactSummary user messages become compact_boundary markers,
  * not raw user bubbles with the full summary text.
  */
 export function sessionToUIMessages(messages: Message[]): unknown[] {
@@ -173,7 +173,7 @@ type JsonlReplayItem =
     }
 
 /**
- * CC transcript parity: replay the append-only JSONL without collapsing at
+ * Replay the append-only JSONL without collapsing at
  * `compacted` checkpoints. Agent restore still uses restoreFromDisk(); UI uses
  * this path so Cursor-style chat shows the full scrollback (micro-compact never
  * wrote cleared tool payloads to disk; full-compact pre-checkpoint lines remain).

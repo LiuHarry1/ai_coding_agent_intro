@@ -11,7 +11,7 @@ import {
 import type { RunAgentFn } from '../core/types.js'
 import { BaizeAcpAgent } from './baize-acp-agent.js'
 
-/** CC ref: `runAcp()` in claude-code-acp — stdio JSON-RPC entry. */
+/** 
 export function runAcp(
   runAgent: RunAgentFn,
   defaultCwd: string,

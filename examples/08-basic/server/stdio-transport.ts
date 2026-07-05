@@ -3,7 +3,7 @@ import type { OutgoingMessage } from '../../../protocol/src/wire.js'
 import { ndjsonSafeStringify } from './ndjson-safe-stringify.js'
 
 /**
- * Stdio NDJSON transport — CC ref: structuredIO.write().
+ * Stdio NDJSON transport — 
  * One `@ai-agent/protocol` message per line on stdout.
  */
 export function createStdioTransport(): SSETransport {

@@ -1,6 +1,5 @@
 /**
- * Canonical tool names — claude-code-rev `constants/tools.ts` equivalent.
- * Import from here everywhere.
+ * Canonical tool names. Import from here everywhere.
  */
 
 export const BASH_TOOL_NAME = 'Bash'

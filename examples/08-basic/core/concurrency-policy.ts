@@ -4,7 +4,7 @@ export type ConcurrencyPolicyFn = (toolName: string, input: unknown) => boolean
 
 /**
  * Build a runtime concurrency policy from registered tool definitions.
- * Tools without `isConcurrencySafe` default to serial execution (CC default).
+ * Tools without `isConcurrencySafe` default to serial execution.
  */
 export function buildConcurrencyPolicy(
   registry: IToolRegistry,

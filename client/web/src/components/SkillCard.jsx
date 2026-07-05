@@ -13,7 +13,7 @@ import {
 } from './pickToolCard.js'
 
 /**
- * Unified Skill row — mirrors Claude Code's single skill renderer:
+ * Unified Skill row:
  *
  *   - The headline (skill name) comes straight from the tool input, so it's
  *     present from the first frame regardless of inline/fork — no `…` and no
@@ -63,7 +63,7 @@ export default function SkillCard({ part, nested = false }) {
   const [showAllSteps, setShowAllSteps] = useState(false)
   const wasDone = useRef(isDone)
 
-  // Collapse the step list once the fork completes (CC behaviour: live while
+  // Collapse the step list once the fork completes (live while
   // running, tidy when done).
   useEffect(() => {
     if (isDone && !wasDone.current) setStepsOpen(false)

@@ -179,7 +179,7 @@ export class FsOpError extends Error {
   }
 }
 
-// ── @-mention file search (Claude Code fileSuggestions pattern, simplified) ──
+// ── @-mention file search (fileSuggestions pattern, simplified) ──
 
 export interface FileSearchEntry {
   /** Path relative to workspace root, forward slashes. */

@@ -1,5 +1,5 @@
 /**
- * CC-aligned attachment API — unified getAttachments / getAttachmentMessages.
+ * Attachment API — unified getAttachments / getAttachmentMessages.
  */
 import { randomUUID } from 'crypto'
 import type {

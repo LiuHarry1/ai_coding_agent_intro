@@ -1,4 +1,4 @@
-/** Aligned with claude-code-rev `constants/apiLimits.ts` + `FileReadTool/limits.ts`. */
+/** Aligned with `constants/apiLimits.ts` + `FileReadTool/limits.ts`. */
 
 export const MAX_OUTPUT_SIZE_BYTES = 256 * 1024
 export const DEFAULT_MAX_OUTPUT_TOKENS = 25_000

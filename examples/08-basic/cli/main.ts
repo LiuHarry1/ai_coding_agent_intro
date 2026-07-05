@@ -1,5 +1,5 @@
 /**
- * Headless CLI — NDJSON over stdio (CC: structuredIO / print-mode).
+ * Headless CLI — NDJSON over stdio (structuredIO / print-mode).
  *
  * Usage:
  *   npm run cli -- --workspace /path/to/project

@@ -71,7 +71,6 @@ export async function expandSkillBody(
 
   // `${SKILL_DIR}` → skill folder. Normalize backslashes on Windows so
   // shell snippets don't treat them as escape sequences.
-  // `${CLAUDE_SKILL_DIR}`.
   if (skill.baseDir) {
     const dir =
       process.platform === 'win32'

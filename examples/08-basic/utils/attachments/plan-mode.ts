@@ -1,5 +1,5 @@
 /**
- * Plan mode attachments — CC attachments.ts equivalent.
+ * Plan mode attachments.
  */
 import type { Message, ToolUseContext, UserMessage } from '../../core/types.js'
 import { isAttachmentMessage } from '../../core/types.js'

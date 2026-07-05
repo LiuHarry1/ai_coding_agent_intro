@@ -159,7 +159,7 @@ export async function getAttachmentsForInput(
   return results.filter((r): r is Attachment => r != null)
 }
 
-/** CC: processAtMentionedFiles */
+/** processAtMentionedFiles */
 export async function processAtMentionedFiles(
   input: string,
   ctx: { cwd: string; readFileState: ReadFileState },

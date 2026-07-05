@@ -605,8 +605,8 @@ export const useChatStore = create((set, get) => ({
   },
 
   /**
-   * CC/Cursor parity: full compact updates agent memory but JSONL keeps the
-   * complete transcript. Refetch from the server instead of truncating local UI.
+   * Full compact updates agent memory but JSONL keeps the complete transcript.
+   * Refetch from the server instead of truncating local UI.
    */
   _refetchTranscriptAfterCompaction: async () => {
     const id = get().currentSessionId
@@ -638,7 +638,7 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  /** ExitPlanMode — show plan card only when user approval is requested (CC UX). */
+  /** ExitPlanMode — show plan card only when user approval is requested. */
   _appendPlanApprovalPart: data => {
     set(s => {
       const msgs = [...s.messages]

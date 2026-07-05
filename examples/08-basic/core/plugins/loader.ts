@@ -6,9 +6,8 @@
  * collects their agents / commands / skills / MCP servers into a single
  * `PluginContributions` bundle.
  *
- * Mirrors Claude Code's `loadAllPlugins` → component-loader split
- * (`loadPluginAgents`, `loadPluginCommands`, `mcpPluginIntegration`), but
- * tailored to this repo's flat `.ai-agent/` model: plugin contributions carry
+ * Component-loader split (`loadPluginAgents`, `loadPluginCommands`,
+ * `mcpPluginIntegration`), tailored to this repo's flat `.ai-agent/` model: plugin contributions carry
  * `source: "plugin"` — the LOWEST override priority — so anything in the
  * user's or project's own `.ai-agent/` wins on a name collision.
  *
@@ -373,8 +372,8 @@ export async function loadPlugins(cwd: string): Promise<PluginContributions> {
   ])
 
   // Flat MCP namespace: warn on cross-plugin name collisions (later plugin
-  // wins). CC avoids this entirely by scoping as `plugin:{name}:{server}`;
-  // we keep flat names but surface the shadowing instead of hiding it.
+  // wins). Some implementations scope as `plugin:{name}:{server}`; we keep
+  // flat names but surface the shadowing instead of hiding it.
   const mcpServers: Record<string, MCPServerConfig> = {}
   const mcpOwner: Record<string, string> = {}
   mcpRecords.forEach((record, i) => {

@@ -1,5 +1,5 @@
 /**
- * Plan mode V2 config — Claude Code planModeV2.ts equivalent (5-phase only).
+ * Plan mode V2 config (5-phase only).
  */
 
 function parsePositiveInt(

@@ -11,7 +11,7 @@ import { ControlRequestSchema } from './control.js'
 /**
  * Messages flowing from the agent engine to a GUI / client.
  *
- * Shape mirrors Claude Code's SDKMessage union:
+ * Shape of the SDK message union:
  *   - top-level discriminant is `type`
  *   - the `system` type carries a secondary `subtype` discriminant
  *     (init / todo_update / skill_start / mode_changed / …)
@@ -24,7 +24,7 @@ import { ControlRequestSchema } from './control.js'
 
 // ── Handshake ────────────────────────────────────────
 // First message of a session. Announces protocol version + capabilities,
-// like CC's `system/init`. Fields the engine can't know yet are optional.
+// like `system/init`. Fields the engine can't know yet are optional.
 export const InitMessageSchema = z.object({
   type: z.literal('system'),
   subtype: z.literal('init'),
@@ -39,7 +39,7 @@ export const InitMessageSchema = z.object({
 })
 
 // ── Streaming assistant output ───────────────────────
-// Incremental deltas (CC's `stream_event` / partial assistant). `kind`
+// Incremental deltas (`stream_event` / partial assistant). `kind`
 // separates visible answer text from chain-of-thought reasoning.
 export const StreamEventMessageSchema = z.object({
   type: z.literal('stream_event'),
@@ -50,7 +50,7 @@ export const StreamEventMessageSchema = z.object({
   ...envelopeFields,
 })
 
-// A settled assistant message (CC's `assistant`). `content` is left as
+// A settled assistant message (`assistant`). `content` is left as
 // unknown for now — it carries the provider message shape verbatim.
 export const AssistantMessageSchema = z.object({
   type: z.literal('assistant'),
@@ -101,7 +101,7 @@ export const ModeChangedMessageSchema = z.object({
 })
 
 // ── Terminal result ──────────────────────────────────
-// Ends a turn (CC's `result`, split into success / error variants).
+// Ends a turn (`result`, split into success / error variants).
 export const ResultSuccessMessageSchema = z.object({
   type: z.literal('result'),
   subtype: z.literal('success'),
@@ -119,7 +119,7 @@ export const ResultErrorMessageSchema = z.object({
 })
 
 // ── GUI progress extensions (engine → client, Web UI parity) ──
-// CC keeps some of these off the SDK stream; we expose them for the web UI.
+// Kept off the public SDK stream; exposed for the web UI.
 
 export const ReasoningStartMessageSchema = z.object({
   type: z.literal('system'),
@@ -206,7 +206,7 @@ export const ToolTimingMessageSchema = z.object({
   ...envelopeFields,
 })
 
-/** Live shell/process output (CC: `tool_progress`). */
+/** Live shell/process output (`tool_progress`). */
 export const ToolProgressMessageSchema = z.object({
   type: z.literal('tool_progress'),
   tool_use_id: z.string(),
@@ -219,8 +219,7 @@ export const ToolProgressMessageSchema = z.object({
  * Anything the engine emits that isn't (yet) part of the stable public
  * contract — internal progress like compaction, token usage, tool-input
  * previews. Kept as an explicit escape hatch so additive engine changes
- * never crash a GUI (mirrors CC keeping internal events off the SDK
- * stream while still being forward-compatible).
+ * never crash a GUI while still being forward-compatible.
  */
 export const KeepAliveMessageSchema = z.object({
   type: z.literal('keep_alive'),

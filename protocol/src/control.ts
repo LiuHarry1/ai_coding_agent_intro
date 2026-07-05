@@ -4,7 +4,7 @@ import { PermissionModeSchema } from './common.js'
 /**
  * Bidirectional control sub-protocol.
  *
- * Directly modeled on Claude Code's controlSchemas.ts:
+ * Directly controlSchemas.ts:
  *   - `control_request`        — one side asks the other to do / decide something
  *   - `control_response`       — success / error reply, correlated by `request_id`
  *   - `control_cancel_request` — withdraw a still-open request
@@ -54,7 +54,7 @@ export const InterruptRequestSchema = z.object({
   subtype: z.literal('interrupt'),
 })
 
-/** Inner request payload, discriminated by `subtype` (CC convention). */
+/** Inner request payload, discriminated by `subtype` . */
 export const ControlRequestInnerSchema = z.discriminatedUnion('subtype', [
   CanUseToolRequestSchema,
   AskUserQuestionRequestSchema,

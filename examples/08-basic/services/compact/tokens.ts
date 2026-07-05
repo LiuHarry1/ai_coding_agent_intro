@@ -110,7 +110,7 @@ export function tokenCountWithEstimation(messages: Message[]): {
     // on only the last one; interleaved tool_results between them must
     // be included in the estimate).
     //
-    // CC parity: when the usage-bearing assistant carries a round `id`, group
+    // When the usage-bearing assistant carries a round `id`, group
     // only same-id siblings (the true parallel-tool group) and stop at the
     // previous round. Without an id (older sessions), fall back to the
     // heuristic of "all assistants since the last user message".

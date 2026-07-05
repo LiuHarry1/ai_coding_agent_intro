@@ -28,7 +28,7 @@ function isPublishDiagnosticsParams(params: unknown): params is {
 }
 
 /**
- * Register LSP notification handlers on all servers (CC passiveFeedback.ts).
+ * Register LSP notification handlers on all servers.
  */
 export function registerLSPNotificationHandlers(
   manager: LspServerManager,

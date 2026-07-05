@@ -7,7 +7,7 @@ import { PROTOCOL_VERSION } from '../../../protocol/src/version.js'
 import type { ServerMessage } from '../../../protocol/src/server.js'
 import type { ControlRequest } from '../../../protocol/src/control.js'
 
-/** CC ref: src/utils/messages/systemInit.ts → buildSystemInitMessage */
+/** 
 export function buildInitMessage(input: {
   session_id: string
   permission_mode: string

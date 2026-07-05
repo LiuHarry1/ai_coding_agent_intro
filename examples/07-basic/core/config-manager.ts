@@ -14,8 +14,7 @@ const CONFIG_FILE = 'config.json'
 const DEFAULTS: AppConfig = {
   provider: { ...DEFAULT_PROFILE },
   compaction: {
-    // Defaults for autocompact thresholds on a 200K model
-    // (Claude 3.5 Sonnet / Claude 4.x baseline). See:
+    // Defaults for autocompact thresholds on a 200K model. See:
     //   src/utils/context.ts:           MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
     //                                   COMPACT_MAX_OUTPUT_TOKENS    =  20_000
     //   services/compact/autoCompact.ts: AUTOCOMPACT_BUFFER_TOKENS   =  13_000

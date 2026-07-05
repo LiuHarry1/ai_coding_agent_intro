@@ -1,6 +1,5 @@
 /**
- * Heuristic read-only check for shell tool inputs. Mirrors Claude Code's
- * BashTool.isReadOnly / isConcurrencySafe split: only commands that cannot
+ * Heuristic read-only check for shell tool inputs. Only commands that cannot
  * mutate state and do not `cd` are safe to run in parallel (shell tools
  * share a per-instance cwd ref that would race under concurrent `cd`).
  */

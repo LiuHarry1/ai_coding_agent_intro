@@ -1,6 +1,6 @@
 /**
- * Session-level permission modes — Claude Code toolPermissionContext equivalent.
- * Three external modes map to Cursor-style Agent / Ask / Plan UX.
+ * Session-level permission modes. Three external modes map to Agent / Ask /
+ * Plan UX.
  */
 
 export type ExternalMode = 'agent' | 'ask' | 'plan'

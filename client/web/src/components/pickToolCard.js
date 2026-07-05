@@ -48,7 +48,7 @@ const TOOL_CARDS = {
 
 export function pickCard(item, options = {}) {
   const { nested = false } = options
-  // Skills always render via SkillCard — mirroring Claude Code's unified
+  // Skills always render via SkillCard — unified
   // skill renderer where the headline (skill name) comes straight from the
   // tool input, so it's stable from the first frame (no inline/fork component
   // swap). SkillCard itself shows fork nested-steps inline when present.

@@ -1,6 +1,5 @@
 /**
- * Plan file management — Claude Code utils/plans.ts equivalent.
- * Plans live under {workspace}/.ai-agent/plans/{slug}.md
+ * Plan file management. Plans live under {workspace}/.ai-agent/plans/{slug}.md
  */
 import * as fs from 'fs'
 import * as path from 'path'

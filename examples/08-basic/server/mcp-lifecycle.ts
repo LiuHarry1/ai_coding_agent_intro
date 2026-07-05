@@ -47,7 +47,7 @@ function sweepIdleManagers(): void {
   }
 }
 
-/** CC parity: clear stale MCP connections after settings write. */
+/** clear stale MCP connections after settings write. */
 export function invalidateMCPManagersForCwd(cwd: string): void {
   const resolved = path.resolve(cwd)
   for (const [key, entry] of managers) {

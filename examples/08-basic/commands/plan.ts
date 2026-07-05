@@ -1,5 +1,5 @@
 /**
- * /plan slash command — Claude Code commands/plan/plan.tsx equivalent.
+ * /plan slash command — commands/plan/plan.tsx equivalent.
  */
 import type { Session } from '../core/types.js'
 import {

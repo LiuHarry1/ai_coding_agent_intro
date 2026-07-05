@@ -1,5 +1,5 @@
 /**
- * Tool execution orchestration — CC: services/tools/toolExecution.ts
+ * Tool execution orchestration — services/tools/toolExecution.ts
  * Consecutive concurrency-safe calls run in parallel; mutating tools serially.
  */
 import type { AnyTool, Message, ToolMessage } from '../../core/types.js'
@@ -44,7 +44,7 @@ export function partitionToolCalls(
   calls: readonly ToolCallRef[],
   policy: ConcurrencyPolicyFn,
 ): Batch[] {
-  return calls.reduce((acc: Batch[], tc) => {
+ return calls.reduce((acc: Batch[], tc) => {
     const safe = isConcurrencySafe(policy, tc.toolName, tc.input)
     const last = acc[acc.length - 1]
     if (safe && last?.isConcurrencySafe) {

@@ -1,15 +1,15 @@
 /**
  * Declarative plugin system — types.
  *
- * Modeled on Claude Code's plugin architecture (`src/types/plugin.ts` +
+ * plugin architecture (`src/types/plugin.ts` +
  * `src/utils/plugins/schemas.ts`): a plugin is a *directory* of declarative
  * content (markdown agents/commands, SKILL.md folders, MCP server config),
  * NOT executed JavaScript. The loader scans the directory, validates an
  * optional manifest, and produces typed contributions that are merged into
  * the same registries the built-in `.ai-agent/` config uses.
  *
- * Directory layout (CC uses `.claude-plugin/plugin.json`; we use
- * `.ai-agent-plugin/plugin.json`, falling back to a root `plugin.json`):
+ * Directory layout (`.ai-agent-plugin/plugin.json`, falling back to a root
+ * `plugin.json`):
  *
  *   <plugins-root>/my-plugin/
  *   ├── .ai-agent-plugin/
@@ -36,8 +36,7 @@ export interface PluginAuthor {
 
 /**
  * Parsed `plugin.json`. All fields optional — a plugin with no manifest is
- * valid (name is derived from the directory). Mirrors the useful subset of
- * Claude Code's `PluginManifestSchema`; unknown keys are preserved.
+ * valid (name is derived from the directory). Unknown keys are preserved.
  */
 export interface PluginManifest {
   name?: string
@@ -85,7 +84,7 @@ export interface LoadedPlugin {
 }
 
 /**
- * Structured, non-fatal plugin load error. A lean version of Claude Code's
+ * Structured, non-fatal plugin load error. A lean version of 's
  * discriminated `PluginError` union (`src/types/plugin.ts`) — typed so the
  * `/plugins` command and logs can format errors consistently and callers can
  * branch on `type` instead of string-matching messages.

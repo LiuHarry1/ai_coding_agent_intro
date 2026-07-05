@@ -14,7 +14,7 @@ export type ReadToolExecuteResult = {
   followUpMessages?: import('../../core/types.js').Message[]
 }
 
-/** CC: tools/FileReadTool/FileReadTool.ts — thin wrapper over utils/read. */
+/** tools/FileReadTool/FileReadTool.ts — thin wrapper over utils/read. */
 export const definition: ToolDefinition = {
   name: READ_FILE_TOOL_NAME,
   description: 'Read files, images, PDFs, notebooks',

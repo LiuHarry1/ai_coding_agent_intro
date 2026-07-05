@@ -88,7 +88,7 @@ export function shouldEnforceQuota(
 /** Subscribe to usage events for one chat request; returns unsubscribe. */
 export function trackTurnTokens(
   eventBus: { on: (event: string, cb: (data: unknown) => void) => () => void },
-  acc: { tokens: number },
+ acc: { tokens: number },
 ): () => void {
   return eventBus.on('usage', data => {
     const e = data as {

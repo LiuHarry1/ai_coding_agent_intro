@@ -525,21 +525,18 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       const stream = streamText({
         model: provider.chatModel(resolvedModel),
         system: systemPrompt,
-        // Seven-pass message preparation before the SDK sees them (mirrors
-        // Claude Code's normalizeMessagesForAPI → ensureToolResultPairing
-        // pipeline ordering):
+        // Seven-pass message preparation before the SDK sees them:
         //   1. inlineReasoningAsText — rewrite reasoning blocks as
         //      <thinking> text so the request is portable across stateless
         //      proxies (copilot-api, etc.).
         //   2. expandAttachmentMessagesForAPI — inline attachment records
         //      into meta user messages (history keeps attachment type).
         //   3. regroupToolResults — pull every tool-result back to
-        //      immediately follow the assistant that issued its tool-call
-        //      (CC's "merge same-turn assistant + hoist tool_results").
+        //      immediately follow the assistant that issued its tool-call.
         //   4. mergeAdjacentUserMessages — collapse consecutive user
         //      messages (expanded attachments + real prompt).
         //   5. smooshSystemReminderSiblings — fold SR siblings into
-        //      simulated tool-result anchors / tool outputs (CC).
+        //      simulated tool-result anchors / tool outputs.
         //   6. ensureToolResultPairing — safety net for orphan/missing
         //      tool-results.
         //   7. applyCacheControlBreakpoint — prompt caching marker.
@@ -558,7 +555,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           provider,
         ) as RoleMessage[],
         // Schema-only tools — execution is handled by toolOrchestration so
-        // we can batch concurrency-safe reads in parallel (CC-style).
+        // we can batch concurrency-safe reads in parallel.
         tools: apiTools,
         maxOutputTokens: getMaxOutputTokens(),
         maxRetries: 3,
@@ -591,16 +588,16 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       // We deliberately do NOT reorder here: a reasoning model can split a
       // turn into [assistant(tool-call), assistant(text)], which leaves the
       // tool message non-adjacent to its tool-call. That's repaired at
-      // request time by regroupToolResults() (CC's model: keep raw history,
-      // normalize only before sending), so assembly stays a dumb append.
+      // request time by regroupToolResults() — keep raw history, normalize
+      // only before sending — so assembly stays a dumb append.
       const response = await stream.response
       const sdkMessages = (
         response.messages as unknown as RoleMessage[]
       ).filter(m => m.role !== 'tool')
       sanitizeReasoningParts(sdkMessages)
       // Stamp every assistant record from this response with the round id so
-      // they group as one API round (matches CC's per-response message.id),
-      // plus a receive timestamp for time-based micro-compaction.
+      // they group as one API round, plus a receive timestamp for
+      // time-based micro-compaction.
       const roundId = response.id
       const receivedAt = Date.now()
       for (const m of sdkMessages) {

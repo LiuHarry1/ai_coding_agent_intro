@@ -27,5 +27,5 @@ export const SUPPRESSED_TOOL_CARDS = new Set([
   EXIT_PLAN_MODE,
 ])
 
-/** Meta tools hidden inside subagent step lists (CC-style). */
+/** Meta tools hidden inside subagent step lists. */
 export const SUBAGENT_SUPPRESSED = new Set([TODO_WRITE, TOOL_SEARCH])

@@ -1,4 +1,4 @@
-/** Phase 4 section — Claude Code PLAN_PHASE4_CONTROL (messages.ts). */
+/** Phase 4 section — PLAN_PHASE4_CONTROL (messages.ts). */
 export const PLAN_PHASE4_SECTION = `### Phase 4: Final Plan
 Goal: Write your final plan to the plan file (the only file you can edit).
 - Begin with a **Context** section: explain why this change is being made — the problem or need it addresses, what prompted it, and the intended outcome

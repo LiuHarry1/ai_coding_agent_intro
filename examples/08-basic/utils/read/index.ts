@@ -21,7 +21,7 @@ export interface ReadFileOptions {
 
 export interface ReadFileResult {
   output: ReadOutput
-  /** Extra user messages for multimodal content (images/PDF), Claude Code `newMessages` pattern. */
+ /** Extra user messages for multimodal content (images/PDF), `newMessages` pattern. */
   followUpMessages?: Message[]
 }
 

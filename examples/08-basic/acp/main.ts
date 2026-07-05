@@ -1,5 +1,5 @@
 /**
- * ACP agent entry — JSON-RPC 2.0 over stdio (CC: claude-agent-acp).
+ * ACP agent entry — JSON-RPC 2.0 over stdio.
  *
  * Usage:
  *   npm run acp -- --workspace /path/to/project

@@ -17,7 +17,7 @@ import {
 } from './protocol-messages.js'
 
 /**
- * Typed wire emitter — CC ref: QueryEngine yielding SDKMessage at the engine
+ * Typed wire emitter — 
  * boundary instead of stringly eventBus pairs translated at transport time.
  */
 export class WireEmitter {

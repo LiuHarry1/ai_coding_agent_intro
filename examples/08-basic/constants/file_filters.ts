@@ -1,6 +1,6 @@
 /**
  * Single source of truth for "what counts as noise" in file searches.
- * Aligned with claude-code-rev exclusion patterns + workspace walk ignores.
+ * Aligned with 
  */
 
 export const VCS_DIRECTORIES = [

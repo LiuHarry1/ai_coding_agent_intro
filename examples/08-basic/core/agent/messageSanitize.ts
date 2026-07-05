@@ -118,9 +118,8 @@ export function inlineReasoningAsText(messages: Message[]): Message[] {
 /**
  * Relocate every tool-result block to immediately follow the assistant
  * message that issued its tool-call (matched by `toolCallId`), collapsing
- * each assistant's results into ONE tool message right after it. Mirrors
- * Claude Code's `normalizeMessagesForAPI` "merge same-turn assistant +
- * hoist tool_results" step (utils/messages.ts).
+ * each assistant's results into ONE tool message right after it — the
+ * "merge same-turn assistant + hoist tool_results" step.
  *
  * Why this matters: providers require tool results to IMMEDIATELY follow
  * the assistant carrying the matching tool-calls. Two real shapes break

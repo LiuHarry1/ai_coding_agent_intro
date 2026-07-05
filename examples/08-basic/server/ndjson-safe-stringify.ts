@@ -1,6 +1,6 @@
 /**
  * JSON.stringify for one-message-per-line transports.
- * CC ref: claude-code-rev/src/cli/ndjsonSafeStringify.ts
+ * 
  */
 const JS_LINE_TERMINATORS = /\u2028|\u2029/g
 

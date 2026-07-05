@@ -8,13 +8,12 @@ import {
 /**
  * Messages flowing from a GUI / client to the agent engine.
  *
- * Mirrors CC's `StdinMessage`: a user turn plus the client side of the
- * control sub-protocol (the client both *initiates* requests — e.g.
- * interrupt — and *responds* to engine requests — e.g. a permission
- * decision).
+ * A user turn plus the client side of the control sub-protocol (the client
+ * both *initiates* requests — e.g. interrupt — and *responds* to engine
+ * requests — e.g. a permission decision).
  */
 
-// A user turn (CC's `user` message). `text` + optional inline images.
+// A user turn. `text` + optional inline images.
 export const UserMessageSchema = z.object({
   type: z.literal('user'),
   text: z.string(),

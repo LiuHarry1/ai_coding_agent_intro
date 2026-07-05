@@ -24,7 +24,7 @@ import { promptBlocksToUserTurn } from './prompt-input.js'
 import { AcpSessionRegistry, runAcpPromptTurn } from './turn-runner.js'
 import { AcpTurnSink } from './translate-outbound.js'
 
-/** CC ref: `ClaudeAcpAgent` — ACP agent side bridging to `runChatTurn`. */
+/** 
 export class BaizeAcpAgent {
   readonly #runAgent: RunAgentFn
   readonly #defaultCwd: string

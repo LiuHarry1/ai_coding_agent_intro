@@ -1,5 +1,5 @@
 /**
- * Prepare a chat turn before runAgent — CC: processUserInput pipeline.
+ * Prepare a chat turn before runAgent — processUserInput pipeline.
  * Slash resolution, per-request registry reload, tools, mode restrictions.
  * Attachments collected in agent loop via getAttachmentMessages.
  */

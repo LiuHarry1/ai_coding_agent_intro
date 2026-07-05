@@ -69,7 +69,7 @@ type ParsedSettingsFile = {
   error?: string
 }
 
-/** CC parity: path-keyed parse cache invalidated by resetSettingsCache(). */
+/** path-keyed parse cache invalidated by resetSettingsCache(). */
 const parseFileCache = new Map<
   string,
   { mtimeMs: number; parsed: ParsedSettingsFile }
@@ -148,7 +148,7 @@ function readSettingsFile(filePath: string): ParsedSettingsFile {
   return parsed
 }
 
-/** CC parity: reset on settings write (see changeDetector → resetSettingsCache). */
+/** reset on settings write (see changeDetector → resetSettingsCache). */
 export function resetSettingsCache(): void {
   parseFileCache.clear()
   resolvedCache.clear()
@@ -290,7 +290,7 @@ export function getSafeSettings(resolved: ResolvedSettings): AppConfig {
 }
 
 /**
- * CC parity: EditableSettingSource excludes read-only policy/flag sources.
+ * EditableSettingSource excludes read-only policy/flag sources.
  * In SSO mode user scope writes to the container home and is blocked.
  */
 export function parseWritableScope(

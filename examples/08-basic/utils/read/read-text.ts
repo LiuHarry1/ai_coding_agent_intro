@@ -27,9 +27,9 @@ export function readTextFile(
     throw new Error(`${displayPath} is a directory, not a file`)
   }
 
-  // CC parity (FileReadTool → readFileInRange): when the caller supplies
-  // offset/limit, read only that window — no whole-file size gate. Without a
-  // range, files larger than MAX_OUTPUT_SIZE_BYTES must use offset/limit.
+  // When the caller supplies offset/limit, read only that window — no
+  // whole-file size gate. Without a range, files larger than
+  // MAX_OUTPUT_SIZE_BYTES must use offset/limit.
   const hasRange =
     options?.limit != null || (options?.offset != null && options.offset > 1)
   if (stat.size > MAX_OUTPUT_SIZE_BYTES) {
@@ -93,7 +93,7 @@ export function readTextFileTruncated(
     return readTextFile(absPath, displayPath, { offset, limit: lineLimit })
   }
 
-  // Oversized on disk: still attach a prefix of lines (CC @-file path). Only
+  // Oversized on disk: still attach a prefix of lines for @-file paths. Only
   // read whole file when below TRUNCATED_ATTACHMENT_MAX_BYTES — avoids the
   // MAX_OUTPUT_SIZE_BYTES gate in readTextFile() that blocks @-mentions.
   if (!fs.existsSync(absPath)) {

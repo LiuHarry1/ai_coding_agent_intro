@@ -1,4 +1,4 @@
-/** Binary extensions skipped for text reads — from claude-code-rev `constants/files.ts`. */
+/** Binary extensions skipped for text reads — from `constants/files.ts`. */
 
 export const BINARY_EXTENSIONS = new Set([
   '.png',

@@ -18,7 +18,7 @@ import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { createSubagentWire } from '../../core/brokers/subagent-wire.js'
 import { randomUUID } from 'crypto'
 
-/** CC: tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
+/** tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
 export function createTaskTool(
   agents: readonly AgentDefinition[],
 ): ToolDefinition {
@@ -209,7 +209,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
 
           const projectRules = def.omitProjectRules ? '' : loadProjectRules(cwd)
           const subSystemPrompt = projectRules
-            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+ ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
             : def.systemPrompt
 
           const result = await runAgent(prompt, {

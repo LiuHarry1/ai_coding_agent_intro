@@ -1,5 +1,5 @@
 /**
- * @-mention autocomplete helpers — ported from claude-code-rev useTypeahead.tsx.
+ * @-mention autocomplete helpers.
  */
 
 const AT_TOKEN_HEAD_RE = /^@[\p{L}\p{N}\p{M}_\-./\\()[\]~:]*/u
@@ -90,7 +90,7 @@ export function formatAtMentionReplacement(displayPath, options) {
   return `${displayPath}${suffix}`
 }
 
-/** Replace partial @ token with selected path (CC applyFileSuggestion). */
+/** Replace partial @ token with selected path. */
 export function applyFileSuggestion(
   replacementValue,
   input,

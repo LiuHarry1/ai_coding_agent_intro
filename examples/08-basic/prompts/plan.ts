@@ -34,7 +34,7 @@ export interface PlanPromptOptions {
 }
 
 /**
- * Plan mode system prompt — Claude Code 5-phase workflow (getPlanModeV2Instructions).
+ * Plan mode system prompt — 5-phase workflow.
  */
 export function planSystemPrompt(
   cwd: string,

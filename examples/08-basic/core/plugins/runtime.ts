@@ -1,11 +1,11 @@
 /**
  * Code-plugin runtime.
  *
- * The declarative loader (`loader.ts`) covers the Claude Code surface
+ * The declarative loader (`loader.ts`) covers the surface
  * (agents/commands/skills/MCP). This module wires the repo's pre-existing
  * `Plugin` / `PluginContext` / `PluginManager` API (`core/plugin-manager.ts`)
  * so a *code* plugin can register tools, middleware, and event handlers at
- * boot — the programmatic extension path CC intentionally does NOT offer.
+ * boot — the programmatic extension path not offered declaratively.
  *
  * The wrinkle: tools live on a durable singleton (`defaultRegistry`), but the
  * EventBus and Middleware are created fresh per chat request (see

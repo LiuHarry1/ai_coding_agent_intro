@@ -1,6 +1,6 @@
 /**
  * SSE parser and stream helpers for the agent backend wire format.
- * Messages are `@ai-agent/protocol` JSON bodies (CC: SDKMessage over SSE).
+ * Messages are `@ai-agent/protocol` JSON bodies over SSE.
  */
 
 import { AgentClientError } from './errors.js'

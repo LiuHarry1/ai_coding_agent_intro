@@ -1,5 +1,5 @@
 /**
- * CC-aligned message normalization — expand AttachmentMessage for API requests.
+ * Message normalization — expand AttachmentMessage for API requests.
  */
 import type {
   Diagnostic,
@@ -236,7 +236,7 @@ function smooshIntoSimulatedToolResult(
 
 /**
  * Concatenate two content arrays, appending `\n` to a's last text block when
- * the seam is text-text. Mirrors CC's joinTextAtSeam.
+ * the seam is text-text. Mirrors the joinTextAtSeam.
  */
 function joinTextAtSeam(
   a: UserContentPart[],
@@ -252,7 +252,7 @@ function joinTextAtSeam(
 
 /**
  * When merging into a simulated tool-result anchor, fold SR siblings into the
- * result block (CC mergeUserContentBlocks / smooshIntoToolResult for SDK text).
+ * result block (mergeUserContentBlocks / smooshIntoToolResult for SDK text).
  */
 function mergeUserContentBlocks(
   a: UserContentPart[],
@@ -273,7 +273,7 @@ function mergeUserContentBlocks(
   return joinTextAtSeam(a, b)
 }
 
-/** Merge user messages, smooshing SR siblings into simulated tool results (CC). */
+/** Merge user messages, smooshing SR siblings into simulated tool results. */
 function mergeUserMessagesAndToolResults(
   a: UserMessage,
   b: UserMessage,
@@ -374,7 +374,7 @@ function smooshSrIntoToolMessage(
 /**
  * Fold `<system-reminder>` siblings into simulated tool-result anchors within
  * user messages, and into real tool-result outputs when SR meta users follow
- * a tool message (CC smooshSystemReminderSiblings, SDK-adapted).
+ * a tool message (smooshSystemReminderSiblings, SDK-adapted).
  */
 export function smooshSystemReminderSiblings(messages: Message[]): Message[] {
   const out: Message[] = []

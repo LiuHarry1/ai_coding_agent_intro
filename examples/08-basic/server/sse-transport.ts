@@ -15,7 +15,7 @@ export function protocolEventName(msg: OutgoingMessage): string {
 
 /**
  * SSE transport — dumb serializer for `@ai-agent/protocol` messages.
- * CC ref: src/cli/structuredIO.ts (validate + serialize, no renaming).
+ * 
  */
 export function createSSETransport(
   res: ServerResponse,

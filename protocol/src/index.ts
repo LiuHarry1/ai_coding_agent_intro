@@ -2,7 +2,7 @@
  * @ai-agent/protocol — the single source of truth for the wire format
  * spoken between the coding-agent engine and any GUI.
  *
- * Layout (mirrors Claude Code's sdk schemas):
+ * Layout:
  *   - version   — PROTOCOL_VERSION
  *   - common    — shared primitives (envelope, todo, mode, usage)
  *   - control   — bidirectional control_request / response / cancel

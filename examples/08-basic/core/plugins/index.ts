@@ -1,7 +1,7 @@
 /**
  * Plugin system entry point.
  *
- * Two complementary mechanisms (see Claude Code parity notes in `loader.ts`
+ * Two complementary mechanisms (see parity notes in `loader.ts`
  * and `runtime.ts`):
  *
  *   1. Declarative plugins — `loadPlugins(cwd)` discovers `.ai-agent/plugins/*`

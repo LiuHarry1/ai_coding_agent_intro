@@ -6,13 +6,12 @@ import type {
 } from '../types.js'
 
 /**
- * Claude 4.6+ (incl. Opus 4.7) expects extended thinking via `thinking.type: "adaptive"`.
+ * Anthropic 4.6+ models expect extended thinking via `thinking.type: "adaptive"`.
  * `type: "enabled"` + `budget_tokens` is for older models (pre-Opus 4.6).
  * @see @ai-sdk/anthropic `anthropicLanguageModelOptions` schema.
  */
 function needsAdaptive(modelId: string): boolean {
-  // Normalize dots to dashes so `claude-opus-4.6` matches the same patterns
-  // as the canonical `claude-opus-4-6` form.
+  // Normalize dots to dashes so dotted model ids match dashed forms.
   const m = modelId.toLowerCase().replace(/\./g, '-')
   if (
     m.includes('opus-4-') ||
@@ -20,7 +19,7 @@ function needsAdaptive(modelId: string): boolean {
     m.includes('haiku-4-')
   )
     return true
-  if (/claude-[^/]+-4-[6-9]/.test(m)) return true
+ if (/claude-[^/]+-4-[6-9]/.test(m)) return true
   return false
 }
 

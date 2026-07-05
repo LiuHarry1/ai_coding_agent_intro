@@ -1,6 +1,6 @@
 import type { AgentDefinition } from '../../core/types.js'
 
-/** Pure data factory for subagent definitions (CC: AgentTool/loadAgentsDir). */
+/** Pure data factory for subagent definitions (AgentTool/loadAgentsDir). */
 export function createAgentDefinition(def: AgentDefinition): AgentDefinition {
   if (def.tools && def.disallowedTools) {
     throw new Error(
