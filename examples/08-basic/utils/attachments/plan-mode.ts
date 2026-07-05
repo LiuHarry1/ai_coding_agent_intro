@@ -3,7 +3,6 @@
  */
 import type { Message, ToolUseContext, UserMessage } from '../../core/types.js'
 import { isAttachmentMessage } from '../../core/types.js'
-import type { ExternalMode } from '../../core/permission-mode.js'
 import type { Attachment } from './types.js'
 import {
   ASK_USER_QUESTION_TOOL_NAME,
@@ -14,16 +13,12 @@ import {
   WRITE_FILE_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import { getPlanFilePath, planExists } from '../plans.js'
+import { isSystemReminderContent } from '../system-reminder.js'
 
 export const PLAN_MODE_ATTACHMENT_CONFIG = {
   TURNS_BETWEEN_ATTACHMENTS: 5,
   FULL_REMINDER_EVERY_N_ATTACHMENTS: 5,
 } as const
-
-function isSystemReminderContent(content: string): boolean {
-  const t = content.trim()
-  return t.startsWith('<system-reminder>') && t.endsWith('</system-reminder>')
-}
 
 function isHumanUserTurn(message: Message): boolean {
   if (isAttachmentMessage(message)) return false
@@ -138,29 +133,6 @@ export function getPlanModeExitAttachment(ctx: ToolUseContext): Attachment[] {
       planExists: planExists(ctx.session, ctx.cwd),
     },
   ]
-}
-
-/** @deprecated Use getPlanModeAttachments via getAttachmentMessages. */
-export function buildPlanModeAttachments(
-  session: ToolUseContext['session'],
-  cwd: string,
-  mode: ExternalMode,
-): Message[] {
-  if (mode !== 'plan' && !session.needsPlanModeExitAttachment) return []
-  const ctx: ToolUseContext = {
-    cwd,
-    session,
-    readFileState: session.readFileState ?? new Map(),
-    options: { tools: {} },
-  }
-  const attachments = [
-    ...getPlanModeExitAttachment(ctx),
-    ...getPlanModeAttachments(session.messages, ctx),
-  ]
-  return attachments.map(a => ({
-    role: 'user' as const,
-    content: `<system-reminder>\n[deprecated plan attachment: ${a.type}]\n</system-reminder>`,
-  }))
 }
 
 function attachmentToMessage(text: string): UserMessage {

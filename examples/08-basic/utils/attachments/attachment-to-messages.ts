@@ -124,7 +124,3 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     }
   }
 }
-
-export function attachmentsToMessages(attachments: Attachment[]): Message[] {
-  return attachments.flatMap(a => attachmentToMessages(a))
-}

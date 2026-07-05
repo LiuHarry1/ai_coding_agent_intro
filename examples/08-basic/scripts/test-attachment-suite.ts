@@ -11,7 +11,6 @@ import {
   expandAttachmentMessagesForAPI,
   mergeAdjacentUserMessages,
   smooshSystemReminderSiblings,
-  normalizeAttachmentForAPI,
 } from '../utils/messages.js'
 import { isAttachmentMessage } from '../core/types.js'
 import type { Message } from '../core/types.js'
@@ -120,7 +119,15 @@ async function runOfflineTests(): Promise<void> {
   )
 
   if (hugeAtt && hugeAtt.type === 'file') {
-    const expanded = normalizeAttachmentForAPI(hugeAtt)
+    const expanded = expandAttachmentMessagesForAPI([
+      {
+        type: 'attachment',
+        attachment: hugeAtt,
+        uuid: 'test-huge',
+        timestamp: new Date().toISOString(),
+        isMeta: true,
+      },
+    ])
     const merged = mergeAdjacentUserMessages(expanded)
     const smooshed = smooshSystemReminderSiblings(merged)
     const userMsgs = smooshed.filter(m => !isAttachmentMessage(m) && m.role === 'user')

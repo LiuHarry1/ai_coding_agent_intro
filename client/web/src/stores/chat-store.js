@@ -583,10 +583,7 @@ export const useChatStore = create((set, get) => ({
     let streamingAssistant = null
     if (s.isStreaming && last?.type === 'assistant') {
       const parts = last.parts.filter(
-        p =>
-          p.type !== 'compaction_start' &&
-          p.type !== 'compaction_done' &&
-          p.type !== 'thinking',
+        p => p.type !== 'compaction_start' && p.type !== 'thinking',
       )
       streamingAssistant = { ...last, parts }
     }

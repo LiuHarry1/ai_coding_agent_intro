@@ -40,12 +40,6 @@ async function maybe<A>(label: string, f: () => Promise<A[]>): Promise<A[]> {
   }
 }
 
-async function getDiagnosticAttachments(
-  _ctx: ToolUseContext,
-): Promise<Attachment[]> {
-  return []
-}
-
 async function getLSPDiagnosticAttachments(
   ctx: ToolUseContext,
 ): Promise<Attachment[]> {
@@ -104,7 +98,6 @@ export async function getAttachments(
   ]
 
   const mainThreadAttachments = [
-    maybe('diagnostics', () => getDiagnosticAttachments(toolUseContext)),
     maybe('lsp_diagnostics', () => getLSPDiagnosticAttachments(toolUseContext)),
   ]
 

@@ -65,27 +65,15 @@ function ReasoningBlock({ part }) {
 }
 
 function CompactionNotice({ part }) {
-  if (part.type === 'compaction_start') {
-    return (
-      <div className='compaction-notice'>
-        <div className='dot' />
-        <div className='dot' />
-        <div className='dot' />
-        <span>
-          Compacting context ({part.totalMessages} &rarr; {part.keeping}{' '}
-          messages)...
-        </span>
-      </div>
-    )
-  }
   return (
-    <div className='compaction-notice done'>
-      <details>
-        <summary>
-          &#10003; Context compacted ({part.summaryLength} chars)
-        </summary>
-        <pre className='compaction-summary'>{part.summary}</pre>
-      </details>
+    <div className='compaction-notice'>
+      <div className='dot' />
+      <div className='dot' />
+      <div className='dot' />
+      <span>
+        Compacting context ({part.totalMessages} &rarr; {part.keeping}{' '}
+        messages)...
+      </span>
     </div>
   )
 }
@@ -399,7 +387,6 @@ export default function MessageBubble({ message }) {
           case 'todo_list':
             return <TodoListCard key={i} part={part} />
           case 'compaction_start':
-          case 'compaction_done':
             return <CompactionNotice key={i} part={part} />
           case 'error':
             return <ErrorBlock key={i} message={part.message} />

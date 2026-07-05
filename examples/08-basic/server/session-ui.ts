@@ -5,16 +5,12 @@ import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import { SESSION_DIR } from './session.js'
 import { getSubagentNames } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools/index.js'
+import { isSystemReminderContent } from '../utils/system-reminder.js'
 
 const COMPACT_SUMMARY_PREFIX =
   '[Previous conversation compacted — context continues below]\n\n'
 const COMPACT_SUMMARY_FOOTER =
   '\n\nContinue from where you left off without asking questions.'
-
-function isSystemReminderContent(content: string): boolean {
-  const t = content.trim()
-  return t.startsWith('<system-reminder>') && t.endsWith('</system-reminder>')
-}
 
 function userMessageText(msg: Message): string {
   if (!isRoleMessage(msg) || msg.role !== 'user') return ''
@@ -27,14 +23,14 @@ function userMessageText(msg: Message): string {
 }
 
 /** CC parity: compact summary is model-only; UI gets a boundary marker. */
-export function isCompactSummaryMessage(msg: Message): boolean {
+function isCompactSummaryMessage(msg: Message): boolean {
   if (!isRoleMessage(msg) || msg.role !== 'user') return false
   if (msg.isCompactSummary) return true
   const text = userMessageText(msg)
   return text.startsWith(COMPACT_SUMMARY_PREFIX)
 }
 
-export function extractCompactSummaryBody(content: string): string {
+function extractCompactSummaryBody(content: string): string {
   if (!content.startsWith(COMPACT_SUMMARY_PREFIX)) return content
   let body = content.slice(COMPACT_SUMMARY_PREFIX.length)
   const footerIdx = body.indexOf(COMPACT_SUMMARY_FOOTER)
@@ -117,15 +113,7 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
   let currentAssistant: UIAssistantMessage | null = null
 
   for (const msg of messages) {
-    if (isAttachmentMessage(msg)) {
-      if (msg.isMeta) continue
-      currentAssistant = null
-      uiMessages.push({
-        type: 'user',
-        content: `[attachment: ${msg.attachment.type}]`,
-      })
-      continue
-    }
+    if (isAttachmentMessage(msg)) continue
     if (msg.role === 'user') {
       currentAssistant = null
       const content = userMessageText(msg)

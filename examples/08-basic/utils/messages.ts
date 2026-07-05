@@ -1,7 +1,6 @@
 /**
  * CC-aligned message normalization — expand AttachmentMessage for API requests.
  */
-import * as path from 'path'
 import type {
   Diagnostic,
   DiagnosticFile,
@@ -19,13 +18,12 @@ import {
   ASK_USER_QUESTION_TOOL_NAME,
   EXIT_PLAN_MODE_TOOL_NAME,
 } from '../constants/tool_names.js'
+import {
+  wrapInSystemReminder,
+} from './system-reminder.js'
 
 const MAX_DIAGNOSTICS_SUMMARY_CHARS = 8000
 const SR_PREFIX = '<system-reminder>'
-
-export function wrapInSystemReminder(content: string): string {
-  return `<system-reminder>\n${content}\n</system-reminder>`
-}
 
 export function wrapMessagesInSystemReminder(
   messages: UserMessage[],
@@ -69,7 +67,7 @@ function severitySymbol(severity: Diagnostic['severity']): string {
   }
 }
 
-export function formatDiagnosticsSummary(files: DiagnosticFile[]): string {
+function formatDiagnosticsSummary(files: DiagnosticFile[]): string {
   const truncationMarker = '…[truncated]'
   const result = files
     .map(file => {
@@ -118,7 +116,7 @@ function getPlanModeInstructions(
   return wrapMessagesInSystemReminder([metaUserMessage(content)])
 }
 
-export function normalizeAttachmentForAPI(attachment: Attachment): UserMessage[] {
+function normalizeAttachmentForAPI(attachment: Attachment): UserMessage[] {
   switch (attachment.type) {
     case 'directory':
     case 'file':
@@ -274,36 +272,14 @@ function mergeUserContentBlocks(
   return joinTextAtSeam(a, b)
 }
 
-/** CC hoistToolResults — no-op for SDK user content (tool results use role: tool). */
-function hoistToolResults(content: UserContentPart[]): UserContentPart[] {
-  return content
-}
-
-/** Merge two adjacent user messages (CC mergeUserMessages). */
-export function mergeUserMessages(a: UserMessage, b: UserMessage): UserMessage {
-  const merged = hoistToolResults(
-    joinTextAtSeam(
-      normalizeUserContent(a.content),
-      normalizeUserContent(b.content),
-    ),
-  )
-  return {
-    role: 'user',
-    content: denormalizeUserContent(merged),
-    isMeta: a.isMeta && b.isMeta ? true : undefined,
-  }
-}
-
 /** Merge user messages, smooshing SR siblings into simulated tool results (CC). */
-export function mergeUserMessagesAndToolResults(
+function mergeUserMessagesAndToolResults(
   a: UserMessage,
   b: UserMessage,
 ): UserMessage {
-  const merged = hoistToolResults(
-    mergeUserContentBlocks(
-      normalizeUserContent(a.content),
-      normalizeUserContent(b.content),
-    ),
+  const merged = mergeUserContentBlocks(
+    normalizeUserContent(a.content),
+    normalizeUserContent(b.content),
   )
   return {
     role: 'user',
@@ -426,9 +402,4 @@ export function smooshSystemReminderSiblings(messages: Message[]): Message[] {
     out.push(raw)
   }
   return out
-}
-
-export function formatDiagnosticFilePath(cwd: string, filePath: string): string {
-  const relative = path.relative(cwd, filePath).replaceAll('\\', '/')
-  return relative && !relative.startsWith('..') ? relative : filePath
 }
