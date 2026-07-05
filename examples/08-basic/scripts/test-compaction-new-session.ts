@@ -35,8 +35,7 @@ async function chat(
   if (!res.ok) {
     throw new Error(`chat failed: ${res.status} ${await res.text()}`)
   }
-  const sessionIdOut =
-    res.headers.get('x-session-id') ?? sessionId ?? ''
+  const sessionIdOut = res.headers.get('x-session-id') ?? sessionId ?? ''
   const body = await res.text()
   return { sessionId: sessionIdOut, body }
 }

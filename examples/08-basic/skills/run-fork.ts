@@ -90,7 +90,9 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
   delete subTools[SKILL_TOOL_NAME]
 
   if (!provider) {
-    throw new Error(`Skill '${skill.name}' fork requires a request-scoped provider`)
+    throw new Error(
+      `Skill '${skill.name}' fork requires a request-scoped provider`,
+    )
   }
 
   const result = await runAgent(combined, {

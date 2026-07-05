@@ -185,7 +185,9 @@ export function createLspServerManager(
     if (errors.length > 0) {
       throw new Error(
         `Failed to stop ${errors.length} LSP server(s): ${errors
-          .map(e => (e.reason instanceof Error ? e.reason.message : String(e.reason)))
+          .map(e =>
+            e.reason instanceof Error ? e.reason.message : String(e.reason),
+          )
           .join('; ')}`,
       )
     }

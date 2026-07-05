@@ -39,7 +39,11 @@ export const SYNTHETIC_TOOL_RESULT_PLACEHOLDER =
  */
 export function sanitizeReasoningParts(messages: Message[]): void {
   for (const msg of messages) {
-    if (!isRoleMessage(msg) || msg.role !== 'assistant' || !Array.isArray(msg.content))
+    if (
+      !isRoleMessage(msg) ||
+      msg.role !== 'assistant' ||
+      !Array.isArray(msg.content)
+    )
       continue
     for (const part of msg.content) {
       delete (part as { providerOptions?: unknown }).providerOptions
@@ -70,7 +74,11 @@ export function inlineReasoningAsText(messages: Message[]): Message[] {
   let remaining = KEEP_RECENT_REASONINGS
   for (let i = messages.length - 1; i >= 0 && remaining > 0; i--) {
     const m = messages[i]
-    if (!isRoleMessage(m) || m.role !== 'assistant' || !Array.isArray(m.content))
+    if (
+      !isRoleMessage(m) ||
+      m.role !== 'assistant' ||
+      !Array.isArray(m.content)
+    )
       continue
     for (let j = m.content.length - 1; j >= 0 && remaining > 0; j--) {
       const part = m.content[j]
@@ -142,7 +150,8 @@ export function inlineReasoningAsText(messages: Message[]): Message[] {
 export function regroupToolResults(messages: Message[]): Message[] {
   const resultById = new Map<string, ToolResultPart>()
   for (const m of messages) {
-    if (!isRoleMessage(m) || m.role !== 'tool' || !Array.isArray(m.content)) continue
+    if (!isRoleMessage(m) || m.role !== 'tool' || !Array.isArray(m.content))
+      continue
     for (const p of m.content) {
       if (p.type === 'tool-result') {
         const tr = p as ToolResultPart

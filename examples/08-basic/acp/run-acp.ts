@@ -12,7 +12,10 @@ import type { RunAgentFn } from '../core/types.js'
 import { BaizeAcpAgent } from './baize-acp-agent.js'
 
 /** CC ref: `runAcp()` in claude-code-acp — stdio JSON-RPC entry. */
-export function runAcp(runAgent: RunAgentFn, defaultCwd: string): {
+export function runAcp(
+  runAgent: RunAgentFn,
+  defaultCwd: string,
+): {
   connection: AgentConnection
   agent: BaizeAcpAgent
 } {
@@ -28,7 +31,9 @@ export function runAcp(runAgent: RunAgentFn, defaultCwd: string): {
     .onRequest(methods.agent.authenticate, ctx =>
       baizeAgent.authenticate(ctx.params),
     )
-    .onRequest(methods.agent.session.new, ctx => baizeAgent.newSession(ctx.params))
+    .onRequest(methods.agent.session.new, ctx =>
+      baizeAgent.newSession(ctx.params),
+    )
     .onRequest(methods.agent.session.setMode, ctx =>
       baizeAgent.setSessionMode(ctx.params),
     )

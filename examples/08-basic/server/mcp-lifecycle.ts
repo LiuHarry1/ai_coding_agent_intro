@@ -26,7 +26,10 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value)
 }
 
-function poolKey(cwd: string, servers: Record<string, MCPServerConfig>): string {
+function poolKey(
+  cwd: string,
+  servers: Record<string, MCPServerConfig>,
+): string {
   return crypto
     .createHash('sha256')
     .update(cwd)

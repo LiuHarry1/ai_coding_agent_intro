@@ -131,9 +131,7 @@ function getMethodAndParams(
     query?: string
   },
   absolutePath: string,
-):
-  | { method: string; params: unknown }
-  | { error: string } {
+): { method: string; params: unknown } | { error: string } {
   const uri = pathToFileURL(absolutePath).href
   const position = makePosition(input)
 
@@ -182,9 +180,7 @@ function getMethodAndParams(
 function makePosition(input: {
   line?: number
   character?: number
-}):
-  | { line: number; character: number }
-  | { error: string } {
+}): { line: number; character: number } | { error: string } {
   if (!input.line || !input.character) {
     return {
       error:
@@ -216,7 +212,10 @@ function formatResult(
         cwd,
       )
     case 'workspace_symbol':
-      return formatWorkspaceSymbols((result as SymbolInformation[] | null) ?? [], cwd)
+      return formatWorkspaceSymbols(
+        (result as SymbolInformation[] | null) ?? [],
+        cwd,
+      )
   }
 }
 
@@ -226,9 +225,9 @@ function formatLocations(
   label: 'definition' | 'reference',
 ): string {
   const raw = Array.isArray(result) ? result : result ? [result] : []
-  const locations = raw.map(toLocation).filter((loc): loc is Location =>
-    Boolean(loc?.uri),
-  )
+  const locations = raw
+    .map(toLocation)
+    .filter((loc): loc is Location => Boolean(loc?.uri))
   if (locations.length === 0) return `No ${label}s found.`
 
   const grouped = new Map<string, Location[]>()
@@ -257,7 +256,9 @@ function formatLocations(
 
 function formatHover(result: Hover | null): string {
   if (!result) return 'No hover information found.'
-  return extractMarkupText(result.contents).trim() || 'No hover information found.'
+  return (
+    extractMarkupText(result.contents).trim() || 'No hover information found.'
+  )
 }
 
 function formatDocumentSymbols(
@@ -268,7 +269,9 @@ function formatDocumentSymbols(
   const lines = ['Document symbols:']
   for (const symbol of symbols) {
     if ('location' in symbol) {
-      lines.push(`- ${symbol.name} (${symbol.kind}) ${formatLocation(symbol.location, cwd)}`)
+      lines.push(
+        `- ${symbol.name} (${symbol.kind}) ${formatLocation(symbol.location, cwd)}`,
+      )
     } else {
       appendDocumentSymbol(lines, symbol, cwd, 0)
     }
@@ -300,7 +303,10 @@ function formatWorkspaceSymbols(
   if (symbols.length === 0) return 'No workspace symbols found.'
   return [
     `Found ${symbols.length} workspace symbol${symbols.length === 1 ? '' : 's'}:`,
-    ...symbols.map(symbol => `- ${symbol.name} (${symbol.kind}) ${formatLocation(symbol.location, cwd)}`),
+    ...symbols.map(
+      symbol =>
+        `- ${symbol.name} (${symbol.kind}) ${formatLocation(symbol.location, cwd)}`,
+    ),
   ].join('\n')
 }
 

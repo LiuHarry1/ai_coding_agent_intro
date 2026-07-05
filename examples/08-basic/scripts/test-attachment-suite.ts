@@ -78,9 +78,7 @@ async function runOfflineTests(): Promise<void> {
 
   const restored = restoreMessagesFromJsonl(SESSION_ID)
   const attachmentCount = restored.filter(isAttachmentMessage).length
-  const types = restored
-    .filter(isAttachmentMessage)
-    .map(m => m.attachment.type)
+  const types = restored.filter(isAttachmentMessage).map(m => m.attachment.type)
   record(
     'session reload from JSONL',
     attachmentCount >= 5 &&
@@ -130,7 +128,9 @@ async function runOfflineTests(): Promise<void> {
     ])
     const merged = mergeAdjacentUserMessages(expanded)
     const smooshed = smooshSystemReminderSiblings(merged)
-    const userMsgs = smooshed.filter(m => !isAttachmentMessage(m) && m.role === 'user')
+    const userMsgs = smooshed.filter(
+      m => !isAttachmentMessage(m) && m.role === 'user',
+    )
     record(
       'huge file merge+smoosh',
       userMsgs.length >= 1,
@@ -146,12 +146,17 @@ async function chatOnce(
   message: string,
 ): Promise<{ ok: boolean; detail: string; newLines: number }> {
   const before = fs.existsSync(path.join(SESSION_DIR, `${sessionId}.jsonl`))
-    ? fs.readFileSync(path.join(SESSION_DIR, `${sessionId}.jsonl`), 'utf8').split('\n').length
+    ? fs
+        .readFileSync(path.join(SESSION_DIR, `${sessionId}.jsonl`), 'utf8')
+        .split('\n').length
     : 0
 
   const res = await fetch('http://localhost:4567/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
     body: JSON.stringify({
       message,
       workspace: WORKSPACE,
@@ -166,10 +171,14 @@ async function chatOnce(
 
   const text = await res.text()
   const done = text.includes('event: done') || text.includes('"done"')
-  const after = fs.readFileSync(path.join(SESSION_DIR, `${sessionId}.jsonl`), 'utf8').split('\n').length
+  const after = fs
+    .readFileSync(path.join(SESSION_DIR, `${sessionId}.jsonl`), 'utf8')
+    .split('\n').length
   return {
     ok: done && !text.includes('event: error'),
-    detail: done ? `stream complete (+${after - before} jsonl lines)` : 'no done event',
+    detail: done
+      ? `stream complete (+${after - before} jsonl lines)`
+      : 'no done event',
     newLines: after - before,
   }
 }
@@ -181,7 +190,11 @@ function tailJsonlTypes(sessionId: string, n = 8): string {
     .split('\n')
     .slice(-n)
     .map(l => {
-      const o = JSON.parse(l) as { type: string; attachment?: { type: string }; role?: string }
+      const o = JSON.parse(l) as {
+        type: string
+        attachment?: { type: string }
+        role?: string
+      }
       if (o.type === 'attachment') return `attachment:${o.attachment?.type}`
       if (o.type === 'message') return `message:${o.role}`
       return o.type
@@ -216,7 +229,10 @@ async function runApiTests(): Promise<void> {
     `jsonl_lines=${jsonlLines} ui_messages=${reloadJson.messages?.length ?? 0}`,
   )
 
-  const r1 = await chatOnce(SESSION_ID, '给我修改一下@syntax_error.py 读一下内容')
+  const r1 = await chatOnce(
+    SESSION_ID,
+    '给我修改一下@syntax_error.py 读一下内容',
+  )
   const tail1 = tailJsonlTypes(SESSION_ID)
   const hasFileAtt = tail1.includes('attachment:file')
   record(
@@ -238,8 +254,12 @@ async function runApiTests(): Promise<void> {
 
   const r3 = await chatOnce(SESSION_ID, '@huge_file.txt 只读前10行内容')
   const tail3 = tailJsonlTypes(SESSION_ID)
-  const jsonl = fs.readFileSync(path.join(SESSION_DIR, `${SESSION_ID}.jsonl`), 'utf8')
-  const hasHugeFileAtt = jsonl.includes('huge_file.txt') && jsonl.includes('"truncated":true')
+  const jsonl = fs.readFileSync(
+    path.join(SESSION_DIR, `${SESSION_ID}.jsonl`),
+    'utf8',
+  )
+  const hasHugeFileAtt =
+    jsonl.includes('huge_file.txt') && jsonl.includes('"truncated":true')
   record(
     'chat @huge_file.txt truncated attachment',
     r3.ok && hasHugeFileAtt,
@@ -254,7 +274,9 @@ async function main(): Promise<void> {
   await runApiTests()
 
   const failed = results.filter(r => !r.ok)
-  console.log(`\n=== Summary: ${results.length - failed.length}/${results.length} passed ===`)
+  console.log(
+    `\n=== Summary: ${results.length - failed.length}/${results.length} passed ===`,
+  )
   if (failed.length) {
     console.log('Failed:')
     for (const f of failed) console.log(`  - ${f.name}: ${f.detail}`)

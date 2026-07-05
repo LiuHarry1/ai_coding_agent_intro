@@ -60,7 +60,10 @@ export function todoUpdateMessage(
   return { type: 'system', subtype: 'todo_update', todos, ...env }
 }
 
-export function textDeltaMessage(text: string, env: WireEnvelope): ServerMessage {
+export function textDeltaMessage(
+  text: string,
+  env: WireEnvelope,
+): ServerMessage {
   return {
     type: 'stream_event',
     delta: { kind: 'text', text },

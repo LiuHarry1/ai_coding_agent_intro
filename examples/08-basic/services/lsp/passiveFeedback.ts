@@ -37,7 +37,10 @@ export function registerLSPNotificationHandlers(
   const servers = manager.getAllServers()
 
   for (const [serverName, serverInstance] of servers.entries()) {
-    if (!serverInstance || typeof serverInstance.onNotification !== 'function') {
+    if (
+      !serverInstance ||
+      typeof serverInstance.onNotification !== 'function'
+    ) {
       console.warn(
         `[lsp:diagnostics] skip handler registration for ${serverName}: no onNotification`,
       )

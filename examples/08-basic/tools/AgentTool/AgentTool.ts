@@ -109,8 +109,14 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
     isSubagent: true,
     isConcurrencySafe: () => false,
     create(cwd: string, context: ToolContext) {
-      const { runAgent, eventBus, registry, toolEnablement, provider, compaction } =
-        context
+      const {
+        runAgent,
+        eventBus,
+        registry,
+        toolEnablement,
+        provider,
+        compaction,
+      } = context
 
       return tool({
         description,

@@ -49,7 +49,11 @@ import {
   canAccessSession,
 } from './session.js'
 import { sessionJsonlToUIMessages } from './session-ui.js'
-import type { RouterOptions, MCPServerConfig, LlmProfile } from '../core/types.js'
+import type {
+  RouterOptions,
+  MCPServerConfig,
+  LlmProfile,
+} from '../core/types.js'
 
 registerBuiltinSubagents(defaultRegistry)
 initCodePlugins(defaultRegistry).catch(err => {
@@ -65,10 +69,7 @@ async function getMCPStatusForCwd(
   return manager.getStatus()
 }
 
-export function createRouter({
-  runAgent,
-  staticDir,
-}: RouterOptions) {
+export function createRouter({ runAgent, staticDir }: RouterOptions) {
   const workspaceRouter = createWorkspaceRouter({ root: getDefaultWorkspace() })
   const skillsApi = createSkillsApi({ runAgent })
 
@@ -381,8 +382,7 @@ export function createRouter({
         const id = body.id as string
         const answers = body.answers as Record<string, string> | undefined
         const annotations = body.annotations as
-          | Record<string, { preview?: string; notes?: string }>
-          | undefined
+          Record<string, { preview?: string; notes?: string }> | undefined
         if (!id || !answers || typeof answers !== 'object') {
           sendJSON(res, 400, { error: "Missing 'id' or 'answers' object" })
           return

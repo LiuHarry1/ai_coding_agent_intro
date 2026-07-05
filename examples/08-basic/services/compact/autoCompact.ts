@@ -87,7 +87,11 @@ function shouldTimeBasedMicro(
   let lastTs: number | undefined
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]
-    if (isRoleMessage(m) && m.role === 'assistant' && typeof m.timestamp === 'number') {
+    if (
+      isRoleMessage(m) &&
+      m.role === 'assistant' &&
+      typeof m.timestamp === 'number'
+    ) {
       lastTs = m.timestamp
       break
     }

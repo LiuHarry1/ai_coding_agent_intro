@@ -118,7 +118,12 @@ function attachTodoReminderAfterCompaction(
 ): void {
   if (todos.length === 0) return
   const last = messages[messages.length - 1]
-  if (!last || !isRoleMessage(last) || last.role !== 'assistant' || !Array.isArray(last.content))
+  if (
+    !last ||
+    !isRoleMessage(last) ||
+    last.role !== 'assistant' ||
+    !Array.isArray(last.content)
+  )
     return
   const existing = last.content.find(p => p.type === 'text')
   const reminder = '\n\n' + formatTodoReminder(todos)
@@ -543,7 +548,9 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
             smooshSystemReminderSiblings(
               mergeAdjacentUserMessages(
                 regroupToolResults(
-                  expandAttachmentMessagesForAPI(inlineReasoningAsText(messages)),
+                  expandAttachmentMessagesForAPI(
+                    inlineReasoningAsText(messages),
+                  ),
                 ),
               ),
             ),
@@ -587,9 +594,9 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       // request time by regroupToolResults() (CC's model: keep raw history,
       // normalize only before sending), so assembly stays a dumb append.
       const response = await stream.response
-      const sdkMessages = (response.messages as unknown as RoleMessage[]).filter(
-        m => m.role !== 'tool',
-      )
+      const sdkMessages = (
+        response.messages as unknown as RoleMessage[]
+      ).filter(m => m.role !== 'tool')
       sanitizeReasoningParts(sdkMessages)
       // Stamp every assistant record from this response with the round id so
       // they group as one API round (matches CC's per-response message.id),

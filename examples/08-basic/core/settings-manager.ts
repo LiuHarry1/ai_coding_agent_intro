@@ -70,7 +70,10 @@ type ParsedSettingsFile = {
 }
 
 /** CC parity: path-keyed parse cache invalidated by resetSettingsCache(). */
-const parseFileCache = new Map<string, { mtimeMs: number; parsed: ParsedSettingsFile }>()
+const parseFileCache = new Map<
+  string,
+  { mtimeMs: number; parsed: ParsedSettingsFile }
+>()
 
 /** Per-cwd merged settings cache keyed by source-file mtimes. */
 const resolvedCache = new Map<
@@ -201,7 +204,12 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   const config = cloneDefaults()
   const sources: SettingsSource[] = [
     { scope: 'user', path: paths.userPath, exists: false, applied: false },
-    { scope: 'project', path: paths.projectPath, exists: false, applied: false },
+    {
+      scope: 'project',
+      path: paths.projectPath,
+      exists: false,
+      applied: false,
+    },
     { scope: 'local', path: paths.localPath, exists: false, applied: false },
   ]
 
@@ -216,7 +224,9 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
     if (!settings) continue
     applyLayer(config, settings)
     source.applied = true
-    console.log(`[settings] Loaded ${source.scope} settings from ${source.path}`)
+    console.log(
+      `[settings] Loaded ${source.scope} settings from ${source.path}`,
+    )
   }
 
   return {
@@ -312,7 +322,10 @@ function readWritableSettings(filePath: string): Record<string, unknown> {
   return settings ? structuredClone(settings) : {}
 }
 
-function writeSettingsFile(filePath: string, settings: Record<string, unknown>) {
+function writeSettingsFile(
+  filePath: string,
+  settings: Record<string, unknown>,
+) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, JSON.stringify(settings, null, 2) + '\n')
   resetSettingsCache()

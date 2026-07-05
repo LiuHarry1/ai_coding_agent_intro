@@ -147,10 +147,7 @@ export function createLspServerInstance(
     return state === 'running' && client.isInitialized
   }
 
-  async function sendRequest<T>(
-    method: string,
-    params: unknown,
-  ): Promise<T> {
+  async function sendRequest<T>(method: string, params: unknown): Promise<T> {
     if (!isHealthy()) {
       throw new Error(
         `Cannot send ${method} to LSP server '${name}' while it is ${state}` +

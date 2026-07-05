@@ -31,8 +31,7 @@ export function readTextFile(
   // offset/limit, read only that window — no whole-file size gate. Without a
   // range, files larger than MAX_OUTPUT_SIZE_BYTES must use offset/limit.
   const hasRange =
-    options?.limit != null ||
-    (options?.offset != null && options.offset > 1)
+    options?.limit != null || (options?.offset != null && options.offset > 1)
   if (stat.size > MAX_OUTPUT_SIZE_BYTES) {
     if (hasRange) {
       return readTextFileTruncated(absPath, displayPath, {

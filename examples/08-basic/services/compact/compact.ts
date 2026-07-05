@@ -251,7 +251,9 @@ export async function compactConversation(
     const formatted = pending.map(formatForSummary).join('\n\n---\n\n')
     try {
       if (!ctx.provider) {
-        throw new Error('compactConversation requires a request-scoped provider')
+        throw new Error(
+          'compactConversation requires a request-scoped provider',
+        )
       }
       const provider = ctx.provider
       const result = await generateText({
@@ -334,8 +336,7 @@ function extractRecentlyReadFiles(messages: Message[], maxFiles = 8): string[] {
         continue
       const filePath =
         ((part.input as Record<string, unknown>)?.file_path as
-          | string
-          | undefined) ??
+          string | undefined) ??
         ((part.input as Record<string, unknown>)?.path as string | undefined)
       if (filePath && !files.includes(filePath)) {
         files.push(filePath)

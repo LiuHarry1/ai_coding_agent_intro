@@ -211,10 +211,7 @@ export interface ToolMessage {
 }
 
 export type Message =
-  | UserMessage
-  | AssistantMessage
-  | ToolMessage
-  | AttachmentMessage
+  UserMessage | AssistantMessage | ToolMessage | AttachmentMessage
 
 export function isAttachmentMessage(msg: Message): msg is AttachmentMessage {
   return (msg as AttachmentMessage).type === 'attachment'

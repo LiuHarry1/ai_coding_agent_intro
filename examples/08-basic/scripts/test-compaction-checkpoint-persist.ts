@@ -26,7 +26,9 @@ function countJsonlLines(sessionId: string): number {
 function hasCompactedCheckpoint(sessionId: string): boolean {
   const p = path.join(SESSION_DIR, `${sessionId}.jsonl`)
   const lines = fs.readFileSync(p, 'utf8').trim().split('\n')
-  return lines.some(l => (JSON.parse(l) as { type?: string }).type === 'compacted')
+  return lines.some(
+    l => (JSON.parse(l) as { type?: string }).type === 'compacted',
+  )
 }
 
 function reloadedMessageCount(sessionId: string): number {
@@ -90,7 +92,9 @@ async function main(): Promise<void> {
   )
 
   if (!hadCheckpointAfter) {
-    console.error('[FAIL] JSONL missing type=compacted checkpoint after auto-compact')
+    console.error(
+      '[FAIL] JSONL missing type=compacted checkpoint after auto-compact',
+    )
     process.exit(1)
   }
   console.log('[PASS] compacted checkpoint written to JSONL')

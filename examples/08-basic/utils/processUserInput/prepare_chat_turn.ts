@@ -266,7 +266,8 @@ export async function prepareChatTurn(
     readFileState,
     lspServers: config.lspServers,
     options: { tools },
-    skillListingContent: reminderParts.length > 0 ? reminderParts.join('\n\n') : undefined,
+    skillListingContent:
+      reminderParts.length > 0 ? reminderParts.join('\n\n') : undefined,
   }
 
   const planFilePath = getPlanFilePath(session, cwd)

@@ -20,11 +20,7 @@ import * as fs from 'fs'
 const MAX_DIFF_BYTES = 1.5 * 1024 * 1024
 
 export type ChangeStatus =
-  | 'modified'
-  | 'added'
-  | 'deleted'
-  | 'untracked'
-  | 'renamed'
+  'modified' | 'added' | 'deleted' | 'untracked' | 'renamed'
 
 export interface ChangeEntry {
   path: string

@@ -1,11 +1,15 @@
 /** @-mention extraction — from claude-code-rev `utils/attachments.ts`, + CJK-before-@. */
 
 /** Whitespace, line start, or CJK/Hangul/Kana immediately before `@`. */
-const AT_MENTION_PREFIX = '(?:^|[\\s\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af])'
+const AT_MENTION_PREFIX =
+  '(?:^|[\\s\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af])'
 
 export function extractAtMentionedFiles(content: string): string[] {
   const quotedAtMentionRegex = new RegExp(`${AT_MENTION_PREFIX}@"([^"]+)"`, 'g')
-  const regularAtMentionRegex = new RegExp(`${AT_MENTION_PREFIX}@([^\\s]+)\\b`, 'g')
+  const regularAtMentionRegex = new RegExp(
+    `${AT_MENTION_PREFIX}@([^\\s]+)\\b`,
+    'g',
+  )
 
   const quotedMatches: string[] = []
   const regularMatches: string[] = []

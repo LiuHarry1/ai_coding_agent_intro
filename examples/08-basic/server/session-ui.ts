@@ -188,7 +188,9 @@ function replaySessionJsonl(sessionId: string): JsonlReplayItem[] {
   const items: JsonlReplayItem[] = []
   let transcriptLineCount = 0
 
-  for (const line of raw.split('\n').map(l => JSON.parse(l) as Record<string, unknown>)) {
+  for (const line of raw
+    .split('\n')
+    .map(l => JSON.parse(l) as Record<string, unknown>)) {
     if (line.type === 'message') {
       const { type: _, timestamp: __, ...msg } = line
       items.push({ kind: 'message', message: msg as unknown as Message })

@@ -257,9 +257,7 @@ async function handleSkillInvoke(args: {
 
   const rawArgs = normalizeSkillArguments(
     body.arguments as
-      | string
-      | Record<string, string | number | boolean>
-      | undefined,
+      string | Record<string, string | number | boolean> | undefined,
   )
 
   let combined: string

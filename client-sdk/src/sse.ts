@@ -61,7 +61,11 @@ export async function collectText(
         deltas.push(delta.text)
       }
     }
-    if (ev.type === 'result' && ev.subtype === 'success' && typeof ev.text === 'string') {
+    if (
+      ev.type === 'result' &&
+      ev.subtype === 'success' &&
+      typeof ev.text === 'string'
+    ) {
       final = ev.text
     }
     if (ev.type === 'result' && ev.subtype === 'error') {
@@ -81,7 +85,11 @@ function parseOneEvent(raw: string): AgentEvent | null {
 
   try {
     const parsed = JSON.parse(dataLine) as AgentEvent
-    if (parsed && typeof parsed === 'object' && typeof parsed.type === 'string') {
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof parsed.type === 'string'
+    ) {
       return parsed
     }
   } catch {

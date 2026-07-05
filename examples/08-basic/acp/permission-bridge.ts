@@ -28,7 +28,9 @@ function outcomeApproved(response: RequestPermissionResponse): boolean {
   return false
 }
 
-function selectedOptionId(response: RequestPermissionResponse): string | undefined {
+function selectedOptionId(
+  response: RequestPermissionResponse,
+): string | undefined {
   const outcome = response.outcome
   if (outcome.outcome === 'cancelled') return undefined
   if ('optionId' in outcome) return outcome.optionId
@@ -78,7 +80,9 @@ export async function handleControlRequest(
           title: 'Answer questions',
           kind: 'other',
           status: 'pending',
-          content: [{ type: 'content', content: { type: 'text', text: summary } }],
+          content: [
+            { type: 'content', content: { type: 'text', text: summary } },
+          ],
         },
         options,
       },
@@ -121,8 +125,16 @@ export async function handleControlRequest(
           ],
         },
         options: [
-          { optionId: 'approve-agent', name: 'Approve (Agent)', kind: 'allow_once' },
-          { optionId: 'approve-ask', name: 'Approve (Ask)', kind: 'allow_once' },
+          {
+            optionId: 'approve-agent',
+            name: 'Approve (Agent)',
+            kind: 'allow_once',
+          },
+          {
+            optionId: 'approve-ask',
+            name: 'Approve (Ask)',
+            kind: 'allow_once',
+          },
           { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
         ],
       },

@@ -17,10 +17,7 @@ import {
   checkForLSPDiagnostics,
   clearAllLSPDiagnostics,
 } from '../services/lsp/LSPDiagnosticRegistry.js'
-import {
-  getLspWorkspaceKey,
-  hasLspServers,
-} from '../services/lsp/manager.js'
+import { getLspWorkspaceKey, hasLspServers } from '../services/lsp/manager.js'
 import { BASH_TOOL_NAME } from '../constants/tool_names.js'
 
 function getSkillListingAttachments(ctx: ToolUseContext): Attachment[] {

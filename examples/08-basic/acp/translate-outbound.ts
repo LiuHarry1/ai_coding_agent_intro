@@ -42,7 +42,10 @@ export class AcpTurnSink implements ProtocolSink {
       }
       void handleControlRequest(this.#client, this.#sessionId, msg).catch(
         err => {
-          console.error('[acp] permission bridge failed:', (err as Error).message)
+          console.error(
+            '[acp] permission bridge failed:',
+            (err as Error).message,
+          )
         },
       )
       return
@@ -96,9 +99,23 @@ function serverMessageToNotifications(
 
   if (msg.type === 'stream_event') {
     if (msg.delta.kind === 'text') {
-      out.push(chunkNotification(sessionId, 'agent_message_chunk', messageId, msg.delta.text))
+      out.push(
+        chunkNotification(
+          sessionId,
+          'agent_message_chunk',
+          messageId,
+          msg.delta.text,
+        ),
+      )
     } else if (msg.delta.kind === 'reasoning') {
-      out.push(chunkNotification(sessionId, 'agent_thought_chunk', messageId, msg.delta.text))
+      out.push(
+        chunkNotification(
+          sessionId,
+          'agent_thought_chunk',
+          messageId,
+          msg.delta.text,
+        ),
+      )
     }
     return out
   }
@@ -182,9 +199,7 @@ function serverMessageToNotifications(
           .map(t => ({
             content: t.content,
             priority: (t.status === 'in_progress' ? 'high' : 'medium') as
-              | 'high'
-              | 'medium'
-              | 'low',
+              'high' | 'medium' | 'low',
             status:
               t.status === 'completed'
                 ? ('completed' as const)

@@ -8,7 +8,12 @@ import { createSSETransport } from '../server/sse-transport.js'
 import { createWireEmitter } from '../core/wire-emitter.js'
 import { registerSubagents } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools/index.js'
-import type { AppConfig, IProvider, RunAgentFn, SSETransport } from '../core/types.js'
+import type {
+  AppConfig,
+  IProvider,
+  RunAgentFn,
+  SSETransport,
+} from '../core/types.js'
 import { runSkillFork } from './run-fork.js'
 import type { SkillDefinition } from './types.js'
 

@@ -1,5 +1,11 @@
 import type { ServerResponse } from 'http'
-import type { Session, RunAgentFn, Message, UserMessage, IEventBus } from '../core/types.js'
+import type {
+  Session,
+  RunAgentFn,
+  Message,
+  UserMessage,
+  IEventBus,
+} from '../core/types.js'
 import { EventBus } from '../core/event-bus.js'
 import { buildProvider } from '../core/llm/index.js'
 import { resolveSettings } from '../core/settings-manager.js'
@@ -7,20 +13,13 @@ import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
 import { getSystemPromptForMode } from '../prompts/mode.js'
 import { applyModeRestrictions } from '../core/mode-restrictions.js'
 import { planExists } from '../utils/plans.js'
-import {
-  appendMessage,
-  appendCompaction,
-  appendModeChange,
-} from './session.js'
+import { appendMessage, appendCompaction, appendModeChange } from './session.js'
 import {
   compactIfNeeded,
   tokenCountWithEstimation,
 } from '../services/compact/index.js'
 import { defaultRegistry } from '../tools/index.js'
-import {
-  Middleware,
-  createTimingMiddleware,
-} from '../core/middleware/index.js'
+import { Middleware, createTimingMiddleware } from '../core/middleware/index.js'
 import { createPlanModeGuardMiddleware } from '../core/middleware/plan-mode-guard.js'
 import { applyPluginHooks, hasPluginHooks } from '../core/plugins/index.js'
 import { attachUsageTelemetry, flushUsage } from './telemetry.js'

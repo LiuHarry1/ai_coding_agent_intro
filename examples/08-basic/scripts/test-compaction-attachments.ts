@@ -68,9 +68,7 @@ async function main(): Promise<void> {
   const attBefore = messages.filter(isAttachmentMessage).length
   const attTypes = [
     ...new Set(
-      messages
-        .filter(isAttachmentMessage)
-        .map(m => m.attachment.type),
+      messages.filter(isAttachmentMessage).map(m => m.attachment.type),
     ),
   ]
   const tokens = tokenCountWithEstimation(messages).total
@@ -83,8 +81,11 @@ async function main(): Promise<void> {
   const model = settings.config.provider.model ?? provider.defaultModelId()
   const eventBus = new EventBus()
 
-  process.env.COMPACT_THRESHOLD_OVERRIDE = process.env.COMPACT_THRESHOLD_OVERRIDE ?? '8000'
-  console.log(`COMPACT_THRESHOLD_OVERRIDE=${process.env.COMPACT_THRESHOLD_OVERRIDE}`)
+  process.env.COMPACT_THRESHOLD_OVERRIDE =
+    process.env.COMPACT_THRESHOLD_OVERRIDE ?? '8000'
+  console.log(
+    `COMPACT_THRESHOLD_OVERRIDE=${process.env.COMPACT_THRESHOLD_OVERRIDE}`,
+  )
 
   const compacted = await compactIfNeeded(
     [...messages],
@@ -121,7 +122,9 @@ async function main(): Promise<void> {
     console.log('[FAIL] attachment messages should not survive full compact')
     process.exit(1)
   }
-  console.log('[PASS] attachment records cleared from in-memory history (CC: re-injected next turn)')
+  console.log(
+    '[PASS] attachment records cleared from in-memory history (CC: re-injected next turn)',
+  )
 
   // Simulate JSONL compacted checkpoint + reload
   const checkpoint = [...compacted]
@@ -151,7 +154,9 @@ async function main(): Promise<void> {
     console.log('[FAIL] compacted checkpoint shape')
     process.exit(1)
   }
-  console.log('[PASS] compacted checkpoint is summary-only (attachments not stored)')
+  console.log(
+    '[PASS] compacted checkpoint is summary-only (attachments not stored)',
+  )
 
   console.log(
     '\nNote: skill_listing / file attachments are re-injected on the next user turn via getAttachmentMessages (CC post-compact pattern).',

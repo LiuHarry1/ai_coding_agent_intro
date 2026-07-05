@@ -29,7 +29,9 @@ async function main(): Promise<void> {
   console.log('User bubbles:')
   for (const u of users) console.log(`  - ${u}`)
 
-  const hasFirstTurn = users.some(c => c.includes('列出 test9') || c.includes('test9'))
+  const hasFirstTurn = users.some(
+    c => c.includes('列出 test9') || c.includes('test9'),
+  )
   const hasBoundary = types.includes('compact_boundary')
 
   if (!hasFirstTurn) {
@@ -41,7 +43,9 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  console.log('[PASS] full JSONL transcript UI replay (pre-compact + boundary + post-compact)')
+  console.log(
+    '[PASS] full JSONL transcript UI replay (pre-compact + boundary + post-compact)',
+  )
 }
 
 void main()

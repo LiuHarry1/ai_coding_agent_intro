@@ -35,7 +35,9 @@ function toDisplayPath(filePath: string, cwd?: string): string {
     resolvedFile.startsWith(resolvedCwd + path.sep) ||
     resolvedFile === resolvedCwd
   ) {
-    return path.relative(resolvedCwd, resolvedFile) || path.basename(resolvedFile)
+    return (
+      path.relative(resolvedCwd, resolvedFile) || path.basename(resolvedFile)
+    )
   }
   return filePath
 }
@@ -57,7 +59,8 @@ export function toolInfoFromCall(
     }
     case BASH_TOOL_NAME:
     case POWERSHELL_TOOL_NAME: {
-      const input = args as { command?: string; description?: string } | undefined
+      const input = args as
+        { command?: string; description?: string } | undefined
       return {
         title: input?.command ?? input?.description ?? 'Terminal',
         kind: 'execute',

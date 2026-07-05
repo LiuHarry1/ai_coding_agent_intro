@@ -57,9 +57,7 @@ function deliveredForWorkspace(workspaceKey: string): Map<string, Set<string>> {
   return delivered
 }
 
-function severityName(
-  severity: number | undefined,
-): Diagnostic['severity'] {
+function severityName(severity: number | undefined): Diagnostic['severity'] {
   switch (severity) {
     case 1:
       return 'Error'
@@ -107,7 +105,10 @@ export function registerPendingLSPDiagnostic(
 ): void {
   const { serverName, files } = input
   if (files.length === 0) return
-  const diagCount = files.reduce((sum, file) => sum + file.diagnostics.length, 0)
+  const diagCount = files.reduce(
+    (sum, file) => sum + file.diagnostics.length,
+    0,
+  )
   console.log(
     `[lsp:diagnostics] register workspace=${workspaceKey} server=${serverName} files=${files.length} diagnostics=${diagCount}`,
   )

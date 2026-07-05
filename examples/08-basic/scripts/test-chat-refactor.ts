@@ -43,12 +43,12 @@ async function waitForServer(maxMs = 15000): Promise<void> {
 function parseSSEEvents(body: string): Array<Record<string, unknown>> {
   const events: Array<Record<string, unknown>> = []
   for (const block of body.split('\n\n')) {
-    const dataLine = block
-      .split('\n')
-      .find(l => l.startsWith('data:'))
+    const dataLine = block.split('\n').find(l => l.startsWith('data:'))
     if (!dataLine) continue
     try {
-      events.push(JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>)
+      events.push(
+        JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>,
+      )
     } catch {
       /* skip */
     }
@@ -56,7 +56,9 @@ function parseSSEEvents(body: string): Array<Record<string, unknown>> {
   return events
 }
 
-function collectTextFromProtocol(events: Array<Record<string, unknown>>): string {
+function collectTextFromProtocol(
+  events: Array<Record<string, unknown>>,
+): string {
   const parts: string[] = []
   for (const ev of events) {
     if (ev.type === 'stream_event') {
@@ -70,7 +72,11 @@ function collectTextFromProtocol(events: Array<Record<string, unknown>>): string
   return parts.join('')
 }
 
-async function chatJSON(message: string, sessionId?: string, workspace?: string) {
+async function chatJSON(
+  message: string,
+  sessionId?: string,
+  workspace?: string,
+) {
   const res = await fetch(`${SERVER}/chat`, {
     method: 'POST',
     headers: {
@@ -85,7 +91,11 @@ async function chatJSON(message: string, sessionId?: string, workspace?: string)
     }),
   })
   const json = (await res.json()) as Record<string, unknown>
-  return { status: res.status, json, sessionId: String(json.session_id ?? sessionId ?? '') }
+  return {
+    status: res.status,
+    json,
+    sessionId: String(json.session_id ?? sessionId ?? ''),
+  }
 }
 
 async function chatSSE(
@@ -152,10 +162,17 @@ async function main() {
   {
     const { status, json } = await chatJSON('/help')
     const text = String(json.text ?? '')
-    if (status === 200 && json.reason === 'slash_command' && text.includes('/help')) {
+    if (
+      status === 200 &&
+      json.reason === 'slash_command' &&
+      text.includes('/help')
+    ) {
       pass('JSON /help', `reason=${json.reason}, len=${text.length}`)
     } else {
-      fail('JSON /help', `status=${status} reason=${json.reason} text=${text.slice(0, 80)}`)
+      fail(
+        'JSON /help',
+        `status=${status} reason=${json.reason} text=${text.slice(0, 80)}`,
+      )
     }
   }
 
@@ -183,10 +200,17 @@ async function main() {
   {
     const { status, json } = await chatJSON('/compact')
     const text = String(json.text ?? '')
-    if (status === 200 && json.reason === 'compact' && text.toLowerCase().includes('compact')) {
+    if (
+      status === 200 &&
+      json.reason === 'compact' &&
+      text.toLowerCase().includes('compact')
+    ) {
       pass('JSON /compact', text.slice(0, 60))
     } else {
-      fail('JSON /compact', `status=${status} reason=${json.reason} text=${text}`)
+      fail(
+        'JSON /compact',
+        `status=${status} reason=${json.reason} text=${text}`,
+      )
     }
   }
 
@@ -207,7 +231,11 @@ async function main() {
     const sid = first.sessionId
     const second = await chatSSE('/compact', sid)
     const text = collectTextFromProtocol(second.events)
-    if (sid && second.sessionId === sid && text.toLowerCase().includes('compact')) {
+    if (
+      sid &&
+      second.sessionId === sid &&
+      text.toLowerCase().includes('compact')
+    ) {
       pass('Session reuse', `session=${sid.slice(0, 8)}… compact ok`)
     } else {
       fail(
@@ -261,11 +289,7 @@ async function main() {
         const hasSkillStart = events.some(
           e => e.type === 'system' && e.subtype === 'skill_start',
         )
-        if (
-          status === 200 &&
-          hasSkillStart &&
-          text.includes('fork-pong')
-        ) {
+        if (status === 200 && hasSkillStart && text.includes('fork-pong')) {
           pass('SSE skill fork', `skill_start ok, text=${text.slice(0, 40)}`)
         } else {
           fail(
@@ -284,9 +308,17 @@ async function main() {
     {
       const { dir, cleanup } = setupForkSkillWorkspace()
       try {
-        const { status, json } = await chatJSON('/pong-fork-test', undefined, dir)
+        const { status, json } = await chatJSON(
+          '/pong-fork-test',
+          undefined,
+          dir,
+        )
         const result = String(json.result ?? '').toLowerCase()
-        if (status === 200 && json.context === 'fork' && result.includes('fork-pong')) {
+        if (
+          status === 200 &&
+          json.context === 'fork' &&
+          result.includes('fork-pong')
+        ) {
           pass('JSON skill fork', `context=fork, result=${result.slice(0, 40)}`)
         } else {
           fail(

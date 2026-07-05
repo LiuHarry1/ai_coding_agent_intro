@@ -34,8 +34,7 @@ export function dispatchControlResponse(msg: ControlResponse): boolean {
     return answerQuestion(requestId, {
       answers: payload.answers as Record<string, string>,
       annotations: payload.annotations as
-        | Record<string, { preview?: string; notes?: string }>
-        | undefined,
+        Record<string, { preview?: string; notes?: string }> | undefined,
     })
   }
 

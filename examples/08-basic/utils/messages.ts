@@ -18,9 +18,7 @@ import {
   ASK_USER_QUESTION_TOOL_NAME,
   EXIT_PLAN_MODE_TOOL_NAME,
 } from '../constants/tool_names.js'
-import {
-  wrapInSystemReminder,
-} from './system-reminder.js'
+import { wrapInSystemReminder } from './system-reminder.js'
 
 const MAX_DIAGNOSTICS_SUMMARY_CHARS = 8000
 const SR_PREFIX = '<system-reminder>'
@@ -83,10 +81,8 @@ function formatDiagnosticsSummary(files: DiagnosticFile[]): string {
 
   if (result.length > MAX_DIAGNOSTICS_SUMMARY_CHARS) {
     return (
-      result.slice(
-        0,
-        MAX_DIAGNOSTICS_SUMMARY_CHARS - truncationMarker.length,
-      ) + truncationMarker
+      result.slice(0, MAX_DIAGNOSTICS_SUMMARY_CHARS - truncationMarker.length) +
+      truncationMarker
     )
   }
   return result
@@ -190,14 +186,18 @@ export function expandAttachmentMessagesForAPI(messages: Message[]): Message[] {
   return out
 }
 
-function normalizeUserContent(content: string | UserContentPart[]): UserContentPart[] {
+function normalizeUserContent(
+  content: string | UserContentPart[],
+): UserContentPart[] {
   if (typeof content === 'string') {
     return [{ type: 'text', text: content }]
   }
   return content
 }
 
-function denormalizeUserContent(parts: UserContentPart[]): string | UserContentPart[] {
+function denormalizeUserContent(
+  parts: UserContentPart[],
+): string | UserContentPart[] {
   if (parts.length === 1 && parts[0]!.type === 'text') {
     return parts[0]!.text
   }
@@ -227,9 +227,7 @@ function smooshIntoSimulatedToolResult(
 ): TextPart {
   const joined = [
     anchor.text.trim(),
-    ...blocks
-      .filter(isSystemReminderText)
-      .map(b => b.text.trim()),
+    ...blocks.filter(isSystemReminderText).map(b => b.text.trim()),
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -240,7 +238,10 @@ function smooshIntoSimulatedToolResult(
  * Concatenate two content arrays, appending `\n` to a's last text block when
  * the seam is text-text. Mirrors CC's joinTextAtSeam.
  */
-function joinTextAtSeam(a: UserContentPart[], b: UserContentPart[]): UserContentPart[] {
+function joinTextAtSeam(
+  a: UserContentPart[],
+  b: UserContentPart[],
+): UserContentPart[] {
   const lastA = a.at(-1)
   const firstB = b[0]
   if (lastA?.type === 'text' && firstB?.type === 'text') {
@@ -325,11 +326,15 @@ function smooshUserMessageContent(msg: UserMessage): UserMessage {
   const anchorPart = content[anchorIdx]!
   if (!isSimulatedToolResultAnchor(anchorPart)) return msg
 
-  const toSmoosh = content.filter((p, k) => k !== anchorIdx && isSystemReminderText(p))
+  const toSmoosh = content.filter(
+    (p, k) => k !== anchorIdx && isSystemReminderText(p),
+  )
   if (toSmoosh.length === 0) return msg
 
   const smooshed = smooshIntoSimulatedToolResult(anchorPart, toSmoosh)
-  const kept = content.filter((p, k) => k !== anchorIdx && !isSystemReminderText(p))
+  const kept = content.filter(
+    (p, k) => k !== anchorIdx && !isSystemReminderText(p),
+  )
   kept.splice(Math.min(anchorIdx, kept.length), 0, smooshed)
   return { ...msg, content: denormalizeUserContent(kept) }
 }
@@ -338,8 +343,7 @@ function appendTextToToolResult(
   part: ToolResultPart,
   extraText: string,
 ): ToolResultPart {
-  const existing =
-    part.output.type === 'text' ? part.output.value.trim() : ''
+  const existing = part.output.type === 'text' ? part.output.value.trim() : ''
   const value = [existing, extraText.trim()].filter(Boolean).join('\n\n')
   return {
     ...part,
@@ -377,7 +381,11 @@ export function smooshSystemReminderSiblings(messages: Message[]): Message[] {
   for (let i = 0; i < messages.length; i++) {
     const raw = messages[i]!
 
-    if (isRoleMessage(raw) && raw.role === 'tool' && Array.isArray(raw.content)) {
+    if (
+      isRoleMessage(raw) &&
+      raw.role === 'tool' &&
+      Array.isArray(raw.content)
+    ) {
       const srSiblings: UserMessage[] = []
       let j = i + 1
       while (j < messages.length) {

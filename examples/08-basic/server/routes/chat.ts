@@ -1,10 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { IncomingMessage, ServerResponse } from 'http'
-import {
-  createSession,
-  getSession,
-  canAccessSession,
-} from '../session.js'
+import { createSession, getSession, canAccessSession } from '../session.js'
 import { createSSETransport } from '../sse-transport.js'
 import { readBody, sendJSON, wantsStreamingResponse } from '../http.js'
 import { sessionToUIMessages } from '../session-ui.js'
@@ -29,10 +25,7 @@ import {
 } from '../../core/permission-mode.js'
 import { appendModeChange } from '../session.js'
 import type { Message, RunAgentFn } from '../../core/types.js'
-import {
-  createNoopTransport,
-  runChatTurn,
-} from '../run-chat-turn.js'
+import { createNoopTransport, runChatTurn } from '../run-chat-turn.js'
 
 export async function handleChat(
   req: IncomingMessage,
