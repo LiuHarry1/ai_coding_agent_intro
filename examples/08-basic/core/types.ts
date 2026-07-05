@@ -3,6 +3,12 @@ import type { ProviderOptions } from '@ai-sdk/provider-utils'
 import type { IProvider, LlmProfile } from './llm/types.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type { ExternalMode, PermissionModeContext } from './permission-mode.js'
+import type {
+  Attachment,
+  Diagnostic,
+  DiagnosticFile,
+  ReadFileState,
+} from '../utils/attachments/types.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>
@@ -148,7 +154,19 @@ export type AssistantContentPart = TextPart | ReasoningPart | ToolCallPart
 export interface UserMessage {
   role: 'user'
   content: string | UserContentPart[]
+  /** Meta attachments expanded for API — hidden from UI when true. */
+  isMeta?: boolean
 }
+
+export interface AttachmentMessage {
+  type: 'attachment'
+  attachment: Attachment
+  uuid: string
+  timestamp: string
+  isMeta?: boolean
+}
+
+export type { Attachment, Diagnostic, DiagnosticFile, ReadFileState }
 
 export interface AssistantMessage {
   role: 'assistant'
@@ -186,7 +204,30 @@ export interface ToolMessage {
   content: ToolResultPart[]
 }
 
-export type Message = UserMessage | AssistantMessage | ToolMessage
+export type Message =
+  | UserMessage
+  | AssistantMessage
+  | ToolMessage
+  | AttachmentMessage
+
+export function isAttachmentMessage(msg: Message): msg is AttachmentMessage {
+  return (msg as AttachmentMessage).type === 'attachment'
+}
+
+export type RoleMessage = UserMessage | AssistantMessage | ToolMessage
+
+export function isRoleMessage(msg: Message): msg is RoleMessage {
+  return !isAttachmentMessage(msg)
+}
+
+/** CC ToolUseContext — minimal fields for attachment collection. */
+export interface ToolUseContext {
+  cwd: string
+  session: Session
+  readFileState: ReadFileState
+  lspServers?: Record<string, LspServerConfig>
+  options: { tools: Record<string, AnyTool> }
+}
 
 // ── Agent ───────────────────────────────────────
 
@@ -231,13 +272,8 @@ export interface AgentOptions {
   concurrencyPolicy?: ConcurrencyPolicyFn
   /** Persists large tool outputs; inherited by subagent runs. */
   sessionId?: string
-  /**
-   * @-mention file attachments injected before the user message (Claude Code
-   * getAttachmentMessages pattern).
-   */
-  attachmentMessages?: Message[]
-  /** Fresh async diagnostics injected before each model step. */
-  lspDiagnosticMessages?: () => Promise<Message[]> | Message[]
+  /** Request-scoped context for getAttachmentMessages (CC pattern). */
+  toolUseContext?: ToolUseContext
   /**
    * Rebuild the active tool set when permission mode changes mid-turn
    * (e.g. ExitPlanMode approval unlocks Write/Bash after planning).

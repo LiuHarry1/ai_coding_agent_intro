@@ -1,4 +1,5 @@
 import type { AssistantContentPart, Message, ToolResultPart } from '../types.js'
+import { isAttachmentMessage, isRoleMessage } from '../types.js'
 
 /**
  * Maximum number of historical `ReasoningPart`s to inline into the next
@@ -38,7 +39,8 @@ export const SYNTHETIC_TOOL_RESULT_PLACEHOLDER =
  */
 export function sanitizeReasoningParts(messages: Message[]): void {
   for (const msg of messages) {
-    if (msg.role !== 'assistant' || !Array.isArray(msg.content)) continue
+    if (!isRoleMessage(msg) || msg.role !== 'assistant' || !Array.isArray(msg.content))
+      continue
     for (const part of msg.content) {
       delete (part as { providerOptions?: unknown }).providerOptions
     }
@@ -68,7 +70,8 @@ export function inlineReasoningAsText(messages: Message[]): Message[] {
   let remaining = KEEP_RECENT_REASONINGS
   for (let i = messages.length - 1; i >= 0 && remaining > 0; i--) {
     const m = messages[i]
-    if (m.role !== 'assistant' || !Array.isArray(m.content)) continue
+    if (!isRoleMessage(m) || m.role !== 'assistant' || !Array.isArray(m.content))
+      continue
     for (let j = m.content.length - 1; j >= 0 && remaining > 0; j--) {
       const part = m.content[j]
       if (part.type !== 'reasoning') continue
@@ -79,6 +82,7 @@ export function inlineReasoningAsText(messages: Message[]): Message[] {
 
   return messages
     .map((m): Message | null => {
+      if (isAttachmentMessage(m)) return m
       if (m.role !== 'assistant' || !Array.isArray(m.content)) return m
 
       const newContent: AssistantContentPart[] = []
@@ -138,7 +142,7 @@ export function inlineReasoningAsText(messages: Message[]): Message[] {
 export function regroupToolResults(messages: Message[]): Message[] {
   const resultById = new Map<string, ToolResultPart>()
   for (const m of messages) {
-    if (m.role !== 'tool' || !Array.isArray(m.content)) continue
+    if (!isRoleMessage(m) || m.role !== 'tool' || !Array.isArray(m.content)) continue
     for (const p of m.content) {
       if (p.type === 'tool-result') {
         const tr = p as ToolResultPart
@@ -151,6 +155,10 @@ export function regroupToolResults(messages: Message[]): Message[] {
 
   const out: Message[] = []
   for (const m of messages) {
+    if (isAttachmentMessage(m)) {
+      out.push(m)
+      continue
+    }
     // Drop original tool messages; their results are re-emitted next to the
     // assistant that owns them below.
     if (m.role === 'tool') continue
@@ -207,6 +215,11 @@ export function ensureToolResultPairing(messages: Message[]): Message[] {
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i]!
 
+    if (isAttachmentMessage(m)) {
+      out.push(m)
+      continue
+    }
+
     if (m.role !== 'assistant' || !Array.isArray(m.content)) {
       // Orphan tool-result handling. Any `tool` message reaching this branch
       // was NOT consumed by a preceding assistant-with-tool-calls — the
@@ -224,10 +237,15 @@ export function ensureToolResultPairing(messages: Message[]): Message[] {
       //      now sits right before these results.
       // We match by id (rather than just "is prev an assistant?") so a stray
       // text-only assistant in front of an orphan no longer hides it.
-      if (m.role === 'tool' && Array.isArray(m.content)) {
+      if (isRoleMessage(m) && m.role === 'tool' && Array.isArray(m.content)) {
         const prev = out.at(-1)
         const prevCallIds = new Set<string>()
-        if (prev?.role === 'assistant' && Array.isArray(prev.content)) {
+        if (
+          prev &&
+          isRoleMessage(prev) &&
+          prev.role === 'assistant' &&
+          Array.isArray(prev.content)
+        ) {
           for (const p of prev.content) {
             if (p.type === 'tool-call') {
               prevCallIds.add((p as { toolCallId: string }).toolCallId)
@@ -267,7 +285,11 @@ export function ensureToolResultPairing(messages: Message[]): Message[] {
     if (toolCalls.length === 0) continue
 
     const next = messages[i + 1]
-    const isNextToolMsg = next?.role === 'tool' && Array.isArray(next.content)
+    const isNextToolMsg =
+      next !== undefined &&
+      isRoleMessage(next) &&
+      next.role === 'tool' &&
+      Array.isArray(next.content)
     const existingResultIds = new Set<string>()
     if (isNextToolMsg) {
       for (const p of next!.content as ToolResultPart[]) {

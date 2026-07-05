@@ -1,4 +1,5 @@
 import type { Message } from '../core/types.js'
+import { isAttachmentMessage } from '../core/types.js'
 import { getSubagentNames } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools/index.js'
 
@@ -72,6 +73,15 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
   let currentAssistant: UIAssistantMessage | null = null
 
   for (const msg of messages) {
+    if (isAttachmentMessage(msg)) {
+      if (msg.isMeta) continue
+      currentAssistant = null
+      uiMessages.push({
+        type: 'user',
+        content: `[attachment: ${msg.attachment.type}]`,
+      })
+      continue
+    }
     if (msg.role === 'user') {
       currentAssistant = null
       const content =

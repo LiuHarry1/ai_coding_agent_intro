@@ -2,13 +2,10 @@ import * as path from 'path'
 import { pathToFileURL } from 'url'
 import type { LspServerConfig } from '../../core/types.js'
 import {
-  convertPublishDiagnostics,
-  registerPendingLspDiagnostics,
-} from './diagnostics.js'
-import {
   createLspServerInstance,
   type LspServerInstance,
 } from './server-instance.js'
+import { registerLSPNotificationHandlers } from './passiveFeedback.js'
 import type { ScopedLspServerConfig } from './types.js'
 
 export interface LspServerManager {
@@ -48,21 +45,6 @@ export function createLspServerManager(
       'workspace/configuration',
       (params: { items?: unknown[] }) => (params.items ?? []).map(() => null),
     )
-    instance.onNotification('textDocument/publishDiagnostics', params => {
-      if (!isPublishDiagnosticsParams(params)) return
-      const files = convertPublishDiagnostics(params)
-      const diagCount = files.reduce(
-        (sum, file) => sum + file.diagnostics.length,
-        0,
-      )
-      const filePath = files[0]?.uri ?? params.uri
-      console.log(
-        `[lsp:diagnostics] publish server=${name} file=${filePath} diagnostics=${diagCount}`,
-      )
-      if (files.some(file => file.diagnostics.length > 0)) {
-        registerPendingLspDiagnostics(workspaceKey, name, files)
-      }
-    })
 
     servers.set(name, instance)
     for (const ext of Object.keys(config.extensionToLanguage)) {
@@ -209,7 +191,7 @@ export function createLspServerManager(
     }
   }
 
-  return {
+  const manager: LspServerManager = {
     workspaceKey,
     getServerForFile,
     ensureServerStarted,
@@ -222,6 +204,9 @@ export function createLspServerManager(
     getAllServers: () => servers,
     shutdown,
   }
+
+  registerLSPNotificationHandlers(manager)
+  return manager
 }
 
 function normalizeConfig(
@@ -261,17 +246,4 @@ function normalizeConfig(
     extensionToLanguage,
     workspaceFolder,
   }
-}
-
-function isPublishDiagnosticsParams(params: unknown): params is Parameters<
-  typeof convertPublishDiagnostics
->[0] {
-  return (
-    typeof params === 'object' &&
-    params !== null &&
-    'uri' in params &&
-    typeof (params as { uri?: unknown }).uri === 'string' &&
-    'diagnostics' in params &&
-    Array.isArray((params as { diagnostics?: unknown }).diagnostics)
-  )
 }

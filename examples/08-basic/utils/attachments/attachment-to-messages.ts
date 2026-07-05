@@ -117,15 +117,22 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'pdf_reference':
       return [
         metaUserMessage(
-          wrapInSystemReminder(
-            `PDF file: ${attachment.displayPath} (${attachment.pageCount} pages, ${formatFileSize(attachment.fileSize)}). ` +
-              `This PDF is too large to read all at once. You MUST use the ${READ_FILE_TOOL_NAME} tool with the pages parameter ` +
-              `to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${READ_FILE_TOOL_NAME} without the pages parameter ` +
-              `or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. ` +
-              `Maximum 20 pages per request.`,
-          ),
+          `PDF file: ${attachment.displayPath} (${attachment.pageCount} pages, ${formatFileSize(attachment.fileSize)}). ` +
+            `This PDF is too large to read all at once. You MUST use the ${READ_FILE_TOOL_NAME} tool with the pages parameter ` +
+            `to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${READ_FILE_TOOL_NAME} without the pages parameter ` +
+            `or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. ` +
+            `Maximum 20 pages per request.`,
         ),
       ]
+    case 'plan_mode':
+    case 'plan_mode_reentry':
+    case 'plan_mode_exit':
+    case 'diagnostics':
+      return []
+    default: {
+      const _exhaustive: never = attachment
+      return _exhaustive
+    }
   }
 }
 

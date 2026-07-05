@@ -3,6 +3,7 @@
  * Canonical "context size" measurement.
  */
 import type { Message } from '../../core/types.js'
+import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
 
 // ── Pure estimation ─────────────────────────────────────
 
@@ -13,6 +14,9 @@ function estStr(s: string): number {
 const IMAGE_TOKEN_ESTIMATE = 1500
 
 export function estimateMessageTokens(msg: Message): number {
+  if (isAttachmentMessage(msg)) {
+    return Math.ceil(JSON.stringify(msg.attachment).length / 4)
+  }
   let total = 0
   if (msg.role === 'user') {
     if (typeof msg.content === 'string') return estStr(msg.content)
@@ -111,14 +115,17 @@ export function tokenCountWithEstimation(messages: Message[]): {
     // previous round. Without an id (older sessions), fall back to the
     // heuristic of "all assistants since the last user message".
     const usageMsg = messages[i]
-    const usageRoundId = usageMsg.role === 'assistant' ? usageMsg.id : undefined
+    const usageRoundId =
+      isRoleMessage(usageMsg) && usageMsg.role === 'assistant'
+        ? usageMsg.id
+        : undefined
     let anchor = i
     for (let j = i - 1; j >= 0; j--) {
       const mj = messages[j]
-      if (mj.role === 'user') {
+      if (isRoleMessage(mj) && mj.role === 'user') {
         break
       }
-      if (mj.role === 'assistant') {
+      if (isRoleMessage(mj) && mj.role === 'assistant') {
         if (usageRoundId !== undefined) {
           if (mj.id === usageRoundId) anchor = j
           else break // previous API round — don't fold it in

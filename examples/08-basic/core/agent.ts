@@ -17,7 +17,9 @@ import type {
   UserContentPart,
   TodoItem,
   TodoStatus,
+  RoleMessage,
 } from './types.js'
+import { isRoleMessage } from './types.js'
 import type { IProvider } from './llm/types.js'
 import {
   ensureToolResultPairing,
@@ -26,6 +28,11 @@ import {
   sanitizeReasoningParts,
 } from './agent/messageSanitize.js'
 import { applyCacheControlBreakpoint } from './agent/cacheControl.js'
+import {
+  expandAttachmentMessagesForAPI,
+  mergeAdjacentUserMessages,
+} from '../utils/messages.js'
+import { getAttachmentMessages } from '../utils/attachments.js'
 import { consumeStream, type StreamResult } from './agent/streamConsumer.js'
 import { stripToolExecute } from './agent/prepareTools.js'
 import {
@@ -33,8 +40,11 @@ import {
   runToolCalls,
 } from '../services/tools/tool_execution.js'
 import {
+  BASH_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
+  WRITE_FILE_TOOL_NAME,
 } from '../constants/tool_names.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type { AnyTool } from './types.js'
@@ -104,7 +114,8 @@ function attachTodoReminderAfterCompaction(
 ): void {
   if (todos.length === 0) return
   const last = messages[messages.length - 1]
-  if (last?.role !== 'assistant' || !Array.isArray(last.content)) return
+  if (!last || !isRoleMessage(last) || last.role !== 'assistant' || !Array.isArray(last.content))
+    return
   const existing = last.content.find(p => p.type === 'text')
   const reminder = '\n\n' + formatTodoReminder(todos)
   if (existing && 'text' in existing) {
@@ -180,6 +191,14 @@ function activateDeferredTools(
 //     compaction needed). Common with copilot-api on long bodies.
 const MAX_TRANSIENT_RETRIES = 2
 
+/** Plan approved — any of these in the same turn counts as implementation started. */
+const PLAN_IMPLEMENTATION_TOOLS = new Set([
+  WRITE_FILE_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
+  BASH_TOOL_NAME,
+  TODO_WRITE_TOOL_NAME,
+])
+
 function syncToolSet(
   target: Record<string, AnyTool>,
   source: Record<string, AnyTool>,
@@ -205,8 +224,7 @@ export async function runAgent(
     deferredToolPool,
     concurrencyPolicy,
     sessionId,
-    attachmentMessages,
-    lspDiagnosticMessages,
+    toolUseContext,
     refreshTools,
     refreshSystemPrompt,
     provider: configuredProvider,
@@ -220,8 +238,14 @@ export async function runAgent(
       content: `<system-reminder>\n${skillListing}\n</system-reminder>`,
     })
   }
-  if (attachmentMessages?.length) {
-    messages.push(...attachmentMessages)
+  if (toolUseContext) {
+    for await (const att of getAttachmentMessages(
+      userMessage,
+      toolUseContext,
+      messages,
+    )) {
+      messages.push(att)
+    }
   }
   messages.push(buildUserMessage(userMessage, images))
 
@@ -239,6 +263,9 @@ export async function runAgent(
 
   // Mutable copy so we can activate deferred tools mid-loop.
   const activeTools = { ...tools }
+  if (toolUseContext) {
+    toolUseContext.options.tools = activeTools
+  }
   const pool = deferredToolPool ? { ...deferredToolPool } : undefined
   const toolPolicy: ConcurrencyPolicyFn = concurrencyPolicy ?? (() => false)
   let activeSystemPrompt = systemPrompt
@@ -273,13 +300,6 @@ export async function runAgent(
     for (let step = 0; step < maxSteps; step++) {
       eventBus.emit('step_start', { step })
       const stepStart = Date.now()
-
-      if (lspDiagnosticMessages) {
-        const diagnostics = await lspDiagnosticMessages()
-        if (diagnostics.length > 0) {
-          messages.push(...diagnostics)
-        }
-      }
 
       await runCompactionAndLog(
         messages,
@@ -328,6 +348,16 @@ export async function runAgent(
         }
       }
 
+      if (
+        planBuildPending &&
+        toolCalls.some(tc => PLAN_IMPLEMENTATION_TOOLS.has(tc.toolName))
+      ) {
+        planBuildPending = false
+        console.log(
+          '[agent] plan approved — implementation tool called, skipping build kickoff',
+        )
+      }
+
       if (toolCalls.length === 0) {
         if (planBuildPending) {
           planBuildPending = false
@@ -347,6 +377,16 @@ Do not reply with a summary or status update only — call TodoWrite, Write, Edi
         autoCompleteTodos(currentTodos, eventBus)
         eventBus.emit('done', { steps: step + 1 })
         return finalText
+      }
+
+      if (toolUseContext) {
+        for await (const att of getAttachmentMessages(
+          null,
+          toolUseContext,
+          messages,
+        )) {
+          messages.push(att)
+        }
       }
 
       eventBus.emit('thinking', {})
@@ -461,33 +501,33 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       const stream = streamText({
         model: provider.chatModel(resolvedModel),
         system: systemPrompt,
-        // Four-pass message preparation before the SDK sees them (mirrors
+        // Six-pass message preparation before the SDK sees them (mirrors
         // Claude Code's normalizeMessagesForAPI → ensureToolResultPairing
         // pipeline ordering):
         //   1. inlineReasoningAsText — rewrite reasoning blocks as
         //      <thinking> text so the request is portable across stateless
         //      proxies (copilot-api, etc.).
-        //   2. regroupToolResults — pull every tool-result back to
+        //   2. expandAttachmentMessagesForAPI — inline attachment records
+        //      into meta user messages (history keeps attachment type).
+        //   3. regroupToolResults — pull every tool-result back to
         //      immediately follow the assistant that issued its tool-call
         //      (CC's "merge same-turn assistant + hoist tool_results").
-        //      Recovers REAL results when a reasoning model splits a turn
-        //      into [assistant(call), assistant(text)] or a resume/compaction
-        //      detached them — instead of degrading to a synthetic
-        //      placeholder.
-        //   3. ensureToolResultPairing — safety net: synthesize a
-        //      `[Tool result missing…]` for any tool-call STILL without a
-        //      result, and strip true orphans. Without this, historical
-        //      damage deadlocks the next request with a 400.
-        //   4. applyCacheControlBreakpoint — attach a single
-        //      `cache_control: ephemeral` marker to the last message when
-        //      the provider supports prompt caching (Anthropic). No-op
-        //      for OpenAI (auto-cached) and openai-compatible (no caching).
+        //   4. mergeAdjacentUserMessages — collapse consecutive user
+        //      messages (expanded attachments + skillListing + real prompt)
+        //      with joinTextAtSeam; history stays fine-grained.
+        //   5. ensureToolResultPairing — safety net for orphan/missing
+        //      tool-results.
+        //   6. applyCacheControlBreakpoint — prompt caching marker.
         messages: applyCacheControlBreakpoint(
           ensureToolResultPairing(
-            regroupToolResults(inlineReasoningAsText(messages)),
+            mergeAdjacentUserMessages(
+              regroupToolResults(
+                expandAttachmentMessagesForAPI(inlineReasoningAsText(messages)),
+              ),
+            ),
           ),
           provider,
-        ),
+        ) as RoleMessage[],
         // Schema-only tools — execution is handled by toolOrchestration so
         // we can batch concurrency-safe reads in parallel (CC-style).
         tools: apiTools,
@@ -525,7 +565,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       // request time by regroupToolResults() (CC's model: keep raw history,
       // normalize only before sending), so assembly stays a dumb append.
       const response = await stream.response
-      const sdkMessages = (response.messages as unknown as Message[]).filter(
+      const sdkMessages = (response.messages as unknown as RoleMessage[]).filter(
         m => m.role !== 'tool',
       )
       sanitizeReasoningParts(sdkMessages)
@@ -660,7 +700,7 @@ interface LogArgs {
   stepStart: number
   requestStart: number
   firstEventMs: number
-  sdkMessages: Message[]
+  sdkMessages: RoleMessage[]
   toolCallsLen: number
   usage: AttachedTokenUsage
   reactiveCompacted: boolean

@@ -11,6 +11,7 @@ import type {
   Message,
   ToolMessage,
 } from '../../core/types.js'
+import { isRoleMessage } from '../../core/types.js'
 import {
   BASH_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
@@ -74,7 +75,8 @@ export function microCompact(
 ): MicroCompactResult {
   const toolMsgIdx: number[] = []
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'tool') toolMsgIdx.push(i)
+    const m = messages[i]
+    if (isRoleMessage(m) && m.role === 'tool') toolMsgIdx.push(i)
   }
   if (toolMsgIdx.length <= Math.max(0, keepRecent)) {
     return { messages, tokensFreed: 0, cleared: 0 }
@@ -87,6 +89,7 @@ export function microCompact(
 
   const out = messages.map((m, i) => {
     if (i >= clearUpToExclusive) return m
+    if (!isRoleMessage(m)) return m
     if (m.role === 'tool')
       return clearToolResults(
         m,

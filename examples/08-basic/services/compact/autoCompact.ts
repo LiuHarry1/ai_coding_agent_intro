@@ -9,6 +9,7 @@ import type {
   Message,
   TodoItem,
 } from '../../core/types.js'
+import { isRoleMessage } from '../../core/types.js'
 import { DEFAULTS } from '../../core/settings-manager.js'
 import {
   tokenCountWithEstimation,
@@ -85,7 +86,7 @@ function shouldTimeBasedMicro(
   let lastTs: number | undefined
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]
-    if (m.role === 'assistant' && typeof m.timestamp === 'number') {
+    if (isRoleMessage(m) && m.role === 'assistant' && typeof m.timestamp === 'number') {
       lastTs = m.timestamp
       break
     }

@@ -1,6 +1,7 @@
 /**
  * Prepare a chat turn before runAgent — CC: processUserInput pipeline.
- * Slash resolution, per-request registry reload, tools, @-attachments, mode restrictions.
+ * Slash resolution, per-request registry reload, tools, mode restrictions.
+ * Attachments collected in agent loop via getAttachmentMessages.
  */
 import { dispatchSlashCommand } from '../../commands/dispatcher.js'
 import { resolvePlanSlash } from '../../commands/plan.js'
@@ -19,21 +20,18 @@ import { filterToolsByEnablement } from '../../core/tool-enablement.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { createToolSearchDefinition } from '../../tools/tool_search.js'
 import { TOOL_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
-import { buildAttachmentMessages } from '../attachments/index.js'
-import { buildLspDiagnosticMessages } from '../attachments/lsp-diagnostics.js'
-import { buildPlanModeAttachments } from '../attachments/plan-mode.js'
 import { applyModeRestrictions } from '../../core/mode-restrictions.js'
 import { definition as enterPlanModeDef } from '../../tools/enter_plan_mode.js'
 import { definition as exitPlanModeDef } from '../../tools/exit_plan_mode.js'
-import { getPlanFilePath, planExists } from '../plans.js'
+import { getPlanFilePath } from '../plans.js'
 import type { ReadFileState } from '../attachments/types.js'
 import type {
   AnyTool,
   IProvider,
   IToolRegistry,
-  Message,
   Session,
   ToolContext,
+  ToolUseContext,
   AppConfig,
 } from '../../core/types.js'
 import type { ToolRegistry } from '../../core/tool-registry.js'
@@ -116,8 +114,7 @@ export interface PreparedChatTurn {
   deferredToolPool?: Record<string, AnyTool>
   skillListing?: string
   projectRules: string
-  attachmentMessages: Message[]
-  lspDiagnosticMessages: () => Message[]
+  toolUseContext: ToolUseContext
   subagentNames: Set<string>
   concurrencyPolicy: ReturnType<typeof buildConcurrencyPolicy>
   permissionMode: Session['permissionMode']['mode']
@@ -154,8 +151,6 @@ export async function prepareChatTurn(
 
   const slash = await resolveSlashCommand(message, cwd, session)
 
-  // Declarative plugins (.ai-agent/plugins/*) contribute agents/skills/MCP at
-  // the lowest override priority. Loaded once per turn (hot-reload friendly).
   const plugins = await loadPlugins(cwd)
   if (plugins.plugins.length > 0) {
     console.log(
@@ -265,30 +260,12 @@ export async function prepareChatTurn(
   }
   const readFileState = session.readFileState as ReadFileState
 
-  const attachmentMessages: Message[] = []
-
-  attachmentMessages.push(
-    ...buildPlanModeAttachments(session, cwd, session.permissionMode.mode),
-  )
-
-  if (slash.effectiveMessage && !slash.immediateReply) {
-    try {
-      const atAttachments = await buildAttachmentMessages(
-        cwd,
-        slash.effectiveMessage,
-        readFileState,
-      )
-      attachmentMessages.push(...atAttachments)
-      if (atAttachments.length > 0) {
-        console.log(
-          `[server] @-attachments: ${atAttachments.length} message(s) from input`,
-        )
-      }
-    } catch (err) {
-      console.warn(
-        `[server] attachment extraction failed: ${(err as Error).message}`,
-      )
-    }
+  const toolUseContext: ToolUseContext = {
+    cwd,
+    session,
+    readFileState,
+    lspServers: config.lspServers,
+    options: { tools },
   }
 
   const planFilePath = getPlanFilePath(session, cwd)
@@ -304,9 +281,7 @@ export async function prepareChatTurn(
     deferredToolPool: Object.keys(deferred).length > 0 ? deferred : undefined,
     skillListing,
     projectRules,
-    attachmentMessages,
-    lspDiagnosticMessages: () =>
-      buildLspDiagnosticMessages(cwd, config.lspServers),
+    toolUseContext,
     subagentNames: getSubagentNames(registry),
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(tools)),
     permissionMode: session.permissionMode.mode,

@@ -6,7 +6,7 @@ import { resolvePath } from './utils.js'
 import { assertPathInWorkspace } from '../core/workspace.js'
 import type { ToolDefinition } from '../core/types.js'
 import { WRITE_FILE_TOOL_NAME } from '../constants/tool_names.js'
-import { clearDeliveredLspDiagnosticsForFile } from '../services/lsp/diagnostics.js'
+import { clearDeliveredDiagnosticsForFile } from '../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspManager, getLspWorkspaceKey } from '../services/lsp/manager.js'
 
 export const definition: ToolDefinition = {
@@ -46,7 +46,7 @@ export const definition: ToolDefinition = {
         const manager = getLspManager(cwd, context.lspServers)
         if (manager) {
           const workspaceKey = getLspWorkspaceKey(cwd, context.lspServers)
-          clearDeliveredLspDiagnosticsForFile(workspaceKey, abs)
+          clearDeliveredDiagnosticsForFile(workspaceKey, abs)
           console.log(`[lsp:diagnostics] sync write start file=${file_path}`)
           void (async () => {
             try {

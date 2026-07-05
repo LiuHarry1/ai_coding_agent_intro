@@ -1,4 +1,4 @@
-import type { LspServerConfig as AppLspServerConfig } from '../../core/types.js'
+import type { LspServerConfig as AppLspServerConfig, Diagnostic, DiagnosticFile } from '../../core/types.js'
 
 export type LspServerConfig = AppLspServerConfig
 
@@ -14,21 +14,8 @@ export interface ScopedLspServerConfig extends LspServerConfig {
   workspaceFolder: string
 }
 
-export interface LspDiagnostic {
-  message: string
-  severity: 'Error' | 'Warning' | 'Info' | 'Hint'
-  range: {
-    start: { line: number; character: number }
-    end: { line: number; character: number }
-  }
-  source?: string
-  code?: string
-}
-
-export interface LspDiagnosticFile {
-  uri: string
-  diagnostics: LspDiagnostic[]
-}
+export type LspDiagnostic = Diagnostic
+export type LspDiagnosticFile = DiagnosticFile
 
 export interface PendingLspDiagnosticSet {
   serverName: string

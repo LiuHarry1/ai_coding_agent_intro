@@ -158,3 +158,11 @@ export async function getAttachmentsForInput(
   )
   return results.filter((r): r is Attachment => r != null)
 }
+
+/** CC: processAtMentionedFiles */
+export async function processAtMentionedFiles(
+  input: string,
+  ctx: { cwd: string; readFileState: ReadFileState },
+): Promise<Attachment[]> {
+  return getAttachmentsForInput(ctx.cwd, input, ctx.readFileState)
+}

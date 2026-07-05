@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
 import type { Session, SessionInfo, Message } from '../core/types.js'
+import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import { createDefaultPermissionMode } from '../core/permission-mode.js'
 import type { ExternalMode } from '../core/permission-mode.js'
 import { isAuthEnabled, isSuperRole } from './auth/identity.js'
@@ -78,7 +79,9 @@ export function getSession(id: string): Session | null {
 
 function extractPreview(session: Session | null): string | undefined {
   if (!session) return undefined
-  const firstUser = session.messages.find(m => m.role === 'user')
+  const firstUser = session.messages.find(
+    m => isRoleMessage(m) && m.role === 'user',
+  )
   if (!firstUser) return undefined
   const text =
     typeof firstUser.content === 'string'
@@ -131,7 +134,12 @@ export function deleteSession(id: string): void {
 }
 
 export function appendMessage(sessionId: string, message: Message): void {
-  appendLine(sessionId, { type: 'message', ...message, timestamp: Date.now() })
+  const timestamp = Date.now()
+  if (isAttachmentMessage(message)) {
+    appendLine(sessionId, { ...message, timestamp })
+    return
+  }
+  appendLine(sessionId, { type: 'message', ...message, timestamp })
 }
 
 /**
@@ -207,6 +215,9 @@ function restoreFromDisk(id: string): Session {
         : []
     } else if (line.type === 'message') {
       const { type: _, timestamp: __, ...msg } = line
+      session.messages.push(msg as Message)
+    } else if (line.type === 'attachment') {
+      const { timestamp: _, ...msg } = line
       session.messages.push(msg as Message)
     }
   }

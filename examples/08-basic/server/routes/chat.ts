@@ -393,11 +393,7 @@ export async function handleChat(
       deferredToolPool: prepared.deferredToolPool,
       concurrencyPolicy: prepared.concurrencyPolicy,
       sessionId: session.id,
-      attachmentMessages:
-        prepared.attachmentMessages.length > 0
-          ? prepared.attachmentMessages
-          : undefined,
-      lspDiagnosticMessages: prepared.lspDiagnosticMessages,
+      toolUseContext: prepared.toolUseContext,
       refreshTools,
       refreshSystemPrompt,
     })

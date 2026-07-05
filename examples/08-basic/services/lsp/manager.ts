@@ -5,7 +5,7 @@ import {
   createLspServerManager,
   type LspServerManager,
 } from './server-manager.js'
-import { clearWorkspaceLspDiagnostics } from './diagnostics.js'
+import { resetAllLSPDiagnosticState } from './LSPDiagnosticRegistry.js'
 
 const managers = new Map<string, LspServerManager>()
 
@@ -52,7 +52,7 @@ export async function shutdownAllLspManagers(): Promise<void> {
       try {
         await manager.shutdown()
       } finally {
-        clearWorkspaceLspDiagnostics(key)
+        resetAllLSPDiagnosticState(key)
       }
     }),
   )

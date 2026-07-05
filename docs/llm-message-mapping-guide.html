@@ -219,7 +219,8 @@
   <h1>LLM 消息格式映射指南</h1>
   <p>
     Anthropic Messages API、OpenAI Responses / Chat Completions API 与 Vercel AI SDK 之间
-    的 role、content block、tool call / tool result 对照 — 以 08-basic 为例
+    的 role、content block、tool call / tool result 对照 — 以 08-basic 为例。
+    含 CC 对齐的 <span class="mono">AttachmentMessage</span> 存储与 API 展开管线。
   </p>
 </header>
 
@@ -229,13 +230,15 @@
   <section>
     <h2><span class="num">1</span>三层架构：你在哪一层工作？</h2>
     <p class="lead">
-      08-basic 在应用层维护 <span class="mono">Message[]</span>（AI SDK 风格），
-      经 <span class="mono">streamText({ messages, system, tools })</span> 交给 SDK，
-      SDK 再按 provider 转成各厂商原生 wire format。
+      08-basic 在应用层维护 <span class="mono">Message[]</span>（AI SDK 风格 + CC 风格
+      <span class="mono">AttachmentMessage</span>），经五步预处理展开 attachment 后，
+      再 <span class="mono">streamText({ messages, system, tools })</span> 交给 SDK。
     </p>
 
     <div class="flow">
-      <div class="box" style="border-color:#4338ca;color:#4338ca">08-basic 会话存储<br><small style="font-weight:400;color:#64748b">core/types.ts</small></div>
+      <div class="box" style="border-color:#4338ca;color:#4338ca">08-basic 会话存储<br><small style="font-weight:400;color:#64748b">role 消息 + type:attachment</small></div>
+      <span class="arrow">→</span>
+      <div class="box" style="border-color:#6d28d9;color:#6d28d9">expandAttachment<br><small style="font-weight:400;color:#64748b">utils/messages.ts</small></div>
       <span class="arrow">→</span>
       <div class="box" style="border-color:#2563eb;color:#2563eb">Vercel AI SDK<br><small style="font-weight:400;color:#64748b">streamText / generateText</small></div>
       <span class="arrow">→</span>
@@ -245,10 +248,13 @@
     </div>
 
     <div class="callout info">
-      <strong>Claude Code 对齐点：</strong>
-      CC 在 wire 层遵循 Anthropic 原生格式（user/assistant 交替、tool_result 在 user 里）。
-      08-basic 额外引入 <span class="mono">role: "tool"</span> 作为 SDK 抽象，持久化前由
-      <span class="mono">messageSanitize.ts</span> 保证配对合法。
+      <strong>Claude Code 对齐点（2026-03）：</strong>
+      上下文注入（@文件、LSP diagnostic、plan mode 提醒等）在 history 里存为
+      <span class="mono">{ type: "attachment", attachment: {...} }</span>，发请求前由
+      <span class="mono">normalizeAttachmentForAPI()</span> 展开为带
+      <span class="mono">isMeta: true</span> 的 <span class="mono">role: "user"</span> 消息。
+      工具轮次仍用 <span class="mono">role: "tool"</span>；持久化前由
+      <span class="mono">messageSanitize.ts</span> 保证 tool 配对合法。
     </div>
   </section>
 
@@ -295,6 +301,18 @@
           <td><code>{ role: "tool", content: ToolResultPart[] }</code><br><em>SDK 抽象，非 Anthropic 原生 role</em></td>
           <td><strong>无 tool role</strong> — 结果放在 <code>role: "user"</code> 的 <code>tool_result</code> block 里</td>
           <td>Responses: <code>function_call_output</code> item<br>Chat: <code>role: "tool"</code> + <code>tool_call_id</code></td>
+        </tr>
+        <tr>
+          <td>上下文注入（CC Attachment）</td>
+          <td><code>{ type: "attachment", attachment, uuid, isMeta? }</code><br><em>无 <code>role</code> 字段；API 前展开为 user</em></td>
+          <td>展开后 → <code>role: "user"</code> + text / tool_result blocks</td>
+          <td>展开后 → user message 或 function_call_output 模拟</td>
+        </tr>
+        <tr>
+          <td>Meta 用户消息</td>
+          <td><code>{ role: "user", content, isMeta: true }</code><br>attachment 展开产物；UI 不展示</td>
+          <td>普通 user message（可与 tool_result 同条）</td>
+          <td>普通 user message</td>
         </tr>
         <tr>
           <td>开发者指令</td>
@@ -360,12 +378,113 @@
     </table>
   </section>
 
-  <!-- 4. 完整一轮工具调用 -->
+  <!-- 4. Attachment 架构 -->
   <section>
-    <h2><span class="num">4</span>完整一轮 Tool Call → Tool Result</h2>
+    <h2><span class="num">4</span>Attachment 消息（CC 对齐）</h2>
+    <p class="lead">
+      统一入口：<span class="mono">utils/attachments.ts → getAttachmentMessages()</span>。
+      History 原生存结构化 attachment；仅在 <span class="mono">streamText</span> 前展开为 LLM 可见的 user 消息。
+    </p>
+
+    <h3>4.1 存储格式（JSONL / 内存）</h3>
+    <pre><span class="c">// core/types.ts — AttachmentMessage，与 role 消息并列于 Message union</span>
+{
+  <span class="k">"type"</span>: <span class="s">"attachment"</span>,
+  <span class="k">"uuid"</span>: <span class="s">"7b62084f-9bfd-445c-a09a-663a5cb1acd0"</span>,
+  <span class="k">"timestamp"</span>: <span class="s">"2026-03-05T12:00:00.000Z"</span>,
+  <span class="k">"isMeta"</span>: <span class="t">true</span>,
+  <span class="k">"attachment"</span>: {
+    <span class="k">"type"</span>: <span class="s">"diagnostics"</span>,
+    <span class="k">"files"</span>: [{ <span class="k">"uri"</span>: <span class="s">"/path/HelloWorld.java"</span>, <span class="k">"diagnostics"</span>: [...] }],
+    <span class="k">"isNew"</span>: <span class="t">true</span>
+  }
+}</pre>
+
+    <div class="callout ok">
+      <strong>JSONL 持久化：</strong>
+      <span class="mono">server/session.ts → appendMessage()</span> 对 attachment 写
+      <span class="mono">type: "attachment"</span> 行（非 <span class="mono">type: "message"</span>）。
+      <span class="mono">restoreFromDisk()</span> 必须回放这两种 type，否则重载 session 会丢失 LSP / @文件 / plan 提醒。
+    </div>
+
+    <h3>4.2 注入时机（agent loop）</h3>
+    <table>
+      <thead>
+        <tr><th>时机</th><th>调用</th><th>典型 attachment 类型</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Turn 0（用户消息入列前）</td>
+          <td><code>getAttachmentMessages(userMessage, ctx, messages)</code></td>
+          <td><code>file</code>、<code>directory</code>、<code>pdf_reference</code>（@提及）</td>
+        </tr>
+        <tr>
+          <td>每个 tool round 之后</td>
+          <td><code>getAttachmentMessages(null, ctx, messages)</code></td>
+          <td><code>plan_mode</code>、<code>lsp diagnostics</code>、<code>plan_mode_exit</code></td>
+        </tr>
+        <tr>
+          <td>发 LLM 请求前</td>
+          <td><code>expandAttachmentMessagesForAPI(messages)</code></td>
+          <td>全部 attachment → <code>role: "user", isMeta: true</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>4.3 Attachment 类型 → API 展开</h3>
+    <table>
+      <thead>
+        <tr><th>attachment.type</th><th>展开后形态</th><th>代码</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>file</code> / <code>directory</code> / <code>pdf_reference</code></td>
+          <td>模拟 Read/Bash 的 tool_use + tool_result（包在 <code>&lt;system-reminder&gt;</code>）</td>
+          <td><code>attachment-to-messages.ts</code></td>
+        </tr>
+        <tr>
+          <td><code>diagnostics</code></td>
+          <td><code>&lt;new-diagnostics&gt;…&lt;/new-diagnostics&gt;</code>（非旧版 system-reminder 文案）</td>
+          <td><code>utils/messages.ts → normalizeAttachmentForAPI</code></td>
+        </tr>
+        <tr>
+          <td><code>plan_mode</code> / <code>plan_mode_reentry</code> / <code>plan_mode_exit</code></td>
+          <td><code>&lt;system-reminder&gt;</code> 内 full/sparse plan 指令</td>
+          <td><code>utils/attachments/plan-mode.ts</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>4.4 LSP Diagnostic 管道</h3>
+    <div class="pipeline">
+      <div class="pipeline-step"><span class="idx">1</span><span><code>passiveFeedback.ts</code> 监听 <code>textDocument/publishDiagnostics</code></span></div>
+      <div class="pipeline-step"><span class="idx">2</span><span><code>registerPendingLSPDiagnostic(workspaceKey, …)</code> 写入 registry</span></div>
+      <div class="pipeline-step"><span class="idx">3</span><span>tool round 后 <code>getLSPDiagnosticAttachments</code> → <code>checkForLSPDiagnostics</code></span></div>
+      <div class="pipeline-step"><span class="idx">4</span><span>产出 <code>type: "diagnostics"</code> attachment；Write/Edit 前 <code>clearDeliveredDiagnosticsForFile</code></span></div>
+    </div>
+    <div class="callout warn">
+      <strong>前置条件：</strong>仅当工具集含 <code>Bash</code> 时才注入 LSP diagnostics（与 CC 一致）。
+      Registry 按 <span class="mono">workspaceKey</span> 分区（多 cwd 场景）。
+    </div>
+
+    <h3>4.5 Plan mode 节流</h3>
+    <p class="lead" style="margin-bottom:12px">
+      每个 tool round 都会<strong>尝试</strong>注入 <code>plan_mode</code>，但多数轮次返回空数组。
+      <code>getPlanModeAttachmentTurnCount</code> 按 <strong>human turn</strong> 计数，不按 tool step 计数。
+    </p>
+    <ul style="font-size:13px;padding-left:20px;color:#475569;margin-bottom:12px">
+      <li>同一用户 turn 内多 step：首次注入后 <code>turnCount &lt; 5</code> → 后续 step 不再注入</li>
+      <li>跨 turn：距上次 <code>plan_mode</code> attachment 满 5 个 human turn 才再注入</li>
+      <li><code>plan_mode_reentry</code> / <code>plan_mode_exit</code>：一次性事件</li>
+    </ul>
+  </section>
+
+  <!-- 5. 完整一轮工具调用 -->
+  <section>
+    <h2><span class="num">5</span>完整一轮 Tool Call → Tool Result</h2>
     <p class="lead">以读取文件 <span class="mono">read_file</span> 为例，三种格式并排对照。</p>
 
-    <h3>4.1 08-basic 持久化格式（AI SDK 风格）</h3>
+    <h3>5.1 08-basic 持久化格式（AI SDK 风格）</h3>
     <pre><span class="c">// services/tools/tool_execution.ts → buildToolMessage()</span>
 [
   {
@@ -393,7 +512,7 @@
   }
 ]</pre>
 
-    <h3>4.2 Anthropic 原生 wire format</h3>
+    <h3>5.2 Anthropic 原生 wire format</h3>
     <pre><span class="c">// POST /v1/messages — 注意 tool_result 在 user 里，无 role:"tool"</span>
 {
   <span class="k">"model"</span>: <span class="s">"claude-sonnet-4-6"</span>,
@@ -429,7 +548,7 @@
   ]
 }</pre>
 
-    <h3>4.3 OpenAI Responses API（08-basic 默认 openai provider）</h3>
+    <h3>5.3 OpenAI Responses API（08-basic 默认 openai provider）</h3>
     <pre><span class="c">// POST /v1/responses — 08-basic 使用 client.responses(id)</span>
 {
   <span class="k">"model"</span>: <span class="s">"gpt-5.2"</span>,
@@ -456,7 +575,7 @@
   ]
 }</pre>
 
-    <h3>4.4 OpenAI Chat Completions（兼容层 / openai-compatible）</h3>
+    <h3>5.4 OpenAI Chat Completions（兼容层 / openai-compatible）</h3>
     <pre><span class="c">// POST /v1/chat/completions — copilot-api 等代理常用</span>
 {
   <span class="k">"messages"</span>: [
@@ -480,9 +599,9 @@
 }</pre>
   </section>
 
-  <!-- 5. 字段名对照 -->
+  <!-- 6. 字段名对照 -->
   <section>
-    <h2><span class="num">5</span>Tool Call / Result 字段名速查</h2>
+    <h2><span class="num">6</span>Tool Call / Result 字段名速查</h2>
 
     <table>
       <thead>
@@ -541,47 +660,66 @@
     </table>
   </section>
 
-  <!-- 6. System / Reminder 特殊模式 -->
+  <!-- 7. System / Attachment 展开 -->
   <section>
-    <h2><span class="num">6</span>System Prompt 与 &lt;system-reminder&gt;</h2>
+    <h2><span class="num">7</span>System Prompt、Attachment 与 &lt;system-reminder&gt;</h2>
 
     <div class="cols-3">
       <div class="card anthropic">
         <h4>Anthropic / Claude Code</h4>
         <ul style="font-size:13px;padding-left:16px;color:#475569">
           <li>全局指令 → 顶层 <code>system</code></li>
-          <li>Skills / deferred tools 列表 → 注入为 <strong>user 文本</strong>，包在 <code>&lt;system-reminder&gt;</code> 里</li>
-          <li>不是独立 message role</li>
+          <li>上下文注入 → 结构化 <code>Attachment</code>，wire 前展开为 user 内容</li>
+          <li>LSP → <code>&lt;new-diagnostics&gt;</code> 包裹</li>
         </ul>
       </div>
       <div class="card openai">
         <h4>OpenAI Responses</h4>
         <ul style="font-size:13px;padding-left:16px;color:#475569">
           <li>全局指令 → <code>instructions</code></li>
-          <li>中途追加 → 新 <code>instructions</code> input item</li>
+          <li>Attachment 展开后 → 普通 user input items</li>
           <li>Reasoning item 需 <code>itemId</code> replay（08-basic 会 strip）</li>
         </ul>
       </div>
       <div class="card sdk">
         <h4>08-basic 做法</h4>
         <ul style="font-size:13px;padding-left:16px;color:#475569">
-          <li><code>systemPrompt(cwd, rules)</code> → <code>streamText({ system })</code></li>
-          <li><code>skillListing</code> → user message with reminder tags</li>
-          <li>Plan mode 切换 → <code>refreshSystemPrompt()</code></li>
+          <li><code>systemPrompt</code> → <code>streamText({ system })</code></li>
+          <li><code>skillListing</code> → 仍为 <code>role: "user"</code> + reminder（待 Phase 2 改 attachment）</li>
+          <li>Plan / LSP / @文件 → <code>type: "attachment"</code> 存入 history</li>
         </ul>
       </div>
     </div>
 
-    <pre><span class="c">// 08-basic: runAgent() 注入 skill listing — 仍是 role:"user"</span>
+    <h3>7.1 仍用 role:user 的路径（未改 attachment）</h3>
+    <pre><span class="c">// runAgent() — skillListing / deferred tools 列表</span>
 {
   <span class="k">"role"</span>: <span class="s">"user"</span>,
-  <span class="k">"content"</span>: <span class="s">"&lt;system-reminder&gt;\nAvailable skills: read, write, bash\n&lt;/system-reminder&gt;"</span>
+  <span class="k">"content"</span>: <span class="s">"&lt;system-reminder&gt;\nThe following tools are available but not loaded...\n&lt;/system-reminder&gt;"</span>
+}
+
+<span class="c">// ExitPlanMode 批准后 — buildPlanApprovedFollowUps（followUpMessages）</span>
+{
+  <span class="k">"role"</span>: <span class="s">"user"</span>,
+  <span class="k">"isMeta"</span>: <span class="t">true</span>,
+  <span class="k">"content"</span>: <span class="s">"&lt;system-reminder&gt;\n## Plan Approved — Begin Implementation Now\n...&lt;/system-reminder&gt;"</span>
+}</pre>
+
+    <h3>7.2 Attachment 展开示例（LSP diagnostics）</h3>
+    <pre><span class="c">// 存储（history）</span>
+{ <span class="k">"type"</span>: <span class="s">"attachment"</span>, <span class="k">"attachment"</span>: { <span class="k">"type"</span>: <span class="s">"diagnostics"</span>, <span class="k">"files"</span>: [...] } }
+
+<span class="c">// expandAttachmentMessagesForAPI 之后（发给 SDK）</span>
+{
+  <span class="k">"role"</span>: <span class="s">"user"</span>,
+  <span class="k">"isMeta"</span>: <span class="t">true</span>,
+  <span class="k">"content"</span>: <span class="s">"&lt;system-reminder&gt;\n&lt;new-diagnostics&gt;The following new diagnostic issues were detected:\n\nHelloWorld.java:\n  ✗ [Line 3:9] ...\n&lt;/new-diagnostics&gt;\n&lt;/system-reminder&gt;"</span>
 }</pre>
   </section>
 
-  <!-- 7. 08-basic 预处理管线 -->
+  <!-- 8. 五步预处理 -->
   <section>
-    <h2><span class="num">7</span>08-basic 发给 SDK 前的四步预处理</h2>
+    <h2><span class="num">8</span>08-basic 发给 SDK 前的五步预处理</h2>
     <p class="lead">
       入口：<span class="mono">core/agent.ts → runOneStep()</span>，
       在 <span class="mono">streamText({ messages })</span> 之前执行（顺序固定）。
@@ -590,32 +728,40 @@
     <div class="pipeline">
       <div class="pipeline-step">
         <span class="idx">1</span>
-        <span><strong>inlineReasoningAsText</strong> — 把 <code>reasoning</code> part 转成 <code>&lt;thinking&gt;…&lt;/thinking&gt;</code> 文本，避免无状态代理 404</span>
+        <span><strong>inlineReasoningAsText</strong> — 把 <code>reasoning</code> part 转成 <code>&lt;thinking&gt;…&lt;/thinking&gt;</code> 文本</span>
       </div>
       <div class="pipeline-step">
         <span class="idx">2</span>
-        <span><strong>regroupToolResults</strong> — 把 tool-result 挪到对应 assistant tool-call 之后（CC 风格配对）</span>
+        <span><strong>expandAttachmentMessagesForAPI</strong> — <code>type:"attachment"</code> → <code>normalizeAttachmentForAPI()</code> → <code>role:"user"</code>（<span class="mono">utils/messages.ts</span>）</span>
       </div>
       <div class="pipeline-step">
         <span class="idx">3</span>
-        <span><strong>ensureToolResultPairing</strong> — 缺 result 则合成 placeholder；孤儿 result 则删除</span>
+        <span><strong>regroupToolResults</strong> — tool-result 挪到对应 assistant tool-call 之后</span>
       </div>
       <div class="pipeline-step">
         <span class="idx">4</span>
-        <span><strong>applyCacheControlBreakpoint</strong> — Anthropic prompt caching：最后一条 message 打 <code>cache_control: ephemeral</code></span>
+        <span><strong>ensureToolResultPairing</strong> — 缺 result 合成 placeholder；删孤儿 result</span>
+      </div>
+      <div class="pipeline-step">
+        <span class="idx">5</span>
+        <span><strong>applyCacheControlBreakpoint</strong> — Anthropic prompt caching</span>
       </div>
     </div>
 
     <div class="callout ok">
-      第 3 步的 synthetic result 文案：
+      <strong>messageSanitize 与 attachment：</strong>
+      <code>regroupToolResults</code> / <code>ensureToolResultPairing</code> 遇到
+      <code>type: "attachment"</code> 原样透传，不参与 tool 配对逻辑。
+    </div>
+    <div class="callout ok">
+      Synthetic result 文案：
       <span class="mono">[Tool result missing due to internal error]</span>
-      （定义于 <span class="mono">messageSanitize.ts</span>）
     </div>
   </section>
 
-  <!-- 8. 执行与回写 -->
+  <!-- 9. 执行与回写 -->
   <section>
-    <h2><span class="num">8</span>工具执行生命周期（08-basic）</h2>
+    <h2><span class="num">9</span>工具执行与 Session 持久化</h2>
 
     <table>
       <thead>
@@ -643,17 +789,37 @@
           <td><code>.sessions/{id}/tool-results/{toolCallId}.txt</code>；message 仍保留摘要</td>
         </tr>
         <tr>
+          <td>Attachment 收集</td>
+          <td><code>utils/attachments.ts → getAttachmentMessages()</code></td>
+          <td>turn 0 + 每 tool round 后 push <code>AttachmentMessage</code></td>
+        </tr>
+        <tr>
           <td>持久化</td>
-          <td><code>server/routes/chat.ts</code> → session append</td>
-          <td>完整 <code>Message[]</code> 写入 JSONL</td>
+          <td><code>server/session.ts → appendMessage()</code></td>
+          <td><code>role</code> 消息 → JSONL <code>type:"message"</code>；attachment → <code>type:"attachment"</code></td>
+        </tr>
+        <tr>
+          <td>UI 展示</td>
+          <td><code>server/session-ui.ts</code></td>
+          <td><code>isMeta</code> attachment 跳过；非 meta 显示 <code>[attachment: type]</code></td>
+        </tr>
+        <tr>
+          <td>Plan Build 防重复</td>
+          <td><code>core/agent.ts → planBuildPending</code></td>
+          <td>同 turn 内已调 Write/Edit/Bash/TodoWrite 则不再注入 kickoff reminder</td>
         </tr>
       </tbody>
     </table>
-  </section>
 
-  <!-- 9. Provider 选择 -->
+    <h3>9.1 JSONL 片段示例（混合 message + attachment）</h3>
+    <pre><span class="c">// .sessions/{id}.jsonl — 同一 turn 内 tool 后插入 diagnostic attachment</span>
+{ <span class="k">"type"</span>: <span class="s">"message"</span>, <span class="k">"role"</span>: <span class="s">"assistant"</span>, <span class="k">"content"</span>: [{ <span class="k">"type"</span>: <span class="s">"tool-call"</span>, ... }] }
+{ <span class="k">"type"</span>: <span class="s">"message"</span>, <span class="k">"role"</span>: <span class="s">"tool"</span>, <span class="k">"content"</span>: [{ <span class="k">"type"</span>: <span class="s">"tool-result"</span>, ... }] }
+{ <span class="k">"type"</span>: <span class="s">"attachment"</span>, <span class="k">"attachment"</span>: { <span class="k">"type"</span>: <span class="s">"diagnostics"</span>, <span class="k">"files"</span>: [...] }, <span class="k">"isMeta"</span>: <span class="t">true</span> }
+{ <span class="k">"type"</span>: <span class="s">"message"</span>, <span class="k">"role"</span>: <span class="s">"assistant"</span>, <span class="k">"content"</span>: [{ <span class="k">"type"</span>: <span class="s">"text"</span>, <span class="k">"text"</span>: <span class="s">"..."</span> }] }</pre>
+  </section>
   <section>
-    <h2><span class="num">9</span>08-basic Provider 配置对照</h2>
+    <h2><span class="num">10</span>08-basic Provider 配置对照</h2>
 
     <table>
       <thead>
@@ -687,9 +853,9 @@
     </p>
   </section>
 
-  <!-- 10. 常见坑 -->
+  <!-- 11. 常见坑 -->
   <section>
-    <h2><span class="num">10</span>常见错误与 400 原因</h2>
+    <h2><span class="num">11</span>常见错误与 400 原因</h2>
 
     <table>
       <thead>
@@ -721,29 +887,53 @@
           <td>删了 assistant call 但留了 tool result</td>
           <td>microCompact 只清 payload，保留 message 骨架与 id</td>
         </tr>
+        <tr>
+          <td>Session 重载丢 LSP / @文件</td>
+          <td><code>restoreFromDisk</code> 只回放 <code>type:"message"</code></td>
+          <td>必须同时回放 <code>type:"attachment"</code> 行</td>
+        </tr>
+        <tr>
+          <td>Plan 批准后多跑一轮</td>
+          <td><code>planBuildPending</code> 在已实现后仍触发 kickoff</td>
+          <td>同 turn 内 Write/Edit/Bash 调用后清除 pending</td>
+        </tr>
+        <tr>
+          <td>Plan mode 刷屏</td>
+          <td>每 tool step 都注入 plan 提醒</td>
+          <td><code>getPlanModeAttachmentTurnCount</code> 按 human turn 节流</td>
+        </tr>
+        <tr>
+          <td>Attachment 直接送 SDK</td>
+          <td>LLM 收到无 <code>role</code> 的 JSON</td>
+          <td>必须先 <code>expandAttachmentMessagesForAPI</code></td>
+        </tr>
       </tbody>
     </table>
   </section>
 
-  <!-- 11. 速记 -->
+  <!-- 12. 速记 -->
   <section>
-    <h2><span class="num">11</span>一句话速记</h2>
+    <h2><span class="num">12</span>一句话速记</h2>
 
     <div class="callout info">
-      <strong>AI SDK</strong> 用 <code>user / assistant / tool</code> 三种 message role，
-      content 里用 <code>tool-call</code> 和 <code>tool-result</code> part 类型。
+      <strong>存储层</strong>：<code>user / assistant / tool</code> + CC 风格
+      <code>type: "attachment"</code>；JSONL 分 <code>message</code> / <code>attachment</code> 两种行。
+    </div>
+    <div class="callout info">
+      <strong>API 层</strong>：attachment 在 <code>streamText</code> 前展开为
+      <code>role: "user", isMeta: true</code>；LSP 用 <code>&lt;new-diagnostics&gt;</code>。
     </div>
     <div class="callout warn">
-      <strong>Anthropic</strong> 只有 <code>user / assistant</code>（+ 可选中途 <code>system</code>）；
-      工具结果是 <strong>user 消息里的 tool_result block</strong>，没有 tool role。
+      <strong>Anthropic</strong> 只有 <code>user / assistant</code>；
+      工具结果是 <strong>user 里的 tool_result block</strong>，无 tool role。
     </div>
     <div class="callout ok">
-      <strong>OpenAI</strong> Responses 用扁平 <code>input[]</code> items（function_call + function_call_output）；
-      Chat Completions 用 <code>assistant.tool_calls</code> + <code>role: tool</code> message。
+      <strong>OpenAI</strong> Responses 用扁平 <code>input[]</code>；
+      Chat Completions 用 <code>tool_calls</code> + <code>role: tool</code>。
     </div>
     <div class="callout err">
-      <strong>08-basic</strong> 在 SDK 层统一建模，发送前 sanitize；执行后
-      <code>buildToolMessage()</code> 回写；Claude Code 行为在 wire 层与 Anthropic 一致。
+      <strong>08-basic</strong>：collect（<code>getAttachmentMessages</code>）与 expand（<code>normalizeAttachmentForAPI</code>）分离；
+      tool round 后收集，发请求前展开 + sanitize。
     </div>
   </section>
 
@@ -753,11 +943,13 @@
   <p>
     相关代码：
     <a href="../examples/08-basic/core/types.ts">core/types.ts</a> ·
+    <a href="../examples/08-basic/utils/attachments.ts">attachments.ts</a> ·
+    <a href="../examples/08-basic/utils/messages.ts">messages.ts</a> ·
     <a href="../examples/08-basic/core/agent/messageSanitize.ts">messageSanitize.ts</a> ·
-    <a href="../examples/08-basic/services/tools/tool_execution.ts">tool_execution.ts</a> ·
+    <a href="../examples/08-basic/server/session.ts">session.ts</a> ·
     <a href="../examples/08-basic/core/agent.ts">agent.ts</a>
   </p>
-  <p style="margin-top:8px;color:#94a3b8">08-basic · LLM Message Mapping Guide</p>
+  <p style="margin-top:8px;color:#94a3b8">08-basic · LLM Message Mapping Guide · CC Attachment 架构对齐版</p>
 </footer>
 
 </body>

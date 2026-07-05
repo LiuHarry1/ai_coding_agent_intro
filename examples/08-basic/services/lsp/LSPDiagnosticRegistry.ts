@@ -1,9 +1,13 @@
 import { fileURLToPath } from 'url'
-import type {
-  LspDiagnostic,
-  LspDiagnosticFile,
-  PendingLspDiagnosticSet,
-} from './types.js'
+import type { Diagnostic, DiagnosticFile } from '../../core/types.js'
+
+export type LspDiagnostic = Diagnostic
+export type LspDiagnosticFile = DiagnosticFile
+
+export interface PendingLspDiagnosticSet {
+  serverName: string
+  files: DiagnosticFile[]
+}
 
 const MAX_DIAGNOSTICS_PER_FILE = 10
 const MAX_TOTAL_DIAGNOSTICS = 30
@@ -12,24 +16,7 @@ const MAX_DELIVERED_FILES = 500
 const pendingByWorkspace = new Map<string, PendingLspDiagnosticSet[]>()
 const deliveredByWorkspace = new Map<string, Map<string, Set<string>>>()
 
-function severityName(
-  severity: number | undefined,
-): LspDiagnostic['severity'] {
-  switch (severity) {
-    case 1:
-      return 'Error'
-    case 2:
-      return 'Warning'
-    case 3:
-      return 'Info'
-    case 4:
-      return 'Hint'
-    default:
-      return 'Error'
-  }
-}
-
-function severityRank(severity: LspDiagnostic['severity']): number {
+function severityRank(severity: Diagnostic['severity']): number {
   switch (severity) {
     case 'Error':
       return 1
@@ -51,7 +38,7 @@ function normalizeUri(uri: string): string {
   }
 }
 
-function diagnosticKey(diag: LspDiagnostic): string {
+function diagnosticKey(diag: Diagnostic): string {
   return JSON.stringify({
     message: diag.message,
     severity: diag.severity,
@@ -70,22 +57,24 @@ function deliveredForWorkspace(workspaceKey: string): Map<string, Set<string>> {
   return delivered
 }
 
-export function registerPendingLspDiagnostics(
-  workspaceKey: string,
-  serverName: string,
-  files: LspDiagnosticFile[],
-): void {
-  if (files.length === 0) return
-  const diagCount = files.reduce((sum, file) => sum + file.diagnostics.length, 0)
-  console.log(
-    `[lsp:diagnostics] register workspace=${workspaceKey} server=${serverName} files=${files.length} diagnostics=${diagCount}`,
-  )
-  const pending = pendingByWorkspace.get(workspaceKey) ?? []
-  pending.push({ serverName, files })
-  pendingByWorkspace.set(workspaceKey, pending)
+function severityName(
+  severity: number | undefined,
+): Diagnostic['severity'] {
+  switch (severity) {
+    case 1:
+      return 'Error'
+    case 2:
+      return 'Warning'
+    case 3:
+      return 'Info'
+    case 4:
+      return 'Hint'
+    default:
+      return 'Error'
+  }
 }
 
-export function convertPublishDiagnostics(params: {
+export function formatDiagnosticsForAttachment(params: {
   uri: string
   diagnostics: Array<{
     message: string
@@ -97,7 +86,7 @@ export function convertPublishDiagnostics(params: {
     source?: string
     code?: string | number
   }>
-}): LspDiagnosticFile[] {
+}): DiagnosticFile[] {
   return [
     {
       uri: normalizeUri(params.uri),
@@ -112,7 +101,22 @@ export function convertPublishDiagnostics(params: {
   ]
 }
 
-export function drainPendingLspDiagnostics(
+export function registerPendingLSPDiagnostic(
+  workspaceKey: string,
+  input: { serverName: string; files: DiagnosticFile[] },
+): void {
+  const { serverName, files } = input
+  if (files.length === 0) return
+  const diagCount = files.reduce((sum, file) => sum + file.diagnostics.length, 0)
+  console.log(
+    `[lsp:diagnostics] register workspace=${workspaceKey} server=${serverName} files=${files.length} diagnostics=${diagCount}`,
+  )
+  const pending = pendingByWorkspace.get(workspaceKey) ?? []
+  pending.push({ serverName, files })
+  pendingByWorkspace.set(workspaceKey, pending)
+}
+
+export function checkForLSPDiagnostics(
   workspaceKey: string,
 ): PendingLspDiagnosticSet[] {
   const pending = pendingByWorkspace.get(workspaceKey) ?? []
@@ -127,7 +131,7 @@ export function drainPendingLspDiagnostics(
   )
 
   const delivered = deliveredForWorkspace(workspaceKey)
-  const fileMap = new Map<string, LspDiagnosticFile>()
+  const fileMap = new Map<string, DiagnosticFile>()
   const seenThisDrain = new Map<string, Set<string>>()
   const serverNames = new Set<string>()
   let skippedDuplicates = 0
@@ -204,11 +208,20 @@ export function drainPendingLspDiagnostics(
   return [{ serverName: [...serverNames].join(', '), files: limitedFiles }]
 }
 
-export function clearDeliveredLspDiagnosticsForFile(
+export function clearAllLSPDiagnostics(workspaceKey: string): void {
+  const had = pendingByWorkspace.has(workspaceKey)
+  pendingByWorkspace.delete(workspaceKey)
+  if (had) {
+    console.log(`[lsp:diagnostics] clearPending workspace=${workspaceKey}`)
+  }
+}
+
+export function clearDeliveredDiagnosticsForFile(
   workspaceKey: string,
   filePath: string,
 ): void {
-  const hadDelivered = deliveredByWorkspace.get(workspaceKey)?.has(filePath) ?? false
+  const hadDelivered =
+    deliveredByWorkspace.get(workspaceKey)?.has(filePath) ?? false
   deliveredByWorkspace.get(workspaceKey)?.delete(filePath)
   if (hadDelivered) {
     console.log(
@@ -217,7 +230,7 @@ export function clearDeliveredLspDiagnosticsForFile(
   }
 }
 
-export function clearWorkspaceLspDiagnostics(workspaceKey: string): void {
+export function resetAllLSPDiagnosticState(workspaceKey: string): void {
   pendingByWorkspace.delete(workspaceKey)
   deliveredByWorkspace.delete(workspaceKey)
 }

@@ -7,6 +7,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { generateText } from 'ai'
 import type { IProvider, Message, TodoItem } from '../../core/types.js'
+import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
 import { READ_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { estimateConversationTokens, clearTokenUsages } from './tokens.js'
 
@@ -188,7 +189,12 @@ function dropOldestApiRound(messages: Message[]): Message[] {
   if (firstId !== undefined) {
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i]
-      if (m.role === 'assistant' && m.id !== undefined && m.id !== firstId) {
+      if (
+        isRoleMessage(m) &&
+        m.role === 'assistant' &&
+        m.id !== undefined &&
+        m.id !== firstId
+      ) {
         return messages.slice(i)
       }
     }
@@ -198,13 +204,15 @@ function dropOldestApiRound(messages: Message[]): Message[] {
   // 2) user-boundary: drop up to the second user message.
   let firstUser = -1
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'user') {
+    const m = messages[i]
+    if (isRoleMessage(m) && m.role === 'user') {
       firstUser = i
       break
     }
   }
   for (let i = firstUser + 1; i < messages.length; i++) {
-    if (messages[i].role === 'user') {
+    const m = messages[i]
+    if (isRoleMessage(m) && m.role === 'user') {
       return messages.slice(i)
     }
   }
@@ -217,7 +225,8 @@ function dropOldestApiRound(messages: Message[]): Message[] {
 /** First assistant message's round id, or undefined if none carry one. */
 function firstAssistantRoundId(messages: Message[]): string | undefined {
   for (const m of messages) {
-    if (m.role === 'assistant' && m.id !== undefined) return m.id
+    if (isRoleMessage(m) && m.role === 'assistant' && m.id !== undefined)
+      return m.id
   }
   return undefined
 }
@@ -319,7 +328,7 @@ function extractRecentlyReadFiles(messages: Message[], maxFiles = 8): string[] {
   const files: string[] = []
   for (let i = messages.length - 1; i >= 0 && files.length < maxFiles; i--) {
     const m = messages[i]
-    if (m.role !== 'assistant') continue
+    if (!isRoleMessage(m) || m.role !== 'assistant') continue
     for (const part of m.content) {
       if (part.type !== 'tool-call' || part.toolName !== READ_FILE_TOOL_NAME)
         continue
@@ -392,6 +401,9 @@ function formatCompactSummary(raw: string): string {
 // ── Formatting helpers ──────────────────────────────────
 
 function formatForSummary(msg: Message): string {
+  if (isAttachmentMessage(msg)) {
+    return `ATTACHMENT: ${msg.attachment.type}`
+  }
   if (msg.role === 'user') {
     if (typeof msg.content === 'string') return `USER: ${msg.content}`
     const text = msg.content
