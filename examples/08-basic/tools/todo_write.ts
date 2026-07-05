@@ -1,6 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import type { ToolDefinition, TodoItem, TodoStatus } from '../core/types.js'
+import { emitTodoUpdate } from '../core/wire-internal.js'
 import { TODO_WRITE_TOOL_NAME } from '../constants/tool_names.js'
 
 const STATUS_ORDER: Record<TodoStatus, number> = {
@@ -93,7 +94,7 @@ export const definition: ToolDefinition = {
 
         const sorted = sortTodos([...todos.values()])
 
-        context.eventBus.emit('todo_update', { todos: sorted })
+        emitTodoUpdate(context.wire, context.eventBus, sorted)
 
         return summarize(sorted)
       },

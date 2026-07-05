@@ -73,4 +73,14 @@ try {
   }
 }
 
-startServer({ runAgent, ...(systemPrompt ? { systemPrompt } : {}) })
+if (process.argv.includes('--stdio')) {
+  try {
+    const { startStdioAgent } = await tryImport('cli')
+    await startStdioAgent(runAgent)
+  } catch (err) {
+    console.error(`[start] stdio CLI failed: ${err.message}`)
+    process.exit(1)
+  }
+} else {
+  startServer({ runAgent, ...(systemPrompt ? { systemPrompt } : {}) })
+}

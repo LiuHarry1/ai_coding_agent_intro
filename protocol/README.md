@@ -30,20 +30,32 @@ ACP adapter is a thin translation rather than a rewrite.
 - **Client → engine** (`ClientMessage`): `user`, and the client side of the
   control sub-protocol.
 
-## Bridging the current backend
+## Native emission
 
-The engine in `examples/08-basic` still emits loose `(name, data)` events on
-its `eventBus`. `mapLegacyEvent(name, data, ctx)` translates those into
-`ServerMessage`s so a transport can speak this protocol today, before the
-core is refactored to emit protocol messages natively. Events that aren't
-part of the stable contract (compaction, usage, tool-input previews) map to
-`null` and stay internal.
+The engine in `examples/08-basic` emits typed `ServerMessage`s at the
+boundary via `WireEmitter` (CC: `QueryEngine` yielding `SDKMessage`).
+Transports (SSE, stdio NDJSON) only serialize — no legacy adapter layer.
+
+### Stdio CLI
+
+```bash
+npm run cli -- --workspace /path/to/project
+echo '{"type":"user","text":"List files in src"}' | npm run cli
+```
+
+- **stdout**: one `OutgoingMessage` JSON object per line
+- **stdin**: `ClientMessage` NDJSON (`user`, `control_response`, …)
+- **stderr**: boot / turn logs (stdout stays pure protocol)
+
+Respond to engine `control_request` messages on stdin:
+
+```json
+{"type":"control_response","response":{"subtype":"success","request_id":"<id>","response":{"answers":{"Which approach?":"Option A"}}}}
+```
 
 ## Roadmap
 
-1. **Now** — schema + legacy bridge (this package).
-2. Wire the SSE transport to validate/emit `ServerMessage`s; point the web
-   frontend at `import.meta.env.VITE_API_BASE`.
-3. Add a stdio **NDJSON** transport for headless CLI / SDK usage.
-4. Add an **ACP** adapter (JSON-RPC 2.0) translating this protocol to
+1. **Done** — schema + native engine emission (`WireEmitter`).
+2. **Done** — SSE + stdio NDJSON transports; web frontend consumes protocol.
+3. Add an **ACP** adapter (JSON-RPC 2.0) translating this protocol to
    `session/prompt` + `session/update` for Zed / JetBrains / any ACP editor.

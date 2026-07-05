@@ -6,6 +6,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { EventBus } from '../core/event-bus.js'
+import { noopWireEmitter } from '../core/wire-emitter.js'
 import { buildProvider } from '../core/llm/index.js'
 import { isAttachmentMessage } from '../core/types.js'
 import type { Message } from '../core/types.js'
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
   const compacted = await compactIfNeeded(
     [...messages],
     eventBus,
+    noopWireEmitter,
     model,
     WORKSPACE,
     [],

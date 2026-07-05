@@ -38,6 +38,7 @@ import type { ToolRegistry } from '../../core/tool-registry.js'
 import type { SlashEntry } from '../../commands/slashRegistry.js'
 import { extractFilePathCandidates } from './path_candidates.js'
 import { mergeMCPServers } from '../../core/settings-manager.js'
+import { noopWireEmitter } from '../../core/wire-emitter.js'
 import { getMCPManagerForServers } from '../../server/mcp-lifecycle.js'
 
 export type ForkSkillSlashResult = {
@@ -119,6 +120,7 @@ export interface PreparedChatTurn {
   permissionMode: Session['permissionMode']['mode']
   planFilePath: string
   modeChanged?: boolean
+  toolContext: ToolContext
 }
 
 export interface PrepareChatTurnInput {
@@ -186,6 +188,7 @@ export async function prepareChatTurn(
 
   const toolContext: ToolContext = {
     eventBus,
+    wire: noopWireEmitter,
     middleware,
     runAgent,
     registry,
@@ -284,5 +287,6 @@ export async function prepareChatTurn(
     permissionMode: session.permissionMode.mode,
     planFilePath,
     modeChanged: slash.modeChanged,
+    toolContext,
   }
 }

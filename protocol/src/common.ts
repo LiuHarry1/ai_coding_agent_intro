@@ -18,6 +18,11 @@ export const envelopeFields = {
    * matched. Optional because incremental stream deltas often omit it.
    */
   uuid: z.string().optional(),
+  /**
+   * When set, this message belongs to a nested subagent/tool invocation.
+   * Mirrors CC's `parent_tool_use_id` on SDK messages.
+   */
+  parent_tool_use_id: z.string().optional(),
 }
 
 /**

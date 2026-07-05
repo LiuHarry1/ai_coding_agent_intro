@@ -175,11 +175,7 @@ export const definition: ToolDefinition = {
 
         // Emit on the per-request EventBus; SSE clients render the
         // question(s) and POST back to /ask_user_question/answer.
-        context.eventBus.emit('ask_user_question', {
-          id,
-          questions: input.questions,
-          metadata: input.metadata,
-        })
+        context.wire.askUserQuestion(id, input.questions)
 
         const result = await registerQuestion(id, DEFAULT_TIMEOUT_MS)
 

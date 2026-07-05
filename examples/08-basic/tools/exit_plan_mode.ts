@@ -5,6 +5,7 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import type { ToolDefinition } from '../core/types.js'
+import { emitModeChanged, emitPlanReady } from '../core/wire-internal.js'
 import { EXIT_PLAN_MODE_TOOL_NAME } from '../constants/tool_names.js'
 import {
   handlePlanModeTransition,
@@ -71,11 +72,7 @@ Read the plan from the plan file — do not pass the plan as a parameter.`,
 
         const requestId = randomUUID()
 
-        context.eventBus.emit('plan_approval_request', {
-          requestId,
-          plan,
-          filePath,
-        })
+        context.wire.planApprovalRequest(requestId, plan)
 
         const approval = await registerPlanApproval(
           requestId,
@@ -107,8 +104,12 @@ Read the plan from the plan file — do not pass the plan as a parameter.`,
           session.permissionMode,
         )
 
-        context.eventBus.emit('plan_ready', { plan, filePath, approved: true })
-        context.eventBus.emit('mode_changed', { mode: targetMode })
+        emitPlanReady(context.wire, context.eventBus, {
+          plan,
+          filePath,
+          approved: true,
+        })
+        emitModeChanged(context.wire, context.eventBus, targetMode)
 
         return {
           result: approvedToolResult(plan, filePath),

@@ -10,7 +10,7 @@ import {
   forceKillChild,
   type ShellConfig,
 } from '../core/platform.js'
-import type { ToolDefinition, ToolContext, IEventBus } from '../core/types.js'
+import type { ToolDefinition, ToolContext } from '../core/types.js'
 import { isShellInputConcurrencySafe } from '../core/shell/shell-readonly.js'
 
 /**
@@ -129,7 +129,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
     description: briefDescription,
     isConcurrencySafe: isShellInputConcurrencySafe,
     create(cwd: string, context: ToolContext) {
-      const eventBus: IEventBus | undefined = context?.eventBus
+      const wire = context?.wire
       // Mutable per-tool-instance cwd. Updated after each foreground command
       // by reading the cwd-tracking tmpfile written by the wrapped command.
       // Lets the model `cd subdir` and have subsequent commands run from
@@ -163,14 +163,18 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               'Max time in ms before killing. Default 120000 (2 min). Ignored in background mode.',
             ),
         }),
-        execute: async (args: {
-          command?: string
-          background?: boolean
-          pid?: number
-          kill?: boolean
-          stdin?: string
-          timeout?: number
-        }) => {
+        execute: async (
+          args: {
+            command?: string
+            background?: boolean
+            pid?: number
+            kill?: boolean
+            stdin?: string
+            timeout?: number
+          },
+          options?: { toolCallId?: string },
+        ) => {
+          const toolUseId = options?.toolCallId ?? ''
           // ── Check / kill a background process ──
           // Prefer `command` if provided. Some providers (OpenAI Responses API
           // with strict tools) may pass `pid: 0` even when the model wants to
@@ -266,18 +270,13 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             let progressTimer: ReturnType<typeof setInterval> | null = null
             let lastOutputLen = 0
 
-            if (eventBus) {
+            if (wire && toolUseId) {
               progressTimer = setInterval(() => {
                 if (proc.done) return
                 const out = formatOutput(proc)
                 if (out.length !== lastOutputLen) {
                   lastOutputLen = out.length
-                  eventBus.emit('process_output', {
-                    pid: proc.pid,
-                    output: out,
-                    elapsed: elapsedSec(proc.startTime),
-                    done: false,
-                  })
+                  wire.processOutput(toolUseId, name, out)
                 }
               }, PROGRESS_INTERVAL_MS)
             }
@@ -300,12 +299,9 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
                 } catch {}
                 const out =
                   formatOutput(proc) + `\n[timed out after ${timeout / 1000}s]`
-                eventBus?.emit('process_output', {
-                  pid: proc.pid,
-                  output: out,
-                  elapsed: elapsedSec(proc.startTime),
-                  done: true,
-                })
+                if (wire && toolUseId) {
+                  wire.processOutput(toolUseId, name, out)
+                }
                 finish(out)
               }, 3000)
             }, timeout)
@@ -316,12 +312,9 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               proc.done = true
               updateCwdFromFile()
               const out = formatOutput(proc)
-              eventBus?.emit('process_output', {
-                pid: proc.pid,
-                output: out,
-                elapsed: elapsedSec(proc.startTime),
-                done: true,
-              })
+              if (wire && toolUseId) {
+                wire.processOutput(toolUseId, name, out)
+              }
               finish(out)
             })
 

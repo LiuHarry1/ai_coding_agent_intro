@@ -100,20 +100,7 @@ export interface ChatJSONResult {
 }
 
 /**
- * SSE events emitted by `/chat` and the fork branch of
- * `/skills/:name/invoke`. The wire format is a flat `(event, data)` pair
- * — we surface it as a tagged union for ergonomic switch handling.
- *
- * Anything we haven't typed yet falls into `UnknownAgentEvent` so callers
- * never have to crash on a new event name; they can just ignore it.
+ * Protocol messages emitted by `/chat` and fork skill SSE streams.
+ * Shape matches `@ai-agent/protocol` OutgoingMessage JSON on the wire.
  */
-export type AgentEvent =
-  | { type: 'session'; session_id: string }
-  | { type: 'skill_start'; skill: string; agentType: string; workspace: string }
-  | { type: 'text_delta'; delta: string }
-  | { type: 'reasoning_delta'; delta: string }
-  | { type: 'tool_call'; name: string; toolCallId: string; args: unknown }
-  | { type: 'tool_result'; toolCallId: string; result: string }
-  | { type: 'finish'; reason: string; text?: string }
-  | { type: 'error'; message: string }
-  | { type: 'unknown'; event: string; data: unknown }
+export type AgentEvent = Record<string, unknown> & { type: string }

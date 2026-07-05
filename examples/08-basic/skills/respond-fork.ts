@@ -1,35 +1,32 @@
 /**
- * Glue between `runSkillFork` and an HTTP transport (SSE or buffered JSON).
- *
- * Both `/chat` (slash `/skill-name` with `context: fork`) and
- * `/skills/:name/invoke` end up doing the same dance: spin up a subagent,
- * stream its events if the caller wants SSE, otherwise wait and emit a
- * single JSON blob. That logic lives here so the two endpoints stay thin.
+ * Glue between `runSkillFork` and a transport (SSE HTTP or stdio NDJSON).
  */
 
 import type { ServerResponse } from 'http'
 import { EventBus } from '../core/event-bus.js'
 import { createSSETransport } from '../server/sse-transport.js'
+import { createWireEmitter } from '../core/wire-emitter.js'
 import { registerSubagents } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools/index.js'
-import type { AppConfig, IProvider, RunAgentFn } from '../core/types.js'
+import type { AppConfig, IProvider, RunAgentFn, SSETransport } from '../core/types.js'
 import { runSkillFork } from './run-fork.js'
 import type { SkillDefinition } from './types.js'
 
 export interface RespondSkillForkOptions {
-  res: ServerResponse
+  /** HTTP response for SSE mode. Omit when using `stdioTransport`. */
+  res?: ServerResponse
+  /** Pre-created stdio transport (headless CLI). */
+  stdioTransport?: SSETransport
   skill: SkillDefinition
-  /** Already-expanded skill body (`expandSkillBody` output). */
   combined: string
   cwd: string
   runAgent: RunAgentFn
   provider: IProvider
   config: AppConfig
   wantsStream: boolean
-  /** Extra HTTP headers to attach to the SSE response. */
   sseHeaders?: Record<string, string>
-  /** Extra fields merged into the JSON response on success. */
   jsonMeta?: Record<string, unknown>
+  sessionId?: string
 }
 
 function sendJSON(res: ServerResponse, status: number, data: unknown): void {
@@ -37,16 +34,12 @@ function sendJSON(res: ServerResponse, status: number, data: unknown): void {
   res.end(JSON.stringify(data))
 }
 
-/**
- * Resolves the fork target agent (lazily reloading subagent definitions so
- * project-level `.agents/` edits land without a restart), runs the skill,
- * and writes the response in whichever transport the caller asked for.
- */
 export async function respondSkillFork(
   opts: RespondSkillForkOptions,
 ): Promise<void> {
   const {
     res,
+    stdioTransport,
     skill,
     combined,
     cwd,
@@ -56,16 +49,19 @@ export async function respondSkillFork(
     wantsStream,
     sseHeaders,
     jsonMeta,
+    sessionId = '',
   } = opts
 
   const { activeAgents } = await registerSubagents(defaultRegistry, cwd)
   const targetAgentType = skill.agent ?? 'general_purpose'
   const targetAgent = activeAgents.find(a => a.agentType === targetAgentType)
   if (!targetAgent) {
-    sendJSON(res, 400, {
-      error: `Skill '${skill.name}' fork target '${targetAgentType}' not found`,
-      available: activeAgents.map(a => a.agentType),
-    })
+    if (res) {
+      sendJSON(res, 400, {
+        error: `Skill '${skill.name}' fork target '${targetAgentType}' not found`,
+        available: activeAgents.map(a => a.agentType),
+      })
+    }
     return
   }
 
@@ -80,29 +76,36 @@ export async function respondSkillFork(
     registry: defaultRegistry,
     activeAgents,
     eventBus,
+    wire: createWireEmitter({ emit() {} }, sessionId),
     toolEnablement,
     provider,
     compaction: config.compaction,
+    sessionId,
   }
 
   if (wantsStream) {
-    const transport = createSSETransport(res, eventBus, sseHeaders)
-    transport.send('skill_start', {
+    const transport =
+      stdioTransport ?? createSSETransport(res!, sseHeaders ?? {})
+    const wire = createWireEmitter(transport, sessionId)
+    runOpts.wire = wire
+    wire.skillStart({
       skill: skill.name,
-      agentType: targetAgent.agentType,
+      agent_type: targetAgent.agentType,
       workspace: cwd,
     })
     try {
       const result = await runSkillFork(runOpts)
-      transport.send('text_delta', { delta: result })
-      transport.send('finish', { reason: 'skill_fork', skill: skill.name })
+      wire.textDelta(result)
+      wire.finish('skill_fork')
     } catch (e) {
-      transport.send('error', { message: (e as Error).message })
+      wire.error((e as Error).message)
     } finally {
-      transport.end()
+      if (res) transport.end()
     }
     return
   }
+
+  if (!res) return
 
   try {
     const result = await runSkillFork(runOpts)

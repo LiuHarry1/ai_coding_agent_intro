@@ -9,6 +9,7 @@ import type {
   Message,
   TodoItem,
 } from '../../core/types.js'
+import type { WireEmitter } from '../../core/wire-emitter.js'
 import { isRoleMessage } from '../../core/types.js'
 import { DEFAULTS } from '../../core/settings-manager.js'
 import {
@@ -181,6 +182,7 @@ export interface CompactOptions {
 export async function compactIfNeeded(
   messages: Message[],
   eventBus: IEventBus,
+  wire: WireEmitter,
   mainModel: string,
   cwd: string,
   currentTodos: TodoItem[],
@@ -294,11 +296,13 @@ export async function compactIfNeeded(
 
   eventBus.emit('compaction_start', {
     totalMessages: working.length,
-    // Full compaction collapses the whole history into a single summary
-    // message, so exactly one message remains afterwards.
     keeping: 1,
     estimatedTokens: tokens,
     aggressive,
+  })
+  wire.compactionStart({
+    messages_before: working.length,
+    tokens_before: tokens,
   })
 
   const ctx: CompactContext = {
@@ -329,6 +333,10 @@ export async function compactIfNeeded(
       summaryLength: result.summaryLength,
       estimatedTokensAfter: result.estimatedTokensAfter,
       messagesBefore: msgsBeforeFull,
+    })
+    wire.compactionDone({
+      messages_after: result.messages.length,
+      tokens_after: result.estimatedTokensAfter,
     })
     console.log(
       `[compact] full-compact DONE — msgs ${msgsBeforeFull} → ${result.messages.length}, ` +

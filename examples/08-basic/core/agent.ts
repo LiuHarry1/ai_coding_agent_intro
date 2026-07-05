@@ -35,6 +35,8 @@ import {
 } from '../utils/messages.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
 import { consumeStream, type StreamResult } from './agent/streamConsumer.js'
+import { emitTodoUpdate } from './wire-internal.js'
+import type { WireEmitter } from './wire-emitter.js'
 import { stripToolExecute } from './agent/prepareTools.js'
 import {
   buildToolMessage,
@@ -85,6 +87,7 @@ function buildUserMessage(text: string, images?: string[]): UserMessage {
 function autoCompleteTodos(
   todos: TodoItem[],
   eventBus: AgentOptions['eventBus'],
+  wire: WireEmitter,
 ): void {
   const hasIncomplete = todos.some(
     t => t.status === 'pending' || t.status === 'in_progress',
@@ -95,7 +98,7 @@ function autoCompleteTodos(
       ? { ...t, status: 'completed' as TodoStatus }
       : t,
   )
-  eventBus.emit('todo_update', { todos: updated })
+  emitTodoUpdate(wire, eventBus, updated)
 }
 
 function formatTodoReminder(todos: TodoItem[]): string {
@@ -216,6 +219,7 @@ export async function runAgent(
     tools,
     systemPrompt,
     eventBus,
+    wire,
     messages = [],
     images,
     maxSteps = 80,
@@ -293,12 +297,13 @@ export async function runAgent(
 
   try {
     for (let step = 0; step < maxSteps; step++) {
-      eventBus.emit('step_start', { step })
+      wire.stepStart(step)
       const stepStart = Date.now()
 
       await runCompactionAndLog(
         messages,
         eventBus,
+        wire,
         step,
         resolvedModel,
         provider,
@@ -316,6 +321,7 @@ export async function runAgent(
         provider,
         resolvedModel,
         eventBus,
+        wire,
         subagentNames,
         step,
         stepStart,
@@ -368,11 +374,11 @@ Do not reply with a summary or status update only — call TodoWrite, Write, Edi
           console.log(
             '[agent] plan approved but no tools called — forcing implementation step',
           )
-          eventBus.emit('thinking', {})
+          wire.thinking()
           continue
         }
-        autoCompleteTodos(currentTodos, eventBus)
-        eventBus.emit('done', { steps: step + 1 })
+        autoCompleteTodos(currentTodos, eventBus, wire)
+        wire.done()
         return finalText
       }
 
@@ -386,12 +392,12 @@ Do not reply with a summary or status update only — call TodoWrite, Write, Edi
         }
       }
 
-      eventBus.emit('thinking', {})
+      wire.thinking()
     }
 
-    autoCompleteTodos(currentTodos, eventBus)
-    eventBus.emit('error', { message: `Reached max steps (${maxSteps})` })
-    eventBus.emit('done', { steps: maxSteps })
+    autoCompleteTodos(currentTodos, eventBus, wire)
+    wire.error(`Reached max steps (${maxSteps})`)
+    wire.done()
     return finalText
   } finally {
     unsubPlanReady()
@@ -415,6 +421,7 @@ function applyFullCompaction(
 async function runCompactionAndLog(
   messages: Message[],
   eventBus: AgentOptions['eventBus'],
+  wire: WireEmitter,
   step: number,
   resolvedModel: string,
   provider: IProvider,
@@ -428,6 +435,7 @@ async function runCompactionAndLog(
   const managed = await compactIfNeeded(
     messages,
     eventBus,
+    wire,
     resolvedModel,
     cwd ?? process.cwd(),
     currentTodos,
@@ -462,6 +470,7 @@ interface RunOneStepArgs {
   provider: IProvider
   resolvedModel: string
   eventBus: AgentOptions['eventBus']
+  wire: WireEmitter
   subagentNames?: Set<string>
   step: number
   stepStart: number
@@ -488,6 +497,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     provider,
     resolvedModel,
     eventBus,
+    wire,
     subagentNames,
     step,
     stepStart,
@@ -551,7 +561,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       const timing = { firstEventMs: 0 }
       const stepResult = await consumeStream(
         stream,
-        eventBus,
+        wire,
         timing,
         subagentNames,
         {
@@ -563,7 +573,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         const executed = await runToolCalls({
           toolCalls: stepResult.toolCalls,
           tools: executors,
-          eventBus,
+          wire,
           concurrencyPolicy,
           sessionId,
         })
@@ -648,6 +658,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         const recompacted = await compactIfNeeded(
           messages,
           eventBus,
+          wire,
           resolvedModel,
           cwd ?? process.cwd(),
           args.currentTodos,
@@ -701,11 +712,11 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           ? ` (${err.cause.message})`
           : ''
       console.error(`[agent] step ${step} failed: ${message}${cause}`)
-      eventBus.emit('error', {
-        message: `Upstream stream failed: ${message}${cause}. Try again or check your proxy logs.`,
-      })
-      autoCompleteTodos(args.currentTodos, eventBus)
-      eventBus.emit('done', { steps: step + 1 })
+      wire.error(
+        `Upstream stream failed: ${message}${cause}. Try again or check your proxy logs.`,
+      )
+      autoCompleteTodos(args.currentTodos, eventBus, wire)
+      wire.done()
       return null
     }
   }

@@ -60,22 +60,28 @@ export async function printStream(
 
   for await (const ev of events) {
     switch (ev.type) {
-      case 'text_delta':
-        deltas.push(ev.delta)
-        process.stdout.write(ev.delta)
+      case 'stream_event': {
+        const delta = ev.delta as { kind?: string; text?: string } | undefined
+        if (delta?.kind === 'text' && typeof delta.text === 'string') {
+          deltas.push(delta.text)
+          process.stdout.write(delta.text)
+        }
         break
+      }
       case 'tool_call':
         console.log(`\n[tool_call] ${ev.name}`)
         break
       case 'tool_result':
-        console.log(`\n[tool_result] ${ev.result.slice(0, 400)}`)
+        console.log(`\n[tool_result] ${String(ev.result).slice(0, 400)}`)
         break
-      case 'finish':
-        if (typeof ev.text === 'string') final = ev.text
-        console.log(`\n[finish] reason=${ev.reason}`)
+      case 'result':
+        if (ev.subtype === 'success') {
+          if (typeof ev.text === 'string') final = ev.text
+          console.log(`\n[result] reason=${ev.reason}`)
+        } else if (ev.subtype === 'error') {
+          throw new AgentClientError(String(ev.error ?? 'stream error'), 0, ev)
+        }
         break
-      case 'error':
-        throw new AgentClientError(ev.message || 'stream error', 0, ev)
     }
   }
   console.log()

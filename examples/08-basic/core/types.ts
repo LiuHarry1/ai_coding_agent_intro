@@ -52,6 +52,7 @@ export interface IMiddleware {
 
 export interface ToolContext {
   eventBus: IEventBus
+  wire: import('./wire-emitter.js').WireEmitter
   middleware?: IMiddleware
   runAgent?: RunAgentFn
   registry?: IToolRegistry
@@ -242,6 +243,7 @@ export interface AgentOptions {
   tools: Record<string, AnyTool>
   systemPrompt: string
   eventBus: IEventBus
+  wire: import('./wire-emitter.js').WireEmitter
   messages?: Message[]
   images?: string[]
   maxSteps?: number
@@ -371,7 +373,7 @@ export interface RouterOptions {
 }
 
 export interface SSETransport {
-  send(event: string, data: unknown): void
+  emit(msg: import('../../../protocol/src/wire.js').OutgoingMessage): void
   end(): void
 }
 

@@ -64,6 +64,7 @@ export const ToolCallMessageSchema = z.object({
   tool_use_id: z.string(),
   name: z.string(),
   args: z.unknown(),
+  is_subagent: z.boolean().optional(),
   ...envelopeFields,
 })
 
@@ -117,6 +118,103 @@ export const ResultErrorMessageSchema = z.object({
   ...envelopeFields,
 })
 
+// ── GUI progress extensions (engine → client, Web UI parity) ──
+// CC keeps some of these off the SDK stream; we expose them for the web UI.
+
+export const ReasoningStartMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('reasoning_start'),
+  ...envelopeFields,
+})
+
+export const ReasoningEndMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('reasoning_end'),
+  ...envelopeFields,
+})
+
+export const ToolInputStartMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('tool_input_start'),
+  tool_use_id: z.string(),
+  name: z.string(),
+  is_subagent: z.boolean().optional(),
+  ...envelopeFields,
+})
+
+export const ToolInputDeltaMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('tool_input_delta'),
+  tool_use_id: z.string(),
+  bytes: z.number(),
+  ...envelopeFields,
+})
+
+export const ToolInputPreviewDeltaMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('tool_input_preview_delta'),
+  tool_use_id: z.string(),
+  delta: z.string(),
+  ...envelopeFields,
+})
+
+export const StepStartMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('step_start'),
+  step: z.number(),
+  task: z.string().optional(),
+  label: z.string().optional(),
+  ...envelopeFields,
+})
+
+export const ThinkingMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('thinking'),
+  ...envelopeFields,
+})
+
+export const PlanReadyMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('plan_ready'),
+  plan: z.string(),
+  file_path: z.string().optional(),
+  approved: z.boolean().optional(),
+  ...envelopeFields,
+})
+
+export const CompactionStartMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('compaction_start'),
+  messages_before: z.number().optional(),
+  tokens_before: z.number().optional(),
+  ...envelopeFields,
+})
+
+export const CompactionDoneMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('compaction_done'),
+  messages_after: z.number().optional(),
+  tokens_after: z.number().optional(),
+  ...envelopeFields,
+})
+
+export const ToolTimingMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('tool_timing'),
+  name: z.string(),
+  duration: z.number(),
+  ...envelopeFields,
+})
+
+/** Live shell/process output (CC: `tool_progress`). */
+export const ToolProgressMessageSchema = z.object({
+  type: z.literal('tool_progress'),
+  tool_use_id: z.string(),
+  tool_name: z.string(),
+  output: z.string(),
+  ...envelopeFields,
+})
+
 /**
  * Anything the engine emits that isn't (yet) part of the stable public
  * contract — internal progress like compaction, token usage, tool-input
@@ -139,6 +237,18 @@ export const ServerMessageSchema = z.union([
   ModeChangedMessageSchema,
   ResultSuccessMessageSchema,
   ResultErrorMessageSchema,
+  ReasoningStartMessageSchema,
+  ReasoningEndMessageSchema,
+  ToolInputStartMessageSchema,
+  ToolInputDeltaMessageSchema,
+  ToolInputPreviewDeltaMessageSchema,
+  StepStartMessageSchema,
+  ThinkingMessageSchema,
+  PlanReadyMessageSchema,
+  CompactionStartMessageSchema,
+  CompactionDoneMessageSchema,
+  ToolTimingMessageSchema,
+  ToolProgressMessageSchema,
   // The engine can also reach back to the client (permission, plan, …).
   ControlRequestSchema,
   KeepAliveMessageSchema,

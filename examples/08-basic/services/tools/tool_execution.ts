@@ -2,13 +2,9 @@
  * Tool execution orchestration — CC: services/tools/toolExecution.ts
  * Consecutive concurrency-safe calls run in parallel; mutating tools serially.
  */
-import type {
-  AnyTool,
-  IEventBus,
-  Message,
-  ToolMessage,
-} from '../../core/types.js'
+import type { AnyTool, Message, ToolMessage } from '../../core/types.js'
 import type { ConcurrencyPolicyFn } from '../../core/concurrency-policy.js'
+import type { WireEmitter } from '../../core/wire-emitter.js'
 import { formatToolError } from '../../core/agent/toolErrors.js'
 import { maybePersistAfterExecute } from '../tool-storage/index.js'
 
@@ -63,7 +59,7 @@ export function partitionToolCalls(
 async function executeOne(
   tc: ToolCallRef,
   tools: Record<string, AnyTool>,
-  eventBus: IEventBus,
+  wire: WireEmitter,
   sessionId?: string,
 ): Promise<ExecutedToolResult> {
   const tool = tools[tc.toolName] as AnyTool & {
@@ -72,10 +68,10 @@ async function executeOne(
 
   if (!tool?.execute) {
     const result = `Error: Unknown tool: ${tc.toolName}`
-    eventBus.emit('tool_result', {
-      name: tc.toolName,
+    wire.toolResult({
+      tool_use_id: tc.toolCallId,
       result,
-      toolCallId: tc.toolCallId,
+      is_error: true,
     })
     return { toolCallId: tc.toolCallId, toolName: tc.toolName, result }
   }
@@ -102,11 +98,7 @@ async function executeOne(
       tc.toolName,
       result,
     )
-    eventBus.emit('tool_result', {
-      name: tc.toolName,
-      result,
-      toolCallId: tc.toolCallId,
-    })
+    wire.toolResult({ tool_use_id: tc.toolCallId, result })
     return {
       toolCallId: tc.toolCallId,
       toolName: tc.toolName,
@@ -115,10 +107,10 @@ async function executeOne(
     }
   } catch (err) {
     const result = `Error: ${formatToolError(tc.toolName, err)}`
-    eventBus.emit('tool_result', {
-      name: tc.toolName,
+    wire.toolResult({
+      tool_use_id: tc.toolCallId,
       result,
-      toolCallId: tc.toolCallId,
+      is_error: true,
     })
     return { toolCallId: tc.toolCallId, toolName: tc.toolName, result }
   }
@@ -127,7 +119,7 @@ async function executeOne(
 async function executeBatchParallel(
   calls: readonly ToolCallRef[],
   tools: Record<string, AnyTool>,
-  eventBus: IEventBus,
+  wire: WireEmitter,
   maxConcurrency: number,
   sessionId?: string,
 ): Promise<ExecutedToolResult[]> {
@@ -138,7 +130,7 @@ async function executeBatchParallel(
     while (true) {
       const i = nextIndex++
       if (i >= calls.length) return
-      results[i] = await executeOne(calls[i]!, tools, eventBus, sessionId)
+      results[i] = await executeOne(calls[i]!, tools, wire, sessionId)
     }
   }
 
@@ -150,7 +142,7 @@ async function executeBatchParallel(
 export interface RunToolCallsOptions {
   toolCalls: readonly ToolCallRef[]
   tools: Record<string, AnyTool>
-  eventBus: IEventBus
+  wire: WireEmitter
   concurrencyPolicy: ConcurrencyPolicyFn
   sessionId?: string
 }
@@ -170,7 +162,7 @@ export async function runToolCalls(
         ...(await executeBatchParallel(
           batch.calls,
           opts.tools,
-          opts.eventBus,
+          opts.wire,
           getMaxToolUseConcurrency(),
           opts.sessionId,
         )),
@@ -180,14 +172,14 @@ export async function runToolCalls(
         await executeOne(
           batch.calls[0]!,
           opts.tools,
-          opts.eventBus,
+          opts.wire,
           opts.sessionId,
         ),
       )
     } else {
       for (const tc of batch.calls) {
         allResults.push(
-          await executeOne(tc, opts.tools, opts.eventBus, opts.sessionId),
+          await executeOne(tc, opts.tools, opts.wire, opts.sessionId),
         )
       }
     }

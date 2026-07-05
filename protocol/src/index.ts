@@ -9,7 +9,6 @@
  *   - server    — engine → client messages (ServerMessage)
  *   - client    — client → engine messages (ClientMessage)
  *   - wire      — direction-split aggregates (Outgoing / Incoming)
- *   - from-legacy — adapter from today's eventBus events
  *
  * Consumers (backend transports, web frontend, CLI, future ACP adapter)
  * import from here and nowhere else.
@@ -20,4 +19,3 @@ export * from './control.js'
 export * from './server.js'
 export * from './client.js'
 export * from './wire.js'
-export * from './from-legacy.js'

@@ -3,30 +3,14 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import {
   createSession,
   getSession,
-  appendMessage,
-  appendModeChange,
-  appendCompaction,
   canAccessSession,
 } from '../session.js'
-import {
-  compactIfNeeded,
-  tokenCountWithEstimation,
-} from '../../services/compact/index.js'
-import { buildProvider } from '../../core/llm/index.js'
 import { createSSETransport } from '../sse-transport.js'
 import { readBody, sendJSON, wantsStreamingResponse } from '../http.js'
 import { sessionToUIMessages } from '../session-ui.js'
 import { resolveRequestCwd } from '../request-cwd.js'
 import type { AuthedRequest } from '../auth/identity.js'
 import { EventBus } from '../../core/event-bus.js'
-import {
-  Middleware,
-  createTimingMiddleware,
-} from '../../core/middleware/index.js'
-import { applyPluginHooks, hasPluginHooks } from '../../core/plugins/index.js'
-import { createPlanModeGuardMiddleware } from '../../core/middleware/plan-mode-guard.js'
-import { defaultRegistry } from '../../tools/index.js'
-import { respondSkillFork } from '../../skills/respond-fork.js'
 import {
   attachUsageTelemetry,
   flushUsage,
@@ -38,17 +22,17 @@ import {
   shouldEnforceQuota,
   trackTurnTokens,
 } from '../quota.js'
-import { prepareChatTurn } from '../../utils/processUserInput/prepare_chat_turn.js'
-import { resolveSettings } from '../../core/settings-manager.js'
 import {
   handlePlanModeTransition,
   isValidExternalMode,
   transitionPermissionMode,
 } from '../../core/permission-mode.js'
-import { getSystemPromptForMode } from '../../prompts/mode.js'
-import { applyModeRestrictions } from '../../core/mode-restrictions.js'
-import { planExists } from '../../utils/plans.js'
-import type { Message, RunAgentFn, UserMessage } from '../../core/types.js'
+import { appendModeChange } from '../session.js'
+import type { Message, RunAgentFn } from '../../core/types.js'
+import {
+  createNoopTransport,
+  runChatTurn,
+} from '../run-chat-turn.js'
 
 export async function handleChat(
   req: IncomingMessage,
@@ -76,12 +60,7 @@ export async function handleChat(
   }
 
   const wantsStream = wantsStreamingResponse(req, body)
-  // When auth is on, the workspace is pinned to the authenticated user
-  // (set by the router's auth gate); the client-supplied `workspace` is
-  // intentionally ignored so a user cannot escape their own directory.
   const cwd = resolveRequestCwd(req, workspace)
-  const resolvedSettings = resolveSettings(cwd)
-  const provider = buildProvider(resolvedSettings.config.provider)
 
   const requesterEmail = (req as AuthedRequest).user?.email
   let session
@@ -160,284 +139,68 @@ export async function handleChat(
       }
     } catch (err) {
       console.warn(`[quota] status check failed: ${(err as Error).message}`)
-      // Fail open if analytics is unreachable — chat still works.
     }
   }
 
-  // One analytics event per user chat POST (question count).
   reportUserQuestion(telemetryCtx, session.messages.length, message)
-  // Ship per-step LLM usage to analytics (no-op unless ANALYTICS_URL is set).
   const unsubTelemetry = attachUsageTelemetry(eventBus, telemetryCtx)
-  const middleware = new Middleware()
-  middleware.use('afterTool', createTimingMiddleware(eventBus).afterTool)
-  middleware.use('beforeTool', createPlanModeGuardMiddleware(session, cwd))
-  // Replay hooks/subscriptions registered by code plugins at boot (skip the
-  // call entirely when no code plugin registered anything).
-  if (hasPluginHooks()) applyPluginHooks(middleware, eventBus)
-
-  const prepared = await prepareChatTurn({
-    message,
-    cwd,
-    session,
-    registry: defaultRegistry,
-    config: resolvedSettings.config,
-    provider,
-    eventBus,
-    middleware,
-    runAgent,
-  })
-
-  if (prepared.forkSkill) {
-    console.log(
-      `[server] fork skill /${prepared.forkSkill.entry.name} → agent ${prepared.forkSkill.entry.def.agent ?? 'general_purpose'}`,
-    )
-    await respondSkillFork({
-      res,
-      skill: prepared.forkSkill.entry.def,
-      combined: prepared.forkSkill.text,
-      cwd,
-      runAgent,
-      provider,
-      config: resolvedSettings.config,
-      wantsStream,
-      sseHeaders: { 'X-Session-Id': session.id },
-      jsonMeta: { session_id: session.id, reason: 'skill_fork' },
-    })
-    unsubTelemetry()
-    await finishQuota()
-    return
-  }
 
   const sseHeaders: Record<string, string> = {
     'X-Session-Id': session.id,
     'X-Permission-Mode': session.permissionMode.mode,
   }
 
-  // Opt-in protocol framing: `?protocol=1` makes the SSE stream carry
-  // @ai-agent/protocol ServerMessages instead of the legacy event pairs.
-  // Default is unchanged, so the existing web UI keeps working.
-  const useProtocol =
-    new URLSearchParams(req.url?.split('?')[1] ?? '').get('protocol') === '1'
-
   const transport = wantsStream
-    ? createSSETransport(res, eventBus, sseHeaders, {
-        protocol: useProtocol,
-        sessionId: session.id,
-        mode: session.permissionMode.mode,
-      })
-    : null
-  transport?.send('session', {
-    session_id: session.id,
-    mode: session.permissionMode.mode,
-  })
-  transport?.send('mode_changed', { mode: session.permissionMode.mode })
-
-  if (prepared.modeChanged) {
-    appendModeChange(session.id, session)
-    transport?.send('mode_changed', { mode: session.permissionMode.mode })
-  }
-
-  const unsubMode = eventBus.on('mode_changed', data => {
-    const newMode = (data as { mode: string }).mode
-    if (newMode && isValidExternalMode(newMode)) {
-      appendModeChange(session.id, session)
-      transport?.send('mode_changed', { mode: newMode })
-    }
-  })
-
-  req.on('close', () => {
-    console.log('[server] client disconnected')
-    eventBus.removeAllListeners()
-  })
-
-  // Manual /compact: summarize the existing history now (no agent run). Runs
-  // force-compaction over the whole session, persists a compaction checkpoint,
-  // then returns a short status line. Token-pressure events stream over SSE.
-  if (prepared.manualCompact) {
-    const instructions = prepared.manualCompact.instructions.trim()
-    const msgsBefore = session.messages.length
-    const tokensBefore = tokenCountWithEstimation(session.messages).total
-    let replyText: string
-    try {
-      const model = provider.defaultModelId()
-      const managed = await compactIfNeeded(
-        session.messages,
-        eventBus,
-        model,
-        cwd,
-        [],
-        { force: true, instructions: instructions || undefined },
-        resolvedSettings.config.compaction,
-        provider,
-        session.id,
-      )
-      if (managed !== session.messages && managed.length > 0) {
-        session.messages.length = 0
-        session.messages.push(...managed)
-        appendCompaction(session.id, session.messages)
-        const tokensAfter = tokenCountWithEstimation(session.messages).total
-        const tokenLine = `~${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens`
-        // Full summarization collapses everything to a single message. If more
-        // than one remains, only micro-compaction ran (the LLM summary step
-        // failed or returned nothing) — report that honestly.
-        if (session.messages.length === 1) {
-          replyText =
-            `Compacted: ${msgsBefore} → 1 message, ${tokenLine}.` +
-            (instructions ? `\nFocus: ${instructions}` : '')
-        } else {
-          replyText =
-            `Partially compacted (full summary unavailable — cleared old tool ` +
-            `outputs only): ${msgsBefore} → ${session.messages.length} messages, ${tokenLine}.`
-        }
-      } else {
-        replyText =
-          msgsBefore < 2
-            ? 'Nothing to compact yet — the conversation is too short.'
-            : 'Compaction did not reduce the conversation (summarizer returned no change).'
-      }
-    } catch (e) {
-      replyText = `Compaction failed: ${(e as Error).message}`
-    }
-
-    if (transport) {
-      transport.send('text_delta', { delta: replyText })
-      transport.send('finish', { reason: 'compact' })
-      transport.end()
-    } else {
-      sendJSON(res, 200, {
-        session_id: session.id,
-        mode: session.permissionMode.mode,
-        text: replyText,
-        reason: 'compact',
-      })
-    }
-    unsubMode()
-    unsubTelemetry()
-    await finishQuota()
-    void flushUsage()
-    return
-  }
-
-  if (prepared.immediateReply !== null) {
-    if (transport) {
-      transport.send('text_delta', { delta: prepared.immediateReply })
-      transport.send('finish', { reason: 'slash_command' })
-      transport.end()
-    } else {
-      sendJSON(res, 200, {
-        session_id: session.id,
-        mode: session.permissionMode.mode,
-        text: prepared.immediateReply,
-        reason: 'slash_command',
-      })
-    }
-    unsubMode()
-    unsubTelemetry()
-    await finishQuota()
-    void flushUsage()
-    return
-  }
-
-  const unsubDiscover = eventBus.on('tools_discovered', data => {
-    const names = (data as { tools: string[] }).tools
-    if (!session.discoveredTools) session.discoveredTools = new Set()
-    for (const n of names) session.discoveredTools.add(n)
-  })
+    ? createSSETransport(res, sseHeaders)
+    : createNoopTransport()
 
   const messagesBefore = session.messages.length
-  let persistFrom = messagesBefore
-  let finalText = ''
-  let runError: Error | null = null
-
-  // CC parity: when compact runs at step 0 it summarizes the in-flight user
-  // turn too. Re-persist the raw user bubble after the checkpoint so reload
-  // still shows what the user typed (summary stays isCompactSummary-only).
-  const userTurnForDisplay: UserMessage = { role: 'user', content: message }
-
-  const promptOptions = {
-    planFilePath: prepared.planFilePath,
-    planExists: planExists(session, cwd),
-  }
-
-  const systemPrompt = getSystemPromptForMode(
-    session.permissionMode.mode,
-    cwd,
-    prepared.projectRules || undefined,
-    promptOptions,
-  )
-
-  const refreshTools = () =>
-    applyModeRestrictions(
-      session.permissionMode.mode,
-      prepared.baseTools,
-      prepared.modeTools,
-    )
-
-  const refreshSystemPrompt = () =>
-    getSystemPromptForMode(
-      session.permissionMode.mode,
-      cwd,
-      prepared.projectRules || undefined,
-      {
-        planFilePath: prepared.planFilePath,
-        planExists: planExists(session, cwd),
-      },
-    )
 
   try {
-    finalText = await runAgent(prepared.effectiveMessage, {
-      tools: prepared.tools,
-      systemPrompt,
-      eventBus,
-      provider,
+    const result = await runChatTurn({
+      message,
+      session,
       cwd,
-      compaction: resolvedSettings.config.compaction,
-      messages: session.messages,
-      images: images?.length ? images : undefined,
-      subagentNames: prepared.subagentNames,
-      deferredToolPool: prepared.deferredToolPool,
-      concurrencyPolicy: prepared.concurrencyPolicy,
-      sessionId: session.id,
-      toolUseContext: prepared.toolUseContext,
-      refreshTools,
-      refreshSystemPrompt,
-      onFullCompaction: compactedMessages => {
-        appendCompaction(session.id, [...compactedMessages])
-        session.messages.push(userTurnForDisplay)
-        appendMessage(session.id, userTurnForDisplay)
-        persistFrom = session.messages.length
+      runAgent,
+      transport,
+      images,
+      mode,
+      eventBus,
+      http: { res, wantsStream, sseHeaders },
+      onClientDisconnect: cleanup => {
+        req.on('close', () => {
+          console.log('[server] client disconnected')
+          cleanup()
+        })
       },
     })
-  } catch (e) {
-    runError = e as Error
-  } finally {
-    unsubDiscover()
-    unsubMode()
-    unsubTelemetry()
+
     await finishQuota()
     void flushUsage()
-  }
 
-  for (const msg of session.messages.slice(persistFrom)) {
-    appendMessage(session.id, msg as Message)
-  }
+    if (wantsStream || result.reason === 'skill_fork') {
+      return
+    }
 
-  if (transport) {
-    if (runError) transport.send('error', { message: runError.message })
-    transport.send('done', { mode: session.permissionMode.mode })
-    transport.end()
-  } else if (runError) {
-    sendJSON(res, 500, {
-      session_id: session.id,
-      mode: session.permissionMode.mode,
-      error: runError.message,
-    })
-  } else {
+    if (result.error) {
+      sendJSON(res, 500, {
+        session_id: session.id,
+        mode: session.permissionMode.mode,
+        error: result.error.message,
+      })
+      return
+    }
+
     sendJSON(res, 200, {
       session_id: session.id,
       mode: session.permissionMode.mode,
-      text: finalText,
-      messages: sessionToUIMessages(session.messages.slice(persistFrom)),
+      text: result.finalText,
+      reason: result.reason,
+      messages: sessionToUIMessages(
+        session.messages.slice(messagesBefore) as Message[],
+      ),
     })
+  } finally {
+    unsubTelemetry()
   }
 }

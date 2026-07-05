@@ -311,138 +311,172 @@ export const useChatStore = create((set, get) => ({
 
   // ── Internal SSE handlers ───────────────────
 
-  _handleSSE: (event, data) => {
+  _handleSSE: (_event, data) => {
     const store = get()
+    const toolUseId = d => d.tool_use_id ?? d.toolCallId
+    const parentId = data.parent_tool_use_id ?? data.parentToolCallId
 
-    if (event.startsWith('subagent_') && event.endsWith('_tool_call')) {
-      store._appendSubagentEvent({ type: 'tool_call', ...data })
-      return
-    }
-    if (event.startsWith('subagent_') && event.endsWith('_tool_result')) {
-      store._appendSubagentEvent({ type: 'tool_result', ...data })
-      return
-    }
-    if (event.startsWith('subagent_') && event.endsWith('_text_delta')) {
-      store._appendSubagentEvent({ type: 'text_delta', ...data })
-      return
-    }
-    if (
-      event.startsWith('subagent_') &&
-      (event.endsWith('_step_start') ||
-        event.endsWith('_thinking') ||
-        event.endsWith('_done'))
-    ) {
-      return
-    }
-    if (event === 'tool_timing') {
-      store._updateLastToolTiming(data)
-      return
-    }
-    if (event === 'process_output') {
-      store._updateProcessOutput(data)
-      return
-    }
-
-    switch (event) {
-      case 'session':
-        if (data.session_id) store.setSessionId(data.session_id)
-        if (data.mode) {
-          localStorage.setItem('coding_agent_mode', data.mode)
-          set({ agentMode: data.mode })
-        }
-        break
-      case 'mode_changed':
-        if (data.mode) {
-          localStorage.setItem('coding_agent_mode', data.mode)
-          set({ agentMode: data.mode })
-        }
-        break
-      case 'ask_user_question':
-        store._appendPart({
-          type: 'ask_user_question',
-          id: data.id,
-          questions: data.questions,
-          status: 'pending',
-        })
-        set({ isAwaitingInteraction: true })
-        break
-      case 'plan_approval_request':
-        store._appendPlanApprovalPart(data)
-        break
-      case 'plan_ready':
-        set({
-          planState: {
-            status: data.approved ? 'building' : 'idle',
-            content: data.plan ?? '',
-            filePath: data.filePath ?? null,
-          },
-        })
-        if (data.approved) store._setThinking()
-        break
-      case 'step_start':
-        set({ currentStep: data.step ?? get().currentStep })
-        store._setThinking()
-        break
-      case 'thinking':
-        store._setThinking()
-        break
-      case 'reasoning_start':
-        store._removeThinking()
-        store._startReasoning()
-        break
-      case 'reasoning_delta':
-        store._appendReasoningDelta(data.delta)
-        break
-      case 'reasoning_end':
-        store._finalizeReasoning()
-        break
-      case 'text_delta':
-        store._removeThinking()
-        store._appendTextDelta(data.delta)
-        break
-      case 'todo_update':
-        store._updateTodos(data.todos)
-        break
-      case 'tool_input_start': {
-        store._removeThinking()
-        const t0 = Date.now()
-        store._appendPart({
+    if (parentId) {
+      if (data.type === 'tool_call') {
+        store._appendSubagentEvent({
           type: 'tool_call',
           name: data.name,
-          toolCallId: data.toolCallId,
-          args: {},
-          status: 'streaming-input',
-          isSubagent: data.isSubagent === true,
-          liveInputBytes: 0,
-          liveInputStart: t0,
-          startTime: t0,
+          args: data.args,
+          toolCallId: toolUseId(data),
+          parentToolCallId: parentId,
         })
-        break
+        return
       }
-      case 'tool_input_preview_delta':
-        store._appendToolInputPreviewDelta(data)
+      if (data.type === 'tool_result') {
+        store._appendSubagentEvent({
+          type: 'tool_result',
+          result: data.result,
+          toolCallId: toolUseId(data),
+          parentToolCallId: parentId,
+        })
+        return
+      }
+      if (data.type === 'stream_event' && data.delta?.kind === 'text') {
+        store._appendSubagentEvent({
+          type: 'text_delta',
+          delta: data.delta.text,
+          parentToolCallId: parentId,
+        })
+      }
+      return
+    }
+
+    if (data.type === 'tool_progress') {
+      store._updateProcessOutput({ output: data.output, done: false })
+      return
+    }
+
+    switch (data.type) {
+      case 'system':
+        switch (data.subtype) {
+          case 'init':
+            if (data.session_id) store.setSessionId(data.session_id)
+            if (data.permission_mode) {
+              localStorage.setItem('coding_agent_mode', data.permission_mode)
+              set({ agentMode: data.permission_mode })
+            }
+            break
+          case 'mode_changed':
+            if (data.mode) {
+              localStorage.setItem('coding_agent_mode', data.mode)
+              set({ agentMode: data.mode })
+            }
+            break
+          case 'reasoning_start':
+            store._removeThinking()
+            store._startReasoning()
+            break
+          case 'reasoning_end':
+            store._finalizeReasoning()
+            break
+          case 'step_start':
+            set({ currentStep: data.step ?? get().currentStep })
+            store._setThinking()
+            break
+          case 'thinking':
+            store._setThinking()
+            break
+          case 'todo_update':
+            store._updateTodos(data.todos)
+            break
+          case 'tool_input_start':
+            store._removeThinking()
+            store._appendPart({
+              type: 'tool_call',
+              name: data.name,
+              toolCallId: toolUseId(data),
+              args: {},
+              status: 'streaming-input',
+              isSubagent: data.is_subagent === true,
+              liveInputBytes: 0,
+              liveInputStart: Date.now(),
+              startTime: Date.now(),
+            })
+            break
+          case 'tool_input_preview_delta':
+            store._appendToolInputPreviewDelta({
+              toolCallId: toolUseId(data),
+              delta: data.delta,
+            })
+            break
+          case 'tool_input_delta':
+            store._appendToolInputDelta({
+              toolCallId: toolUseId(data),
+              bytes: data.bytes,
+            })
+            break
+          case 'plan_ready':
+            set({
+              planState: {
+                status: data.approved ? 'building' : 'idle',
+                content: data.plan ?? '',
+                filePath: data.file_path ?? null,
+              },
+            })
+            if (data.approved) store._setThinking()
+            break
+          case 'compaction_start':
+            store._appendPart({ type: 'compaction_start', ...data })
+            break
+          case 'compaction_done':
+            void get()._refetchTranscriptAfterCompaction()
+            break
+          case 'tool_timing':
+            store._updateLastToolTiming(data)
+            break
+        }
         break
-      case 'tool_input_delta':
-        store._appendToolInputDelta(data)
+      case 'stream_event':
+        if (data.delta?.kind === 'reasoning') {
+          store._appendReasoningDelta(data.delta.text)
+        } else if (data.delta?.kind === 'text') {
+          store._removeThinking()
+          store._appendTextDelta(data.delta.text)
+        }
         break
       case 'tool_call':
         store._removeThinking()
-        store._upsertToolCall({ ...data, startTime: Date.now() })
+        store._upsertToolCall({
+          name: data.name,
+          toolCallId: toolUseId(data),
+          args: data.args,
+          isSubagent: data.is_subagent === true,
+          startTime: Date.now(),
+        })
         break
       case 'tool_result':
-        store._updateToolResult(data)
+        store._updateToolResult({
+          toolCallId: toolUseId(data),
+          result: data.result,
+        })
         break
-      case 'compaction_start':
-        store._appendPart({ type: 'compaction_start', ...data })
+      case 'control_request':
+        if (data.request?.subtype === 'ask_user_question') {
+          store._appendPart({
+            type: 'ask_user_question',
+            id: data.request.question_id,
+            questions: data.request.questions,
+            status: 'pending',
+          })
+          set({ isAwaitingInteraction: true })
+        } else if (data.request?.subtype === 'approve_plan') {
+          store._appendPlanApprovalPart({
+            requestId: data.request_id,
+            plan: data.request.plan,
+          })
+        }
         break
-      case 'compaction_done':
-        void get()._refetchTranscriptAfterCompaction()
-        break
-      case 'error':
-        store._appendPart({ type: 'error', message: data.message })
-        break
-      case 'done':
-        store._removeThinking()
+      case 'result':
+        if (data.subtype === 'error') {
+          store._appendPart({ type: 'error', message: data.error })
+        } else if (data.subtype === 'success' && data.reason === 'done') {
+          store._removeThinking()
+        }
         break
     }
   },
@@ -836,6 +870,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   _updateToolResult: data => {
+    const toolCallId = data.tool_use_id ?? data.toolCallId
     set(s => {
       const msgs = [...s.messages]
       const last = msgs[msgs.length - 1]
@@ -845,7 +880,7 @@ export const useChatStore = create((set, get) => ({
       for (let i = parts.length - 1; i >= 0; i--) {
         if (
           parts[i].type === 'tool_call' &&
-          parts[i].toolCallId === data.toolCallId
+          parts[i].toolCallId === toolCallId
         ) {
           parts[i] = {
             ...parts[i],

@@ -4,6 +4,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import type { ToolDefinition } from '../core/types.js'
+import { emitModeChanged } from '../core/wire-internal.js'
 import { ENTER_PLAN_MODE_TOOL_NAME } from '../constants/tool_names.js'
 import {
   handlePlanModeTransition,
@@ -40,7 +41,7 @@ Do NOT use for simple, obvious tasks — execute directly instead.`,
           session.permissionMode,
         )
 
-        context.eventBus.emit('mode_changed', { mode: 'plan' })
+        emitModeChanged(context.wire, context.eventBus, 'plan')
 
         return {
           message:

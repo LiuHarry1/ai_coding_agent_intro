@@ -1,20 +1,10 @@
 /**
  * SSE parser and stream helpers for the agent backend wire format.
+ * Messages are `@ai-agent/protocol` JSON bodies (CC: SDKMessage over SSE).
  */
 
 import { AgentClientError } from './errors.js'
 import type { AgentEvent } from './types.js'
-
-const KNOWN_EVENTS = new Set([
-  'session',
-  'skill_start',
-  'text_delta',
-  'reasoning_delta',
-  'tool_call',
-  'tool_result',
-  'finish',
-  'error',
-])
 
 export async function* parseSSE(
   stream: ReadableStream<Uint8Array>,
@@ -57,7 +47,7 @@ export async function* parseSSE(
   }
 }
 
-/** Drain an event stream; prefer finish.text, else join text_delta chunks. */
+/** Drain an event stream; prefer result.text, else join stream_event text deltas. */
 export async function collectText(
   events: AsyncIterable<AgentEvent>,
 ): Promise<string> {
@@ -65,15 +55,17 @@ export async function collectText(
   let final: string | undefined
 
   for await (const ev of events) {
-    switch (ev.type) {
-      case 'text_delta':
-        deltas.push(ev.delta)
-        break
-      case 'finish':
-        if (typeof ev.text === 'string') final = ev.text
-        break
-      case 'error':
-        throw new AgentClientError(ev.message || 'stream error', 0, ev)
+    if (ev.type === 'stream_event') {
+      const delta = ev.delta as { kind?: string; text?: string } | undefined
+      if (delta?.kind === 'text' && typeof delta.text === 'string') {
+        deltas.push(delta.text)
+      }
+    }
+    if (ev.type === 'result' && ev.subtype === 'success' && typeof ev.text === 'string') {
+      final = ev.text
+    }
+    if (ev.type === 'result' && ev.subtype === 'error') {
+      throw new AgentClientError(String(ev.error ?? 'stream error'), 0, ev)
     }
   }
 
@@ -81,31 +73,19 @@ export async function collectText(
 }
 
 function parseOneEvent(raw: string): AgentEvent | null {
-  let eventName = 'message'
   let dataLine = ''
   for (const line of raw.split('\n')) {
-    if (line.startsWith('event:')) eventName = line.slice(6).trim()
-    else if (line.startsWith('data:')) dataLine = line.slice(5).trim()
+    if (line.startsWith('data:')) dataLine = line.slice(5).trim()
   }
   if (!dataLine) return null
 
-  let parsed: unknown
   try {
-    parsed = JSON.parse(dataLine)
+    const parsed = JSON.parse(dataLine) as AgentEvent
+    if (parsed && typeof parsed === 'object' && typeof parsed.type === 'string') {
+      return parsed
+    }
   } catch {
-    return { type: 'unknown', event: eventName, data: dataLine }
+    return { type: 'unknown', data: dataLine }
   }
-
-  return discriminate(eventName, parsed)
-}
-
-function discriminate(event: string, data: unknown): AgentEvent {
-  if (!KNOWN_EVENTS.has(event)) {
-    return { type: 'unknown', event, data }
-  }
-  const fields =
-    data && typeof data === 'object' && !Array.isArray(data)
-      ? (data as Record<string, unknown>)
-      : {}
-  return { type: event, ...fields } as AgentEvent
+  return null
 }

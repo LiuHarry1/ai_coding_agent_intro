@@ -145,6 +145,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
               registry,
               activeAgents: forkableAgents,
               eventBus,
+              wire: context.wire,
               toolEnablement,
               sessionId: context.sessionId,
             })

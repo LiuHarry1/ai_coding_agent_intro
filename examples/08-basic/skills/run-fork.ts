@@ -14,6 +14,7 @@ import type {
   RunAgentFn,
   ToolContext,
 } from '../core/types.js'
+import type { WireEmitter } from '../core/wire-emitter.js'
 import { buildConcurrencyPolicy } from '../core/concurrency-policy.js'
 import { AGENT_TOOL_NAME } from '../constants/tool_names.js'
 import { SKILL_TOOL_NAME } from '../tools/skill.js'
@@ -28,6 +29,7 @@ export interface RunSkillForkOptions {
   registry: IToolRegistry
   activeAgents: readonly AgentDefinition[]
   eventBus: IEventBus
+  wire: WireEmitter
   toolEnablement?: ToolContext['toolEnablement']
   provider?: IProvider
   compaction?: CompactionConfig
@@ -43,6 +45,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     registry,
     activeAgents,
     eventBus,
+    wire,
     toolEnablement,
     provider,
     compaction,
@@ -57,15 +60,14 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     )
   }
 
-  const subBus = eventBus.scoped(`skill_${skill.name}`)
-  subBus.emit('step_start', {
-    step: 0,
+  wire.stepStart(0, {
     task: skill.name,
     label: `Skill: ${skill.name}`,
   })
 
   const subContext: ToolContext = {
-    eventBus: subBus,
+    eventBus,
+    wire,
     registry,
     runAgent,
     toolEnablement,
@@ -94,7 +96,8 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
   const result = await runAgent(combined, {
     tools: subTools,
     systemPrompt: targetAgent.systemPrompt,
-    eventBus: subBus,
+    eventBus,
+    wire,
     messages: [],
     maxSteps: targetAgent.maxSteps ?? 20,
     model: targetAgent.model,

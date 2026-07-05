@@ -15,7 +15,7 @@ import { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
 import { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
 import { loadProjectRules } from '../../utils/rules-loader.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
-import { createSubagentEventBus } from '../../core/brokers/subagent-bus.js'
+import { createSubagentWire } from '../../core/brokers/subagent-wire.js'
 import { randomUUID } from 'crypto'
 
 /** CC: tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
@@ -168,14 +168,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             )
           }
           const resolvedParentId = parentToolCallId ?? randomUUID()
-          const subBus = createSubagentEventBus(
-            eventBus,
-            resolvedParentId,
-            `subagent_${subagent_type}_${resolvedParentId}`,
-          )
+          const subWire = createSubagentWire(context.wire, resolvedParentId)
 
-          subBus.emit('step_start', {
-            step: 0,
+          subWire.stepStart(0, {
             task: shortDesc.slice(0, 80),
             label: def.label || subagent_type,
           })
@@ -185,7 +180,8 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           }
 
           const subContext: ToolContext = {
-            eventBus: subBus,
+            eventBus,
+            wire: subWire,
             registry,
             runAgent,
             toolEnablement,
@@ -213,7 +209,8 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           const result = await runAgent(prompt, {
             tools: subTools,
             systemPrompt: subSystemPrompt,
-            eventBus: subBus,
+            eventBus,
+            wire: subWire,
             messages: [],
             maxSteps: def.maxSteps ?? 20,
             model: def.model,

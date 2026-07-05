@@ -5,6 +5,7 @@ import type {
   MiddlewareHandler,
   MiddlewareContext,
 } from '../types.js'
+import type { WireEmitter } from '../wire-emitter.js'
 
 export class Middleware implements IMiddleware {
   #hooks = new Map<MiddlewareHook, MiddlewareHandler[]>()
@@ -46,11 +47,11 @@ export class Middleware implements IMiddleware {
   }
 }
 
-export function createTimingMiddleware(eventBus: IEventBus) {
+export function createTimingMiddleware(wire: WireEmitter) {
   return {
     afterTool(ctx: MiddlewareContext): void {
       console.log('tool_timing', ctx.name, ctx.duration)
-      eventBus.emit('tool_timing', { name: ctx.name, duration: ctx.duration })
+      wire.toolTiming(ctx.name, ctx.duration ?? 0)
     },
   }
 }
