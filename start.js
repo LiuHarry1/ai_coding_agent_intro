@@ -1,4 +1,13 @@
 import * as fs from 'fs'
+import * as path from 'path'
+
+// ACP uses stdout for JSON-RPC — keep boot logs on stderr only.
+if (process.argv.includes('--acp')) {
+  console.log = console.error
+  console.info = console.error
+  console.warn = console.error
+  console.debug = console.error
+}
 
 // Load .env (Node 20.12+ built-in, no dotenv dependency needed).
 // Silent when the file doesn't exist.
@@ -23,9 +32,35 @@ console.log(
   `[start] ANALYTICS_URL=${process.env.ANALYTICS_URL ?? '(unset → telemetry disabled)'}`,
 )
 
-// First positional that isn't a `--flag` is the example name.
-const positionals = process.argv.slice(2).filter(a => !a.startsWith('--'))
-const example = positionals[0] || '08-basic'
+// First positional that isn't a flag (or a --workspace value) is the example name.
+function cliPositionals(argv) {
+  const out = []
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--workspace') {
+      i++
+      continue
+    }
+    if (arg.startsWith('--workspace=')) continue
+    if (arg.startsWith('--')) continue
+    out.push(arg)
+  }
+  return out
+}
+
+function resolveExampleName(argv) {
+  const positionals = cliPositionals(argv)
+  const candidate = positionals[0]
+  if (!candidate) return '08-basic'
+  const exampleDir = new URL(`./examples/${candidate}/`, import.meta.url)
+  if (fs.existsSync(exampleDir)) return candidate
+  if (path.isAbsolute(candidate) || candidate.includes('/')) {
+    return '08-basic'
+  }
+  return candidate
+}
+
+const example = resolveExampleName(process.argv)
 
 console.log(`[start] Loading example: ${example}`)
 
@@ -79,6 +114,17 @@ if (process.argv.includes('--stdio')) {
     await startStdioAgent(runAgent)
   } catch (err) {
     console.error(`[start] stdio CLI failed: ${err.message}`)
+    process.exit(1)
+  }
+} else if (process.argv.includes('--acp')) {
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+  })
+  try {
+    const { startAcpAgent } = await tryImport('acp')
+    await startAcpAgent(runAgent)
+  } catch (err) {
+    console.error(`[start] ACP agent failed: ${err.message}`)
     process.exit(1)
   }
 } else {

@@ -7,6 +7,7 @@
   "scripts": {
     "start": "tsx start.js",
     "cli": "tsx start.js --stdio",
+    "acp": "tsx start.js --acp",
     "server:stop": "node ./shared/kill-port.cjs 4567",
     "server:restart": "npm run server:stop && npm run start",
     "dev:web": "npm --prefix client/web run dev",
@@ -22,6 +23,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.1.0",
     "@ai-sdk/anthropic": "^3.0.74",
     "@ai-sdk/mcp": "^1.0.36",
     "@ai-sdk/openai": "^3.0.52",

@@ -57,5 +57,10 @@ Respond to engine `control_request` messages on stdin:
 
 1. **Done** — schema + native engine emission (`WireEmitter`).
 2. **Done** — SSE + stdio NDJSON transports; web frontend consumes protocol.
-3. Add an **ACP** adapter (JSON-RPC 2.0) translating this protocol to
-   `session/prompt` + `session/update` for Zed / JetBrains / any ACP editor.
+3. **Done** — ACP stdio adapter for JetBrains / VS Code / any ACP client:
+
+```bash
+npm run acp -- --workspace /path/to/project
+```
+
+Configure the IDE's ACP agent command to run the above. Stdout is JSON-RPC; stderr is boot logs only.
