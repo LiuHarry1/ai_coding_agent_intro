@@ -48,7 +48,7 @@ import {
   appendModeChange,
   canAccessSession,
 } from './session.js'
-import { sessionToUIMessages } from './session-ui.js'
+import { sessionJsonlToUIMessages } from './session-ui.js'
 import type { RouterOptions, MCPServerConfig, LlmProfile } from '../core/types.js'
 
 registerBuiltinSubagents(defaultRegistry)
@@ -192,7 +192,7 @@ export function createRouter({
         sendJSON(res, 404, { error: 'Session not found' })
         return
       }
-      sendJSON(res, 200, { messages: sessionToUIMessages(session.messages) })
+      sendJSON(res, 200, { messages: sessionJsonlToUIMessages(id) })
       return
     }
 

@@ -112,7 +112,6 @@ export interface PreparedChatTurn {
   baseTools: Record<string, AnyTool>
   modeTools: Record<string, AnyTool>
   deferredToolPool?: Record<string, AnyTool>
-  skillListing?: string
   projectRules: string
   toolUseContext: ToolUseContext
   subagentNames: Set<string>
@@ -248,8 +247,6 @@ export async function prepareChatTurn(
       `The following tools are available but not loaded. Use \`${TOOL_SEARCH_TOOL_NAME}\` to discover and load them before use:\n${listing}`,
     )
   }
-  const skillListing =
-    reminderParts.length > 0 ? reminderParts.join('\n\n') : undefined
 
   console.log(
     `[server] mode=${session.permissionMode.mode} tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ''}`,
@@ -266,6 +263,7 @@ export async function prepareChatTurn(
     readFileState,
     lspServers: config.lspServers,
     options: { tools },
+    skillListingContent: reminderParts.length > 0 ? reminderParts.join('\n\n') : undefined,
   }
 
   const planFilePath = getPlanFilePath(session, cwd)
@@ -279,7 +277,6 @@ export async function prepareChatTurn(
     baseTools: enablementFiltered,
     modeTools,
     deferredToolPool: Object.keys(deferred).length > 0 ? deferred : undefined,
-    skillListing,
     projectRules,
     toolUseContext,
     subagentNames: getSubagentNames(registry),

@@ -48,7 +48,7 @@ import {
 import { getSystemPromptForMode } from '../../prompts/mode.js'
 import { applyModeRestrictions } from '../../core/mode-restrictions.js'
 import { planExists } from '../../utils/plans.js'
-import type { Message, RunAgentFn } from '../../core/types.js'
+import type { Message, RunAgentFn, UserMessage } from '../../core/types.js'
 
 export async function handleChat(
   req: IncomingMessage,
@@ -345,8 +345,14 @@ export async function handleChat(
   })
 
   const messagesBefore = session.messages.length
+  let persistFrom = messagesBefore
   let finalText = ''
   let runError: Error | null = null
+
+  // CC parity: when compact runs at step 0 it summarizes the in-flight user
+  // turn too. Re-persist the raw user bubble after the checkpoint so reload
+  // still shows what the user typed (summary stays isCompactSummary-only).
+  const userTurnForDisplay: UserMessage = { role: 'user', content: message }
 
   const promptOptions = {
     planFilePath: prepared.planFilePath,
@@ -389,13 +395,18 @@ export async function handleChat(
       messages: session.messages,
       images: images?.length ? images : undefined,
       subagentNames: prepared.subagentNames,
-      skillListing: prepared.skillListing,
       deferredToolPool: prepared.deferredToolPool,
       concurrencyPolicy: prepared.concurrencyPolicy,
       sessionId: session.id,
       toolUseContext: prepared.toolUseContext,
       refreshTools,
       refreshSystemPrompt,
+      onFullCompaction: compactedMessages => {
+        appendCompaction(session.id, [...compactedMessages])
+        session.messages.push(userTurnForDisplay)
+        appendMessage(session.id, userTurnForDisplay)
+        persistFrom = session.messages.length
+      },
     })
   } catch (e) {
     runError = e as Error
@@ -407,7 +418,7 @@ export async function handleChat(
     void flushUsage()
   }
 
-  for (const msg of session.messages.slice(messagesBefore)) {
+  for (const msg of session.messages.slice(persistFrom)) {
     appendMessage(session.id, msg as Message)
   }
 
@@ -426,7 +437,7 @@ export async function handleChat(
       session_id: session.id,
       mode: session.permissionMode.mode,
       text: finalText,
-      messages: sessionToUIMessages(session.messages.slice(messagesBefore)),
+      messages: sessionToUIMessages(session.messages.slice(persistFrom)),
     })
   }
 }

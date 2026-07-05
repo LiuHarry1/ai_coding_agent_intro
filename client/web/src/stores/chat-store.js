@@ -436,7 +436,7 @@ export const useChatStore = create((set, get) => ({
         store._appendPart({ type: 'compaction_start', ...data })
         break
       case 'compaction_done':
-        store._appendPart({ type: 'compaction_done', ...data })
+        void get()._refetchTranscriptAfterCompaction()
         break
       case 'error':
         store._appendPart({ type: 'error', message: data.message })
@@ -568,6 +568,43 @@ export const useChatStore = create((set, get) => ({
       }
       return { messages: msgs }
     })
+  },
+
+  /**
+   * CC/Cursor parity: full compact updates agent memory but JSONL keeps the
+   * complete transcript. Refetch from the server instead of truncating local UI.
+   */
+  _refetchTranscriptAfterCompaction: async () => {
+    const id = get().currentSessionId
+    if (!id) return
+
+    const s = get()
+    const last = s.messages[s.messages.length - 1]
+    let streamingAssistant = null
+    if (s.isStreaming && last?.type === 'assistant') {
+      const parts = last.parts.filter(
+        p =>
+          p.type !== 'compaction_start' &&
+          p.type !== 'compaction_done' &&
+          p.type !== 'thinking',
+      )
+      streamingAssistant = { ...last, parts }
+    }
+
+    try {
+      const data = await agentApi.getSessionMessages(id)
+      let msgs = data.messages ?? []
+      if (streamingAssistant?.status === 'streaming') {
+        const tail = msgs[msgs.length - 1]
+        if (tail?.type === 'assistant') {
+          msgs = msgs.slice(0, -1)
+        }
+        msgs.push(streamingAssistant)
+      }
+      if (msgs.length > 0) set({ messages: msgs })
+    } catch (err) {
+      console.error('[chat] transcript refetch after compact failed', err)
+    }
   },
 
   /** ExitPlanMode — show plan card only when user approval is requested (CC UX). */

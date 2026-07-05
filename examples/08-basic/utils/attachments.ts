@@ -23,6 +23,12 @@ import {
 } from '../services/lsp/manager.js'
 import { BASH_TOOL_NAME } from '../constants/tool_names.js'
 
+function getSkillListingAttachments(ctx: ToolUseContext): Attachment[] {
+  const content = ctx.skillListingContent?.trim()
+  if (!content) return []
+  return [{ type: 'skill_listing', content }]
+}
+
 async function maybe<A>(label: string, f: () => Promise<A[]>): Promise<A[]> {
   try {
     return await f()
@@ -82,6 +88,13 @@ export async function getAttachments(
     : []
 
   const allThreadAttachments = [
+    ...(input
+      ? [
+          maybe('skill_listing', () =>
+            Promise.resolve(getSkillListingAttachments(toolUseContext)),
+          ),
+        ]
+      : []),
     maybe('plan_mode', () =>
       Promise.resolve(getPlanModeAttachments(messages, toolUseContext)),
     ),

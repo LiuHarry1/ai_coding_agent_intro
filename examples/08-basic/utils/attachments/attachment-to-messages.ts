@@ -8,12 +8,8 @@ import { MAX_LINES_TO_READ } from '../../constants/api_limits.js'
 import { formatReadOutputAsToolString } from '../read/index.js'
 import type { ReadOutput } from '../read/types.js'
 
-function wrapInSystemReminder(content: string): string {
-  return `<system-reminder>\n${content}\n</system-reminder>`
-}
-
 function metaUserMessage(content: string | UserContentPart[]): UserMessage {
-  return { role: 'user', content }
+  return { role: 'user', content, isMeta: true }
 }
 
 function createToolUseMessage(
@@ -21,9 +17,7 @@ function createToolUseMessage(
   input: Record<string, string | number>,
 ): UserMessage {
   return metaUserMessage(
-    wrapInSystemReminder(
-      `Called the ${toolName} tool with the following input: ${JSON.stringify(input)}`,
-    ),
+    `Called the ${toolName} tool with the following input: ${JSON.stringify(input)}`,
   )
 }
 
@@ -32,9 +26,7 @@ function createToolResultTextMessage(
   resultText: string,
 ): UserMessage {
   return metaUserMessage(
-    wrapInSystemReminder(
-      `Result of calling the ${toolName} tool:\n${resultText}`,
-    ),
+    `Result of calling the ${toolName} tool:\n${resultText}`,
   )
 }
 
@@ -45,9 +37,7 @@ function createToolResultImageMessage(
   const parts: UserContentPart[] = [
     {
       type: 'text',
-      text: wrapInSystemReminder(
-        `Result of calling the ${toolName} tool: [Image ${output.file.filePath}]`,
-      ),
+      text: `Result of calling the ${toolName} tool: [Image ${output.file.filePath}]`,
     },
     {
       type: 'image',
@@ -55,7 +45,7 @@ function createToolResultImageMessage(
       mediaType: output.file.mediaType,
     },
   ]
-  return { role: 'user', content: parts }
+  return metaUserMessage(parts)
 }
 
 function fileAttachmentToMessages(attachment: {
@@ -83,9 +73,7 @@ function fileAttachmentToMessages(attachment: {
   if (attachment.truncated) {
     msgs.push(
       metaUserMessage(
-        wrapInSystemReminder(
-          `Note: The file ${attachment.displayPath} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${READ_FILE_TOOL_NAME} to read more of the file if you need.`,
-        ),
+        `Note: The file ${attachment.displayPath} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${READ_FILE_TOOL_NAME} to read more of the file if you need.`,
       ),
     )
   }
@@ -128,6 +116,7 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'plan_mode_reentry':
     case 'plan_mode_exit':
     case 'diagnostics':
+    case 'skill_listing':
       return []
     default: {
       const _exhaustive: never = attachment

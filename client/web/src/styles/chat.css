@@ -447,6 +447,14 @@
   overflow: auto;
 }
 
+.msg-compact-boundary {
+  margin: 0.75rem 0;
+}
+
+.compact-boundary summary {
+  cursor: pointer;
+}
+
 /* ── Todo List Card (Cursor-style) ───────── */
 .todo-card {
   margin: 8px 0;

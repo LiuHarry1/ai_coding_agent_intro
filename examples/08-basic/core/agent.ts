@@ -31,6 +31,7 @@ import { applyCacheControlBreakpoint } from './agent/cacheControl.js'
 import {
   expandAttachmentMessagesForAPI,
   mergeAdjacentUserMessages,
+  smooshSystemReminderSiblings,
 } from '../utils/messages.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
 import { consumeStream, type StreamResult } from './agent/streamConsumer.js'
@@ -220,7 +221,6 @@ export async function runAgent(
     maxSteps = 80,
     model,
     subagentNames,
-    skillListing,
     deferredToolPool,
     concurrencyPolicy,
     sessionId,
@@ -230,14 +230,9 @@ export async function runAgent(
     provider: configuredProvider,
     cwd,
     compaction,
+    onFullCompaction,
   }: AgentOptions,
 ): Promise<string> {
-  if (skillListing) {
-    messages.push({
-      role: 'user',
-      content: `<system-reminder>\n${skillListing}\n</system-reminder>`,
-    })
-  }
   if (toolUseContext) {
     for await (const att of getAttachmentMessages(
       userMessage,
@@ -311,6 +306,7 @@ export async function runAgent(
         cwd,
         compaction,
         sessionId,
+        onFullCompaction,
       )
 
       const stepResult = await runOneStep({
@@ -328,6 +324,7 @@ export async function runAgent(
         cwd,
         compaction,
         sessionId,
+        onFullCompaction,
       })
 
       if (stepResult === null) {
@@ -403,6 +400,18 @@ Do not reply with a summary or status update only — call TodoWrite, Write, Edi
   }
 }
 
+function applyFullCompaction(
+  messages: Message[],
+  managed: Message[],
+  currentTodos: TodoItem[],
+  onFullCompaction?: AgentOptions['onFullCompaction'],
+): void {
+  messages.length = 0
+  messages.push(...managed)
+  attachTodoReminderAfterCompaction(messages, currentTodos)
+  onFullCompaction?.(messages)
+}
+
 async function runCompactionAndLog(
   messages: Message[],
   eventBus: AgentOptions['eventBus'],
@@ -413,6 +422,7 @@ async function runCompactionAndLog(
   cwd?: string,
   compaction?: AgentOptions['compaction'],
   sessionId?: string,
+  onFullCompaction?: AgentOptions['onFullCompaction'],
 ): Promise<void> {
   const compactStart = Date.now()
   const managed = await compactIfNeeded(
@@ -441,9 +451,7 @@ async function runCompactionAndLog(
   )
 
   if (managed !== messages) {
-    messages.length = 0
-    messages.push(...managed)
-    attachTodoReminderAfterCompaction(messages, currentTodos)
+    applyFullCompaction(messages, managed, currentTodos, onFullCompaction)
   }
 }
 
@@ -462,6 +470,7 @@ interface RunOneStepArgs {
   cwd?: string
   compaction?: AgentOptions['compaction']
   sessionId?: string
+  onFullCompaction?: AgentOptions['onFullCompaction']
 }
 
 /**
@@ -501,7 +510,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       const stream = streamText({
         model: provider.chatModel(resolvedModel),
         system: systemPrompt,
-        // Six-pass message preparation before the SDK sees them (mirrors
+        // Seven-pass message preparation before the SDK sees them (mirrors
         // Claude Code's normalizeMessagesForAPI → ensureToolResultPairing
         // pipeline ordering):
         //   1. inlineReasoningAsText — rewrite reasoning blocks as
@@ -513,16 +522,19 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         //      immediately follow the assistant that issued its tool-call
         //      (CC's "merge same-turn assistant + hoist tool_results").
         //   4. mergeAdjacentUserMessages — collapse consecutive user
-        //      messages (expanded attachments + skillListing + real prompt)
-        //      with joinTextAtSeam; history stays fine-grained.
-        //   5. ensureToolResultPairing — safety net for orphan/missing
+        //      messages (expanded attachments + real prompt).
+        //   5. smooshSystemReminderSiblings — fold SR siblings into
+        //      simulated tool-result anchors / tool outputs (CC).
+        //   6. ensureToolResultPairing — safety net for orphan/missing
         //      tool-results.
-        //   6. applyCacheControlBreakpoint — prompt caching marker.
+        //   7. applyCacheControlBreakpoint — prompt caching marker.
         messages: applyCacheControlBreakpoint(
           ensureToolResultPairing(
-            mergeAdjacentUserMessages(
-              regroupToolResults(
-                expandAttachmentMessagesForAPI(inlineReasoningAsText(messages)),
+            smooshSystemReminderSiblings(
+              mergeAdjacentUserMessages(
+                regroupToolResults(
+                  expandAttachmentMessagesForAPI(inlineReasoningAsText(messages)),
+                ),
               ),
             ),
           ),
@@ -648,8 +660,12 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           sessionId,
         )
         if (recompacted !== messages) {
-          messages.length = 0
-          messages.push(...recompacted)
+          applyFullCompaction(
+            messages,
+            recompacted,
+            args.currentTodos,
+            args.onFullCompaction,
+          )
         }
         ctxLengthAttempt++
         reactiveCompacted = true

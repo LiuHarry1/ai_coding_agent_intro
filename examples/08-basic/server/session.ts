@@ -150,9 +150,12 @@ export function appendMessage(sessionId: string, message: Message): void {
  * messages to this snapshot when it replays the line.
  */
 export function appendCompaction(sessionId: string, messages: Message[]): void {
+  // Snapshot so later in-memory mutations (new assistant/tool msgs) don't
+  // alter the on-disk checkpoint.
+  const snapshot = JSON.parse(JSON.stringify(messages)) as Message[]
   appendLine(sessionId, {
     type: 'compacted',
-    messages,
+    messages: snapshot,
     timestamp: Date.now(),
   })
 }

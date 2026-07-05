@@ -6,6 +6,9 @@ import type {
   Diagnostic,
   DiagnosticFile,
   Message,
+  TextPart,
+  ToolMessage,
+  ToolResultPart,
   UserContentPart,
   UserMessage,
 } from '../core/types.js'
@@ -18,13 +21,37 @@ import {
 } from '../constants/tool_names.js'
 
 const MAX_DIAGNOSTICS_SUMMARY_CHARS = 8000
+const SR_PREFIX = '<system-reminder>'
 
-function wrapInSystemReminder(content: string): string {
+export function wrapInSystemReminder(content: string): string {
   return `<system-reminder>\n${content}\n</system-reminder>`
 }
 
+export function wrapMessagesInSystemReminder(
+  messages: UserMessage[],
+): UserMessage[] {
+  return messages.map(msg => {
+    if (typeof msg.content === 'string') {
+      return {
+        ...msg,
+        content: wrapInSystemReminder(msg.content),
+      }
+    }
+    const wrappedContent = msg.content.map(block => {
+      if (block.type === 'text') {
+        return {
+          ...block,
+          text: wrapInSystemReminder(block.text),
+        }
+      }
+      return block
+    })
+    return { ...msg, content: wrappedContent }
+  })
+}
+
 function metaUserMessage(content: string): UserMessage {
-  return { role: 'user', content: wrapInSystemReminder(content), isMeta: true }
+  return { role: 'user', content, isMeta: true }
 }
 
 function severitySymbol(severity: Diagnostic['severity']): string {
@@ -88,7 +115,7 @@ function getPlanModeInstructions(
     attachment.reminderType === 'full'
       ? fullPlanReminder(attachment.planFilePath, attachment.planExists)
       : sparsePlanReminder(attachment.planFilePath)
-  return [metaUserMessage(content)]
+  return wrapMessagesInSystemReminder([metaUserMessage(content)])
 }
 
 export function normalizeAttachmentForAPI(attachment: Attachment): UserMessage[] {
@@ -97,25 +124,25 @@ export function normalizeAttachmentForAPI(attachment: Attachment): UserMessage[]
     case 'file':
     case 'already_read_file':
     case 'pdf_reference':
-      return attachmentToMessages(attachment).map(
-        m => ({ ...m, isMeta: true }) as UserMessage,
+      return wrapMessagesInSystemReminder(
+        attachmentToMessages(attachment) as UserMessage[],
       )
 
     case 'diagnostics': {
       if (attachment.files.length === 0) return []
       const diagnosticSummary = formatDiagnosticsSummary(attachment.files)
-      return [
+      return wrapMessagesInSystemReminder([
         metaUserMessage(
           `<new-diagnostics>The following new diagnostic issues were detected:\n\n${diagnosticSummary}</new-diagnostics>`,
         ),
-      ]
+      ])
     }
 
     case 'plan_mode':
       return getPlanModeInstructions(attachment)
 
     case 'plan_mode_reentry':
-      return [
+      return wrapMessagesInSystemReminder([
         metaUserMessage(`## Re-entering Plan Mode
 
 You are returning to plan mode after having previously exited it. A plan file exists at ${attachment.planFilePath} from your previous planning session.
@@ -129,17 +156,26 @@ You are returning to plan mode after having previously exited it. A plan file ex
 4. Continue on with the plan process and most importantly you should always edit the plan file one way or the other before calling ${EXIT_PLAN_MODE_TOOL_NAME}
 
 Treat this as a fresh planning session. Do not assume the existing plan is relevant without evaluating it first.`),
-      ]
+      ])
 
     case 'plan_mode_exit': {
       const planReference = attachment.planExists
         ? ` The plan file is located at ${attachment.planFilePath} if you need to reference it.`
         : ''
-      return [
+      return wrapMessagesInSystemReminder([
         metaUserMessage(`## Exited Plan Mode
 
 You have exited plan mode. You can now make edits, run tools, and take actions.${planReference}`),
-      ]
+      ])
+    }
+
+    case 'skill_listing': {
+      if (!attachment.content) return []
+      return wrapMessagesInSystemReminder([
+        metaUserMessage(
+          `The following skills are available for use with the Skill tool:\n\n${attachment.content}`,
+        ),
+      ])
     }
   }
 }
@@ -170,11 +206,41 @@ function denormalizeUserContent(parts: UserContentPart[]): string | UserContentP
   return parts
 }
 
+function isSystemReminderText(part: UserContentPart): part is TextPart {
+  return part.type === 'text' && part.text.startsWith(SR_PREFIX)
+}
+
+function isSimulatedToolResultAnchor(part: UserContentPart): part is TextPart {
+  return (
+    part.type === 'text' &&
+    part.text.includes('Result of calling the') &&
+    part.text.startsWith(SR_PREFIX)
+  )
+}
+
+function isSystemReminderOnlyUser(msg: UserMessage): boolean {
+  const parts = normalizeUserContent(msg.content)
+  return parts.length > 0 && parts.every(isSystemReminderText)
+}
+
+function smooshIntoSimulatedToolResult(
+  anchor: TextPart,
+  blocks: UserContentPart[],
+): TextPart {
+  const joined = [
+    anchor.text.trim(),
+    ...blocks
+      .filter(isSystemReminderText)
+      .map(b => b.text.trim()),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+  return { type: 'text', text: joined }
+}
+
 /**
  * Concatenate two content arrays, appending `\n` to a's last text block when
- * the seam is text-text. Mirrors CC's joinTextAtSeam — the API concatenates
- * adjacent text blocks without a separator, so `"2 + 2"` + `"3 + 3"` would
- * otherwise reach the model as `"2 + 23 + 3"`.
+ * the seam is text-text. Mirrors CC's joinTextAtSeam.
  */
 function joinTextAtSeam(a: UserContentPart[], b: UserContentPart[]): UserContentPart[] {
   const lastA = a.at(-1)
@@ -185,24 +251,70 @@ function joinTextAtSeam(a: UserContentPart[], b: UserContentPart[]): UserContent
   return [...a, ...b]
 }
 
-/** Merge two adjacent user messages into one (CC mergeUserMessages). */
+/**
+ * When merging into a simulated tool-result anchor, fold SR siblings into the
+ * result block (CC mergeUserContentBlocks / smooshIntoToolResult for SDK text).
+ */
+function mergeUserContentBlocks(
+  a: UserContentPart[],
+  b: UserContentPart[],
+): UserContentPart[] {
+  const lastBlock = a.at(-1)
+  if (lastBlock && isSimulatedToolResultAnchor(lastBlock)) {
+    const toSmoosh = b.filter(isSystemReminderText)
+    const rest = b.filter(p => !isSystemReminderText(p))
+    if (toSmoosh.length > 0) {
+      return [
+        ...a.slice(0, -1),
+        smooshIntoSimulatedToolResult(lastBlock, toSmoosh),
+        ...rest,
+      ]
+    }
+  }
+  return joinTextAtSeam(a, b)
+}
+
+/** CC hoistToolResults — no-op for SDK user content (tool results use role: tool). */
+function hoistToolResults(content: UserContentPart[]): UserContentPart[] {
+  return content
+}
+
+/** Merge two adjacent user messages (CC mergeUserMessages). */
 export function mergeUserMessages(a: UserMessage, b: UserMessage): UserMessage {
-  const merged = joinTextAtSeam(
-    normalizeUserContent(a.content),
-    normalizeUserContent(b.content),
+  const merged = hoistToolResults(
+    joinTextAtSeam(
+      normalizeUserContent(a.content),
+      normalizeUserContent(b.content),
+    ),
   )
   return {
     role: 'user',
     content: denormalizeUserContent(merged),
-    // Merged message is meta only when every operand is meta.
+    isMeta: a.isMeta && b.isMeta ? true : undefined,
+  }
+}
+
+/** Merge user messages, smooshing SR siblings into simulated tool results (CC). */
+export function mergeUserMessagesAndToolResults(
+  a: UserMessage,
+  b: UserMessage,
+): UserMessage {
+  const merged = hoistToolResults(
+    mergeUserContentBlocks(
+      normalizeUserContent(a.content),
+      normalizeUserContent(b.content),
+    ),
+  )
+  return {
+    role: 'user',
+    content: denormalizeUserContent(merged),
     isMeta: a.isMeta && b.isMeta ? true : undefined,
   }
 }
 
 /**
  * Collapse consecutive `role: user` messages before the SDK/provider sees
- * them. History and JSONL keep fine-grained attachment structure; this runs
- * only at API request time (CC mergeAdjacentUserMessages).
+ * them. History and JSONL keep fine-grained attachment structure.
  */
 export function mergeAdjacentUserMessages(messages: Message[]): Message[] {
   const out: Message[] = []
@@ -215,10 +327,103 @@ export function mergeAdjacentUserMessages(messages: Message[]): Message[] {
       isRoleMessage(prev) &&
       prev.role === 'user'
     ) {
-      out[out.length - 1] = mergeUserMessages(prev, m)
+      out[out.length - 1] = mergeUserMessagesAndToolResults(prev, m)
     } else {
       out.push(m)
     }
+  }
+  return out
+}
+
+function smooshUserMessageContent(msg: UserMessage): UserMessage {
+  const content = normalizeUserContent(msg.content)
+  let anchorIdx = -1
+  for (let k = content.length - 1; k >= 0; k--) {
+    if (isSimulatedToolResultAnchor(content[k]!)) {
+      anchorIdx = k
+      break
+    }
+  }
+  if (anchorIdx === -1) return msg
+
+  const anchorPart = content[anchorIdx]!
+  if (!isSimulatedToolResultAnchor(anchorPart)) return msg
+
+  const toSmoosh = content.filter((p, k) => k !== anchorIdx && isSystemReminderText(p))
+  if (toSmoosh.length === 0) return msg
+
+  const smooshed = smooshIntoSimulatedToolResult(anchorPart, toSmoosh)
+  const kept = content.filter((p, k) => k !== anchorIdx && !isSystemReminderText(p))
+  kept.splice(Math.min(anchorIdx, kept.length), 0, smooshed)
+  return { ...msg, content: denormalizeUserContent(kept) }
+}
+
+function appendTextToToolResult(
+  part: ToolResultPart,
+  extraText: string,
+): ToolResultPart {
+  const existing =
+    part.output.type === 'text' ? part.output.value.trim() : ''
+  const value = [existing, extraText.trim()].filter(Boolean).join('\n\n')
+  return {
+    ...part,
+    output: { type: 'text', value },
+  }
+}
+
+function smooshSrIntoToolMessage(
+  toolMsg: ToolMessage,
+  srUsers: UserMessage[],
+): ToolMessage {
+  const extraText = srUsers
+    .flatMap(u => normalizeUserContent(u.content))
+    .filter(isSystemReminderText)
+    .map(p => p.text.trim())
+    .filter(Boolean)
+    .join('\n\n')
+  if (!extraText) return toolMsg
+
+  const content = toolMsg.content.map((part, i, arr) =>
+    i === arr.length - 1 && part.type === 'tool-result'
+      ? appendTextToToolResult(part, extraText)
+      : part,
+  )
+  return { role: 'tool', content }
+}
+
+/**
+ * Fold `<system-reminder>` siblings into simulated tool-result anchors within
+ * user messages, and into real tool-result outputs when SR meta users follow
+ * a tool message (CC smooshSystemReminderSiblings, SDK-adapted).
+ */
+export function smooshSystemReminderSiblings(messages: Message[]): Message[] {
+  const out: Message[] = []
+  for (let i = 0; i < messages.length; i++) {
+    const raw = messages[i]!
+
+    if (isRoleMessage(raw) && raw.role === 'tool' && Array.isArray(raw.content)) {
+      const srSiblings: UserMessage[] = []
+      let j = i + 1
+      while (j < messages.length) {
+        const next = messages[j]!
+        if (!isRoleMessage(next) || next.role !== 'user' || !next.isMeta) break
+        if (!isSystemReminderOnlyUser(next)) break
+        srSiblings.push(next)
+        j++
+      }
+      if (srSiblings.length > 0) {
+        out.push(smooshSrIntoToolMessage(raw, srSiblings))
+        i = j - 1
+        continue
+      }
+    }
+
+    if (isRoleMessage(raw) && raw.role === 'user') {
+      out.push(smooshUserMessageContent(raw))
+      continue
+    }
+
+    out.push(raw)
   }
   return out
 }

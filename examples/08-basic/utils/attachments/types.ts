@@ -72,6 +72,11 @@ export type PlanModeExitAttachment = {
   planExists: boolean
 }
 
+export type SkillListingAttachment = {
+  type: 'skill_listing'
+  content: string
+}
+
 export type Attachment =
   | FileAttachment
   | PdfReferenceAttachment
@@ -81,6 +86,7 @@ export type Attachment =
   | PlanModeAttachment
   | PlanModeReentryAttachment
   | PlanModeExitAttachment
+  | SkillListingAttachment
 
 export interface ReadFileStateEntry {
   content: string

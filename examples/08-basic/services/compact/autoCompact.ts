@@ -124,6 +124,8 @@ function getAutoCompactThreshold(
   contextWindow: number,
   maxOutputTokens?: number,
 ): number {
+  const override = parseEnvInt('COMPACT_THRESHOLD_OVERRIDE', -1)
+  if (override > 0) return override
   return (
     getEffectiveContextWindow(contextWindow, maxOutputTokens) -
     AUTOCOMPACT_BUFFER
@@ -326,6 +328,7 @@ export async function compactIfNeeded(
       summary: result.summary,
       summaryLength: result.summaryLength,
       estimatedTokensAfter: result.estimatedTokensAfter,
+      messagesBefore: msgsBeforeFull,
     })
     console.log(
       `[compact] full-compact DONE — msgs ${msgsBeforeFull} → ${result.messages.length}, ` +

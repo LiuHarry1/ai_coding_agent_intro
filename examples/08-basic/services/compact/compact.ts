@@ -319,7 +319,7 @@ function buildPostCompactMessages(
 
   content += `\n\nContinue from where you left off without asking questions. Resume directly — do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.`
 
-  return [{ role: 'user', content }]
+  return [{ role: 'user', content, isCompactSummary: true }]
 }
 
 // ── File restoration ────────────────────────────────────

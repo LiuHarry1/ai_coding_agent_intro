@@ -156,6 +156,11 @@ export interface UserMessage {
   content: string | UserContentPart[]
   /** Meta attachments expanded for API — hidden from UI when true. */
   isMeta?: boolean
+  /**
+   * Full-compact summary injected for the model (CC: isCompactSummary).
+   * Hidden from chat view; UI shows a compact_boundary marker instead.
+   */
+  isCompactSummary?: boolean
 }
 
 export interface AttachmentMessage {
@@ -227,6 +232,8 @@ export interface ToolUseContext {
   readFileState: ReadFileState
   lspServers?: Record<string, LspServerConfig>
   options: { tools: Record<string, AnyTool> }
+  /** Pre-formatted skill/deferred-tool listing for skill_listing attachment (turn 0). */
+  skillListingContent?: string
 }
 
 // ── Agent ───────────────────────────────────────
@@ -253,12 +260,6 @@ export interface AgentOptions {
    */
   subagentNames?: Set<string>
   /**
-   * Pre-formatted skill/agent listing injected as a `<system-reminder>`
-   * user message before the real user message. Keeps volatile listings
-   * out of the tool schema and system prompt so those stay cacheable.
-   */
-  skillListing?: string
-  /**
    * Deferred tools pool — keyed by name, created but not in `tools`.
    * When the model calls `tool_search` and discovers a tool, the agent
    * loop activates it by moving it from this pool into `tools` for the
@@ -283,6 +284,13 @@ export interface AgentOptions {
   refreshSystemPrompt?: () => string
   /** Inject plan-exit reminders when transitioning out of plan mode mid-turn. */
   onPermissionModeChange?: () => Message[]
+  /**
+   * Called after a full LLM compaction replaces the in-memory history.
+   * Host (chat route) uses this to write a `compacted` JSONL checkpoint —
+   * CC parity: useLogMessages passes the full post-compact array to
+   * recordTranscript when the first message uuid changes.
+   */
+  onFullCompaction?: (messages: readonly Message[]) => void
 }
 
 export type RunAgentFn = (

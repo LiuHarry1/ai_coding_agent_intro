@@ -90,6 +90,24 @@ function CompactionNotice({ part }) {
   )
 }
 
+function CompactBoundaryNotice({ message }) {
+  return (
+    <div className='compaction-notice done compact-boundary'>
+      <details>
+        <summary>
+          &#10003; Conversation compacted
+          {message.messagesBefore
+            ? ` (${message.messagesBefore} messages summarized)`
+            : ''}
+        </summary>
+        {message.summary ? (
+          <pre className='compaction-summary'>{message.summary}</pre>
+        ) : null}
+      </details>
+    </div>
+  )
+}
+
 function TodoListIcon() {
   return (
     <svg
@@ -257,6 +275,14 @@ function ErrorBlock({ message }) {
 
 export default function MessageBubble({ message }) {
   const [lightbox, setLightbox] = useState(null)
+
+  if (message.type === 'compact_boundary') {
+    return (
+      <div className='msg msg-compact-boundary'>
+        <CompactBoundaryNotice message={message} />
+      </div>
+    )
+  }
 
   if (message.type === 'user') {
     return (
