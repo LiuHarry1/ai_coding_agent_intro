@@ -11,7 +11,20 @@ export function buildLspDiagnosticMessages(
 
   const workspaceKey = getLspWorkspaceKey(cwd, lspServers)
   const sets = drainPendingLspDiagnostics(workspaceKey)
-  if (sets.length === 0) return []
+  if (sets.length === 0) {
+    console.log(`[lsp:diagnostics] attach workspace=${workspaceKey} messages=0`)
+    return []
+  }
+
+  const diagCount = sets.reduce(
+    (sum, set) =>
+      sum + set.files.reduce((fileSum, file) => fileSum + file.diagnostics.length, 0),
+    0,
+  )
+  const fileCount = sets.reduce((sum, set) => sum + set.files.length, 0)
+  console.log(
+    `[lsp:diagnostics] attach workspace=${workspaceKey} messages=1 diagnostics=${diagCount} files=${fileCount}`,
+  )
 
   const lines: string[] = [
     'Language server diagnostics were reported after recent file changes. Use them as fresh feedback when deciding the next action.',

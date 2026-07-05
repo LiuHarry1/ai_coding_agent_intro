@@ -91,10 +91,15 @@ export const definition: ToolDefinition = {
         if (manager) {
           const workspaceKey = getLspWorkspaceKey(cwd, context.lspServers)
           clearDeliveredLspDiagnosticsForFile(workspaceKey, abs)
+          console.log(`[lsp:diagnostics] sync edit start file=${file_path}`)
           void (async () => {
             try {
               await manager.changeFile(abs, newContent)
               await manager.saveFile(abs)
+              const server = manager.getServerForFile(abs)
+              console.log(
+                `[lsp:diagnostics] sync edit done file=${file_path} server=${server?.name ?? 'none'} state=${server?.state ?? 'none'}`,
+              )
             } catch (err) {
               console.warn(
                 `[lsp] failed to sync edit for ${abs}: ${
@@ -103,6 +108,10 @@ export const definition: ToolDefinition = {
               )
             }
           })()
+        } else {
+          console.log(
+            `[lsp:diagnostics] sync edit skip file=${file_path} reason=no-lsp-config`,
+          )
         }
 
         const oldLines = content.split('\n').length

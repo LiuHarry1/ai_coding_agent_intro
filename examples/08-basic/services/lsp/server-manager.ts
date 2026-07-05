@@ -51,6 +51,14 @@ export function createLspServerManager(
     instance.onNotification('textDocument/publishDiagnostics', params => {
       if (!isPublishDiagnosticsParams(params)) return
       const files = convertPublishDiagnostics(params)
+      const diagCount = files.reduce(
+        (sum, file) => sum + file.diagnostics.length,
+        0,
+      )
+      const filePath = files[0]?.uri ?? params.uri
+      console.log(
+        `[lsp:diagnostics] publish server=${name} file=${filePath} diagnostics=${diagCount}`,
+      )
       if (files.some(file => file.diagnostics.length > 0)) {
         registerPendingLspDiagnostics(workspaceKey, name, files)
       }
@@ -95,7 +103,12 @@ export function createLspServerManager(
   async function openFile(filePath: string, content: string): Promise<void> {
     const absolutePath = path.resolve(filePath)
     const server = await ensureServerStarted(absolutePath)
-    if (!server) return
+    if (!server) {
+      console.log(
+        `[lsp:diagnostics] open skip file=${absolutePath} reason=no-server`,
+      )
+      return
+    }
 
     const uri = pathToFileURL(absolutePath).href
     if (openedFiles.get(uri) === server.name) return
@@ -103,6 +116,9 @@ export function createLspServerManager(
     const ext = path.extname(absolutePath).toLowerCase()
     const languageId = server.config.extensionToLanguage[ext] ?? 'plaintext'
     const version = 1
+    console.log(
+      `[lsp:diagnostics] open server=${server.name} file=${absolutePath} language=${languageId}`,
+    )
     await server.sendNotification('textDocument/didOpen', {
       textDocument: { uri, languageId, version, text: content },
     })
@@ -135,7 +151,21 @@ export function createLspServerManager(
   async function saveFile(filePath: string): Promise<void> {
     const absolutePath = path.resolve(filePath)
     const server = getServerForFile(absolutePath)
-    if (!server || server.state !== 'running') return
+    if (!server) {
+      console.log(
+        `[lsp:diagnostics] save skip file=${absolutePath} reason=no-server`,
+      )
+      return
+    }
+    if (server.state !== 'running') {
+      console.log(
+        `[lsp:diagnostics] save skip file=${absolutePath} server=${server.name} state=${server.state}`,
+      )
+      return
+    }
+    console.log(
+      `[lsp:diagnostics] save server=${server.name} file=${absolutePath}`,
+    )
     await server.sendNotification('textDocument/didSave', {
       textDocument: { uri: pathToFileURL(absolutePath).href },
     })

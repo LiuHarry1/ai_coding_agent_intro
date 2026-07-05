@@ -47,10 +47,15 @@ export const definition: ToolDefinition = {
         if (manager) {
           const workspaceKey = getLspWorkspaceKey(cwd, context.lspServers)
           clearDeliveredLspDiagnosticsForFile(workspaceKey, abs)
+          console.log(`[lsp:diagnostics] sync write start file=${file_path}`)
           void (async () => {
             try {
               await manager.changeFile(abs, content)
               await manager.saveFile(abs)
+              const server = manager.getServerForFile(abs)
+              console.log(
+                `[lsp:diagnostics] sync write done file=${file_path} server=${server?.name ?? 'none'} state=${server?.state ?? 'none'}`,
+              )
             } catch (err) {
               console.warn(
                 `[lsp] failed to sync write for ${abs}: ${
@@ -59,6 +64,10 @@ export const definition: ToolDefinition = {
               )
             }
           })()
+        } else {
+          console.log(
+            `[lsp:diagnostics] sync write skip file=${file_path} reason=no-lsp-config`,
+          )
         }
 
         const lines = content.split('\n').length

@@ -76,6 +76,10 @@ export function registerPendingLspDiagnostics(
   files: LspDiagnosticFile[],
 ): void {
   if (files.length === 0) return
+  const diagCount = files.reduce((sum, file) => sum + file.diagnostics.length, 0)
+  console.log(
+    `[lsp:diagnostics] register workspace=${workspaceKey} server=${serverName} files=${files.length} diagnostics=${diagCount}`,
+  )
   const pending = pendingByWorkspace.get(workspaceKey) ?? []
   pending.push({ serverName, files })
   pendingByWorkspace.set(workspaceKey, pending)
@@ -113,12 +117,21 @@ export function drainPendingLspDiagnostics(
 ): PendingLspDiagnosticSet[] {
   const pending = pendingByWorkspace.get(workspaceKey) ?? []
   pendingByWorkspace.delete(workspaceKey)
-  if (pending.length === 0) return []
+  if (pending.length === 0) {
+    console.log(`[lsp:diagnostics] drain workspace=${workspaceKey} pending=0`)
+    return []
+  }
+
+  console.log(
+    `[lsp:diagnostics] drain workspace=${workspaceKey} pendingSets=${pending.length}`,
+  )
 
   const delivered = deliveredForWorkspace(workspaceKey)
   const fileMap = new Map<string, LspDiagnosticFile>()
   const seenThisDrain = new Map<string, Set<string>>()
   const serverNames = new Set<string>()
+  let skippedDuplicates = 0
+  let incomingDiagnostics = 0
 
   for (const set of pending) {
     serverNames.add(set.serverName)
@@ -131,8 +144,12 @@ export function drainPendingLspDiagnostics(
       const alreadyDelivered = delivered.get(file.uri) ?? new Set<string>()
 
       for (const diag of file.diagnostics) {
+        incomingDiagnostics++
         const key = diagnosticKey(diag)
-        if (seen.has(key) || alreadyDelivered.has(key)) continue
+        if (seen.has(key) || alreadyDelivered.has(key)) {
+          skippedDuplicates++
+          continue
+        }
         seen.add(key)
         fileDiagnostics.diagnostics.push(diag)
       }
@@ -174,7 +191,16 @@ export function drainPendingLspDiagnostics(
     delivered.delete(first)
   }
 
-  if (limitedFiles.length === 0) return []
+  if (limitedFiles.length === 0) {
+    console.log(
+      `[lsp:diagnostics] drain workspace=${workspaceKey} incoming=${incomingDiagnostics} skippedDuplicates=${skippedDuplicates} deliver=0`,
+    )
+    return []
+  }
+
+  console.log(
+    `[lsp:diagnostics] drain workspace=${workspaceKey} incoming=${incomingDiagnostics} skippedDuplicates=${skippedDuplicates} deliver=${total} files=${limitedFiles.length} servers=${[...serverNames].join(', ')}`,
+  )
   return [{ serverName: [...serverNames].join(', '), files: limitedFiles }]
 }
 
@@ -182,7 +208,13 @@ export function clearDeliveredLspDiagnosticsForFile(
   workspaceKey: string,
   filePath: string,
 ): void {
+  const hadDelivered = deliveredByWorkspace.get(workspaceKey)?.has(filePath) ?? false
   deliveredByWorkspace.get(workspaceKey)?.delete(filePath)
+  if (hadDelivered) {
+    console.log(
+      `[lsp:diagnostics] clearDelivered workspace=${workspaceKey} file=${filePath}`,
+    )
+  }
 }
 
 export function clearWorkspaceLspDiagnostics(workspaceKey: string): void {

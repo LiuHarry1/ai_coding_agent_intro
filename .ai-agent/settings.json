@@ -3,7 +3,7 @@
     "provider": "openai-compatible",
     "baseURL": "http://localhost:4141/v1",
     "apiKey": "sk-xxx",
-    "model": "claude-opus-4.7"
+    "model": "claude-opus-4.6"
   },
   "compaction": {
     "contextWindow": 200000,
@@ -23,6 +23,31 @@
         ".tsx": "typescriptreact"
       },
       "startupTimeout": 30000
+    },
+    "python": {
+      "command": "npx",
+      "args": ["--yes", "pyright-langserver", "--stdio"],
+      "extensionToLanguage": {
+        ".py": "python",
+        ".pyi": "python"
+      },
+      "startupTimeout": 30000
+    },
+    "java-language-server": {
+      "command": "npx",
+      "args": ["--yes", "jj-language-server", "--stdio"],
+      "extensionToLanguage": {
+        ".java": "java"
+      },
+      "startupTimeout": 30000
+    },
+    "jdtls": {
+      "command": "jdtls",
+      "args": ["-data", ".jdtls-data"],
+      "_extensionToLanguage": {
+        ".java": "java"
+      },
+      "startupTimeout": 120000
     }
   },
   "mcpServers": {

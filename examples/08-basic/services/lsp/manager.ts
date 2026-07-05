@@ -38,6 +38,9 @@ export function getLspManager(
 
   const manager = createLspServerManager(path.resolve(cwd), servers, key)
   managers.set(key, manager)
+  console.log(
+    `[lsp:diagnostics] manager created cwd=${path.resolve(cwd)} servers=${Object.keys(servers).join(', ')}`,
+  )
   return manager
 }
 
