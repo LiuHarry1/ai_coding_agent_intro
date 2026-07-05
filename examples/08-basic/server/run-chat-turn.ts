@@ -152,16 +152,18 @@ export async function runChatTurn(
   prepared.toolContext.wire = wire
 
   if (prepared.forkSkill) {
+    const streaming = http?.wantsStream ?? true
     await respondSkillFork({
-      res: http?.res,
-      stdioTransport: http ? undefined : transport,
+      // SSE: chat route already opened the transport — reuse it.
+      res: http && !streaming ? http.res : undefined,
+      stdioTransport: streaming ? transport : undefined,
       skill: prepared.forkSkill.entry.def,
       combined: prepared.forkSkill.text,
       cwd,
       runAgent,
       provider,
       config: resolvedSettings.config,
-      wantsStream: http?.wantsStream ?? true,
+      wantsStream: streaming,
       sseHeaders: http?.sseHeaders,
       sessionId: session.id,
     })
