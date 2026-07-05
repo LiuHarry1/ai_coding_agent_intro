@@ -42,7 +42,7 @@ function toDisplayPath(filePath: string, cwd?: string): string {
   return filePath
 }
 
-/** 
+
 export function toolInfoFromCall(
   name: string,
   args: unknown,

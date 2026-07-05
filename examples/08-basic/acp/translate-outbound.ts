@@ -17,7 +17,7 @@ import { toolInfoFromCall } from './tool-kind.js'
 
 type WireOutbound = OutgoingMessage | ControlRequest
 
-/** 
+
 export class AcpTurnSink implements ProtocolSink {
   readonly #client: AgentContext
   readonly #sessionId: string
