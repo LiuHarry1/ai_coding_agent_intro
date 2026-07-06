@@ -232,6 +232,8 @@ export interface ToolUseContext {
   options: { tools: Record<string, AnyTool> }
   /** Pre-formatted skill/deferred-tool listing for skill_listing attachment (turn 0). */
   skillListingContent?: string
+  /** Active subagent definitions for agent_listing_delta attachments. */
+  agentDefinitions?: { activeAgents: AgentDefinition[] }
 }
 
 // ── Agent ───────────────────────────────────────
@@ -375,6 +377,8 @@ export interface SSETransport {
 
 // ── Subagent ────────────────────────────────────
 
+export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project'
+
 /**
  * Pure-data definition of a subagent. After the single-Task architecture
  * refactor, subagents are no longer registered as individual tools — they
@@ -418,6 +422,16 @@ export interface AgentDefinition {
    * with full context.
    */
   omitProjectRules?: boolean
+  /** Where this definition was loaded from (disk agents + plugins). */
+  source?: AgentSource
+  /** Absolute path to the defining `.md` file, when loaded from disk. */
+  filePath?: string
+}
+
+export interface AgentDefinitionsResult {
+  activeAgents: AgentDefinition[]
+  allAgents: AgentDefinition[]
+  errors: Array<{ filePath: string; error: string }>
 }
 
 // ── MCP ─────────────────────────────────────────

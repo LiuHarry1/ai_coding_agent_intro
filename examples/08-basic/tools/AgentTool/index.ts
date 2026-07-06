@@ -1,14 +1,11 @@
-import type { AgentDefinition, IToolRegistry } from '../../core/types.js'
+import type { AgentDefinition, AgentDefinitionsResult, IToolRegistry } from '../../core/types.js'
 import { definition as exploreDef } from './built-in/exploreAgent.js'
 import { definition as planDef } from './built-in/planAgent.js'
 import { definition as generalPurposeDef } from './built-in/generalPurposeAgent.js'
 import { createTaskTool } from './AgentTool.js'
 import { AGENT_TOOL_NAME } from '../../constants/tool_names.js'
-import {
-  loadMarkdownConfigs,
-  type MarkdownFile,
-} from '../../utils/markdownConfigLoader.js'
-import { mergeAgents } from './mergeAgents.js'
+import type { MarkdownFile } from '../../utils/markdownConfigLoader.js'
+import { loadAgentDefinitions } from './loadAgents.js'
 
 export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
   exploreDef,
@@ -24,19 +21,10 @@ export async function registerSubagents(
   registry: IToolRegistry,
   cwd: string,
   pluginAgentFiles: readonly MarkdownFile[] = [],
-): Promise<{
-  activeAgents: AgentDefinition[]
-  errors: Array<{ filePath: string; error: string }>
-}> {
-  const files = await loadMarkdownConfigs('agents', cwd)
-  // Plugin files carry source "plugin" (lowest priority); `mergeAgents` sorts
-  // by `sourceRank` so disk agents override plugin agents of the same name.
-  const { agents, errors } = mergeAgents(BUILTIN_AGENTS, [
-    ...pluginAgentFiles,
-    ...files,
-  ])
-  registry.register(createTaskTool(agents))
-  return { activeAgents: agents, errors }
+): Promise<AgentDefinitionsResult> {
+  const result = await loadAgentDefinitions(cwd, pluginAgentFiles)
+  registry.register(createTaskTool(result.activeAgents))
+  return result
 }
 
 export function getSubagentNames(registry: IToolRegistry): Set<string> {
@@ -52,3 +40,7 @@ export function getSubagentNames(registry: IToolRegistry): Set<string> {
 export { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
 export { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
 export { GENERAL_PURPOSE_AGENT_TYPE } from './built-in/generalPurposeAgent.js'
+export {
+  loadAgentDefinitions,
+  loadAgentDefinitionsForWorkspace,
+} from './loadAgents.js'

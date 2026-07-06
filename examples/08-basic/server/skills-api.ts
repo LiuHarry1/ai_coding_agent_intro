@@ -5,7 +5,7 @@
  * a service:
  *
  *   GET  /skills                  — list all skills discoverable for a cwd
- *   GET  /agents                  — list all subagents (built-in + .agents/)
+ *   GET  /agents                  — list all subagents (built-in + disk + plugins)
  *   POST /skills/:name/invoke     — directly run a skill, bypassing the
  *                                   model's choice. For inline skills this
  *                                   is an LLM-free template expansion;
@@ -30,6 +30,7 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import {
   loadSkillsFromDisk,
   filterSkillsByPaths,
+  mergeSkillsByName,
 } from '../skills/loadSkillsDir.js'
 import {
   expandSkillBody,
@@ -37,8 +38,16 @@ import {
   SkillExpansionError,
 } from '../skills/expand.js'
 import { respondSkillFork } from '../skills/respond-fork.js'
-import { registerSubagents, BUILTIN_AGENTS } from '../tools/AgentTool/index.js'
-import { defaultRegistry } from '../tools/index.js'
+import { BUILTIN_AGENTS } from '../tools/AgentTool/index.js'
+import {
+  AGENT_SOURCE_GROUPS,
+  resolveAgentOverrides,
+  type ResolvedAgent,
+} from '../tools/AgentTool/agentDisplay.js'
+import {
+  loadWorkspaceContributions,
+  mapPluginErrors,
+} from '../core/workspace-load.js'
 import type { AgentDefinition, RunAgentFn } from '../core/types.js'
 import type { SkillDefinition } from '../skills/types.js'
 import { resolveRequestCwd } from './request-cwd.js'
@@ -127,9 +136,12 @@ interface AgentSummary {
   disallowedTools?: string[]
   maxSteps?: number
   model?: string
+  source?: AgentDefinition['source']
+  filePath?: string
+  overriddenBy?: AgentDefinition['source']
 }
 
-function toAgentSummary(a: AgentDefinition): AgentSummary {
+function toAgentSummary(a: AgentDefinition | ResolvedAgent): AgentSummary {
   return {
     agentType: a.agentType,
     whenToUse: a.whenToUse,
@@ -138,6 +150,11 @@ function toAgentSummary(a: AgentDefinition): AgentSummary {
     disallowedTools: a.disallowedTools,
     maxSteps: a.maxSteps,
     model: a.model,
+    source: a.source,
+    filePath: a.filePath,
+    ...('overriddenBy' in a && a.overriddenBy
+      ? { overriddenBy: a.overriddenBy }
+      : {}),
   }
 }
 
@@ -165,14 +182,15 @@ export function createSkillsApi({ runAgent }: SkillsApiOptions) {
     if (method === 'GET' && pathOnly === '/skills') {
       const cwd = resolveRequestWorkspace(req, query.get('workspace'))
       try {
-        const { skills, errors } = await loadSkillsFromDisk(cwd)
+        const { skills, skillDiskErrors, plugins } =
+          await loadWorkspaceContributions(cwd)
         const unconditional = new Set(
           filterSkillsByPaths(skills, undefined, cwd).map(s => s.name),
         )
         sendJSON(res, 200, {
           workspace: cwd,
           skills: skills.map(s => toSummary(s, unconditional.has(s.name))),
-          errors,
+          errors: [...mapPluginErrors(plugins), ...skillDiskErrors],
         })
       } catch (e) {
         sendJSON(res, 500, { error: (e as Error).message })
@@ -184,18 +202,16 @@ export function createSkillsApi({ runAgent }: SkillsApiOptions) {
     if (method === 'GET' && pathOnly === '/agents') {
       const cwd = resolveRequestWorkspace(req, query.get('workspace'))
       try {
-        // registerSubagents replaces the `task` tool as a side effect.
-        // Acceptable here because /agents is rarely-called metadata —
-        // callers that pump traffic at it should debounce.
-        const { activeAgents, errors } = await registerSubagents(
-          defaultRegistry,
-          cwd,
-        )
+        const { agents, plugins } = await loadWorkspaceContributions(cwd)
+        const { activeAgents, allAgents, errors: agentErrors } = agents
+        const resolved = resolveAgentOverrides(allAgents, activeAgents)
         sendJSON(res, 200, {
           workspace: cwd,
           agents: activeAgents.map(a => toAgentSummary(a)),
+          all: resolved.map(a => toAgentSummary(a)),
+          sourceGroups: AGENT_SOURCE_GROUPS,
           builtin: BUILTIN_AGENTS.map(a => a.agentType),
-          errors,
+          errors: [...mapPluginErrors(plugins), ...agentErrors],
         })
       } catch (e) {
         sendJSON(res, 500, { error: (e as Error).message })

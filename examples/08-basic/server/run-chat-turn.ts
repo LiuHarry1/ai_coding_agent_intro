@@ -6,6 +6,7 @@ import type {
   UserMessage,
   IEventBus,
 } from '../core/types.js'
+import { isAttachmentMessage } from '../core/types.js'
 import { EventBus } from '../core/event-bus.js'
 import { buildProvider } from '../core/llm/index.js'
 import { resolveSettings } from '../core/settings-manager.js'
@@ -330,7 +331,8 @@ export async function runChatTurn(
       refreshTools,
       refreshSystemPrompt,
       onFullCompaction: compactedMessages => {
-        appendCompaction(session.id, [...compactedMessages])
+        const checkpoint = compactedMessages.filter(m => !isAttachmentMessage(m))
+        appendCompaction(session.id, checkpoint)
         session.messages.push(userTurnForDisplay)
         appendMessage(session.id, userTurnForDisplay)
         persistFrom = session.messages.length

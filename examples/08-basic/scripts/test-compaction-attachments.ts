@@ -119,11 +119,13 @@ async function main(): Promise<void> {
   console.log('[PASS] full compact → 1 summary user message')
 
   if (attAfter !== 0) {
-    console.log('[FAIL] attachment messages should not survive full compact')
+    console.log(
+      '[FAIL] without enrichment, attachment messages should not survive full compact',
+    )
     process.exit(1)
   }
   console.log(
- '[PASS] attachment records cleared from in-memory history (re-injected next turn)',
+    '[PASS] without enrichment: summary-only in-memory history',
   )
 
   // Simulate JSONL compacted checkpoint + reload
@@ -159,7 +161,7 @@ async function main(): Promise<void> {
   )
 
   console.log(
-    '\nNote: skill_listing / file attachments are re-injected on the next user turn via getAttachmentMessages.',
+    '\nNote: with compactEnrichment, agent_listing_delta is re-injected in-memory after full compact (see test-compaction-agent-listing.ts). JSONL checkpoint stays summary-only.',
   )
   console.log('\nAll compaction + read tests passed.')
 }

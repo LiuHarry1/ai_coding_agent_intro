@@ -7,8 +7,8 @@
  *
  * Directory layout:
  *
- *   <ancestor>/.ai-agent/agents/*.md
- *   <ancestor>/.ai-agent/commands/*.md
+ *   <ancestor>/.ai-agent/agents/ (recursive .md)
+ *   <ancestor>/.ai-agent/commands/ (recursive .md)
  *
  *   ~/.ai-agent/agents/*.md
  *   ~/.ai-agent/commands/*.md
@@ -64,17 +64,55 @@ export interface MarkdownFile {
 }
 
 async function listMarkdownFiles(dir: string): Promise<string[]> {
-  let entries: import('fs').Dirent[]
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true })
-  } catch (e: unknown) {
-    const code = (e as NodeJS.ErrnoException).code
-    if (code === 'ENOENT' || code === 'EACCES' || code === 'ENOTDIR') return []
-    throw e
+  const files: string[] = []
+  const visitedDirs = new Set<string>()
+
+  async function walk(currentDir: string): Promise<void> {
+    let entries: import('fs').Dirent[]
+    try {
+      entries = await fs.readdir(currentDir, { withFileTypes: true })
+    } catch (e: unknown) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'EACCES' || code === 'ENOTDIR') return
+      throw e
+    }
+
+    try {
+      const stats = await fs.stat(currentDir)
+      if (stats.isDirectory()) {
+        const dirKey =
+          stats.dev !== undefined && stats.ino !== undefined
+            ? `${stats.dev}:${stats.ino}`
+            : await fs.realpath(currentDir)
+        if (visitedDirs.has(dirKey)) return
+        visitedDirs.add(dirKey)
+      }
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name)
+      try {
+        if (entry.isSymbolicLink()) {
+          const stats = await fs.stat(fullPath)
+          if (stats.isDirectory()) await walk(fullPath)
+          else if (stats.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+            files.push(fullPath)
+          }
+        } else if (entry.isDirectory()) {
+          await walk(fullPath)
+        } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+          files.push(fullPath)
+        }
+      } catch {
+        // skip inaccessible entries
+      }
+    }
   }
-  return entries
-    .filter(e => e.isFile() && e.name.toLowerCase().endsWith('.md'))
-    .map(e => path.join(dir, e.name))
+
+  await walk(dir)
+  return files
 }
 
 async function readAndParse(
@@ -112,7 +150,7 @@ async function readAndParse(
 }
 
 /**
- * Read + parse every `.md` file directly under `dir`, tagging each with
+ * Read + parse every `.md` file under `dir` (recursive), tagging each with
  * `source`. Returns an empty array when the directory is absent. Exposed so
  * the plugin loader can scan arbitrary `<plugin>/agents` and
  * `<plugin>/commands` directories with the same parsing path as built-in config.

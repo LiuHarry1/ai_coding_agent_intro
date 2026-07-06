@@ -18,6 +18,7 @@ export default defineConfig({
       "/ask_user_question": "http://localhost:4567",
       "/skills": "http://localhost:4567",
       "/agents": "http://localhost:4567",
+      "/plugins": "http://localhost:4567",
       // SSO mode (dev): forward auth-service routes to localhost:8010.
       // Override the target with DEV_AUTH_BACKEND_URL if it runs elsewhere.
       "/sso": process.env.DEV_AUTH_BACKEND_URL || "http://localhost:8010",

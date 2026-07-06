@@ -171,6 +171,25 @@ You have exited plan mode. You can now make edits, run tools, and take actions.$
         ),
       ])
     }
+
+    case 'agent_listing_delta': {
+      const parts: string[] = []
+      if (attachment.addedLines.length > 0) {
+        const header = attachment.isInitial
+          ? 'Available agent types for the Agent tool:'
+          : 'New agent types are now available for the Agent tool:'
+        parts.push(`${header}\n${attachment.addedLines.join('\n')}`)
+      }
+      if (attachment.removedTypes.length > 0) {
+        parts.push(
+          `The following agent types are no longer available:\n${attachment.removedTypes.map(t => `- ${t}`).join('\n')}`,
+        )
+      }
+      if (parts.length === 0) return []
+      return wrapMessagesInSystemReminder([
+        metaUserMessage(parts.join('\n\n')),
+      ])
+    }
   }
 }
 

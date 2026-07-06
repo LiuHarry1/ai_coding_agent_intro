@@ -77,6 +77,14 @@ export type SkillListingAttachment = {
   content: string
 }
 
+export type AgentListingDeltaAttachment = {
+  type: 'agent_listing_delta'
+  addedTypes: string[]
+  addedLines: string[]
+  removedTypes: string[]
+  isInitial: boolean
+}
+
 export type Attachment =
   | FileAttachment
   | PdfReferenceAttachment
@@ -87,6 +95,7 @@ export type Attachment =
   | PlanModeReentryAttachment
   | PlanModeExitAttachment
   | SkillListingAttachment
+  | AgentListingDeltaAttachment
 
 export interface ReadFileStateEntry {
   content: string

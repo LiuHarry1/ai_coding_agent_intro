@@ -117,6 +117,7 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'plan_mode_exit':
     case 'diagnostics':
     case 'skill_listing':
+    case 'agent_listing_delta':
       return []
     default: {
       const _exhaustive: never = attachment

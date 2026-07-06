@@ -268,6 +268,7 @@ export async function prepareChatTurn(
     options: { tools },
     skillListingContent:
       reminderParts.length > 0 ? reminderParts.join('\n\n') : undefined,
+    agentDefinitions: { activeAgents },
   }
 
   const planFilePath = getPlanFilePath(session, cwd)

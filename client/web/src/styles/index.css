@@ -5,5 +5,6 @@
 @import './tools.css';
 @import './input.css';
 @import './workspace-ide.css';
+@import './workspace-panel.css';
 @import './file-tree.css';
 @import './editor.css';

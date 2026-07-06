@@ -20,7 +20,13 @@ export type {
   CompactResult,
   CompactContext,
   FileRestoreConfig,
+  CompactEnrichment,
 } from './compact.js'
+
+export {
+  buildPostCompactAttachmentMessages,
+  countPostCompactAgentListing,
+} from './post-compact-attachments.js'
 
 export { compactIfNeeded, resetCompactionFailures } from './autoCompact.js'
 export type { CompactOptions } from './autoCompact.js'

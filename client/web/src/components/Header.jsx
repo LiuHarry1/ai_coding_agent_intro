@@ -6,6 +6,7 @@ import { isDesktop, pickWorkspaceDir } from '../lib/desktop.js'
 import { authEnabled, getUser, logout } from '../lib/auth.js'
 import SessionSwitcher from './SessionSwitcher.jsx'
 import BaizeLogo from './BaizeLogo.jsx'
+import WorkspacePanel from './WorkspacePanel.jsx'
 
 export default function Header() {
   // SSO mode: the workspace is pinned server-side to the logged-in user, so
@@ -26,6 +27,7 @@ export default function Header() {
   /** When non-null, the dropdown renders an inline "new folder" input row. */
   const [newFolderName, setNewFolderName] = useState(null)
   const [newFolderError, setNewFolderError] = useState(null)
+  const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false)
   const dropdownRef = useRef(null)
 
   useEffect(() => {
@@ -328,6 +330,26 @@ export default function Header() {
             {user.username || user.email}
           </span>
         )}
+        <button
+          className='icon-btn'
+          onClick={() => setWorkspacePanelOpen(true)}
+          title='Workspace extensions (agents, skills, plugins)'
+        >
+          <svg
+            width='16'
+            height='16'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+          >
+            <path d='M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z' />
+            <circle cx='8.5' cy='14.5' r='1.5' />
+            <circle cx='15.5' cy='14.5' r='1.5' />
+          </svg>
+        </button>
         <button className='icon-btn' onClick={toggleTheme} title='Toggle theme'>
           {theme === 'dark' ? (
             <svg
@@ -374,6 +396,11 @@ export default function Header() {
           </button>
         )}
       </div>
+      <WorkspacePanel
+        open={workspacePanelOpen}
+        workspace={workspace}
+        onClose={() => setWorkspacePanelOpen(false)}
+      />
     </header>
   )
 }

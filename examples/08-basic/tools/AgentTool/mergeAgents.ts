@@ -1,5 +1,5 @@
 import path from 'path'
-import type { AgentDefinition } from '../../core/types.js'
+import type { AgentDefinition, AgentSource } from '../../core/types.js'
 import {
   sourceRank,
   type MarkdownFile,
@@ -74,6 +74,8 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
     whenToUse,
     description: parseString(fm.label) ?? `Custom agent (${filename})`,
     systemPrompt: body,
+    source: file.source as AgentSource,
+    filePath: file.filePath,
     ...(allowedTools !== undefined ? { tools: allowedTools } : {}),
     ...(allowedTools === undefined ? { disallowedTools: disallowed } : {}),
     ...(parsePositiveInt(fm.maxSteps) !== undefined
@@ -98,13 +100,18 @@ export function mergeAgents(
   files: readonly MarkdownFile[],
 ): {
   agents: AgentDefinition[]
+  allAgents: AgentDefinition[]
   errors: Array<{ filePath: string; error: string }>
 } {
   const errors: Array<{ filePath: string; error: string }> = []
   const byType = new Map<string, AgentDefinition>()
+  const allAgents: AgentDefinition[] = builtins.map(b => ({
+    ...b,
+    source: 'built-in' as const,
+  }))
 
   const builtinTypes = new Set(builtins.map(b => b.agentType))
-  for (const b of builtins) byType.set(b.agentType, b)
+  for (const b of allAgents) byType.set(b.agentType, b)
 
   const ordered = [...files].sort(
     (a, b) => sourceRank(a.source) - sourceRank(b.source),
@@ -117,6 +124,7 @@ export function mergeAgents(
       console.warn(`[agents] ${error} (${filePath})`)
     }
     if (agent) {
+      allAgents.push(agent)
       // Trust boundary: third-party plugins must not shadow built-in agents.
       // Some implementations enforce this structurally via `{plugin}:{name}`
       // namespacing; we use flat names, so guard explicitly.
@@ -135,5 +143,5 @@ export function mergeAgents(
     }
   }
 
-  return { agents: [...byType.values()], errors }
+  return { agents: [...byType.values()], allAgents, errors }
 }

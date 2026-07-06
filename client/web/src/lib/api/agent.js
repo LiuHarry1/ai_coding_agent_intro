@@ -16,6 +16,21 @@ export const agentApi = {
     return fetchJSON(`/slash-commands${qs}`)
   },
 
+  getAgents: workspace => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(`/agents${qs}`)
+  },
+
+  getSkills: workspace => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(`/skills${qs}`)
+  },
+
+  getPlugins: workspace => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(`/plugins${qs}`)
+  },
+
   postChat: (body, signal) =>
     fetch(
       apiUrl('/chat'),

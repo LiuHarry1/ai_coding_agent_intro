@@ -10,6 +10,12 @@ import type { IProvider, Message, TodoItem } from '../../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
 import { READ_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { estimateConversationTokens, clearTokenUsages } from './tokens.js'
+import {
+  buildPostCompactAttachmentMessages,
+  type CompactEnrichment,
+} from './post-compact-attachments.js'
+
+export type { CompactEnrichment } from './post-compact-attachments.js'
 
 // ── Prompt (analysis + summary) ─────────────────────────
 
@@ -161,6 +167,8 @@ export interface CompactContext {
   instructions?: string
   /** Request-scoped provider; falls back to default provider when absent. */
   provider?: IProvider
+  /** Re-inject agent/skill listings after full compact (CC-aligned). */
+  enrichment?: CompactEnrichment
 }
 
 // MAX_PTL_RETRIES = 3. If the summarizer call itself overflows,
@@ -290,7 +298,11 @@ export async function compactConversation(
 
   const recentFiles = extractRecentlyReadFiles(messages)
   const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore)
-  const built = buildPostCompactMessages(summary, fileSection, ctx.todos)
+  const summaryMessages = buildPostCompactMessages(summary, fileSection, ctx.todos)
+  const attachmentMessages = ctx.enrichment
+    ? await buildPostCompactAttachmentMessages(ctx.cwd, ctx.enrichment)
+    : []
+  const built = [...summaryMessages, ...attachmentMessages]
 
   return {
     messages: built,

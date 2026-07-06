@@ -17,8 +17,11 @@ import {
   estimateConversationTokens,
 } from './tokens.js'
 import { microCompact } from './microCompact.js'
-import { compactConversation } from './compact.js'
-import type { CompactContext } from './compact.js'
+import {
+  compactConversation,
+  type CompactContext,
+  type CompactEnrichment,
+} from './compact.js'
 
 // ── Threshold constants ─────────────────────────────────
 
@@ -171,6 +174,8 @@ export interface CompactOptions {
   aggressive?: boolean
   /** Steering text for a manual `/compact <instructions>` summarization. */
   instructions?: string
+  /** Re-announce agent/skill listings after full compact. */
+  enrichment?: CompactEnrichment
 }
 
 /**
@@ -319,6 +324,7 @@ export async function compactIfNeeded(
     },
     instructions: opts.instructions,
     provider,
+    enrichment: opts.enrichment,
   }
 
   try {

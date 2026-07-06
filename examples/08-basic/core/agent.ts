@@ -4,7 +4,7 @@ import {
   compactIfNeeded,
   tokenCountWithEstimation,
 } from '../services/compact/index.js'
-import type { AttachedTokenUsage } from '../services/compact/index.js'
+import type { AttachedTokenUsage, CompactEnrichment } from '../services/compact/index.js'
 import {
   isContextLengthError,
   isTransientStreamError,
@@ -275,6 +275,13 @@ export async function runAgent(
   let activeSystemPrompt = systemPrompt
   let planBuildPending = false
 
+  const compactEnrichment: CompactEnrichment | undefined = toolUseContext
+    ? {
+        toolNames: Object.keys(activeTools),
+        skillListingContent: toolUseContext.skillListingContent,
+      }
+    : undefined
+
   const applyPermissionModeRefresh = (newMode: string) => {
     if (refreshTools) {
       syncToolSet(activeTools, refreshTools())
@@ -317,6 +324,7 @@ export async function runAgent(
         compaction,
         sessionId,
         onFullCompaction,
+        compactEnrichment,
       )
 
       const stepResult = await runOneStep({
@@ -336,6 +344,7 @@ export async function runAgent(
         compaction,
         sessionId,
         onFullCompaction,
+        compactEnrichment,
       })
 
       if (stepResult === null) {
@@ -435,6 +444,7 @@ async function runCompactionAndLog(
   compaction?: AgentOptions['compaction'],
   sessionId?: string,
   onFullCompaction?: AgentOptions['onFullCompaction'],
+  compactEnrichment?: CompactEnrichment,
 ): Promise<void> {
   const compactStart = Date.now()
   const managed = await compactIfNeeded(
@@ -444,7 +454,7 @@ async function runCompactionAndLog(
     resolvedModel,
     cwd ?? process.cwd(),
     currentTodos,
-    {},
+    { enrichment: compactEnrichment },
     compaction,
     provider,
     sessionId,
@@ -485,6 +495,7 @@ interface RunOneStepArgs {
   compaction?: AgentOptions['compaction']
   sessionId?: string
   onFullCompaction?: AgentOptions['onFullCompaction']
+  compactEnrichment?: CompactEnrichment
 }
 
 /**
@@ -669,6 +680,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           {
             force: true,
             aggressive: true,
+            enrichment: args.compactEnrichment,
           },
           compaction,
           provider,

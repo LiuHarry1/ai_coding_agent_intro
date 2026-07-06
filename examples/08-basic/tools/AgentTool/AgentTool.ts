@@ -18,6 +18,8 @@ import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { createSubagentWire } from '../../core/brokers/subagent-wire.js'
 import { randomUUID } from 'crypto'
 
+import { buildAgentListSection } from './agentListing.js'
+
 /** tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
 export function createTaskTool(
   agents: readonly AgentDefinition[],
@@ -35,23 +37,13 @@ export function createTaskTool(
   }
   const validTypes = [...byType.keys()]
 
-  const directory = agents
-    .map(a => {
-      const toolsDesc = a.disallowedTools?.length
-        ? `All tools except ${a.disallowedTools.join(', ')}`
-        : a.tools?.length
-          ? a.tools.join(', ')
-          : 'All tools'
-      return `- ${a.agentType}: ${a.whenToUse} (Tools: ${toolsDesc})`
-    })
-    .join('\n')
+  const agentListSection = buildAgentListSection(agents)
 
   const description = `Launch a new agent to handle complex, multi-step tasks autonomously.
 
 The ${AGENT_TOOL_NAME} tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-Available agent types:
-${directory}
+${agentListSection}
 
 When using the ${AGENT_TOOL_NAME} tool, specify a \`subagent_type\` parameter to select which agent type to use.
 

@@ -19,6 +19,7 @@ import {
 } from '../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspWorkspaceKey, hasLspServers } from '../services/lsp/manager.js'
 import { BASH_TOOL_NAME } from '../constants/tool_names.js'
+import { getAgentListingDeltaAttachments } from '../tools/AgentTool/agentListing.js'
 
 function getSkillListingAttachments(ctx: ToolUseContext): Attachment[] {
   const content = ctx.skillListingContent?.trim()
@@ -83,6 +84,11 @@ export async function getAttachments(
       ? [
           maybe('skill_listing', () =>
             Promise.resolve(getSkillListingAttachments(toolUseContext)),
+          ),
+          maybe('agent_listing_delta', () =>
+            Promise.resolve(
+              getAgentListingDeltaAttachments(toolUseContext, messages),
+            ),
           ),
         ]
       : []),
