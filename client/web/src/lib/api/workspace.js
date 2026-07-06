@@ -6,8 +6,9 @@
  * this file, and nothing here should import from `agent.js` — the only
  * shared code is the tiny `fetchJSON` helper.
  */
-import { fetchJSON, apiUrl } from './_http.js'
-import { authHeader } from '../auth.js'
+import { fetchJSON, apiUrl, withAuth } from './_http.js'
+import { authHeader, handleUnauthorized } from '../auth.js'
+import { fileName } from '../utils.js'
 
 const json = body => ({
   headers: { 'Content-Type': 'application/json' },
@@ -118,16 +119,70 @@ export const workspaceApi = {
     fetchJSON(`/workspace/git/diff?path=${encodeURIComponent(path)}`),
 }
 
+function filenameFromContentDisposition(header) {
+  if (!header) return null
+  const star = header.match(/filename\*=UTF-8''([^;\n]+)/i)
+  if (star) {
+    try {
+      return decodeURIComponent(star[1])
+    } catch {}
+  }
+  const quoted = header.match(/filename="([^"]+)"/i)
+  if (quoted) return quoted[1]
+  const plain = header.match(/filename=([^;\n]+)/i)
+  if (plain) return plain[1].trim()
+  return null
+}
+
+/** Fetch a file/dir download with auth headers (anchor href can't send them). */
+async function fetchDownloadBlob(path) {
+  const res = await fetch(workspaceApi.downloadUrl(path), withAuth())
+  if (res.status === 401) {
+    handleUnauthorized()
+    throw new Error('Unauthorized')
+  }
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const body = await res.json()
+      detail = body?.error ? `: ${body.error}` : ''
+    } catch {}
+    const err = new Error(`HTTP ${res.status}${detail}`)
+    err.status = res.status
+    throw err
+  }
+  const blob = await res.blob()
+  const name =
+    filenameFromContentDisposition(res.headers.get('Content-Disposition')) ||
+    fileName(path)
+  return { blob, name }
+}
+
 /**
  * Trigger a browser download for `path` (file or directory-as-zip) by
- * clicking a transient anchor. Kept out of `workspaceApi` because it touches
- * the DOM rather than the network.
+ * fetching with auth and clicking a transient anchor. Kept out of
+ * `workspaceApi` because it touches the DOM rather than the network.
  */
-export function triggerDownload(path) {
-  const a = document.createElement('a')
-  a.href = workspaceApi.downloadUrl(path)
-  a.download = ''
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+export async function triggerDownload(path) {
+  const { blob, name } = await fetchDownloadBlob(path)
+  const url = URL.createObjectURL(blob)
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+/**
+ * Authenticated blob URL for inline previews (e.g. images). Caller must
+ * revoke the URL when done.
+ */
+export async function fetchAuthenticatedBlobUrl(path) {
+  const { blob } = await fetchDownloadBlob(path)
+  return URL.createObjectURL(blob)
 }

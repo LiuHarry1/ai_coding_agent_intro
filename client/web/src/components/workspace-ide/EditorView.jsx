@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspaceIdeStore } from '../../stores/workspace-ide-store.js'
-import { workspaceApi, triggerDownload } from '../../lib/api/workspace.js'
+import {
+  fetchAuthenticatedBlobUrl,
+  triggerDownload,
+} from '../../lib/api/workspace.js'
 import CopyButton from '../CopyButton.jsx'
 import { languageLabel, buildBreadcrumb } from './helpers.js'
 import { DownloadIcon } from './icons.jsx'
@@ -48,12 +51,47 @@ export default function EditorView() {
 function BinaryView({ filePath, size }) {
   const ext = (filePath.split('.').pop() || '').toLowerCase()
   const isImage = IMAGE_EXTS.has(ext)
-  const url = workspaceApi.downloadUrl(filePath)
+  const [imgUrl, setImgUrl] = useState(null)
+  const [imgError, setImgError] = useState(null)
+
+  useEffect(() => {
+    if (!isImage) return
+    let revoked = false
+    let objectUrl = null
+    setImgUrl(null)
+    setImgError(null)
+    fetchAuthenticatedBlobUrl(filePath)
+      .then(url => {
+        if (revoked) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        objectUrl = url
+        setImgUrl(url)
+      })
+      .catch(err => setImgError(err.message))
+    return () => {
+      revoked = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [filePath, isImage])
 
   return (
     <div className='editor-binary'>
       {isImage ? (
-        <img className='editor-binary-img' src={url} alt={fileName(filePath)} />
+        imgError ? (
+          <div className='editor-binary-icon' aria-hidden='true'>
+            {'\u{26A0}\uFE0F'}
+          </div>
+        ) : imgUrl ? (
+          <img
+            className='editor-binary-img'
+            src={imgUrl}
+            alt={fileName(filePath)}
+          />
+        ) : (
+          <div className='editor-loading'>Loading preview…</div>
+        )
       ) : (
         <div className='editor-binary-icon' aria-hidden='true'>
           {'\u{1F4E6}'}
