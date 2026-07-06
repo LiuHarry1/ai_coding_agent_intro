@@ -29,3 +29,19 @@ export const SUPPRESSED_TOOL_CARDS = new Set([
 
 /** Meta tools hidden inside subagent step lists. */
 export const SUBAGENT_SUPPRESSED = new Set([TODO_WRITE, TOOL_SEARCH])
+
+/** Tools that create or modify workspace files (08-basic + 07-basic aliases). */
+export const FILE_MUTATING_TOOLS = new Set([
+  WRITE,
+  EDIT,
+  'write_file',
+  'edit_file',
+])
+
+/** Shell tools that may indirectly change the workspace tree. */
+export const SHELL_TOOLS = new Set([
+  BASH,
+  POWERSHELL,
+  'bash',
+  'powershell',
+])

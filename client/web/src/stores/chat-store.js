@@ -2,6 +2,41 @@ import { create } from 'zustand'
 import { agentApi } from '../lib/api/agent.js'
 import { useWorkspaceIdeStore } from './workspace-ide-store.js'
 
+/** Find a tool_call part (top-level or nested in a subagent) by id. */
+function findToolCallInAssistant(assistantMsg, toolCallId) {
+  if (assistantMsg?.type !== 'assistant' || !toolCallId) return null
+  for (let i = assistantMsg.parts.length - 1; i >= 0; i--) {
+    const p = assistantMsg.parts[i]
+    if (p.type !== 'tool_call') continue
+    if (p.toolCallId === toolCallId) return p
+    for (const sub of p.subagentParts || []) {
+      if (sub.toolCallId === toolCallId) return sub
+    }
+  }
+  return null
+}
+
+function notifyIdeFilesystemFromTool(toolName, args, result) {
+  try {
+    useWorkspaceIdeStore
+      .getState()
+      .onAgentToolFilesystemChange(toolName, args, result)
+  } catch {
+    // workspace IDE store not initialized — ignore
+  }
+}
+
+function refreshIdeAfterAgentTurn() {
+  try {
+    const ideStore = useWorkspaceIdeStore.getState()
+    if (!ideStore.rootPath) return
+    ideStore.refreshChanges()
+    ideStore.refreshTree()
+  } catch {
+    // store not initialized — ignore
+  }
+}
+
 /**
  * Central state store for the chat UI.
  *
@@ -297,16 +332,9 @@ export const useChatStore = create((set, get) => ({
 
     get()._finalizeAssistant()
     set({ isStreaming: false, abortController: null })
-    // Nudge the workspace IDE's git status — the agent likely just
-    // wrote / edited / created files, so any open "Changes" view should
-    // reflect that without the user clicking refresh. Best-effort; we
-    // don't await it and we ignore errors (the store handles its own).
-    try {
-      const ideStore = useWorkspaceIdeStore.getState()
-      if (ideStore.rootPath) ideStore.refreshChanges()
-    } catch {
-      // store not initialized — ignore
-    }
+    // Agent likely wrote / edited files — refresh git status and the
+    // explorer tree without requiring a manual click.
+    refreshIdeAfterAgentTurn()
   },
 
   // ── Internal SSE handlers ───────────────────
@@ -837,6 +865,7 @@ export const useChatStore = create((set, get) => ({
         for (let j = sub.length - 1; j >= 0; j--) {
           if (sub[j].toolCallId === ev.toolCallId) {
             sub[j] = { ...sub[j], result: ev.result, status: 'done' }
+            notifyIdeFilesystemFromTool(sub[j].name, sub[j].args, ev.result)
             break
           }
         }
@@ -871,12 +900,15 @@ export const useChatStore = create((set, get) => ({
 
   _updateToolResult: data => {
     const toolCallId = data.tool_use_id ?? data.toolCallId
+    const last = get().messages[get().messages.length - 1]
+    const matched = findToolCallInAssistant(last, toolCallId)
+
     set(s => {
       const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return { messages: msgs }
+      const lastMsg = msgs[msgs.length - 1]
+      if (lastMsg?.type !== 'assistant') return { messages: msgs }
 
-      const parts = [...last.parts]
+      const parts = [...lastMsg.parts]
       for (let i = parts.length - 1; i >= 0; i--) {
         if (
           parts[i].type === 'tool_call' &&
@@ -891,9 +923,13 @@ export const useChatStore = create((set, get) => ({
           break
         }
       }
-      msgs[msgs.length - 1] = { ...last, parts }
+      msgs[msgs.length - 1] = { ...lastMsg, parts }
       return { messages: msgs }
     })
+
+    if (matched) {
+      notifyIdeFilesystemFromTool(matched.name, matched.args, data.result)
+    }
   },
 
   _updateLastToolTiming: data => {

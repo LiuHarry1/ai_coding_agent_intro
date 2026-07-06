@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { workspaceApi } from '../lib/api/workspace.js'
+import { FILE_MUTATING_TOOLS, SHELL_TOOLS } from '../lib/tool-names.js'
 import { fileName } from '../lib/utils.js'
 
 const STORAGE_KEY_WIDTH = 'coding_agent_ide_width'
@@ -57,6 +58,16 @@ function parentDir(absPath) {
 function isUnderPath(p, prefix) {
   const base = prefix.replace(/\/$/, '')
   return p === base || p.startsWith(base + '/')
+}
+
+/** Resolve a workspace-relative or absolute path against `rootPath`. */
+function resolveAbsPath(rootPath, p) {
+  if (!p || !rootPath) return null
+  const norm = String(p).replace(/\\/g, '/')
+  if (norm.startsWith('/')) return norm.replace(/\/+$/, '') || '/'
+  const root = rootPath.replace(/\/+$/, '')
+  const rel = norm.replace(/^\.?\//, '')
+  return `${root}/${rel}`.replace(/\/+/g, '/')
 }
 
 export const useWorkspaceIdeStore = create((set, get) => ({
@@ -166,6 +177,69 @@ export const useWorkspaceIdeStore = create((set, get) => ({
   refreshTree: async () => {
     const paths = Array.from(get().expandedDirs)
     await Promise.all(paths.map(p => get().loadDir(p)))
+  },
+
+  /**
+   * Re-fetch a single directory when it is currently expanded. No-op when
+   * collapsed — the listing is fetched fresh on next expand.
+   */
+  refreshDirIfExpanded: async dirPath => {
+    if (!dirPath || !get().expandedDirs.has(dirPath)) return
+    await get().loadDir(dirPath)
+  },
+
+  /**
+   * After the agent mutates a file, refresh its parent listing and reload
+   * the editor buffer when the file is open and has no unsaved edits.
+   */
+  refreshDirForFile: async filePath => {
+    if (!filePath) return
+    const parent = parentDir(filePath)
+    await get().refreshDirIfExpanded(parent)
+    await get().reloadOpenFileIfClean(filePath)
+  },
+
+  reloadOpenFileIfClean: async filePath => {
+    const cur = get().fileContents[filePath]
+    if (!cur || cur.dirty || cur.loading) return
+    if (!get().openFiles.includes(filePath)) return
+    try {
+      const data = await workspaceApi.getFile(filePath)
+      set(s => ({
+        fileContents: {
+          ...s.fileContents,
+          [filePath]: {
+            ...data,
+            loading: false,
+            draft: data.content ?? '',
+            dirty: false,
+          },
+        },
+      }))
+    } catch (e) {
+      console.error('[workspace-ide] reloadOpenFileIfClean failed:', e)
+    }
+  },
+
+  /**
+   * Best-effort sync after an agent tool finishes. Called from chat-store on
+   * each tool_result and again at turn end via refreshTree().
+   */
+  onAgentToolFilesystemChange: (toolName, args = {}, result) => {
+    const root = get().rootPath
+    if (!root) return
+    if (typeof result === 'string' && result.startsWith('Error:')) return
+
+    if (FILE_MUTATING_TOOLS.has(toolName)) {
+      const rel = args.file_path || args.path
+      const abs = resolveAbsPath(root, rel)
+      if (abs) void get().refreshDirForFile(abs)
+      return
+    }
+
+    if (SHELL_TOOLS.has(toolName)) {
+      void get().refreshTree()
+    }
   },
 
   /**
