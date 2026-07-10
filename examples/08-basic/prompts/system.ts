@@ -16,6 +16,7 @@ import {
 } from '../constants/tool_names.js'
 import { SKILL_TOOL_NAME } from '../tools/skill.js'
 import { previewSection } from './preview.js'
+import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
 
 // Static system prompt sections. Uses tool/agent names via constants.
 
@@ -59,7 +60,7 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
  - Primary working directory: ${cwd}
  - Platform: ${platformLabel}
  - ${shellInfoLine()}${previewSection()}
-
+${workspaceBoundaryPromptSection(cwd)}
 # Tone and style
  - Only use emojis if the user explicitly requests it. Avoid using emojis in all communication unless asked.
  - Your responses should be short and concise.

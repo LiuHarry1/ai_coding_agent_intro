@@ -20,6 +20,10 @@ import { ripGrep } from '../utils/ripgrep.js'
 import { resolvePath } from './utils.js'
 import type { ToolDefinition } from '../core/types.js'
 import {
+  assertAccessibleResolved,
+  policyFromContext,
+} from '../core/sandbox.js'
+import {
   AGENT_TOOL_NAME,
   BASH_TOOL_NAME,
   GREP_TOOL_NAME,
@@ -99,7 +103,7 @@ export const definition: ToolDefinition = {
   name: GREP_TOOL_NAME,
   description: 'Regex search across files (ripgrep)',
   isConcurrencySafe: () => true,
-  create(cwd) {
+  create(cwd, context) {
     return tool({
       description: getDescription(),
       inputSchema: z.object({
@@ -201,6 +205,16 @@ export const definition: ToolDefinition = {
         const resolved = resolvePath(cwd, inputPath ?? '.')
         if ('error' in resolved) return resolved.error
         const absolutePath = resolved.abs
+
+        try {
+          assertAccessibleResolved(
+            absolutePath,
+            policyFromContext(cwd, context.sandbox),
+            'read',
+          )
+        } catch (err) {
+          return (err as Error).message
+        }
 
         const args: string[] = ['--hidden']
 

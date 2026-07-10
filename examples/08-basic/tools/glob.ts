@@ -12,6 +12,10 @@ import * as path from 'path'
 import { glob as runGlob } from '../utils/glob.js'
 import { resolvePath } from './utils.js'
 import type { ToolDefinition } from '../core/types.js'
+import {
+  assertAccessibleResolved,
+  policyFromContext,
+} from '../core/sandbox.js'
 import { GLOB_TOOL_NAME } from '../constants/tool_names.js'
 import { AGENT_TOOL_NAME } from '../constants/tool_names.js'
 import {
@@ -39,7 +43,7 @@ export const definition: ToolDefinition = {
   name: GLOB_TOOL_NAME,
   description: 'Fast file pattern matching with glob syntax',
   isConcurrencySafe: () => true,
-  create(cwd) {
+  create(cwd, context) {
     return tool({
       description: DESCRIPTION,
       inputSchema: z.object({
@@ -62,6 +66,16 @@ export const definition: ToolDefinition = {
         const resolved = resolvePath(cwd, baseRel)
         if ('error' in resolved) return resolved.error
         const searchDir = resolved.abs
+
+        try {
+          assertAccessibleResolved(
+            searchDir,
+            policyFromContext(cwd, context.sandbox),
+            'read',
+          )
+        } catch (err) {
+          return (err as Error).message
+        }
 
         // We request a much bigger pool than DEFAULT_LIMIT from the
         // util layer because noise dirs (.git, node_modules) tend to

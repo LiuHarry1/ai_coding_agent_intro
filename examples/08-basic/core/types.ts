@@ -71,6 +71,11 @@ export interface ToolContext {
   session?: Session
   /** Workspace cwd for plan file resolution. */
   cwd?: string
+  /**
+   * Request-scoped filesystem sandbox (SSO: pinned to userWorkspace).
+   * When set, File tools enforce read/write boundaries via core/sandbox.ts.
+   */
+  sandbox?: import('./sandbox.js').SandboxPolicy
 }
 
 export interface ToolDefinition {

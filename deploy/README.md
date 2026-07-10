@@ -85,6 +85,19 @@ docker compose -f deploy/docker-compose.sso.yml --env-file deploy/.env up -d
 
 每个用户被锁定到 `/workspace/users/<email>`,首次登录会从 `deploy/workspace-seed/`(打进 tenant 镜像)复制一份初始内容。
 
+### 工作区沙箱 (`SANDBOX_MODE`)
+
+SSO 模式默认 `SANDBOX_MODE=strict`：`read_file` / `grep` / `glob` / `write_file` / `edit_file` 以及 HTTP `/workspace/*` 只能访问当前用户的 pinned 目录。系统提示词也会声明该边界。
+
+| 值 | 场景 |
+|----|------|
+| `strict`（或未设但 `AUTH_ENABLED=true`） | SSO：读/写均限制在用户 workspace |
+| `off` / 不设（且无 AUTH） | 本地 / admin：读可越界，写仍限 workspace |
+
+说明：这是**应用层**隔离，不阻止 bash 用绝对路径读其它目录。本地开发不要设 `SANDBOX_MODE`（或显式 `off`）。
+
+可选：`SANDBOX_EXTRA_READ_ROOTS=/opt/shared-templates`（逗号分隔）在 strict 下额外允许只读根。
+
 ---
 
 ## 工作区挂载

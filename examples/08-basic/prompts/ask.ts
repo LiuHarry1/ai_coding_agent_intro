@@ -6,6 +6,7 @@ import {
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
 } from '../constants/tool_names.js'
+import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
 
 function shellInfoLine(): string {
   if (isWindows) {
@@ -27,6 +28,7 @@ export function askSystemPrompt(cwd: string, projectRules?: string): string {
     `- Working directory: ${cwd}`,
     `- Platform: ${platformLabel}`,
     `- ${shellInfoLine()}`,
+    workspaceBoundaryPromptSection(cwd).trim(),
     '',
     '## Guidelines',
     '- Answer questions clearly and concisely about the codebase.',

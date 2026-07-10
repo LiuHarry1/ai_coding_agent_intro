@@ -34,6 +34,7 @@ export interface RunSkillForkOptions {
   provider?: IProvider
   compaction?: CompactionConfig
   sessionId?: string
+  sandbox?: ToolContext['sandbox']
 }
 
 export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
@@ -50,6 +51,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     provider,
     compaction,
     sessionId,
+    sandbox,
   } = opts
 
   const targetAgentType = skill.agent ?? 'general_purpose'
@@ -74,6 +76,8 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     provider,
     compaction,
     sessionId,
+    sandbox,
+    cwd,
   }
 
   let subTools: Record<string, AnyTool>

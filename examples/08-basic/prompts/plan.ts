@@ -20,6 +20,7 @@ import {
   getPlanModeExploreAgentCount,
 } from '../utils/plan-config.js'
 import { PLAN_PHASE4_SECTION } from './plan-phase4.js'
+import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
 
 function shellInfoLine(): string {
   if (isWindows) {
@@ -124,6 +125,7 @@ Example perspectives by task type:
     `- Working directory: ${cwd}`,
     `- Platform: ${platformLabel}`,
     `- ${shellInfoLine()}`,
+    workspaceBoundaryPromptSection(cwd).trim(),
     '',
     '## Tool usage (read-only during Phases 1-3)',
     `- Exploration agents: ${EXPLORE_AGENT_TYPE} (Phase 1), ${PLAN_AGENT_TYPE} (Phase 2)`,

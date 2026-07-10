@@ -13,12 +13,12 @@ import * as os from 'os'
  * Per-request `workspace` body fields (see server/router.ts) override this
  * default; this is purely the floor.
  *
- * Boundary semantics (see `isPathInWorkspace`):
- *   - Reading outside is allowed (bash + read_file deliberately span the FS
- *     so the agent can grep system config, install deps, etc.).
- *   - WRITING outside is blocked by write_file / edit_file. Bash writes
- *     aren't validated here — rely on the Docker mount being the only
- *     writable host path, or build a static analyzer (see TODO in bash.ts).
+ * Boundary semantics (see `isPathInWorkspace` / `core/sandbox.ts`):
+ *   - When SANDBOX_MODE=off: reading outside is allowed for grep/bash;
+ *     write_file / edit_file still refuse paths outside the workspace.
+ *   - When SANDBOX_MODE=strict (SSO): read and write tools refuse paths
+ *     outside the request workspace (symlink realpath checked too).
+ *   - Bash is not OS-sandboxed by this module.
  */
 
 let cachedDefault: string | null = null
@@ -151,8 +151,7 @@ export function assertPathInWorkspace(
   if (!isPathInWorkspace(absPath, workspaceRoot)) {
     throw new Error(
       `Refused: "${absPath}" is outside the workspace "${workspaceRoot}". ` +
-        `Writes must stay inside the workspace. ` +
-        `Reads outside the workspace are allowed via bash / read_file.`,
+        `Writes must stay inside the workspace.`,
     )
   }
 }

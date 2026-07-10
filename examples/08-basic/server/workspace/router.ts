@@ -14,6 +14,10 @@ import {
 import { gitStatus, gitDiff } from './git.js'
 import { handleUpload, handleDownload } from './transfer.js'
 import { isPathInWorkspace } from '../../core/workspace.js'
+import {
+  assertAccessibleResolved,
+  createSandboxPolicy,
+} from '../../core/sandbox.js'
 
 /**
  * Self-contained workspace HTTP module.
@@ -99,14 +103,24 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
     if (!url || !url.startsWith('/workspace')) return false
 
     // Per-request root: when the auth gate pinned a user workspace
-    // (req.userWorkspace), use it and SANDBOX every path to it. Otherwise
-    // fall back to the server default with no sandbox (legacy single-user).
+    // (req.userWorkspace), use it. Sandbox policy also turns on for
+    // SANDBOX_MODE=strict (SSO) even if we only have opts.root.
     const pinned = (req as { userWorkspace?: string }).userWorkspace
     const root = pinned ?? opts.root
-    const sandbox = Boolean(pinned)
-    const safe = (input: string): string => {
+    const policy = createSandboxPolicy(root)
+    const enforceSandbox = Boolean(pinned) || policy.mode === 'strict'
+    const safe = (input: string, access: 'read' | 'write' = 'read'): string => {
       const abs = resolvePath(input, root)
-      if (sandbox && !isPathInWorkspace(abs, root)) {
+      if (enforceSandbox) {
+        try {
+          assertAccessibleResolved(abs, policy, access)
+        } catch (err) {
+          throw new FsOpError(
+            'EACCES',
+            err instanceof Error ? err.message : 'Path is outside your workspace',
+          )
+        }
+      } else if (pinned && !isPathInWorkspace(abs, root)) {
         throw new FsOpError('EACCES', 'Path is outside your workspace')
       }
       return abs
@@ -181,7 +195,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
           sendJSON(res, 400, { error: "Missing 'path'" })
           return true
         }
-        sendJSON(res, 200, createFile(safe(p), content))
+        sendJSON(res, 200, createFile(safe(p, 'write'), content))
         return true
       }
 
@@ -195,7 +209,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
           sendJSON(res, 400, { error: "Missing 'path' or 'content'" })
           return true
         }
-        sendJSON(res, 200, saveFile(safe(p), content, expectedMtimeMs))
+        sendJSON(res, 200, saveFile(safe(p, 'write'), content, expectedMtimeMs))
         return true
       }
 
@@ -207,7 +221,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
           sendJSON(res, 400, { error: "Missing 'path'" })
           return true
         }
-        sendJSON(res, 200, makeDir(safe(p)))
+        sendJSON(res, 200, makeDir(safe(p, 'write')))
         return true
       }
 
@@ -237,7 +251,7 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
           sendJSON(res, 400, { error: "Missing 'path'" })
           return true
         }
-        sendJSON(res, 200, removeEntry(safe(p)))
+        sendJSON(res, 200, removeEntry(safe(p, 'write')))
         return true
       }
 

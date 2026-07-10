@@ -186,6 +186,8 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             provider,
             compaction,
             sessionId: context.sessionId,
+            sandbox: context.sandbox,
+            cwd: context.cwd ?? cwd,
           }
 
           let subTools: Record<string, AnyTool>

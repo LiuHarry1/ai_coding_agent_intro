@@ -147,7 +147,10 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
               eventBus,
               wire: context.wire,
               toolEnablement,
+              provider: context.provider,
+              compaction: context.compaction,
               sessionId: context.sessionId,
+              sandbox: context.sandbox,
             })
           } catch (e) {
             return `Error: ${(e as Error).message}`

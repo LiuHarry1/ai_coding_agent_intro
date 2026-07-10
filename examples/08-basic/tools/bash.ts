@@ -40,8 +40,10 @@ Constraints:
 - Default timeout 120s. Pass \`timeout\` for slower commands.
 
 Workspace boundary:
-- Read-only commands (\`ls\`, \`cat\`, \`grep\`, \`git log\`, etc.) MAY target paths outside the workspace — use this to inspect system config, logs, or sibling projects.
-- File mutations belong to \`write_file\` / \`edit_file\`, which are sandboxed to the workspace root. Don't use bash redirections (\`>\`, \`>>\`, \`tee\`) or \`rm\` / \`mv\` / \`cp\` to write OUTSIDE the workspace — that's the user's filesystem, not yours.
+- Prefer dedicated tools (\`read_file\`, \`grep\`, \`glob\`, \`write_file\`, \`edit_file\`) for file I/O — they enforce the workspace boundary.
+- When SANDBOX_MODE=strict (SSO multi-tenant), do NOT list, read, or modify paths outside the current working directory (including sibling user workspaces). Stay inside the project root.
+- When sandbox is off (local/admin), read-only commands (\`ls\`, \`cat\`, \`grep\`, \`git log\`, etc.) MAY target paths outside the workspace for system config or sibling projects; file mutations still belong to \`write_file\` / \`edit_file\`.
+- Don't use bash redirections (\`>\`, \`>>\`, \`tee\`) or \`rm\` / \`mv\` / \`cp\` to write OUTSIDE the workspace — that's the user's filesystem, not yours.
 
 IMPORTANT: Avoid using this tool to run \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Prefer the dedicated tools instead:
 - File search: Use \`glob\` (NOT find or ls)

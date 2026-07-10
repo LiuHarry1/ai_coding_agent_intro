@@ -2,7 +2,10 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import * as fs from 'fs'
 import { resolvePath } from './utils.js'
-import { assertPathInWorkspace } from '../core/workspace.js'
+import {
+  assertAccessibleResolved,
+  policyFromContext,
+} from '../core/sandbox.js'
 import type { ToolDefinition } from '../core/types.js'
 import { EDIT_FILE_TOOL_NAME } from '../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../services/lsp/LSPDiagnosticRegistry.js'
@@ -50,7 +53,11 @@ export const definition: ToolDefinition = {
         const { abs } = resolved
 
         try {
-          assertPathInWorkspace(abs, cwd)
+          assertAccessibleResolved(
+            abs,
+            policyFromContext(cwd, context.sandbox),
+            'write',
+          )
         } catch (err) {
           return (err as Error).message
         }

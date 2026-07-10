@@ -8,6 +8,10 @@ import {
   resolveFileInCwd,
 } from '../../utils/read/index.js'
 import { PDF_MAX_PAGES_PER_READ } from '../../constants/api_limits.js'
+import {
+  assertAccessibleResolved,
+  policyFromContext,
+} from '../../core/sandbox.js'
 
 export type ReadToolExecuteResult = {
   result: string
@@ -19,7 +23,7 @@ export const definition: ToolDefinition = {
   name: READ_FILE_TOOL_NAME,
   description: 'Read files, images, PDFs, notebooks',
   isConcurrencySafe: () => true,
-  create(cwd) {
+  create(cwd, context) {
     return tool({
       description: buildReadToolDescription(),
       inputSchema: z.object({
@@ -49,6 +53,16 @@ export const definition: ToolDefinition = {
       }): Promise<ReadToolExecuteResult> => {
         const resolved = resolveFileInCwd(cwd, file_path)
         if ('error' in resolved) return { result: `Error: ${resolved.error}` }
+
+        try {
+          assertAccessibleResolved(
+            resolved.abs,
+            policyFromContext(cwd, context.sandbox),
+            'read',
+          )
+        } catch (err) {
+          return { result: (err as Error).message }
+        }
 
         try {
           const { output, followUpMessages } = await readFileCore(

@@ -40,6 +40,7 @@ import { extractFilePathCandidates } from './path_candidates.js'
 import { mergeMCPServers } from '../../core/settings-manager.js'
 import { noopWireEmitter } from '../../core/wire-emitter.js'
 import { getMCPManagerForServers } from '../../server/mcp-lifecycle.js'
+import { createSandboxPolicy } from '../../core/sandbox.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -200,6 +201,7 @@ export async function prepareChatTurn(
     sessionId: session.id,
     session,
     cwd,
+    sandbox: createSandboxPolicy(cwd),
   }
 
   const { active, deferred, deferredDefs } = (
