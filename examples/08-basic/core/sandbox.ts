@@ -127,11 +127,9 @@ export function assertAccessibleResolved(
   const resolved = path.resolve(absPath)
   assertAccessible(resolved, policy, access)
 
+  let real: string | undefined
   try {
-    const real = fs.realpathSync(resolved)
-    if (path.resolve(real) !== resolved) {
-      assertAccessible(real, policy, access)
-    }
+    real = fs.realpathSync(resolved)
   } catch {
     // Path may not exist yet (e.g. write_file creating a new file).
     // Also try realpath on the nearest existing ancestor.
@@ -144,13 +142,21 @@ export function assertAccessibleResolved(
         if (candidate !== resolved) {
           assertAccessible(candidate, policy, access)
         }
-        break
-      } catch {
+        return
+      } catch (inner) {
+        if (inner instanceof Error && inner.message.startsWith('Refused:')) {
+          throw inner
+        }
         const parent = path.dirname(dir)
         if (parent === dir) break
         dir = parent
       }
     }
+    return
+  }
+
+  if (real && path.resolve(real) !== resolved) {
+    assertAccessible(real, policy, access)
   }
 }
 
