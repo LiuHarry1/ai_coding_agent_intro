@@ -202,6 +202,34 @@
   letter-spacing: 0;
 }
 
+.ws-badge--error {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+}
+
+/* ── MCP tab ── */
+.ws-mcp-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ws-mcp-tool {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.ws-mcp-error {
+  color: #f85149;
+}
+
 .ws-panel-warnings {
   margin-top: 12px;
   padding-top: 12px;

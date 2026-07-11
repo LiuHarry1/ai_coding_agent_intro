@@ -5,7 +5,14 @@ const TABS = [
   { id: 'agents', label: 'Subagents' },
   { id: 'skills', label: 'Skills' },
   { id: 'plugins', label: 'Plugins' },
+  { id: 'mcp', label: 'MCP' },
 ]
+
+const MCP_STATUS_BADGE = {
+  connected: { className: 'ws-badge--active', label: 'connected' },
+  error: { className: 'ws-badge--error', label: 'error' },
+  disconnected: { className: 'ws-badge--shadow', label: 'disconnected' },
+}
 
 const AGENT_SOURCE_ORDER = ['project', 'user', 'plugin', 'built-in']
 const AGENT_SOURCE_LABELS = {
@@ -182,6 +189,56 @@ function PluginsTab({ data }) {
   )
 }
 
+function McpTab({ data }) {
+  const servers = data?.servers ?? []
+
+  if (servers.length === 0) {
+    return (
+      <p className='ws-panel-empty'>
+        No MCP servers configured. Add one via settings (mcpServers).
+      </p>
+    )
+  }
+
+  return (
+    <ul className='ws-panel-list'>
+      {servers.map(s => {
+        const badge =
+          MCP_STATUS_BADGE[s.status] ?? MCP_STATUS_BADGE.disconnected
+        const tools = s.tools ?? []
+        return (
+          <li key={s.name} className='ws-panel-item'>
+            <div className='ws-panel-item-row'>
+              <code className='ws-panel-item-name'>{s.name}</code>
+              <span
+                className={`ws-badge ${badge.className}`}
+                title={s.error || undefined}
+              >
+                {badge.label}
+              </span>
+            </div>
+            <p className='ws-panel-item-meta'>
+              tools {tools.length}
+            </p>
+            {tools.length > 0 && (
+              <div className='ws-mcp-tools'>
+                {tools.map(t => (
+                  <code key={t} className='ws-mcp-tool' title={`${s.name}_${t}`}>
+                    {t}
+                  </code>
+                ))}
+              </div>
+            )}
+            {s.status === 'error' && s.error && (
+              <p className='ws-panel-item-desc-short ws-mcp-error'>{s.error}</p>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 function Warnings({ errors }) {
   if (!errors?.length) return null
   return (
@@ -206,6 +263,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
   const [agentsData, setAgentsData] = useState(null)
   const [skillsData, setSkillsData] = useState(null)
   const [pluginsData, setPluginsData] = useState(null)
+  const [mcpData, setMcpData] = useState(null)
 
   const load = useCallback(async () => {
     if (!open) return
@@ -213,19 +271,24 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
     setError(null)
     const ws = workspace || undefined
     try {
-      const [agents, skills, plugins] = await Promise.all([
+      const [agents, skills, plugins, mcp] = await Promise.all([
         agentApi.getAgents(ws),
         agentApi.getSkills(ws),
         agentApi.getPlugins(ws),
+        // MCP servers may be slow/broken to connect; don't fail the whole
+        // panel over them.
+        agentApi.getMcp(ws).catch(() => null),
       ])
       setAgentsData(agents)
       setSkillsData(skills)
       setPluginsData(plugins)
+      setMcpData(mcp)
     } catch (e) {
       setError(e.message || 'Failed to load workspace extensions')
       setAgentsData(null)
       setSkillsData(null)
       setPluginsData(null)
+      setMcpData(null)
     } finally {
       setLoading(false)
     }
@@ -247,6 +310,10 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
   const activeCount = agentsData?.agents?.length ?? 0
   const skillCount = skillsData?.skills?.length ?? 0
   const pluginCount = pluginsData?.plugins?.length ?? 0
+  const mcpToolCount = (mcpData?.servers ?? []).reduce(
+    (n, s) => n + (s.tools?.length ?? 0),
+    0,
+  )
 
   const allErrors = useMemo(
     () => [
@@ -275,6 +342,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
             </h2>
             <p className='ws-panel-sub'>
               {activeCount} agents · {skillCount} skills · {pluginCount} plugins
+              {' '}· {mcpToolCount} mcp tools
               {agentsData?.workspace ? (
                 <>
                   {' '}
@@ -328,6 +396,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
           {!error && tab === 'agents' && <AgentsTab data={agentsData} />}
           {!error && tab === 'skills' && <SkillsTab data={skillsData} />}
           {!error && tab === 'plugins' && <PluginsTab data={pluginsData} />}
+          {!error && tab === 'mcp' && <McpTab data={mcpData} />}
 
           <Warnings errors={allErrors} />
         </div>

@@ -31,6 +31,12 @@ export const agentApi = {
     return fetchJSON(`/plugins${qs}`)
   },
 
+  /** MCP server statuses + their tool lists for the workspace. */
+  getMcp: workspace => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(`/mcp${qs}`)
+  },
+
   postChat: (body, signal) =>
     fetch(
       apiUrl('/chat'),
