@@ -449,11 +449,17 @@ export const useChatStore = create((set, get) => ({
             if (data.approved) store._setThinking()
             break
           case 'compaction_start':
-            store._appendPart({ type: 'compaction_start', ...data })
+            // Spread first: the wire message carries type:'system', which
+            // must not clobber the part's own type discriminant.
+            store._appendPart({ ...data, type: 'compaction_start' })
             break
-          case 'compaction_done':
-            void get()._refetchTranscriptAfterCompaction()
+          case 'compaction_done': {
+            const status = data.status ?? 'ok'
+            store._resolveCompactionPart(status)
+            // noop/error left the transcript untouched — nothing to refetch.
+            if (status === 'ok') void get()._refetchTranscriptAfterCompaction()
             break
+          }
           case 'tool_timing':
             store._updateLastToolTiming(data)
             break
@@ -633,6 +639,38 @@ export const useChatStore = create((set, get) => ({
   },
 
   /**
+   * Settle the in-progress compaction row when compaction_done arrives.
+   * ok/error → the running `compaction_start` part becomes a settled
+   * `compaction_done` part (instant feedback, before any refetch).
+   * noop → the row is dropped entirely; nothing happened worth showing.
+   *
+   * The settled part is only a transitional frame: after the transcript
+   * refetch the canonical `compact_boundary` message replaces it.
+   */
+  _resolveCompactionPart: status => {
+    set(s => {
+      const msgs = [...s.messages]
+      const last = msgs[msgs.length - 1]
+      if (last?.type !== 'assistant') return s
+
+      let parts
+      if (status === 'noop') {
+        parts = last.parts.filter(p => p.type !== 'compaction_start')
+      } else {
+        parts = [...last.parts]
+        for (let i = parts.length - 1; i >= 0; i--) {
+          if (parts[i].type === 'compaction_start') {
+            parts[i] = { type: 'compaction_done', status }
+            break
+          }
+        }
+      }
+      msgs[msgs.length - 1] = { ...last, parts }
+      return { messages: msgs }
+    })
+  },
+
+  /**
    * Full compact updates agent memory but JSONL keeps the complete transcript.
    * Refetch from the server instead of truncating local UI.
    */
@@ -644,8 +682,13 @@ export const useChatStore = create((set, get) => ({
     const last = s.messages[s.messages.length - 1]
     let streamingAssistant = null
     if (s.isStreaming && last?.type === 'assistant') {
+      // Drop the transitional compaction parts: the refetched transcript
+      // carries the canonical compact_boundary marker instead.
       const parts = last.parts.filter(
-        p => p.type !== 'compaction_start' && p.type !== 'thinking',
+        p =>
+          p.type !== 'compaction_start' &&
+          p.type !== 'compaction_done' &&
+          p.type !== 'thinking',
       )
       streamingAssistant = { ...last, parts }
     }

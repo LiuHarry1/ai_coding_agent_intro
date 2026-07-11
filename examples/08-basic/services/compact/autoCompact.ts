@@ -334,6 +334,9 @@ export async function compactIfNeeded(
         `[compact] full-compact DONE — no change (summarizer returned empty), ` +
           `msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}`,
       )
+      // Settle the client's progress UI: compaction_start must always be
+      // paired with a compaction_done, even when nothing was rewritten.
+      wire.compactionDone({ status: 'noop' })
       return working
     }
 
@@ -345,6 +348,7 @@ export async function compactIfNeeded(
       messagesBefore: msgsBeforeFull,
     })
     wire.compactionDone({
+      status: 'ok',
       messages_after: result.messages.length,
       tokens_after: result.estimatedTokensAfter,
     })
@@ -361,6 +365,7 @@ export async function compactIfNeeded(
       `[compact] full-compact FAILED — msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}: ${msg}`,
     )
     eventBus.emit('compaction_error', { error: msg })
+    wire.compactionDone({ status: 'error' })
     return working
   }
 }

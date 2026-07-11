@@ -198,12 +198,14 @@ export class WireEmitter {
   }
 
   compactionDone(data: {
+    status?: 'ok' | 'noop' | 'error'
     messages_after?: number
     tokens_after?: number
   }): void {
     this.emit({
       type: 'system',
       subtype: 'compaction_done',
+      status: data.status,
       messages_after: data.messages_after,
       tokens_after: data.tokens_after,
       ...this.#env,

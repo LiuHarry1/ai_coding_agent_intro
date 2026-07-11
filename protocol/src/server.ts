@@ -193,6 +193,14 @@ export const CompactionStartMessageSchema = z.object({
 export const CompactionDoneMessageSchema = z.object({
   type: z.literal('system'),
   subtype: z.literal('compaction_done'),
+  /**
+   * How the compaction attempt ended. Every compaction_start is guaranteed
+   * a matching compaction_done so clients can settle their progress UI:
+   *   ok    — history was summarized (default when absent)
+   *   noop  — summarizer produced no change, nothing was rewritten
+   *   error — summarization failed, conversation left untouched
+   */
+  status: z.enum(['ok', 'noop', 'error']).optional(),
   messages_after: z.number().optional(),
   tokens_after: z.number().optional(),
   ...envelopeFields,

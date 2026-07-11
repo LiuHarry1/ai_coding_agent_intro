@@ -6,6 +6,8 @@ import { pickCard, SUPPRESSED_TOOL_CARDS } from './pickToolCard.js'
 import { isPlanFileWrite } from '../lib/plan-utils.js'
 import AskUserQuestionCard from './AskUserQuestionCard.jsx'
 import PlanApprovalCard from './PlanApprovalCard.jsx'
+import ToolRowHeader from './ToolRowHeader.jsx'
+import CopyButton from './CopyButton.jsx'
 import { getMdComponents } from '../lib/markdown-components.jsx'
 
 function ThinkingDots() {
@@ -64,34 +66,56 @@ function ReasoningBlock({ part }) {
   )
 }
 
-function CompactionNotice({ part }) {
-  return (
-    <div className='compaction-notice'>
-      <div className='dot' />
-      <div className='dot' />
-      <div className='dot' />
-      <span>
-        Compacting context ({part.totalMessages} &rarr; {part.keeping}{' '}
-        messages)...
-      </span>
-    </div>
-  )
-}
+/**
+ * Single timeline row for full compaction. Rides on ToolRowHeader so it
+ * shares the exact visual language of the tool rows around it
+ * (mono font, spinner while running, chevron when expandable).
+ * state: 'running' | 'done' | 'error'.
+ */
+function CompactionRow({ state, summary }) {
+  const [expanded, setExpanded] = useState(false)
+  const expandable = state === 'done' && !!summary
 
-function CompactBoundaryNotice({ message }) {
+  if (state === 'running') {
+    return (
+      <div className='tool-row compaction-row'>
+        <ToolRowHeader
+          showChevron={false}
+          label={'Summarizing chat context\u2026'}
+          isDone={false}
+        />
+      </div>
+    )
+  }
+
+  if (state === 'error') {
+    return (
+      <div className='tool-row compaction-row has-error'>
+        <ToolRowHeader
+          showChevron={false}
+          label='Chat context summarization failed'
+          isDone
+          isError
+        />
+      </div>
+    )
+  }
+
   return (
-    <div className='compaction-notice done compact-boundary'>
-      <details>
-        <summary>
-          &#10003; Conversation compacted
-          {message.messagesBefore
-            ? ` (${message.messagesBefore} messages summarized)`
-            : ''}
-        </summary>
-        {message.summary ? (
-          <pre className='compaction-summary'>{message.summary}</pre>
-        ) : null}
-      </details>
+    <div className='tool-row compaction-row'>
+      <ToolRowHeader
+        expanded={expanded}
+        onToggle={expandable ? () => setExpanded(v => !v) : undefined}
+        showChevron={expandable}
+        label='Chat context summarized'
+        isDone
+        actions={
+          summary ? <CopyButton text={summary} label='Copy' inline /> : null
+        }
+      />
+      {expanded && expandable && (
+        <pre className='compaction-summary'>{summary}</pre>
+      )}
     </div>
   )
 }
@@ -267,7 +291,7 @@ export default function MessageBubble({ message }) {
   if (message.type === 'compact_boundary') {
     return (
       <div className='msg msg-compact-boundary'>
-        <CompactBoundaryNotice message={message} />
+        <CompactionRow state='done' summary={message.summary} />
       </div>
     )
   }
@@ -387,7 +411,14 @@ export default function MessageBubble({ message }) {
           case 'todo_list':
             return <TodoListCard key={i} part={part} />
           case 'compaction_start':
-            return <CompactionNotice key={i} part={part} />
+            return <CompactionRow key={i} state='running' />
+          case 'compaction_done':
+            return (
+              <CompactionRow
+                key={i}
+                state={part.status === 'error' ? 'error' : 'done'}
+              />
+            )
           case 'error':
             return <ErrorBlock key={i} message={part.message} />
           default:
