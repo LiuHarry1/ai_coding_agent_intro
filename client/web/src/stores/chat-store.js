@@ -275,9 +275,20 @@ export const useChatStore = create((set, get) => ({
 
       if (!res.ok) {
         const errText = await res.text()
+        // Server error bodies are JSON ({ error: "..." }) — show the human
+        // message, not the raw payload. 409 = a previous turn (possibly a
+        // slow context compaction) is still running for this session.
+        let friendly = errText
+        try {
+          const parsed = JSON.parse(errText)
+          if (parsed?.error) friendly = parsed.error
+        } catch {
+          /* not JSON — show as-is */
+        }
         get()._appendPart({
           type: 'error',
-          message: `HTTP ${res.status}: ${errText}`,
+          message:
+            res.status === 409 ? friendly : `HTTP ${res.status}: ${friendly}`,
         })
         set({ isStreaming: false, abortController: null })
         return

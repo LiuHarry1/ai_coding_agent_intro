@@ -42,7 +42,7 @@ export interface RunChatTurnInput {
   session: Session
   cwd: string
   runAgent: RunAgentFn
-  /** Protocol sink — use noop transport when the client wants buffered JSON. */
+  /** Protocol sink -- use noop transport when the client wants buffered JSON. */
   transport: SSETransport
   images?: string[]
   mode?: string
@@ -71,7 +71,7 @@ const noopTransport: SSETransport = {
   end() {},
 }
 
-/** Buffered JSON responses — wire emits are dropped. */
+/** Buffered JSON responses -- wire emits are dropped. */
 export function createNoopTransport(): SSETransport {
   return noopTransport
 }
@@ -154,7 +154,7 @@ export async function runChatTurn(
   if (prepared.forkSkill) {
     const streaming = http?.wantsStream ?? true
     await respondSkillFork({
-      // SSE: chat route already opened the transport — reuse it.
+      // SSE: chat route already opened the transport -- reuse it.
       res: http && !streaming ? http.res : undefined,
       stdioTransport: streaming ? transport : undefined,
       skill: prepared.forkSkill.entry.def,
@@ -229,20 +229,20 @@ export async function runChatTurn(
         session.messages.push(...managed)
         appendCompaction(session.id, session.messages)
         const tokensAfter = tokenCountWithEstimation(session.messages).total
-        const tokenLine = `~${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens`
+        const tokenLine = `~${tokensBefore.toLocaleString()} -> ~${tokensAfter.toLocaleString()} tokens`
         if (session.messages.length === 1) {
           replyText =
-            `Compacted: ${msgsBefore} → 1 message, ${tokenLine}.` +
+            `Compacted: ${msgsBefore} -> 1 message, ${tokenLine}.` +
             (instructions ? `\nFocus: ${instructions}` : '')
         } else {
           replyText =
-            `Partially compacted (full summary unavailable — cleared old tool ` +
-            `outputs only): ${msgsBefore} → ${session.messages.length} messages, ${tokenLine}.`
+            `Partially compacted (full summary unavailable -- cleared old tool ` +
+            `outputs only): ${msgsBefore} -> ${session.messages.length} messages, ${tokenLine}.`
         }
       } else {
         replyText =
           msgsBefore < 2
-            ? 'Nothing to compact yet — the conversation is too short.'
+            ? 'Nothing to compact yet -- the conversation is too short.'
             : 'Compaction did not reduce the conversation (summarizer returned no change).'
       }
     } catch (e) {

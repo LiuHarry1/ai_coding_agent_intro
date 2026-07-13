@@ -1,5 +1,5 @@
 /**
- * Tool execution orchestration — services/tools/toolExecution.ts
+ * Tool execution orchestration -- services/tools/toolExecution.ts
  * Consecutive concurrency-safe calls run in parallel; mutating tools serially.
  */
 import type { AnyTool, Message, ToolMessage } from '../../core/types.js'
@@ -156,7 +156,7 @@ export async function runToolCalls(
   for (const batch of batches) {
     if (batch.isConcurrencySafe && batch.calls.length > 1) {
       console.log(
-        `[agent] tool batch: parallel ×${batch.calls.length} (${batch.calls.map(c => c.toolName).join(', ')})`,
+        `[agent] tool batch: parallel x${batch.calls.length} (${batch.calls.map(c => c.toolName).join(', ')})`,
       )
       allResults.push(
         ...(await executeBatchParallel(

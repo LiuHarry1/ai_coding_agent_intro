@@ -1,6 +1,12 @@
 import { randomUUID } from 'crypto'
 import type { IncomingMessage, ServerResponse } from 'http'
-import { createSession, getSession, canAccessSession } from '../session.js'
+import {
+  createSession,
+  getSession,
+  canAccessSession,
+  tryBeginTurn,
+  endTurn,
+} from '../session.js'
 import { createSSETransport } from '../sse-transport.js'
 import { readBody, sendJSON, wantsStreamingResponse } from '../http.js'
 import { sessionToUIMessages } from '../session-ui.js'
@@ -74,6 +80,50 @@ export async function handleChat(
     session = createSession(requesterEmail)
   }
 
+  // One turn per session. A duplicate send while a slow step (e.g. full
+  // compaction) is running must not spawn a concurrent run over the same
+  // message history — that's how repeated compact boundaries pile up.
+  if (!tryBeginTurn(session.id)) {
+    sendJSON(res, 409, {
+      error:
+        'A previous message is still being processed for this session ' +
+        '(possibly compacting context). Please wait for it to finish.',
+      session_id: session.id,
+    })
+    return
+  }
+
+  try {
+    await handleChatLocked(req, res, runAgent, session, {
+      message,
+      images,
+      mode,
+      wantsStream,
+      cwd,
+      requesterEmail,
+    })
+  } finally {
+    endTurn(session.id)
+  }
+}
+
+/** The per-session turn mutex is held for the duration of this function. */
+async function handleChatLocked(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runAgent: RunAgentFn,
+  session: NonNullable<ReturnType<typeof getSession>>,
+  opts: {
+    message: string
+    images?: string[]
+    mode?: string
+    wantsStream: boolean
+    cwd: string
+    requesterEmail?: string
+  },
+): Promise<void> {
+  const { message, images, mode, wantsStream, cwd, requesterEmail } = opts
+
   if (!session.permissionMode) {
     session.permissionMode = { mode: 'agent' }
   }
@@ -93,8 +143,11 @@ export async function handleChat(
     appendModeChange(session.id, session)
   }
 
+  // Preview: collapse newlines to keep one log entry per line, and slice by
+  // code points (not UTF-16 units) so a wide char is never cut in half.
+  const preview = [...message.replace(/\s+/g, ' ')].slice(0, 80).join('')
   console.log(
-    `[server] chat [session:${session.id.slice(0, 8)}] [mode:${session.permissionMode.mode}] [${session.messages.length} prior msgs] ${message.slice(0, 80)}`,
+    `[server] chat [session:${session.id.slice(0, 8)}] [mode:${session.permissionMode.mode}] [${session.messages.length} prior msgs] ${preview}`,
   )
 
   const eventBus = new EventBus()

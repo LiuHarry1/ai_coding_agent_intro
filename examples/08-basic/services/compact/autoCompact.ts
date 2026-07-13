@@ -12,10 +12,7 @@ import type {
 import type { WireEmitter } from '../../core/wire-emitter.js'
 import { isRoleMessage } from '../../core/types.js'
 import { DEFAULTS } from '../../core/settings-manager.js'
-import {
-  tokenCountWithEstimation,
-  estimateConversationTokens,
-} from './tokens.js'
+import { tokenCountWithEstimation } from './tokens.js'
 import { microCompact } from './microCompact.js'
 import {
   compactConversation,
@@ -76,7 +73,7 @@ function getCompactionConfig(base?: CompactionConfig) {
  * When the gap since the last assistant message exceeds the TTL, the prompt
  * cache has almost certainly expired, so the prefix will be rewritten anyway.
  * will be rewritten regardless. Clearing old tool payloads (content-mutating
- * micro) before the next request shrinks what gets rewritten — and only does
+ * micro) before the next request shrinks what gets rewritten -- and only does
  * so when the mutation is "free" (cache already cold).
  *
  * Returns true when the time-based trigger should fire.
@@ -185,7 +182,7 @@ export interface CompactOptions {
  *   1. Check enabled + circuit breaker
  *   2. Emit warning if approaching threshold
  *   3. Micro-compact (clear old tool payloads, no LLM)
- *   4. If still over threshold → full LLM summarization of ALL messages
+ *   4. If still over threshold -> full LLM summarization of ALL messages
  *   5. Post-compact: re-inject files, todos, skill refs
  */
 export async function compactIfNeeded(
@@ -248,7 +245,7 @@ export async function compactIfNeeded(
     })
   }
 
-  // STEP 1 — micro-compaction (pre-pass to reduce summarizer input)
+  // STEP 1 -- micro-compaction (pre-pass to reduce summarizer input)
   let working = messages
   const microKeep = aggressive ? 1 : cfg.microCompactKeepRecent
   // Time-based trigger fires regardless of token pressure: when the cache is
@@ -265,7 +262,7 @@ export async function compactIfNeeded(
     aggressive || force || tokens >= microThreshold || timeBased
   if (shouldMicro) {
     console.log(
-      `[compact] micro-compact START — msgs=${working.length}, tokens≈${tokens.toLocaleString()}, ` +
+      `[compact] micro-compact START -- msgs=${working.length}, tokens~${tokens.toLocaleString()}, ` +
         `microThreshold=${microThreshold.toLocaleString()}, keepRecent=${microKeep}` +
         (aggressive ? ', aggressive' : '') +
         (force ? ', force' : '') +
@@ -275,7 +272,13 @@ export async function compactIfNeeded(
     )
     const tokensBeforeMicro = tokens
     const r = microCompact(working, microKeep, sessionId)
-    tokens = estimateConversationTokens(r.messages)
+    // CC-aligned (shouldAutoCompact's snipTokensFreed): keep the accurate
+    // usage-anchored count and subtract what micro freed. The previous code
+    // recomputed with pure chars/4 estimation here, which badly undercounts
+    // CJK conversations AND drops the system-prompt/tools overhead baked
+    // into real usage -- observed 221k real -> "167k estimated" right at the
+    // threshold, i.e. compaction firing only after the real window was blown.
+    tokens = Math.max(0, tokensBeforeMicro - r.tokensFreed)
     if (r.cleared > 0) {
       eventBus.emit('compaction_micro', {
         cleared: r.cleared,
@@ -284,12 +287,12 @@ export async function compactIfNeeded(
       working = r.messages
     }
     console.log(
-      `[compact] micro-compact DONE — cleared=${r.cleared}, freed≈${r.tokensFreed.toLocaleString()} tokens, ` +
-        `tokens ${tokensBeforeMicro.toLocaleString()} → ${tokens.toLocaleString()}, msgs=${working.length}`,
+      `[compact] micro-compact DONE -- cleared=${r.cleared}, freed~${r.tokensFreed.toLocaleString()} tokens, ` +
+        `tokens ${tokensBeforeMicro.toLocaleString()} -> ${tokens.toLocaleString()}, msgs=${working.length}`,
     )
   }
 
-  // STEP 2 — full LLM summarization (summarize ALL, no tail)
+  // STEP 2 -- full LLM summarization (summarize ALL, no tail)
   if (!force && !aggressive && tokens < threshold) {
     return working
   }
@@ -297,7 +300,7 @@ export async function compactIfNeeded(
   const msgsBeforeFull = working.length
   const tokensBeforeFull = tokens
   console.log(
-    `[compact] full-compact START — msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}, ` +
+    `[compact] full-compact START -- msgs=${msgsBeforeFull}, tokens~${tokensBeforeFull.toLocaleString()}, ` +
       `fullThreshold=${threshold.toLocaleString()}` +
       (aggressive ? ', aggressive' : '') +
       (force ? ', force' : ''),
@@ -325,14 +328,19 @@ export async function compactIfNeeded(
     instructions: opts.instructions,
     provider,
     enrichment: opts.enrichment,
+    // Aggressive compaction means the context already blew past the real
+    // window -- re-injecting up to fileBudget tokens of file contents right
+    // after shrinking it is the recompaction-loop amplifier. The model can
+    // re-read files on demand.
+    skipFileRestore: aggressive,
   }
 
   try {
     const result = await compactConversation(working, mainModel, ctx)
     if (!result) {
       console.log(
-        `[compact] full-compact DONE — no change (summarizer returned empty), ` +
-          `msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}`,
+        `[compact] full-compact DONE -- no change (summarizer returned empty), ` +
+          `msgs=${msgsBeforeFull}, tokens~${tokensBeforeFull.toLocaleString()}`,
       )
       // Settle the client's progress UI: compaction_start must always be
       // paired with a compaction_done, even when nothing was rewritten.
@@ -352,17 +360,33 @@ export async function compactIfNeeded(
       messages_after: result.messages.length,
       tokens_after: result.estimatedTokensAfter,
     })
+    // CC's willRetriggerNextTurn signal: if the freshly-compacted context is
+    // already at/over the threshold, the next turn will compact again -- a
+    // recompaction loop. Surface it loudly so it's diagnosable from logs.
+    const willRetriggerNextTurn = result.estimatedTokensAfter >= threshold
+    if (willRetriggerNextTurn) {
+      console.warn(
+        `[compact] WARNING: post-compact context (~${result.estimatedTokensAfter.toLocaleString()} tokens) ` +
+          `still >= threshold (${threshold.toLocaleString()}) -- compaction will re-trigger next turn. ` +
+          `Check contextWindow config, file restore budget, and oversized tool results.`,
+      )
+      eventBus.emit('compaction_will_retrigger', {
+        tokensAfter: result.estimatedTokensAfter,
+        threshold,
+      })
+    }
     console.log(
-      `[compact] full-compact DONE — msgs ${msgsBeforeFull} → ${result.messages.length}, ` +
-        `tokens≈${tokensBeforeFull.toLocaleString()} → ${result.estimatedTokensAfter.toLocaleString()}, ` +
-        `summaryChars=${result.summaryLength.toLocaleString()}`,
+      `[compact] full-compact DONE -- msgs ${msgsBeforeFull} -> ${result.messages.length}, ` +
+        `tokens~${tokensBeforeFull.toLocaleString()} -> ${result.estimatedTokensAfter.toLocaleString()}, ` +
+        `summaryChars=${result.summaryLength.toLocaleString()}` +
+        (willRetriggerNextTurn ? ', WILL-RETRIGGER' : ''),
     )
     return result.messages
   } catch (error) {
     consecutiveFailures++
     const msg = error instanceof Error ? error.message : String(error)
     console.error(
-      `[compact] full-compact FAILED — msgs=${msgsBeforeFull}, tokens≈${tokensBeforeFull.toLocaleString()}: ${msg}`,
+      `[compact] full-compact FAILED -- msgs=${msgsBeforeFull}, tokens~${tokensBeforeFull.toLocaleString()}: ${msg}`,
     )
     eventBus.emit('compaction_error', { error: msg })
     wire.compactionDone({ status: 'error' })

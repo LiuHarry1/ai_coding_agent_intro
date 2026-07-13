@@ -24,6 +24,29 @@ function sessionPath(id: string): string {
   return path.join(SESSION_DIR, `${id}.jsonl`)
 }
 
+// ── In-flight turn mutex ────────────────────────
+//
+// One running turn per session. Without this, a user resending a message
+// while a slow step (e.g. a ~30s full compaction) is still running spawns a
+// CONCURRENT turn over the same messages array: both turns compact the same
+// oversized history, checkpoints race, and the transcript accumulates one
+// compact boundary per resend. CC avoids the whole class by design (the REPL
+// is single-threaded and queues input); for an HTTP server the equivalent is
+// rejecting concurrent turns on the same session.
+
+const activeTurns = new Set<string>()
+
+/** Returns false when a turn is already running for this session. */
+export function tryBeginTurn(sessionId: string): boolean {
+  if (activeTurns.has(sessionId)) return false
+  activeTurns.add(sessionId)
+  return true
+}
+
+export function endTurn(sessionId: string): void {
+  activeTurns.delete(sessionId)
+}
+
 export function createSession(ownerEmail?: string): Session {
   const id = randomUUID()
   const session: Session = {

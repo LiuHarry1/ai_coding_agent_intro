@@ -64,28 +64,74 @@ export interface AttachedTokenUsage {
 
 const tokenUsageMap = new WeakMap<object, AttachedTokenUsage>()
 
+/**
+ * Attach usage BOTH to the WeakMap (fast path, identity-keyed) and onto the
+ * message record itself (CC-aligned) so it persists to JSONL and survives
+ * session restore / server restart.
+ */
 export function attachTokenUsage(
   msg: Message,
   usage: AttachedTokenUsage,
 ): void {
   tokenUsageMap.set(msg, usage)
+  if (isRoleMessage(msg) && msg.role === 'assistant') {
+    msg.usage = usage
+  }
 }
 
 export function readTokenUsage(msg: Message): AttachedTokenUsage | undefined {
-  return tokenUsageMap.get(msg)
+  const fromMap = tokenUsageMap.get(msg)
+  if (fromMap) return fromMap
+  // Restored-from-disk messages carry usage on the record itself.
+  if (isRoleMessage(msg) && msg.role === 'assistant' && msg.usage) {
+    return msg.usage
+  }
+  return undefined
 }
 
 export function clearTokenUsages(messages: Message[]): void {
-  for (const m of messages) tokenUsageMap.delete(m)
+  for (const m of messages) {
+    tokenUsageMap.delete(m)
+    if (isRoleMessage(m) && m.role === 'assistant' && m.usage) {
+      delete m.usage
+    }
+  }
 }
 
+/**
+ * Full context size from usage (CC getTokenCountFromUsage: input + cache
+ * creation/read + output). Provider quirk handled defensively:
+ *   - Anthropic-style: inputTokens EXCLUDES cache reads → cached must be added.
+ *   - OpenAI-compatible-style: prompt_tokens INCLUDES cached_tokens → adding
+ *     would double-count.
+ * Heuristic: cached > input can only happen when they're disjoint counters,
+ * so add; otherwise assume cached ⊆ input. Also never trust a `totalTokens`
+ * smaller than the parts we can see.
+ */
 function tokenCountFromUsage(u: AttachedTokenUsage): number {
-  if (typeof u.totalTokens === 'number' && u.totalTokens > 0)
-    return u.totalTokens
-  return (u.inputTokens ?? 0) + (u.outputTokens ?? 0)
+  const input = u.inputTokens ?? 0
+  const output = u.outputTokens ?? 0
+  const cached = u.cachedInputTokens ?? 0
+  const inputWithCache = cached > input ? input + cached : input
+  const fromParts = inputWithCache + output
+  const total = typeof u.totalTokens === 'number' ? u.totalTokens : 0
+  return Math.max(total, fromParts)
 }
 
 // ── Hybrid counting (real + estimate) ───────────────────
+
+/**
+ * Conservative padding applied to chars/4 estimates in threshold decisions
+ * (CC-aligned: "Pad estimate by 4/3 to be conservative since we're
+ * approximating"). Matters a lot for CJK-heavy conversations where the real
+ * ratio is closer to 1 token/char — unpadded chars/4 undercounts ~4x and
+ * lets the context blow past the real window before compaction triggers.
+ */
+const ESTIMATE_PAD = 4 / 3
+
+function padEstimate(tokens: number): number {
+  return Math.ceil(tokens * ESTIMATE_PAD)
+}
 
 /**
  * Canonical token-count for threshold checks:
@@ -142,6 +188,7 @@ export function tokenCountWithEstimation(messages: Message[]): {
       if (j === i) continue // skip the usage-bearing message itself
       estimatedDelta += estimateMessageTokens(messages[j])
     }
+    estimatedDelta = padEstimate(estimatedDelta)
     return {
       total: realBaseline + estimatedDelta,
       source: 'real+est',
@@ -150,7 +197,7 @@ export function tokenCountWithEstimation(messages: Message[]): {
     }
   }
   return {
-    total: estimateConversationTokens(messages),
+    total: padEstimate(estimateConversationTokens(messages)),
     source: 'est',
   }
 }

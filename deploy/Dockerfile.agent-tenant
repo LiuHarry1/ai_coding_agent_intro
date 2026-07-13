@@ -33,7 +33,12 @@
 #   docker-compose.yml shows the env-injection pattern.
 
 ARG BASE_TAG=latest
-FROM ai-agent-base:${BASE_TAG}
+FROM 10.150.115.69:80/dice-zero/ai-agent-base:${BASE_TAG}
+
+# UTF-8 locale — agent logs include CJK user text; a non-UTF-8 locale makes
+# in-container shells/pagers (docker exec + less, etc.) show <E4><BD>… bytes.
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 # Copy this deployment's agent config (agents/, skills/, commands/,
 # settings.json, ...). Anything not present here falls back to the agent

@@ -212,6 +212,10 @@ function replaySessionJsonl(sessionId: string): JsonlReplayItem[] {
         summary,
         messagesBefore: transcriptLineCount,
       })
+      // Lines up to here were consumed by THIS compaction. Reset so the next
+      // boundary reports its own span, not a session-lifetime running total
+      // (which showed ever-growing "(N messages summarized)" counts).
+      transcriptLineCount = 0
     }
   }
 

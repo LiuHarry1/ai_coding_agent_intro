@@ -26,14 +26,14 @@ const NO_TOOLS_PREAMBLE = `CRITICAL: Respond with TEXT ONLY. Do NOT call any too
 
 - Do NOT use Read, Bash, Grep, Glob, Edit, Write, or ANY other tool.
 - You already have all the context you need in the conversation above.
-- Tool calls will be REJECTED and will waste your only turn — you will fail the task.
+- Tool calls will be REJECTED and will waste your only turn -- you will fail the task.
 - Your entire response must be plain text: an <analysis> block followed by a <summary> block.
 
 `
 
 // weaker reminder repeated at the very end as a trailer.
 const NO_TOOLS_TRAILER =
-  '\n\nREMINDER: Do NOT call any tools. Respond with plain text only — ' +
+  '\n\nREMINDER: Do NOT call any tools. Respond with plain text only -- ' +
   'an <analysis> block followed by a <summary> block. ' +
   'Tool calls will be rejected and you will fail the task.'
 
@@ -153,7 +153,7 @@ export interface FileRestoreConfig {
 
 export interface CompactResult {
   messages: Message[]
-  /** Raw summary text (without restored files/todos) — for UI display. */
+  /** Raw summary text (without restored files/todos) -- for UI display. */
   summary: string
   summaryLength: number
   estimatedTokensAfter: number
@@ -169,6 +169,11 @@ export interface CompactContext {
   provider?: IProvider
   /** Re-inject agent/skill listings after full compact (CC-aligned). */
   enrichment?: CompactEnrichment
+  /**
+   * Skip re-injecting recently-read file contents (aggressive/reactive
+   * compaction -- the context just overflowed; don't re-inflate it).
+   */
+  skipFileRestore?: boolean
 }
 
 // MAX_PTL_RETRIES = 3. If the summarizer call itself overflows,
@@ -205,7 +210,7 @@ function dropOldestApiRound(messages: Message[]): Message[] {
         return messages.slice(i)
       }
     }
-    // Only one round carries an id — fall through to coarser strategies.
+    // Only one round carries an id -- fall through to coarser strategies.
   }
 
   // 2) user-boundary: drop up to the second user message.
@@ -280,11 +285,11 @@ export async function compactConversation(
         const before = pending.length
         pending = dropOldestApiRound(pending)
         if (pending.length === before || pending.length < 2) {
-          // Couldn't shrink further — give up rather than loop uselessly.
+          // Couldn't shrink further -- give up rather than loop uselessly.
           throw error
         }
         console.warn(
-          `[compact] PTL recovery: dropped oldest API round (${before} → ${pending.length} msgs), retrying`,
+          `[compact] PTL recovery: dropped oldest API round (${before} -> ${pending.length} msgs), retrying`,
         )
         continue
       }
@@ -296,7 +301,9 @@ export async function compactConversation(
 
   clearTokenUsages(messages)
 
-  const recentFiles = extractRecentlyReadFiles(messages)
+  const recentFiles = ctx.skipFileRestore
+    ? []
+    : extractRecentlyReadFiles(messages)
   const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore)
   const summaryMessages = buildPostCompactMessages(summary, fileSection, ctx.todos)
   const attachmentMessages = ctx.enrichment
@@ -319,7 +326,7 @@ function buildPostCompactMessages(
   fileSection: string,
   todos: TodoItem[],
 ): Message[] {
-  let content = `[Previous conversation compacted — context continues below]\n\n${summary}`
+  let content = `[Previous conversation compacted -- context continues below]\n\n${summary}`
 
   if (fileSection) {
     content += `\n\n${fileSection}`
@@ -330,7 +337,7 @@ function buildPostCompactMessages(
     content += `\n\n## Active Todo List\nUpdate via todo_write(merge=true) as you complete items:\n${todoLines.join('\n')}`
   }
 
-  content += `\n\nContinue from where you left off without asking questions. Resume directly — do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.`
+  content += `\n\nContinue from where you left off without asking questions. Resume directly -- do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.`
 
   return [{ role: 'user', content, isCompactSummary: true }]
 }

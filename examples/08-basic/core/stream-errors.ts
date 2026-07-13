@@ -18,6 +18,13 @@ export function isContextLengthError(err: unknown): boolean {
   const status = e.statusCode ?? e.status
   if (status === 413) return true
   const msg = ((e.message ?? '') + ' ' + (e.cause?.message ?? '')).toLowerCase()
+  // Rate-limit errors from gateways often mention tokens too ("too many
+  // tokens per minute", "token limit exceeded") — those need a retry/backoff,
+  // NOT compaction. Misclassifying them fires a full LLM summarization on
+  // every throttled turn.
+  if (status === 429 || msg.includes('rate limit') || msg.includes('rate_limit')) {
+    return false
+  }
   return (
     msg.includes('context length') ||
     msg.includes('context_length') ||
@@ -47,6 +54,9 @@ export function isTransientStreamError(err: unknown): boolean {
   }
   const status = e.statusCode ?? e.status
   if (status === 502 || status === 503 || status === 504) return true
+  // Rate limits are retryable-with-backoff, never compactable (see
+  // isContextLengthError above).
+  if (status === 429) return true
   const code = e.code ?? e.cause?.code ?? ''
   if (
     code === 'ECONNRESET' ||
@@ -58,6 +68,8 @@ export function isTransientStreamError(err: unknown): boolean {
   }
   const msg = ((e.message ?? '') + ' ' + (e.cause?.message ?? '')).toLowerCase()
   return (
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit') ||
     msg.includes('terminated') ||
     msg.includes('other side closed') ||
     msg.includes('socket hang up') ||

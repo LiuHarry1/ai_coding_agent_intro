@@ -29,7 +29,7 @@ export function startServer({ runAgent }: ServerOptions): void {
 
   // Static hosting is opt-out via SERVE_STATIC=0 (or "false"). Default keeps
   // serving the bundled SPA so local `npm start` and the Electron shell are
-  // unchanged. Set SERVE_STATIC=0 to run a pure headless API — the mode you
+  // unchanged. Set SERVE_STATIC=0 to run a pure headless API -- the mode you
   // want when the frontend is deployed separately and talks cross-origin.
   const serveStatic = !['0', 'false', 'no'].includes(
     (process.env.SERVE_STATIC ?? '').toLowerCase(),
@@ -62,10 +62,10 @@ export function startServer({ runAgent }: ServerOptions): void {
 
   server.listen(PORT, () => {
     console.log(`[server] listening on http://localhost:${PORT}`)
-    console.log(`[server]   POST /sessions     — create session`)
-    console.log(`[server]   GET  /sessions     — list sessions`)
-    console.log(`[server]   DELETE /sessions/id — delete session`)
-    console.log(`[server]   POST /chat         — chat (SSE stream)`)
+    console.log(`[server]   POST /sessions     -- create session`)
+    console.log(`[server]   GET  /sessions     -- list sessions`)
+    console.log(`[server]   DELETE /sessions/id -- delete session`)
+    console.log(`[server]   POST /chat         -- chat (SSE stream)`)
     if (staticDir) {
       console.log(`[server]   Static files from: ${distDir}`)
     }

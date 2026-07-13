@@ -135,3 +135,4 @@ docker compose -f deploy/docker-compose.admin.yml down            # 停止
 | 页面空白 | web 镜像构建失败,用 `docker build --no-cache -f deploy/Dockerfile.web -t ai-agent-web:latest .` 重建。 |
 | sso 登录回跳被拒(400) | 把 `FRONTEND_ORIGIN` 加进 auth-service 的 `SSO_ALLOWED_RETURN_ORIGINS` 和 `CORS_ALLOWED_ORIGINS`。 |
 | sso 登录跳到 localhost | 没设 `AUTH_PUBLIC_URL`,改成真实 auth-service 源。 |
+| 日志里中文显示为 `<E4><BD>…` 乱码 | 日志本身是合法 UTF-8,是查看端 locale 不对。SSH/终端里先 `export LANG=C.UTF-8 LESSCHARSET=utf-8` 再看;`docker logs` 输出别经过非 UTF-8 的 pager。容器内已默认 `LANG=C.UTF-8`。 |

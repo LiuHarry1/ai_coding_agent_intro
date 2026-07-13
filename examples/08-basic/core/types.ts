@@ -196,6 +196,20 @@ export interface AssistantMessage {
    * cache has likely gone cold past the TTL). Optional for backward-compat.
    */
   timestamp?: number
+  /**
+   * Real API usage from the response that produced this message (CC-aligned:
+   * usage lives ON the message so it persists to JSONL and survives session
+   * restore — the previous WeakMap-only storage lost the accurate baseline on
+   * every server restart, forcing threshold checks onto chars/4 estimation
+   * which badly undercounts CJK text). Optional for backward-compat.
+   */
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+    cachedInputTokens?: number
+    reasoningTokens?: number
+  }
 }
 
 export interface ToolResultOutput {

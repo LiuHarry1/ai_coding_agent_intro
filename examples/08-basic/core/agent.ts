@@ -103,7 +103,7 @@ function autoCompleteTodos(
 
 function formatTodoReminder(todos: TodoItem[]): string {
   const lines = todos.map(t => `- [${t.status}] ${t.id}: ${t.content}`)
-  return `[Active todo list — update via ${TODO_WRITE_TOOL_NAME}(merge=true) as you complete items]\n${lines.join('\n')}`
+  return `[Active todo list -- update via ${TODO_WRITE_TOOL_NAME}(merge=true) as you complete items]\n${lines.join('\n')}`
 }
 
 /**
@@ -200,7 +200,7 @@ function activateDeferredTools(
 //     compaction needed). Common with copilot-api on long bodies.
 const MAX_TRANSIENT_RETRIES = 2
 
-/** Plan approved — any of these in the same turn counts as implementation started. */
+/** Plan approved -- any of these in the same turn counts as implementation started. */
 const PLAN_IMPLEMENTATION_TOOLS = new Set([
   WRITE_FILE_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
@@ -371,7 +371,7 @@ export async function runAgent(
       ) {
         planBuildPending = false
         console.log(
-          '[agent] plan approved — implementation tool called, skipping build kickoff',
+          '[agent] plan approved -- implementation tool called, skipping build kickoff',
         )
       }
 
@@ -382,11 +382,11 @@ export async function runAgent(
             role: 'user',
             content: `<system-reminder>
 The user approved your plan and expects implementation to start now.
-Do not reply with a summary or status update only — call TodoWrite, Write, Edit, or Bash to make the first code change from the approved plan.
+Do not reply with a summary or status update only -- call TodoWrite, Write, Edit, or Bash to make the first code change from the approved plan.
 </system-reminder>`,
           })
           console.log(
-            '[agent] plan approved but no tools called — forcing implementation step',
+            '[agent] plan approved but no tools called -- forcing implementation step',
           )
           wire.thinking()
           continue
@@ -468,7 +468,7 @@ async function runCompactionAndLog(
         `(${counted.realBaseline?.toLocaleString()} real + ${counted.estimatedDelta?.toLocaleString()} est)`
       : `~${counted.total.toLocaleString()} tokens (est, no usage cached yet)`
   console.log(
-    `[agent] step ${step} start — ${messages.length} msgs, ${tokenLabel}, ` +
+    `[agent] step ${step} start -- ${messages.length} msgs, ${tokenLabel}, ` +
       `model=${resolvedModel}, llm=${provider.describe()}` +
       (compactMs > 50 ? `, compaction=${compactMs}ms` : ''),
   )
@@ -537,20 +537,20 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         model: provider.chatModel(resolvedModel),
         system: systemPrompt,
         // Seven-pass message preparation before the SDK sees them:
-        //   1. inlineReasoningAsText — rewrite reasoning blocks as
+        //   1. inlineReasoningAsText -- rewrite reasoning blocks as
         //      <thinking> text so the request is portable across stateless
         //      proxies (copilot-api, etc.).
-        //   2. expandAttachmentMessagesForAPI — inline attachment records
+        //   2. expandAttachmentMessagesForAPI -- inline attachment records
         //      into meta user messages (history keeps attachment type).
-        //   3. regroupToolResults — pull every tool-result back to
+        //   3. regroupToolResults -- pull every tool-result back to
         //      immediately follow the assistant that issued its tool-call.
-        //   4. mergeAdjacentUserMessages — collapse consecutive user
+        //   4. mergeAdjacentUserMessages -- collapse consecutive user
         //      messages (expanded attachments + real prompt).
-        //   5. smooshSystemReminderSiblings — fold SR siblings into
+        //   5. smooshSystemReminderSiblings -- fold SR siblings into
         //      simulated tool-result anchors / tool outputs.
-        //   6. ensureToolResultPairing — safety net for orphan/missing
+        //   6. ensureToolResultPairing -- safety net for orphan/missing
         //      tool-results.
-        //   7. applyCacheControlBreakpoint — prompt caching marker.
+        //   7. applyCacheControlBreakpoint -- prompt caching marker.
         messages: applyCacheControlBreakpoint(
           ensureToolResultPairing(
             smooshSystemReminderSiblings(
@@ -565,7 +565,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           ),
           provider,
         ) as RoleMessage[],
-        // Schema-only tools — execution is handled by toolOrchestration so
+        // Schema-only tools -- execution is handled by toolOrchestration so
         // we can batch concurrency-safe reads in parallel.
         tools: apiTools,
         maxOutputTokens: getMaxOutputTokens(),
@@ -599,8 +599,8 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       // We deliberately do NOT reorder here: a reasoning model can split a
       // turn into [assistant(tool-call), assistant(text)], which leaves the
       // tool message non-adjacent to its tool-call. That's repaired at
-      // request time by regroupToolResults() — keep raw history, normalize
-      // only before sending — so assembly stays a dumb append.
+      // request time by regroupToolResults() -- keep raw history, normalize
+      // only before sending -- so assembly stays a dumb append.
       const response = await stream.response
       const sdkMessages = (
         response.messages as unknown as RoleMessage[]
@@ -637,7 +637,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         // Don't fail the step over a missing telemetry counter.
       }
       // Cache real usage onto the last assistant message of this step's
-      // response — next step's tokenCountWithEstimation uses it as the
+      // response -- next step's tokenCountWithEstimation uses it as the
       // precise baseline.
       if (usage.inputTokens != null || usage.totalTokens != null) {
         for (let i = sdkMessages.length - 1; i >= 0; i--) {
@@ -667,7 +667,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       if (ctxLengthAttempt === 0 && isContextLengthError(err)) {
         const errMsg = err instanceof Error ? err.message : String(err)
         console.warn(
-          `[agent] step ${step} hit context-length error → reactive aggressive compaction. ${errMsg}`,
+          `[agent] step ${step} hit context-length error -> reactive aggressive compaction. ${errMsg}`,
         )
         eventBus.emit('compaction_reactive', { error: errMsg })
         const recompacted = await compactIfNeeded(
@@ -784,7 +784,7 @@ function logStepCompletion(a: LogArgs): void {
     usageParts.push(`cached=${fmt(a.usage.cachedInputTokens)}`)
   }
   console.log(
-    `[agent] step ${a.step} done — total=${totalMs}ms ` +
+    `[agent] step ${a.step} done -- total=${totalMs}ms ` +
       `(ttfb=${ttfb}ms upstream-wait, gen=${generationMs}ms streaming), ` +
       `usage[${usageParts.join(' ')}], ` +
       `reasoning_blocks=${reasoningCount}, tool_calls=${a.toolCallsLen}, ` +

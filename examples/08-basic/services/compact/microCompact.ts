@@ -55,6 +55,16 @@ const CLEARABLE_TOOL_INPUTS = new Set<string>([
   'NotebookEdit',
 ])
 
+/**
+ * Any tool result at least this large is clearable regardless of tool name.
+ * MCP tools (doc retrievers, memory search, ...) return some of the biggest
+ * payloads yet were invisible to the name-based whitelist — observed as
+ * `micro-compact DONE cleared=0` on a 167k-token conversation. CC solves the
+ * same problem with a size-based aggregate budget (enforceToolResultBudget)
+ * rather than tool names.
+ */
+const CLEARABLE_MIN_CHARS = 2_000
+
 function estStr(s: string): number {
   return Math.ceil(s.length / 4)
 }
@@ -133,9 +143,12 @@ function clearToolResults(
 ): ToolMessage {
   let touched = false
   const newContent = m.content.map(part => {
-    if (!CLEARABLE_TOOL_RESULTS.has(part.toolName)) return part
     const v = part.output?.value ?? ''
     const text = typeof v === 'string' ? v : JSON.stringify(v)
+    const clearable =
+      CLEARABLE_TOOL_RESULTS.has(part.toolName) ||
+      text.length >= CLEARABLE_MIN_CHARS
+    if (!clearable) return part
     if (text === MICRO_COMPACT_MARKER || isPersistedReference(text)) return part
     const replacement = offloadReferenceForCompact(
       sessionId,

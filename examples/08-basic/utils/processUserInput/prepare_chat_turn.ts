@@ -1,5 +1,5 @@
 /**
- * Prepare a chat turn before runAgent — processUserInput pipeline.
+ * Prepare a chat turn before runAgent -- processUserInput pipeline.
  * Slash resolution, per-request registry reload, tools, mode restrictions.
  * Attachments collected in agent loop via getAttachmentMessages.
  */
@@ -91,7 +91,7 @@ export async function resolveSlashCommand(
   } else if (slashResult.kind === 'run' && slashResult.mode === 'inline') {
     effectiveMessage = slashResult.text
     console.log(
-      `[server] expanded /${slashResult.entry.name} (${slashResult.entry.kind}) → ${effectiveMessage.length} char prompt`,
+      `[server] expanded /${slashResult.entry.name} (${slashResult.entry.kind}) -> ${effectiveMessage.length} char prompt`,
     )
   } else if (
     slashResult.kind === 'run' &&
@@ -110,7 +110,7 @@ export interface PreparedChatTurn {
   forkSkill: SlashResolution['forkSkill']
   manualCompact: SlashResolution['manualCompact']
   tools: Record<string, AnyTool>
-  /** Tools before mode filtering — used to refresh when mode changes mid-turn. */
+  /** Tools before mode filtering -- used to refresh when mode changes mid-turn. */
   baseTools: Record<string, AnyTool>
   modeTools: Record<string, AnyTool>
   deferredToolPool?: Record<string, AnyTool>
