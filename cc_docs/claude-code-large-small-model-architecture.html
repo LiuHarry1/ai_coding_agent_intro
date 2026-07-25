@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 大模型 / 小模型搭配架构</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --accent2:#d97757;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15; --opus:#bc8cff; --sonnet:#58a6ff; --haiku:#3fb950;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.toc a.active{background:rgba(88,166,255,.15);color:var(--accent);font-weight:600}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:30px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;border:1px solid transparent}
+.badge.green{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3)}
+.badge.blue{background:rgba(88,166,255,.12);color:var(--accent);border-color:rgba(88,166,255,.3)}
+.badge.amber{background:rgba(210,153,34,.12);color:var(--amber);border-color:rgba(210,153,34,.3)}
+.badge.purple{background:rgba(188,140,255,.12);color:var(--purple);border-color:rgba(188,140,255,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:23px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:13px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(217,119,87,.07)}
+.callout.ok{border-color:var(--green);background:rgba(63,185,80,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.ok .tag{color:var(--green)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 16px}
+.card h4{margin:0 0 8px;font-size:15px}
+.card.opus{border-top:3px solid var(--opus)}
+.card.sonnet{border-top:3px solid var(--sonnet)}
+.card.haiku{border-top:3px solid var(--haiku)}
+.card p{margin:0;color:var(--muted);font-size:13.5px}
+.card .price{margin-top:10px;font-size:12px;color:var(--amber)}
+.pill{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11.5px;font-weight:600;margin:0 2px}
+.pill.opus{background:rgba(188,140,255,.14);color:var(--opus);border:1px solid rgba(188,140,255,.3)}
+.pill.sonnet{background:rgba(88,166,255,.14);color:var(--sonnet);border:1px solid rgba(88,166,255,.3)}
+.pill.haiku{background:rgba(63,185,80,.12);color:var(--haiku);border:1px solid rgba(63,185,80,.3)}
+.flow{font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;background:var(--panel);
+  border:1px solid var(--border);border-radius:10px;padding:18px 20px;line-height:1.55;overflow-x:auto;white-space:pre}
+.footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:24px;border-top:1px solid var(--border)}
+@media(max-width:920px){
+  .sidebar{display:none}
+  .main{padding:24px}
+  .cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <h1>CC Model Architecture</h1>
+  <div class="sub">大模型 / 小模型搭配设计</div>
+  <ul class="toc">
+    <li><a href="#overview">1. 核心结论</a></li>
+    <li><a href="#architecture">2. 三层架构</a></li>
+    <li><a href="#resolution">3. 模型解析层</a></li>
+    <li><a href="#large">4. 大模型做什么</a></li>
+    <li><a href="#small">5. 小模型做什么</a></li>
+    <li><a href="#mid">6. 中间档与特例</a></li>
+    <li><a href="#routing">7. 路由决策方式</a></li>
+    <li><a href="#cost">8. 成本与缓存策略</a></li>
+    <li><a href="#files">9. 关键源码文件</a></li>
+    <li><a href="#takeaways">10. 设计要点</a></li>
+  </ul>
+</aside>
+
+<main class="main">
+<header class="hero">
+  <h1>Claude Code 大 / 小模型搭配架构</h1>
+  <p>基于 <code>claude-code-rev</code> 源码梳理：主循环大模型 + 侧信道小模型（Haiku）+ 同模型 Fork 侧任务。</p>
+  <p>源码路径：<code>C:\Users\Harry\cursor_workspace\public\claude-code-rev</code></p>
+  <span class="badge green">Small Fast = Haiku</span>
+  <span class="badge purple">Main Loop = Opus / Sonnet</span>
+  <span class="badge blue">静态选型，非智能路由</span>
+  <span class="badge amber">Fork 复用 Prompt Cache</span>
+</header>
+
+<section id="overview">
+  <h2><span class="num">01</span>核心结论</h2>
+  <div class="callout ok">
+    <p class="tag">一句话</p>
+    <p>Claude Code <strong>没有统一的“智能路由器”</strong> 在运行时决定大/小模型；而是<strong>按调用点静态选型</strong>：主对话走大模型，轻量侧任务走 Haiku（Small Fast Model），需要长上下文的重侧任务则 <strong>Fork 主模型</strong> 以复用 Prompt Cache。</p>
+  </div>
+  <ul>
+    <li><span class="pill opus">大模型</span> = <code>mainLoopModel</code>（默认 Opus 或 Sonnet，取决于订阅）</li>
+    <li><span class="pill haiku">小模型</span> = <code>getSmallFastModel()</code>（默认 Haiku 4.5，可被环境变量覆盖）</li>
+    <li><span class="pill sonnet">中间档</span> = 少数场景显式指定 Sonnet（如 memory 相关性）；Fast Mode 是 Opus 的加速档，<strong>不是</strong>换小模型</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2><span class="num">02</span>三层架构</h2>
+  <div class="flow">用户 / SDK / REPL
+        │
+        ▼
+┌───────────────────────────────────────┐
+│  Model Resolution Layer               │
+│  aliases → getMainLoopModel()         │
+│         → getSmallFastModel()         │
+│         → getAgentModel()             │
+└───────────────┬───────────┬───────────┘
+                │           │
+     ┌──────────▼───┐   ┌───▼────────────────────────────┐
+     │ MAIN LOOP    │   │ SIDE CHANNELS                  │
+     │ 大模型循环    │   │ A) queryHaiku / Small Fast     │
+     │ tools/plan   │   │    （便宜、快、无 tools）        │
+     │ 写码推理      │   │ B) sideQuery(显式传 model)      │
+     └──────┬───────┘   │ C) runForkedAgent              │
+            │           │    （同主模型，共享 prompt cache）│
+            └─────┬─────┴────────────────────────────────┘
+                  ▼
+         Anthropic / Bedrock / Vertex / Foundry
+</div>
+
+  <div class="cards">
+    <div class="card opus">
+      <h4>① 主循环大模型</h4>
+      <p><code>getMainLoopModel()</code></p>
+      <p>对话、工具调用、规划、写码。Max/Team Premium 默认 Opus 4.6，其余默认 Sonnet 4.6。</p>
+      <div class="price">Opus ≈ $5/$25 · Sonnet ≈ $3/$15（per MTok）</div>
+    </div>
+    <div class="card haiku">
+      <h4>② Small Fast 小模型</h4>
+      <p><code>getSmallFastModel()</code> / <code>queryHaiku()</code></p>
+      <p>标题、标签、命令前缀、WebFetch 二次提取等廉价侧任务。thinking 关闭，通常无 tools。</p>
+      <div class="price">Haiku 4.5 ≈ $1/$5（per MTok）</div>
+    </div>
+    <div class="card sonnet">
+      <h4>③ Fork 同模型侧任务</h4>
+      <p><code>runForkedAgent()</code></p>
+      <p>Compact、Session Memory、Prompt Suggestion 等<strong>故意不用 Haiku</strong>，而是复用主模型 + Prompt Cache，避免 cache bust。</p>
+      <div class="price">边际成本低（命中 cache）</div>
+    </div>
+  </div>
+</section>
+
+<section id="resolution">
+  <h2><span class="num">03</span>模型解析层</h2>
+
+  <h3>Small Fast Model</h3>
+  <pre><code>// src/utils/model/model.ts
+export function getSmallFastModel(): ModelName {
+  return process.env.ANTHROPIC_SMALL_FAST_MODEL || getDefaultHaikuModel()
+}</code></pre>
+  <p><code>queryHaiku()</code> 内部强制 <code>model: getSmallFastModel()</code>，并关闭 thinking、清空 tools：</p>
+  <pre><code>// src/services/api/claude.ts — queryHaiku
+thinkingConfig: { type: 'disabled' },
+tools: [],
+options: { model: getSmallFastModel(), ... }</code></pre>
+
+  <h3>主循环模型优先级</h3>
+  <ol>
+    <li>会话内 <code>/model</code> 覆盖</li>
+    <li>启动 <code>--model</code></li>
+    <li><code>ANTHROPIC_MODEL</code> 环境变量</li>
+    <li>用户 settings</li>
+    <li>订阅默认：Max / Team Premium → Opus；Pro / Enterprise / Team Standard / PAYG → Sonnet</li>
+  </ol>
+
+  <h3>别名与 Plan 模式升级</h3>
+  <table>
+    <thead>
+      <tr><th>别名 / 条件</th><th>行为</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>opus</code> / <code>sonnet</code> / <code>haiku</code></td><td>解析为对应默认版本（如 Opus 4.6 / Sonnet 4.6 / Haiku 4.5）</td></tr>
+      <tr><td><code>opusplan</code></td><td>平时用 Sonnet；进入 plan 模式时切到 Opus（<code>getRuntimeMainLoopModel</code>）</td></tr>
+      <tr><td><code>haiku</code> + plan 模式</td><td>升级到 Sonnet（计划任务需要更强推理）</td></tr>
+      <tr><td><code>best</code></td><td>指向默认 Opus</td></tr>
+    </tbody>
+  </table>
+
+  <h3>关键环境变量</h3>
+  <table>
+    <thead>
+      <tr><th>变量</th><th>作用</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>ANTHROPIC_MODEL</code></td><td>用户主模型</td></tr>
+      <tr><td><code>ANTHROPIC_SMALL_FAST_MODEL</code></td><td>覆盖小模型</td></tr>
+      <tr><td><code>ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL</code></td><td>覆盖各档默认 ID</td></tr>
+      <tr><td><code>CLAUDE_CODE_SUBAGENT_MODEL</code></td><td>强制所有 subagent 模型</td></tr>
+      <tr><td><code>ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION</code></td><td>Bedrock 上小模型独立 region</td></tr>
+      <tr><td><code>DISABLE_PROMPT_CACHING_HAIKU</code> 等</td><td>按档关闭 prompt caching</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <p class="tag">易混淆：Fast Mode ≠ 小模型</p>
+    <p><code>fastMode</code> 是在 <strong>同一 Opus</strong> 上走 API <code>speed: 'fast'</code>，单价更高（约 $30/$150），目的是加速，不是切到 Haiku。</p>
+  </div>
+</section>
+
+<section id="large">
+  <h2><span class="num">04</span>大模型做什么</h2>
+  <p>角色：会话主脑（<code>mainLoopModel</code>），经 QueryEngine 流式调用，带 tools、thinking、权限系统。</p>
+
+  <table>
+    <thead>
+      <tr><th>任务</th><th>说明</th><th>选型策略</th><th>关键路径</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>主对话 + 工具循环</td>
+        <td>读改文件、Bash、MCP、推理写码</td>
+        <td><span class="pill opus">mainLoop</span></td>
+        <td><code>QueryEngine.ts</code>, <code>services/api/claude.ts</code></td>
+      </tr>
+      <tr>
+        <td>Context Compact</td>
+        <td>压缩长上下文；故意用主模型以共享 cache</td>
+        <td><span class="pill opus">Fork 同模型</span></td>
+        <td><code>services/compact/compact.ts</code></td>
+      </tr>
+      <tr>
+        <td>Session Memory 提取</td>
+        <td>从会话抽取记忆</td>
+        <td><span class="pill opus">Fork 同模型</span></td>
+        <td><code>services/SessionMemory/</code></td>
+      </tr>
+      <tr>
+        <td>Extract Memories / Auto Dream</td>
+        <td>记忆整理类后台任务</td>
+        <td><span class="pill opus">Fork 同模型</span></td>
+        <td><code>extractMemories/</code>, <code>autoDream/</code></td>
+      </tr>
+      <tr>
+        <td>Prompt Suggestion</td>
+        <td>下一轮提示建议</td>
+        <td><span class="pill opus">Fork 同模型</span></td>
+        <td><code>PromptSuggestion/</code>, <code>sideQuestion.ts</code></td>
+      </tr>
+      <tr>
+        <td>Agent Summary</td>
+        <td>子 agent 摘要</td>
+        <td><span class="pill opus">Fork 同模型</span></td>
+        <td><code>AgentSummary/</code></td>
+      </tr>
+      <tr>
+        <td>Auto-mode Classifier</td>
+        <td>是否允许某 agent 动作（YOLO）</td>
+        <td>默认主模型（可 GB/env 覆盖）</td>
+        <td><code>permissions/yoloClassifier.ts</code></td>
+      </tr>
+      <tr>
+        <td>Permission Explainer</td>
+        <td>解释为何请求权限（注释写 Haiku，实现用主模型）</td>
+        <td><span class="pill opus">mainLoop via sideQuery</span></td>
+        <td><code>permissionExplainer.ts</code></td>
+      </tr>
+      <tr>
+        <td>Insights 会话分析</td>
+        <td>深度会话洞察</td>
+        <td><span class="pill opus">强制 Opus</span></td>
+        <td><code>commands/insights.ts</code></td>
+      </tr>
+      <tr>
+        <td>Swarm Teammates</td>
+        <td>多智能体队友默认模型</td>
+        <td><span class="pill opus">Opus 4.6</span></td>
+        <td><code>swarm/teammateModel.ts</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout note">
+    <p class="tag">为何重侧任务不用小模型？</p>
+    <p><code>forkedAgent.ts</code> 注释写明：API cache key 由 system / tools / <strong>model</strong> / messages 前缀 / thinking 组成。换 Haiku 会直接 bust cache；对已经很长的会话，用主模型 fork + cache hit 往往比换小模型更省。</p>
+  </div>
+</section>
+
+<section id="small">
+  <h2><span class="num">05</span>小模型做什么</h2>
+  <p>角色：<code>getSmallFastModel()</code> / <code>queryHaiku()</code> — 低成本、低延迟、无 tools（或极窄）、thinking 关闭；失败时常可降级或忽略。</p>
+
+  <table>
+    <thead>
+      <tr><th>任务</th><th>querySource / 用途</th><th>文件</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Session 标题（3–7 词）</td><td><code>generate_session_title</code></td><td><code>utils/sessionTitle.ts</code></td></tr>
+      <tr><td>/rename 短名</td><td><code>rename_generate_name</code></td><td><code>commands/rename/generateSessionName.ts</code></td></tr>
+      <tr><td>Teleport 标题 + 分支名</td><td><code>teleport_generate_title</code></td><td><code>utils/teleport.tsx</code></td></tr>
+      <tr><td>Feedback Issue 标题</td><td><code>feedback</code></td><td><code>components/Feedback.tsx</code></td></tr>
+      <tr><td>Tool-use 短标签（SDK UI）</td><td><code>tool_use_summary_generation</code></td><td><code>services/toolUseSummary/</code></td></tr>
+      <tr><td>Away Summary（离开回来卡片）</td><td><code>away_summary</code></td><td><code>services/awaySummary.ts</code></td></tr>
+      <tr><td>Bash 命令前缀提取</td><td><code>bash_extract_prefix</code></td><td><code>utils/shell/prefix.ts</code></td></tr>
+      <tr><td>WebFetch 二次问答提取</td><td><code>web_fetch_apply</code></td><td><code>tools/WebFetchTool/utils.ts</code></td></tr>
+      <tr><td>WebSearch（feature flag）</td><td><code>web_search_tool</code></td><td><code>WebSearchTool.ts</code>（可切 Haiku）</td></tr>
+      <tr><td>自然语言日期解析</td><td><code>mcp_datetime_parse</code></td><td><code>utils/mcp/dateTimeParser.ts</code></td></tr>
+      <tr><td>Session 语义搜索</td><td><code>session_search</code></td><td><code>utils/agenticSessionSearch.ts</code></td></tr>
+      <tr><td>Skill improvement</td><td>hook / apply</td><td><code>hooks/skillImprovement.ts</code></td></tr>
+      <tr><td>Prompt / Agent Hooks 默认</td><td><code>hook_prompt</code> / <code>hook_agent</code></td><td><code>execPromptHook.ts</code> 等</td></tr>
+      <tr><td>API Key / Quota 探测</td><td><code>verify_api_key</code>, <code>quota_check</code></td><td><code>claude.ts</code>, <code>claudeAiLimits.ts</code></td></tr>
+      <tr><td>Token count fallback</td><td><code>count_tokens</code></td><td><code>tokenEstimation.ts</code>（部分条件升 Sonnet）</td></tr>
+      <tr><td>内置 Guide Agent</td><td><code>model: 'haiku'</code></td><td><code>AgentTool/built-in/claudeCodeGuideAgent.ts</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>小模型任务特征</h3>
+  <ul>
+    <li><strong>短输入 / 短输出</strong>：标题、标签、前缀，不需要深度推理</li>
+    <li><strong>可失败</strong>：标题生成失败返回 null，或走启发式 fallback</li>
+    <li><strong>不进主对话历史</strong>：侧信道调用，不污染主 context</li>
+    <li><strong>能力边界</strong>：Haiku 不支持 <code>tool_reference</code>（见 <code>toolSearch.ts</code>）</li>
+  </ul>
+</section>
+
+<section id="mid">
+  <h2><span class="num">06</span>中间档与特例</h2>
+  <table>
+    <thead>
+      <tr><th>场景</th><th>模型</th><th>原因</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Memory 相关性筛选</td>
+        <td><span class="pill sonnet">Sonnet</span></td>
+        <td>比 Haiku 更准，又不想用最贵 Opus（<code>memdir/findRelevantMemories.ts</code>）</td>
+      </tr>
+      <tr>
+        <td>Magic Docs 内置 agent</td>
+        <td><span class="pill sonnet">sonnet</span></td>
+        <td>固定钉 Sonnet</td>
+      </tr>
+      <tr>
+        <td>Token count（部分 provider）</td>
+        <td>Haiku → 升 Sonnet</td>
+        <td>Vertex global / thinking on Bedrock·Vertex 时 Haiku 不可用则升级</td>
+      </tr>
+      <tr>
+        <td>3P 新模型不可用</td>
+        <td>建议上一版本</td>
+        <td><code>get3PFallbackSuggestion</code>（如 sonnet-4.6→4.5→4.0）</td>
+      </tr>
+      <tr>
+        <td>Subagent</td>
+        <td>inherit / alias / 强制 env</td>
+        <td><code>getAgentModel()</code>；Guide agent 钉死 Haiku</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="routing">
+  <h2><span class="num">07</span>路由决策方式</h2>
+  <div class="callout">
+    <p class="tag">原则</p>
+    <p><strong>静态按调用点选型</strong>，不是运行时分类器在大/小模型之间动态切换。</p>
+  </div>
+
+  <div class="flow">getMainLoopModel()
+  ├─ user / settings / env / --model
+  ├─ allowlist filter
+  └─ subscription default (opus vs sonnet)
+
+getRuntimeMainLoopModel()
+  └─ permissionMode + opusplan / haiku 规则
+
+getSmallFastModel()
+  └─ ANTHROPIC_SMALL_FAST_MODEL || Haiku default
+         ▲
+queryHaiku() 始终走这里
+
+sideQuery({ model })
+  └─ 调用方显式传入
+       · classifier → 默认 mainLoop
+       · memdir → Sonnet
+       · session_search → Small Fast
+
+runForkedAgent()
+  └─ 故意不换 model，复用 parent CacheSafeParams
+
+getAgentModel()
+  └─ inherit | alias | CLAUDE_CODE_SUBAGENT_MODEL</div>
+
+  <h3>少数动态 / Flag 路由</h3>
+  <ol>
+    <li><strong>WebSearch</strong>：GrowthBook <code>tengu_plum_vx3</code> → Haiku vs mainLoop</li>
+    <li><strong>Token count</strong>：部分 provider 条件升 Sonnet</li>
+    <li><strong>3P unavailable</strong>：建议降级到上一版本</li>
+    <li><strong>Legacy Opus remap</strong>：1P 上 4.0/4.1 静默映射到当前 Opus</li>
+    <li><strong>Auto-mode two-stage</strong>：同一 classifier 模型上 stage1/stage2 提示变体，<strong>不是换 Haiku</strong></li>
+  </ol>
+</section>
+
+<section id="cost">
+  <h2><span class="num">08</span>成本与缓存策略</h2>
+
+  <h3>成本优化手段</h3>
+  <ol>
+    <li>侧任务用 Haiku（标题、标签、前缀、WebFetch 提取）</li>
+    <li>重侧任务 Fork 主模型 + 共享 Prompt Cache（compact / memory / suggestions）</li>
+    <li>Haiku 可单独关 caching（<code>DISABLE_PROMPT_CACHING_HAIKU</code>）</li>
+    <li>Bedrock 小模型可独立 AWS region</li>
+    <li>Away summary / side question：<code>skipCacheWrite: true</code></li>
+    <li>Bash prefix extractor：LRU 缓存，失败 eviction，避免重复 Haiku 调用</li>
+  </ol>
+
+  <h3>失败降级</h3>
+  <table>
+    <thead>
+      <tr><th>场景</th><th>行为</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Title / Summary Haiku 失败</td><td>返回 null / 启发式 fallback</td></tr>
+      <tr><td>Token count Haiku 不可用</td><td>升 <code>getDefaultSonnetModel()</code></td></tr>
+      <tr><td>Compact cache-sharing 失败</td><td>streaming fallback（仍用 mainLoopModel）</td></tr>
+      <tr><td>Classifier API 错误</td><td>fail-closed：阻塞执行</td></tr>
+      <tr><td>Subagent inherit</td><td>走 runtime 解析（含 opusplan）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="files">
+  <h2><span class="num">09</span>关键源码文件</h2>
+
+  <h3>配置与解析</h3>
+  <ul>
+    <li><code>src/utils/model/model.ts</code> — <code>getSmallFastModel</code> / <code>getMainLoopModel</code> / defaults / plan 规则</li>
+    <li><code>src/utils/model/configs.ts</code> — 各 provider 的模型 ID</li>
+    <li><code>src/utils/model/aliases.ts</code> — 别名列表</li>
+    <li><code>src/utils/model/agent.ts</code> — subagent 模型继承</li>
+    <li><code>src/utils/modelCost.ts</code> — 定价档</li>
+    <li><code>src/utils/fastMode.ts</code> — Opus speed=fast（非小模型）</li>
+  </ul>
+
+  <h3>API 入口</h3>
+  <ul>
+    <li><code>src/services/api/claude.ts</code> — <code>queryHaiku</code> / 主 query / verify key</li>
+    <li><code>src/utils/sideQuery.ts</code> — 轻量侧查询（调用方给 model）</li>
+    <li><code>src/utils/forkedAgent.ts</code> — 同模型 fork + cache</li>
+    <li><code>src/QueryEngine.ts</code> — 主循环挂载 <code>mainLoopModel</code></li>
+  </ul>
+
+  <h3>小模型调用点（抽样）</h3>
+  <ul>
+    <li><code>src/utils/sessionTitle.ts</code></li>
+    <li><code>src/utils/shell/prefix.ts</code></li>
+    <li><code>src/tools/WebFetchTool/utils.ts</code></li>
+    <li><code>src/services/toolUseSummary/toolUseSummaryGenerator.ts</code></li>
+    <li><code>src/services/awaySummary.ts</code></li>
+  </ul>
+
+  <h3>主模型侧任务</h3>
+  <ul>
+    <li><code>src/services/compact/compact.ts</code> / <code>autoCompact.ts</code></li>
+    <li><code>src/services/SessionMemory/sessionMemory.ts</code></li>
+    <li><code>src/utils/permissions/yoloClassifier.ts</code></li>
+    <li><code>src/memdir/findRelevantMemories.ts</code>（Sonnet）</li>
+  </ul>
+</section>
+
+<section id="takeaways">
+  <h2><span class="num">10</span>设计要点总结</h2>
+  <ol>
+    <li><strong>配对模型是「主循环大模型 + 侧信道 Haiku」</strong>，不是动态 LLM Router。</li>
+    <li><strong>Small Fast Model</strong> 是官方抽象（<code>ANTHROPIC_SMALL_FAST_MODEL</code>），实现默认 Haiku 4.5。</li>
+    <li><strong>Fast Mode ≠ 小模型</strong>：是 Opus 的 API speed 档，更贵更快。</li>
+    <li><strong>昂贵上下文任务（compact / memory）故意用大模型 fork</strong>，用 prompt cache 省钱，而不是换 Haiku。</li>
+    <li><strong>选型原则</strong>：短、可丢、无工具 → Haiku；长上下文、需 cache / 深度推理 → 主模型；少数精度敏感侧任务 → Sonnet。</li>
+    <li><strong>Subagent</strong> 默认可 inherit，也可钉 <code>haiku</code> / <code>sonnet</code> / <code>opus</code>；Guide agent 钉死 Haiku。</li>
+  </ol>
+
+  <div class="callout ok">
+    <p class="tag">可借鉴到自研 Agent</p>
+    <p>把「主循环智能」和「辅助标签/前缀/标题」拆开；对需要读完整会话的后台任务，优先考虑与主模型共享 prompt cache，而不是机械地全部甩给小模型。</p>
+  </div>
+</section>
+
+<footer class="footer">
+  基于 claude-code-rev 源码分析 · 文档生成于 ai_coding_agent_intro/cc_docs
+</footer>
+</main>
+</div>
+
+<script>
+const links = document.querySelectorAll('.toc a');
+const sections = [...links].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  }
+}, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>

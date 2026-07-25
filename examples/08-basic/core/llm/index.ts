@@ -23,3 +23,13 @@ export function buildProvider(profile: LlmProfile): IProvider {
 
 export * from './types.js'
 export { resolveProfile, profileToRecord, DEFAULT_PROFILE } from './resolve.js'
+export {
+  createModelRegistry,
+  isModelTier,
+  modelProfilesToRecord,
+  resolveModelProfiles,
+  MODEL_TIERS,
+  type ModelProfiles,
+  type ModelRegistry,
+  type ModelTier,
+} from './model-registry.js'

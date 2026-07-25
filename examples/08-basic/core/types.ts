@@ -1,6 +1,7 @@
 import type { Tool } from 'ai'
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
 import type { IProvider, LlmProfile } from './llm/types.js'
+import type { ModelProfiles, ModelRegistry, ModelTier } from './llm/model-registry.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type { ExternalMode, PermissionModeContext } from './permission-mode.js'
 import type {
@@ -62,6 +63,8 @@ export interface ToolContext {
   toolEnablement?: Pick<AppConfig, 'disabledTools'>
   /** Request-scoped provider and compaction settings inherited by subagents. */
   provider?: IProvider
+  /** Three-tier model registry (large / medium / small). */
+  models?: ModelRegistry
   compaction?: CompactionConfig
   /** Request-scoped LSP server configs from effective settings. */
   lspServers?: Record<string, LspServerConfig>
@@ -264,6 +267,10 @@ export interface AgentOptions {
   wire: import('./wire-emitter.js').WireEmitter
   messages?: Message[]
   images?: string[]
+  /**
+   * Optional step budget (CC `maxTurns`). When omitted, the loop runs until
+   * the model stops calling tools (or errors) — no artificial cap.
+   */
   maxSteps?: number
   model?: string
   /** Request-scoped provider built from the resolved settings for this cwd. */
@@ -352,6 +359,11 @@ export interface Session {
   messages: Message[]
   createdAt: number
   /**
+   * LLM-generated session title (small-model side channel). When unset, UI
+   * falls back to a heuristic preview of the first user message.
+   */
+  title?: string
+  /**
    * Email of the user who created the session (SSO mode only). Used to keep
    * sessions private per-user. Undefined for sessions created without auth.
    */
@@ -427,10 +439,18 @@ export interface AgentDefinition {
   tools?: string[]
   /** Deny-list of tool names. */
   disallowedTools?: string[]
-  /** Max agentic steps before stopping. Default 20. */
+  /**
+   * Optional step budget (CC `maxTurns`). Built-ins omit this; custom agents
+   * may set it via frontmatter `maxSteps:`.
+   */
   maxSteps?: number
-  /** Optional model override (provider-dependent). */
+  /** Optional model id override on the resolved tier's provider. */
   model?: string
+  /**
+   * Which configured tier to run on (Claude Code–style static routing).
+   * Default when unset: `large`. Explore uses `small`.
+   */
+  modelTier?: ModelTier
   /** Display label used in the UI's SubagentCard. Defaults to titlecased agentType. */
   label?: string
   /**
@@ -521,13 +541,20 @@ export interface CompactionConfig {
 }
 
 export interface AppConfig {
+  /**
+   * Alias for `models.large` (backward compatible). Main loop / compact use this.
+   */
   provider: LlmProfile
+  /** Three-tier profiles; medium/small fall back to large when omitted in settings. */
+  models: ModelProfiles
   compaction: CompactionConfig
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */
   disabledTools?: string[]
 }
+
+export type { ModelProfiles, ModelRegistry, ModelTier }
 
 export interface LspServerConfig {
   command: string

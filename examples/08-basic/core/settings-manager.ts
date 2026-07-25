@@ -4,8 +4,10 @@ import * as path from 'path'
 import type { AppConfig, LspServerConfig, MCPServerConfig } from './types.js'
 import {
   DEFAULT_PROFILE,
+  modelProfilesToRecord,
   profileToRecord,
-  resolveProfile,
+  resolveModelProfiles,
+  type ModelProfiles,
 } from './llm/index.js'
 import { loadPlugins } from './plugins/index.js'
 import {
@@ -14,8 +16,14 @@ import {
   SETTINGS_FILE_NAME,
 } from '../utils/app-dir.js'
 
+function defaultModels(): ModelProfiles {
+  const large = { ...DEFAULT_PROFILE }
+  return { large, medium: { ...large }, small: { ...large } }
+}
+
 export const DEFAULTS: AppConfig = {
   provider: { ...DEFAULT_PROFILE },
+  models: defaultModels(),
   compaction: {
     enabled: true,
     contextWindow: 200_000,
@@ -58,6 +66,7 @@ export interface EffectiveSettings extends ResolvedSettings {
 
 type PartialAppConfig = Partial<{
   provider: Record<string, unknown>
+  models: Record<string, unknown>
   compaction: Record<string, unknown>
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
@@ -165,12 +174,68 @@ function mergeStringArray(
   return [...out]
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+/** True when a tier was explicitly configured (not merely a fallback clone). */
+function tierExplicitlySet(
+  config: AppConfig,
+  tier: 'medium' | 'small',
+): boolean {
+  // Heuristic: after resolve, fallback clones share the same model id + baseURL
+  // as their parent. We track explicit tiers on a WeakMap-less side channel via
+  // comparing to large after each layer is imperfect; instead we stash flags.
+  return Boolean((config as AppConfig & { _explicit?: Set<string> })._explicit?.has(tier))
+}
+
+function markExplicit(
+  config: AppConfig,
+  tier: 'medium' | 'small',
+): void {
+  const c = config as AppConfig & { _explicit?: Set<string> }
+  if (!c._explicit) c._explicit = new Set()
+  c._explicit.add(tier)
+}
+
 function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
-  if (layer.provider && typeof layer.provider === 'object') {
-    config.provider = resolveProfile({
-      ...profileToRecord(config.provider),
-      ...layer.provider,
+  const hasProvider = isRecord(layer.provider)
+  const hasModels = isRecord(layer.models)
+  if (hasProvider || hasModels) {
+    const layerModels: Record<string, unknown> = hasModels
+      ? (layer.models as Record<string, unknown>)
+      : {}
+    if (isRecord(layerModels.medium)) markExplicit(config, 'medium')
+    if (isRecord(layerModels.small)) markExplicit(config, 'small')
+
+    // Only pass tiers that are being set this layer or were previously explicit,
+    // so resolveModelProfiles can fall back medium/small → large.
+    const modelsArg: Record<string, unknown> = {
+      large: {
+        ...profileToRecord(config.models.large),
+        ...(hasProvider ? layer.provider : {}),
+        ...(isRecord(layerModels.large) ? layerModels.large : {}),
+      },
+    }
+    if (isRecord(layerModels.medium) || tierExplicitlySet(config, 'medium')) {
+      modelsArg.medium = {
+        ...profileToRecord(config.models.medium),
+        ...(isRecord(layerModels.medium) ? layerModels.medium : {}),
+      }
+    }
+    if (isRecord(layerModels.small) || tierExplicitlySet(config, 'small')) {
+      modelsArg.small = {
+        ...profileToRecord(config.models.small),
+        ...(isRecord(layerModels.small) ? layerModels.small : {}),
+      }
+    }
+
+    const profiles = resolveModelProfiles({
+      provider: modelsArg.large,
+      models: modelsArg,
     })
+    config.models = profiles
+    config.provider = profiles.large
   }
 
   if (layer.compaction && typeof layer.compaction === 'object') {
@@ -278,14 +343,23 @@ export async function resolveEffectiveSettings(
   }
 }
 
+function maskApiKey(key: string): string {
+  return key.replace(/.(?=.{4})/g, '*')
+}
+
+function maskProfile<T extends { apiKey?: string }>(profile: T): T {
+  if (!profile.apiKey) return profile
+  return { ...profile, apiKey: maskApiKey(profile.apiKey) }
+}
+
 export function getSafeSettings(resolved: ResolvedSettings): AppConfig {
   const copy = structuredClone(resolved.config)
-  if (copy.provider.apiKey) {
-    copy.provider = {
-      ...copy.provider,
-      apiKey: copy.provider.apiKey.replace(/.(?=.{4})/g, '*'),
-    }
+  copy.models = {
+    large: maskProfile(copy.models.large),
+    medium: maskProfile(copy.models.medium),
+    small: maskProfile(copy.models.small),
   }
+  copy.provider = copy.models.large
   return copy
 }
 
@@ -340,6 +414,36 @@ function mergePatch(
     next.provider = {
       ...((next.provider as Record<string, unknown> | undefined) ?? {}),
       ...patch.provider,
+    }
+    const models = isRecord(next.models) ? { ...next.models } : {}
+    models.large = {
+      ...((isRecord(models.large) ? models.large : {}) as Record<
+        string,
+        unknown
+      >),
+      ...patch.provider,
+    }
+    next.models = models
+  }
+  if (patch.models) {
+    const models = isRecord(next.models) ? { ...next.models } : {}
+    for (const tier of ['large', 'medium', 'small'] as const) {
+      const tierPatch = (patch.models as ModelProfiles)[tier]
+      if (!tierPatch) continue
+      models[tier] = {
+        ...((isRecord(models[tier]) ? models[tier] : {}) as Record<
+          string,
+          unknown
+        >),
+        ...profileToRecord(tierPatch),
+      }
+    }
+    next.models = models
+    if (isRecord(models.large)) {
+      next.provider = {
+        ...((next.provider as Record<string, unknown> | undefined) ?? {}),
+        ...models.large,
+      }
     }
   }
   if (patch.compaction) {

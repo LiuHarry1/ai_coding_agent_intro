@@ -45,7 +45,7 @@ export const definition = createAgentDefinition({
   description: 'Implementation planning',
   systemPrompt: PLAN_SYSTEM,
   disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
-  maxSteps: 25,
+  // No maxSteps — matches CC Plan (no maxTurns on the built-in).
   label: 'Plan',
   omitProjectRules: true,
 })

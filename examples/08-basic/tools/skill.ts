@@ -148,6 +148,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
               wire: context.wire,
               toolEnablement,
               provider: context.provider,
+              models: context.models,
               compaction: context.compaction,
               sessionId: context.sessionId,
               sandbox: context.sandbox,

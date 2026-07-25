@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenCode 大模型 / 小模型搭配架构</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --accent2:#d97757;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15; --large:#bc8cff; --main:#58a6ff; --small:#3fb950;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.toc a.active{background:rgba(88,166,255,.15);color:var(--accent);font-weight:600}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:30px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;border:1px solid transparent}
+.badge.green{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3)}
+.badge.blue{background:rgba(88,166,255,.12);color:var(--accent);border-color:rgba(88,166,255,.3)}
+.badge.amber{background:rgba(210,153,34,.12);color:var(--amber);border-color:rgba(210,153,34,.3)}
+.badge.purple{background:rgba(188,140,255,.12);color:var(--purple);border-color:rgba(188,140,255,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:23px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:13px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(217,119,87,.07)}
+.callout.ok{border-color:var(--green);background:rgba(63,185,80,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.ok .tag{color:var(--green)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 16px}
+.card h4{margin:0 0 8px;font-size:15px}
+.card.large{border-top:3px solid var(--large)}
+.card.main{border-top:3px solid var(--main)}
+.card.small{border-top:3px solid var(--small)}
+.card p{margin:0;color:var(--muted);font-size:13.5px}
+.card .price{margin-top:10px;font-size:12px;color:var(--amber)}
+.pill{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11.5px;font-weight:600;margin:0 2px}
+.pill.large{background:rgba(188,140,255,.14);color:var(--large);border:1px solid rgba(188,140,255,.3)}
+.pill.main{background:rgba(88,166,255,.14);color:var(--main);border:1px solid rgba(88,166,255,.3)}
+.pill.small{background:rgba(63,185,80,.12);color:var(--small);border:1px solid rgba(63,185,80,.3)}
+.flow{font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;background:var(--panel);
+  border:1px solid var(--border);border-radius:10px;padding:18px 20px;line-height:1.55;overflow-x:auto;white-space:pre}
+.footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:24px;border-top:1px solid var(--border)}
+@media(max-width:920px){
+  .sidebar{display:none}
+  .main{padding:24px}
+  .cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <h1>OpenCode Models</h1>
+  <div class="sub">大模型 / 小模型搭配设计</div>
+  <ul class="toc">
+    <li><a href="#overview">1. 核心结论</a></li>
+    <li><a href="#architecture">2. 架构总览</a></li>
+    <li><a href="#resolution">3. 模型解析</a></li>
+    <li><a href="#large">4. 大模型做什么</a></li>
+    <li><a href="#small">5. 小模型做什么</a></li>
+    <li><a href="#agents">6. Agent 矩阵</a></li>
+    <li><a href="#routing">7. 路由与 small 标志</a></li>
+    <li><a href="#vs-cc">8. 与 Claude Code 对比</a></li>
+    <li><a href="#cost">9. 成本与缓存</a></li>
+    <li><a href="#files">10. 关键源码</a></li>
+    <li><a href="#takeaways">11. 设计要点</a></li>
+  </ul>
+</aside>
+
+<main class="main">
+<header class="hero">
+  <h1>OpenCode 大 / 小模型搭配架构</h1>
+  <p>基于 <code>public/opencode</code> 源码梳理：会话主模型 + 极窄 utility 小模型；compact / explore 默认仍走主模型。</p>
+  <p>源码路径：<code>C:\Users\Harry\cursor_workspace\public\opencode</code></p>
+  <span class="badge purple">model = 主循环</span>
+  <span class="badge green">small_model = 工具模型</span>
+  <span class="badge blue">静态选型，非智能路由</span>
+  <span class="badge amber">小模型职责很窄</span>
+</header>
+
+<section id="overview">
+  <h2><span class="num">01</span>核心结论</h2>
+  <div class="callout ok">
+    <p class="tag">一句话</p>
+    <p>OpenCode <strong>没有运行时智能路由</strong>。它用<strong>调用点静态选型</strong>：会话 <code>model</code> 跑主 agent / 多数子任务 / compaction；<code>getSmallModel()</code>（配置 <code>small_model</code> 或自动挑 haiku/flash/nano）只服务<strong>极少数轻量侧任务</strong>（会话标题、项目副本命名）。</p>
+  </div>
+  <ul>
+    <li><span class="pill large">主模型</span> = 配置 <code>model</code> / 会话当前模型（Sonnet、Opus、GPT-5、Gemini Pro 等）</li>
+    <li><span class="pill small">小模型</span> = <code>small_model</code> 或 <code>Provider.getSmallModel()</code> 自动匹配</li>
+    <li><span class="pill main">第三轴</span> = <code>variant</code>（推理力度 high/low/none…），不是大小档切换</li>
+  </ul>
+  <div class="callout warn">
+    <p class="tag">和 CC 的最大差异</p>
+    <p>Claude Code 有大量 Haiku 侧信道 + compact 用主模型 fork 保 cache；OpenCode 的小模型通道<strong>非常薄</strong>——compact / explore / general 默认都烧主模型，除非用户用 <code>agent.*.model</code> 自己改。</p>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2><span class="num">02</span>架构总览</h2>
+  <div class="flow">User / TUI / SDK / CLI
+        │
+        ▼
+┌────────────────────────────────────────────┐
+│ Model Resolution                            │
+│  --model > config.model > recent > priority │
+│  agent.model / agent.variant 覆盖           │
+│  Provider.getSmallModel(providerID)         │
+└──────────────┬──────────────────┬──────────┘
+               │                  │
+     ┌─────────▼────────┐   ┌─────▼─────────────────────────┐
+     │ MAIN SESSION     │   │ UTILITY SIDE CHANNEL          │
+     │ build / plan     │   │ • title agent（会话标题）      │
+     │ + tools          │   │ • project-copy 命名           │
+     │ explore/general  │   │ getSmallModel → else 主模型   │
+     │ （默认继承主模型）│   │ stream({ small: true })       │
+     │ compaction       │   └───────────────────────────────┘
+     │ （默认 = 会话模型）│
+     └─────────┬────────┘
+               ▼
+     Provider APIs（AI SDK / Native）
+     + prompt cache markers
+     + variants（reasoning effort）
+</div>
+
+  <div class="cards">
+    <div class="card large">
+      <h4>① 会话主模型</h4>
+      <p><code>config.model</code> / session model</p>
+      <p>build、plan、工具循环、默认的 explore/general/compaction 都走它。</p>
+      <div class="price">用户自选：Sonnet / Opus / GPT-5 …</div>
+    </div>
+    <div class="card small">
+      <h4>② Small / Utility</h4>
+      <p><code>getSmallModel()</code></p>
+      <p>几乎只用于标题生成、项目副本短名。自动优先 haiku / flash / nano。</p>
+      <div class="price">配置：<code>"small_model": "anthropic/claude-haiku-4-5"</code></div>
+    </div>
+    <div class="card main">
+      <h4>③ Agent 覆盖 + Variant</h4>
+      <p><code>agent.*.model</code> / <code>variant</code></p>
+      <p>用户可把 plan/explore/compaction 钉到便宜模型；variant 只调推理力度，不换模型档。</p>
+      <div class="price">可选成本优化入口</div>
+    </div>
+  </div>
+</section>
+
+<section id="resolution">
+  <h2><span class="num">03</span>模型解析</h2>
+
+  <h3>配置（opencode.json）</h3>
+  <pre><code>{
+  "model": "anthropic/claude-sonnet-4-5",
+  "small_model": "anthropic/claude-haiku-4-5",
+  "agent": {
+    "explore": { "model": "anthropic/claude-haiku-4-5" },
+    "compaction": { "model": "anthropic/claude-haiku-4-5" },
+    "title": { "model": "anthropic/claude-haiku-4-5" }
+  }
+}</code></pre>
+
+  <h3>主模型优先级</h3>
+  <ol>
+    <li>CLI <code>--model</code> / <code>-m</code></li>
+    <li>配置 <code>model</code></li>
+    <li>最近使用模型（state 里的 <code>model.json</code>）</li>
+    <li>目录排序优先：<code>gpt-5</code> → <code>claude-sonnet-4</code> → <code>big-pickle</code> → <code>gemini-3-pro</code></li>
+  </ol>
+
+  <h3>小模型：<code>Provider.getSmallModel</code></h3>
+  <pre><code>// packages/opencode/src/provider/provider.ts
+// 1) config.small_model（解析失败则 undefined，不继续自动匹配）
+// 2) plugin hook: experimental.provider.small_model（如 Copilot utility）
+// 3) 按 provider 目录子串优先匹配：
+//    默认: claude-haiku-4-5 → 3-5-haiku → gemini-*-flash → gpt-5-nano
+//    opencode*: gpt-5-nano
+//    github-copilot*: gpt-5-mini → haiku → 默认列表
+//    Bedrock: 优先 global./us./eu. 前缀</code></pre>
+
+  <div class="callout note">
+    <p class="tag">注意</p>
+    <p>若显式配置了无效的 <code>small_model</code>，会返回 <code>undefined</code>，<strong>不会</strong>再回落到自动 haiku 列表。标题生成随后会退回会话主模型。</p>
+  </div>
+
+  <h3><code>small: true</code> ≠ 换模型</h3>
+  <p>流式请求上的 <code>small: true</code> 走 <code>ProviderTransform.smallOptions()</code>：跳过用户 variant、减弱/关闭 reasoning、OpenAI 系设 <code>store: false</code>。它是<strong>请求模式标志</strong>，模型 ID 仍由调用方传入。</p>
+
+  <h3>Variant ≠ 大小模型</h3>
+  <p><code>high</code> / <code>max</code> / <code>low</code> / <code>none</code> 等 variant 只调节同一模型上的推理预算，是正交于「大/小模型」的第三轴。</p>
+</section>
+
+<section id="large">
+  <h2><span class="num">04</span>大模型（主模型）做什么</h2>
+  <p>角色：会话主脑。primary agent（build/plan）的工具循环几乎都跑在 session model 上。</p>
+
+  <table>
+    <thead>
+      <tr><th>任务</th><th>说明</th><th>选型</th><th>关键路径</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>主对话 + 工具循环</td>
+        <td>读改文件、Bash、搜索、MCP 等</td>
+        <td><span class="pill large">session model</span></td>
+        <td><code>session/prompt.ts</code></td>
+      </tr>
+      <tr>
+        <td>Plan 模式</td>
+        <td>禁止编辑，做规划</td>
+        <td><span class="pill large">session / agent.plan.model</span></td>
+        <td><code>agent/agent.ts</code>（plan）</td>
+      </tr>
+      <tr>
+        <td>Explore 子 agent</td>
+        <td>只读探索代码库；“fast”指权限/提示，不是换小模型</td>
+        <td><span class="pill large">默认继承父模型</span></td>
+        <td><code>agent/agent.ts</code>, <code>tool/task.ts</code></td>
+      </tr>
+      <tr>
+        <td>General 子 agent</td>
+        <td>并行多步调研/执行</td>
+        <td><span class="pill large">默认继承父模型</span></td>
+        <td><code>tool/task.ts</code></td>
+      </tr>
+      <tr>
+        <td>Context Compaction</td>
+        <td>上下文压缩；默认用当前用户消息的模型</td>
+        <td><span class="pill large">session model</span>（可覆盖）</td>
+        <td><code>session/compaction.ts</code></td>
+      </tr>
+      <tr>
+        <td>Agent 配置生成</td>
+        <td><code>opencode agent</code> 等结构化生成</td>
+        <td><span class="pill large">defaultModel()</span></td>
+        <td>agent generate 路径</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout note">
+    <p class="tag">Compaction 默认用主模型</p>
+    <p><code>compaction.ts</code>：<code>agent.model ?? userMessage.model</code>。不像 CC 那样为了 prompt cache 刻意 fork 同模型——而是直接复用会话当前模型（可选 <code>agent.compaction.model</code> 改便宜模型）。</p>
+  </div>
+</section>
+
+<section id="small">
+  <h2><span class="num">05</span>小模型做什么</h2>
+  <p>角色极窄：文档表述为 “lightweight tasks like title generation”。源码里实际调用点很少。</p>
+
+  <table>
+    <thead>
+      <tr><th>任务</th><th>选型链</th><th>文件</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Session 标题</td>
+        <td><code>title</code> agent.model → <code>getSmallModel(provider)</code> → 会话主模型；<code>small: true</code></td>
+        <td><code>session/prompt.ts</code> → <code>ensureTitle</code></td>
+      </tr>
+      <tr>
+        <td>Project Copy 短名</td>
+        <td><code>getSmallModel(defaultProvider)</code> → default model；<code>small: true</code></td>
+        <td><code>.../handlers/project-copy.ts</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>标题生成流程</h3>
+  <pre><code>// session/prompt.ts — SessionPrompt.ensureTitle
+const ag = yield* agents.get("title")
+const mdl = ag.model
+  ? yield* provider.getModel(ag.model.providerID, ag.model.modelID)
+  : ((yield* provider.getSmallModel(input.providerID)) ??
+     (yield* provider.getModel(input.providerID, input.modelID)))
+
+yield* llm.stream({
+  agent: ag,
+  small: true,   // 减弱 reasoning，不决定 model ID
+  tools: {},
+  model: mdl,
+  messages: [{ role: "user", content: "Generate a title..." }, ...],
+})</code></pre>
+
+  <h3>小模型任务特征</h3>
+  <ul>
+    <li>短输入 / 短输出（标题、2–3 词 slug）</li>
+    <li>无 tools（permission 全 deny）</li>
+    <li>可失败回退（project-copy 失败可走 slug）</li>
+    <li>不承担 compact、分类、命令前缀、WebFetch 二次提取等（这些在 CC 里常给 Haiku）</li>
+  </ul>
+
+  <div class="callout warn">
+    <p class="tag">summary agent</p>
+    <p>内置有 hidden <code>summary</code> agent 和 <code>prompt/summary.txt</code>，但当前未见 <code>agents.get("summary")</code> 的 LLM 调用接线；TUI 的 summarize/compact 走的是 compaction / 其它路径。不要把它当成活跃的小模型消费者。</p>
+  </div>
+</section>
+
+<section id="agents">
+  <h2><span class="num">06</span>Agent 矩阵</h2>
+  <p>OpenCode 用 <strong>agent 矩阵</strong> 而不是简单的大/小二元档。多数 agent 共享同一会话模型。</p>
+
+  <table>
+    <thead>
+      <tr><th>Agent</th><th>Mode</th><th>Hidden</th><th>默认模型行为</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>build</code></td><td>primary</td><td>否</td><td>会话 / 全局 <code>model</code></td></tr>
+      <tr><td><code>plan</code></td><td>primary</td><td>否</td><td>同上（禁编辑）</td></tr>
+      <tr><td><code>general</code></td><td>subagent</td><td>否</td><td>继承父 assistant 模型，除非 <code>agent.general.model</code></td></tr>
+      <tr><td><code>explore</code></td><td>subagent</td><td>否</td><td>同上；“fast”=只读+提示，非小模型</td></tr>
+      <tr><td><code>compaction</code></td><td>primary</td><td>是</td><td>会话用户消息模型，可覆盖</td></tr>
+      <tr><td><code>title</code></td><td>primary</td><td>是</td><td>小模型链（见上）</td></tr>
+      <tr><td><code>summary</code></td><td>primary</td><td>是</td><td>有定义，LLM 路径基本未接线</td></tr>
+    </tbody>
+  </table>
+
+  <p>用户若想省钱，可显式配置，例如把 explore / compaction 钉到 Haiku——这是<strong>可选</strong>策略，不是默认。</p>
+</section>
+
+<section id="routing">
+  <h2><span class="num">07</span>路由与 small 标志</h2>
+  <div class="callout">
+    <p class="tag">原则</p>
+    <p><strong>静态按调用点选型</strong>，没有分类器在大/小模型间动态切换。</p>
+  </div>
+
+  <div class="flow">主循环
+  └─ lastUser.model（会话当前模型）
+
+Subagent (Task tool)
+  └─ subagent.model ?? 父 assistant 的 model + variant
+
+Compaction
+  └─ compaction.agent.model ?? userMessage.model
+
+Title
+  └─ title.agent.model ?? getSmallModel(provider) ?? session model
+       + stream({ small: true })
+
+Project copy name
+  └─ getSmallModel(defaultProvider) ?? defaultModel
+       + stream({ small: true })
+
+llm/request.ts 当 small=true
+  └─ 跳过用户 variant，套用 smallOptions（弱/无 reasoning）
+</div>
+
+  <h3>少数动态点</h3>
+  <ol>
+    <li>Plugin 注入 small model（GitHub Copilot utility models）</li>
+    <li>无效 <code>small_model</code> → undefined → 标题退回主模型</li>
+    <li>Overflow → compaction 再继续（换上下文形态，不换更便宜模型）</li>
+    <li>HTTP/限流重试：同模型重试，不是 “try cheaper model”</li>
+  </ol>
+</section>
+
+<section id="vs-cc">
+  <h2><span class="num">08</span>与 Claude Code 对比</h2>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>Claude Code</th><th>OpenCode</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>主循环</td>
+        <td><code>mainLoopModel</code>（订阅默认 Opus/Sonnet）</td>
+        <td>会话 <code>model</code> + primary agent</td>
+      </tr>
+      <tr>
+        <td>小模型</td>
+        <td><code>getSmallFastModel</code> / <code>queryHaiku</code>，侧任务很多</td>
+        <td><code>getSmallModel</code>，主要是标题（+ project-copy）</td>
+      </tr>
+      <tr>
+        <td>Compaction</td>
+        <td>Fork <strong>同</strong>主模型以保 prompt cache</td>
+        <td>Hidden compaction agent，默认<strong>会话模型</strong>（可覆盖）</td>
+      </tr>
+      <tr>
+        <td>Explore / 子 agent</td>
+        <td>可 env 强制；Guide 钉 Haiku 等</td>
+        <td>默认继承父模型；explore「快」靠权限不是模型</td>
+      </tr>
+      <tr>
+        <td>第三轴</td>
+        <td>Fast Mode = Opus API speed（更贵）</td>
+        <td>Variant = 同模型推理力度</td>
+      </tr>
+      <tr>
+        <td>配置面</td>
+        <td>Env + settings</td>
+        <td><code>opencode.json</code> 的 <code>model</code> / <code>small_model</code> / <code>agent.*.model</code></td>
+      </tr>
+      <tr>
+        <td>路由</td>
+        <td>静态调用点</td>
+        <td>静态调用点</td>
+      </tr>
+      <tr>
+        <td>未来</td>
+        <td>—</td>
+        <td>V2 计划移除顶层 <code>small_model</code>，改 <code>agent.title.model</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout ok">
+    <p class="tag">对照记忆</p>
+    <p>CC Haiku 侧信道 ≈ OpenCode 的 <code>title</code> + <code>getSmallModel</code>（但 OC 覆盖面小得多）。CC compact-for-cache ≈ OC compaction 用当前会话模型（同类尺寸，但不是 “为 cache 而 fork” 的叙事）。</p>
+  </div>
+</section>
+
+<section id="cost">
+  <h2><span class="num">09</span>成本与缓存</h2>
+
+  <h3>已有优化</h3>
+  <ol>
+    <li>标题 / 命名用便宜小模型（haiku/flash/nano 或 Copilot utility）</li>
+    <li><code>small: true</code> 降低 reasoning 成本</li>
+    <li>Auto-compact + 可选 tool-output prune 缩小上下文</li>
+    <li>Anthropic / Bedrock 等 prompt cache markers（<code>applyCaching</code>）</li>
+    <li>Variant 调低推理力度（同一模型）</li>
+    <li>用户可把 <code>agent.explore.model</code> / <code>agent.compaction.model</code> 设便宜模型</li>
+  </ol>
+
+  <h3>没有的东西（相对 CC）</h3>
+  <ul>
+    <li>没有广泛的 Haiku 侧信道（命令前缀、fetch 提取、分类器…）</li>
+    <li>没有 “fork 同模型保 cache 做 compact” 的专门封装</li>
+    <li>没有订阅档位自动 Opus/Sonnet 默认阶梯</li>
+    <li>没有 <code>ANTHROPIC_SMALL_FAST_MODEL</code> 等价物（用配置 <code>small_model</code>）</li>
+    <li>失败重试不会自动降到更便宜模型</li>
+  </ul>
+
+  <h3>V2 方向</h3>
+  <p><code>specs/v2/config.md</code>：计划<strong>移除</strong>顶层 <code>small_model</code>；标题模型改为配置 <code>title</code> agent 的 model。当前运行时 <code>small_model</code> 的主要消费者就是标题生成。</p>
+</section>
+
+<section id="files">
+  <h2><span class="num">10</span>关键源码</h2>
+
+  <h3>配置与解析</h3>
+  <ul>
+    <li><code>packages/opencode/src/provider/provider.ts</code> — <code>getSmallModel</code> / <code>defaultModel</code> / <code>parseModel</code></li>
+    <li><code>packages/opencode/src/provider/transform.ts</code> — <code>variants</code> / <code>smallOptions</code> / <code>applyCaching</code></li>
+    <li><code>packages/core/src/v1/config/config.ts</code> — <code>model</code> / <code>small_model</code> / agent / compaction schema</li>
+    <li><code>packages/core/src/catalog.ts</code> — V2 目录里按成本的 small picker（另一路径）</li>
+    <li><code>packages/web/src/content/docs/{config,models,agents}.mdx</code> — 用户文档</li>
+    <li><code>specs/v2/config.md</code> — 移除 <code>small_model</code> 的规划</li>
+  </ul>
+
+  <h3>运行时</h3>
+  <ul>
+    <li><code>packages/opencode/src/session/prompt.ts</code> — 主循环、<code>ensureTitle</code></li>
+    <li><code>packages/opencode/src/session/compaction.ts</code> — compaction 模型选择</li>
+    <li><code>packages/opencode/src/session/llm.ts</code> / <code>llm/request.ts</code> — stream 与 <code>small</code> 标志</li>
+    <li><code>packages/opencode/src/agent/agent.ts</code> — 内置 agents</li>
+    <li><code>packages/opencode/src/tool/task.ts</code> — subagent 模型继承</li>
+    <li><code>packages/opencode/src/server/.../project-copy.ts</code> — 小模型命名</li>
+    <li><code>packages/opencode/src/plugin/github-copilot/copilot.ts</code> — small_model plugin hook</li>
+  </ul>
+</section>
+
+<section id="takeaways">
+  <h2><span class="num">11</span>设计要点总结</h2>
+  <ol>
+    <li><strong>配对很薄</strong>：主模型扛几乎一切；小模型只做标题/短名一类 utility。</li>
+    <li><strong>静态选型</strong>：按调用点 / agent 配置决定，没有任务分类器。</li>
+    <li><strong><code>small: true</code> 是请求选项</strong>，不是模型选择器；真正选小模型靠 <code>getSmallModel</code>。</li>
+    <li><strong>Compaction / Explore 默认烧主模型</strong>；想省钱要靠 <code>agent.*.model</code> 手动配置。</li>
+    <li><strong>Variant 是推理力度轴</strong>，与大/小模型正交。</li>
+    <li><strong>V2 将去掉 <code>small_model</code></strong>，统一到 agent 级模型覆盖（尤其 <code>title</code>）。</li>
+  </ol>
+
+  <div class="callout ok">
+    <p class="tag">可借鉴</p>
+    <p>若自研 Agent：至少把「标题/命名」从主循环拆到便宜模型；同时想清楚 compact / explore 是默认跟主模型（质量优先）还是默认跟小模型（成本优先）——OpenCode 选了前者，Claude Code 在侧任务上更激进地用 Haiku。</p>
+  </div>
+</section>
+
+<footer class="footer">
+  基于 public/opencode 源码分析 · 文档位于 ai_coding_agent_intro/opencode_docs
+</footer>
+</main>
+</div>
+
+<script>
+const links = document.querySelectorAll('.toc a');
+const sections = [...links].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  }
+}, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>

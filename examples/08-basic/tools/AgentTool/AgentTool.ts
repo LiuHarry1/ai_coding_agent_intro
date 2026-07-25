@@ -19,6 +19,7 @@ import { createSubagentWire } from '../../core/brokers/subagent-wire.js'
 import { randomUUID } from 'crypto'
 
 import { buildAgentListSection } from './agentListing.js'
+import { SUBAGENT_NO_OUTPUT_MARKER } from './finalizeAgentTool.js'
 
 /** tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
 export function createTaskTool(
@@ -107,6 +108,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
         registry,
         toolEnablement,
         provider,
+        models,
         compaction,
       } = context
 
@@ -177,13 +179,24 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             return 'Error: task tool requires provider in ToolContext'
           }
 
+          const tier = def.modelTier ?? 'large'
+          const subProvider = models?.provider(tier) ?? provider
+          if (!subProvider) {
+            throw new Error(
+              `Subagent '${subagent_type}' requires a request-scoped provider`,
+            )
+          }
+          const subModel =
+            def.model ?? models?.profile(tier).model ?? subProvider.defaultModelId()
+
           const subContext: ToolContext = {
             eventBus,
             wire: subWire,
             registry,
             runAgent,
             toolEnablement,
-            provider,
+            provider: subProvider,
+            models,
             compaction,
             sessionId: context.sessionId,
             sandbox: context.sandbox,
@@ -203,7 +216,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
 
           const projectRules = def.omitProjectRules ? '' : loadProjectRules(cwd)
           const subSystemPrompt = projectRules
- ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
             : def.systemPrompt
 
           const result = await runAgent(prompt, {
@@ -212,9 +225,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             eventBus,
             wire: subWire,
             messages: [],
-            maxSteps: def.maxSteps ?? 20,
-            model: def.model,
-            provider,
+            ...(def.maxSteps !== undefined ? { maxSteps: def.maxSteps } : {}),
+            model: subModel,
+            provider: subProvider,
             cwd,
             compaction,
             concurrencyPolicy: registry
@@ -223,7 +236,10 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             sessionId: context.sessionId,
           })
 
-          return result || `(${subagent_type} subagent returned no result)`
+          // CC mapToolResult: never hand the parent an empty tool_result —
+          // some models treat that as "nothing to act on" and stop.
+          const text = typeof result === 'string' ? result.trim() : ''
+          return text || SUBAGENT_NO_OUTPUT_MARKER
         },
       })
     },

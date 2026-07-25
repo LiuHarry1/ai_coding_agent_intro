@@ -102,6 +102,7 @@ export function getSession(id: string): Session | null {
 
 function extractPreview(session: Session | null): string | undefined {
   if (!session) return undefined
+  if (session.title?.trim()) return session.title.trim()
   const firstUser = session.messages.find(
     m => isRoleMessage(m) && m.role === 'user',
   )
@@ -114,6 +115,20 @@ function extractPreview(session: Session | null): string | undefined {
           .map(p => p.text)
           .join('')
   return text.slice(0, 80) || undefined
+}
+
+/** Persist an LLM-generated session title (append-only jsonl + in-memory). */
+export function setSessionTitle(sessionId: string, title: string): void {
+  const session = getSession(sessionId)
+  if (!session) return
+  const cleaned = title.trim()
+  if (!cleaned) return
+  session.title = cleaned
+  appendLine(sessionId, {
+    type: 'session_title',
+    title: cleaned,
+    timestamp: Date.now(),
+  })
 }
 
 /**
@@ -232,6 +247,10 @@ function restoreFromDisk(id: string): Session {
       }
       if (typeof line.needsPlanModeExitAttachment === 'boolean') {
         session.needsPlanModeExitAttachment = line.needsPlanModeExitAttachment
+      }
+    } else if (line.type === 'session_title') {
+      if (typeof line.title === 'string' && line.title.trim()) {
+        session.title = line.title.trim()
       }
     } else if (line.type === 'compacted') {
       // Checkpoint: discard everything accumulated so far and adopt the

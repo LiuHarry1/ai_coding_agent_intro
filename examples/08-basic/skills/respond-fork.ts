@@ -12,9 +12,11 @@ import { defaultRegistry } from '../tools/index.js'
 import type {
   AppConfig,
   IProvider,
+  ModelRegistry,
   RunAgentFn,
   SSETransport,
 } from '../core/types.js'
+import { createModelRegistry } from '../core/llm/index.js'
 import { runSkillFork } from './run-fork.js'
 import type { SkillDefinition } from './types.js'
 
@@ -28,6 +30,7 @@ export interface RespondSkillForkOptions {
   cwd: string
   runAgent: RunAgentFn
   provider: IProvider
+  models?: ModelRegistry
   config: AppConfig
   wantsStream: boolean
   sseHeaders?: Record<string, string>
@@ -51,6 +54,7 @@ export async function respondSkillFork(
     cwd,
     runAgent,
     provider,
+    models: modelsOpt,
     config,
     wantsStream,
     sseHeaders,
@@ -58,6 +62,7 @@ export async function respondSkillFork(
     sessionId = '',
   } = opts
 
+  const models = modelsOpt ?? createModelRegistry(config.models)
   const { activeAgents } = await registerSubagents(defaultRegistry, cwd)
   const targetAgentType = skill.agent ?? 'general_purpose'
   const targetAgent = activeAgents.find(a => a.agentType === targetAgentType)
@@ -85,6 +90,7 @@ export async function respondSkillFork(
     wire: createWireEmitter({ emit() {} }, sessionId),
     toolEnablement,
     provider,
+    models,
     compaction: config.compaction,
     sessionId,
     sandbox: createSandboxPolicy(cwd),

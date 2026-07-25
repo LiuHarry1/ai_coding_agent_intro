@@ -11,6 +11,7 @@ import type {
   IEventBus,
   IProvider,
   IToolRegistry,
+  ModelRegistry,
   RunAgentFn,
   ToolContext,
 } from '../core/types.js'
@@ -18,6 +19,7 @@ import type { WireEmitter } from '../core/wire-emitter.js'
 import { buildConcurrencyPolicy } from '../core/concurrency-policy.js'
 import { AGENT_TOOL_NAME } from '../constants/tool_names.js'
 import { SKILL_TOOL_NAME } from '../tools/skill.js'
+import { SUBAGENT_NO_OUTPUT_MARKER } from '../tools/AgentTool/finalizeAgentTool.js'
 import type { SkillDefinition } from './types.js'
 
 export interface RunSkillForkOptions {
@@ -32,6 +34,7 @@ export interface RunSkillForkOptions {
   wire: WireEmitter
   toolEnablement?: ToolContext['toolEnablement']
   provider?: IProvider
+  models?: ModelRegistry
   compaction?: CompactionConfig
   sessionId?: string
   sandbox?: ToolContext['sandbox']
@@ -49,6 +52,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     wire,
     toolEnablement,
     provider,
+    models,
     compaction,
     sessionId,
     sandbox,
@@ -67,13 +71,21 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     label: `Skill: ${skill.name}`,
   })
 
+  const tier = targetAgent.modelTier ?? 'large'
+  const forkProvider = models?.provider(tier) ?? provider
+  const forkModel =
+    targetAgent.model ??
+    models?.profile(tier).model ??
+    forkProvider?.defaultModelId()
+
   const subContext: ToolContext = {
     eventBus,
     wire,
     registry,
     runAgent,
     toolEnablement,
-    provider,
+    provider: forkProvider,
+    models,
     compaction,
     sessionId,
     sandbox,
@@ -93,7 +105,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
   delete subTools[AGENT_TOOL_NAME]
   delete subTools[SKILL_TOOL_NAME]
 
-  if (!provider) {
+  if (!forkProvider) {
     throw new Error(
       `Skill '${skill.name}' fork requires a request-scoped provider`,
     )
@@ -105,14 +117,17 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     eventBus,
     wire,
     messages: [],
-    maxSteps: targetAgent.maxSteps ?? 20,
-    model: targetAgent.model,
-    provider,
+    ...(targetAgent.maxSteps !== undefined
+      ? { maxSteps: targetAgent.maxSteps }
+      : {}),
+    model: forkModel,
+    provider: forkProvider,
     cwd,
     compaction,
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(subTools)),
     sessionId,
   })
 
-  return result || `(skill ${skill.name} returned no result)`
+  const text = typeof result === 'string' ? result.trim() : ''
+  return text || SUBAGENT_NO_OUTPUT_MARKER
 }

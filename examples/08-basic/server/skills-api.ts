@@ -52,7 +52,7 @@ import type { AgentDefinition, RunAgentFn } from '../core/types.js'
 import type { SkillDefinition } from '../skills/types.js'
 import { resolveRequestCwd } from './request-cwd.js'
 import { resolveSettings } from '../core/settings-manager.js'
-import { buildProvider } from '../core/llm/index.js'
+import { createModelRegistry } from '../core/llm/index.js'
 
 function sendJSON(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json' })
@@ -258,7 +258,8 @@ async function handleSkillInvoke(args: {
   const { req, res, skillName, body, runAgent, wantsStream } = args
   const cwd = resolveRequestWorkspace(req, body.workspace)
   const resolvedSettings = resolveSettings(cwd)
-  const provider = buildProvider(resolvedSettings.config.provider)
+  const models = createModelRegistry(resolvedSettings.config.models)
+  const provider = models.provider('large')
 
   const { skills } = await loadSkillsFromDisk(cwd)
   const skill = skills.find(s => s.name === skillName)
@@ -309,6 +310,7 @@ async function handleSkillInvoke(args: {
     cwd,
     runAgent,
     provider,
+    models,
     config: resolvedSettings.config,
     wantsStream,
     sseHeaders: { 'X-Skill': skillName },

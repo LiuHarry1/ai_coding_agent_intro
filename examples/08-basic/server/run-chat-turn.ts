@@ -6,10 +6,13 @@ import type {
   UserMessage,
   IEventBus,
 } from '../core/types.js'
-import { isAttachmentMessage } from '../core/types.js'
+import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
+import type { ModelRegistry } from '../core/llm/index.js'
 import { EventBus } from '../core/event-bus.js'
-import { buildProvider } from '../core/llm/index.js'
+import { createModelRegistry } from '../core/llm/index.js'
 import { resolveSettings } from '../core/settings-manager.js'
+import { generateSessionTitle } from '../services/sessionTitle.js'
+import { setSessionTitle } from './session.js'
 import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
 import { getSystemPromptForMode } from '../prompts/mode.js'
 import { applyModeRestrictions } from '../core/mode-restrictions.js'
@@ -77,6 +80,33 @@ export function createNoopTransport(): SSETransport {
 }
 
 /**
+ * Fire-and-forget title generation on the first user turn (CC ensureTitle).
+ * Failures keep the heuristic preview from the first message.
+ */
+function maybeGenerateSessionTitle(
+  session: Session,
+  message: string,
+  models: ModelRegistry,
+): void {
+  if (session.title?.trim()) return
+  const userTurns = session.messages.filter(
+    m => isRoleMessage(m) && m.role === 'user',
+  ).length
+  // Current turn's user message is not yet appended; 0 prior user msgs = first turn.
+  if (userTurns !== 0) return
+  const text = message.trim()
+  if (!text) return
+
+  const small = models.provider('small')
+  const modelId = models.profile('small').model
+  void generateSessionTitle(text, small, modelId)
+    .then(title => {
+      if (title) setSessionTitle(session.id, title)
+    })
+    .catch(() => {})
+}
+
+/**
  * Run one user turn and stream `@ai-agent/protocol` messages on `transport`.
  * Shared by HTTP `/chat` (SSE or JSON) and headless stdio CLI.
  */
@@ -98,7 +128,8 @@ export async function runChatTurn(
   } = input
 
   const resolvedSettings = resolveSettings(cwd)
-  const provider = buildProvider(resolvedSettings.config.provider)
+  const models = createModelRegistry(resolvedSettings.config.models)
+  const provider = models.provider('large')
   const wire = createWireEmitter(transport, session.id)
 
   if (!session.permissionMode) {
@@ -144,10 +175,14 @@ export async function runChatTurn(
     registry: defaultRegistry,
     config: resolvedSettings.config,
     provider,
+    models,
     eventBus,
     middleware,
     runAgent,
   })
+
+  // Claude Code–style: title via small model after the first real user turn.
+  maybeGenerateSessionTitle(session, message, models)
 
   prepared.toolContext.wire = wire
 
@@ -162,6 +197,7 @@ export async function runChatTurn(
       cwd,
       runAgent,
       provider,
+      models,
       config: resolvedSettings.config,
       wantsStream: streaming,
       sseHeaders: http?.sseHeaders,

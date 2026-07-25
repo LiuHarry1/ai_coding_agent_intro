@@ -131,6 +131,7 @@ export interface PrepareChatTurnInput {
   registry: IToolRegistry
   config: AppConfig
   provider: IProvider
+  models?: ToolContext['models']
   eventBus: ToolContext['eventBus']
   middleware: ToolContext['middleware']
   runAgent: NonNullable<ToolContext['runAgent']>
@@ -146,6 +147,7 @@ export async function prepareChatTurn(
     registry,
     config,
     provider,
+    models,
     eventBus,
     middleware,
     runAgent,
@@ -196,6 +198,7 @@ export async function prepareChatTurn(
     mcpTools: mcpManager.getAllTools(),
     toolEnablement,
     provider,
+    models,
     compaction: config.compaction,
     lspServers: config.lspServers,
     sessionId: session.id,

@@ -11,6 +11,7 @@ import {
   parseString,
   parseIdentifier,
 } from '../../utils/frontmatterParser.js'
+import { isModelTier } from '../../core/llm/index.js'
 import {
   AGENT_TOOL_NAME,
   INTERACTIVE_TOOLS,
@@ -83,6 +84,9 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
       : {}),
     ...(parseString(fm.model) !== undefined
       ? { model: parseString(fm.model) }
+      : {}),
+    ...(isModelTier(parseString(fm.modelTier))
+      ? { modelTier: parseString(fm.modelTier) as 'large' | 'medium' | 'small' }
       : {}),
     ...(parseString(fm.label) !== undefined
       ? { label: parseString(fm.label) }

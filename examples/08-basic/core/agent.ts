@@ -38,6 +38,7 @@ import { consumeStream, type StreamResult } from './agent/streamConsumer.js'
 import { emitTodoUpdate } from './wire-internal.js'
 import type { WireEmitter } from './wire-emitter.js'
 import { stripToolExecute } from './agent/prepareTools.js'
+import { extractPartialResult } from '../tools/AgentTool/finalizeAgentTool.js'
 import {
   buildToolMessage,
   runToolCalls,
@@ -227,7 +228,7 @@ export async function runAgent(
     wire,
     messages = [],
     images,
-    maxSteps = 80,
+    maxSteps,
     model,
     subagentNames,
     deferredToolPool,
@@ -307,8 +308,14 @@ export async function runAgent(
     applyPermissionModeRefresh(newMode)
   })
 
+  // CC query(): only enforce a turn cap when maxTurns is provided.
+  const stepLimit =
+    typeof maxSteps === 'number' && maxSteps > 0
+      ? maxSteps
+      : Number.POSITIVE_INFINITY
+
   try {
-    for (let step = 0; step < maxSteps; step++) {
+    for (let step = 0; step < stepLimit; step++) {
       wire.stepStart(step)
       const stepStart = Date.now()
 
@@ -348,7 +355,9 @@ export async function runAgent(
       })
 
       if (stepResult === null) {
-        return finalText
+        // CC finalizeAgentTool: prefer text from history if the step failed
+        // after partial assistant output was already appended.
+        return extractPartialResult(messages) ?? finalText
       }
 
       const { text, toolCalls } = stepResult
@@ -393,7 +402,8 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
         }
         autoCompleteTodos(currentTodos, eventBus, wire)
         wire.done()
-        return finalText
+        // CC: if last turn was tool_use-only, walk back for earlier text.
+        return extractPartialResult(messages) ?? finalText
       }
 
       if (toolUseContext) {
@@ -409,14 +419,103 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
       wire.thinking()
     }
 
+    // Finite maxSteps exhausted (CC would stop + salvage; we also do industry
+    // pattern A: one extra toolless turn so the parent always gets a report).
     autoCompleteTodos(currentTodos, eventBus, wire)
-    wire.error(`Reached max steps (${maxSteps})`)
+    let text = extractPartialResult(messages) ?? finalText
+    if (typeof maxSteps === 'number' && maxSteps > 0) {
+      console.log(
+        `[agent] maxSteps=${maxSteps} reached — forcing final answer (tools disabled)`,
+      )
+      const summary = await forceFinalAnswerOnMaxSteps({
+        messages,
+        systemPrompt: activeSystemPrompt,
+        provider,
+        resolvedModel,
+        eventBus,
+        wire,
+        step: maxSteps,
+        currentTodos,
+        cwd,
+        compaction,
+        sessionId,
+        onFullCompaction,
+        compactEnrichment,
+      })
+      if (summary) {
+        text = summary
+        finalText = summary
+      } else {
+        wire.error(`Reached max steps (${maxSteps})`)
+      }
+    }
     wire.done()
-    return finalText
+    return text
   } finally {
     unsubPlanReady()
     unsubMode()
     unsubTodo()
+  }
+}
+
+/**
+ * Haystack / Livekit / Hermes pattern: after the step budget is spent, make
+ * one more LLM call with no tools (`toolChoice: 'none'`) so the model must
+ * emit a text summary. Does not count toward maxSteps.
+ */
+async function forceFinalAnswerOnMaxSteps(input: {
+  messages: Message[]
+  systemPrompt: string
+  provider: IProvider
+  resolvedModel: string
+  eventBus: AgentOptions['eventBus']
+  wire: WireEmitter
+  step: number
+  currentTodos: TodoItem[]
+  cwd?: string
+  compaction?: AgentOptions['compaction']
+  sessionId?: string
+  onFullCompaction?: AgentOptions['onFullCompaction']
+  compactEnrichment?: CompactEnrichment
+}): Promise<string> {
+  input.messages.push({
+    role: 'user',
+    content: `<system-reminder>
+You have reached the maximum number of agent steps (${input.step}).
+Tool-calling budget is exhausted. Write a clear, self-contained final report of
+what you learned and accomplished so far. Respond in plain text / markdown only
+— do not call any tools.
+</system-reminder>`,
+  })
+  input.wire.stepStart(input.step)
+  const stepStart = Date.now()
+  try {
+    const stepResult = await runOneStep({
+      messages: input.messages,
+      tools: {},
+      toolChoice: 'none',
+      systemPrompt: input.systemPrompt,
+      provider: input.provider,
+      resolvedModel: input.resolvedModel,
+      eventBus: input.eventBus,
+      wire: input.wire,
+      step: input.step,
+      stepStart,
+      currentTodos: input.currentTodos,
+      concurrencyPolicy: () => false,
+      cwd: input.cwd,
+      compaction: input.compaction,
+      sessionId: input.sessionId,
+      onFullCompaction: input.onFullCompaction,
+      compactEnrichment: input.compactEnrichment,
+    })
+    const fromStep = stepResult?.text?.trim() ?? ''
+    if (fromStep) return fromStep
+    // Model may still have emitted text only in history (or ignored toolChoice).
+    return extractPartialResult(input.messages) ?? ''
+  } catch (err) {
+    console.warn(`[agent] forceFinalAnswerOnMaxSteps failed: ${err}`)
+    return extractPartialResult(input.messages) ?? ''
   }
 }
 
@@ -481,6 +580,8 @@ async function runCompactionAndLog(
 interface RunOneStepArgs {
   messages: Message[]
   tools: AgentOptions['tools']
+  /** AI SDK toolChoice — use `'none'` for the maxSteps final-answer turn. */
+  toolChoice?: 'auto' | 'none' | 'required'
   systemPrompt: string
   provider: IProvider
   resolvedModel: string
@@ -509,6 +610,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
   const {
     messages,
     tools,
+    toolChoice,
     systemPrompt,
     provider,
     resolvedModel,
@@ -568,6 +670,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         // Schema-only tools -- execution is handled by toolOrchestration so
         // we can batch concurrency-safe reads in parallel.
         tools: apiTools,
+        ...(toolChoice !== undefined ? { toolChoice } : {}),
         maxOutputTokens: getMaxOutputTokens(),
         maxRetries: 3,
         ...provider.streamTextExtras(),
