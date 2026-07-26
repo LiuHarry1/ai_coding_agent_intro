@@ -14,7 +14,7 @@
 #
 # Notes for downstream tenant Dockerfiles:
 #   - `WORKDIR /app` and tsx are already set up; `CMD` defaults to
-#     `start.js 08-basic` and need not be overridden.
+#     `start.js` and need not be overridden.
 #   - `/root/.ai-agent` is the agent config directory. The tenant image
 #     should `COPY` its own contents there (NOT mount at runtime —
 #     mounting defeats the point of baking the tenant layer).
@@ -50,13 +50,13 @@ RUN python3 -m venv "${VIRTUAL_ENV}" \
   && pip install --no-cache-dir --default-timeout=600 -r requirements.txt
 
 COPY package.json package-lock.json ./
-# Runtime needs tsx to load TypeScript examples; keep prod deps lean.
+# Runtime needs tsx to load TypeScript sources; keep prod deps lean.
 RUN npm ci --omit=dev \
   && npm install --no-save --ignore-scripts tsx@^4.21.0 \
   && test -x node_modules/.bin/tsx \
   && npm cache clean --force
 
-COPY examples/ ./examples/
+COPY src/ ./src/
 COPY shared/ ./shared/
 # Shared wire-protocol package, imported by the server transports at
 # runtime (tsx loads its .ts directly; zod resolves from /app/node_modules).
@@ -71,8 +71,7 @@ ENV NODE_ENV=production
 ENV PORT=4567
 # Default workspace inside the container. The tenant deployment is expected
 # to bind-mount the host project tree at this path (see docker-compose.admin.yml).
-# Override per-instance via `-e WORKSPACE=/other` or `--workspace=/path`
-# after the example name in CMD.
+# Override per-instance via `-e WORKSPACE=/other` or `--workspace=/path`.
 ENV WORKSPACE=/workspace
 VOLUME /workspace
 EXPOSE 4567
@@ -80,5 +79,4 @@ EXPOSE 4567
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||4567)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-# Tenant images can override the example via CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"].
-CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"]
+CMD ["./node_modules/.bin/tsx", "start.js"]

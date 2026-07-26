@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Subagent 加载与调用 — 08-basic 图文详解</title>
+  <title>Subagent 加载与调用 — src 图文详解</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
 
@@ -236,7 +236,7 @@
 
 <header class="hero">
   <h1>Subagent 加载与调用</h1>
-  <p>仅 <strong>examples/08-basic</strong> · 单一 <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#e0e7ff">Agent</code> 工具调度 · 每轮热加载 · 隔离式 <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#e0e7ff">runAgent</code></p>
+  <p>仅 <strong>src</strong> · 单一 <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#e0e7ff">Agent</code> 工具调度 · 每轮热加载 · 隔离式 <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#e0e7ff">runAgent</code></p>
   <div class="nav">
     <a href="#tool-prompt">Tool 提示词</a>
     <a href="skill-loading-guide.html">Skill</a>
@@ -316,7 +316,7 @@
     </div>
 
     <div class="callout">
-      <strong>08-basic 的设计：</strong>所有 subagent 类型合并进一个 <code>Agent</code> 工具——
+      <strong>src 的设计：</strong>所有 subagent 类型合并进一个 <code>Agent</code> 工具——
       description 里列目录，schema 里用 <code>subagent_type</code> enum 选型。新增 agent 只改 <code>AgentDefinition</code> 数据（TS 或 Markdown），不必再注册新 tool。
     </div>
   </section>
@@ -495,8 +495,8 @@ You are a database migration specialist...</pre>
     </table>
 
     <p class="lead" style="margin-top:12px">
-      关键源码：<code>examples/08-basic/tools/AgentTool/mergeAgents.ts</code>；
-      注册入口：<code>examples/08-basic/tools/AgentTool/index.ts</code> → <code>registerSubagents</code>。
+      关键源码：<code>src/tools/AgentTool/mergeAgents.ts</code>；
+      注册入口：<code>src/tools/AgentTool/index.ts</code> → <code>registerSubagents</code>。
     </p>
   </section>
 
@@ -802,7 +802,7 @@ Examples:
     </div>
 
     <p class="lead">
-      源码：<code>examples/08-basic/tools/AgentTool/AgentTool.ts</code> · 工具名常量 <code>AGENT_TOOL_NAME = "Agent"</code>
+      源码：<code>src/tools/AgentTool/AgentTool.ts</code> · 工具名常量 <code>AGENT_TOOL_NAME = "Agent"</code>
     </p>
   </section>
 
@@ -899,8 +899,8 @@ Examples:
     </div>
 
     <p>
-      <code>runSkillFork</code>（<code>examples/08-basic/skills/run-fork.ts</code>）根据 skill frontmatter 的 <code>agent:</code> 字段选择 target agent（默认 <code>general-purpose</code>），
-      额外禁止 <code>skill</code> 工具以防 fork 套娃。HTTP <code>/skills/:name/invoke</code>（<code>examples/08-basic/server/skills-api.ts</code>）与用户斜杠命令共用此路径。
+      <code>runSkillFork</code>（<code>src/skills/run-fork.ts</code>）根据 skill frontmatter 的 <code>agent:</code> 字段选择 target agent（默认 <code>general-purpose</code>），
+      额外禁止 <code>skill</code> 工具以防 fork 套娃。HTTP <code>/skills/:name/invoke</code>（<code>src/server/skills-api.ts</code>）与用户斜杠命令共用此路径。
     </p>
   </section>
 
@@ -932,18 +932,18 @@ Examples:
         <tr><th>职责</th><th>文件</th></tr>
       </thead>
       <tbody>
-        <tr><td>内置 agent 定义</td><td><code>examples/08-basic/tools/AgentTool/built-in/*.ts</code></td></tr>
-        <tr><td>注册 / 热加载</td><td><code>examples/08-basic/tools/AgentTool/index.ts</code></td></tr>
-        <tr><td>Markdown 解析 &amp; merge</td><td><code>examples/08-basic/tools/AgentTool/mergeAgents.ts</code></td></tr>
-        <tr><td>磁盘扫描</td><td><code>examples/08-basic/utils/markdownConfigLoader.ts</code></td></tr>
-        <tr><td>插件 agent</td><td><code>examples/08-basic/core/plugins/loader.ts</code></td></tr>
-        <tr><td>每轮 orchestration</td><td><code>examples/08-basic/utils/processUserInput/prepare_chat_turn.ts</code></td></tr>
-        <tr><td>进程启动注册</td><td><code>examples/08-basic/server/router.ts</code></td></tr>
-        <tr><td>调度 &amp; spawn</td><td><code>examples/08-basic/tools/AgentTool/AgentTool.ts</code></td></tr>
-        <tr><td>子 agent 循环</td><td><code>examples/08-basic/core/agent.ts</code></td></tr>
-        <tr><td>嵌套事件</td><td><code>examples/08-basic/core/brokers/subagent-bus.ts</code></td></tr>
-        <tr><td>Skill fork</td><td><code>examples/08-basic/skills/run-fork.ts</code></td></tr>
-        <tr><td>类型定义</td><td><code>examples/08-basic/core/types.ts</code> → <code>AgentDefinition</code></td></tr>
+        <tr><td>内置 agent 定义</td><td><code>src/tools/AgentTool/built-in/*.ts</code></td></tr>
+        <tr><td>注册 / 热加载</td><td><code>src/tools/AgentTool/index.ts</code></td></tr>
+        <tr><td>Markdown 解析 &amp; merge</td><td><code>src/tools/AgentTool/mergeAgents.ts</code></td></tr>
+        <tr><td>磁盘扫描</td><td><code>src/utils/markdownConfigLoader.ts</code></td></tr>
+        <tr><td>插件 agent</td><td><code>src/core/plugins/loader.ts</code></td></tr>
+        <tr><td>每轮 orchestration</td><td><code>src/utils/processUserInput/prepare_chat_turn.ts</code></td></tr>
+        <tr><td>进程启动注册</td><td><code>src/server/router.ts</code></td></tr>
+        <tr><td>调度 &amp; spawn</td><td><code>src/tools/AgentTool/AgentTool.ts</code></td></tr>
+        <tr><td>子 agent 循环</td><td><code>src/core/agent.ts</code></td></tr>
+        <tr><td>嵌套事件</td><td><code>src/core/brokers/subagent-bus.ts</code></td></tr>
+        <tr><td>Skill fork</td><td><code>src/skills/run-fork.ts</code></td></tr>
+        <tr><td>类型定义</td><td><code>src/core/types.ts</code> → <code>AgentDefinition</code></td></tr>
       </tbody>
     </table>
   </section>
@@ -970,7 +970,7 @@ Examples:
 </main>
 
 <footer>
-  examples/08-basic only · Subagent Loading Guide ·
+  src only · Subagent Loading Guide ·
   <a href="coding-agent-architecture-guide.html">架构图集</a>
   <a href="deferred-mcp-tools-skills-guide.html">Deferred / Skills</a>
   <a href="session-compacting-guide.html">Compacting</a>

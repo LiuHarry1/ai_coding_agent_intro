@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Coding Agent 架构图集 — 08-basic</title>
+  <title>Coding Agent 架构图集 — src</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap");
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -72,7 +72,7 @@
 
 <header class="hero">
   <h1>Coding Agent 架构图集</h1>
-  <p>examples/08-basic · 图为主 · 少文字</p>
+  <p>src · 图为主 · 少文字</p>
   <div class="nav">
     <a href="deferred-mcp-tools-skills-guide.html">Deferred / Skills</a>
     <a href="session-compacting-guide.html">Compacting</a>
@@ -96,7 +96,7 @@
         </defs>
 
         <!-- 标题区 -->
-        <text x="640" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">08-basic Coding Agent — End-to-End Architecture</text>
+        <text x="640" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Coding Agent (src) — End-to-End Architecture</text>
         <text x="640" y="52" text-anchor="middle" font-size="11" fill="#64748b">Client → Server → Turn Prep → Agent Loop → Tools / LLM → Persistence &amp; Events</text>
 
         <!-- ═══ 外部配置（顶） ═══ -->
@@ -555,7 +555,7 @@
     <div class="fig-title">⑧ 代码模块地图</div>
     <div class="svg-wrap">
       <svg viewBox="0 0 920 360" xmlns="http://www.w3.org/2000/svg">
-        <text x="460" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">examples/08-basic/</text>
+        <text x="460" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">src/</text>
         <g font-size="9" font-weight="600">
           <rect x="30" y="40" width="130" height="140" rx="8" fill="#d1fae5" stroke="#059669"/><text x="95" y="58" text-anchor="middle" fill="#047857">core/</text>
           <text x="42" y="78" fill="#475569">agent.ts</text><text x="42" y="92" fill="#475569">agent/*</text><text x="42" y="106" fill="#475569">llm/*</text><text x="42" y="120" fill="#475569">tool-registry</text><text x="42" y="134" fill="#475569">mcp-manager</text><text x="42" y="148" fill="#475569">permission-mode</text><text x="42" y="162" fill="#475569">event-bus</text>
@@ -684,7 +684,7 @@
 
         <rect x="120" y="170" width="680" height="50" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
         <text x="460" y="192" text-anchor="middle" font-size="9" fill="#475569">GET /health · /slash-commands · static client/web/dist · auth gate (optional)</text>
-        <text x="460" y="208" text-anchor="middle" font-size="9" fill="#475569">:4567 · npm start -- 08-basic</text>
+        <text x="460" y="208" text-anchor="middle" font-size="9" fill="#475569">:4567 · npm start</text>
       </svg>
     </div>
     <p class="fig-cap">HTTP 入口分布</p>

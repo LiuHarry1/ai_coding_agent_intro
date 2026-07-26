@@ -1,0 +1,642 @@
+import type { Tool } from 'ai'
+import type { ProviderOptions } from '@ai-sdk/provider-utils'
+import type { IProvider, LlmProfile } from './llm/types.js'
+import type { ModelProfiles, ModelRegistry, ModelTier } from './llm/model-registry.js'
+import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
+import type { ExternalMode, PermissionModeContext } from './permission-mode.js'
+import type {
+  Attachment,
+  Diagnostic,
+  DiagnosticFile,
+  ReadFileState,
+} from '../utils/attachments/types.js'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyTool = Tool<any, any>
+
+// ── EventBus ────────────────────────────────────
+
+export type EventHandler = (data: unknown, event: string) => void
+
+export interface IEventBus {
+  on(event: string, handler: EventHandler): () => void
+  off(event: string, handler: EventHandler): void
+  emit(event: string, data?: unknown): void
+  scoped(prefix: string): IEventBus
+  removeAllListeners(): void
+}
+
+// ── Middleware ───────────────────────────────────
+
+export type MiddlewareHook = 'beforeTool' | 'afterTool' | 'onError'
+
+export interface MiddlewareContext {
+  name: string
+  args: unknown
+  startTime: number
+  result?: unknown
+  error?: unknown
+  duration?: number
+  /** Agent identity for console logs (e.g. `main`, `session_memory`). */
+  logLabel?: string
+}
+
+export type MiddlewareHandler = (ctx: MiddlewareContext) => void | Promise<void>
+
+export interface IMiddleware {
+  use(hook: MiddlewareHook, handler: MiddlewareHandler): void
+  wrap(
+    name: string,
+    executeFn: (args: unknown, options?: unknown) => Promise<unknown>,
+  ): (args: unknown, options?: unknown) => Promise<unknown>
+}
+
+// ── Tool Registry ───────────────────────────────
+
+export interface ToolContext {
+  eventBus: IEventBus
+  wire: import('./wire-emitter.js').WireEmitter
+  middleware?: IMiddleware
+  runAgent?: RunAgentFn
+  registry?: IToolRegistry
+  /** MCP tools keyed by merged name from MCPManager (e.g. `web_fetch`). Subagents list these in SubagentConfig.tools */
+  mcpTools?: Record<string, AnyTool>
+  /** From AppConfig: omit disabled tools in registry.createAll; subagents pass through for MCP merge + filter */
+  toolEnablement?: Pick<AppConfig, 'disabledTools'>
+  /** Request-scoped provider and compaction settings inherited by subagents. */
+  provider?: IProvider
+  /** Three-tier model registry (large / medium / small). */
+  models?: ModelRegistry
+  compaction?: CompactionConfig
+  sessionMemory?: SessionMemoryConfig
+  /** Request-scoped LSP server configs from effective settings. */
+  lspServers?: Record<string, LspServerConfig>
+  /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
+  sessionId?: string
+  /** Active session �?set on main-agent runs for mode/plan tools. */
+  session?: Session
+  /** Workspace cwd for plan file resolution. */
+  cwd?: string
+  /**
+   * Request-scoped filesystem sandbox (SSO: pinned to userWorkspace).
+   * When set, File tools enforce read/write boundaries via core/sandbox.ts.
+   */
+  sandbox?: import('./sandbox.js').SandboxPolicy
+}
+
+export interface ToolDefinition {
+  name: string
+  description: string
+  /** When false, the tool is never exposed to the model */
+  enabled?: boolean
+  /**
+   * Marks tools created via `createSubagentDefinition`. Used to prevent
+   * subagent �?subagent recursion: a subagent never inherits other subagents
+   * as tools regardless of allow/deny lists.
+   */
+  isSubagent?: boolean
+  /**
+   * When true, the tool is deferred: its schema is excluded from the API
+   * `tools[]` array until the model discovers it via `tool_search`. MCP
+   * tools are auto-deferred (see `isDeferredTool`).
+   */
+  shouldDefer?: boolean
+  /**
+   * When true, the tool is never deferred �?full schema in the initial
+   * prompt even when tool_search is enabled. For MCP tools, set via
+   * config. Overrides both `shouldDefer` and the MCP auto-defer rule.
+   */
+  alwaysLoad?: boolean
+  /**
+   * When true for a given input, the tool may run in parallel with other
+   * consecutive concurrency-safe calls in the same assistant turn. Runtime
+   * policy �?the model is not told about this flag.
+   */
+  isConcurrencySafe?: (input: unknown) => boolean
+  create(cwd: string, context: ToolContext): AnyTool
+}
+
+export interface IToolRegistry {
+  register(def: ToolDefinition): void
+  get(name: string): ToolDefinition | undefined
+  list(): Array<{ name: string; description: string }>
+  createAll(
+    cwd: string,
+    context: ToolContext,
+    only?: string[],
+  ): Record<string, AnyTool>
+}
+
+// ── Messages (AI SDK format) ────────────────────
+
+export interface TextPart {
+  type: 'text'
+  text: string
+}
+
+export interface ImagePart {
+  type: 'image'
+  image: string | Buffer | Uint8Array
+  mediaType?: string
+}
+
+export interface ToolCallPart {
+  type: 'tool-call'
+  toolCallId: string
+  toolName: string
+  input: Record<string, unknown>
+  providerOptions?: ProviderOptions
+}
+
+/**
+ * Reasoning part produced by reasoning models (e.g. OpenAI Responses API).
+ * `providerOptions.openai.{ itemId, reasoningEncryptedContent }` carries the
+ * opaque state that MUST be replayed verbatim on the next request, otherwise
+ * the model loses its chain-of-thought across tool-call rounds.
+ */
+export interface ReasoningPart {
+  type: 'reasoning'
+  text: string
+  providerOptions?: ProviderOptions
+}
+
+export type UserContentPart = TextPart | ImagePart
+export type AssistantContentPart = TextPart | ReasoningPart | ToolCallPart
+
+export interface UserMessage {
+  role: 'user'
+  content: string | UserContentPart[]
+  /** Stable message id (session-memory cursor / keep boundary). */
+  uuid?: string
+  /** Meta attachments expanded for API �?hidden from UI when true. */
+  isMeta?: boolean
+  /**
+   * Full-compact summary injected for the model (isCompactSummary).
+   * Hidden from chat view; UI shows a compact_boundary marker instead.
+   */
+  isCompactSummary?: boolean
+}
+
+export interface AttachmentMessage {
+  type: 'attachment'
+  attachment: Attachment
+  uuid: string
+  timestamp: string
+  isMeta?: boolean
+}
+
+export type { Attachment, Diagnostic, DiagnosticFile, ReadFileState }
+
+export interface AssistantMessage {
+  role: 'assistant'
+  content: AssistantContentPart[]
+  /** Stable message id (session-memory cursor / keep boundary). */
+  uuid?: string
+  /**
+   * API-round id (the provider's response id). One `streamText` call = one
+   * round, so all assistant records from the same response (incl. parallel
+   * tool-call splits) share this id. Used to group messages by API round for
+   * PTL truncation and token estimation.
+   */
+  id?: string
+  /**
+   * Epoch-ms when this assistant response was received. Used by time-based
+   * micro-compaction to measure the gap since the last model turn (the prompt
+   * cache has likely gone cold past the TTL). Optional for backward-compat.
+   */
+  timestamp?: number
+  /**
+   * Real API usage from the response that produced this message (CC-aligned:
+   * usage lives ON the message so it persists to JSONL and survives session
+   * restore �?the previous WeakMap-only storage lost the accurate baseline on
+   * every server restart, forcing threshold checks onto chars/4 estimation
+   * which badly undercounts CJK text). Optional for backward-compat.
+   */
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+    cachedInputTokens?: number
+    reasoningTokens?: number
+  }
+}
+
+export interface ToolResultOutput {
+  type: 'text'
+  value: string
+}
+
+export interface ToolResultPart {
+  type: 'tool-result'
+  toolCallId: string
+  toolName: string
+  output: ToolResultOutput
+}
+
+export interface ToolMessage {
+  role: 'tool'
+  content: ToolResultPart[]
+  /** Stable message id (session-memory cursor / keep boundary). */
+  uuid?: string
+}
+
+export type Message =
+  UserMessage | AssistantMessage | ToolMessage | AttachmentMessage
+
+export function isAttachmentMessage(msg: Message): msg is AttachmentMessage {
+  return (msg as AttachmentMessage).type === 'attachment'
+}
+
+export type RoleMessage = UserMessage | AssistantMessage | ToolMessage
+
+export function isRoleMessage(msg: Message): msg is RoleMessage {
+  return !isAttachmentMessage(msg)
+}
+
+/** minimal fields for attachment collection. */
+export interface ToolUseContext {
+  cwd: string
+  session: Session
+  readFileState: ReadFileState
+  lspServers?: Record<string, LspServerConfig>
+  options: { tools: Record<string, AnyTool> }
+  /** Pre-formatted skill/deferred-tool listing for skill_listing attachment (turn 0). */
+  skillListingContent?: string
+  /** Active subagent definitions for agent_listing_delta attachments. */
+  agentDefinitions?: { activeAgents: AgentDefinition[] }
+}
+
+// ── Agent ───────────────────────────────────────
+
+export interface AgentOptions {
+  tools: Record<string, AnyTool>
+  systemPrompt: string
+  eventBus: IEventBus
+  wire: import('./wire-emitter.js').WireEmitter
+  messages?: Message[]
+  images?: string[]
+  /**
+   * Optional step budget (CC `maxTurns`). When omitted, the loop runs until
+   * the model stops calling tools (or errors) �?no artificial cap.
+   */
+  maxSteps?: number
+  model?: string
+  /** Request-scoped provider built from the resolved settings for this cwd. */
+  provider: IProvider
+  /** Request workspace; used by compaction and subagent runs. */
+  cwd?: string
+  /** Request-scoped compaction settings. */
+  compaction?: CompactionConfig
+  /** Session-memory (background notes + compact prefer-read). */
+  sessionMemory?: SessionMemoryConfig
+  /**
+   * Model id for session-memory extraction (usually medium tier).
+   * When omitted, extraction is skipped even if sessionMemory.enabled.
+   */
+  sessionMemoryModelId?: string
+  /** Cross-session auto memory (turn-end extract + MEMORY.md inject). */
+  autoMemory?: AutoMemoryConfig
+  /**
+   * Model id for auto-memory extract when cacheSafe is false.
+   * When cacheSafe, main-loop model is used.
+   */
+  autoMemoryModelId?: string
+  /**
+   * Names of tools that are subagent wrappers. Used purely for UI: when
+   * provided, the agent tags `tool_call` / `tool_input_start` events with
+   * `isSubagent: true` so the frontend can render them with the special
+   * "subagent" card style + auto-expanded nested step list.
+   */
+  subagentNames?: Set<string>
+  /**
+   * Deferred tools pool �?keyed by name, created but not in `tools`.
+   * When the model calls `tool_search` and discovers a tool, the agent
+   * loop activates it by moving it from this pool into `tools` for the
+   * next step.
+   */
+  deferredToolPool?: Record<string, AnyTool>
+  /**
+   * Per-tool concurrency policy for manual tool orchestration. When omitted,
+   * all tools run serially (safe default).
+   */
+  concurrencyPolicy?: ConcurrencyPolicyFn
+  /** Persists large tool outputs; inherited by subagent runs. */
+  sessionId?: string
+  /** Request-scoped context for getAttachmentMessages. */
+  toolUseContext?: ToolUseContext
+  /**
+   * Rebuild the active tool set when permission mode changes mid-turn
+   * (e.g. ExitPlanMode approval unlocks Write/Bash after planning).
+   */
+  refreshTools?: () => Record<string, AnyTool>
+  /** Rebuild system prompt when permission mode changes mid-turn. */
+  refreshSystemPrompt?: () => string
+  /** Inject plan-exit reminders when transitioning out of plan mode mid-turn. */
+  onPermissionModeChange?: () => Message[]
+  /**
+   * Called after a full LLM compaction replaces the in-memory history.
+   * Host (chat route) uses this to write a `compacted` JSONL checkpoint when
+   * the first message uuid changes.
+   */
+  onFullCompaction?: (messages: readonly Message[]) => void
+  /**
+   * Optional prefix for agent console logs (e.g. `session_memory` �?
+   * `[agent:session_memory] step …`). Defaults to `main` when omitted so
+   * forked agents are always distinguishable from the primary loop.
+   */
+  logLabel?: string
+}
+
+export type RunAgentFn = (
+  userMessage: string,
+  options: AgentOptions,
+) => Promise<string>
+
+// ── LLM provider ─────────────────────────────────
+// Profile/strategy types live in `./llm/`. Re-exported here for convenience.
+
+export type {
+  LlmProfile,
+  ProviderId,
+  ThinkingConfig,
+  IProvider,
+  AgentStreamTextExtras,
+  ProviderStrategy,
+} from './llm/types.js'
+
+// ── Plugin ──────────────────────────────────────
+
+export interface PluginContext {
+  tools: IToolRegistry
+  events: IEventBus
+  middleware: IMiddleware
+}
+
+export interface Plugin {
+  name: string
+  version?: string
+  description?: string
+  init(context: PluginContext): void | Promise<void>
+  destroy?(): void | Promise<void>
+}
+
+// ── Session ─────────────────────────────────────
+
+export interface Session {
+  id: string
+  messages: Message[]
+  createdAt: number
+  /**
+   * LLM-generated session title (small-model side channel). When unset, UI
+   * falls back to a heuristic preview of the first user message.
+   */
+  title?: string
+  /**
+   * Email of the user who created the session (SSO mode only). Used to keep
+   * sessions private per-user. Undefined for sessions created without auth.
+   */
+  ownerEmail?: string
+  /** Tool names discovered via `tool_search` �?activated in subsequent turns. */
+  discoveredTools?: Set<string>
+  /** Tracks files read for @-mention dedup (mtime-based), per session. */
+  readFileState?: Map<string, { content: string; timestamp: number }>
+  /** Session-level Agent / Ask / Plan mode. */
+  permissionMode: PermissionModeContext
+  /** Set when exiting plan �?triggers reentry attachment on next plan entry. */
+  hasExitedPlanMode?: boolean
+  /** One-shot attachment after plan exit allowing execution. */
+  needsPlanModeExitAttachment?: boolean
+}
+
+export interface SessionInfo {
+  id: string
+  createdAt?: number
+  messageCount: number
+  preview?: string
+  permissionMode?: ExternalMode
+  /** Present when SSO mode records session ownership (shown to super users). */
+  ownerEmail?: string
+}
+
+// ── Server ──────────────────────────────────────
+
+export interface ServerOptions {
+  runAgent: RunAgentFn
+}
+
+export interface RouterOptions {
+  runAgent: RunAgentFn
+  staticDir: string | null
+}
+
+export interface SSETransport {
+  emit(msg: import('../../protocol/src/wire.js').OutgoingMessage): void
+  end(): void
+}
+
+// ── Subagent ────────────────────────────────────
+
+export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project'
+
+/**
+ * Pure-data definition of a subagent. After the single-Task architecture
+ * refactor, subagents are no longer registered as individual tools �?they
+ * are entries in the `task` tool's directory. The model picks one via
+ * `subagent_type` parameter.
+ */
+export interface AgentDefinition {
+  /** Stable identifier shown to the model as `subagent_type` value. */
+  agentType: string
+  /**
+   * One-paragraph description rendered in the `task` tool's description
+   * directory. Should include 1-3 user-phrasing examples in quotes so the
+   * model recognizes triggers like "how does X work" / "audit Y".
+   *
+   * Add the literal string "use proactively" here to opt this agent into
+   * the proactive-use protocol surfaced in the main system prompt.
+   */
+  whenToUse: string
+  /** Brief description for activity logs / UI / events. */
+  description: string
+  /** System prompt the subagent runs with. */
+  systemPrompt: string
+  /**
+   * Allow-list of tool names. Mutually exclusive with `disallowedTools`.
+   * If neither set, subagent inherits the full registry + MCP tools.
+   */
+  tools?: string[]
+  /** Deny-list of tool names. */
+  disallowedTools?: string[]
+  /**
+   * Optional step budget (CC `maxTurns`). Built-ins omit this; custom agents
+   * may set it via frontmatter `maxSteps:`.
+   */
+  maxSteps?: number
+  /** Optional model id override on the resolved tier's provider. */
+  model?: string
+  /**
+   * Which configured tier to run on (Claude Code–style static routing).
+   * Default when unset: `large`. Explore uses `small`.
+   */
+  modelTier?: ModelTier
+  /** Display label used in the UI's SubagentCard. Defaults to titlecased agentType. */
+  label?: string
+  /**
+ * Skip injecting project rules (AGENTS.md / CLAUDE.md / .cursor/rules/*)
+   * into this subagent's system prompt. Set true for fast read-only
+   * exploration agents �?the rules carry commit/PR/lint guidance the
+   * subagent will never act on, and the parent already interprets results
+   * with full context.
+   */
+  omitProjectRules?: boolean
+  /** Where this definition was loaded from (disk agents + plugins). */
+  source?: AgentSource
+  /** Absolute path to the defining `.md` file, when loaded from disk. */
+  filePath?: string
+}
+
+export interface AgentDefinitionsResult {
+  activeAgents: AgentDefinition[]
+  allAgents: AgentDefinition[]
+  errors: Array<{ filePath: string; error: string }>
+}
+
+// ── MCP ─────────────────────────────────────────
+
+export interface MCPServerStdio {
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+}
+
+export interface MCPServerHTTP {
+  url: string
+  transport?: 'http' | 'sse'
+  headers?: Record<string, string>
+}
+
+export type MCPServerConfig = MCPServerStdio | MCPServerHTTP
+
+export interface MCPServerStatus {
+  name: string
+  status: 'connected' | 'error' | 'disconnected'
+  tools: string[]
+  error?: string
+}
+
+// ── Todo ────────────────────────────────────────
+
+export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
+
+export interface TodoItem {
+  id: string
+  content: string
+  status: TodoStatus
+}
+
+// ── App Config ──────────────────────────────────
+
+export interface CompactionConfig {
+  /** Master switch �?when false, proactive auto-compact is skipped (manual /compact still works). */
+  enabled: boolean
+  /** Model's context window size in tokens. Used to dynamically compute compact threshold. */
+  contextWindow: number
+  /** Number of most-recent tool results to keep verbatim during micro-compaction. */
+  microCompactKeepRecent: number
+  /** Max number of recently-read files to re-inject post-compact. */
+  maxFilesToRestore: number
+  /** Max tokens (estimated) per restored file. */
+  maxTokensPerFile: number
+  /** Total token budget for all restored files combined. */
+  fileBudget: number
+  /**
+   * Model's max output tokens. The compaction reserve is `min(this, 20_000)`.
+   * When unset, the reserve defaults to 20_000.
+   */
+  maxOutputTokens?: number
+  /**
+   * Time-based micro-compaction. When the gap since the last assistant message
+   * exceeds the TTL, the prompt cache is cold and the prefix will be rewritten
+   * anyway �?so clearing old tool payloads first (content-mutating micro) is
+   * "free". Default off.
+   */
+  timeBasedMicroEnabled?: boolean
+  /**
+   * Gap in minutes that marks the cache as cold. Set to match your prompt-cache
+   * TTL: 5 for the default 5-min ephemeral cache, 60 for 1h TTL. Default 5.
+   */
+  timeBasedMicroGapMinutes?: number
+}
+
+/** Background session notes used to accelerate compaction (CC-aligned). */
+export interface SessionMemoryConfig {
+  /** Master switch. Also requires compaction.enabled for auto extract. */
+  enabled: boolean
+  minimumTokensToInit: number
+  minimumTokensBetweenUpdate: number
+  toolCallsBetweenUpdates: number
+  /**
+   * When true (CC default), extract reuses the main-loop model + system +
+   * full tools schema (`CacheSafeParams`) so the fork can hit prompt cache.
+   * `canUseTool` still allows only Edit on summary.md.
+   * When false, uses a restricted Edit-only fork on `modelTier`.
+   */
+  cacheSafe: boolean
+  /**
+   * Model tier for non-cacheSafe (restricted) extract.
+   * Ignored when `cacheSafe` is true (main-loop model is used).
+   */
+  modelTier: 'large' | 'medium' | 'small'
+  compactMinTokens: number
+  compactMaxTokens: number
+  compactMinTextMessages: number
+}
+
+/**
+ * Runtime auto-memory config (derived from flat AppConfig fields + code defaults).
+ * Settings surface matches CC: `autoMemoryEnabled` / `autoMemoryDirectory`.
+ */
+export interface AutoMemoryConfig {
+  enabled: boolean
+  /** Trusted directory; from env / user / local only. */
+  directory?: string
+  /** Eligible turn-end extracts; default 1 (CC tengu_bramble_lintel). */
+  extractEveryNTurns: number
+  cacheSafe: boolean
+  injectIndex: boolean
+  injectMaxIndexLines: number
+}
+
+export interface AppConfig {
+  /** Three-tier profiles; medium/small fall back to large when omitted in settings. */
+  models: ModelProfiles
+  compaction: CompactionConfig
+  sessionMemory: SessionMemoryConfig
+  /**
+   * Enable auto-memory (CC `autoMemoryEnabled`). Default true.
+   * Env `AI_AGENT_DISABLE_AUTO_MEMORY=1` still forces off.
+   */
+  autoMemoryEnabled: boolean
+  /**
+   * Custom auto-memory directory (CC `autoMemoryDirectory`).
+   * Trusted scopes only: user / local / env �?never project settings.
+   */
+  autoMemoryDirectory?: string
+  mcpServers: Record<string, MCPServerConfig>
+  lspServers: Record<string, LspServerConfig>
+  /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */
+  disabledTools?: string[]
+}
+
+export type { ModelProfiles, ModelRegistry, ModelTier }
+
+export interface LspServerConfig {
+  command: string
+  args?: string[]
+  extensionToLanguage: Record<string, string>
+  env?: Record<string, string>
+  initializationOptions?: unknown
+  workspaceFolder?: string
+  startupTimeout?: number
+  maxRestarts?: number
+}

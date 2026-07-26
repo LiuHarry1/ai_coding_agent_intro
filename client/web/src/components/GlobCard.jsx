@@ -10,7 +10,7 @@ import { shortDisplayPath, truncateEnd } from '../lib/utils.js'
  * Header shape:
  *   Searched files   "**\/*.ts"   src/   · 12 files
  *
- * Glob result string (see examples/08-basic/tools/glob.ts:execute) is either:
+ * Glob result string (see src/tools/GlobTool/GlobTool.ts:execute) is either:
  *   - "No files found"
  *   - <relative path>\n<relative path>\n…   (optionally followed by
  *     a trailing "(Results are truncated…)" hint line)

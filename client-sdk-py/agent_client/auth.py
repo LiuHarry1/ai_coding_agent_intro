@@ -2,7 +2,7 @@
 
 The agent's SSO deploy mode (``deploy/docker-compose.sso.yml``) verifies a
 shared-secret HS256 token statelessly — no auth-service round-trip, no DB.
-See ``examples/08-basic/server/auth/identity.py``/``identity.ts``
+See ``src/server/auth/identity.py``/``identity.ts``
 (``verifyJwt``): it only checks the signature, ``exp``/``nbf``, and reads
 ``sub`` (email), ``username`` and ``role``.
 

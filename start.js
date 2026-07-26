@@ -1,5 +1,4 @@
 import * as fs from 'fs'
-import * as path from 'path'
 
 // ACP uses stdout for JSON-RPC — keep boot logs on stderr only.
 if (process.argv.includes('--acp')) {
@@ -32,76 +31,38 @@ console.log(
   `[start] ANALYTICS_URL=${process.env.ANALYTICS_URL ?? '(unset → telemetry disabled)'}`,
 )
 
-// First positional that isn't a flag (or a --workspace value) is the example name.
-function cliPositionals(argv) {
-  const out = []
-  for (let i = 2; i < argv.length; i++) {
-    const arg = argv[i]
-    if (arg === '--workspace') {
-      i++
-      continue
-    }
-    if (arg.startsWith('--workspace=')) continue
-    if (arg.startsWith('--')) continue
-    out.push(arg)
-  }
-  return out
-}
-
-function resolveExampleName(argv) {
-  const positionals = cliPositionals(argv)
-  const candidate = positionals[0]
-  if (!candidate) return '08-basic'
-  const exampleDir = new URL(`./examples/${candidate}/`, import.meta.url)
-  if (fs.existsSync(exampleDir)) return candidate
-  if (path.isAbsolute(candidate) || candidate.includes('/')) {
-    return '08-basic'
-  }
-  return candidate
-}
-
-const example = resolveExampleName(process.argv)
-
-console.log(`[start] Loading example: ${example}`)
-
 async function tryImport(base) {
-  const tsPath = `./examples/${example}/${base}.ts`
-  const jsPath = `./examples/${example}/${base}.js`
+  const tsPath = `./src/${base}.ts`
+  const jsPath = `./src/${base}.js`
   const tsExists = fs.existsSync(new URL(tsPath, import.meta.url))
   return import(tsExists ? tsPath : jsPath)
 }
 
+console.log('[start] Loading agent from src/')
+
 let runAgent, systemPrompt, startServer
 try {
   ;({ runAgent } = await tryImport('agent'))
-
   ;({ startServer } = await tryImport('server'))
-  // 07-basic still wires systemPrompt into its router; 08-basic ignores it.
   try {
     ;({ systemPrompt } = await tryImport('prompts'))
   } catch {
     systemPrompt = undefined
   }
-  console.log(`[start] Using server from ${example}/`)
+  console.log('[start] Using server from src/')
 } catch (err) {
-  console.error(`[start] Failed to load example "${example}": ${err.message}`)
-  console.error(`[start] Available examples:`)
-
-  const dirs = fs.readdirSync(new URL('./examples', import.meta.url))
-  dirs.forEach(d => console.error(`  - ${d}`))
+  console.error(`[start] Failed to load src/: ${err.message}`)
   process.exit(1)
 }
 
 // Resolve the default workspace ONCE at boot (CLI --workspace > $WORKSPACE >
 // process.cwd()). Logs early so a typo blows up here rather than on the first
-// tool call. The actual resolver lives inside the example so each example can
-// own its workspace semantics; we just trigger it and log the result.
+// tool call.
 try {
   const { resolveDefaultWorkspace } = await tryImport('core/workspace')
   const workspace = resolveDefaultWorkspace()
   console.log(`[start] workspace = ${workspace}`)
 } catch (err) {
-  // Examples without a core/workspace module (older ones) are unaffected.
   if (err?.code !== 'ERR_MODULE_NOT_FOUND') {
     console.error(`[start] Failed to resolve workspace: ${err.message}`)
     process.exit(1)

@@ -1,6 +1,6 @@
 /**
  * Classify tool names for UI routing. MCP tools are merged as
- * `{mcpServerName}_{toolName}` (see examples/08-basic/core/mcp-manager.ts).
+ * `{mcpServerName}_{toolName}` (see src/core/mcp-manager.ts).
  */
 
 /** Built-in `WebFetch` and MCP names like `mcp_server_fetch`. */

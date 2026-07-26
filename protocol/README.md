@@ -32,7 +32,7 @@ ACP adapter is a thin translation rather than a rewrite.
 
 ## Native emission
 
-The engine in `examples/08-basic` emits typed `ServerMessage`s at the
+The engine in `src` emits typed `ServerMessage`s at the
 boundary via `WireEmitter` (CC: `QueryEngine` yielding `SDKMessage`).
 Transports (SSE, stdio NDJSON) only serialize — no legacy adapter layer.
 

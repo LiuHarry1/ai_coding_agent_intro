@@ -16,8 +16,8 @@
     "desktop:dev": "npm run build:web && npm run desktop:start",
     "desktop:pack": "npm run build:web && electron-builder",
     "desktop:pack:win": "npm run build:web && electron-builder --win",
-    "typecheck": "tsc --noEmit -p examples/08-basic/tsconfig.json && npm --prefix protocol run typecheck && npm --prefix client-sdk run typecheck",
-    "format": "npx prettier --write \"examples/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\""
+    "typecheck": "tsc --noEmit -p src/tsconfig.json && npm --prefix protocol run typecheck && npm --prefix client-sdk run typecheck",
+    "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\""
   },
   "keywords": [],
   "author": "",
@@ -63,7 +63,7 @@
     "files": [
       "electron/**/*",
       "start.js",
-      "examples/**/*",
+      "src/**/*",
       "shared/**/*",
       "protocol/**/*",
       "client/web/dist/**/*",

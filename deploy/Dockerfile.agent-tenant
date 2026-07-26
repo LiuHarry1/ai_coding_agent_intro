@@ -49,5 +49,5 @@ COPY .ai-agent/ /root/.ai-agent/
 # /workspace/users/<slug>/. See deploy/workspace-seed/README.md.
 COPY deploy/workspace-seed/ /opt/workspace-seed/
 
-# Optional: override the example the base image runs by default.
-# CMD ["./node_modules/.bin/tsx", "start.js", "08-basic"]
+# Optional: override the default CMD from the base image.
+# CMD ["./node_modules/.bin/tsx", "start.js"]

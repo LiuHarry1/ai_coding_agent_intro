@@ -219,7 +219,7 @@
   <h1>LLM 消息格式映射指南</h1>
   <p>
     Anthropic Messages API、OpenAI Responses / Chat Completions API 与 Vercel AI SDK 之间
-    的 role、content block、tool call / tool result 对照 — 以 08-basic 为例。
+    的 role、content block、tool call / tool result 对照 — 以 src 为例。
     含 CC 对齐的 <span class="mono">AttachmentMessage</span> 存储与 API 展开管线。
   </p>
 </header>
@@ -230,13 +230,13 @@
   <section>
     <h2><span class="num">1</span>三层架构：你在哪一层工作？</h2>
     <p class="lead">
-      08-basic 在应用层维护 <span class="mono">Message[]</span>（AI SDK 风格 + CC 风格
+      src 在应用层维护 <span class="mono">Message[]</span>（AI SDK 风格 + CC 风格
       <span class="mono">AttachmentMessage</span>），经五步预处理展开 attachment 后，
       再 <span class="mono">streamText({ messages, system, tools })</span> 交给 SDK。
     </p>
 
     <div class="flow">
-      <div class="box" style="border-color:#4338ca;color:#4338ca">08-basic 会话存储<br><small style="font-weight:400;color:#64748b">role 消息 + type:attachment</small></div>
+      <div class="box" style="border-color:#4338ca;color:#4338ca">src 会话存储<br><small style="font-weight:400;color:#64748b">role 消息 + type:attachment</small></div>
       <span class="arrow">→</span>
       <div class="box" style="border-color:#6d28d9;color:#6d28d9">expandAttachment<br><small style="font-weight:400;color:#64748b">utils/messages.ts</small></div>
       <span class="arrow">→</span>
@@ -266,7 +266,7 @@
       <thead>
         <tr>
           <th>语义</th>
-          <th><span class="tag sdk">AI SDK</span> 08-basic</th>
+          <th><span class="tag sdk">AI SDK</span> src</th>
           <th><span class="tag anthropic">Anthropic</span> Messages API</th>
           <th><span class="tag openai">OpenAI</span> Responses / Chat</th>
         </tr>
@@ -484,7 +484,7 @@
     <h2><span class="num">5</span>完整一轮 Tool Call → Tool Result</h2>
     <p class="lead">以读取文件 <span class="mono">read_file</span> 为例，三种格式并排对照。</p>
 
-    <h3>5.1 08-basic 持久化格式（AI SDK 风格）</h3>
+    <h3>5.1 src 持久化格式（AI SDK 风格）</h3>
     <pre><span class="c">// services/tools/tool_execution.ts → buildToolMessage()</span>
 [
   {
@@ -548,8 +548,8 @@
   ]
 }</pre>
 
-    <h3>5.3 OpenAI Responses API（08-basic 默认 openai provider）</h3>
-    <pre><span class="c">// POST /v1/responses — 08-basic 使用 client.responses(id)</span>
+    <h3>5.3 OpenAI Responses API（src 默认 openai provider）</h3>
+    <pre><span class="c">// POST /v1/responses — src 使用 client.responses(id)</span>
 {
   <span class="k">"model"</span>: <span class="s">"gpt-5.2"</span>,
   <span class="k">"instructions"</span>: <span class="s">"You are a coding assistant..."</span>,
@@ -607,7 +607,7 @@
       <thead>
         <tr>
           <th>概念</th>
-          <th>AI SDK (08-basic)</th>
+          <th>AI SDK (src)</th>
           <th>Anthropic</th>
           <th>OpenAI Responses</th>
           <th>OpenAI Chat</th>
@@ -678,11 +678,11 @@
         <ul style="font-size:13px;padding-left:16px;color:#475569">
           <li>全局指令 → <code>instructions</code></li>
           <li>Attachment 展开后 → 普通 user input items</li>
-          <li>Reasoning item 需 <code>itemId</code> replay（08-basic 会 strip）</li>
+          <li>Reasoning item 需 <code>itemId</code> replay（src 会 strip）</li>
         </ul>
       </div>
       <div class="card sdk">
-        <h4>08-basic 做法</h4>
+        <h4>src 做法</h4>
         <ul style="font-size:13px;padding-left:16px;color:#475569">
           <li><code>systemPrompt</code> → <code>streamText({ system })</code></li>
           <li><code>skillListing</code> → 仍为 <code>role: "user"</code> + reminder（待 Phase 2 改 attachment）</li>
@@ -719,7 +719,7 @@
 
   <!-- 8. 五步预处理 -->
   <section>
-    <h2><span class="num">8</span>08-basic 发给 SDK 前的五步预处理</h2>
+    <h2><span class="num">8</span>src 发给 SDK 前的五步预处理</h2>
     <p class="lead">
       入口：<span class="mono">core/agent.ts → runOneStep()</span>，
       在 <span class="mono">streamText({ messages })</span> 之前执行（顺序固定）。
@@ -819,11 +819,11 @@
 { <span class="k">"type"</span>: <span class="s">"message"</span>, <span class="k">"role"</span>: <span class="s">"assistant"</span>, <span class="k">"content"</span>: [{ <span class="k">"type"</span>: <span class="s">"text"</span>, <span class="k">"text"</span>: <span class="s">"..."</span> }] }</pre>
   </section>
   <section>
-    <h2><span class="num">10</span>08-basic Provider 配置对照</h2>
+    <h2><span class="num">10</span>src Provider 配置对照</h2>
 
     <table>
       <thead>
-        <tr><th>配置 provider</th><th>SDK 包</th><th>API 端点</th><th>08-basic 特殊处理</th></tr>
+        <tr><th>配置 provider</th><th>SDK 包</th><th>API 端点</th><th>src 特殊处理</th></tr>
       </thead>
       <tbody>
         <tr>
@@ -859,7 +859,7 @@
 
     <table>
       <thead>
-        <tr><th>症状</th><th>根因</th><th>08-basic 对策</th></tr>
+        <tr><th>症状</th><th>根因</th><th>src 对策</th></tr>
       </thead>
       <tbody>
         <tr>
@@ -932,7 +932,7 @@
       Chat Completions 用 <code>tool_calls</code> + <code>role: tool</code>。
     </div>
     <div class="callout err">
-      <strong>08-basic</strong>：collect（<code>getAttachmentMessages</code>）与 expand（<code>normalizeAttachmentForAPI</code>）分离；
+      <strong>src</strong>：collect（<code>getAttachmentMessages</code>）与 expand（<code>normalizeAttachmentForAPI</code>）分离；
       tool round 后收集，发请求前展开 + sanitize。
     </div>
   </section>
@@ -942,14 +942,14 @@
 <footer>
   <p>
     相关代码：
-    <a href="../examples/08-basic/core/types.ts">core/types.ts</a> ·
-    <a href="../examples/08-basic/utils/attachments.ts">attachments.ts</a> ·
-    <a href="../examples/08-basic/utils/messages.ts">messages.ts</a> ·
-    <a href="../examples/08-basic/core/agent/messageSanitize.ts">messageSanitize.ts</a> ·
-    <a href="../examples/08-basic/server/session.ts">session.ts</a> ·
-    <a href="../examples/08-basic/core/agent.ts">agent.ts</a>
+    <a href="../src/core/types.ts">core/types.ts</a> ·
+    <a href="../src/utils/attachments.ts">attachments.ts</a> ·
+    <a href="../src/utils/messages.ts">messages.ts</a> ·
+    <a href="../src/core/agent/messageSanitize.ts">messageSanitize.ts</a> ·
+    <a href="../src/server/session.ts">session.ts</a> ·
+    <a href="../src/core/agent.ts">agent.ts</a>
   </p>
-  <p style="margin-top:8px;color:#94a3b8">08-basic · LLM Message Mapping Guide · CC Attachment 架构对齐版</p>
+  <p style="margin-top:8px;color:#94a3b8">src · LLM Message Mapping Guide · CC Attachment 架构对齐版</p>
 </footer>
 
 </body>

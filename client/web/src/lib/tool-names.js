@@ -1,5 +1,5 @@
 /**
- * Canonical tool names — keep in sync with examples/08-basic/tools/tool-names.ts
+ * Canonical tool names — keep in sync with src/constants/tool_names.ts
  */
 
 export const BASH = 'Bash'
@@ -30,7 +30,7 @@ export const SUPPRESSED_TOOL_CARDS = new Set([
 /** Meta tools hidden inside subagent step lists. */
 export const SUBAGENT_SUPPRESSED = new Set([TODO_WRITE, TOOL_SEARCH])
 
-/** Tools that create or modify workspace files (08-basic + 07-basic aliases). */
+/** Tools that create or modify workspace files. */
 export const FILE_MUTATING_TOOLS = new Set([
   WRITE,
   EDIT,

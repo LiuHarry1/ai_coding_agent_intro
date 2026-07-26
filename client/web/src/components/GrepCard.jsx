@@ -16,7 +16,7 @@ import {
  *   Grepped   "pattern"   12 matches in 4 files       (content mode)
  *   Grepped   "pattern"   42 occurrences across 3 files  (count mode)
  *
- * Result-string shapes (see examples/08-basic/tools/grep.ts:execute):
+ * Result-string shapes (see src/tools/GrepTool/GrepTool.ts:execute):
  *   files_with_matches: "Found N file(s) [limit: …]\n<path>\n<path>\n…"
  *                       or "No files found".
  *   content:            "<path>:<line?>:<text>\n…" (+ pagination footer).

@@ -1,5 +1,5 @@
 /**
- * REFERENCE client — drop into the coding agent (examples/08-basic) to report
+ * REFERENCE client — drop into the coding agent (src) to report
  * usage to the analytics backend. Fire-and-forget + batched so it never blocks
  * or fails a chat turn. This file is documentation, not wired in by default.
  *

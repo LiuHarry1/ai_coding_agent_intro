@@ -10,7 +10,7 @@ import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
  * results-list-second layout — the same shape Cursor use for
  * search-result rendering.
  *
- * Result-string shape (from examples/07-basic/tools/web_search.ts:execute):
+ * Result-string shape (from src/tools/WebSearchTool/WebSearchTool.ts:execute):
  *   JSON.stringify({ query, source, totalResults, answers?, suggestions?,
  *                    results: [{ rank, title, url, snippet, engines? }] })
  * Truncated to MAX_OUTPUT_CHARS so the JSON may be a partial blob — we

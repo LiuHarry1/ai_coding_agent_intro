@@ -26,7 +26,7 @@ cp .env.example .env   # 如有示例文件
 ### 3. 启动后端(终端 A)
 
 ```bash
-npm start              # 默认加载 08-basic，监听 http://localhost:4567
+npm start              # 加载 src/，监听 http://localhost:4567
 ```
 
 ### 4. 启动 Web UI(终端 B,开发模式,支持热更新)
@@ -92,7 +92,7 @@ cd /path/to/ai_coding_agent_intro
 npm run acp -- --workspace /path/to/your/project
 ```
 
-应看到 `[start] Loading example: 08-basic` 和 `[acp] workspace=...`，随后进程等待输入（正常）。
+应看到 `[start] Loading agent from src/` 和 `[acp] workspace=...`，随后进程等待输入（正常）。
 
 > **注意：** `--workspace` 用于设置默认项目根目录。不要把 workspace 路径作为裸位置参数传入，应使用 `--workspace /abs/path`。
 
@@ -176,7 +176,7 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 
 ```
 ├── start.js              # 统一启动入口
-├── examples/             # 各版本 agent 实现（默认 08-basic）
+├── src/                  # Agent 实现（对齐 Claude Code 的 src/ 布局）
 ├── client/web/          # React 前端
 ├── electron/             # Electron 桌面壳
 ├── shared/               # 共享服务端工具
@@ -196,12 +196,12 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 | `npm run build:web` | 构建前端到 `client/web/dist` |
 | `npm run desktop:dev` | 启动桌面版 |
 | `npm run desktop:pack` | 打包当前平台桌面安装包 |
-| `npm run typecheck` | TypeScript 类型检查（08-basic + protocol + client-sdk） |
+| `npm run typecheck` | TypeScript 类型检查（src + protocol + client-sdk） |
 | `npm run format` | 按项目 Prettier 规则格式化代码 |
 
 ## 更多文档
 
-- Agent 能力详解：[`examples/08-basic/README.md`](examples/08-basic/README.md)
+- Agent 能力详解：[`src/README.md`](src/README.md)
 - Docker 部署：[`deploy/README.md`](deploy/README.md)
 - 客户端 SDK：[`client-sdk/`](client-sdk/)
 - VS Code / Cursor ACP 集成：见上文 [VS Code / Cursor（ACP）](#vs-code--cursoracp)

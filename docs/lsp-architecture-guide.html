@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LSP 架构与用法 — 08-basic Coding Agent</title>
+  <title>LSP 架构与用法 — src Coding Agent</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
 
@@ -398,7 +398,7 @@
   <header class="hero">
     <h1>LSP 架构与用法</h1>
     <p>
-      这份文档总结当前 08-basic coding agent 中新增的 LSP 能力：它为什么存在、怎么接入 agent、怎么配置、怎么在真实写代码时发挥作用，以及如何测试。
+      这份文档总结当前 coding agent 中新增的 LSP 能力：它为什么存在、怎么接入 agent、怎么配置、怎么在真实写代码时发挥作用，以及如何测试。
     </p>
     <nav class="nav">
       <a href="#purpose">目的</a>
@@ -459,11 +459,11 @@
         <div class="card">
           <h3>核心文件</h3>
           <ul>
-            <li><code>examples/08-basic/services/lsp/client.ts</code>: stdio JSON-RPC 客户端。</li>
-            <li><code>examples/08-basic/services/lsp/server-instance.ts</code>: 单个 language server 生命周期。</li>
-            <li><code>examples/08-basic/services/lsp/server-manager.ts</code>: 扩展名路由、文件同步、诊断注册。</li>
-            <li><code>examples/08-basic/services/lsp/manager.ts</code>: workspace-scoped manager 缓存和 shutdown。</li>
-            <li><code>examples/08-basic/tools/lsp.ts</code>: agent 可调用的 <code>LSP</code> 工具。</li>
+            <li><code>src/services/lsp/client.ts</code>: stdio JSON-RPC 客户端。</li>
+            <li><code>src/services/lsp/server-instance.ts</code>: 单个 language server 生命周期。</li>
+            <li><code>src/services/lsp/server-manager.ts</code>: 扩展名路由、文件同步、诊断注册。</li>
+            <li><code>src/services/lsp/manager.ts</code>: workspace-scoped manager 缓存和 shutdown。</li>
+            <li><code>src/tools/LSPTool/LSPTool.ts</code>: agent 可调用的 <code>LSP</code> 工具。</li>
           </ul>
         </div>
         <div class="card">
@@ -471,7 +471,7 @@
           <ul>
             <li><code>core/settings-manager.ts</code>: 读取并合并 <code>lspServers</code>。</li>
             <li><code>prepare_chat_turn.ts</code>: 将 LSP 配置传给工具上下文。</li>
-            <li><code>tools/write_file.ts</code> 和 <code>tools/edit_file.ts</code>: 写入后同步 <code>didChange</code>/<code>didSave</code>。</li>
+            <li><code>tools/FileWriteTool/FileWriteTool.ts</code> 和 <code>tools/FileEditTool/FileEditTool.ts</code>: 写入后同步 <code>didChange</code>/<code>didSave</code>。</li>
             <li><code>core/agent.ts</code>: 每个 step 前注入新的 LSP diagnostics。</li>
             <li><code>server/index.ts</code>: 进程退出时关闭 LSP 子进程。</li>
           </ul>
@@ -493,7 +493,7 @@ flowchart TD
   Chat["处理 Chat 请求<br/><b>server/routes/chat.ts</b>"]
   Settings["读取并合并 lspServers<br/><b>core/settings-manager.ts</b>"]
   Prepare["写入 ToolContext.lspServers<br/><b>utils/processUserInput/prepare_chat_turn.ts</b>"]
-  Register["注册 LSP tool<br/><b>tools/index.ts</b><br/><b>tools/lsp.ts</b>"]
+  Register["注册 LSP tool<br/><b>src/tools.ts</b><br/><b>tools/LSPTool/LSPTool.ts</b>"]
   Deferred["作为 deferred tool 暂不进主提示词<br/><b>core/tool-registry.ts</b>"]
   ToolSearch["模型需要时通过 ToolSearch 激活<br/><b>tools/tool_search.ts</b>"]
   Ready["LSP schema 进入 active tools<br/><b>core/agent.ts</b>"]
@@ -513,7 +513,7 @@ flowchart TD
   User["用户任务<br/>例如: 查看 AppConfig 类型"]
   Model["模型决定使用 LSP<br/><b>core/agent.ts</b>"]
   ToolSearch["激活 LSP tool<br/><b>tools/tool_search.ts</b>"]
-  LspTool["调用 LSP tool<br/><b>tools/lsp.ts</b><br/>operation: hover"]
+  LspTool["调用 LSP tool<br/><b>tools/LSPTool/LSPTool.ts</b><br/>operation: hover"]
 
   subgraph Service["LSP Service"]
     Manager["获取 workspace manager<br/><b>services/lsp/manager.ts</b>"]
@@ -524,7 +524,7 @@ flowchart TD
 
   Server["typescript-language-server<br/>--stdio"]
   Response["返回 hover / definition / references"]
-  Format["格式化为纯文本<br/><b>tools/lsp.ts</b>"]
+  Format["格式化为纯文本<br/><b>tools/LSPTool/LSPTool.ts</b>"]
   ToolResult["写回 tool-result message<br/><b>services/tools/tool_execution.ts</b>"]
   Continue["模型读取结果继续推理或写代码<br/><b>core/agent.ts</b>"]
 
@@ -541,7 +541,7 @@ flowchart TD
         </div>
         <pre class="mermaid">
 flowchart TD
-  Edit["agent 写代码<br/><b>tools/write_file.ts</b><br/><b>tools/edit_file.ts</b>"]
+  Edit["agent 写代码<br/><b>tools/FileWriteTool/FileWriteTool.ts</b><br/><b>tools/FileEditTool/FileEditTool.ts</b>"]
   Clear["清除旧诊断去重<br/><b>services/lsp/diagnostics.ts</b>"]
   Change["发送 didChange<br/><b>services/lsp/server-manager.ts</b>"]
   Save["发送 didSave<br/><b>services/lsp/server-manager.ts</b>"]
@@ -564,13 +564,13 @@ flowchart TD
         <pre class="mermaid">
 flowchart TD
   subgraph syncFlow ["同步等待: LSP 查询"]
-    S1["LSP tool call<br/><b>tools/lsp.ts</b>"] --> S2["await manager.sendRequest<br/><b>services/lsp/server-manager.ts</b>"]
+    S1["LSP tool call<br/><b>tools/LSPTool/LSPTool.ts</b>"] --> S2["await manager.sendRequest<br/><b>services/lsp/server-manager.ts</b>"]
     S2 --> S3["await JSON-RPC response<br/><b>services/lsp/client.ts</b>"]
     S3 --> S4["返回 tool result<br/><b>core/agent.ts</b>"]
   end
 
   subgraph asyncFlow ["异步反馈: diagnostics"]
-    A1["Write/Edit 返回<br/><b>tools/write_file.ts / edit_file.ts</b>"] --> A2["fire-and-forget didChange didSave<br/><b>services/lsp/server-manager.ts</b>"]
+    A1["Write/Edit 返回<br/><b>tools/FileWriteTool/FileWriteTool.ts / edit_file.ts</b>"] --> A2["fire-and-forget didChange didSave<br/><b>services/lsp/server-manager.ts</b>"]
     A2 --> A3["later publishDiagnostics<br/>language server"]
     A3 --> A4["registry 暂存<br/><b>services/lsp/diagnostics.ts</b>"]
     A4 --> A5["next step 注入上下文<br/><b>core/agent.ts</b>"]
@@ -589,33 +589,33 @@ flowchart TD
         <div class="sequence">
           <div class="node arrow">
             <strong>启动入口</strong>
-            <p>选择 08-basic 示例并导入 server。</p>
+            <p>选择 src 示例并导入 server。</p>
             <span class="file-ref">start.js</span>
           </div>
           <div class="node arrow">
             <strong>HTTP 路由</strong>
             <p>每次 chat 请求解析 workspace、settings 和 session。</p>
-            <span class="file-ref">examples/08-basic/server/routes/chat.ts</span>
+            <span class="file-ref">src/server/routes/chat.ts</span>
           </div>
           <div class="node arrow">
             <strong>读取配置</strong>
             <p>合并 user/project/local settings，包括 <code>lspServers</code>。</p>
-            <span class="file-ref">examples/08-basic/core/settings-manager.ts</span>
+            <span class="file-ref">src/core/settings-manager.ts</span>
           </div>
           <div class="node arrow">
             <strong>准备工具上下文</strong>
             <p>把 <code>config.lspServers</code> 放进 <code>ToolContext</code>。</p>
-            <span class="file-ref">examples/08-basic/utils/processUserInput/prepare_chat_turn.ts</span>
+            <span class="file-ref">src/utils/processUserInput/prepare_chat_turn.ts</span>
           </div>
           <div class="node arrow">
             <strong>注册工具</strong>
             <p>默认注册 <code>LSP</code>，作为 deferred tool 等待 ToolSearch 激活。</p>
-            <span class="file-ref">examples/08-basic/tools/index.ts<br>examples/08-basic/tools/lsp.ts</span>
+            <span class="file-ref">src/tools.ts<br>src/tools/LSPTool/LSPTool.ts</span>
           </div>
           <div class="node">
             <strong>等待首次使用</strong>
             <p>真正调用时才创建 manager、路由 server、启动子进程。</p>
-            <span class="file-ref">examples/08-basic/services/lsp/manager.ts</span>
+            <span class="file-ref">src/services/lsp/manager.ts</span>
           </div>
         </div>
       </div>
@@ -631,7 +631,7 @@ flowchart TD
         <div class="sequence">
           <div class="node arrow">
             <strong>1. npm start</strong>
-            <p>启动 08-basic server，加载 workspace 和 settings。</p>
+            <p>启动 src server，加载 workspace 和 settings。</p>
             <span class="file-ref">start.js<br>server/index.ts</span>
           </div>
           <div class="node arrow">
@@ -647,7 +647,7 @@ flowchart TD
           <div class="node arrow">
             <strong>4. ToolRegistry</strong>
             <p>注册 <code>LSP</code>，但它是 deferred tool。</p>
-            <span class="file-ref">core/tool-registry.ts<br>tools/index.ts</span>
+            <span class="file-ref">core/tool-registry.ts<br>src/tools.ts</span>
           </div>
           <div class="node arrow">
             <strong>5. ToolSearch</strong>
@@ -657,7 +657,7 @@ flowchart TD
           <div class="node">
             <strong>6. Lazy Start</strong>
             <p>第一次对 <code>.ts</code> 文件查询时才启动 TypeScript server。</p>
-            <span class="file-ref">tools/lsp.ts<br>services/lsp/manager.ts</span>
+            <span class="file-ref">tools/LSPTool/LSPTool.ts<br>services/lsp/manager.ts</span>
           </div>
         </div>
       </div>
@@ -686,7 +686,7 @@ flowchart TD
           <div class="node arrow">
             <strong>LSP Tool Call</strong>
             <p><code>operation: hover</code><br><code>file_path</code> + 位置。</p>
-            <span class="file-ref">tools/lsp.ts</span>
+            <span class="file-ref">tools/LSPTool/LSPTool.ts</span>
           </div>
           <div class="node empty"></div>
           <div class="node empty"></div>
@@ -748,7 +748,7 @@ flowchart TD
           <div class="node arrow">
             <strong>1. Write / Edit</strong>
             <p>agent 成功写入或编辑 <code>.ts</code> 文件。</p>
-            <span class="file-ref">tools/write_file.ts<br>tools/edit_file.ts</span>
+            <span class="file-ref">tools/FileWriteTool/FileWriteTool.ts<br>tools/FileEditTool/FileEditTool.ts</span>
           </div>
           <div class="node arrow">
             <strong>2. didChange</strong>
@@ -812,7 +812,7 @@ flowchart TD
           <div class="node arrow">
             <strong>LSP Tool Formatter</strong>
             <p>把 Location/Hover/Symbol 转成纯文本。</p>
-            <span class="file-ref">tools/lsp.ts</span>
+            <span class="file-ref">tools/LSPTool/LSPTool.ts</span>
           </div>
           <div class="node arrow">
             <strong>Tool Execution</strong>
@@ -959,7 +959,7 @@ later .ts LSP request
           <p>查询某个位置的类型、签名或文档。</p>
           <pre><code>{
   "operation": "hover",
-  "file_path": "examples/08-basic/core/types.ts",
+  "file_path": "src/core/types.ts",
   "line": 446,
   "character": 18
 }</code></pre>
@@ -969,7 +969,7 @@ later .ts LSP request
           <p>找当前位置符号的定义位置。</p>
           <pre><code>{
   "operation": "go_to_definition",
-  "file_path": "examples/08-basic/core/types.ts",
+  "file_path": "src/core/types.ts",
   "line": 446,
   "character": 18
 }</code></pre>
@@ -979,7 +979,7 @@ later .ts LSP request
           <p>找某个符号的引用，适合重构前看影响面。</p>
           <pre><code>{
   "operation": "find_references",
-  "file_path": "examples/08-basic/core/types.ts",
+  "file_path": "src/core/types.ts",
   "line": 446,
   "character": 18
 }</code></pre>
@@ -990,7 +990,7 @@ later .ts LSP request
         <h3>推荐提示词</h3>
         <p>在聊天里可以这样让 agent 使用 LSP：</p>
         <pre><code>先用 ToolSearch 加载 LSP 工具。
-然后对 examples/08-basic/core/types.ts 里的 AppConfig 执行 hover，
+然后对 src/core/types.ts 里的 AppConfig 执行 hover，
 再查找它的 references，告诉我哪些地方依赖这个配置类型。</code></pre>
         <p>或者在复杂修改前这样说：</p>
         <pre><code>这次修改涉及类型和跨文件引用。
@@ -1012,7 +1012,7 @@ later .ts LSP request
 → diagnostics registry
 → next agent step system-reminder</code></pre>
         <p>
-          诊断消息在 <code>examples/08-basic/utils/attachments/lsp-diagnostics.ts</code> 中被转换为普通 <code>system-reminder</code> 用户消息，注入到后续模型上下文里。
+          诊断消息在 <code>src/utils/attachments/lsp-diagnostics.ts</code> 中被转换为普通 <code>system-reminder</code> 用户消息，注入到后续模型上下文里。
         </p>
         <div class="callout">
           这意味着 agent 写完代码后，如果 TypeScript server 报“属性不存在”“类型不匹配”“缺少 import”等问题，下一步模型可以直接看到并继续修。

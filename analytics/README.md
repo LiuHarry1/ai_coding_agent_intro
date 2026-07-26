@@ -40,7 +40,7 @@ prefix-matched) and stored, so later price edits don't rewrite history.
 `event_id` is unique → safe retries (duplicates are skipped, not errored).
 
 The token fields mirror the agent's `AttachedTokenUsage`
-(`examples/08-basic/services/compact/tokens.ts`): `inputTokens`,
+(`src/services/compact/tokens.ts`): `inputTokens`,
 `outputTokens`, `totalTokens`, `cachedInputTokens`, `reasoningTokens`.
 
 ## Endpoints
@@ -171,7 +171,7 @@ For schema changes after launch, prefer Alembic over ad-hoc ALTER scripts.
 
 `clients/agentTelemetry.ts` is a ready-to-drop reference reporter (batched,
 fire-and-forget, never throws). Call `reportUsage(...)` from
-`logStepCompletion` in `examples/08-basic/core/agent.ts` — it already has the
+`logStepCompletion` in `src/core/agent.ts` — it already has the
 model, token usage, and timings — and pass the session's `ownerEmail` / `id`.
 Set `ANALYTICS_URL` + `ANALYTICS_INGEST_API_KEY` in the agent's env to enable;
 leave unset to disable.

@@ -13,8 +13,6 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 const DEFAULT_PORT = 4567
-const EXAMPLE = '08-basic'
-
 let agentProc = null
 let mainWindow = null
 let agentPort = DEFAULT_PORT
@@ -46,7 +44,7 @@ function startAgent() {
   if (app.isPackaged) {
     const tsxCli = path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
     const startScript = path.join(appRoot, 'start.js')
-    agentProc = spawn(process.execPath, [tsxCli, startScript, EXAMPLE], {
+    agentProc = spawn(process.execPath, [tsxCli, startScript], {
       cwd: appRoot,
       env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
       stdio: 'pipe',
@@ -61,7 +59,7 @@ function startAgent() {
       'cli.mjs',
     )
     const startScript = path.join(REPO_ROOT, 'start.js')
-    agentProc = spawn(process.execPath, [tsxCli, startScript, EXAMPLE], {
+    agentProc = spawn(process.execPath, [tsxCli, startScript], {
       cwd: REPO_ROOT,
       env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
       stdio: 'pipe',

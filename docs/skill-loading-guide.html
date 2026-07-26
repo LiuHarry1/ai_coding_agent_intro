@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Skill 加载与调用 — 08-basic 图文详解</title>
+  <title>Skill 加载与调用 — src 图文详解</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
 
@@ -235,7 +235,7 @@
 
 <header class="hero">
   <h1>Skill 加载与调用</h1>
-  <p>仅 <strong>examples/08-basic</strong> · 文件夹 + <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#ccfbf1">SKILL.md</code> · 单一 <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#ccfbf1">Skill</code> 工具 · inline / fork 双模式</p>
+  <p>仅 <strong>src</strong> · 文件夹 + <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#ccfbf1">SKILL.md</code> · 单一 <code style="background:rgba(255,255,255,.15);padding:2px 8px;border-radius:4px;color:#ccfbf1">Skill</code> 工具 · inline / fork 双模式</p>
   <div class="nav">
     <a href="#tool-prompt">Tool 提示词</a>
     <a href="#paths">paths 条件激活</a>
@@ -715,19 +715,19 @@ The following skills are available for use with the skill tool:
         <tr><th>职责</th><th>文件</th></tr>
       </thead>
       <tbody>
-        <tr><td>类型定义</td><td><code>examples/08-basic/skills/types.ts</code></td></tr>
-        <tr><td>磁盘扫描 + paths 过滤</td><td><code>examples/08-basic/skills/loadSkillsDir.ts</code></td></tr>
-        <tr><td>每轮注册</td><td><code>examples/08-basic/skills/index.ts</code> → <code>registerSkills</code></td></tr>
-        <tr><td>展开管道</td><td><code>examples/08-basic/skills/expand.ts</code></td></tr>
-        <tr><td>Skill 工具</td><td><code>examples/08-basic/tools/skill.ts</code> → <code>createSkillTool</code></td></tr>
-        <tr><td>fork 执行</td><td><code>examples/08-basic/skills/run-fork.ts</code></td></tr>
-        <tr><td>HTTP/SSE 响应</td><td><code>examples/08-basic/skills/respond-fork.ts</code></td></tr>
-        <tr><td>斜杠分发</td><td><code>examples/08-basic/commands/dispatcher.ts</code></td></tr>
-        <tr><td>斜杠注册表</td><td><code>examples/08-basic/commands/slashRegistry.ts</code></td></tr>
-        <tr><td>每轮 orchestration</td><td><code>examples/08-basic/utils/processUserInput/prepare_chat_turn.ts</code></td></tr>
-        <tr><td>路径候选提取</td><td><code>examples/08-basic/utils/processUserInput/path_candidates.ts</code></td></tr>
-        <tr><td>HTTP API</td><td><code>examples/08-basic/server/skills-api.ts</code></td></tr>
-        <tr><td>插件 skill</td><td><code>examples/08-basic/core/plugins/loader.ts</code></td></tr>
+        <tr><td>类型定义</td><td><code>src/skills/types.ts</code></td></tr>
+        <tr><td>磁盘扫描 + paths 过滤</td><td><code>src/skills/loadSkillsDir.ts</code></td></tr>
+        <tr><td>每轮注册</td><td><code>src/skills/index.ts</code> → <code>registerSkills</code></td></tr>
+        <tr><td>展开管道</td><td><code>src/skills/expand.ts</code></td></tr>
+        <tr><td>Skill 工具</td><td><code>src/tools/SkillTool/SkillTool.ts</code> → <code>createSkillTool</code></td></tr>
+        <tr><td>fork 执行</td><td><code>src/skills/run-fork.ts</code></td></tr>
+        <tr><td>HTTP/SSE 响应</td><td><code>src/skills/respond-fork.ts</code></td></tr>
+        <tr><td>斜杠分发</td><td><code>src/commands/dispatcher.ts</code></td></tr>
+        <tr><td>斜杠注册表</td><td><code>src/commands/slashRegistry.ts</code></td></tr>
+        <tr><td>每轮 orchestration</td><td><code>src/utils/processUserInput/prepare_chat_turn.ts</code></td></tr>
+        <tr><td>路径候选提取</td><td><code>src/utils/processUserInput/path_candidates.ts</code></td></tr>
+        <tr><td>HTTP API</td><td><code>src/server/skills-api.ts</code></td></tr>
+        <tr><td>插件 skill</td><td><code>src/core/plugins/loader.ts</code></td></tr>
       </tbody>
     </table>
   </section>
@@ -754,7 +754,7 @@ The following skills are available for use with the skill tool:
 </main>
 
 <footer>
-  examples/08-basic only · Skill Loading Guide ·
+  src only · Skill Loading Guide ·
   <a href="subagent-loading-guide.html">Subagent</a>
   <a href="deferred-mcp-tools-skills-guide.html">Deferred / Skills</a>
   <a href="coding-agent-architecture-guide.html">架构图集</a>
