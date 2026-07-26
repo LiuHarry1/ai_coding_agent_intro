@@ -1,9 +1,11 @@
 {
-  "provider": {
-    "provider": "openai-compatible",
-    "baseURL": "http://localhost:4141/v1",
-    "apiKey": "sk-xxx",
-    "model": "claude-ops-4.6"
+  "models": {
+    "large": {
+      "provider": "openai-compatible",
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "claude-ops-4.6"
+    }
   },
   "compaction": {
     "contextWindow": 200000,

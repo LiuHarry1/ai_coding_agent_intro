@@ -4,7 +4,6 @@ import * as path from 'path'
 import type { AppConfig, LspServerConfig, MCPServerConfig } from './types.js'
 import {
   DEFAULT_PROFILE,
-  modelProfilesToRecord,
   profileToRecord,
   resolveModelProfiles,
   type ModelProfiles,
@@ -22,7 +21,6 @@ function defaultModels(): ModelProfiles {
 }
 
 export const DEFAULTS: AppConfig = {
-  provider: { ...DEFAULT_PROFILE },
   models: defaultModels(),
   compaction: {
     enabled: true,
@@ -65,7 +63,6 @@ export interface EffectiveSettings extends ResolvedSettings {
 }
 
 type PartialAppConfig = Partial<{
-  provider: Record<string, unknown>
   models: Record<string, unknown>
   compaction: Record<string, unknown>
   mcpServers: Record<string, MCPServerConfig>
@@ -199,12 +196,9 @@ function markExplicit(
 }
 
 function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
-  const hasProvider = isRecord(layer.provider)
   const hasModels = isRecord(layer.models)
-  if (hasProvider || hasModels) {
-    const layerModels: Record<string, unknown> = hasModels
-      ? (layer.models as Record<string, unknown>)
-      : {}
+  if (hasModels) {
+    const layerModels = layer.models as Record<string, unknown>
     if (isRecord(layerModels.medium)) markExplicit(config, 'medium')
     if (isRecord(layerModels.small)) markExplicit(config, 'small')
 
@@ -213,7 +207,6 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
     const modelsArg: Record<string, unknown> = {
       large: {
         ...profileToRecord(config.models.large),
-        ...(hasProvider ? layer.provider : {}),
         ...(isRecord(layerModels.large) ? layerModels.large : {}),
       },
     }
@@ -230,12 +223,7 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
       }
     }
 
-    const profiles = resolveModelProfiles({
-      provider: modelsArg.large,
-      models: modelsArg,
-    })
-    config.models = profiles
-    config.provider = profiles.large
+    config.models = resolveModelProfiles({ models: modelsArg })
   }
 
   if (layer.compaction && typeof layer.compaction === 'object') {
@@ -359,7 +347,6 @@ export function getSafeSettings(resolved: ResolvedSettings): AppConfig {
     medium: maskProfile(copy.models.medium),
     small: maskProfile(copy.models.small),
   }
-  copy.provider = copy.models.large
   return copy
 }
 
@@ -410,21 +397,8 @@ function mergePatch(
   patch: Partial<AppConfig>,
 ): Record<string, unknown> {
   const next = structuredClone(target)
-  if (patch.provider) {
-    next.provider = {
-      ...((next.provider as Record<string, unknown> | undefined) ?? {}),
-      ...patch.provider,
-    }
-    const models = isRecord(next.models) ? { ...next.models } : {}
-    models.large = {
-      ...((isRecord(models.large) ? models.large : {}) as Record<
-        string,
-        unknown
-      >),
-      ...patch.provider,
-    }
-    next.models = models
-  }
+  // Drop legacy top-level provider if present in on-disk settings.
+  delete next.provider
   if (patch.models) {
     const models = isRecord(next.models) ? { ...next.models } : {}
     for (const tier of ['large', 'medium', 'small'] as const) {
@@ -439,12 +413,6 @@ function mergePatch(
       }
     }
     next.models = models
-    if (isRecord(models.large)) {
-      next.provider = {
-        ...((next.provider as Record<string, unknown> | undefined) ?? {}),
-        ...models.large,
-      }
-    }
   }
   if (patch.compaction) {
     next.compaction = {

@@ -52,7 +52,6 @@ import { sessionJsonlToUIMessages } from './session-ui.js'
 import type {
   RouterOptions,
   MCPServerConfig,
-  LlmProfile,
   AppConfig,
 } from '../core/types.js'
 
@@ -214,30 +213,6 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
       })
       return
     }
-    if (method === 'PATCH' && url === '/settings/provider') {
-      try {
-        const body = await readBody(req)
-        const cwd = resolveSettingsRequestCwd(authed, url)
-        const scope = parseWritableScope(body.scope, {
-          ssoMode: isAuthEnabled() && !!authed.userWorkspace,
-        })
-        const providerPatch = { ...(body as Record<string, unknown>) }
-        delete providerPatch.scope
-        const resolved = patchSettings(cwd, scope, {
-          provider: providerPatch as Partial<LlmProfile> as LlmProfile,
-        })
-        const safe = getSafeSettings(resolved)
-        sendJSON(res, 200, {
-          provider: safe.provider,
-          models: safe.models,
-          scope,
-          sources: resolved.sources,
-        })
-      } catch (e) {
-        sendJSON(res, 400, { error: (e as Error).message })
-      }
-      return
-    }
     if (method === 'PATCH' && url === '/settings/models') {
       try {
         const body = await readBody(req)
@@ -253,7 +228,6 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
         const safe = getSafeSettings(resolved)
         sendJSON(res, 200, {
           models: safe.models,
-          provider: safe.provider,
           scope,
           sources: resolved.sources,
         })

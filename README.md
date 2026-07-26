@@ -19,7 +19,7 @@ cd client/web && npm install && cd ../..
 cp .env.example .env   # 如有示例文件
 ```
 
-用户级配置位于 `~/.ai-agent/settings.json`（provider、model、MCP 等）。项目级配置可放在 `<workspace>/.ai-agent/settings.json`，优先级高于用户级配置。
+用户级配置位于 `~/.ai-agent/settings.json`（`models`、MCP 等）。项目级配置可放在 `<workspace>/.ai-agent/settings.json`，优先级高于用户级配置。
 
 本地开发前后端分开跑,**用两个终端**:
 

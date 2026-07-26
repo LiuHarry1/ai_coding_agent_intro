@@ -1,10 +1,4 @@
 {
-  "provider": {
-    "provider": "openai-compatible",
-    "baseURL": "http://localhost:4141/v1",
-    "apiKey": "sk-xxx",
-    "model": "claude-opus-4.6"
-  },
   "models": {
     "large": {
       "provider": "openai-compatible",

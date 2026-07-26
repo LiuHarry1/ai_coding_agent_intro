@@ -41,10 +41,9 @@ th{background:var(--panel2);color:var(--text)}
     "large":  { "provider": "openai-compatible", "baseURL": "...", "apiKey": "...", "model": "claude-opus-4.6" },
     "medium": { "provider": "openai-compatible", "baseURL": "...", "apiKey": "...", "model": "claude-sonnet-4.6" },
     "small":  { "provider": "openai-compatible", "baseURL": "...", "apiKey": "...", "model": "claude-haiku-4.5" }
-  },
-  "provider": { "...": "兼容旧字段，等价于 models.large" }
+  }
 }</code></pre>
-  <p>回退：<code>medium → large</code>，<code>small → medium → large</code>。仅配旧 <code>provider</code> 时三档都等于它。</p>
+  <p>回退：<code>medium → large</code>，<code>small → medium → large</code>。未配 <code>models.large</code> 时使用内置默认 profile。</p>
 
   <h2>任务绑定</h2>
   <table>
@@ -61,8 +60,7 @@ th{background:var(--panel2);color:var(--text)}
 
   <h2>API</h2>
   <ul>
-    <li><code>GET /settings</code> — 含 <code>models</code> + <code>provider</code>（key 打码）</li>
-    <li><code>PATCH /settings/provider</code> — 改 large（兼容）</li>
+    <li><code>GET /settings</code> — 含 <code>models</code>（key 打码）</li>
     <li><code>PATCH /settings/models</code> — 改任意档</li>
   </ul>
 </div>

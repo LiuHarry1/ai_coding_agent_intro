@@ -541,10 +541,6 @@ export interface CompactionConfig {
 }
 
 export interface AppConfig {
-  /**
-   * Alias for `models.large` (backward compatible). Main loop / compact use this.
-   */
-  provider: LlmProfile
   /** Three-tier profiles; medium/small fall back to large when omitted in settings. */
   models: ModelProfiles
   compaction: CompactionConfig

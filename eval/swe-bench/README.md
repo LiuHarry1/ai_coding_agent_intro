@@ -19,7 +19,7 @@ prepare  →  run  →  collect  →  evaluate
 | **Python (conda `llm_ft`)** | 跑评测脚本。本仓库约定 `conda activate llm_ft`。 |
 | **Docker Desktop** | `evaluate` 步骤在容器里跑测试，必须先启动 Docker。 |
 | **Node.js** | 启动本地 agent 服务（`npm start`）。 |
-| **Agent 配置** | `~/.ai-agent/settings.json` 里配好 `provider`（模型地址 / model 名）。 |
+| **Agent 配置** | `~/.ai-agent/settings.json` 里配好 `models`（模型地址 / model 名）。 |
 | 网络 | 首次需联网下载数据集和拉取镜像；之后可离线。 |
 
 **macOS 注意**

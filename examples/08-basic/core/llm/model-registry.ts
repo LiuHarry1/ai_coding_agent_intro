@@ -60,28 +60,20 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 /**
  * Resolve three tiers from settings.
  *
- * Compatibility:
- * - Legacy `provider` alone → large; medium/small fall back to large.
- * - `models.large` wins over `provider` when both present (then field-merge).
+ * - Missing `models.large` → DEFAULT_PROFILE.
  * - Missing medium → clone large; missing small → clone medium (then large).
  */
 export function resolveModelProfiles(input: {
-  provider?: unknown
   models?: unknown
 }): ModelProfiles {
   const modelsRaw = isRecord(input.models) ? input.models : {}
-  const legacyProvider = input.provider
 
-  const largeRaw = isRecord(modelsRaw.large)
-    ? {
-        ...profileToRecord(
-          resolveProfile(legacyProvider ?? DEFAULT_PROFILE),
-        ),
+  const large = isRecord(modelsRaw.large)
+    ? resolveProfile({
+        ...profileToRecord(DEFAULT_PROFILE),
         ...modelsRaw.large,
-      }
-    : (legacyProvider ?? DEFAULT_PROFILE)
-
-  const large = resolveProfile(largeRaw)
+      })
+    : { ...DEFAULT_PROFILE }
 
   const medium = isRecord(modelsRaw.medium)
     ? resolveProfile({

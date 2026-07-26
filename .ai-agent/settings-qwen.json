@@ -1,9 +1,11 @@
 {
-  "provider": {
-    "provider": "openai-compatible",
-    "baseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "apiKey": "sk-xxx",
-    "model": "qwen3.7-max"
+  "models": {
+    "large": {
+      "provider": "openai-compatible",
+      "baseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "sk-xxx",
+      "model": "qwen3.7-max"
+    }
   },
   "compaction": {
     "contextWindow": 200000,

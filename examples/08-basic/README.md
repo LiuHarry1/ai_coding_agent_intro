@@ -163,21 +163,35 @@ core/llm/
 
 配置位于 `~/.ai-agent/settings.json`（用户级）和 `<project>/.ai-agent/settings.json`（项目级），项目级优先级更高；`settings.local.json` 可作为项目本地私有覆盖。
 
-### Provider（LlmProfile）
+### Models（三档 LlmProfile）
 
 ```json
 {
-  "provider": {
-    "provider": "anthropic",
-    "baseURL": "https://api.anthropic.com/v1",
-    "apiKey": "sk-…",
-    "model": "claude-sonnet-4-20250514",
-    "thinking": { "mode": "auto" }
+  "models": {
+    "large": {
+      "provider": "anthropic",
+      "baseURL": "https://api.anthropic.com/v1",
+      "apiKey": "sk-…",
+      "model": "claude-opus-4-20250514",
+      "thinking": { "mode": "auto" }
+    },
+    "medium": {
+      "provider": "anthropic",
+      "baseURL": "https://api.anthropic.com/v1",
+      "apiKey": "sk-…",
+      "model": "claude-sonnet-4-20250514"
+    },
+    "small": {
+      "provider": "anthropic",
+      "baseURL": "https://api.anthropic.com/v1",
+      "apiKey": "sk-…",
+      "model": "claude-haiku-4-20250514"
+    }
   }
 }
 ```
 
-`thinking.mode` 可选：`off` | `auto` | `low` | `medium` | `high` | `budget`（budget 需配 `tokens`）。
+未配置的 `medium` / `small` 会回退到上一档。`thinking.mode` 可选：`off` | `auto` | `low` | `medium` | `high` | `budget`（budget 需配 `tokens`）。
 
 ### 禁用工具
 
@@ -205,7 +219,7 @@ core/llm/
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/settings` | 完整配置（apiKey 脱敏）+ MCP 连接状态 |
-| `PATCH` | `/settings/provider` | 更新 provider 任意字段 |
+| `PATCH` | `/settings/models` | 更新 `models` 任意档位字段 |
 | `PATCH` | `/settings/mcp` | 添加或移除 MCP server |
 
 ## Running

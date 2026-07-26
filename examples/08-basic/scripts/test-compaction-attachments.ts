@@ -77,8 +77,9 @@ async function main(): Promise<void> {
   )
 
   const settings = resolveSettings(WORKSPACE)
-  const provider = buildProvider(settings.config.provider)
-  const model = settings.config.provider.model ?? provider.defaultModelId()
+  const provider = buildProvider(settings.config.models.large)
+  const model =
+    settings.config.models.large.model ?? provider.defaultModelId()
   const eventBus = new EventBus()
 
   process.env.COMPACT_THRESHOLD_OVERRIDE =
