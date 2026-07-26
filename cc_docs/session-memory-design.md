@@ -4,6 +4,7 @@
 > 消息游标字段：`uuid`（非 API round `id`）；创建时尽量打标，缺失时运行时补齐  
 > 模板：10 节（对齐 CC，含 Workflow / Codebase and System Documentation）  
 > CacheSafeParams：默认 `sessionMemory.cacheSafe: true` — 主循环 `createCacheSafeParams` + `saveCacheSafeParams`，SM fork 复用主模型/system/全量 tools schema，`canUseTool` 仅允许 Edit summary.md  
+> Extract 并发：per-session 队列（对齐 CC `sequential`）+ 自动抽取 latest-wins coalesce（不再 `inFlight` drop）  
 > 日期：2026-07-26
 
 ---

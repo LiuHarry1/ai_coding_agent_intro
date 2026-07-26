@@ -6,6 +6,9 @@
  * `canUseTool` + sandbox-free execute override for `.sessions/`.
  *
  * Fallback (`cacheSafe: false`): restricted Edit-only tools + `modelTier`.
+ *
+ * Concurrency: per-session queue (CC `sequential`) with latest-wins coalesce
+ * for auto extracts — never drop the freshest snapshot on `inFlight`.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -42,6 +45,7 @@ import {
   getSessionMemoryState,
 } from './state.js'
 import { validateSessionMemoryStructure } from './template.js'
+import { enqueueSessionExtract } from './extractQueue.js'
 
 /** Cap fork agent turns (CC session memory typically finishes in 1–2 rounds). */
 const SESSION_MEMORY_MAX_STEPS = 5
@@ -143,13 +147,20 @@ export type ExtractSessionMemoryArgs = {
   cacheSafeParams?: CacheSafeParams
 }
 
+export type ExtractSessionMemoryResult = {
+  ok: boolean
+  error?: string
+  memoryPath?: string
+}
+
 /**
- * Side-path session-memory update via Edit-only forked agent.
- * Fire-and-forget from the main agent loop — do not await on the hot path.
+ * Run one extract body. Threshold must already have been checked by the
+ * caller — queued/coalesced jobs must not re-check (tokensAtLastExtraction
+ * advances when the previous run finishes).
  */
-export async function extractSessionMemory(
+async function runSessionMemoryExtract(
   args: ExtractSessionMemoryArgs,
-): Promise<{ ok: boolean; error?: string; memoryPath?: string }> {
+): Promise<ExtractSessionMemoryResult> {
   const {
     messages,
     sessionId,
@@ -161,24 +172,8 @@ export async function extractSessionMemory(
     force,
     cacheSafeParams,
   } = args
-  if (!config.enabled) return { ok: false, error: 'disabled' }
 
   const state = getSessionMemoryState(sessionId)
-  if (state.inFlight) return { ok: false, error: 'in_flight' }
-
-  // Fill missing uuids on the live session (idempotent) so keep-cursors resolve.
-  // Messages are normally stamped at creation; this only backfills gaps.
-  ensureMessageUuids(messages)
-  if (!force && !shouldExtractSessionMemory(messages, sessionId, config)) {
-    return { ok: false, error: 'threshold' }
-  }
-
-  if (force) {
-    const last = messages[messages.length - 1]
-    const lastUuid = last ? getMessageUuid(last) : undefined
-    if (lastUuid) state.lastTriggerMessageId = lastUuid
-  }
-
   const epoch = beginExtraction(sessionId)
   try {
     const { memoryPath, current } = await ensureSessionMemoryFile(
@@ -197,7 +192,7 @@ export async function extractSessionMemory(
         execute: (args: unknown, options?: unknown) => Promise<unknown>
       }
     ).execute.bind(editTool)
-    // Shallow copy so fork appends don't mutate the parent array.
+    // Snapshot at run time (freshest for coalesced jobs).
     const forkMessages = messages.slice()
     const useCacheSafe = config.cacheSafe !== false && !!cacheSafeParams
     const canUseTool = createPathScopedEditCanUseTool(
@@ -206,8 +201,6 @@ export async function extractSessionMemory(
     )
 
     if (useCacheSafe && cacheSafeParams) {
-      // Keep parent tool schemas (cache key); only swap Edit execute so
-      // writes under `.sessions/` bypass workspace sandbox.
       const tools = overrideToolExecute(
         cacheSafeParams.tools,
         EDIT_FILE_TOOL_NAME,
@@ -275,9 +268,56 @@ export async function extractSessionMemory(
   }
 }
 
+/**
+ * Side-path session-memory update via forked agent.
+ * Fire-and-forget from the main agent loop — do not await on the hot path.
+ *
+ * Serialized per session (CC sequential). Auto extracts coalesce to latest.
+ */
+export async function extractSessionMemory(
+  args: ExtractSessionMemoryArgs,
+): Promise<ExtractSessionMemoryResult> {
+  const { messages, sessionId, config, force } = args
+  if (!config.enabled) return { ok: false, error: 'disabled' }
+
+  // Fill missing uuids on the live session (idempotent) so keep-cursors resolve.
+  ensureMessageUuids(messages)
+  if (!force && !shouldExtractSessionMemory(messages, sessionId, config)) {
+    return { ok: false, error: 'threshold' }
+  }
+
+  if (force) {
+    const last = messages[messages.length - 1]
+    const lastUuid = last ? getMessageUuid(last) : undefined
+    const state = getSessionMemoryState(sessionId)
+    if (lastUuid) state.lastTriggerMessageId = lastUuid
+  }
+
+  // Snapshot messages now — the array may keep growing on the main thread.
+  // Coalesced re-runs still see this parked snapshot (latest parked wins).
+  const parked: ExtractSessionMemoryArgs = {
+    ...args,
+    messages: messages.slice(),
+    cacheSafeParams: args.cacheSafeParams
+      ? {
+          ...args.cacheSafeParams,
+          forkContextMessages: messages.slice(),
+        }
+      : undefined,
+  }
+
+  return enqueueSessionExtract(parked, !!force, runSessionMemoryExtract)
+}
+
 /** Non-blocking wrapper for the agent loop. */
 export function extractSessionMemoryInBackground(
   args: ExtractSessionMemoryArgs,
 ): void {
-  void extractSessionMemory(args)
+  void extractSessionMemory(args).then(result => {
+    if (result.error === 'coalesced') {
+      console.log(
+        `[session-memory] extract superseded by newer pending session=${args.sessionId}`,
+      )
+    }
+  })
 }

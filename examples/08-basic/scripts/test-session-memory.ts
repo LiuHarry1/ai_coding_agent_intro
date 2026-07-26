@@ -193,11 +193,63 @@ async function main(): Promise<void> {
     'Edit tool wrote memory file',
   )
 
-  // Cleanup
-  fs.rmSync(path.join(path.dirname(memPath), '..'), {
-    recursive: true,
-    force: true,
+  // Extract queue: sequential + latest-wins coalesce
+  const { enqueueSessionExtract, resetExtractQueues } = await import(
+    '../services/session-memory/extractQueue.js'
+  )
+  resetExtractQueues()
+  const order: string[] = []
+  let release!: () => void
+  const gate = new Promise<void>(r => {
+    release = r
   })
+  type TagArgs = { sessionId: string; tag: string }
+  const runTagged = async (args: TagArgs) => {
+    if (args.tag === 'a') {
+      order.push(`start:${args.tag}`)
+      await gate
+      order.push(`end:${args.tag}`)
+    } else {
+      order.push(`run:${args.tag}`)
+    }
+    return { ok: true }
+  }
+  const slow = enqueueSessionExtract(
+    { sessionId: SESSION_ID, tag: 'a' },
+    false,
+    runTagged,
+  )
+  await new Promise(r => setTimeout(r, 10))
+  const mid = enqueueSessionExtract(
+    { sessionId: SESSION_ID, tag: 'b' },
+    false,
+    runTagged,
+  )
+  const late = enqueueSessionExtract(
+    { sessionId: SESSION_ID, tag: 'c' },
+    false,
+    runTagged,
+  )
+  release()
+  const [ra, rb, rc] = await Promise.all([slow, mid, late])
+  assert(ra.ok === true, 'first extract runs')
+  assert(rb.error === 'coalesced', 'middle auto extract coalesced')
+  assert(rc.ok === true, 'latest auto extract runs after first')
+  assert(
+    order.includes('run:c') && !order.includes('run:b'),
+    `latest-wins ran c not b (order=${order.join(',')})`,
+  )
+  resetExtractQueues()
+
+  // Cleanup
+  try {
+    fs.rmSync(path.join(path.dirname(memPath), '..'), {
+      recursive: true,
+      force: true,
+    })
+  } catch {
+    // ignore
+  }
   console.log('\nAll session-memory unit checks passed.')
 }
 

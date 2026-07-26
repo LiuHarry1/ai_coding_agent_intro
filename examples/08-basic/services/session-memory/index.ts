@@ -38,6 +38,7 @@ export {
   extractSessionMemoryInBackground,
   shouldExtractSessionMemory,
 } from './extract.js'
+export { resetExtractQueues } from './extractQueue.js'
 export { trySessionMemoryCompaction } from './compact.js'
 export type { SessionMemoryCompactResult } from './compact.js'
 export { createMemoryFileEditTool } from './memoryEditTool.js'
