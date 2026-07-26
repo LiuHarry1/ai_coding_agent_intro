@@ -40,6 +40,7 @@
     "compactMaxTokens": 40000,
     "compactMinTextMessages": 5
   },
+  "autoMemoryEnabled": true,
   "lspServers": {
     "typescript": {
       "command": "npx",

@@ -41,6 +41,12 @@ import { mergeMCPServers } from '../../core/settings-manager.js'
 import { noopWireEmitter } from '../../core/wire-emitter.js'
 import { getMCPManagerForServers } from '../../server/mcp-lifecycle.js'
 import { createSandboxPolicy } from '../../core/sandbox.js'
+import { resolveAutoMemoryConfig } from '../../core/settings-manager.js'
+import {
+  buildAutoMemorySystemAppend,
+  getAutoMemPath,
+  isAutoMemoryDisabledByEnv,
+} from '../../services/auto-memory/index.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -193,8 +199,25 @@ export async function prepareChatTurn(
     `[server] cwd=${cwd}  agents=[${activeAgents.map(a => a.agentType).join(', ')}]  skills=[${activeSkills.map(s => s.name).join(', ')}]${conditionalHidden > 0 ? `  (+${conditionalHidden} conditional hidden)` : ''}`,
   )
 
-  const projectRules = loadProjectRules(cwd)
+  const projectRulesRaw = loadProjectRules(cwd)
+  const autoMemory = resolveAutoMemoryConfig(config)
+  const autoMemoryAppend = buildAutoMemorySystemAppend({
+    cwd,
+    config: autoMemory,
+  })
+  const projectRules = [projectRulesRaw, autoMemoryAppend]
+    .filter(s => s.trim())
+    .join('\n\n')
   const toolEnablement = { disabledTools: config.disabledTools }
+
+  const autoMemEnabled =
+    autoMemory.enabled && !isAutoMemoryDisabledByEnv()
+  const autoMemPath = autoMemEnabled
+    ? getAutoMemPath({
+        cwd,
+        trustedDirectory: autoMemory.directory,
+      })
+    : undefined
 
   const toolContext: ToolContext = {
     eventBus,
@@ -212,7 +235,15 @@ export async function prepareChatTurn(
     sessionId: session.id,
     session,
     cwd,
-    sandbox: createSandboxPolicy(cwd),
+    sandbox: createSandboxPolicy(
+      cwd,
+      autoMemPath
+        ? {
+            extraReadRoots: [autoMemPath],
+            extraWriteRoots: [autoMemPath],
+          }
+        : undefined,
+    ),
   }
 
   const { active, deferred, deferredDefs } = (

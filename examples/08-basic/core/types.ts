@@ -294,6 +294,13 @@ export interface AgentOptions {
    * When omitted, extraction is skipped even if sessionMemory.enabled.
    */
   sessionMemoryModelId?: string
+  /** Cross-session auto memory (turn-end extract + MEMORY.md inject). */
+  autoMemory?: AutoMemoryConfig
+  /**
+   * Model id for auto-memory extract when cacheSafe is false.
+   * When cacheSafe, main-loop model is used.
+   */
+  autoMemoryModelId?: string
   /**
    * Names of tools that are subagent wrappers. Used purely for UI: when
    * provided, the agent tags `tool_call` / `tool_input_start` events with
@@ -585,11 +592,36 @@ export interface SessionMemoryConfig {
   compactMinTextMessages: number
 }
 
+/**
+ * Runtime auto-memory config (derived from flat AppConfig fields + code defaults).
+ * Settings surface matches CC: `autoMemoryEnabled` / `autoMemoryDirectory`.
+ */
+export interface AutoMemoryConfig {
+  enabled: boolean
+  /** Trusted directory; from env / user / local only. */
+  directory?: string
+  /** Eligible turn-end extracts; default 1 (CC tengu_bramble_lintel). */
+  extractEveryNTurns: number
+  cacheSafe: boolean
+  injectIndex: boolean
+  injectMaxIndexLines: number
+}
+
 export interface AppConfig {
   /** Three-tier profiles; medium/small fall back to large when omitted in settings. */
   models: ModelProfiles
   compaction: CompactionConfig
   sessionMemory: SessionMemoryConfig
+  /**
+   * Enable auto-memory (CC `autoMemoryEnabled`). Default true.
+   * Env `AI_AGENT_DISABLE_AUTO_MEMORY=1` still forces off.
+   */
+  autoMemoryEnabled: boolean
+  /**
+   * Custom auto-memory directory (CC `autoMemoryDirectory`).
+   * Trusted scopes only: user / local / env — never project settings.
+   */
+  autoMemoryDirectory?: string
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */

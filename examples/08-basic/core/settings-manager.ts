@@ -1,7 +1,12 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import type { AppConfig, LspServerConfig, MCPServerConfig } from './types.js'
+import type {
+  AppConfig,
+  AutoMemoryConfig,
+  LspServerConfig,
+  MCPServerConfig,
+} from './types.js'
 import {
   DEFAULT_PROFILE,
   profileToRecord,
@@ -43,9 +48,29 @@ export const DEFAULTS: AppConfig = {
     compactMaxTokens: 40_000,
     compactMinTextMessages: 5,
   },
+  autoMemoryEnabled: true,
   mcpServers: {},
   lspServers: {},
   disabledTools: [],
+}
+
+/** Code defaults for extract/inject (CC throttle default = 1). */
+const AUTO_MEMORY_RUNTIME_DEFAULTS = {
+  extractEveryNTurns: 1,
+  cacheSafe: true,
+  injectIndex: true,
+  injectMaxIndexLines: 50,
+} as const
+
+/**
+ * Resolve runtime AutoMemoryConfig from flat CC-style settings fields.
+ */
+export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
+  return {
+    enabled: config.autoMemoryEnabled !== false,
+    directory: config.autoMemoryDirectory,
+    ...AUTO_MEMORY_RUNTIME_DEFAULTS,
+  }
 }
 
 export type SettingsScope = 'user' | 'project' | 'local'
@@ -77,6 +102,10 @@ type PartialAppConfig = Partial<{
   models: Record<string, unknown>
   compaction: Record<string, unknown>
   sessionMemory: Record<string, unknown>
+  autoMemoryEnabled: boolean
+  autoMemoryDirectory: string
+  /** Legacy nested shape — migrated in applyLayer. */
+  autoMemory: Record<string, unknown>
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   disabledTools: unknown[]
@@ -246,6 +275,23 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
     Object.assign(config.sessionMemory, layer.sessionMemory)
   }
 
+  // CC-style flat fields (+ legacy nested autoMemory.{enabled,directory})
+  if (typeof layer.autoMemoryEnabled === 'boolean') {
+    config.autoMemoryEnabled = layer.autoMemoryEnabled
+  }
+  if (typeof layer.autoMemoryDirectory === 'string') {
+    config.autoMemoryDirectory = layer.autoMemoryDirectory
+  }
+  if (layer.autoMemory && typeof layer.autoMemory === 'object') {
+    const legacy = layer.autoMemory
+    if (typeof legacy.enabled === 'boolean') {
+      config.autoMemoryEnabled = legacy.enabled
+    }
+    if (typeof legacy.directory === 'string') {
+      config.autoMemoryDirectory = legacy.directory
+    }
+  }
+
   if (layer.mcpServers && typeof layer.mcpServers === 'object') {
     config.mcpServers = {
       ...config.mcpServers,
@@ -291,7 +337,35 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
       continue
     }
     if (!settings) continue
-    applyLayer(config, settings)
+    // Project settings must never set autoMemoryDirectory (CC: path escape).
+    let toApply = settings
+    if (source.scope === 'project') {
+      const next = { ...settings }
+      if (next.autoMemoryDirectory !== undefined) {
+        console.warn(
+          `[settings] Ignoring project autoMemoryDirectory from ${source.path} (trusted scopes only)`,
+        )
+        delete next.autoMemoryDirectory
+      }
+      if (
+        next.autoMemory &&
+        typeof next.autoMemory === 'object' &&
+        'directory' in next.autoMemory
+      ) {
+        const { directory: _ignored, ...restAuto } = next.autoMemory as Record<
+          string,
+          unknown
+        > & { directory?: unknown }
+        if (_ignored !== undefined) {
+          console.warn(
+            `[settings] Ignoring project autoMemory.directory from ${source.path} (trusted scopes only)`,
+          )
+        }
+        next.autoMemory = restAuto
+      }
+      toApply = next
+    }
+    applyLayer(config, toApply)
     source.applied = true
     console.log(
       `[settings] Loaded ${source.scope} settings from ${source.path}`,
@@ -441,6 +515,17 @@ function mergePatch(
       ...((next.sessionMemory as Record<string, unknown> | undefined) ?? {}),
       ...patch.sessionMemory,
     }
+  }
+  if (typeof patch.autoMemoryEnabled === 'boolean') {
+    next.autoMemoryEnabled = patch.autoMemoryEnabled
+  }
+  if (typeof patch.autoMemoryDirectory === 'string') {
+    next.autoMemoryDirectory = patch.autoMemoryDirectory
+  } else if (
+    'autoMemoryDirectory' in patch &&
+    patch.autoMemoryDirectory === undefined
+  ) {
+    delete next.autoMemoryDirectory
   }
   if (patch.mcpServers) {
     next.mcpServers = {

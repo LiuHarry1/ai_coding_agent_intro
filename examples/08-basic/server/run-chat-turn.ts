@@ -11,7 +11,7 @@ import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import type { ModelRegistry } from '../core/llm/index.js'
 import { EventBus } from '../core/event-bus.js'
 import { createModelRegistry } from '../core/llm/index.js'
-import { resolveSettings } from '../core/settings-manager.js'
+import { resolveSettings, resolveAutoMemoryConfig } from '../core/settings-manager.js'
 import { generateSessionTitle } from '../services/sessionTitle.js'
 import { setSessionTitle } from './session.js'
 import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
@@ -439,6 +439,8 @@ export async function runChatTurn(
           ? resolvedSettings.config.sessionMemory.modelTier
           : 'medium',
       ).model,
+      autoMemory: resolveAutoMemoryConfig(resolvedSettings.config),
+      autoMemoryModelId: models.profile('medium').model,
       messages: session.messages,
       images: images?.length ? images : undefined,
       subagentNames: prepared.subagentNames,

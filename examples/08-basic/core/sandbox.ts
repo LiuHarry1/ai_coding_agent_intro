@@ -21,6 +21,11 @@ export interface SandboxPolicy {
   root: string
   /** Optional extra roots readable in strict mode (comma-separated env). */
   extraReadRoots: string[]
+  /**
+   * Extra roots writable even when outside `root` (e.g. auto-memory dir).
+   * Used for trusted carve-outs; each write is audit-logged.
+   */
+  extraWriteRoots: string[]
 }
 
 function parseExtraReadRoots(): string[] {
@@ -56,18 +61,40 @@ export function isSandboxStrict(policy?: SandboxPolicy): boolean {
   return (policy?.mode ?? resolveSandboxMode()) === 'strict'
 }
 
+export type CreateSandboxPolicyOptions = {
+  extraReadRoots?: string[]
+  extraWriteRoots?: string[]
+}
+
 /** Build a policy for the request cwd / pinned user workspace. */
-export function createSandboxPolicy(root: string): SandboxPolicy {
+export function createSandboxPolicy(
+  root: string,
+  opts?: CreateSandboxPolicyOptions,
+): SandboxPolicy {
+  const envReads = parseExtraReadRoots()
+  const extraReads = [
+    ...envReads,
+    ...(opts?.extraReadRoots ?? []).map(p => path.resolve(p)),
+  ]
+  const extraWrites = (opts?.extraWriteRoots ?? []).map(p => path.resolve(p))
   return {
     mode: resolveSandboxMode(),
     root: path.resolve(root),
-    extraReadRoots: parseExtraReadRoots(),
+    extraReadRoots: extraReads,
+    extraWriteRoots: extraWrites,
   }
 }
 
 function pathAllowedForRead(absPath: string, policy: SandboxPolicy): boolean {
   if (isPathInWorkspace(absPath, policy.root)) return true
   return policy.extraReadRoots.some(r => isPathInWorkspace(absPath, r))
+}
+
+function pathAllowedForWrite(absPath: string, policy: SandboxPolicy): boolean {
+  if (isPathInWorkspace(absPath, policy.root)) return true
+  return (policy.extraWriteRoots ?? []).some(r =>
+    isPathInWorkspace(absPath, r),
+  )
 }
 
 function refusalMessage(
@@ -86,8 +113,8 @@ function refusalMessage(
  * Enforce path access according to policy.
  *
  * - mode=off + read  → allow (local flexibility)
- * - mode=off + write → must be inside root (same as legacy write boundary)
- * - mode=strict      → read/write must be inside root (or extraReadRoots for read)
+ * - mode=off + write → must be inside root or extraWriteRoots
+ * - mode=strict      → read in root|extraReadRoots; write in root|extraWriteRoots
  */
 export function assertAccessible(
   absPath: string,
@@ -97,8 +124,15 @@ export function assertAccessible(
   const resolved = path.resolve(absPath)
 
   if (policy.mode === 'off') {
-    if (access === 'write' && !isPathInWorkspace(resolved, policy.root)) {
+    if (access === 'write' && !pathAllowedForWrite(resolved, policy)) {
       throw new Error(refusalMessage(resolved, policy.root, 'write'))
+    }
+    if (
+      access === 'write' &&
+      !isPathInWorkspace(resolved, policy.root) &&
+      pathAllowedForWrite(resolved, policy)
+    ) {
+      console.log(`[sandbox] write carve-out path=${resolved}`)
     }
     return
   }
@@ -110,8 +144,11 @@ export function assertAccessible(
     return
   }
 
-  if (!isPathInWorkspace(resolved, policy.root)) {
+  if (!pathAllowedForWrite(resolved, policy)) {
     throw new Error(refusalMessage(resolved, policy.root, 'write'))
+  }
+  if (!isPathInWorkspace(resolved, policy.root)) {
+    console.log(`[sandbox] write carve-out path=${resolved}`)
   }
 }
 

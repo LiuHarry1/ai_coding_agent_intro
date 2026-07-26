@@ -10,6 +10,7 @@ import {
   ensureMessageUuid,
   ensureMessageUuids,
 } from '../services/session-memory/index.js'
+import { extractAutoMemoriesInBackground } from '../services/auto-memory/index.js'
 import {
   createCacheSafeParams,
   saveCacheSafeParams,
@@ -256,6 +257,8 @@ export async function runAgent(
     compaction,
     sessionMemory,
     sessionMemoryModelId,
+    autoMemory,
+    autoMemoryModelId,
     onFullCompaction,
     logLabel,
   }: AgentOptions,
@@ -426,6 +429,36 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
           )
           wire.thinking()
           continue
+        }
+        // Turn-end only: auto-memory extract (CC stopHooks). Separate from
+        // session-memory which may also run after intermediate steps.
+        if (
+          sessionId &&
+          autoMemory?.enabled &&
+          (autoMemory.cacheSafe !== false || autoMemoryModelId)
+        ) {
+          const cacheSafeParams =
+            autoMemory.cacheSafe !== false
+              ? createCacheSafeParams({
+                  systemPrompt: activeSystemPrompt,
+                  tools: activeTools,
+                  provider,
+                  model: resolvedModel,
+                  messages,
+                })
+              : undefined
+          if (cacheSafeParams) saveCacheSafeParams(cacheSafeParams)
+          extractAutoMemoriesInBackground({
+            messages,
+            sessionId,
+            provider,
+            modelId: autoMemoryModelId ?? resolvedModel,
+            config: autoMemory,
+            runAgent,
+            cwd: cwd ?? process.cwd(),
+            cacheSafeParams,
+            trustedDirectory: autoMemory.directory,
+          })
         }
         autoCompleteTodos(currentTodos, eventBus, wire)
         wire.done()
