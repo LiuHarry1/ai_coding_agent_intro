@@ -20,6 +20,7 @@
     }
   },
   "compaction": {
+    "enabled": true,
     "contextWindow": 200000,
     "microCompactKeepRecent": 5,
     "maxFilesToRestore": 5,
@@ -27,6 +28,17 @@
     "fileBudget": 50000,
     "timeBasedMicroEnabled": true,
     "timeBasedMicroGapMinutes": 5
+  },
+  "sessionMemory": {
+    "enabled": true,
+    "minimumTokensToInit": 10000,
+    "minimumTokensBetweenUpdate": 5000,
+    "toolCallsBetweenUpdates": 3,
+    "cacheSafe": true,
+    "modelTier": "medium",
+    "compactMinTokens": 10000,
+    "compactMaxTokens": 40000,
+    "compactMinTextMessages": 5
   },
   "lspServers": {
     "typescript": {

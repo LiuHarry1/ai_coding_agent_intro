@@ -1,19 +1,24 @@
 /**
  * LLM summarization engine for full compaction.
- * summarizes ALL messages (no tail preservation), then re-injects
- * recently-read file contents, todo list, and skill references.
+ * Summarizes messages BEFORE keepStartIndex, then builds:
+ *   summaryMsg + messagesToKeep + attachments
+ * (same shape as session-memory compact).
  */
-import * as fs from 'fs'
-import * as path from 'path'
 import { generateText } from 'ai'
 import type { IProvider, Message, TodoItem } from '../../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
-import { READ_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { estimateConversationTokens, clearTokenUsages } from './tokens.js'
 import {
   buildPostCompactAttachmentMessages,
   type CompactEnrichment,
 } from './post-compact-attachments.js'
+import {
+  extractRecentlyReadFiles,
+  restoreRecentFiles,
+} from './fileRestore.js'
+import { ensureMessageUuid } from '../session-memory/messageUuid.js'
+import { sliceMessagesToKeep } from '../session-memory/keepIndex.js'
+import { formatCompactSummaryMessage } from '../session-memory/prompts.js'
 
 export type { CompactEnrichment } from './post-compact-attachments.js'
 
@@ -157,6 +162,8 @@ export interface CompactResult {
   summary: string
   summaryLength: number
   estimatedTokensAfter: number
+  source: 'full'
+  messagesToKeep: Message[]
 }
 
 export interface CompactContext {
@@ -244,19 +251,65 @@ function firstAssistantRoundId(messages: Message[]): string | undefined {
 }
 
 /**
- * Summarize ALL messages via LLM, then build a fresh post-compact context
- * with re-injected files, todos, and a "continue without asking" instruction.
+ * Summarize messages BEFORE keepStartIndex via LLM, then build:
+ *   summaryMsg + messages[keepStartIndex…] + attachments
  *
+ * When keepStartIndex is 0, summarizes nothing useful — caller should avoid that.
  * Returns null if summarization fails.
  */
 export async function compactConversation(
   messages: Message[],
   model: string,
   ctx: CompactContext,
+  keepStartIndex?: number,
 ): Promise<CompactResult | null> {
   if (messages.length < 2) return null
 
-  let pending = messages
+  const start =
+    keepStartIndex === undefined
+      ? messages.length
+      : Math.max(0, Math.min(keepStartIndex, messages.length))
+
+  // Head to summarize; tail to keep verbatim.
+  let pending = messages.slice(0, start)
+  const messagesToKeep = sliceMessagesToKeep(messages, start)
+
+  // Need something to summarize; if head is tiny, summarize everything except keep.
+  if (pending.length < 2 && messagesToKeep.length === 0) {
+    pending = messages
+  } else if (pending.length < 1) {
+    // Nothing older than keep — still produce a minimal continue marker + keep.
+    const summary =
+      'Session compacted; recent messages preserved. Continue the current task.'
+    clearTokenUsages(messages)
+    const recentFiles = ctx.skipFileRestore
+      ? []
+      : extractRecentlyReadFiles(messages)
+    const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore)
+    const summaryMessages = buildPostCompactMessages(
+      summary,
+      fileSection,
+      ctx.todos,
+      true,
+    )
+    const attachmentMessages = ctx.enrichment
+      ? await buildPostCompactAttachmentMessages(ctx.cwd, ctx.enrichment)
+      : []
+    const built = [
+      ...summaryMessages,
+      ...messagesToKeep,
+      ...attachmentMessages,
+    ]
+    return {
+      messages: built,
+      summary,
+      summaryLength: summary.length,
+      estimatedTokensAfter: estimateConversationTokens(built),
+      source: 'full',
+      messagesToKeep,
+    }
+  }
+
   let summary: string | undefined
 
   for (let attempt = 0; attempt <= MAX_SUMMARIZE_RETRIES; attempt++) {
@@ -284,8 +337,7 @@ export async function compactConversation(
       if (attempt < MAX_SUMMARIZE_RETRIES && isLikelyTooLong(error)) {
         const before = pending.length
         pending = dropOldestApiRound(pending)
-        if (pending.length === before || pending.length < 2) {
-          // Couldn't shrink further -- give up rather than loop uselessly.
+        if (pending.length === before || pending.length < 1) {
           throw error
         }
         console.warn(
@@ -305,17 +357,28 @@ export async function compactConversation(
     ? []
     : extractRecentlyReadFiles(messages)
   const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore)
-  const summaryMessages = buildPostCompactMessages(summary, fileSection, ctx.todos)
+  const summaryMessages = buildPostCompactMessages(
+    summary,
+    fileSection,
+    ctx.todos,
+    messagesToKeep.length > 0,
+  )
   const attachmentMessages = ctx.enrichment
     ? await buildPostCompactAttachmentMessages(ctx.cwd, ctx.enrichment)
     : []
-  const built = [...summaryMessages, ...attachmentMessages]
+  const built = [
+    ...summaryMessages,
+    ...messagesToKeep,
+    ...attachmentMessages,
+  ]
 
   return {
     messages: built,
     summary,
     summaryLength: summary.length,
     estimatedTokensAfter: estimateConversationTokens(built),
+    source: 'full',
+    messagesToKeep,
   }
 }
 
@@ -325,83 +388,26 @@ function buildPostCompactMessages(
   summary: string,
   fileSection: string,
   todos: TodoItem[],
+  recentMessagesPreserved: boolean,
 ): Message[] {
-  let content = `[Previous conversation compacted -- context continues below]\n\n${summary}`
-
+  let body = summary
   if (fileSection) {
-    content += `\n\n${fileSection}`
+    body += `\n\n${fileSection}`
   }
-
   if (todos.length > 0) {
     const todoLines = todos.map(t => `- [${t.status}] ${t.id}: ${t.content}`)
-    content += `\n\n## Active Todo List\nUpdate via todo_write(merge=true) as you complete items:\n${todoLines.join('\n')}`
+    body += `\n\n## Active Todo List\nUpdate via todo_write(merge=true) as you complete items:\n${todoLines.join('\n')}`
   }
-
-  content += `\n\nContinue from where you left off without asking questions. Resume directly -- do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.`
-
-  return [{ role: 'user', content, isCompactSummary: true }]
-}
-
-// ── File restoration ────────────────────────────────────
-
-function extractRecentlyReadFiles(messages: Message[], maxFiles = 8): string[] {
-  const files: string[] = []
-  for (let i = messages.length - 1; i >= 0 && files.length < maxFiles; i--) {
-    const m = messages[i]
-    if (!isRoleMessage(m) || m.role !== 'assistant') continue
-    for (const part of m.content) {
-      if (part.type !== 'tool-call' || part.toolName !== READ_FILE_TOOL_NAME)
-        continue
-      const filePath =
-        ((part.input as Record<string, unknown>)?.file_path as
-          string | undefined) ??
-        ((part.input as Record<string, unknown>)?.path as string | undefined)
-      if (filePath && !files.includes(filePath)) {
-        files.push(filePath)
-      }
-    }
-  }
-  return files
-}
-
-function restoreRecentFiles(
-  recentPaths: string[],
-  cwd: string,
-  config: FileRestoreConfig,
-): string {
-  if (recentPaths.length === 0) return ''
-
-  const maxCharPerFile = config.maxTokensPerFile * 4
-  const totalCharBudget = config.totalBudget * 4
-  let usedChars = 0
-  const sections: string[] = []
-
-  for (const filePath of recentPaths.slice(0, config.maxFiles)) {
-    const abs = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(cwd, filePath)
-    try {
-      if (!fs.existsSync(abs)) continue
-      const stat = fs.statSync(abs)
-      if (stat.isDirectory() || stat.size > 512 * 1024) continue
-
-      let content = fs.readFileSync(abs, 'utf-8')
-      if (content.length > maxCharPerFile) {
-        content =
-          content.slice(0, maxCharPerFile) + '\n[... truncated for compaction]'
-      }
-
-      if (usedChars + content.length > totalCharBudget) break
-      usedChars += content.length
-
-      sections.push(`### ${filePath}\n\`\`\`\n${content}\n\`\`\``)
-    } catch {
-      continue
-    }
-  }
-
-  if (sections.length === 0) return ''
-  return `## Restored File Contents\nThese files were recently accessed. Their current content is included so you can continue working immediately.\n\n${sections.join('\n\n')}`
+  const content = formatCompactSummaryMessage(body, {
+    recentMessagesPreserved,
+  })
+  return [
+    ensureMessageUuid({
+      role: 'user',
+      content,
+      isCompactSummary: true,
+    }),
+  ]
 }
 
 // ── Format compact summary (strip analysis scratchpad) ──

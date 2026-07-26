@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 记忆系统详解</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --accent2:#d97757;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.toc a.active{background:rgba(88,166,255,.15);color:var(--accent);font-weight:600}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:28px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;border:1px solid transparent}
+.badge.green{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3)}
+.badge.blue{background:rgba(88,166,255,.12);color:var(--accent);border-color:rgba(88,166,255,.3)}
+.badge.amber{background:rgba(210,153,34,.12);color:var(--amber);border-color:rgba(210,153,34,.3)}
+.badge.purple{background:rgba(188,140,255,.12);color:var(--purple);border-color:rgba(188,140,255,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:22px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(217,119,87,.07)}
+.callout.ok{border-color:var(--green);background:rgba(63,185,80,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.ok .tag{color:var(--green)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+.cards.two{grid-template-columns:repeat(2,1fr)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 16px}
+.card h4{margin:0 0 8px;font-size:15px;color:var(--text)}
+.card p{margin:0;color:var(--muted);font-size:13.5px}
+.card .meta{margin-top:10px;font-size:12px;color:var(--amber)}
+.flow{font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;background:var(--panel);
+  border:1px solid var(--border);border-radius:10px;padding:18px 20px;line-height:1.55;overflow-x:auto;white-space:pre}
+.footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:24px;border-top:1px solid var(--border)}
+@media(max-width:920px){
+  .sidebar{display:none}
+  .main{padding:24px}
+  .cards,.cards.two{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <h1>CC Memory Systems</h1>
+  <div class="sub">用户 / Agent / 会话 / 团队记忆</div>
+  <ul class="toc">
+    <li><a href="#overview">1. 概述</a></li>
+    <li><a href="#architecture">2. 架构总览</a></li>
+    <li><a href="#instructions">3. CLAUDE.md 指令记忆</a></li>
+    <li><a href="#automem">4. Auto Memory</a></li>
+    <li><a href="#team">5. Team Memory</a></li>
+    <li><a href="#agent">6. Agent Memory</a></li>
+    <li><a href="#session">7. Session Memory</a></li>
+    <li><a href="#pipeline">8. Recall / Extract / Dream</a></li>
+    <li><a href="#security">9. 权限与安全</a></li>
+    <li><a href="#index">10. 源码索引</a></li>
+    <li><a href="#cheat">11. 选用对照</a></li>
+    <li><a href="#gates">12. Feature Gates</a></li>
+  </ul>
+</aside>
+
+<main class="main">
+  <div class="hero">
+    <h1>Claude Code 记忆系统详解</h1>
+    <p>源码：<code>/Users/harry/cursor_workspace/public_repo/claude-code-rev</code></p>
+    <p>核心：<code>src/memdir/</code> · <code>claudemd.ts</code> · <code>AgentTool/agentMemory*</code> · <code>SessionMemory/</code> · <code>extractMemories/</code> · <code>autoDream/</code></p>
+    <p>文档日期：2026-07-26</p>
+    <span class="badge blue">6 大记忆系统</span>
+    <span class="badge green">跨会话 + 单会话</span>
+    <span class="badge purple">私有 / 团队 / Agent 隔离</span>
+    <span class="badge amber">文件驱动</span>
+  </div>
+
+  <section id="overview">
+    <h2><span class="num">01</span> 概述</h2>
+    <p>CC 的「记忆」不是单一模块，而是<strong>多层、多生命周期</strong>的持久化上下文。按职责分成六大类：</p>
+    <table>
+      <thead><tr><th>#</th><th>系统</th><th>生命周期</th><th>主要用途</th><th>核心路径</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><strong>Instructions（CLAUDE.md）</strong></td><td>跨会话，人工</td><td>指令/规范，始终注入</td><td><code>utils/claudemd.ts</code></td></tr>
+        <tr><td>2</td><td><strong>Auto Memory（memdir）</strong></td><td>跨会话，自动+手动</td><td>用户画像、反馈、项目事实、外部指针</td><td><code>memdir/</code></td></tr>
+        <tr><td>3</td><td><strong>Team Memory</strong></td><td>跨会话，团队同步</td><td>项目级共享（Auto 子目录）</td><td><code>teamMemPaths.ts</code></td></tr>
+        <tr><td>4</td><td><strong>Agent Memory</strong></td><td>跨会话，按 agent</td><td>子 Agent 专属记忆</td><td><code>agentMemory.ts</code></td></tr>
+        <tr><td>5</td><td><strong>Session Memory</strong></td><td>单会话</td><td>对话笔记，供 compact</td><td><code>SessionMemory/</code></td></tr>
+        <tr><td>6</td><td><strong>Recall / Extract / Dream</strong></td><td>运行时流水线</td><td>检索、抽取、整理</td><td>见 §8</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+      <p class="tag">注意 · 两套 MemoryType</p>
+      <p>① 指令文件类型（<code>utils/memory/types.ts</code>）：<code>User | Project | Local | Managed | AutoMem | TeamMem</code></p>
+      <p>② Auto Memory 内容类型（<code>memdir/memoryTypes.ts</code>）：<code>user | feedback | project | reference</code></p>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <h2><span class="num">02</span> 架构总览</h2>
+    <div class="flow">会话启动
+  ├─ getMemoryFiles()       → CLAUDE.md 层级 + MEMORY.md 入口
+  │     └─ getClaudeMds()   → 注入 user context（指令）
+  ├─ loadMemoryPrompt()     → 系统提示：如何读写记忆
+  └─ Agent spawn
+        └─ loadAgentMemoryPrompt()
+
+每轮用户输入
+  └─ findRelevantMemories() → Sonnet 选 ≤5 条 topic 文件
+        └─ relevant_memories attachment
+
+回合结束（stop hooks）
+  ├─ extractMemories（主 agent 未直接写时）
+  └─ Session Memory hook（阈值满足）→ Edit summary.md
+
+后台
+  └─ autoDream（≥24h 且 ≥5 sessions）→ 蒸馏 MEMORY.md
+
+Compact
+  └─ 优先用 Session Memory 代替整段 LLM 总结</div>
+  </section>
+
+  <section id="instructions">
+    <h2><span class="num">03</span> Instructions Memory（CLAUDE.md）</h2>
+    <p>人工编写的指令文件，会话一开始整文件注入，优先级高于模型默认行为。入口：<code>/memory</code>。</p>
+
+    <h3>3.1 四级层级（低 → 高优先级）</h3>
+    <table>
+      <thead><tr><th>类型</th><th>路径</th><th>作用域</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Managed</strong></td><td>macOS <code>/Library/Application Support/ClaudeCode/CLAUDE.md</code>；Linux <code>/etc/claude-code/CLAUDE.md</code></td><td>全机策略</td></tr>
+        <tr><td><strong>User</strong></td><td><code>~/.claude/CLAUDE.md</code> + <code>~/.claude/rules/*.md</code></td><td>用户全局</td></tr>
+        <tr><td><strong>Project</strong></td><td><code>CLAUDE.md</code>、<code>.claude/CLAUDE.md</code>、<code>.claude/rules/*.md</code>（CWD 向上）</td><td>仓库</td></tr>
+        <tr><td><strong>Local</strong></td><td><code>CLAUDE.local.md</code>（CWD 向上）</td><td>本机私有</td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.2 关键规则</h3>
+    <ul>
+      <li>离 CWD 越近越晚加载 → 越高优先级</li>
+      <li>嵌套 worktree 跳过主仓重复 Project 文件；Local 仍从主仓加载</li>
+      <li>支持 <code>@path</code> include；仅文本扩展名；防循环</li>
+      <li><code>claudeMdExcludes</code> 可排除 User/Project/Local</li>
+      <li>单文件建议上限 <code>40_000</code> 字符</li>
+    </ul>
+  </section>
+
+  <section id="automem">
+    <h2><span class="num">04</span> Auto Memory（memdir）</h2>
+    <p>跨会话结构化主题记忆，只存<strong>无法从代码/git 推导</strong>的上下文。</p>
+
+    <h3>4.1 目录结构</h3>
+<pre><code>~/.claude/projects/&lt;sanitized-git-root&gt;/memory/
+├── MEMORY.md              # 索引（常驻上下文）
+├── user_*.md / feedback_*.md / project_*.md / reference_*.md
+├── team/MEMORY.md         # Team Memory
+└── logs/YYYY/MM/YYYY-MM-DD.md   # KAIROS 日日志</code></pre>
+    <p>路径覆盖顺序：<code>CLAUDE_COWORK_MEMORY_PATH_OVERRIDE</code> → settings <code>autoMemoryDirectory</code>（禁 projectSettings）→ 默认 projects 路径。同一 git 的 worktree 共享目录。</p>
+
+    <h3>4.2 四种内容类型</h3>
+    <div class="cards two">
+      <div class="card">
+        <h4>user</h4>
+        <p>角色、目标、知识背景、协作偏好。帮助因人而异地解释与协作。</p>
+        <div class="meta">scope: 永远 private</div>
+      </div>
+      <div class="card">
+        <h4>feedback</h4>
+        <p>纠正<strong>与确认</strong>的工作方式。含 Why / How to apply，避免只记失败变过度谨慎。</p>
+        <div class="meta">默认 private；项目公约 → team</div>
+      </div>
+      <div class="card">
+        <h4>project</h4>
+        <p>进行中工作、动机、截止日期等非代码可推导事实。相对日期须存成绝对日期。</p>
+        <div class="meta">强烈偏向 team</div>
+      </div>
+      <div class="card">
+        <h4>reference</h4>
+        <p>外部系统指针：Linear 项目、Slack 频道、Grafana 看板等。</p>
+        <div class="meta">通常 team</div>
+      </div>
+    </div>
+
+    <div class="callout note">
+      <p class="tag">不要存</p>
+      <p>代码模式 / 架构 / 文件树 / git 历史 / 调试配方 / 已在 CLAUDE.md 的内容 / 仅当前对话有用的临时任务。</p>
+    </div>
+
+    <h3>4.3 保存方式</h3>
+    <ol>
+      <li>写带 frontmatter 的主题 <code>.md</code></li>
+      <li>在同目录 <code>MEMORY.md</code> 加一行索引（≤150 字符 hook）</li>
+    </ol>
+    <p><code>MEMORY.md</code> 硬限制：<strong>200 行</strong> 且 <strong>25KB</strong>。</p>
+
+    <h3>4.4 与 Plan / Task</h3>
+    <ul>
+      <li><strong>Plan</strong>：对齐实现方案</li>
+      <li><strong>Task</strong>：当前对话步骤</li>
+      <li><strong>Memory</strong>：跨会话仍有价值的信息</li>
+    </ul>
+
+    <h3>4.5 KAIROS 日日志</h3>
+    <p>长会话模式下新记忆 append 到日日志；夜间 Dream 再蒸馏。与 Team Memory 互斥。</p>
+  </section>
+
+  <section id="team">
+    <h2><span class="num">05</span> Team Memory</h2>
+    <ul>
+      <li>路径：<code>&lt;autoMemPath&gt;/team/</code></li>
+      <li>需 Auto Memory 开启 + GB <code>tengu_herring_clock</code></li>
+      <li>写入经 realpath 校验，防 symlink / 路径穿越</li>
+      <li>禁止在 team 记忆中存 API key 等敏感信息（提示词硬约束）</li>
+    </ul>
+  </section>
+
+  <section id="agent">
+    <h2><span class="num">06</span> Agent Memory</h2>
+    <table>
+      <thead><tr><th>Scope</th><th>目录</th><th>语义</th></tr></thead>
+      <tbody>
+        <tr><td><code>user</code></td><td><code>~/.claude/agent-memory/&lt;agentType&gt;/</code></td><td>跨项目通用</td></tr>
+        <tr><td><code>project</code></td><td><code>.claude/agent-memory/&lt;agentType&gt;/</code></td><td>可进 VCS</td></tr>
+        <tr><td><code>local</code></td><td><code>.claude/agent-memory-local/&lt;agentType&gt;/</code></td><td>本机，不进 VCS</td></tr>
+      </tbody>
+    </table>
+    <p>创建 agent 时 <code>MemoryStep.tsx</code> 选择 scope；spawn 时注入 <code>loadAgentMemoryPrompt()</code>。</p>
+    <p>项目可提交 snapshot（<code>.claude/agent-memory-snapshots/</code>），本地通过 <code>.snapshot-synced.json</code> 做 initialize / update / replace。</p>
+    <p><code>@agent-xxx</code> 提及时，相关性检索<strong>只搜该 agent 目录</strong>。</p>
+  </section>
+
+  <section id="session">
+    <h2><span class="num">07</span> Session Memory</h2>
+    <p>单会话工作笔记，路径：</p>
+<pre><code>~/.claude/projects/&lt;cwd&gt;/&lt;sessionId&gt;/session-memory/summary.md</code></pre>
+    <p>默认章节：Title / Current State / Task / Files / Workflow / Errors / Docs / Learnings / Key results / Worklog。</p>
+    <p>模板与 prompt 可自定义：<code>~/.claude/session-memory/config/{template,prompt}.md</code>。</p>
+
+    <h3>触发阈值（默认）</h3>
+    <ul>
+      <li>Gate：<code>tengu_session_memory</code>；且 auto-compact 开启</li>
+      <li>初始化：上下文 ≥ <strong>10k</strong> tokens</li>
+      <li>更新：再增长 ≥ <strong>5k</strong>，且（工具调用 ≥ 3 或上轮无 tool call）</li>
+      <li>Forked agent 仅允许 Edit 该 summary 文件</li>
+    </ul>
+    <div class="callout ok">
+      <p class="tag">与 Compact</p>
+      <p><code>sessionMemoryCompact.ts</code> 可在压缩时用 summary 代替完整 LLM 总结，保留尾部消息窗口（约 10k–40k tokens）。</p>
+    </div>
+  </section>
+
+  <section id="pipeline">
+    <h2><span class="num">08</span> Recall / Extract / Dream</h2>
+
+    <h3>8.1 Relevant Memory Recall</h3>
+    <ol>
+      <li><code>scanMemoryFiles</code>：扫 frontmatter，排除 MEMORY.md，最多 200</li>
+      <li>侧路 Sonnet 按 query 选 ≤5 个文件</li>
+      <li>以 <code>relevant_memories</code> attachment 注入，附带新鲜度警告（&gt;1 天）</li>
+    </ol>
+    <p><code>tengu_moth_copse</code> 开启时：MEMORY.md 不再常驻 system prompt，改走 attachment。</p>
+
+    <h3>8.2 Extract Memories</h3>
+    <ul>
+      <li>Stop hook；仅主 agent；gate <code>tengu_passport_quail</code></li>
+      <li>主 agent 本轮已写 memory → 跳过（互斥）</li>
+      <li>否则 fork，最多 5 turns；工具仅读 + memory 目录写</li>
+    </ul>
+
+    <h3>8.3 Auto Dream</h3>
+    <ul>
+      <li><code>autoDreamEnabled</code> 或 GB <code>tengu_onyx_plover</code></li>
+      <li>默认：≥24h 且 ≥5 个有更新的 session</li>
+      <li>蒸馏日日志 / 散文件 → topic + MEMORY.md</li>
+    </ul>
+  </section>
+
+  <section id="security">
+    <h2><span class="num">09</span> 权限与安全</h2>
+    <table>
+      <thead><tr><th>机制</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>Auto-mem 写放行</td><td><code>isAutoMemPath</code> carve-out；env path override <strong>不</strong>给写放行</td></tr>
+        <tr><td>Team path</td><td>realpath + 拒 null byte / URL 编码 / Unicode 归一化 / dangling symlink</td></tr>
+        <tr><td>Agent path</td><td><code>normalize</code> 防 <code>..</code></td></tr>
+        <tr><td>Fork canUseTool</td><td>Extract / Session 只能改指定 memory 文件</td></tr>
+        <tr><td>settings 安全</td><td>projectSettings 禁止设 <code>autoMemoryDirectory</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="index">
+    <h2><span class="num">10</span> 源码索引</h2>
+    <table>
+      <thead><tr><th>主题</th><th>文件</th></tr></thead>
+      <tbody>
+        <tr><td>CLAUDE.md 加载</td><td><code>src/utils/claudemd.ts</code></td></tr>
+        <tr><td>指令 MemoryType</td><td><code>src/utils/memory/types.ts</code></td></tr>
+        <tr><td>路径解析</td><td><code>src/utils/config.ts</code> → <code>getMemoryPath</code></td></tr>
+        <tr><td>Auto mem 路径/开关</td><td><code>src/memdir/paths.ts</code></td></tr>
+        <tr><td>提示词 / MEMORY.md</td><td><code>src/memdir/memdir.ts</code></td></tr>
+        <tr><td>四类型 taxonomy</td><td><code>src/memdir/memoryTypes.ts</code></td></tr>
+        <tr><td>扫描 / 相关性</td><td><code>memoryScan.ts</code> / <code>findRelevantMemories.ts</code></td></tr>
+        <tr><td>Team</td><td><code>teamMemPaths.ts</code> / <code>teamMemPrompts.ts</code></td></tr>
+        <tr><td>Agent</td><td><code>tools/AgentTool/agentMemory.ts</code> + <code>agentMemorySnapshot.ts</code></td></tr>
+        <tr><td>Session</td><td><code>services/SessionMemory/*</code></td></tr>
+        <tr><td>Session compact</td><td><code>services/compact/sessionMemoryCompact.ts</code></td></tr>
+        <tr><td>Extract / Dream</td><td><code>extractMemories/</code> / <code>autoDream/</code></td></tr>
+        <tr><td>Attachment 注入</td><td><code>utils/attachments.ts</code></td></tr>
+        <tr><td><code>/memory</code> UI</td><td><code>commands/memory/memory.tsx</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="cheat">
+    <h2><span class="num">11</span> 选用对照</h2>
+    <table>
+      <thead><tr><th>你想记住…</th><th>用哪个系统</th></tr></thead>
+      <tbody>
+        <tr><td>仓库永远用 bun / PR 规范</td><td>Project CLAUDE.md / rules</td></tr>
+        <tr><td>我是前端新手，多类比后端</td><td>Auto Memory <code>user</code></td></tr>
+        <tr><td>别在每条回复末尾总结</td><td>Auto Memory <code>feedback</code>（private）</td></tr>
+        <tr><td>周四起 merge freeze</td><td>Auto Memory <code>project</code>（team）</td></tr>
+        <tr><td>流水线 bug 在 Linear INGEST</td><td>Auto Memory <code>reference</code></td></tr>
+        <tr><td>某 code-reviewer agent 的习惯</td><td>Agent Memory</td></tr>
+        <tr><td>当前会话做到哪，compact 后接着干</td><td>Session Memory</td></tr>
+        <tr><td>组织强制安全策略</td><td>Managed CLAUDE.md</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="gates">
+    <h2><span class="num">12</span> Feature Gates 速查</h2>
+    <table>
+      <thead><tr><th>Gate / Setting</th><th>作用</th></tr></thead>
+      <tbody>
+        <tr><td><code>autoMemoryEnabled</code> / <code>CLAUDE_CODE_DISABLE_AUTO_MEMORY</code></td><td>Auto memory 总开关</td></tr>
+        <tr><td><code>tengu_passport_quail</code></td><td>extractMemories</td></tr>
+        <tr><td><code>tengu_bramble_lintel</code></td><td>抽取节流</td></tr>
+        <tr><td><code>tengu_herring_clock</code></td><td>Team memory</td></tr>
+        <tr><td><code>tengu_session_memory</code> / <code>tengu_sm_config</code></td><td>Session memory</td></tr>
+        <tr><td><code>tengu_sm_compact_config</code></td><td>Session compact 阈值</td></tr>
+        <tr><td><code>tengu_moth_copse</code></td><td>跳过 MEMORY.md 常驻，改 attachment</td></tr>
+        <tr><td><code>tengu_coral_fern</code></td><td>Searching past context 提示</td></tr>
+        <tr><td><code>tengu_onyx_plover</code> / <code>autoDreamEnabled</code></td><td>Auto dream</td></tr>
+        <tr><td><code>TEAMMEM</code> / <code>KAIROS</code></td><td>编译期 feature</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="footer">
+    基于 claude-code-rev 源码整理 · 与 <code>claude-code-memory-systems.md</code> 同步
+  </div>
+</main>
+</div>
+<script>
+const links = document.querySelectorAll('.toc a');
+const sections = [...links].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+function onScroll(){
+  let cur = sections[0];
+  for(const s of sections){ if(s.getBoundingClientRect().top <= 80) cur = s; }
+  links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#'+cur.id));
+}
+document.addEventListener('scroll', onScroll, {passive:true});
+onScroll();
+</script>
+</body>
+</html>

@@ -1,12 +1,16 @@
 /**
  * Auto-compact orchestrator: dynamic threshold, circuit breaker, config,
  * and the main compactIfNeeded entry point.
+ *
+ * Order after micro: wait session-memory extraction → try SM compact →
+ * else full LLM compact. Both produce summary + messagesToKeep + attachments.
  */
 import type {
   CompactionConfig,
   IEventBus,
   IProvider,
   Message,
+  SessionMemoryConfig,
   TodoItem,
 } from '../../core/types.js'
 import type { WireEmitter } from '../../core/wire-emitter.js'
@@ -19,6 +23,17 @@ import {
   type CompactContext,
   type CompactEnrichment,
 } from './compact.js'
+import { buildPostCompactAttachmentMessages } from './post-compact-attachments.js'
+import {
+  extractRecentlyReadFiles,
+  restoreRecentFiles,
+} from './fileRestore.js'
+import {
+  calculateMessagesToKeepIndex,
+  clearLastSummarizedMessageId,
+  ensureMessageUuids,
+  trySessionMemoryCompaction,
+} from '../session-memory/index.js'
 
 // ── Threshold constants ─────────────────────────────────
 
@@ -26,9 +41,6 @@ const RESERVED_FOR_OUTPUT = 20_000
 const AUTOCOMPACT_BUFFER = 13_000
 const MICRO_COMPACT_HEADSTART = 27_000
 const WARNING_BUFFER = 20_000
-// Hard limit = effectiveWindow - 3_000 (MANUAL_COMPACT_BUFFER).
-// Past this point even a manual compact can't reliably fit, so the loop
-// should refuse to grow context further. We surface it via an event.
 const MANUAL_COMPACT_BUFFER = 3_000
 
 // ── Config ──────────────────────────────────────────────
@@ -69,15 +81,6 @@ function getCompactionConfig(base?: CompactionConfig) {
   }
 }
 
-/**
- * When the gap since the last assistant message exceeds the TTL, the prompt
- * cache has almost certainly expired, so the prefix will be rewritten anyway.
- * will be rewritten regardless. Clearing old tool payloads (content-mutating
- * micro) before the next request shrinks what gets rewritten -- and only does
- * so when the mutation is "free" (cache already cold).
- *
- * Returns true when the time-based trigger should fire.
- */
 function shouldTimeBasedMicro(
   messages: Message[],
   enabled: boolean,
@@ -101,11 +104,6 @@ function shouldTimeBasedMicro(
   return Number.isFinite(gap) && gap >= gapMinutes
 }
 
-/**
- * Tokens reserved for the model's output during compaction.
- * `min(model max output, 20_000)`. When the model's max output is
- * unknown (maxOutputTokens unset) we fall back to the full 20_000 reserve.
- */
 function getReservedForOutput(maxOutputTokens?: number): number {
   if (typeof maxOutputTokens === 'number' && maxOutputTokens > 0) {
     return Math.min(maxOutputTokens, RESERVED_FOR_OUTPUT)
@@ -120,11 +118,6 @@ function getEffectiveContextWindow(
   return contextWindow - getReservedForOutput(maxOutputTokens)
 }
 
-/**
- * Compute the auto-compact threshold dynamically from the context window.
- * Formula: effectiveWindow - buffer  (effectiveWindow = contextWindow - reservedForOutput)
- * For 200K: 200K - 20K - 13K = 167K
- */
 function getAutoCompactThreshold(
   contextWindow: number,
   maxOutputTokens?: number,
@@ -141,10 +134,6 @@ function getMicroCompactThreshold(autoCompactThreshold: number): number {
   return autoCompactThreshold - MICRO_COMPACT_HEADSTART
 }
 
-/**
- * The blocking limit is effectiveWindow - 3_000. Crossing it means
- * context is effectively unrecoverable for the next request.
- */
 function getBlockingLimit(
   contextWindow: number,
   maxOutputTokens?: number,
@@ -173,6 +162,8 @@ export interface CompactOptions {
   instructions?: string
   /** Re-announce agent/skill listings after full compact. */
   enrichment?: CompactEnrichment
+  /** Session-memory config; when set, prefer SM compact before full LLM. */
+  sessionMemory?: SessionMemoryConfig
 }
 
 /**
@@ -182,8 +173,8 @@ export interface CompactOptions {
  *   1. Check enabled + circuit breaker
  *   2. Emit warning if approaching threshold
  *   3. Micro-compact (clear old tool payloads, no LLM)
- *   4. If still over threshold -> full LLM summarization of ALL messages
- *   5. Post-compact: re-inject files, todos, skill refs
+ *   4. If still over threshold -> session-memory compact, else full LLM
+ *   5. Post-compact: re-inject files, todos, skill refs (both paths)
  */
 export async function compactIfNeeded(
   messages: Message[],
@@ -200,8 +191,10 @@ export async function compactIfNeeded(
   const cfg = getCompactionConfig(compaction)
   const force = !!opts.force
   const aggressive = !!opts.aggressive
+  const smConfig = opts.sessionMemory ?? DEFAULTS.sessionMemory
 
   if (messages.length === 0) return messages
+  ensureMessageUuids(messages)
 
   if (!force && !aggressive && !cfg.enabled) {
     return messages
@@ -219,7 +212,6 @@ export async function compactIfNeeded(
   const blockingLimit = getBlockingLimit(cfg.contextWindow, cfg.maxOutputTokens)
   let tokens = tokenCountWithEstimation(messages).total
 
-  // Emit warning when approaching threshold
   if (
     tokens >= threshold - WARNING_BUFFER &&
     tokens < threshold &&
@@ -236,8 +228,6 @@ export async function compactIfNeeded(
     })
   }
 
-  // Surface the hard blocking limit. Context past this point can't
-  // be reliably recovered by compaction; the host loop should stop growing it.
   if (tokens >= blockingLimit) {
     eventBus.emit('compaction_blocking', {
       currentTokens: tokens,
@@ -245,11 +235,9 @@ export async function compactIfNeeded(
     })
   }
 
-  // STEP 1 -- micro-compaction (pre-pass to reduce summarizer input)
+  // STEP 1 -- micro-compaction
   let working = messages
   const microKeep = aggressive ? 1 : cfg.microCompactKeepRecent
-  // Time-based trigger fires regardless of token pressure: when the cache is
-  // cold (gap > TTL) the prefix is rewritten anyway, so clear old payloads now.
   const timeBased =
     !aggressive &&
     !force &&
@@ -272,12 +260,6 @@ export async function compactIfNeeded(
     )
     const tokensBeforeMicro = tokens
     const r = microCompact(working, microKeep, sessionId)
-    // CC-aligned (shouldAutoCompact's snipTokensFreed): keep the accurate
-    // usage-anchored count and subtract what micro freed. The previous code
-    // recomputed with pure chars/4 estimation here, which badly undercounts
-    // CJK conversations AND drops the system-prompt/tools overhead baked
-    // into real usage -- observed 221k real -> "167k estimated" right at the
-    // threshold, i.e. compaction firing only after the real window was blown.
     tokens = Math.max(0, tokensBeforeMicro - r.tokensFreed)
     if (r.cleared > 0) {
       eventBus.emit('compaction_micro', {
@@ -292,7 +274,7 @@ export async function compactIfNeeded(
     )
   }
 
-  // STEP 2 -- full LLM summarization (summarize ALL, no tail)
+  // STEP 2 -- SM or full summarization
   if (!force && !aggressive && tokens < threshold) {
     return working
   }
@@ -300,7 +282,7 @@ export async function compactIfNeeded(
   const msgsBeforeFull = working.length
   const tokensBeforeFull = tokens
   console.log(
-    `[compact] full-compact START -- msgs=${msgsBeforeFull}, tokens~${tokensBeforeFull.toLocaleString()}, ` +
+    `[compact] compact START -- msgs=${msgsBeforeFull}, tokens~${tokensBeforeFull.toLocaleString()}, ` +
       `fullThreshold=${threshold.toLocaleString()}` +
       (aggressive ? ', aggressive' : '') +
       (force ? ', force' : ''),
@@ -317,52 +299,120 @@ export async function compactIfNeeded(
     tokens_before: tokens,
   })
 
+  const fileRestore = {
+    maxFiles: cfg.maxFilesToRestore,
+    maxTokensPerFile: cfg.maxTokensPerFile,
+    totalBudget: cfg.fileBudget,
+  }
+  const skipFileRestore = aggressive
+  const fileSection = skipFileRestore
+    ? ''
+    : restoreRecentFiles(
+        extractRecentlyReadFiles(working),
+        cwd,
+        fileRestore,
+      )
+
+  const attachmentMessages = opts.enrichment
+    ? await buildPostCompactAttachmentMessages(cwd, opts.enrichment)
+    : []
+
+  // Prefer session-memory notes unless the user steered summarization.
+  const preferSm =
+    !!sessionId && smConfig.enabled && !opts.instructions?.trim()
+
+  if (preferSm) {
+    try {
+      const sm = await trySessionMemoryCompaction({
+        messages: working,
+        sessionId,
+        config: smConfig,
+        autoCompactThreshold: force || aggressive ? undefined : threshold,
+        attachmentMessages,
+        todos: currentTodos,
+        fileSection,
+        estimateTokens: msgs => tokenCountWithEstimation(msgs).total,
+      })
+      if (sm) {
+        consecutiveFailures = 0
+        clearLastSummarizedMessageId(sessionId)
+        eventBus.emit('compaction_done', {
+          summary: sm.summaryText,
+          summaryLength: sm.summaryText.length,
+          estimatedTokensAfter: tokenCountWithEstimation(sm.messages).total,
+          messagesBefore: msgsBeforeFull,
+          source: 'session_memory',
+        })
+        const tokensAfter = tokenCountWithEstimation(sm.messages).total
+        wire.compactionDone({
+          status: 'ok',
+          messages_after: sm.messages.length,
+          tokens_after: tokensAfter,
+        })
+        console.log(
+          `[compact] session-memory compact DONE -- msgs ${msgsBeforeFull} -> ${sm.messages.length}, ` +
+            `tokens~${tokensBeforeFull.toLocaleString()} -> ${tokensAfter.toLocaleString()}, ` +
+            `kept=${sm.messagesToKeep.length}`,
+        )
+        return sm.messages
+      }
+      console.log(
+        `[compact] session-memory compact skipped -- falling back to full LLM`,
+      )
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn(`[compact] session-memory compact error: ${msg}`)
+    }
+  }
+
   const ctx: CompactContext = {
     cwd,
     todos: currentTodos,
-    fileRestore: {
-      maxFiles: cfg.maxFilesToRestore,
-      maxTokensPerFile: cfg.maxTokensPerFile,
-      totalBudget: cfg.fileBudget,
-    },
+    fileRestore,
     instructions: opts.instructions,
     provider,
     enrichment: opts.enrichment,
-    // Aggressive compaction means the context already blew past the real
-    // window -- re-injecting up to fileBudget tokens of file contents right
-    // after shrinking it is the recompaction-loop amplifier. The model can
-    // re-read files on demand.
-    skipFileRestore: aggressive,
+    skipFileRestore,
   }
 
+  // Compute keep boundary from end (SM miss / no cursor — expand for mins).
+  let keepStart = calculateMessagesToKeepIndex(working, undefined, {
+    minTokens: smConfig.compactMinTokens,
+    maxTokens: smConfig.compactMaxTokens,
+    minTextMessages: smConfig.compactMinTextMessages,
+  })
+  if (keepStart < 0) keepStart = 0
+
   try {
-    const result = await compactConversation(working, mainModel, ctx)
+    const result = await compactConversation(
+      working,
+      mainModel,
+      ctx,
+      keepStart,
+    )
     if (!result) {
       console.log(
         `[compact] full-compact DONE -- no change (summarizer returned empty), ` +
           `msgs=${msgsBeforeFull}, tokens~${tokensBeforeFull.toLocaleString()}`,
       )
-      // Settle the client's progress UI: compaction_start must always be
-      // paired with a compaction_done, even when nothing was rewritten.
       wire.compactionDone({ status: 'noop' })
       return working
     }
 
     consecutiveFailures = 0
+    if (sessionId) clearLastSummarizedMessageId(sessionId)
     eventBus.emit('compaction_done', {
       summary: result.summary,
       summaryLength: result.summaryLength,
       estimatedTokensAfter: result.estimatedTokensAfter,
       messagesBefore: msgsBeforeFull,
+      source: 'full',
     })
     wire.compactionDone({
       status: 'ok',
       messages_after: result.messages.length,
       tokens_after: result.estimatedTokensAfter,
     })
-    // CC's willRetriggerNextTurn signal: if the freshly-compacted context is
-    // already at/over the threshold, the next turn will compact again -- a
-    // recompaction loop. Surface it loudly so it's diagnosable from logs.
     const willRetriggerNextTurn = result.estimatedTokensAfter >= threshold
     if (willRetriggerNextTurn) {
       console.warn(
@@ -378,7 +428,7 @@ export async function compactIfNeeded(
     console.log(
       `[compact] full-compact DONE -- msgs ${msgsBeforeFull} -> ${result.messages.length}, ` +
         `tokens~${tokensBeforeFull.toLocaleString()} -> ${result.estimatedTokensAfter.toLocaleString()}, ` +
-        `summaryChars=${result.summaryLength.toLocaleString()}` +
+        `summaryChars=${result.summaryLength.toLocaleString()}, kept=${result.messagesToKeep.length}` +
         (willRetriggerNextTurn ? ', WILL-RETRIGGER' : ''),
     )
     return result.messages

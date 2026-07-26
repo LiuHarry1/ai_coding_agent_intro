@@ -13,6 +13,7 @@
  *   ANALYTICS_URL              e.g. http://analytics:8200 (unset → disabled)
  *   ANALYTICS_INGEST_API_KEY   shared secret sent as X-API-Key (optional)
  *   ANALYTICS_FLUSH_MS         batch flush interval (default 5000)
+ *   ANALYTICS_DEBUG            "true" to log flush / HTTP failures (default off)
  */
 import type { IEventBus } from '../core/types.js'
 
@@ -62,16 +63,24 @@ interface EventReport {
 /** Analytics event type for one user chat POST. */
 export const USER_QUESTION_EVENT = 'chat.user_message'
 
-const ENDPOINT = (process.env.ANALYTICS_URL ?? '').replace(/\/+$/, '')
+const ENDPOINT = (process.env.ANALYTICS_URL ?? '').trim().replace(/\/+$/, '')
 const API_KEY = process.env.ANALYTICS_INGEST_API_KEY ?? ''
 const FLUSH_MS = (() => {
   const n = parseInt(process.env.ANALYTICS_FLUSH_MS ?? '', 10)
   return Number.isFinite(n) && n > 0 ? n : 5000
 })()
 const MAX_BATCH = 200
+const DEBUG =
+  String(process.env.ANALYTICS_DEBUG ?? '')
+    .trim()
+    .toLowerCase() === 'true'
 
 export function isTelemetryEnabled(): boolean {
   return ENDPOINT.length > 0
+}
+
+function debugWarn(message: string): void {
+  if (DEBUG) console.warn(message)
 }
 
 // Module-level queues shared across requests; one flush timer.
@@ -80,6 +89,7 @@ const eventQueue: EventReport[] = []
 let timer: ReturnType<typeof setTimeout> | null = null
 
 function scheduleFlush(): void {
+  if (!isTelemetryEnabled()) return
   const pending = usageQueue.length + eventQueue.length
   if (pending >= MAX_BATCH) {
     void flushUsage()
@@ -99,7 +109,7 @@ async function postIngest(path: string, body: unknown): Promise<void> {
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    console.warn(
+    debugWarn(
       `[telemetry] ${path} HTTP ${res.status}: ${text.slice(0, 200)}`,
     )
   }
@@ -110,7 +120,12 @@ export async function flushUsage(): Promise<void> {
     clearTimeout(timer)
     timer = null
   }
-  if (!ENDPOINT) return
+  // Unset / blank ANALYTICS_URL → telemetry off; never fetch or warn.
+  if (!isTelemetryEnabled()) {
+    usageQueue.length = 0
+    eventQueue.length = 0
+    return
+  }
 
   const records = usageQueue.splice(0, usageQueue.length)
   const events = eventQueue.splice(0, eventQueue.length)
@@ -124,8 +139,8 @@ export async function flushUsage(): Promise<void> {
       await postIngest('/v1/events', { events })
     }
   } catch (err) {
-    // Telemetry must never break the agent. Drop on failure.
-    console.warn(`[telemetry] flush failed: ${(err as Error).message}`)
+    // Fire-and-forget: drop on failure. Opt into noise with ANALYTICS_DEBUG=true.
+    debugWarn(`[telemetry] flush failed: ${(err as Error).message}`)
   }
 }
 

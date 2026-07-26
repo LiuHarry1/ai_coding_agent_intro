@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'
 import { EventBus } from '../core/event-bus.js'
 import { noopWireEmitter } from '../core/wire-emitter.js'
 import { buildProvider } from '../core/llm/index.js'
-import { isAttachmentMessage } from '../core/types.js'
+import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import type { Message } from '../core/types.js'
 import { resolveSettings } from '../core/settings-manager.js'
 import { compactIfNeeded } from '../services/compact/index.js'
@@ -103,21 +103,25 @@ async function main(): Promise<void> {
 
   const attAfter = compacted.filter(isAttachmentMessage).length
   const tokensAfter = tokenCountWithEstimation(compacted).total
-  const isSummary =
-    compacted.length === 1 &&
-    compacted[0]!.role === 'user' &&
-    typeof compacted[0]!.content === 'string' &&
-    compacted[0]!.content.includes('[Previous conversation compacted')
+  const isSummary = compacted.some(
+    m =>
+      isRoleMessage(m) &&
+      m.role === 'user' &&
+      typeof m.content === 'string' &&
+      (!!m.isCompactSummary ||
+        m.content.includes('continued from a previous conversation') ||
+        m.content.includes('[Previous conversation compacted')),
+  )
 
   console.log(
     `after compact: ${compacted.length} msgs, ${attAfter} attachments, ~${tokensAfter.toLocaleString()} tokens`,
   )
 
   if (!isSummary) {
-    console.log('[FAIL] expected single summary user message')
+    console.log('[FAIL] expected a compact summary user message')
     process.exit(1)
   }
-  console.log('[PASS] full compact → 1 summary user message')
+  console.log('[PASS] compact produced summary message (+ optional keep/attachments)')
 
   if (attAfter !== 0) {
     console.log(

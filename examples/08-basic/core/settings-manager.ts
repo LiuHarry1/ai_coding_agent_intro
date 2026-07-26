@@ -32,6 +32,17 @@ export const DEFAULTS: AppConfig = {
     timeBasedMicroEnabled: false,
     timeBasedMicroGapMinutes: 5,
   },
+  sessionMemory: {
+    enabled: true,
+    minimumTokensToInit: 10_000,
+    minimumTokensBetweenUpdate: 5_000,
+    toolCallsBetweenUpdates: 3,
+    cacheSafe: true,
+    modelTier: 'medium',
+    compactMinTokens: 10_000,
+    compactMaxTokens: 40_000,
+    compactMinTextMessages: 5,
+  },
   mcpServers: {},
   lspServers: {},
   disabledTools: [],
@@ -65,6 +76,7 @@ export interface EffectiveSettings extends ResolvedSettings {
 type PartialAppConfig = Partial<{
   models: Record<string, unknown>
   compaction: Record<string, unknown>
+  sessionMemory: Record<string, unknown>
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   disabledTools: unknown[]
@@ -228,6 +240,10 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
 
   if (layer.compaction && typeof layer.compaction === 'object') {
     Object.assign(config.compaction, layer.compaction)
+  }
+
+  if (layer.sessionMemory && typeof layer.sessionMemory === 'object') {
+    Object.assign(config.sessionMemory, layer.sessionMemory)
   }
 
   if (layer.mcpServers && typeof layer.mcpServers === 'object') {
@@ -418,6 +434,12 @@ function mergePatch(
     next.compaction = {
       ...((next.compaction as Record<string, unknown> | undefined) ?? {}),
       ...patch.compaction,
+    }
+  }
+  if (patch.sessionMemory) {
+    next.sessionMemory = {
+      ...((next.sessionMemory as Record<string, unknown> | undefined) ?? {}),
+      ...patch.sessionMemory,
     }
   }
   if (patch.mcpServers) {

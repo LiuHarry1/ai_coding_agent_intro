@@ -43,6 +43,7 @@ export type DispatchResult =
   | { kind: 'passthrough' }
   | { kind: 'reply'; text: string }
   | { kind: 'compact'; instructions: string }
+  | { kind: 'summary' }
   | {
       kind: 'run'
       /** `inline` feeds expanded text to the main agent; `fork` runs a subagent. */
@@ -92,6 +93,9 @@ export async function dispatchSlashCommand(
       // Manual compaction. Args (if any) steer the summary focus; the actual
       // summarization runs in the chat route, which holds the session history.
       return { kind: 'compact', instructions: parsed.args }
+    }
+    if (entry.name === 'summary') {
+      return { kind: 'summary' }
     }
     return { kind: 'reply', text: `Built-in /${entry.name} not implemented` }
   }

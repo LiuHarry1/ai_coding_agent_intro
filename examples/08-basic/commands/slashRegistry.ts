@@ -89,6 +89,12 @@ export const BUILTIN_SLASH_ENTRIES: SlashEntry[] = [
       'Summarize the conversation now to free context. Optionally focus the summary.',
     argumentHint: '[focus instructions]',
   },
+  {
+    kind: 'built-in',
+    name: 'summary',
+    description:
+      'Force an immediate update of the session-memory notes file (waits for completion).',
+  },
 ]
 
 const BUILTIN_NAMES = new Set(BUILTIN_SLASH_ENTRIES.map(e => e.name))

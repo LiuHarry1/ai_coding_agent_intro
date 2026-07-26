@@ -145,6 +145,8 @@ export interface RunToolCallsOptions {
   wire: WireEmitter
   concurrencyPolicy: ConcurrencyPolicyFn
   sessionId?: string
+  /** Agent identity for batch logs (default `main`). */
+  logLabel?: string
 }
 
 export async function runToolCalls(
@@ -152,11 +154,12 @@ export async function runToolCalls(
 ): Promise<ExecutedToolResult[]> {
   const batches = partitionToolCalls(opts.toolCalls, opts.concurrencyPolicy)
   const allResults: ExecutedToolResult[] = []
+  const tag = `agent:${opts.logLabel ?? 'main'}`
 
   for (const batch of batches) {
     if (batch.isConcurrencySafe && batch.calls.length > 1) {
       console.log(
-        `[agent] tool batch: parallel x${batch.calls.length} (${batch.calls.map(c => c.toolName).join(', ')})`,
+        `[${tag}] tool batch: parallel x${batch.calls.length} (${batch.calls.map(c => c.toolName).join(', ')})`,
       )
       allResults.push(
         ...(await executeBatchParallel(

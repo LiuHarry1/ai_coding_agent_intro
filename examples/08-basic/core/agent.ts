@@ -6,6 +6,15 @@ import {
 } from '../services/compact/index.js'
 import type { AttachedTokenUsage, CompactEnrichment } from '../services/compact/index.js'
 import {
+  extractSessionMemoryInBackground,
+  ensureMessageUuid,
+  ensureMessageUuids,
+} from '../services/session-memory/index.js'
+import {
+  createCacheSafeParams,
+  saveCacheSafeParams,
+} from './forked-agent.js'
+import {
   isContextLengthError,
   isTransientStreamError,
 } from './stream-errors.js'
@@ -56,6 +65,11 @@ import type { AnyTool } from './types.js'
 /** Default per-step output cap when the provider SDK cannot infer model limits. */
 const DEFAULT_MAX_OUTPUT_TOKENS = 128_000
 
+/** Default / resolve console tag: `[agent:main]` or `[agent:session_memory]`. */
+function agentLogTag(logLabel?: string): string {
+  return `agent:${logLabel ?? 'main'}`
+}
+
 function getMaxOutputTokens(): number {
   const parsed = parseInt(process.env.AGENT_MAX_OUTPUT_TOKENS ?? '', 10)
   return Number.isFinite(parsed) && parsed > 0
@@ -73,14 +87,14 @@ function parseDataUrl(dataUrl: string): { buffer: Buffer; mediaType: string } {
 
 function buildUserMessage(text: string, images?: string[]): UserMessage {
   if (!images || images.length === 0) {
-    return { role: 'user', content: text }
+    return ensureMessageUuid({ role: 'user', content: text })
   }
   const parts: UserContentPart[] = [{ type: 'text', text }]
   for (const dataUrl of images) {
     const { buffer, mediaType } = parseDataUrl(dataUrl)
     parts.push({ type: 'image', image: buffer, mediaType })
   }
-  return { role: 'user', content: parts }
+  return ensureMessageUuid({ role: 'user', content: parts })
 }
 
 // ── Todo helpers ────────────────────────────────────
@@ -240,7 +254,10 @@ export async function runAgent(
     provider: configuredProvider,
     cwd,
     compaction,
+    sessionMemory,
+    sessionMemoryModelId,
     onFullCompaction,
+    logLabel,
   }: AgentOptions,
 ): Promise<string> {
   if (toolUseContext) {
@@ -249,10 +266,11 @@ export async function runAgent(
       toolUseContext,
       messages,
     )) {
-      messages.push(att)
+      messages.push(ensureMessageUuid(att))
     }
   }
   messages.push(buildUserMessage(userMessage, images))
+  ensureMessageUuids(messages)
 
   let finalText = ''
   if (!configuredProvider) {
@@ -287,12 +305,14 @@ export async function runAgent(
     if (refreshTools) {
       syncToolSet(activeTools, refreshTools())
       console.log(
-        `[agent] refreshed tools for mode=${newMode}: ${Object.keys(activeTools).join(', ')}`,
+        `[${agentLogTag(logLabel)}] refreshed tools for mode=${newMode}: ${Object.keys(activeTools).join(', ')}`,
       )
     }
     if (refreshSystemPrompt) {
       activeSystemPrompt = refreshSystemPrompt()
-      console.log(`[agent] refreshed system prompt for mode=${newMode}`)
+      console.log(
+        `[${agentLogTag(logLabel)}] refreshed system prompt for mode=${newMode}`,
+      )
     }
   }
 
@@ -329,9 +349,11 @@ export async function runAgent(
         currentTodos,
         cwd,
         compaction,
+        sessionMemory,
         sessionId,
         onFullCompaction,
         compactEnrichment,
+        logLabel,
       )
 
       const stepResult = await runOneStep({
@@ -349,9 +371,12 @@ export async function runAgent(
         concurrencyPolicy: toolPolicy,
         cwd,
         compaction,
+        sessionMemory,
+        sessionMemoryModelId,
         sessionId,
         onFullCompaction,
         compactEnrichment,
+        logLabel,
       })
 
       if (stepResult === null) {
@@ -387,13 +412,15 @@ export async function runAgent(
       if (toolCalls.length === 0) {
         if (planBuildPending) {
           planBuildPending = false
-          messages.push({
-            role: 'user',
-            content: `<system-reminder>
+          messages.push(
+            ensureMessageUuid({
+              role: 'user',
+              content: `<system-reminder>
 The user approved your plan and expects implementation to start now.
 Do not reply with a summary or status update only -- call TodoWrite, Write, Edit, or Bash to make the first code change from the approved plan.
 </system-reminder>`,
-          })
+            }),
+          )
           console.log(
             '[agent] plan approved but no tools called -- forcing implementation step',
           )
@@ -412,7 +439,7 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
           toolUseContext,
           messages,
         )) {
-          messages.push(att)
+          messages.push(ensureMessageUuid(att))
         }
       }
 
@@ -438,6 +465,7 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
         currentTodos,
         cwd,
         compaction,
+        sessionMemory,
         sessionId,
         onFullCompaction,
         compactEnrichment,
@@ -474,19 +502,22 @@ async function forceFinalAnswerOnMaxSteps(input: {
   currentTodos: TodoItem[]
   cwd?: string
   compaction?: AgentOptions['compaction']
+  sessionMemory?: AgentOptions['sessionMemory']
   sessionId?: string
   onFullCompaction?: AgentOptions['onFullCompaction']
   compactEnrichment?: CompactEnrichment
 }): Promise<string> {
-  input.messages.push({
-    role: 'user',
-    content: `<system-reminder>
+  input.messages.push(
+    ensureMessageUuid({
+      role: 'user',
+      content: `<system-reminder>
 You have reached the maximum number of agent steps (${input.step}).
 Tool-calling budget is exhausted. Write a clear, self-contained final report of
 what you learned and accomplished so far. Respond in plain text / markdown only
 — do not call any tools.
 </system-reminder>`,
-  })
+    }),
+  )
   input.wire.stepStart(input.step)
   const stepStart = Date.now()
   try {
@@ -505,6 +536,7 @@ what you learned and accomplished so far. Respond in plain text / markdown only
       concurrencyPolicy: () => false,
       cwd: input.cwd,
       compaction: input.compaction,
+      sessionMemory: input.sessionMemory,
       sessionId: input.sessionId,
       onFullCompaction: input.onFullCompaction,
       compactEnrichment: input.compactEnrichment,
@@ -541,9 +573,11 @@ async function runCompactionAndLog(
   currentTodos: TodoItem[],
   cwd?: string,
   compaction?: AgentOptions['compaction'],
+  sessionMemory?: AgentOptions['sessionMemory'],
   sessionId?: string,
   onFullCompaction?: AgentOptions['onFullCompaction'],
   compactEnrichment?: CompactEnrichment,
+  logLabel?: string,
 ): Promise<void> {
   const compactStart = Date.now()
   const managed = await compactIfNeeded(
@@ -553,7 +587,7 @@ async function runCompactionAndLog(
     resolvedModel,
     cwd ?? process.cwd(),
     currentTodos,
-    { enrichment: compactEnrichment },
+    { enrichment: compactEnrichment, sessionMemory },
     compaction,
     provider,
     sessionId,
@@ -566,8 +600,9 @@ async function runCompactionAndLog(
       ? `${counted.total.toLocaleString()} tokens ` +
         `(${counted.realBaseline?.toLocaleString()} real + ${counted.estimatedDelta?.toLocaleString()} est)`
       : `~${counted.total.toLocaleString()} tokens (est, no usage cached yet)`
+  const tag = agentLogTag(logLabel)
   console.log(
-    `[agent] step ${step} start -- ${messages.length} msgs, ${tokenLabel}, ` +
+    `[${tag}] step ${step} start -- ${messages.length} msgs, ${tokenLabel}, ` +
       `model=${resolvedModel}, llm=${provider.describe()}` +
       (compactMs > 50 ? `, compaction=${compactMs}ms` : ''),
   )
@@ -594,9 +629,12 @@ interface RunOneStepArgs {
   concurrencyPolicy: ConcurrencyPolicyFn
   cwd?: string
   compaction?: AgentOptions['compaction']
+  sessionMemory?: AgentOptions['sessionMemory']
+  sessionMemoryModelId?: AgentOptions['sessionMemoryModelId']
   sessionId?: string
   onFullCompaction?: AgentOptions['onFullCompaction']
   compactEnrichment?: CompactEnrichment
+  logLabel?: string
 }
 
 /**
@@ -622,7 +660,10 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     concurrencyPolicy,
     cwd,
     compaction,
+    sessionMemory,
+    sessionMemoryModelId,
     sessionId,
+    logLabel,
   } = args
 
   const apiTools = stripToolExecute(tools)
@@ -694,6 +735,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           wire,
           concurrencyPolicy,
           sessionId,
+          logLabel,
         })
         stepResult.toolResults.push(...executed)
       }
@@ -721,14 +763,47 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         }
       }
       messages.push(...sdkMessages)
+      ensureMessageUuids(sdkMessages)
 
       if (stepResult.toolResults.length > 0) {
-        messages.push(buildToolMessage(stepResult.toolResults))
+        messages.push(ensureMessageUuid(buildToolMessage(stepResult.toolResults)))
         for (const tr of stepResult.toolResults) {
           if (tr.followUpMessages?.length) {
-            messages.push(...tr.followUpMessages)
+            for (const fm of tr.followUpMessages) {
+              messages.push(ensureMessageUuid(fm))
+            }
           }
         }
+      }
+
+      // Background session-memory extract (fire-and-forget; never blocks the turn).
+      if (
+        sessionId &&
+        sessionMemory?.enabled &&
+        compaction?.enabled !== false &&
+        (sessionMemory.cacheSafe !== false || sessionMemoryModelId)
+      ) {
+        const cacheSafeParams =
+          sessionMemory.cacheSafe !== false
+            ? createCacheSafeParams({
+                systemPrompt,
+                tools,
+                provider,
+                model: resolvedModel,
+                messages,
+              })
+            : undefined
+        if (cacheSafeParams) saveCacheSafeParams(cacheSafeParams)
+        extractSessionMemoryInBackground({
+          messages,
+          sessionId,
+          provider,
+          modelId: sessionMemoryModelId ?? resolvedModel,
+          config: sessionMemory,
+          runAgent,
+          cwd,
+          cacheSafeParams,
+        })
       }
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless
@@ -764,13 +839,14 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         model: resolvedModel,
         provider: provider.describe(),
         sessionId,
+        logLabel,
       })
       return stepResult
     } catch (err) {
       if (ctxLengthAttempt === 0 && isContextLengthError(err)) {
         const errMsg = err instanceof Error ? err.message : String(err)
         console.warn(
-          `[agent] step ${step} hit context-length error -> reactive aggressive compaction. ${errMsg}`,
+          `[${agentLogTag(logLabel)}] step ${step} hit context-length error -> reactive aggressive compaction. ${errMsg}`,
         )
         eventBus.emit('compaction_reactive', { error: errMsg })
         const recompacted = await compactIfNeeded(
@@ -784,6 +860,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
             force: true,
             aggressive: true,
             enrichment: args.compactEnrichment,
+            sessionMemory: args.sessionMemory,
           },
           compaction,
           provider,
@@ -811,7 +888,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         const backoffMs = 500 * Math.pow(3, transientAttempt - 1)
         const errMsg = err instanceof Error ? err.message : String(err)
         console.warn(
-          `[agent] step ${step} transient stream error (attempt ${transientAttempt}/${MAX_TRANSIENT_RETRIES}), retrying in ${backoffMs}ms: ${errMsg}`,
+          `[${agentLogTag(logLabel)}] step ${step} transient stream error (attempt ${transientAttempt}/${MAX_TRANSIENT_RETRIES}), retrying in ${backoffMs}ms: ${errMsg}`,
         )
         eventBus.emit('transient_retry', {
           attempt: transientAttempt,
@@ -830,7 +907,9 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         err instanceof Error && err.cause instanceof Error
           ? ` (${err.cause.message})`
           : ''
-      console.error(`[agent] step ${step} failed: ${message}${cause}`)
+      console.error(
+        `[${agentLogTag(logLabel)}] step ${step} failed: ${message}${cause}`,
+      )
       wire.error(
         `Upstream stream failed: ${message}${cause}. Try again or check your proxy logs.`,
       )
@@ -854,6 +933,7 @@ interface LogArgs {
   model: string
   provider?: string
   sessionId?: string
+  logLabel?: string
 }
 
 function logStepCompletion(a: LogArgs): void {
@@ -886,8 +966,9 @@ function logStepCompletion(a: LogArgs): void {
   ) {
     usageParts.push(`cached=${fmt(a.usage.cachedInputTokens)}`)
   }
+  const tag = agentLogTag(a.logLabel)
   console.log(
-    `[agent] step ${a.step} done -- total=${totalMs}ms ` +
+    `[${tag}] step ${a.step} done -- total=${totalMs}ms ` +
       `(ttfb=${ttfb}ms upstream-wait, gen=${generationMs}ms streaming), ` +
       `usage[${usageParts.join(' ')}], ` +
       `reasoning_blocks=${reasoningCount}, tool_calls=${a.toolCallsLen}, ` +

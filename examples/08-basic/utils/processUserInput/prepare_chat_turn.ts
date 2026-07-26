@@ -55,6 +55,8 @@ export interface SlashResolution {
   forkSkill: ForkSkillSlashResult | null
   /** Set when the user ran `/compact [instructions]`; handled by the chat route. */
   manualCompact: { instructions: string } | null
+  /** Set when the user ran `/summary`; force session-memory extract. */
+  forceSummary: boolean
   modeChanged?: boolean
 }
 
@@ -71,6 +73,7 @@ export async function resolveSlashCommand(
         immediateReply: planSlash.immediateReply ?? null,
         forkSkill: null,
         manualCompact: null,
+        forceSummary: false,
         modeChanged: planSlash.modeChanged,
       }
     }
@@ -81,11 +84,14 @@ export async function resolveSlashCommand(
   let immediateReply: string | null = null
   let forkSkill: SlashResolution['forkSkill'] = null
   let manualCompact: SlashResolution['manualCompact'] = null
+  let forceSummary = false
 
   if (slashResult.kind === 'reply') {
     immediateReply = slashResult.text
   } else if (slashResult.kind === 'compact') {
     manualCompact = { instructions: slashResult.instructions }
+  } else if (slashResult.kind === 'summary') {
+    forceSummary = true
   } else if (slashResult.kind === 'unknown') {
     immediateReply = `Unknown slash command: /${slashResult.name}\n\nTry /help to see all available commands.`
   } else if (slashResult.kind === 'run' && slashResult.mode === 'inline') {
@@ -101,7 +107,7 @@ export async function resolveSlashCommand(
     forkSkill = slashResult as ForkSkillSlashResult
   }
 
-  return { effectiveMessage, immediateReply, forkSkill, manualCompact }
+  return { effectiveMessage, immediateReply, forkSkill, manualCompact, forceSummary }
 }
 
 export interface PreparedChatTurn {
@@ -109,6 +115,7 @@ export interface PreparedChatTurn {
   immediateReply: string | null
   forkSkill: SlashResolution['forkSkill']
   manualCompact: SlashResolution['manualCompact']
+  forceSummary: boolean
   tools: Record<string, AnyTool>
   /** Tools before mode filtering -- used to refresh when mode changes mid-turn. */
   baseTools: Record<string, AnyTool>
@@ -200,6 +207,7 @@ export async function prepareChatTurn(
     provider,
     models,
     compaction: config.compaction,
+    sessionMemory: config.sessionMemory,
     lspServers: config.lspServers,
     sessionId: session.id,
     session,
@@ -283,6 +291,7 @@ export async function prepareChatTurn(
     immediateReply: slash.immediateReply,
     forkSkill: slash.forkSkill,
     manualCompact: slash.manualCompact,
+    forceSummary: slash.forceSummary,
     tools,
     baseTools: enablementFiltered,
     modeTools,

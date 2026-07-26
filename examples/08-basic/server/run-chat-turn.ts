@@ -1,4 +1,5 @@
 import type { ServerResponse } from 'http'
+import { randomUUID } from 'crypto'
 import type {
   Session,
   RunAgentFn,
@@ -22,6 +23,11 @@ import {
   compactIfNeeded,
   tokenCountWithEstimation,
 } from '../services/compact/index.js'
+import {
+  extractSessionMemory,
+  getSessionMemoryPath,
+} from '../services/session-memory/index.js'
+import { createCacheSafeParams } from '../core/forked-agent.js'
 import { defaultRegistry } from '../tools/index.js'
 import { Middleware, createTimingMiddleware } from '../core/middleware/index.js'
 import { createPlanModeGuardMiddleware } from '../core/middleware/plan-mode-guard.js'
@@ -255,7 +261,11 @@ export async function runChatTurn(
         model,
         cwd,
         [],
-        { force: true, instructions: instructions || undefined },
+        {
+          force: true,
+          instructions: instructions || undefined,
+          sessionMemory: resolvedSettings.config.sessionMemory,
+        },
         resolvedSettings.config.compaction,
         provider,
         session.id,
@@ -266,15 +276,13 @@ export async function runChatTurn(
         appendCompaction(session.id, session.messages)
         const tokensAfter = tokenCountWithEstimation(session.messages).total
         const tokenLine = `~${tokensBefore.toLocaleString()} -> ~${tokensAfter.toLocaleString()} tokens`
-        if (session.messages.length === 1) {
-          replyText =
-            `Compacted: ${msgsBefore} -> 1 message, ${tokenLine}.` +
-            (instructions ? `\nFocus: ${instructions}` : '')
-        } else {
-          replyText =
-            `Partially compacted (full summary unavailable -- cleared old tool ` +
-            `outputs only): ${msgsBefore} -> ${session.messages.length} messages, ${tokenLine}.`
-        }
+        const kept = session.messages.filter(
+          m => !(isRoleMessage(m) && m.role === 'user' && m.isCompactSummary),
+        ).length
+        replyText =
+          `Compacted: ${msgsBefore} -> ${session.messages.length} messages` +
+          ` (kept ${kept} recent), ${tokenLine}.` +
+          (instructions ? `\nFocus: ${instructions}` : '')
       } else {
         replyText =
           msgsBefore < 2
@@ -292,6 +300,69 @@ export async function runChatTurn(
     void flushUsage()
     if (transport !== noopTransport) transport.end()
     return { finalText: replyText, error: null, reason: 'compact' }
+  }
+
+  if (prepared.forceSummary) {
+    const sm = resolvedSettings.config.sessionMemory
+    let replyText: string
+    if (!sm.enabled) {
+      replyText = 'Session memory is disabled in settings.'
+    } else {
+      const systemPrompt = getSystemPromptForMode(
+        session.permissionMode.mode,
+        cwd,
+        prepared.projectRules || undefined,
+        {
+          planFilePath: prepared.planFilePath,
+          planExists: planExists(session, cwd),
+        },
+      )
+      const useCacheSafe = sm.cacheSafe !== false
+      const tier =
+        sm.modelTier === 'large' || sm.modelTier === 'small'
+          ? sm.modelTier
+          : 'medium'
+      // Cache-safe path must use the main (large) model + tools/system.
+      const extractProvider = useCacheSafe ? provider : models.provider(tier)
+      const modelId = useCacheSafe
+        ? models.profile('large').model
+        : models.profile(tier).model
+      const cacheSafeParams = useCacheSafe
+        ? createCacheSafeParams({
+            systemPrompt,
+            tools: prepared.tools,
+            provider: extractProvider,
+            model: modelId,
+            messages: session.messages,
+          })
+        : undefined
+      const result = await extractSessionMemory({
+        messages: session.messages,
+        sessionId: session.id,
+        provider: extractProvider,
+        modelId,
+        config: sm,
+        force: true,
+        runAgent,
+        cwd,
+        cacheSafeParams,
+      })
+      const memPath = getSessionMemoryPath(session.id)
+      replyText = result.ok
+        ? `Session memory updated.\n${memPath}`
+        : `Session memory update skipped: ${result.error ?? 'unknown'}`
+    }
+    wire.textDelta(replyText)
+    wire.finish('slash_command')
+    unsubMode()
+    unsubTelemetry?.()
+    void flushUsage()
+    if (transport !== noopTransport) transport.end()
+    return {
+      finalText: replyText,
+      error: null,
+      reason: 'slash_command',
+    }
   }
 
   if (prepared.immediateReply !== null) {
@@ -318,7 +389,11 @@ export async function runChatTurn(
   let persistFrom = messagesBefore
   let finalText = ''
   let runError: Error | null = null
-  const userTurnForDisplay: UserMessage = { role: 'user', content: message }
+  const userTurnForDisplay: UserMessage = {
+    role: 'user',
+    content: message,
+    uuid: randomUUID(),
+  }
 
   const systemPrompt = getSystemPromptForMode(
     session.permissionMode.mode,
@@ -357,6 +432,13 @@ export async function runChatTurn(
       provider,
       cwd,
       compaction: resolvedSettings.config.compaction,
+      sessionMemory: resolvedSettings.config.sessionMemory,
+      sessionMemoryModelId: models.profile(
+        resolvedSettings.config.sessionMemory.modelTier === 'large' ||
+          resolvedSettings.config.sessionMemory.modelTier === 'small'
+          ? resolvedSettings.config.sessionMemory.modelTier
+          : 'medium',
+      ).model,
       messages: session.messages,
       images: images?.length ? images : undefined,
       subagentNames: prepared.subagentNames,

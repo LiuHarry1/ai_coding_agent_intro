@@ -6,8 +6,13 @@ import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import { createDefaultPermissionMode } from '../core/permission-mode.js'
 import type { ExternalMode } from '../core/permission-mode.js'
 import { isAuthEnabled, isSuperRole } from './auth/identity.js'
+import { resetSessionMemoryState } from '../services/session-memory/state.js'
+import {
+  SESSION_DIR,
+  getSessionDataDir,
+  getSessionJsonlPath,
+} from '../core/session-paths.js'
 
-const SESSION_DIR = path.resolve('.sessions')
 const sessions = new Map<string, Session>()
 
 export { SESSION_DIR }
@@ -21,7 +26,7 @@ export function getToolResultFilePath(
 }
 
 function sessionPath(id: string): string {
-  return path.join(SESSION_DIR, `${id}.jsonl`)
+  return getSessionJsonlPath(id)
 }
 
 // ── In-flight turn mutex ────────────────────────
@@ -169,6 +174,11 @@ export function deleteSession(id: string): void {
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath)
   }
+  const memoryDir = getSessionDataDir(id)
+  if (fs.existsSync(memoryDir)) {
+    fs.rmSync(memoryDir, { recursive: true, force: true })
+  }
+  resetSessionMemoryState(id)
 }
 
 export function appendMessage(sessionId: string, message: Message): void {

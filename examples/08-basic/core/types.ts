@@ -37,6 +37,8 @@ export interface MiddlewareContext {
   result?: unknown
   error?: unknown
   duration?: number
+  /** Agent identity for console logs (e.g. `main`, `session_memory`). */
+  logLabel?: string
 }
 
 export type MiddlewareHandler = (ctx: MiddlewareContext) => void | Promise<void>
@@ -66,6 +68,7 @@ export interface ToolContext {
   /** Three-tier model registry (large / medium / small). */
   models?: ModelRegistry
   compaction?: CompactionConfig
+  sessionMemory?: SessionMemoryConfig
   /** Request-scoped LSP server configs from effective settings. */
   lspServers?: Record<string, LspServerConfig>
   /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
@@ -163,6 +166,8 @@ export type AssistantContentPart = TextPart | ReasoningPart | ToolCallPart
 export interface UserMessage {
   role: 'user'
   content: string | UserContentPart[]
+  /** Stable message id (session-memory cursor / keep boundary). */
+  uuid?: string
   /** Meta attachments expanded for API — hidden from UI when true. */
   isMeta?: boolean
   /**
@@ -185,12 +190,13 @@ export type { Attachment, Diagnostic, DiagnosticFile, ReadFileState }
 export interface AssistantMessage {
   role: 'assistant'
   content: AssistantContentPart[]
+  /** Stable message id (session-memory cursor / keep boundary). */
+  uuid?: string
   /**
    * API-round id (the provider's response id). One `streamText` call = one
    * round, so all assistant records from the same response (incl. parallel
    * tool-call splits) share this id. Used to group messages by API round for
    * PTL truncation and token estimation.
-   * Optional for backward-compat with sessions persisted before this field.
    */
   id?: string
   /**
@@ -230,6 +236,8 @@ export interface ToolResultPart {
 export interface ToolMessage {
   role: 'tool'
   content: ToolResultPart[]
+  /** Stable message id (session-memory cursor / keep boundary). */
+  uuid?: string
 }
 
 export type Message =
@@ -279,6 +287,13 @@ export interface AgentOptions {
   cwd?: string
   /** Request-scoped compaction settings. */
   compaction?: CompactionConfig
+  /** Session-memory (background notes + compact prefer-read). */
+  sessionMemory?: SessionMemoryConfig
+  /**
+   * Model id for session-memory extraction (usually medium tier).
+   * When omitted, extraction is skipped even if sessionMemory.enabled.
+   */
+  sessionMemoryModelId?: string
   /**
    * Names of tools that are subagent wrappers. Used purely for UI: when
    * provided, the agent tags `tool_call` / `tool_input_start` events with
@@ -317,6 +332,12 @@ export interface AgentOptions {
    * the first message uuid changes.
    */
   onFullCompaction?: (messages: readonly Message[]) => void
+  /**
+   * Optional prefix for agent console logs (e.g. `session_memory` →
+   * `[agent:session_memory] step …`). Defaults to `main` when omitted so
+   * forked agents are always distinguishable from the primary loop.
+   */
+  logLabel?: string
 }
 
 export type RunAgentFn = (
@@ -540,10 +561,35 @@ export interface CompactionConfig {
   timeBasedMicroGapMinutes?: number
 }
 
+/** Background session notes used to accelerate compaction (CC-aligned). */
+export interface SessionMemoryConfig {
+  /** Master switch. Also requires compaction.enabled for auto extract. */
+  enabled: boolean
+  minimumTokensToInit: number
+  minimumTokensBetweenUpdate: number
+  toolCallsBetweenUpdates: number
+  /**
+   * When true (CC default), extract reuses the main-loop model + system +
+   * full tools schema (`CacheSafeParams`) so the fork can hit prompt cache.
+   * `canUseTool` still allows only Edit on summary.md.
+   * When false, uses a restricted Edit-only fork on `modelTier`.
+   */
+  cacheSafe: boolean
+  /**
+   * Model tier for non-cacheSafe (restricted) extract.
+   * Ignored when `cacheSafe` is true (main-loop model is used).
+   */
+  modelTier: 'large' | 'medium' | 'small'
+  compactMinTokens: number
+  compactMaxTokens: number
+  compactMinTextMessages: number
+}
+
 export interface AppConfig {
   /** Three-tier profiles; medium/small fall back to large when omitted in settings. */
   models: ModelProfiles
   compaction: CompactionConfig
+  sessionMemory: SessionMemoryConfig
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */
