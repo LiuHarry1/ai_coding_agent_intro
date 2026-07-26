@@ -7,9 +7,12 @@
  *   ~/.ai-agent/agents/*.md
  *   ~/.ai-agent/commands/*.md
  *   ~/.ai-agent/skills/<name>/SKILL.md
+ *   ~/.ai-agent/AGENTS.md              (optional user-scope instructions — if wired)
  *
  *   <ancestor>/.ai-agent/settings.json
  *   <ancestor>/.ai-agent/settings.local.json
+ *   <ancestor>/.ai-agent/AGENTS.md      (project instructions; open AGENTS.md name)
+ *   <ancestor>/.ai-agent/rules/*.md     (topic rules; CC-style .claude/rules/)
  *   <ancestor>/.ai-agent/agents/*.md
  *   <ancestor>/.ai-agent/commands/*.md
  *   <ancestor>/.ai-agent/skills/<name>/SKILL.md

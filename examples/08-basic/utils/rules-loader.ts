@@ -2,19 +2,24 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { execSync } from 'child_process'
 import { normalizeGitPath } from '../core/platform.js'
+import { getAppDirName } from './app-dir.js'
 
-// Single-file rule docs found at each directory level (in priority order
-// per dir — first match wins). AGENTS.md is the cross-tool standard;
-// .cursorrules is the legacy Cursor file (superseded by .cursor/rules/*.md, which we load
-// separately below).
-const RULE_FILENAMES = ['AGENTS.md', 'CLAUDE.md', '.cursorrules']
+/**
+ * Project instructions loader.
+ *
+ * Naming follows the open AGENTS.md convention (agents.md), with Claude Code
+ * layout for the app config dir:
+ *
+ *   CC:  CLAUDE.md | .claude/CLAUDE.md | .claude/rules/
+ *   Us:  AGENTS.md | {appDir}/AGENTS.md | {appDir}/rules/
+ *
+ * Walk cwd → git root; closer files load later (higher model priority).
+ * {appDir} defaults to .ai-agent (AI_AGENT_DIR / getAppDirName()).
+ */
 
-// Directory of per-topic markdown rules (Cursor's modern format). All
-// .md/.mdc files inside are concatenated, sorted by filename for
-// stability.
-const RULES_DIR_NAMES = ['.cursor/rules']
+/** Single entry file per directory (repo root or nested package). */
+const ENTRY_FILENAMES = ['AGENTS.md']
 
-// Caps to prevent rule files from drowning out the system prompt.
 const MAX_SINGLE_FILE_BYTES = 40 * 1024
 const MAX_RULES_BYTES = 40 * 1024
 
@@ -31,8 +36,8 @@ function findGitRoot(dir: string): string | null {
   }
 }
 
-function findRuleFile(dir: string): string | null {
-  for (const name of RULE_FILENAMES) {
+function findRuleFile(dir: string, names: string[]): string | null {
+  for (const name of names) {
     const candidate = path.join(dir, name)
     if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
       return candidate
@@ -42,9 +47,7 @@ function findRuleFile(dir: string): string | null {
 }
 
 interface RuleSource {
-  /** Filesystem dir this rule was found under. */
   dir: string
-  /** Display label, e.g. "AGENTS.md" or ".cursor/rules/style.md". */
   label: string
   content: string
 }
@@ -65,48 +68,75 @@ function readRuleFile(absPath: string): string | null {
   }
 }
 
-/**
- * Collect every .md / .mdc file under `<dir>/.cursor/rules/` (one level
- * deep), sorted by filename so iteration order is stable across runs.
- */
-function collectCursorRules(dir: string): RuleSource[] {
+/** One-level .md files under a rules directory, sorted by name. */
+function collectRulesDir(
+  projectDir: string,
+  rulesDir: string,
+  labelPrefix: string,
+): RuleSource[] {
   const out: RuleSource[] = []
-  for (const rulesSubpath of RULES_DIR_NAMES) {
-    const rulesDir = path.join(dir, rulesSubpath)
-    if (!fs.existsSync(rulesDir) || !fs.statSync(rulesDir).isDirectory()) {
-      continue
-    }
-    let entries: string[]
+  if (!fs.existsSync(rulesDir) || !fs.statSync(rulesDir).isDirectory()) {
+    return out
+  }
+  let entries: string[]
+  try {
+    entries = fs.readdirSync(rulesDir).sort()
+  } catch {
+    return out
+  }
+  for (const name of entries) {
+    if (!/\.md$/i.test(name)) continue
+    const abs = path.join(rulesDir, name)
     try {
-      entries = fs.readdirSync(rulesDir).sort()
+      if (!fs.statSync(abs).isFile()) continue
     } catch {
       continue
     }
-    for (const name of entries) {
-      if (!/\.(md|mdc)$/i.test(name)) continue
-      const abs = path.join(rulesDir, name)
-      try {
-        if (!fs.statSync(abs).isFile()) continue
-      } catch {
-        continue
-      }
-      const content = readRuleFile(abs)
-      if (content !== null) {
-        out.push({ dir, label: `${rulesSubpath}/${name}`, content })
-      }
+    const content = readRuleFile(abs)
+    if (content !== null) {
+      out.push({
+        dir: projectDir,
+        label: `${labelPrefix}/${name}`,
+        content,
+      })
     }
   }
   return out
 }
 
+function collectAppDirRules(projectDir: string): RuleSource[] {
+  const appDir = getAppDirName()
+  const out: RuleSource[] = []
+
+  // Like CC .claude/CLAUDE.md → {appDir}/AGENTS.md
+  const nested = findRuleFile(path.join(projectDir, appDir), ENTRY_FILENAMES)
+  if (nested) {
+    const content = readRuleFile(nested)
+    if (content !== null) {
+      out.push({
+        dir: projectDir,
+        label: `${appDir}/${path.basename(nested)}`,
+        content,
+      })
+    }
+  }
+
+  // Like CC .claude/rules/
+  out.push(
+    ...collectRulesDir(
+      projectDir,
+      path.join(projectDir, appDir, 'rules'),
+      `${appDir}/rules`,
+    ),
+  )
+
+  return out
+}
+
 /**
- * Walk from `cwd` up to git root (or filesystem root), collecting:
- *   - one rule file per dir (AGENTS.md > CLAUDE.md > .cursorrules)
- *   - every .md/.mdc under each .cursor/rules/ dir we encounter
- *
- * Files closer to cwd appear LATER in the combined output and therefore
- * take higher priority when the model resolves conflicts (Codex /
- * OpenCode convention). Combined output is capped at MAX_RULES_BYTES.
+ * Load project agent instructions for `cwd`.
+ * Prefer colocating under `{appDir}/AGENTS.md`; root `AGENTS.md` also works
+ * (agents.md standard / monorepo packages).
  */
 export function loadProjectRules(cwd: string): string {
   const absDir = path.resolve(cwd)
@@ -116,14 +146,14 @@ export function loadProjectRules(cwd: string): string {
   let cur = absDir
 
   while (true) {
-    const single = findRuleFile(cur)
+    const single = findRuleFile(cur, ENTRY_FILENAMES)
     if (single) {
       const content = readRuleFile(single)
       if (content !== null) {
         sources.push({ dir: cur, label: path.basename(single), content })
       }
     }
-    sources.push(...collectCursorRules(cur))
+    sources.push(...collectAppDirRules(cur))
 
     if (cur === ceiling || cur === path.dirname(cur)) break
     cur = path.dirname(cur)
@@ -131,8 +161,6 @@ export function loadProjectRules(cwd: string): string {
 
   if (sources.length === 0) return ''
 
-  // Root-most rules first, cwd-local rules last (higher priority).
-  // Reverse the collected list (it was built walking upward).
   sources.reverse()
 
   let combined = sources
@@ -153,11 +181,8 @@ export function loadProjectRules(cwd: string): string {
   return combined
 }
 
-/**
- * Check if any rule source exists in the given directory.
- */
 export function hasRulesFile(cwd: string): boolean {
   const abs = path.resolve(cwd)
-  if (findRuleFile(abs) !== null) return true
-  return collectCursorRules(abs).length > 0
+  if (findRuleFile(abs, ENTRY_FILENAMES) !== null) return true
+  return collectAppDirRules(abs).length > 0
 }
