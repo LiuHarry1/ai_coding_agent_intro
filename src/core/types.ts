@@ -73,7 +73,7 @@ export interface ToolContext {
   lspServers?: Record<string, LspServerConfig>
   /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
   sessionId?: string
-  /** Active session �?set on main-agent runs for mode/plan tools. */
+  /** Active session �?set on main-agent runs for mode/plan tools. */
   session?: Session
   /** Workspace cwd for plan file resolution. */
   cwd?: string
@@ -91,7 +91,7 @@ export interface ToolDefinition {
   enabled?: boolean
   /**
    * Marks tools created via `createSubagentDefinition`. Used to prevent
-   * subagent �?subagent recursion: a subagent never inherits other subagents
+   * subagent �?subagent recursion: a subagent never inherits other subagents
    * as tools regardless of allow/deny lists.
    */
   isSubagent?: boolean
@@ -102,7 +102,7 @@ export interface ToolDefinition {
    */
   shouldDefer?: boolean
   /**
-   * When true, the tool is never deferred �?full schema in the initial
+   * When true, the tool is never deferred �?full schema in the initial
    * prompt even when tool_search is enabled. For MCP tools, set via
    * config. Overrides both `shouldDefer` and the MCP auto-defer rule.
    */
@@ -110,7 +110,7 @@ export interface ToolDefinition {
   /**
    * When true for a given input, the tool may run in parallel with other
    * consecutive concurrency-safe calls in the same assistant turn. Runtime
-   * policy �?the model is not told about this flag.
+   * policy �?the model is not told about this flag.
    */
   isConcurrencySafe?: (input: unknown) => boolean
   create(cwd: string, context: ToolContext): AnyTool
@@ -168,7 +168,7 @@ export interface UserMessage {
   content: string | UserContentPart[]
   /** Stable message id (session-memory cursor / keep boundary). */
   uuid?: string
-  /** Meta attachments expanded for API �?hidden from UI when true. */
+  /** Meta attachments expanded for API �?hidden from UI when true. */
   isMeta?: boolean
   /**
    * Full-compact summary injected for the model (isCompactSummary).
@@ -208,7 +208,7 @@ export interface AssistantMessage {
   /**
    * Real API usage from the response that produced this message (CC-aligned:
    * usage lives ON the message so it persists to JSONL and survives session
-   * restore �?the previous WeakMap-only storage lost the accurate baseline on
+   * restore �?the previous WeakMap-only storage lost the accurate baseline on
    * every server restart, forcing threshold checks onto chars/4 estimation
    * which badly undercounts CJK text). Optional for backward-compat.
    */
@@ -277,7 +277,7 @@ export interface AgentOptions {
   images?: string[]
   /**
    * Optional step budget (CC `maxTurns`). When omitted, the loop runs until
-   * the model stops calling tools (or errors) �?no artificial cap.
+   * the model stops calling tools (or errors) �?no artificial cap.
    */
   maxSteps?: number
   model?: string
@@ -309,7 +309,7 @@ export interface AgentOptions {
    */
   subagentNames?: Set<string>
   /**
-   * Deferred tools pool �?keyed by name, created but not in `tools`.
+   * Deferred tools pool �?keyed by name, created but not in `tools`.
    * When the model calls `tool_search` and discovers a tool, the agent
    * loop activates it by moving it from this pool into `tools` for the
    * next step.
@@ -340,7 +340,7 @@ export interface AgentOptions {
    */
   onFullCompaction?: (messages: readonly Message[]) => void
   /**
-   * Optional prefix for agent console logs (e.g. `session_memory` �?
+   * Optional prefix for agent console logs (e.g. `session_memory` �?
    * `[agent:session_memory] step …`). Defaults to `main` when omitted so
    * forked agents are always distinguishable from the primary loop.
    */
@@ -396,13 +396,18 @@ export interface Session {
    * sessions private per-user. Undefined for sessions created without auth.
    */
   ownerEmail?: string
-  /** Tool names discovered via `tool_search` �?activated in subsequent turns. */
+  /** Tool names discovered via `tool_search` �?activated in subsequent turns. */
   discoveredTools?: Set<string>
   /** Tracks files read for @-mention dedup (mtime-based), per session. */
   readFileState?: Map<string, { content: string; timestamp: number }>
   /** Session-level Agent / Ask / Plan mode. */
   permissionMode: PermissionModeContext
-  /** Set when exiting plan �?triggers reentry attachment on next plan entry. */
+  /**
+   * Main-thread agent profile (`mode: primary` agentType), or null for the
+   * default agent prompt. Independent of `permissionMode` (CC mainThreadAgent).
+   */
+  agentType: string | null
+  /** Set when exiting plan �?triggers reentry attachment on next plan entry. */
   hasExitedPlanMode?: boolean
   /** One-shot attachment after plan exit allowing execution. */
   needsPlanModeExitAttachment?: boolean
@@ -414,6 +419,8 @@ export interface SessionInfo {
   messageCount: number
   preview?: string
   permissionMode?: ExternalMode
+  /** Main-thread primary agent profile, if any. */
+  agentType?: string | null
   /** Present when SSO mode records session ownership (shown to super users). */
   ownerEmail?: string
 }
@@ -438,11 +445,13 @@ export interface SSETransport {
 
 export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project'
 
+/** Whether a disk agent is a ModePicker primary or AgentTool-only subagent. */
+export type AgentMode = 'primary' | 'subagent'
+
 /**
- * Pure-data definition of a subagent. After the single-Task architecture
- * refactor, subagents are no longer registered as individual tools �?they
- * are entries in the `task` tool's directory. The model picks one via
- * `subagent_type` parameter.
+ * Pure-data definition of a subagent / primary profile. After the single-Task
+ * architecture refactor, subagents are entries in the `task` tool directory.
+ * Primary agents (`mode: primary`) can also drive the main-thread prompt.
  */
 export interface AgentDefinition {
   /** Stable identifier shown to the model as `subagent_type` value. */
@@ -458,15 +467,23 @@ export interface AgentDefinition {
   whenToUse: string
   /** Brief description for activity logs / UI / events. */
   description: string
-  /** System prompt the subagent runs with. */
+  /** System prompt the subagent (or main-thread profile) runs with. */
   systemPrompt: string
   /**
    * Allow-list of tool names. Mutually exclusive with `disallowedTools`.
    * If neither set, subagent inherits the full registry + MCP tools.
    */
   tools?: string[]
-  /** Deny-list of tool names. */
+  /**
+   * Deny-list of tool names. Entries may be exact names or suffix globs
+   * (e.g. `search-memory_*`) for MCP isolation on the main thread.
+   */
   disallowedTools?: string[]
+  /**
+   * `primary` — selectable as main-thread profile (ModePicker Specialists).
+   * `subagent` or omitted — AgentTool only (default for built-ins / disk).
+   */
+  mode?: AgentMode
   /**
    * Optional step budget (CC `maxTurns`). Built-ins omit this; custom agents
    * may set it via frontmatter `maxSteps:`.
@@ -475,16 +492,16 @@ export interface AgentDefinition {
   /** Optional model id override on the resolved tier's provider. */
   model?: string
   /**
-   * Which configured tier to run on (Claude Code–style static routing).
+   * Which configured tier to run on (Claude Code-style static routing).
    * Default when unset: `large`. Explore uses `small`.
    */
   modelTier?: ModelTier
   /** Display label used in the UI's SubagentCard. Defaults to titlecased agentType. */
   label?: string
   /**
- * Skip injecting project rules (AGENTS.md / CLAUDE.md / .cursor/rules/*)
+   * Skip injecting project rules (AGENTS.md / CLAUDE.md / .cursor/rules/*)
    * into this subagent's system prompt. Set true for fast read-only
-   * exploration agents �?the rules carry commit/PR/lint guidance the
+   * exploration agents — the rules carry commit/PR/lint guidance the
    * subagent will never act on, and the parent already interprets results
    * with full context.
    */
@@ -537,7 +554,7 @@ export interface TodoItem {
 // ── App Config ──────────────────────────────────
 
 export interface CompactionConfig {
-  /** Master switch �?when false, proactive auto-compact is skipped (manual /compact still works). */
+  /** Master switch �?when false, proactive auto-compact is skipped (manual /compact still works). */
   enabled: boolean
   /** Model's context window size in tokens. Used to dynamically compute compact threshold. */
   contextWindow: number
@@ -557,7 +574,7 @@ export interface CompactionConfig {
   /**
    * Time-based micro-compaction. When the gap since the last assistant message
    * exceeds the TTL, the prompt cache is cold and the prefix will be rewritten
-   * anyway �?so clearing old tool payloads first (content-mutating micro) is
+   * anyway �?so clearing old tool payloads first (content-mutating micro) is
    * "free". Default off.
    */
   timeBasedMicroEnabled?: boolean
@@ -619,7 +636,7 @@ export interface AppConfig {
   autoMemoryEnabled: boolean
   /**
    * Custom auto-memory directory (CC `autoMemoryDirectory`).
-   * Trusted scopes only: user / local / env �?never project settings.
+   * Trusted scopes only: user / local / env �?never project settings.
    */
   autoMemoryDirectory?: string
   mcpServers: Record<string, MCPServerConfig>

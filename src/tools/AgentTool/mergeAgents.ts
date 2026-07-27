@@ -1,5 +1,9 @@
 import path from 'path'
-import type { AgentDefinition, AgentSource } from '../../core/types.js'
+import type {
+  AgentDefinition,
+  AgentMode,
+  AgentSource,
+} from '../../core/types.js'
 import {
   sourceRank,
   type MarkdownFile,
@@ -17,10 +21,28 @@ import {
   INTERACTIVE_TOOLS,
 } from '../../constants/tool_names.js'
 
+/** Names that must not be used as ModePicker primary agentTypes. */
+const RESERVED_PRIMARY_AGENT_TYPES = new Set([
+  'Plan',
+  'Explore',
+  'agent',
+  'ask',
+  'plan',
+  'general-purpose',
+])
+
 export interface AgentParseResult {
   agent: AgentDefinition | null
   filePath: string
   error?: string
+}
+
+function parseAgentMode(value: unknown): AgentMode | undefined {
+  if (typeof value !== 'string') return undefined
+  const v = value.trim().toLowerCase()
+  if (v === 'primary') return 'primary'
+  if (v === 'subagent') return 'subagent'
+  return undefined
 }
 
 export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
@@ -60,13 +82,32 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
     }
   }
 
+  const mode = parseAgentMode(fm.mode) ?? 'subagent'
+  if (mode === 'primary' && RESERVED_PRIMARY_AGENT_TYPES.has(agentType)) {
+    return {
+      agent: null,
+      filePath: file.filePath,
+      error: `agent '${agentType}': name is reserved and cannot be mode: primary`,
+    }
+  }
+
   let allowedTools = tools
   if (allowedTools) {
     allowedTools = allowedTools.filter(t => t !== AGENT_TOOL_NAME)
   }
-  const disallowed = disallowedRaw
-    ? Array.from(new Set([...disallowedRaw, AGENT_TOOL_NAME]))
-    : [...INTERACTIVE_TOOLS, AGENT_TOOL_NAME]
+
+  // CC main-thread: primary stores only explicit frontmatter denies (globs ok).
+  // Subagent path keeps auto-deny of Agent + interactive tools.
+  let disallowed: string[] | undefined
+  if (allowedTools === undefined) {
+    if (mode === 'primary') {
+      disallowed = disallowedRaw ? [...disallowedRaw] : undefined
+    } else {
+      disallowed = disallowedRaw
+        ? Array.from(new Set([...disallowedRaw, AGENT_TOOL_NAME]))
+        : [...INTERACTIVE_TOOLS, AGENT_TOOL_NAME]
+    }
+  }
 
   const filename = path.basename(file.filePath, '.md')
 
@@ -77,8 +118,9 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
     systemPrompt: body,
     source: file.source as AgentSource,
     filePath: file.filePath,
+    mode,
     ...(allowedTools !== undefined ? { tools: allowedTools } : {}),
-    ...(allowedTools === undefined ? { disallowedTools: disallowed } : {}),
+    ...(disallowed !== undefined ? { disallowedTools: disallowed } : {}),
     ...(parsePositiveInt(fm.maxSteps) !== undefined
       ? { maxSteps: parsePositiveInt(fm.maxSteps) }
       : {}),
@@ -112,6 +154,7 @@ export function mergeAgents(
   const allAgents: AgentDefinition[] = builtins.map(b => ({
     ...b,
     source: 'built-in' as const,
+    mode: b.mode ?? ('subagent' as const),
   }))
 
   const builtinTypes = new Set(builtins.map(b => b.agentType))
@@ -148,4 +191,15 @@ export function mergeAgents(
   }
 
   return { agents: [...byType.values()], allAgents, errors }
+}
+
+/** Resolve a primary profile for the main thread, or null. */
+export function findPrimaryAgent(
+  agents: readonly AgentDefinition[],
+  agentType: string | null | undefined,
+): AgentDefinition | null {
+  if (!agentType) return null
+  const found = agents.find(a => a.agentType === agentType)
+  if (!found || found.mode !== 'primary') return null
+  return found
 }

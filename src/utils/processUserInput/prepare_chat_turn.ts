@@ -25,7 +25,13 @@ import { definition as enterPlanModeDef } from '../../tools/EnterPlanModeTool/En
 import { definition as exitPlanModeDef } from '../../tools/ExitPlanModeTool/ExitPlanModeTool.js'
 import { getPlanFilePath } from '../plans.js'
 import type { ReadFileState } from '../attachments/types.js'
+import { findPrimaryAgent } from '../../tools/AgentTool/mergeAgents.js'
+import {
+  filterDeferredDefsByDisallowedGlobs,
+  filterToolsRecordByDisallowedGlobs,
+} from '../../tools/AgentTool/toolGlob.js'
 import type {
+  AgentDefinition,
   AnyTool,
   IProvider,
   IToolRegistry,
@@ -132,6 +138,8 @@ export interface PreparedChatTurn {
   subagentNames: Set<string>
   concurrencyPolicy: ReturnType<typeof buildConcurrencyPolicy>
   permissionMode: Session['permissionMode']['mode']
+  /** Resolved primary profile for this turn (CC mainThreadAgent), if any. */
+  mainThreadProfile: AgentDefinition | null
   planFilePath: string
   modeChanged?: boolean
   toolContext: ToolContext
@@ -246,7 +254,7 @@ export async function prepareChatTurn(
     ),
   }
 
-  const { active, deferred, deferredDefs } = (
+  let { active, deferred, deferredDefs } = (
     registry as ToolRegistry
   ).createSplit(
     cwd,
@@ -254,6 +262,22 @@ export async function prepareChatTurn(
     mcpManager.getAllTools(),
     session.discoveredTools,
   )
+
+  // CC resolveAgentTools(isMainThread): apply profile disallowedTools (globs)
+  // on the main thread only — skip subagent auto-deny lists.
+  const mainThreadProfile =
+    session.permissionMode.mode === 'agent'
+      ? findPrimaryAgent(activeAgents, session.agentType)
+      : null
+  const denyGlobs = mainThreadProfile?.disallowedTools
+  if (denyGlobs && denyGlobs.length > 0) {
+    active = filterToolsRecordByDisallowedGlobs(active, denyGlobs)
+    deferred = filterToolsRecordByDisallowedGlobs(deferred, denyGlobs)
+    deferredDefs = filterDeferredDefsByDisallowedGlobs(deferredDefs, denyGlobs)
+    console.log(
+      `[server] agentType=${mainThreadProfile!.agentType} denied globs=[${denyGlobs.join(', ')}]`,
+    )
+  }
 
   if (deferredDefs.length > 0) {
     const tsearchDef = createToolSearchDefinition(deferredDefs)
@@ -296,7 +320,7 @@ export async function prepareChatTurn(
   }
 
   console.log(
-    `[server] mode=${session.permissionMode.mode} tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ''}`,
+    `[server] mode=${session.permissionMode.mode}${mainThreadProfile ? ` agentType=${mainThreadProfile.agentType}` : ''} tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ''}`,
   )
 
   if (!session.readFileState) {
@@ -332,6 +356,7 @@ export async function prepareChatTurn(
     subagentNames: getSubagentNames(registry),
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(tools)),
     permissionMode: session.permissionMode.mode,
+    mainThreadProfile,
     planFilePath,
     modeChanged: slash.modeChanged,
     toolContext,

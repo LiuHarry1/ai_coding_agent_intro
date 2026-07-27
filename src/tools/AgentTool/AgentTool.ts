@@ -20,6 +20,7 @@ import { randomUUID } from 'crypto'
 
 import { buildAgentListSection } from './agentListing.js'
 import { SUBAGENT_NO_OUTPUT_MARKER } from './finalizeAgentTool.js'
+import { isToolNameDisallowed } from './toolGlob.js'
 
 /** tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
 export function createTaskTool(
@@ -208,9 +209,15 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             subTools = registry.createAll(cwd, subContext, def.tools)
           } else {
             subTools = registry.createAll(cwd, subContext)
-            const denied = new Set(def.disallowedTools ?? [])
-            denied.add(AGENT_TOOL_NAME)
-            for (const n of denied) delete subTools[n]
+            const patterns = def.disallowedTools ?? []
+            for (const n of Object.keys(subTools)) {
+              if (
+                n === AGENT_TOOL_NAME ||
+                isToolNameDisallowed(n, patterns)
+              ) {
+                delete subTools[n]
+              }
+            }
           }
           delete subTools[AGENT_TOOL_NAME]
 

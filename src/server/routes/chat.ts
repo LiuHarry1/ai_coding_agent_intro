@@ -29,9 +29,11 @@ import {
   isValidExternalMode,
   transitionPermissionMode,
 } from '../../core/permission-mode.js'
-import { appendModeChange } from '../session.js'
+import { appendModeChange, appendAgentChange } from '../session.js'
 import type { Message, RunAgentFn } from '../../core/types.js'
 import { createNoopTransport, runChatTurn } from '../run-chat-turn.js'
+import { loadWorkspaceContributions } from '../../core/workspace-load.js'
+import { findPrimaryAgent } from '../../tools/AgentTool/mergeAgents.js'
 
 export async function handleChat(
   req: IncomingMessage,
@@ -46,12 +48,13 @@ export async function handleChat(
     return
   }
 
-  const { message, workspace, session_id, images, mode } = body as {
+  const { message, workspace, session_id, images, mode, agentType } = body as {
     message?: string
     workspace?: string
     session_id?: string
     images?: string[]
     mode?: string
+    agentType?: string | null
   }
   if (!message) {
     sendJSON(res, 400, { error: "Missing 'message' field" })
@@ -98,6 +101,7 @@ export async function handleChat(
       message,
       images,
       mode,
+      agentType: agentType === undefined ? undefined : agentType,
       wantsStream,
       cwd,
       requesterEmail,
@@ -117,15 +121,21 @@ async function handleChatLocked(
     message: string
     images?: string[]
     mode?: string
+    agentType?: string | null
     wantsStream: boolean
     cwd: string
     requesterEmail?: string
   },
 ): Promise<void> {
-  const { message, images, mode, wantsStream, cwd, requesterEmail } = opts
+  const { message, images, mode, agentType, wantsStream, cwd, requesterEmail } =
+    opts
 
   if (!session.permissionMode) {
     session.permissionMode = { mode: 'agent' }
+  }
+
+  if (session.agentType === undefined) {
+    session.agentType = null
   }
 
   if (
@@ -140,7 +150,38 @@ async function handleChatLocked(
       mode,
       session.permissionMode,
     )
+    if (mode === 'ask' || mode === 'plan') {
+      session.agentType = null
+    }
     appendModeChange(session.id, session)
+  }
+
+  // Sync main-thread profile from client (before session exists, or on resume).
+  if (agentType !== undefined && (mode === undefined || mode === 'agent')) {
+    const nextType =
+      agentType === null || agentType === '' ? null : String(agentType)
+    if (nextType !== (session.agentType ?? null)) {
+      if (nextType !== null) {
+        const { agents } = await loadWorkspaceContributions(cwd)
+        const profile = findPrimaryAgent(agents.activeAgents, nextType)
+        if (profile) {
+          session.agentType = nextType
+          if (session.permissionMode.mode !== 'agent') {
+            const from = session.permissionMode.mode
+            handlePlanModeTransition(from, 'agent', session)
+            session.permissionMode = transitionPermissionMode(
+              from,
+              'agent',
+              session.permissionMode,
+            )
+          }
+          appendAgentChange(session.id, session)
+        }
+      } else {
+        session.agentType = null
+        appendAgentChange(session.id, session)
+      }
+    }
   }
 
   // Preview: collapse newlines to keep one log entry per line, and slice by
@@ -194,6 +235,7 @@ async function handleChatLocked(
   const sseHeaders: Record<string, string> = {
     'X-Session-Id': session.id,
     'X-Permission-Mode': session.permissionMode.mode,
+    'X-Agent-Type': session.agentType ?? '',
   }
 
   const transport = wantsStream

@@ -21,6 +21,8 @@
   --red:           #f85149;
   --purple:        #bc8cff;
   --purple-dim:    rgba(188,140,255,0.1);
+  --specialist:    #2dd4bf;
+  --specialist-dim: rgba(45,212,191,0.12);
   --diff-del-bg:   rgba(248,81,73,0.10);
   --diff-del-text: var(--text-primary);
   --diff-add-bg:   rgba(63,185,80,0.10);
@@ -52,6 +54,8 @@
   --red:           #d1242f;
   --purple:        #8250df;
   --purple-dim:    rgba(130,80,223,0.1);
+  --specialist:    #0d9488;
+  --specialist-dim: rgba(13,148,136,0.12);
   --diff-del-bg:   #ffebe9;
   --diff-del-text: #82071e;
   --diff-add-bg:   #dafbe1;
@@ -116,7 +120,12 @@ html, body {
 @media (max-width: 768px) {
   .workspace-bar { display: none; }
   .workspace-ide { width: 100%; min-width: 0; }
+  .welcome { padding: 16px 12px 24px; }
+  .welcome-panel { padding: 12px; }
   .hint-grid { grid-template-columns: 1fr; }
+  .hint-grid--2col { grid-template-columns: 1fr; }
   .hint-grid--3col { grid-template-columns: 1fr 1fr; }
+  .hint-grid--4col { grid-template-columns: 1fr 1fr; }
+  .hint-chip-row { gap: 5px; }
   .msg-user { max-width: 90%; }
 }

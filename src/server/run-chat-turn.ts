@@ -6,6 +6,7 @@ import type {
   Message,
   UserMessage,
   IEventBus,
+  AgentDefinition,
 } from '../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import type { ModelRegistry } from '../core/llm/index.js'
@@ -16,6 +17,7 @@ import { generateSessionTitle } from '../services/sessionTitle.js'
 import { setSessionTitle } from './session.js'
 import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
 import { getSystemPromptForMode } from '../prompts/mode.js'
+import { getSystemPromptForAgentProfile } from '../prompts/agent-profile.js'
 import { applyModeRestrictions } from '../core/mode-restrictions.js'
 import { planExists } from '../utils/plans.js'
 import { appendMessage, appendCompaction, appendModeChange } from './session.js'
@@ -80,6 +82,27 @@ const noopTransport: SSETransport = {
   end() {},
 }
 
+/**
+ * CC buildEffectiveSystemPrompt: primary profile REPLACE when in agent mode.
+ */
+function resolveTurnSystemPrompt(
+  session: Session,
+  cwd: string,
+  projectRules: string | undefined,
+  profile: AgentDefinition | null,
+  planOpts: { planFilePath: string; planExists: boolean },
+): string {
+  if (session.permissionMode.mode === 'agent' && profile) {
+    return getSystemPromptForAgentProfile(profile, cwd, projectRules)
+  }
+  return getSystemPromptForMode(
+    session.permissionMode.mode,
+    cwd,
+    projectRules,
+    planOpts,
+  )
+}
+
 /** Buffered JSON responses -- wire emits are dropped. */
 export function createNoopTransport(): SSETransport {
   return noopTransport
@@ -141,6 +164,9 @@ export async function runChatTurn(
   if (!session.permissionMode) {
     session.permissionMode = { mode: 'agent' }
   }
+  if (session.agentType === undefined) {
+    session.agentType = null
+  }
 
   if (
     mode &&
@@ -154,6 +180,9 @@ export async function runChatTurn(
       mode,
       session.permissionMode,
     )
+    if (mode === 'ask' || mode === 'plan') {
+      session.agentType = null
+    }
     appendModeChange(session.id, session)
   }
 
@@ -308,10 +337,11 @@ export async function runChatTurn(
     if (!sm.enabled) {
       replyText = 'Session memory is disabled in settings.'
     } else {
-      const systemPrompt = getSystemPromptForMode(
-        session.permissionMode.mode,
+      const systemPrompt = resolveTurnSystemPrompt(
+        session,
         cwd,
         prepared.projectRules || undefined,
+        prepared.mainThreadProfile,
         {
           planFilePath: prepared.planFilePath,
           planExists: planExists(session, cwd),
@@ -395,10 +425,11 @@ export async function runChatTurn(
     uuid: randomUUID(),
   }
 
-  const systemPrompt = getSystemPromptForMode(
-    session.permissionMode.mode,
+  const systemPrompt = resolveTurnSystemPrompt(
+    session,
     cwd,
     prepared.projectRules || undefined,
+    prepared.mainThreadProfile,
     {
       planFilePath: prepared.planFilePath,
       planExists: planExists(session, cwd),
@@ -413,10 +444,14 @@ export async function runChatTurn(
     )
 
   const refreshSystemPrompt = () =>
-    getSystemPromptForMode(
-      session.permissionMode.mode,
+    resolveTurnSystemPrompt(
+      session,
       cwd,
       prepared.projectRules || undefined,
+      // Mid-turn mode change to ask/plan clears agentType; drop profile prompt.
+      session.permissionMode.mode === 'agent' && session.agentType
+        ? prepared.mainThreadProfile
+        : null,
       {
         planFilePath: prepared.planFilePath,
         planExists: planExists(session, cwd),

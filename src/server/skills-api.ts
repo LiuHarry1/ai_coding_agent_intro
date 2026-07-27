@@ -136,6 +136,8 @@ interface AgentSummary {
   disallowedTools?: string[]
   maxSteps?: number
   model?: string
+  mode?: AgentDefinition['mode']
+  label?: string
   source?: AgentDefinition['source']
   filePath?: string
   overriddenBy?: AgentDefinition['source']
@@ -150,6 +152,8 @@ function toAgentSummary(a: AgentDefinition | ResolvedAgent): AgentSummary {
     disallowedTools: a.disallowedTools,
     maxSteps: a.maxSteps,
     model: a.model,
+    mode: a.mode ?? 'subagent',
+    label: a.label,
     source: a.source,
     filePath: a.filePath,
     ...('overriddenBy' in a && a.overriddenBy

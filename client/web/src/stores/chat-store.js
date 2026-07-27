@@ -65,6 +65,8 @@ export const useChatStore = create((set, get) => ({
 
   // ── Agent mode (Agent / Ask / Plan) ─────────
   agentMode: localStorage.getItem('coding_agent_mode') || 'agent',
+  /** Main-thread primary agent profile (null = default Agent). */
+  agentType: localStorage.getItem('coding_agent_type') || null,
   planState: {
     status: 'idle',
     content: '',
@@ -78,13 +80,47 @@ export const useChatStore = create((set, get) => ({
 
   setAgentMode: mode => {
     localStorage.setItem('coding_agent_mode', mode)
-    set({ agentMode: mode })
+    // Selecting a permission mode clears the specialist (Ask/Plan server-side;
+    // Agent explicitly resets to default profile).
+    localStorage.removeItem('coding_agent_type')
+    set({ agentMode: mode, agentType: null })
     const { currentSessionId, workspace } = get()
     if (currentSessionId) {
       agentApi
         .setSessionMode({
           session_id: currentSessionId,
           mode,
+          workspace: workspace || undefined,
+        })
+        .catch(() => {})
+      if (mode === 'agent') {
+        agentApi
+          .setSessionAgent({
+            session_id: currentSessionId,
+            agentType: null,
+            workspace: workspace || undefined,
+          })
+          .catch(() => {})
+      }
+    }
+  },
+
+  setAgentType: agentType => {
+    const next = agentType || null
+    if (next) {
+      localStorage.setItem('coding_agent_type', next)
+      localStorage.setItem('coding_agent_mode', 'agent')
+      set({ agentType: next, agentMode: 'agent' })
+    } else {
+      localStorage.removeItem('coding_agent_type')
+      set({ agentType: null })
+    }
+    const { currentSessionId, workspace } = get()
+    if (currentSessionId) {
+      agentApi
+        .setSessionAgent({
+          session_id: currentSessionId,
+          agentType: next,
           workspace: workspace || undefined,
         })
         .catch(() => {})
@@ -241,6 +277,7 @@ export const useChatStore = create((set, get) => ({
       workspace: get().workspace,
       session_id: get().currentSessionId,
       mode: get().agentMode,
+      agentType: get().agentType,
     }
     if (images.length > 0) body.images = images
 
@@ -300,6 +337,13 @@ export const useChatStore = create((set, get) => ({
       if (headerMode && ['agent', 'ask', 'plan'].includes(headerMode)) {
         localStorage.setItem('coding_agent_mode', headerMode)
         set({ agentMode: headerMode })
+      }
+      const headerAgent = res.headers.get('x-agent-type')
+      if (headerAgent !== null) {
+        const nextType = headerAgent || null
+        if (nextType) localStorage.setItem('coding_agent_type', nextType)
+        else localStorage.removeItem('coding_agent_type')
+        set({ agentType: nextType })
       }
 
       const reader = res.body.getReader()
@@ -399,11 +443,22 @@ export const useChatStore = create((set, get) => ({
               localStorage.setItem('coding_agent_mode', data.permission_mode)
               set({ agentMode: data.permission_mode })
             }
+            if (data.agent_type !== undefined) {
+              const nextType = data.agent_type || null
+              if (nextType) localStorage.setItem('coding_agent_type', nextType)
+              else localStorage.removeItem('coding_agent_type')
+              set({ agentType: nextType })
+            }
             break
           case 'mode_changed':
             if (data.mode) {
               localStorage.setItem('coding_agent_mode', data.mode)
-              set({ agentMode: data.mode })
+              const patch = { agentMode: data.mode }
+              if (data.mode === 'ask' || data.mode === 'plan') {
+                localStorage.removeItem('coding_agent_type')
+                patch.agentType = null
+              }
+              set(patch)
             }
             break
           case 'reasoning_start':

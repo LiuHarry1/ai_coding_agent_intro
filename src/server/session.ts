@@ -61,6 +61,7 @@ export function createSession(ownerEmail?: string): Session {
     ownerEmail,
     readFileState: new Map(),
     permissionMode: createDefaultPermissionMode(),
+    agentType: null,
     hasExitedPlanMode: false,
     needsPlanModeExitAttachment: false,
   }
@@ -72,6 +73,7 @@ export function createSession(ownerEmail?: string): Session {
     createdAt: session.createdAt,
     ownerEmail: ownerEmail ?? null,
     permissionMode: session.permissionMode,
+    agentType: session.agentType,
   })
   return session
 }
@@ -160,6 +162,7 @@ export function listSessions(ownerEmail?: string): SessionInfo[] {
       messageCount: session.messages.length,
       preview: extractPreview(session),
       permissionMode: session.permissionMode.mode,
+      agentType: session.agentType ?? null,
       ownerEmail: session.ownerEmail,
     }))
     .sort(
@@ -212,8 +215,19 @@ export function appendModeChange(sessionId: string, session: Session): void {
   appendLine(sessionId, {
     type: 'mode_changed',
     permissionMode: session.permissionMode,
+    agentType: session.agentType ?? null,
     hasExitedPlanMode: session.hasExitedPlanMode ?? false,
     needsPlanModeExitAttachment: session.needsPlanModeExitAttachment ?? false,
+    timestamp: Date.now(),
+  })
+}
+
+/** Persist main-thread agent profile changes (CC mainThreadAgent). */
+export function appendAgentChange(sessionId: string, session: Session): void {
+  appendLine(sessionId, {
+    type: 'agent_changed',
+    agentType: session.agentType ?? null,
+    permissionMode: session.permissionMode,
     timestamp: Date.now(),
   })
 }
@@ -233,6 +247,7 @@ function restoreFromDisk(id: string): Session {
     createdAt: Date.now(),
     readFileState: new Map(),
     permissionMode: createDefaultPermissionMode(),
+    agentType: null,
     hasExitedPlanMode: false,
     needsPlanModeExitAttachment: false,
   }
@@ -247,16 +262,30 @@ function restoreFromDisk(id: string): Session {
         session.permissionMode =
           line.permissionMode as Session['permissionMode']
       }
+      if (line.agentType === null || typeof line.agentType === 'string') {
+        session.agentType = line.agentType
+      }
     } else if (line.type === 'mode_changed') {
       if (line.permissionMode) {
         session.permissionMode =
           line.permissionMode as Session['permissionMode']
+      }
+      if (line.agentType === null || typeof line.agentType === 'string') {
+        session.agentType = line.agentType
       }
       if (typeof line.hasExitedPlanMode === 'boolean') {
         session.hasExitedPlanMode = line.hasExitedPlanMode
       }
       if (typeof line.needsPlanModeExitAttachment === 'boolean') {
         session.needsPlanModeExitAttachment = line.needsPlanModeExitAttachment
+      }
+    } else if (line.type === 'agent_changed') {
+      if (line.agentType === null || typeof line.agentType === 'string') {
+        session.agentType = line.agentType
+      }
+      if (line.permissionMode) {
+        session.permissionMode =
+          line.permissionMode as Session['permissionMode']
       }
     } else if (line.type === 'session_title') {
       if (typeof line.title === 'string' && line.title.trim()) {

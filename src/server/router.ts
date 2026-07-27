@@ -10,13 +10,15 @@ import { listSlashCommands } from '../commands/dispatcher.js'
 import { loadPluginsOverview } from '../commands/slashRegistry.js'
 import { answerQuestion } from '../core/brokers/question-broker.js'
 import { answerPlanApproval } from '../core/brokers/plan-approval-broker.js'
+import { getPlanFilePath } from '../utils/plans.js'
+import { readBody, sendJSON, setCORS } from './http.js'
+import { loadWorkspaceContributions } from '../core/workspace-load.js'
+import { findPrimaryAgent } from '../tools/AgentTool/mergeAgents.js'
 import {
   handlePlanModeTransition,
   isValidExternalMode,
   transitionPermissionMode,
 } from '../core/permission-mode.js'
-import { getPlanFilePath } from '../utils/plans.js'
-import { readBody, sendJSON, setCORS } from './http.js'
 import {
   authenticateRequest,
   isAuthEnabled,
@@ -46,6 +48,7 @@ import {
   listSessions,
   deleteSession,
   appendModeChange,
+  appendAgentChange,
   canAccessSession,
 } from './session.js'
 import { sessionJsonlToUIMessages } from './session-ui.js'
@@ -358,6 +361,10 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
             mode,
             session.permissionMode,
           )
+          // Ask/Plan clear main-thread specialist (P0 UX).
+          if (mode === 'ask' || mode === 'plan') {
+            session.agentType = null
+          }
           appendModeChange(sessionId, session)
         }
 
@@ -368,6 +375,93 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
             : getDefaultWorkspace())
 
         sendJSON(res, 200, {
+          mode: session.permissionMode.mode,
+          agentType: session.agentType ?? null,
+          planFilePath: getPlanFilePath(session, cwd),
+        })
+      } catch {
+        sendJSON(res, 400, { error: 'Invalid JSON' })
+      }
+      return
+    }
+
+    if (method === 'POST' && url === '/session/agent') {
+      try {
+        const body = await readBody(req)
+        const sessionId = body.session_id as string
+        const agentTypeRaw = body.agentType
+        const workspace = body.workspace as string | undefined
+
+        if (!sessionId) {
+          sendJSON(res, 400, { error: "Missing 'session_id'" })
+          return
+        }
+        if (
+          agentTypeRaw !== null &&
+          agentTypeRaw !== undefined &&
+          typeof agentTypeRaw !== 'string'
+        ) {
+          sendJSON(res, 400, {
+            error: "'agentType' must be a string or null",
+          })
+          return
+        }
+
+        const session = getSession(sessionId)
+        if (
+          !session ||
+          !canAccessSession(session, authed.user?.email, authed.user?.role)
+        ) {
+          sendJSON(res, 404, { error: 'Session not found' })
+          return
+        }
+
+        const cwd =
+          authed.userWorkspace ??
+          (workspace && fs.existsSync(workspace)
+            ? path.resolve(workspace)
+            : getDefaultWorkspace())
+
+        const nextType =
+          agentTypeRaw === undefined || agentTypeRaw === null || agentTypeRaw === ''
+            ? null
+            : (agentTypeRaw as string)
+
+        if (nextType !== null) {
+          const { agents } = await loadWorkspaceContributions(cwd)
+          const profile = findPrimaryAgent(agents.activeAgents, nextType)
+          if (!profile) {
+            sendJSON(res, 400, {
+              error: `Unknown or non-primary agentType '${nextType}'`,
+            })
+            return
+          }
+        }
+
+        const prev = session.agentType ?? null
+        const prevMode = session.permissionMode.mode
+        session.agentType = nextType
+
+        // Selecting a specialist forces Agent permission mode (CC main thread).
+        if (nextType !== null && session.permissionMode.mode !== 'agent') {
+          const from = session.permissionMode.mode
+          handlePlanModeTransition(from, 'agent', session)
+          session.permissionMode = transitionPermissionMode(
+            from,
+            'agent',
+            session.permissionMode,
+          )
+        }
+
+        if (
+          prev !== nextType ||
+          prevMode !== session.permissionMode.mode
+        ) {
+          appendAgentChange(sessionId, session)
+        }
+
+        sendJSON(res, 200, {
+          agentType: session.agentType ?? null,
           mode: session.permissionMode.mode,
           planFilePath: getPlanFilePath(session, cwd),
         })

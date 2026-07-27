@@ -20,6 +20,7 @@ import { buildConcurrencyPolicy } from '../core/concurrency-policy.js'
 import { AGENT_TOOL_NAME } from '../constants/tool_names.js'
 import { SKILL_TOOL_NAME } from '../tools/SkillTool/SkillTool.js'
 import { SUBAGENT_NO_OUTPUT_MARKER } from '../tools/AgentTool/finalizeAgentTool.js'
+import { isToolNameDisallowed } from '../tools/AgentTool/toolGlob.js'
 import type { SkillDefinition } from './types.js'
 
 export interface RunSkillForkOptions {
@@ -97,10 +98,16 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     subTools = registry.createAll(cwd, subContext, targetAgent.tools)
   } else {
     subTools = registry.createAll(cwd, subContext)
-    const denied = new Set(targetAgent.disallowedTools ?? [])
-    denied.add(AGENT_TOOL_NAME)
-    denied.add(SKILL_TOOL_NAME)
-    for (const n of denied) delete subTools[n]
+    const patterns = targetAgent.disallowedTools ?? []
+    for (const n of Object.keys(subTools)) {
+      if (
+        n === AGENT_TOOL_NAME ||
+        n === SKILL_TOOL_NAME ||
+        isToolNameDisallowed(n, patterns)
+      ) {
+        delete subTools[n]
+      }
+    }
   }
   delete subTools[AGENT_TOOL_NAME]
   delete subTools[SKILL_TOOL_NAME]

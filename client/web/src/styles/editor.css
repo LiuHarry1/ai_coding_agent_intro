@@ -8,9 +8,17 @@
   background: var(--bg-secondary);
   overflow-x: auto;
   flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 .editor-tabs::-webkit-scrollbar { height: 6px; }
-.editor-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.editor-tabs::-webkit-scrollbar-track { background: transparent; }
+.editor-tabs::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.editor-tabs::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.editor-tabs::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
 
 .editor-tab {
   display: flex;
@@ -100,6 +108,8 @@
   flex-shrink: 0;
   overflow-x: auto;
   white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 .editor-breadcrumb-sep { opacity: 0.5; }
 .editor-breadcrumb-item.leaf { color: var(--text-primary); }
@@ -109,11 +119,18 @@
   flex: 1;
   min-height: 0;
   background: var(--bg-primary);
+  /* Prefer dark OS scrollbars when custom styles aren't applied (e.g. some textarea cases). */
+  color-scheme: dark;
+}
+[data-theme="light"] .editor-body {
+  color-scheme: light;
 }
 
 /* Read-only / truncated: scroll the whole code pane (gutter + pre together). */
 .editor-body--readonly {
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 /* Editable: only the textarea scrolls; avoids double vertical scrollbars. */
@@ -123,6 +140,48 @@
 .editor-body--edit .editor-gutter {
   overflow: hidden;
   align-self: stretch;
+}
+
+/* Theme-aware scrollbars (avoid bright OS default bars on dark theme). */
+.editor-body--readonly::-webkit-scrollbar,
+.editor-code--edit::-webkit-scrollbar,
+.editor-breadcrumb::-webkit-scrollbar,
+.editor-binary::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.editor-body--readonly::-webkit-scrollbar-track,
+.editor-code--edit::-webkit-scrollbar-track,
+.editor-breadcrumb::-webkit-scrollbar-track,
+.editor-binary::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-body--readonly::-webkit-scrollbar-thumb,
+.editor-code--edit::-webkit-scrollbar-thumb,
+.editor-breadcrumb::-webkit-scrollbar-thumb,
+.editor-binary::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.editor-body--readonly::-webkit-scrollbar-thumb:hover,
+.editor-code--edit::-webkit-scrollbar-thumb:hover,
+.editor-breadcrumb::-webkit-scrollbar-thumb:hover,
+.editor-binary::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+.editor-body--readonly::-webkit-scrollbar-corner,
+.editor-code--edit::-webkit-scrollbar-corner,
+.editor-breadcrumb::-webkit-scrollbar-corner,
+.editor-binary::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.editor-body--readonly::-webkit-scrollbar-button,
+.editor-code--edit::-webkit-scrollbar-button,
+.editor-breadcrumb::-webkit-scrollbar-button,
+.editor-binary::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
 }
 
 .editor-gutter,
@@ -220,6 +279,8 @@
   gap: 14px;
   padding: 24px;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 .editor-binary-img {
   max-width: 100%;
@@ -265,6 +326,8 @@
   caret-color: var(--accent);
   tab-size: 2;
   -moz-tab-size: 2;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 .editor-code--edit:focus { outline: none; }
 
