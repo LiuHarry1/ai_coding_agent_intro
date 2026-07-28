@@ -72,7 +72,7 @@ function ResultRow({ item }) {
   )
 }
 
-export default function WebSearchCard({ part }) {
+export default function WebSearchCard({ part, nested = false }) {
   const toolName = part.name || ''
   const { server: mcpServer } = parseMcpToolName(toolName)
   const args = part.args || {}
@@ -89,7 +89,7 @@ export default function WebSearchCard({ part }) {
     : []
 
   // Expanded only while running; collapses on done (user can still click).
-  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone)
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
   const [showAll, setShowAll] = useState(false)
 
   const query = args.query || parsed?.query || ''

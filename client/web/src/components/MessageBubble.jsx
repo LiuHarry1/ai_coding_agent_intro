@@ -4,8 +4,10 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { pickCard, SUPPRESSED_TOOL_CARDS } from './pickToolCard.js'
 import { isPlanFileWrite } from '../lib/plan-utils.js'
+import { coalesceToolRuns } from '../lib/tool-density.js'
 import AskUserQuestionCard from './AskUserQuestionCard.jsx'
 import PlanApprovalCard from './PlanApprovalCard.jsx'
+import ExploredGroup from './ExploredGroup.jsx'
 import ToolRowHeader from './ToolRowHeader.jsx'
 import CopyButton from './CopyButton.jsx'
 import { getMdComponents } from '../lib/markdown-components.jsx'
@@ -395,11 +397,22 @@ export default function MessageBubble({ message }) {
                 !isPlanFileWrite(it),
             )
             if (visibleItems.length === 0) return null
+            const runs = coalesceToolRuns(visibleItems)
             return (
               <div className='tool-group' key={i}>
-                {visibleItems.map((item, j) => {
-                  const Card = pickCard(item)
-                  return <Card key={j} part={item} />
+                {runs.map((run, j) => {
+                  if (run.type === 'explored_run') {
+                    return (
+                      <ExploredGroup
+                        key={run.items[0]?.id ?? `explored-${j}`}
+                        items={run.items}
+                      />
+                    )
+                  }
+                  const Card = pickCard(run.part)
+                  return (
+                    <Card key={run.part.id ?? j} part={run.part} />
+                  )
                 })}
               </div>
             )

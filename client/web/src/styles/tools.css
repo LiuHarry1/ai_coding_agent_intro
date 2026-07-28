@@ -1139,6 +1139,18 @@
   /* inherits .tool-row margin from .tool-group .tool-row */
 }
 
+/* ── Explored N tools (Cursor-style density group) ─────────────── */
+.explored-group-body {
+  margin: 2px 0 4px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.explored-group-step > .tool-row,
+.explored-group-step > .tool-card {
+  margin: 0;
+}
+
 .subagent-step-toggle {
   padding: 0;
   background: none;

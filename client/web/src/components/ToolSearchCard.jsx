@@ -6,14 +6,14 @@ import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
  * Compact row for ToolSearch — avoids the generic ToolCallCard's bulky
  * Arguments/Result panels for a one-field lookup tool.
  */
-export default function ToolSearchCard({ part }) {
+export default function ToolSearchCard({ part, nested = false }) {
   const args = part.args || {}
   const result = part.result
   const isDone = part.status === 'done'
   const isError =
     isDone && typeof result === 'string' && result.startsWith('Error:')
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone)
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
 
   const query = typeof args.query === 'string' ? args.query : ''
   const title = query || 'ToolSearch\u2026'

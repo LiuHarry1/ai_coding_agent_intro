@@ -41,7 +41,7 @@ function urlHeadline(url) {
   }
 }
 
-export default function WebFetchCard({ part }) {
+export default function WebFetchCard({ part, nested = false }) {
   const toolName = part.name || ''
   const args = part.args || {}
   const result = part.result
@@ -62,7 +62,7 @@ export default function WebFetchCard({ part }) {
   const host = hostname(articleUrl)
 
   // Expanded only while running; collapses on done (user can still click).
-  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone)
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
   const [showFull, setShowAll] = useState(false)
 
   const headline = isDone && title ? title : urlHeadline(articleUrl)

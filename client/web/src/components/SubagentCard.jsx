@@ -1,18 +1,23 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { mdComponents } from '../lib/markdown-components.jsx'
 import ToolRowHeader from './ToolRowHeader.jsx'
+import NestedToolRuns from './NestedToolRuns.jsx'
+import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import {
-  pickCard,
+  liveToolSubtitle,
+  pickLiveMember,
+  summarizeToolSteps,
+} from '../lib/tool-density.js'
+import {
   SUPPRESSED_TOOL_CARDS,
   SUBAGENT_SUPPRESSED,
 } from './pickToolCard.js'
 
 /**
- * Subagent row (Explore / Plan / Agent): same flat tool-row shell as Read/Bash.
- * Nested steps + report expand beneath the header — no outer card chrome.
+ * Subagent row: one-line parent card with live subtitle; steps/report on expand.
  */
 
 const TYPE_LABELS = {
@@ -29,42 +34,6 @@ function labelFor(subagentType) {
   if (!subagentType) return 'Agent'
   return subagentType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
-
-function summarizeSteps(steps) {
-  const counts = {}
-  for (const s of steps) {
-    const n = s.name || 'other'
-    let bucket = n
-    if (n.endsWith('_fetch')) bucket = '__fetch__'
-    else if (n.endsWith('_search') || n.endsWith('_web_search'))
-      bucket = '__search__'
-    counts[bucket] = (counts[bucket] || 0) + 1
-  }
-  const VERBS = [
-    ['Read', 'read', 'reads'],
-    ['Grep', 'search', 'searches'],
-    ['Glob', 'glob', 'globs'],
-    ['list_dir', 'dir', 'dirs'],
-    ['Bash', 'cmd', 'cmds'],
-    ['PowerShell', 'cmd', 'cmds'],
-    ['WebSearch', 'web search', 'web searches'],
-    ['__search__', 'web search', 'web searches'],
-    ['WebFetch', 'fetch', 'fetches'],
-    ['__fetch__', 'fetch', 'fetches'],
-    ['Write', 'write', 'writes'],
-    ['Edit', 'edit', 'edits'],
-    ['Skill', 'skill', 'skills'],
-  ]
-  const phrases = []
-  for (const [key, sing, plur] of VERBS) {
-    if (counts[key])
-      phrases.push(`${counts[key]} ${counts[key] > 1 ? plur : sing}`)
-  }
-  if (phrases.length === 0) return null
-  return phrases.join(' \u00B7 ')
-}
-
-const STEP_PREVIEW_LIMIT = 6
 
 export default function SubagentCard({ part }) {
   const args = part.args || {}
@@ -90,22 +59,26 @@ export default function SubagentCard({ part }) {
     )
   }, [part.subagentParts])
 
-  const [expanded, setExpanded] = useState(true)
-  const [stepsOpen, setStepsOpen] = useState(() => !isDone)
+  const [expanded, toggleExpanded, setExpanded] = useStreamingExpanded(false, {
+    expandOnceWhen: isError,
+  })
+  const [stepsOpen, setStepsOpen] = useState(false)
   const [showAllSteps, setShowAllSteps] = useState(false)
-  const wasDone = useRef(isDone)
 
-  useEffect(() => {
-    if (isDone && !wasDone.current) {
-      setStepsOpen(false)
+  const summary = useMemo(() => summarizeToolSteps(steps), [steps])
+  const liveStep = useMemo(() => pickLiveMember(steps), [steps])
+  const subtitle = !isDone
+    ? liveToolSubtitle(liveStep) || summary
+    : summary
+
+  const hasReport = isDone && typeof result === 'string' && result.length > 0
+
+  const handleHeaderToggle = () => {
+    if (!expanded && steps.length > 0 && !hasReport) {
+      setStepsOpen(true)
     }
-    wasDone.current = isDone
-  }, [isDone])
-
-  const summary = useMemo(() => summarizeSteps(steps), [steps])
-
-  const visibleSteps = showAllSteps ? steps : steps.slice(0, STEP_PREVIEW_LIMIT)
-  const hiddenCount = steps.length - visibleSteps.length
+    toggleExpanded()
+  }
 
   const handleStepToggle = e => {
     e.stopPropagation()
@@ -130,17 +103,15 @@ export default function SubagentCard({ part }) {
       </button>
     ) : null
 
-  const hasReport = isDone && typeof result === 'string' && result.length > 0
-
   return (
     <div className={`tool-row subagent-row ${isError ? 'has-error' : ''}`}>
       <ToolRowHeader
         expanded={expanded}
-        onToggle={() => setExpanded(v => !v)}
+        onToggle={handleHeaderToggle}
         label={label}
         title={headline || '\u2026'}
         titleTooltip={fullPrompt || headline || undefined}
-        subtitle={summary}
+        subtitle={subtitle || undefined}
         meta={stepsToggle}
         duration={part.duration}
         isDone={isDone}
@@ -151,28 +122,11 @@ export default function SubagentCard({ part }) {
       {expanded && (
         <div className='subagent-expanded'>
           {steps.length > 0 && stepsOpen && (
-            <div className='subagent-steps'>
-              {visibleSteps.map((s, i) => {
-                const Card = pickCard(s, { nested: true })
-                return (
-                  <div className='subagent-nested-step' key={s.id ?? i}>
-                    <Card part={s} nested />
-                  </div>
-                )
-              })}
-              {hiddenCount > 0 && (
-                <button
-                  type='button'
-                  className='subagent-more'
-                  onClick={e => {
-                    e.stopPropagation()
-                    setShowAllSteps(true)
-                  }}
-                >
-                  Show {hiddenCount} more step{hiddenCount === 1 ? '' : 's'}
-                </button>
-              )}
-            </div>
+            <NestedToolRuns
+              steps={steps}
+              showAllSteps={showAllSteps}
+              onShowAll={() => setShowAllSteps(true)}
+            />
           )}
 
           {hasReport && (

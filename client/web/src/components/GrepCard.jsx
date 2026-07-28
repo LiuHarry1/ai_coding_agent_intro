@@ -134,7 +134,7 @@ function parseResult(result, mode, fallbackPath) {
   return parseFilesWithMatches(result)
 }
 
-export default function GrepCard({ part }) {
+export default function GrepCard({ part, nested = false }) {
   const args = part.args || {}
   const result = part.result
   const isDone = part.status === 'done'
@@ -147,7 +147,8 @@ export default function GrepCard({ part }) {
     [result, mode, args.path],
   )
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone)
+  // Nested (inside Explored/Subagent): stay collapsed — parent owns density.
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
 
   const pattern = args.pattern || ''
   const displayPattern = pattern ? truncateEnd(pattern, 44) : ''

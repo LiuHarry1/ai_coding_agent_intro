@@ -1,24 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
 
 /**
- * Tool cards should auto-expand ONLY while the tool is running so the
- * user can see streaming output. Once the call finishes (or for any
- * already-finished card on first mount) we collapse it to keep the
- * conversation scannable. After the user manually toggles the card we
- * stop overriding their choice.
+ * Density-aware expand state for tool rows.
  *
- * Usage:
- *   const [expanded, toggle] = useStreamingExpanded(!isDone);
- *   <ToolRowHeader expanded={expanded} onToggle={toggle} … />
+ * - `isRunning`: when true (and user hasn't toggled), keep expanded so
+ *   streaming output is visible. When false, collapse.
+ * - `expandOnceWhen`: one-shot force expand (e.g. first error) without
+ *   treating the card as permanently "running". After the one-shot fires
+ *   we leave the card alone until the user toggles.
+ *
+ * After the user manually toggles we never override their choice.
  */
-export function useStreamingExpanded(isRunning) {
+export function useStreamingExpanded(isRunning, options = {}) {
+  const { expandOnceWhen = false } = options
   const [expanded, setExpanded] = useState(Boolean(isRunning))
   const userToggled = useRef(false)
+  const didExpandOnce = useRef(false)
 
   useEffect(() => {
     if (userToggled.current) return
+    if (expandOnceWhen && !didExpandOnce.current) {
+      didExpandOnce.current = true
+      setExpanded(true)
+      return
+    }
+    // One-shot expand already applied — don't immediately collapse via
+    // isRunning=false on the next effect pass.
+    if (didExpandOnce.current) return
     setExpanded(Boolean(isRunning))
-  }, [isRunning])
+  }, [isRunning, expandOnceWhen])
 
   const toggle = () => {
     userToggled.current = true

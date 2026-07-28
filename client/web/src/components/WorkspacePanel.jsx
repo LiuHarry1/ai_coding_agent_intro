@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { agentApi } from '../lib/api/agent.js'
+import { setKnownMcpServers } from '../lib/tool-kind.js'
 
 const TABS = [
   { id: 'agents', label: 'Subagents' },
@@ -283,6 +284,9 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
       setSkillsData(skills)
       setPluginsData(plugins)
       setMcpData(mcp)
+      if (mcp?.servers) {
+        setKnownMcpServers(mcp.servers.map(s => s.name).filter(Boolean))
+      }
     } catch (e) {
       setError(e.message || 'Failed to load workspace extensions')
       setAgentsData(null)

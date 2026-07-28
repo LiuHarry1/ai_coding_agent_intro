@@ -10,8 +10,10 @@ import GlobCard from './GlobCard.jsx'
 import GrepCard from './GrepCard.jsx'
 import ToolSearchCard from './ToolSearchCard.jsx'
 import SkillCard from './SkillCard.jsx'
+import McpToolCard from './McpToolCard.jsx'
 import SubagentStepFallback from './SubagentStepFallback.jsx'
 import { isFetchTool, isSearchTool } from '../lib/tool-kind.js'
+import { isMcpTool } from '../lib/tool-density.js'
 import {
   BASH,
   POWERSHELL,
@@ -58,6 +60,9 @@ export function pickCard(item, options = {}) {
   if (item.isSubagent) return SubagentCard
   const name = item.name
   if (TOOL_CARDS[name]) return TOOL_CARDS[name]
+  // Real MCP tools stay on their own rows (Cursor density) — never Explored,
+  // and not redirected through WebFetch/WebSearch just because of suffixes.
+  if (isMcpTool(item)) return McpToolCard
   if (isFetchTool(name)) return WebFetchCard
   if (isSearchTool(name)) return WebSearchCard
   if (nested) return SubagentStepFallback

@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react'
 import { useChatStore } from './stores/chat-store.js'
 import { useWorkspaceIdeStore } from './stores/workspace-ide-store.js'
+import { agentApi } from './lib/api/agent.js'
+import { setKnownMcpServers } from './lib/tool-kind.js'
 import Header from './components/Header.jsx'
 import ChatView from './components/ChatView.jsx'
 import InputArea from './components/InputArea.jsx'
@@ -29,6 +31,24 @@ export default function App() {
   useEffect(() => {
     setIdeRootPath(chatWorkspace)
   }, [chatWorkspace, setIdeRootPath])
+
+  // Cache MCP server names for accurate `server/tool` labels in chat rows.
+  useEffect(() => {
+    let cancelled = false
+    agentApi
+      .getMcp(chatWorkspace || undefined)
+      .then(data => {
+        if (cancelled) return
+        const names = (data?.servers ?? []).map(s => s.name).filter(Boolean)
+        setKnownMcpServers(names)
+      })
+      .catch(() => {
+        if (!cancelled) setKnownMcpServers([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [chatWorkspace])
 
   // Warn before unload if any open file has unsaved edits. Reads the
   // store imperatively (no re-render needed for this side-effect-only listener).

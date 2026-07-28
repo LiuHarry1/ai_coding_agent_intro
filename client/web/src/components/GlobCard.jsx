@@ -40,7 +40,7 @@ function parseResult(result) {
   return { files, truncated, empty: false }
 }
 
-export default function GlobCard({ part }) {
+export default function GlobCard({ part, nested = false }) {
   const args = part.args || {}
   const result = part.result
   const isDone = part.status === 'done'
@@ -53,7 +53,7 @@ export default function GlobCard({ part }) {
   )
 
   // Expanded only while running (to stream results); collapses on done.
-  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone)
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
 
   const pattern = args.pattern || ''
   const displayPattern = pattern ? truncateEnd(pattern, 44) : ''
