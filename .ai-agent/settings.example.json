@@ -1,0 +1,109 @@
+{
+  "models": {
+    "large": {
+      "provider": "openai-compatible",
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "claude-opus-4.6"
+    },
+    "medium": {
+      "provider": "openai-compatible",
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "claude-sonnet-4.6"
+    },
+    "small": {
+      "provider": "openai-compatible",
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "claude-haiku-4.5"
+    }
+  },
+  "compaction": {
+    "enabled": true,
+    "contextWindow": 200000,
+    "microCompactKeepRecent": 5,
+    "maxFilesToRestore": 5,
+    "maxTokensPerFile": 5000,
+    "fileBudget": 50000,
+    "timeBasedMicroEnabled": true,
+    "timeBasedMicroGapMinutes": 5
+  },
+  "sessionMemory": {
+    "enabled": true,
+    "minimumTokensToInit": 10000,
+    "minimumTokensBetweenUpdate": 5000,
+    "toolCallsBetweenUpdates": 3,
+    "cacheSafe": true,
+    "modelTier": "medium",
+    "compactMinTokens": 10000,
+    "compactMaxTokens": 40000,
+    "compactMinTextMessages": 5
+  },
+  "autoMemoryEnabled": true,
+  "lspServers": {
+    "typescript": {
+      "command": "npx",
+      "args": ["--yes", "typescript-language-server", "--stdio"],
+      "extensionToLanguage": {
+        ".ts": "typescript",
+        ".tsx": "typescriptreact"
+      },
+      "startupTimeout": 30000
+    },
+    "python": {
+      "command": "npx",
+      "args": ["--yes", "pyright-langserver", "--stdio"],
+      "extensionToLanguage": {
+        ".py": "python",
+        ".pyi": "python"
+      },
+      "startupTimeout": 30000
+    },
+    "java-language-server": {
+      "command": "npx",
+      "args": ["--yes", "jj-language-server", "--stdio"],
+      "extensionToLanguage": {
+        ".java": "java"
+      },
+      "startupTimeout": 30000
+    },
+    "jdtls": {
+      "command": "jdtls",
+      "args": ["-data", ".jdtls-data"],
+      "_extensionToLanguage": {
+        ".java": "java"
+      },
+      "startupTimeout": 120000
+    },
+    "stpl": {
+      "command": "node",
+      "args": ["integrations/stpl-lsp-bridge/index.js"],
+      "env": {
+        "STPL_START_MODE": "jmx",
+        "STPLLS_PID": "REPLACE_WITH_HOST_JVM_PID",
+        "STPL_JMX_HELPER": "REPLACE_WITH_PATH_TO_JMX_HELPER",
+        "STPL_CONNECT_TIMEOUT_MS": "60000",
+        "JDT_LS_NO_EXIT": "true",
+        "watchParentProcess": "false"
+      },
+      "extensionToLanguage": {
+        ".spec": "stpl",
+        ".flow": "stpl",
+        ".dbd": "stpl",
+        ".prog": "stpl",
+        ".seq": "stpl",
+        ".pat": "stpl"
+      },
+      "startupTimeout": 120000,
+      "maxRestarts": 1
+    }
+  },
+  "mcpServers": {
+    "mcp_server": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"]
+    }
+  },
+  "disabledTools": ["web_fetch"]
+}
