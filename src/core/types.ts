@@ -290,17 +290,31 @@ export interface AgentOptions {
   /** Session-memory (background notes + compact prefer-read). */
   sessionMemory?: SessionMemoryConfig
   /**
-   * Model id for session-memory extraction (usually medium tier).
-   * When omitted, extraction is skipped even if sessionMemory.enabled.
+   * Model id for session-memory when `cacheSafe` is false.
+   * Prefer resolving via `resolveSidePathModel` with a matching provider.
+   * When `cacheSafe` is true, main-loop model is used via CacheSafeParams.
    */
   sessionMemoryModelId?: string
+  /**
+   * Provider for session-memory when `cacheSafe` is false.
+   * Must match `sessionMemoryModelId`'s tier (tiers may use different baseURL).
+   * Falls back to the main-loop `provider` when omitted.
+   */
+  sessionMemoryProvider?: IProvider
   /** Cross-session auto memory (turn-end extract + MEMORY.md inject). */
   autoMemory?: AutoMemoryConfig
   /**
-   * Model id for auto-memory extract when cacheSafe is false.
-   * When cacheSafe, main-loop model is used.
+   * Model id for auto-memory extract when `cacheSafe` is false.
+   * Prefer resolving via `resolveSidePathModel` with a matching provider.
+   * When `cacheSafe` is true, main-loop model is used via CacheSafeParams.
    */
   autoMemoryModelId?: string
+  /**
+   * Provider for auto-memory when `cacheSafe` is false.
+   * Must match `autoMemoryModelId`'s tier (tiers may use different baseURL).
+   * Falls back to the main-loop `provider` when omitted.
+   */
+  autoMemoryProvider?: IProvider
   /**
    * Names of tools that are subagent wrappers. Used purely for UI: when
    * provided, the agent tags `tool_call` / `tool_input_start` events with
@@ -619,7 +633,16 @@ export interface AutoMemoryConfig {
   directory?: string
   /** Eligible turn-end extracts; default 1 (CC tengu_bramble_lintel). */
   extractEveryNTurns: number
+  /**
+   * When true (CC default), reuse main-loop model via CacheSafeParams.
+   * When false, use `modelTier` (default medium) with a matching provider.
+   */
   cacheSafe: boolean
+  /**
+   * Model tier for non-cacheSafe extract. Ignored when `cacheSafe` is true.
+   * Default medium when omitted.
+   */
+  modelTier?: ModelTier
   injectIndex: boolean
   injectMaxIndexLines: number
 }

@@ -11,7 +11,7 @@ import type {
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import type { ModelRegistry } from '../core/llm/index.js'
 import { EventBus } from '../core/event-bus.js'
-import { createModelRegistry } from '../core/llm/index.js'
+import { createModelRegistry, resolveSidePathModel } from '../core/llm/index.js'
 import { resolveSettings, resolveAutoMemoryConfig } from '../core/settings-manager.js'
 import { generateSessionTitle } from '../services/sessionTitle.js'
 import { setSessionTitle } from './session.js'
@@ -347,30 +347,28 @@ export async function runChatTurn(
           planExists: planExists(session, cwd),
         },
       )
-      const useCacheSafe = sm.cacheSafe !== false
-      const tier =
-        sm.modelTier === 'large' || sm.modelTier === 'small'
-          ? sm.modelTier
-          : 'medium'
-      // Cache-safe path must use the main (large) model + tools/system.
-      const extractProvider = useCacheSafe ? provider : models.provider(tier)
-      const modelId = useCacheSafe
-        ? models.profile('large').model
-        : models.profile(tier).model
-      const cacheSafeParams = useCacheSafe
+      const mainModelId = models.profile('large').model
+      const side = resolveSidePathModel({
+        models,
+        cacheSafe: sm.cacheSafe,
+        modelTier: sm.modelTier,
+        mainProvider: provider,
+        mainModelId,
+      })
+      const cacheSafeParams = side.cacheSafe
         ? createCacheSafeParams({
             systemPrompt,
             tools: prepared.tools,
-            provider: extractProvider,
-            model: modelId,
+            provider: side.provider,
+            model: side.modelId,
             messages: session.messages,
           })
         : undefined
       const result = await extractSessionMemory({
         messages: session.messages,
         sessionId: session.id,
-        provider: extractProvider,
-        modelId,
+        provider: side.provider,
+        modelId: side.modelId,
         config: sm,
         force: true,
         runAgent,
@@ -459,6 +457,24 @@ export async function runChatTurn(
     )
 
   try {
+    const mainModelId = models.profile('large').model
+    const sessionMemorySide = resolveSidePathModel({
+      models,
+      cacheSafe: resolvedSettings.config.sessionMemory.cacheSafe,
+      modelTier: resolvedSettings.config.sessionMemory.modelTier,
+      mainProvider: provider,
+      mainModelId,
+    })
+    const autoMemoryConfig = resolveAutoMemoryConfig(resolvedSettings.config)
+    const autoMemorySide = resolveSidePathModel({
+      models,
+      cacheSafe: autoMemoryConfig.cacheSafe,
+      modelTier: autoMemoryConfig.modelTier,
+      mainProvider: provider,
+      mainModelId,
+      defaultTier: 'medium',
+    })
+
     finalText = await runAgent(prepared.effectiveMessage, {
       tools: prepared.tools,
       systemPrompt,
@@ -468,14 +484,11 @@ export async function runChatTurn(
       cwd,
       compaction: resolvedSettings.config.compaction,
       sessionMemory: resolvedSettings.config.sessionMemory,
-      sessionMemoryModelId: models.profile(
-        resolvedSettings.config.sessionMemory.modelTier === 'large' ||
-          resolvedSettings.config.sessionMemory.modelTier === 'small'
-          ? resolvedSettings.config.sessionMemory.modelTier
-          : 'medium',
-      ).model,
-      autoMemory: resolveAutoMemoryConfig(resolvedSettings.config),
-      autoMemoryModelId: models.profile('medium').model,
+      sessionMemoryModelId: sessionMemorySide.modelId,
+      sessionMemoryProvider: sessionMemorySide.provider,
+      autoMemory: autoMemoryConfig,
+      autoMemoryModelId: autoMemorySide.modelId,
+      autoMemoryProvider: autoMemorySide.provider,
       messages: session.messages,
       images: images?.length ? images : undefined,
       subagentNames: prepared.subagentNames,

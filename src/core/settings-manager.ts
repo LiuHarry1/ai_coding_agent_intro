@@ -58,6 +58,8 @@ export const DEFAULTS: AppConfig = {
 const AUTO_MEMORY_RUNTIME_DEFAULTS = {
   extractEveryNTurns: 1,
   cacheSafe: true,
+  /** Used only when cacheSafe is false. */
+  modelTier: 'medium' as const,
   injectIndex: true,
   injectMaxIndexLines: 50,
 } as const

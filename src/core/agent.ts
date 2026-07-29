@@ -257,8 +257,10 @@ export async function runAgent(
     compaction,
     sessionMemory,
     sessionMemoryModelId,
+    sessionMemoryProvider,
     autoMemory,
     autoMemoryModelId,
+    autoMemoryProvider,
     onFullCompaction,
     logLabel,
   }: AgentOptions,
@@ -376,6 +378,7 @@ export async function runAgent(
         compaction,
         sessionMemory,
         sessionMemoryModelId,
+        sessionMemoryProvider,
         sessionId,
         onFullCompaction,
         compactEnrichment,
@@ -451,7 +454,7 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
           extractAutoMemoriesInBackground({
             messages,
             sessionId,
-            provider,
+            provider: autoMemoryProvider ?? provider,
             modelId: autoMemoryModelId ?? resolvedModel,
             config: autoMemory,
             runAgent,
@@ -664,6 +667,7 @@ interface RunOneStepArgs {
   compaction?: AgentOptions['compaction']
   sessionMemory?: AgentOptions['sessionMemory']
   sessionMemoryModelId?: AgentOptions['sessionMemoryModelId']
+  sessionMemoryProvider?: AgentOptions['sessionMemoryProvider']
   sessionId?: string
   onFullCompaction?: AgentOptions['onFullCompaction']
   compactEnrichment?: CompactEnrichment
@@ -695,6 +699,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     compaction,
     sessionMemory,
     sessionMemoryModelId,
+    sessionMemoryProvider,
     sessionId,
     logLabel,
   } = args
@@ -830,7 +835,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         extractSessionMemoryInBackground({
           messages,
           sessionId,
-          provider,
+          provider: sessionMemoryProvider ?? provider,
           modelId: sessionMemoryModelId ?? resolvedModel,
           config: sessionMemory,
           runAgent,

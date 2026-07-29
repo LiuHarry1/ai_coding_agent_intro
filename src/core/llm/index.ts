@@ -33,3 +33,4 @@ export {
   type ModelRegistry,
   type ModelTier,
 } from './model-registry.js'
+export { resolveSidePathModel } from './resolve-side-path-model.js'
