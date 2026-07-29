@@ -3,8 +3,8 @@
  * stpl-lsp-bridge — stdio ↔ SmarTest STPL Language Server (TCP reverse-connect)
  *
  * Agent sees a normal stdio LSP server (command/args in lspServers).
- * Bridge listens on 127.0.0.1, optionally starts LS via JMX, accepts one
- * reverse connection from SmarTest, then pipes LSP frames transparently.
+ * Bridge listens on 127.0.0.1, checks SWC via JMX serverInfo, starts LS via
+ * JMX start(port), accepts one reverse connection, then pipes LSP frames.
  *
  * Exit codes:
  *   0 — clean shutdown
@@ -13,8 +13,12 @@
  *   3 — socket disconnected during pipe
  */
 
-import { loadConfig, ConfigError } from './lib/config.js'
-import { jmxInvoke } from './lib/jmx.js'
+import {
+  loadConfig,
+  normalizeWorkspacePath,
+} from './lib/config.js'
+import { resolveSwcTarget } from './lib/discover.js'
+import { jmxInvoke, parseServerInfo } from './lib/jmx.js'
 import { listenLocal, acceptOne } from './lib/listen.js'
 import { pipeStdioToSocket } from './lib/pipe.js'
 import { log } from './lib/log.js'
@@ -38,6 +42,21 @@ async function main() {
   }
   state.config = config
 
+  if (config.startMode === 'jmx') {
+    try {
+      const target = await resolveSwcTarget(config)
+      config.pid = target.pid
+      config.workspacePath = target.workspacePath
+      log(`SWC target: pid=${target.pid} workspace=${target.workspacePath} (${target.source})`)
+    } catch (err) {
+      log(
+        `SWC discover/resolve failed: ${err instanceof Error ? err.message : String(err)}`,
+        'error',
+      )
+      process.exit(EXIT_CONFIG)
+    }
+  }
+
   if (config.workspacePath) {
     log(`workspace: ${config.workspacePath}`)
   }
@@ -57,15 +76,13 @@ async function main() {
   state.server = server
   state.port = port
 
+  // Register accept BEFORE JMX start — the LS may connect immediately after
+  // start(port), and a late 'connection' listener would miss that socket.
+  const acceptPromise = acceptOne(server, config.connectTimeoutMs)
+
   if (config.startMode === 'jmx') {
     try {
-      await jmxInvoke({
-        java: config.jmxJava,
-        helper: /** @type {string} */ (config.jmxHelper),
-        pid: /** @type {string} */ (config.pid),
-        action: 'start',
-        port,
-      })
+      await jmxPreflightAndStart(config, port)
     } catch (err) {
       log(
         `JMX start failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -76,13 +93,13 @@ async function main() {
     }
   } else {
     log(
-      `already-running mode: waiting for STPL LS to connect to 127.0.0.1:${port}`,
+      `wait-for-connect mode (no JMX): waiting for STPL LS to connect to 127.0.0.1:${port}`,
     )
   }
 
   let socket
   try {
-    socket = await acceptOne(server, config.connectTimeoutMs)
+    socket = await acceptPromise
   } catch (err) {
     log(
       `accept failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -104,6 +121,64 @@ async function main() {
   process.exit(EXIT_OK)
 }
 
+/**
+ * serverInfo → validate → start(port)
+ * @param {import('./lib/config.js').BridgeConfig} config
+ * @param {number} port
+ */
+async function jmxPreflightAndStart(config, port) {
+  const pid = /** @type {string} */ (config.pid)
+  const helper = config.jmxHelper
+
+  const rawInfo = await jmxInvoke({
+    java: config.jmxJava,
+    helper,
+    pid,
+    action: 'serverInfo',
+    user: config.jmxUser,
+    extensionVersion: config.extensionVersion,
+  })
+
+  const info = parseServerInfo(rawInfo)
+  if (!info) {
+    throw new Error(
+      'SWC serverInfo returned empty — MBean not registered, user mismatch, ' +
+        'extension version incompatible, or SWC was not restarted with com.advantest.itee.lsp.stpl. ' +
+        `Tried user=${config.jmxUser} extensionVersion=${config.extensionVersion} pid=${pid}`,
+    )
+  }
+
+  log(
+    `SWC serverInfo: running=${info.running} version=${info.version} workspace=${info.workspace}`,
+  )
+
+  if (info.running) {
+    throw new Error(
+      'STPL language server is already running in this SWC (one client at a time). ' +
+        'Close External IDE / another bridge session first.',
+    )
+  }
+
+  const expected = normalizeWorkspacePath(
+    /** @type {string} */ (config.workspacePath),
+  )
+  const actual = normalizeWorkspacePath(info.workspace)
+  if (expected !== actual) {
+    throw new Error(
+      `workspace mismatch: agent/cwd is "${expected}" but SWC reports "${actual}". ` +
+        'Start the agent with cwd = the same Eclipse workspace path.',
+    )
+  }
+
+  await jmxInvoke({
+    java: config.jmxJava,
+    helper,
+    pid,
+    action: 'start',
+    port,
+  })
+}
+
 function installSignalHandlers() {
   const onSignal = (signal) => {
     log(`received ${signal}`)
@@ -123,36 +198,14 @@ async function shutdown(reason) {
   shuttingDown = true
   log(`shutting down (${reason})`)
 
-  const { socket, server, config, port } = state
+  const { socket, server } = state
   try {
     if (socket && !socket.destroyed) socket.destroy()
   } catch {
     // ignore
   }
   await closeServer(server)
-
-  if (
-    config?.callJmxStopOnExit &&
-    config.startMode === 'jmx' &&
-    config.jmxHelper &&
-    config.pid &&
-    port != null
-  ) {
-    try {
-      await jmxInvoke({
-        java: config.jmxJava,
-        helper: config.jmxHelper,
-        pid: config.pid,
-        action: 'stop',
-        port,
-      })
-    } catch (err) {
-      log(
-        `JMX stop failed (ignored): ${err instanceof Error ? err.message : String(err)}`,
-        'warn',
-      )
-    }
-  }
+  // No JMX stop — SWC MBean has no stop(); LSP exit handles LS lifecycle.
 }
 
 /**

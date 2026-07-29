@@ -82,10 +82,9 @@
       "env": {
         "STPL_START_MODE": "jmx",
         "STPLLS_PID": "REPLACE_WITH_HOST_JVM_PID",
-        "STPL_JMX_HELPER": "REPLACE_WITH_PATH_TO_JMX_HELPER",
-        "STPL_CONNECT_TIMEOUT_MS": "60000",
-        "JDT_LS_NO_EXIT": "true",
-        "watchParentProcess": "false"
+        "STPL_JMX_HELPER": "integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java",
+        "STPL_JMX_JAVA": "/usr/lib/jvm/java-25/bin/java",
+        "STPL_CONNECT_TIMEOUT_MS": "60000"
       },
       "extensionToLanguage": {
         ".spec": "stpl",

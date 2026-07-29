@@ -1,5 +1,5 @@
 import * as path from 'path'
-import { pathToFileURL } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import type { LspServerConfig } from '../../core/types.js'
 import {
   createLspServerInstance,
@@ -7,6 +7,12 @@ import {
 } from './server-instance.js'
 import { registerLSPNotificationHandlers } from './passiveFeedback.js'
 import type { ScopedLspServerConfig } from './types.js'
+
+/** Agent package root (repo root containing `integrations/`, `src/`, …). */
+const AGENT_PACKAGE_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../..',
+)
 
 export interface LspServerManager {
   readonly workspaceKey: string
@@ -242,10 +248,36 @@ function normalizeConfig(
     ? path.resolve(cwd, config.workspaceFolder)
     : path.resolve(cwd)
 
+  // Spawn cwd is the workspace folder, so relative command/args would be
+  // resolved against the user's project — not the agent install. Resolve
+  // relative script paths against the agent package root instead.
+  const command = resolveAgentRelativePath(config.command)
+  const args = (config.args ?? []).map(resolveAgentRelativePath)
+
   return {
     ...config,
     name,
+    command,
+    args,
     extensionToLanguage,
     workspaceFolder,
   }
+}
+
+/**
+ * Absolute paths and bare commands (`npx`, `jdtls`) are left unchanged.
+ * Relative paths (e.g. `integrations/stpl-lsp-bridge/index.js`) are resolved
+ * against the agent package root so they work when spawn cwd is the workspace.
+ */
+function resolveAgentRelativePath(value: string): string {
+  if (!value || path.isAbsolute(value)) return value
+  // Bare executables on PATH (no path separator, no relative prefix)
+  if (
+    !value.includes('/') &&
+    !value.includes('\\') &&
+    !value.startsWith('.')
+  ) {
+    return value
+  }
+  return path.resolve(AGENT_PACKAGE_ROOT, value)
 }

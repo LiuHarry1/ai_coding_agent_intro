@@ -2,13 +2,14 @@
 /**
  * Manual smoke test: spawn the bridge over stdio, send initialize + hover.
  *
- * Usage (already-running mode with a mock or real STPL LS):
- *   STPL_START_MODE=already-running STPL_LSP_PORT=50000 \
+ * Usage (wait-for-connect mode with a mock or real STPL LS):
+ *   STPL_START_MODE=wait-for-connect STPL_LSP_PORT=50000 \
  *     node scripts/smoke-hover.mjs [path/to/file.spec]
  *
- * For a dry run without SmarTest, use scripts/mock-stpl-ls.mjs first:
- *   node scripts/mock-stpl-ls.mjs 50000 &
- *   STPL_START_MODE=already-running STPL_LSP_PORT=50000 node scripts/smoke-hover.mjs
+ * For a dry run without SmarTest, use scripts/mock-stpl-ls.mjs after smoke starts:
+ *   STPL_START_MODE=wait-for-connect STPL_LSP_PORT=50000 node scripts/smoke-hover.mjs
+ *   # other terminal:
+ *   node scripts/mock-stpl-ls.mjs 50000
  */
 
 import { spawn } from 'node:child_process'
