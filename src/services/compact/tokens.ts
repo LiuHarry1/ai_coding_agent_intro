@@ -66,7 +66,7 @@ const tokenUsageMap = new WeakMap<object, AttachedTokenUsage>()
 
 /**
  * Attach usage BOTH to the WeakMap (fast path, identity-keyed) and onto the
- * message record itself (CC-aligned) so it persists to JSONL and survives
+ * message record itself so it persists to JSONL and survives
  * session restore / server restart.
  */
 export function attachTokenUsage(
@@ -99,7 +99,7 @@ export function clearTokenUsages(messages: Message[]): void {
 }
 
 /**
- * Full context size from usage (CC getTokenCountFromUsage: input + cache
+ * Full context size from usage (input + cache
  * creation/read + output). Provider quirk handled defensively:
  *   - Anthropic-style: inputTokens EXCLUDES cache reads → cached must be added.
  *   - OpenAI-compatible-style: prompt_tokens INCLUDES cached_tokens → adding
@@ -122,7 +122,7 @@ function tokenCountFromUsage(u: AttachedTokenUsage): number {
 
 /**
  * Conservative padding applied to chars/4 estimates in threshold decisions
- * (CC-aligned: "Pad estimate by 4/3 to be conservative since we're
+ * ("Pad estimate by 4/3 to be conservative since we're
  * approximating"). Matters a lot for CJK-heavy conversations where the real
  * ratio is closer to 1 token/char — unpadded chars/4 undercounts ~4x and
  * lets the context blow past the real window before compaction triggers.

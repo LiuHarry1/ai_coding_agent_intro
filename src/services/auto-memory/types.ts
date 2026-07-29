@@ -1,5 +1,5 @@
 /**
- * Auto-memory content types — from CC `memdir/memoryTypes.ts`
+ * Auto-memory content types and prompt section constants.
  * (INDIVIDUAL / auto-only; no team <scope>).
  * CLAUDE.md → AGENTS.md where applicable.
  */
@@ -18,7 +18,7 @@ export function parseMemoryType(raw: unknown): MemoryType | undefined {
   return MEMORY_TYPES.find(t => t === raw)
 }
 
-/** CC MEMORY_FRONTMATTER_EXAMPLE */
+/** Example frontmatter for memory files. */
 export const MEMORY_FRONTMATTER_EXAMPLE = [
   '```markdown',
   '---',
@@ -31,7 +31,7 @@ export const MEMORY_FRONTMATTER_EXAMPLE = [
   '```',
 ] as const
 
-/** CC WHAT_NOT_TO_SAVE_SECTION (CLAUDE.md → AGENTS.md) */
+/** Section: what not to save into auto-memory. */
 export const WHAT_NOT_TO_SAVE_SECTION = [
   '## What NOT to save in memory',
   '',
@@ -45,12 +45,12 @@ export const WHAT_NOT_TO_SAVE_SECTION = [
 ] as const
 
 /**
- * CC MEMORY_DRIFT_CAVEAT (bullet under When to access).
+ * Caveat about memory drift (bullet under When to access).
  */
 export const MEMORY_DRIFT_CAVEAT =
   '- Memory records can become stale over time. Use memory as context for what was true at a given point in time. Before answering the user or building assumptions based solely on information in memory records, verify that the memory is still correct and up-to-date by reading the current state of the files or resources. If a recalled memory conflicts with current information, trust what you observe now — and update or remove the stale memory rather than acting on it.'
 
-/** CC WHEN_TO_ACCESS_SECTION */
+/** Section: when to access memory. */
 export const WHEN_TO_ACCESS_SECTION = [
   '## When to access memories',
   '- When memories seem relevant, or the user references prior-conversation work.',
@@ -59,7 +59,7 @@ export const WHEN_TO_ACCESS_SECTION = [
   MEMORY_DRIFT_CAVEAT,
 ] as const
 
-/** CC TRUSTING_RECALL_SECTION */
+/** Section: trusting recalled memory. */
 export const TRUSTING_RECALL_SECTION = [
   '## Before recommending from memory',
   '',
@@ -75,7 +75,7 @@ export const TRUSTING_RECALL_SECTION = [
 ] as const
 
 /**
- * CC TYPES_SECTION_INDIVIDUAL — full type blocks + examples.
+ * Individual type blocks + examples for memory entries.
  */
 export const TYPES_SECTION_INDIVIDUAL = [
   '## Types of memory',

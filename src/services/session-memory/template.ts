@@ -1,5 +1,5 @@
 /**
- * Session-memory markdown template (aligned with Claude Code).
+ * Session-memory markdown template.
  */
 export const SESSION_MEMORY_SECTION_HEADERS = [
   '# Session Title',

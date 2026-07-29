@@ -1,5 +1,5 @@
 /**
- * Forked agent helper (Claude Code–aligned).
+ * Forked agent helper for side-path runs that reuse main-loop cache context.
  *
  * Shared infrastructure for **side-path** agent loops that:
  * 1. Optionally reuse parent prompt-cache-critical params (`CacheSafeParams`)
@@ -10,7 +10,6 @@
  * This is NOT Explore/Plan **subagents** (those start with `messages: []` via
  * AgentTool). Forked agents typically continue the parent message prefix.
  *
- * CC reference: `src/utils/forkedAgent.ts`
  */
 import type {
   AnyTool,
@@ -26,7 +25,7 @@ import { noopWireEmitter, type WireEmitter } from './wire-emitter.js'
 import { DEFAULTS } from './settings-manager.js'
 import * as path from 'path'
 
-// ── canUseTool (CC CanUseToolFn subset) ──────────
+// ── canUseTool ─────────────────────────────────────
 
 export type CanUseToolAllow = {
   behavior: 'allow'
@@ -43,7 +42,7 @@ export type CanUseToolResult = CanUseToolAllow | CanUseToolDeny
 
 /**
  * Per-call tool gate. Prefer keeping the full tool *schema* in the request
- * (for prompt-cache stability) and denying at execute time — same as CC.
+ * (for prompt-cache stability) and denying at execute time.
  */
 export type CanUseToolFn = (
   toolName: string,
@@ -68,7 +67,7 @@ export type CacheSafeParams = {
   toolUseContext?: ToolContext
 }
 
-// Slot for post-turn forks (prompt suggestion, /btw, etc.) — same idea as CC.
+// Slot for post-turn forks (prompt suggestion, side notes, etc.).
 let lastCacheSafeParams: CacheSafeParams | null = null
 
 export function saveCacheSafeParams(params: CacheSafeParams | null): void {
@@ -422,7 +421,7 @@ export function pathsMatchExact(
 }
 
 /**
- * CC-style helper: allow only Edit on an exact absolute path.
+ * Helper: allow only Edit on an exact absolute path.
  * Use with `canUseTool` while keeping other tools in the schema for cache hits,
  * or with a single-Edit toolset for restricted forks.
  */

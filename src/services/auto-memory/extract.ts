@@ -1,5 +1,5 @@
 /**
- * Turn-end auto-memory extraction (CC extractMemories aligned).
+ * Turn-end auto-memory extraction.
  *
  * - Trigger only when last assistant has no tool_calls (caller enforces)
  * - Skip if main agent already wrote memdir since cursor

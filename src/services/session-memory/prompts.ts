@@ -1,5 +1,5 @@
 /**
- * Session-memory update prompts (Claude Code–aligned Edit-only instructions).
+ * Session-memory update prompts (Edit-only instructions).
  */
 import * as fs from 'fs'
 import * as os from 'os'
@@ -159,7 +159,7 @@ function generateSectionReminders(
 }
 
 /**
- * Build the Edit-only update prompt (CC-aligned).
+ * Build the Edit-only update prompt.
  * Conversation context is supplied via forked agent messages, not inlined here.
  */
 export function buildSessionMemoryUpdatePrompt(input: {
@@ -178,7 +178,7 @@ export function buildSessionMemoryUpdatePrompt(input: {
   return basePrompt + sectionReminders
 }
 
-/** Minimal system prompt for the session-memory fork (CC: note-taker only). */
+/** Minimal system prompt for the session-memory fork (note-taker only). */
 export const SESSION_MEMORY_FORK_SYSTEM_PROMPT = `You are a session-notes updater for a coding agent.
 
 Your ONLY job is to update the session notes markdown file using the Edit tool, then stop.

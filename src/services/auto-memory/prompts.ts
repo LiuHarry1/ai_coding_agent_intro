@@ -1,8 +1,6 @@
 /**
  * Auto-memory system + extract prompts.
- * Ported from CC `memdir/memdir.ts` (buildMemoryLines) and
- * `extractMemories/prompts.ts` (buildExtractAutoOnlyPrompt).
- * Local edits: AGENTS.md naming; tool name constants; no team/KAIROS/GB sections.
+ * Local naming uses AGENTS.md; tool names come from constants.
  */
 import {
   EDIT_FILE_TOOL_NAME,
@@ -20,12 +18,12 @@ import {
   WHEN_TO_ACCESS_SECTION,
 } from './types.js'
 
-/** CC DIR_EXISTS_GUIDANCE */
+/** Guidance when the memory directory already exists. */
 const DIR_EXISTS_GUIDANCE =
   'This directory already exists — write to it directly with the Write tool (do not run mkdir or check for its existence).'
 
 /**
- * Main-agent behavioral guide (CC buildMemoryLines, individual / skipIndex=false).
+ * Main-agent behavioral guide (individual entries / skipIndex=false).
  * MEMORY.md body is injected separately after AGENTS.md.
  */
 export function loadAutoMemoryPrompt(memoryDir: string): string {
@@ -70,7 +68,7 @@ export function loadAutoMemoryPrompt(memoryDir: string): string {
 }
 
 /**
- * Fork extract prompt (CC buildExtractAutoOnlyPrompt).
+ * Fork extract prompt (auto-memory only).
  * Tool list matches our canUseTool gate (no Bash).
  */
 export function buildExtractAutoMemoryPrompt(opts: {

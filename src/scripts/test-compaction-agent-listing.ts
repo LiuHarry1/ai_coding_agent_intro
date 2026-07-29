@@ -1,5 +1,5 @@
 /**
- * Post-compact agent_listing_delta re-announce (CC-aligned).
+ * Post-compact agent_listing_delta re-announce.
  * Run: npx tsx src/scripts/test-compaction-agent-listing.ts
  */
 import * as path from 'path'

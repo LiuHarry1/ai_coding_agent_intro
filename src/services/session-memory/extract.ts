@@ -1,5 +1,5 @@
 /**
- * Session-memory extraction via forked agent (Claude Code–aligned).
+ * Session-memory extraction via forked agent.
  *
  * Default (`cacheSafe: true`): same model/system/tools schema as the main
  * loop (`CacheSafeParams`) for prompt-cache sharing; Edit is path-locked via
@@ -7,7 +7,7 @@
  *
  * Fallback (`cacheSafe: false`): restricted Edit-only tools + `modelTier`.
  *
- * Concurrency: per-session queue (CC `sequential`) with latest-wins coalesce
+ * Concurrency: per-session sequential queue with latest-wins coalesce
  * for auto extracts — never drop the freshest snapshot on `inFlight`.
  */
 import * as fs from 'fs'
@@ -47,7 +47,7 @@ import {
 import { validateSessionMemoryStructure } from './template.js'
 import { enqueueSessionExtract } from './extractQueue.js'
 
-/** Cap fork agent turns (CC session memory typically finishes in 1–2 rounds). */
+/** Cap fork agent turns (session memory typically finishes in 1–2 rounds). */
 const SESSION_MEMORY_MAX_STEPS = 5
 
 function countToolCallsSince(
@@ -100,7 +100,7 @@ export function shouldExtractSessionMemory(
     toolCalls >= cfg.toolCallsBetweenUpdates || naturalBreak
 
   if (should) {
-    // CC updates lastMemoryMessageUuid when deciding to extract (before async).
+    // Update lastMemoryMessageUuid when deciding to extract (before async).
     const last = messages[messages.length - 1]
     const lastUuid = last ? getMessageUuid(last) : undefined
     if (lastUuid) state.lastTriggerMessageId = lastUuid
@@ -272,7 +272,7 @@ async function runSessionMemoryExtract(
  * Side-path session-memory update via forked agent.
  * Fire-and-forget from the main agent loop — do not await on the hot path.
  *
- * Serialized per session (CC sequential). Auto extracts coalesce to latest.
+ * Serialized per session. Auto extracts coalesce to latest.
  */
 export async function extractSessionMemory(
   args: ExtractSessionMemoryArgs,

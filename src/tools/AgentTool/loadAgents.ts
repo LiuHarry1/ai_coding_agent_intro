@@ -1,6 +1,6 @@
 /**
- * Read-only agent discovery — mirrors CC's getAgentDefinitionsWithOverrides
- * without mutating the tool registry.
+ * Read-only agent discovery — load disk/plugin agents and merge with
+ * built-ins without mutating the tool registry.
  */
 import type { AgentDefinitionsResult, AgentDefinition } from '../../core/types.js'
 import {

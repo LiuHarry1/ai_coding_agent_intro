@@ -333,7 +333,7 @@ export async function runAgent(
     applyPermissionModeRefresh(newMode)
   })
 
-  // CC query(): only enforce a turn cap when maxTurns is provided.
+  // Only enforce a turn cap when maxSteps/maxTurns is provided.
   const stepLimit =
     typeof maxSteps === 'number' && maxSteps > 0
       ? maxSteps
@@ -386,7 +386,7 @@ export async function runAgent(
       })
 
       if (stepResult === null) {
-        // CC finalizeAgentTool: prefer text from history if the step failed
+        // Prefer text from history if the step failed
         // after partial assistant output was already appended.
         return extractPartialResult(messages) ?? finalText
       }
@@ -433,7 +433,7 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
           wire.thinking()
           continue
         }
-        // Turn-end only: auto-memory extract (CC stopHooks). Separate from
+        // Turn-end only: auto-memory extract. Separate from
         // session-memory which may also run after intermediate steps.
         if (
           sessionId &&
@@ -465,7 +465,7 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
         }
         autoCompleteTodos(currentTodos, eventBus, wire)
         wire.done()
-        // CC: if last turn was tool_use-only, walk back for earlier text.
+        // If last turn was tool_use-only, walk back for earlier text.
         return extractPartialResult(messages) ?? finalText
       }
 
@@ -482,7 +482,7 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
       wire.thinking()
     }
 
-    // Finite maxSteps exhausted (CC would stop + salvage; we also do industry
+    // Finite maxSteps exhausted (stop + salvage; same as common agent-loop
     // pattern A: one extra toolless turn so the parent always gets a report).
     autoCompleteTodos(currentTodos, eventBus, wire)
     let text = extractPartialResult(messages) ?? finalText

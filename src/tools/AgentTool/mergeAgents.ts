@@ -96,7 +96,7 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
     allowedTools = allowedTools.filter(t => t !== AGENT_TOOL_NAME)
   }
 
-  // CC main-thread: primary stores only explicit frontmatter denies (globs ok).
+  // Primary stores only explicit frontmatter denies (globs ok).
   // Subagent path keeps auto-deny of Agent + interactive tools.
   let disallowed: string[] | undefined
   if (allowedTools === undefined) {

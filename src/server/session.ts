@@ -35,9 +35,9 @@ function sessionPath(id: string): string {
 // while a slow step (e.g. a ~30s full compaction) is still running spawns a
 // CONCURRENT turn over the same messages array: both turns compact the same
 // oversized history, checkpoints race, and the transcript accumulates one
-// compact boundary per resend. CC avoids the whole class by design (the REPL
-// is single-threaded and queues input); for an HTTP server the equivalent is
-// rejecting concurrent turns on the same session.
+// compact boundary per resend. An interactive single-threaded REPL avoids this
+// by queueing input; for an HTTP server the equivalent is rejecting concurrent
+// turns on the same session.
 
 const activeTurns = new Set<string>()
 
@@ -222,7 +222,7 @@ export function appendModeChange(sessionId: string, session: Session): void {
   })
 }
 
-/** Persist main-thread agent profile changes (CC mainThreadAgent). */
+/** Persist main-thread agent profile changes. */
 export function appendAgentChange(sessionId: string, session: Session): void {
   appendLine(sessionId, {
     type: 'agent_changed',

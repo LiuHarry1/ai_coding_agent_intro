@@ -54,7 +54,7 @@ export const DEFAULTS: AppConfig = {
   disabledTools: [],
 }
 
-/** Code defaults for extract/inject (CC throttle default = 1). */
+/** Code defaults for extract/inject (throttle default = 1). */
 const AUTO_MEMORY_RUNTIME_DEFAULTS = {
   extractEveryNTurns: 1,
   cacheSafe: true,
@@ -65,7 +65,7 @@ const AUTO_MEMORY_RUNTIME_DEFAULTS = {
 } as const
 
 /**
- * Resolve runtime AutoMemoryConfig from flat CC-style settings fields.
+ * Resolve runtime AutoMemoryConfig from flat settings fields.
  */
 export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
   return {
@@ -277,7 +277,7 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
     Object.assign(config.sessionMemory, layer.sessionMemory)
   }
 
-  // CC-style flat fields (+ legacy nested autoMemory.{enabled,directory})
+  // Flat fields (+ legacy nested autoMemory.{enabled,directory})
   if (typeof layer.autoMemoryEnabled === 'boolean') {
     config.autoMemoryEnabled = layer.autoMemoryEnabled
   }
@@ -339,7 +339,7 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
       continue
     }
     if (!settings) continue
-    // Project settings must never set autoMemoryDirectory (CC: path escape).
+    // Project settings must never set autoMemoryDirectory (path escape risk).
     let toApply = settings
     if (source.scope === 'project') {
       const next = { ...settings }

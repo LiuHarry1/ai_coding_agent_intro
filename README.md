@@ -176,7 +176,7 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 
 ```
 ├── start.js              # 统一启动入口
-├── src/                  # Agent 实现（对齐 Claude Code 的 src/ 布局）
+├── src/                  # Agent 实现（tools / core / services）
 ├── client/web/          # React 前端
 ├── electron/             # Electron 桌面壳
 ├── shared/               # 共享服务端工具

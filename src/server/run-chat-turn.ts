@@ -83,7 +83,7 @@ const noopTransport: SSETransport = {
 }
 
 /**
- * CC buildEffectiveSystemPrompt: primary profile REPLACE when in agent mode.
+ * Primary profile REPLACE when in agent mode (overrides default system prompt).
  */
 function resolveTurnSystemPrompt(
   session: Session,
@@ -109,7 +109,7 @@ export function createNoopTransport(): SSETransport {
 }
 
 /**
- * Fire-and-forget title generation on the first user turn (CC ensureTitle).
+ * Fire-and-forget title generation on the first user turn.
  * Failures keep the heuristic preview from the first message.
  */
 function maybeGenerateSessionTitle(
@@ -216,7 +216,7 @@ export async function runChatTurn(
     runAgent,
   })
 
-  // Claude Code–style: title via small model after the first real user turn.
+  // Title via small model after the first real user turn.
   maybeGenerateSessionTitle(session, message, models)
 
   prepared.toolContext.wire = wire

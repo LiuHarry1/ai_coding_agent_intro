@@ -1,7 +1,7 @@
 /**
- * CC-aligned main-thread agent profile prompt.
+ * Main-thread agent profile prompt.
  * When session.agentType is set, the profile body REPLACES the default
- * system prompt (see claude-code-rev systemPrompt.buildEffectiveSystemPrompt).
+ * system prompt for that turn.
  */
 import { isWindows, platformLabel } from '../core/platform.js'
 import { BASH_TOOL_NAME } from '../constants/tool_names.js'

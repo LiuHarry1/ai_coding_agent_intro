@@ -34,6 +34,6 @@ export const definition = createAgentDefinition({
   description: 'General-purpose research / execution',
   systemPrompt: GENERAL_PURPOSE_SYSTEM,
   disallowedTools: [...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
-  // No maxSteps — matches CC general-purpose (no maxTurns on the built-in).
+  // No maxSteps — built-in general-purpose has no turn budget.
   label: 'Agent',
 })

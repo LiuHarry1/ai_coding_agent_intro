@@ -442,7 +442,7 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
         const prevMode = session.permissionMode.mode
         session.agentType = nextType
 
-        // Selecting a specialist forces Agent permission mode (CC main thread).
+        // Selecting a specialist forces Agent permission mode on the main thread.
         if (nextType !== null && session.permissionMode.mode !== 'agent') {
           const from = session.permissionMode.mode
           handlePlanModeTransition(from, 'agent', session)

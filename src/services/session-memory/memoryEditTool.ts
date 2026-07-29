@@ -1,5 +1,5 @@
 /**
- * Edit tool locked to the session-memory summary.md path (CC createMemoryFileCanUseTool).
+ * Edit tool locked to the session-memory summary.md path.
  * Bypasses workspace sandbox so writes under `.sessions/` are allowed.
  */
 import { tool } from 'ai'
@@ -45,7 +45,7 @@ function fuzzyFind(content: string, search: string): string | null {
 
 /**
  * Create an Edit tool that only allows edits to `memoryPath` (absolute).
- * Matches CC: deny every other tool/path at the tool boundary.
+ * Deny every other tool/path at the tool boundary.
  */
 export function createMemoryFileEditTool(memoryPath: string): AnyTool {
   const allowed = path.resolve(memoryPath)

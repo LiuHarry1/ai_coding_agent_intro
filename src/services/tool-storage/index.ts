@@ -1,5 +1,5 @@
 /**
- * Persist large tool outputs to disk (CC toolResultStorage-aligned).
+ * Persist large tool outputs to disk so prompts stay small.
  *
  * Execute time: results over the threshold are written to a sidecar file and
  * REPLACED in the conversation by a short preview + file path -- the model
@@ -13,7 +13,7 @@
  *
  * The replacement is deterministic per toolCallId (persisted once, preview
  * derived from the same bytes), so repeated turns produce byte-identical
- * prompts and the provider prompt cache stays warm (CC freezes decisions per
+ * prompts and the provider prompt cache stays warm (freeze decisions per
  * tool_use_id for the same reason).
  *
  * Micro-compact time: older already-full payloads (from sessions predating
@@ -26,7 +26,7 @@ import { getToolResultFilePath } from '../../server/session.js'
 export const PERSISTED_OUTPUT_OPEN = '<persisted-output'
 export const PERSISTED_OUTPUT_CLOSE = '</persisted-output>'
 
-/** Preview kept inline when a result is offloaded (CC: PREVIEW_SIZE_BYTES). */
+/** Preview kept inline when a result is offloaded. */
 const PREVIEW_SIZE_CHARS = 2_000
 
 function parseEnvInt(name: string, fallback: number): number {
@@ -53,7 +53,7 @@ function formatBytes(chars: number): string {
 
 /**
  * Truncate at a newline boundary when one exists reasonably close to the
- * limit (CC generatePreview) so the preview doesn't cut mid-line.
+ * limit so the preview doesn't cut mid-line.
  */
 function generatePreview(content: string, maxChars: number): string {
   if (content.length <= maxChars) return content
@@ -98,7 +98,7 @@ export function persistToolResult(
 
 /**
  * Inline replacement for an oversized result: header + preview + path
- * (CC buildLargeToolResultMessage).
+ * for large offloaded tool results.
  */
 export function buildLargeResultPreview(
   filePath: string,

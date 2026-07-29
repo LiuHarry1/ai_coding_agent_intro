@@ -1,14 +1,13 @@
 /**
- * Claude Code–aligned result extraction for subagent runs.
- * Mirrors `finalizeAgentTool` / `extractPartialResult` in
- * claude-code-rev/src/tools/AgentTool/agentToolUtils.ts:
- * if the last assistant turn is pure tool_use, walk backward for text.
+ * Result extraction for subagent runs.
+ * If the last assistant turn is pure tool_use, walk backward for text
+ * so the parent still receives a useful summary.
  */
 
 import type { Message } from '../../core/types.js'
 import { isRoleMessage } from '../../core/types.js'
 
-/** Empty-output marker shown to the parent (CC AgentTool mapToolResult). */
+/** Empty-output marker shown to the parent when the subagent produced no text. */
 export const SUBAGENT_NO_OUTPUT_MARKER =
   '(Subagent completed but returned no output.)'
 
@@ -49,8 +48,8 @@ export function extractPartialResult(messages: Message[]): string | undefined {
 
 /**
  * Resolve the string returned to the parent Task tool.
- * Prefer message-history extraction (CC); fall back to loop accumulator;
- * never return empty — use the CC no-output marker.
+ * Prefer message-history extraction; fall back to loop accumulator;
+ * never return empty — use the no-output marker.
  */
 export function finalizeSubagentReturn(
   messages: Message[],

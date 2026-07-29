@@ -1,5 +1,5 @@
 /**
- * Re-announce agent/skill listings after full compaction (CC-aligned).
+ * Re-announce agent/skill listings after full compaction.
  * Compaction drops prior attachment messages; inject fresh deltas before the
  * next agent step.
  */

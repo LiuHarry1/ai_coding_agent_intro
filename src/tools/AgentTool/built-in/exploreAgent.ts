@@ -59,9 +59,9 @@ export const definition = createAgentDefinition({
   description: 'Codebase exploration',
   systemPrompt: EXPLORE_SYSTEM,
   disallowedTools: [...MUTATING_TOOLS, ...INTERACTIVE_TOOLS, AGENT_TOOL_NAME],
-  // No maxSteps — matches CC Explore (no maxTurns on the built-in).
+  // No maxSteps — built-in Explore has no turn budget.
   label: 'Explore',
   omitProjectRules: true,
-  // Claude Code: external Explore uses haiku; we map that to the small tier.
+  // Explore is a light read-only pass; map it to the small model tier.
   modelTier: 'small',
 })

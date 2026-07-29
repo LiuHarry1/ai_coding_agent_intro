@@ -7,11 +7,9 @@ import { getAppDirName } from './app-dir.js'
 /**
  * Project instructions loader.
  *
- * Naming follows the open AGENTS.md convention (agents.md), with Claude Code
- * layout for the app config dir:
+ * Naming follows the open AGENTS.md convention:
  *
- *   CC:  CLAUDE.md | .claude/CLAUDE.md | .claude/rules/
- *   Us:  AGENTS.md | {appDir}/AGENTS.md | {appDir}/rules/
+ *   AGENTS.md | {appDir}/AGENTS.md | {appDir}/rules/
  *
  * Walk cwd → git root; closer files load later (higher model priority).
  * {appDir} defaults to .ai-agent (AI_AGENT_DIR / getAppDirName()).
@@ -108,7 +106,7 @@ function collectAppDirRules(projectDir: string): RuleSource[] {
   const appDir = getAppDirName()
   const out: RuleSource[] = []
 
-  // Like CC .claude/CLAUDE.md → {appDir}/AGENTS.md
+  // App-dir AGENTS.md → {appDir}/AGENTS.md
   const nested = findRuleFile(path.join(projectDir, appDir), ENTRY_FILENAMES)
   if (nested) {
     const content = readRuleFile(nested)
@@ -121,7 +119,7 @@ function collectAppDirRules(projectDir: string): RuleSource[] {
     }
   }
 
-  // Like CC .claude/rules/
+  // Topic rules under {appDir}/rules/
   out.push(
     ...collectRulesDir(
       projectDir,

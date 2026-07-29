@@ -1,8 +1,8 @@
 /**
- * Session title generation via the small-model tier (Claude Code–aligned).
+ * Session title generation via the small-model tier.
  *
- * Mirrors CC `utils/sessionTitle.ts` + `queryHaiku`: short structured title,
- * no tools, failures return null so callers can fall back to a heuristic.
+ * Short structured title, no tools; failures return null so callers can
+ * fall back to a heuristic.
  */
 
 import { generateText } from 'ai'

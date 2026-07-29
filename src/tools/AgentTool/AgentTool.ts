@@ -243,7 +243,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             sessionId: context.sessionId,
           })
 
-          // CC mapToolResult: never hand the parent an empty tool_result —
+          // Never hand the parent an empty tool_result —
           // some models treat that as "nothing to act on" and stop.
           const text = typeof result === 'string' ? result.trim() : ''
           return text || SUBAGENT_NO_OUTPUT_MARKER

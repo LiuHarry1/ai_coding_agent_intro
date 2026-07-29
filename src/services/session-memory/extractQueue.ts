@@ -1,5 +1,5 @@
 /**
- * Per-session / per-memdir extract queue (CC sequential + latest-wins).
+ * Per-session / per-memdir extract queue (sequential + latest-wins).
  *
  * - Only one extract runs per lockKey at a time.
  * - Auto extracts: at most one pending; newer replaces older (`coalesced`).

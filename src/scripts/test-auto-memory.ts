@@ -190,7 +190,7 @@ function assistantWrite(filePath: string): Message {
   fs.rmSync(mem, { recursive: true, force: true })
 }
 
-// ── throttle (CC default every 1 turn) ────────────
+// ── throttle (default every 1 turn) ────────────────
 {
   clearAllAutoMemoryState()
   const sid = `am-${randomUUID()}`
@@ -238,7 +238,7 @@ function assistantWrite(filePath: string): Message {
   fs.rmSync(mem, { recursive: true, force: true })
 }
 
-// ── CC flat settings + project directory strip ───
+// ── flat settings + project directory strip ───────
 {
   assert(DEFAULTS.autoMemoryEnabled === true, 'default autoMemoryEnabled true')
 

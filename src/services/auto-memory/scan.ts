@@ -1,5 +1,5 @@
 /**
- * Scan topic files + truncate MEMORY.md index (CC memoryScan / memdir).
+ * Scan topic files + truncate MEMORY.md index.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -90,7 +90,7 @@ export function formatMemoryManifest(files: MemoryFileMeta[]): string {
     .join('\n')
 }
 
-/** Truncate MEMORY.md to line + byte caps (CC truncateEntrypointContent). */
+/** Truncate MEMORY.md to line + byte caps. */
 export function truncateEntrypointContent(raw: string): {
   content: string
   truncated: boolean

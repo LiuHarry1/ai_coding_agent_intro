@@ -174,7 +174,7 @@ export interface CompactContext {
   instructions?: string
   /** Request-scoped provider; falls back to default provider when absent. */
   provider?: IProvider
-  /** Re-inject agent/skill listings after full compact (CC-aligned). */
+  /** Re-inject agent/skill listings after full compact. */
   enrichment?: CompactEnrichment
   /**
    * Skip re-injecting recently-read file contents (aggressive/reactive

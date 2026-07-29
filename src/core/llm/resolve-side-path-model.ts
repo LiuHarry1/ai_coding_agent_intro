@@ -8,7 +8,7 @@ import {
 /**
  * Resolve provider + model id for a side-path fork (session-memory / auto-memory).
  *
- * - `cacheSafe: true` (CC default): reuse the main-loop provider/model so the
+ * - `cacheSafe: true` (default): reuse the main-loop provider/model so the
  *   fork can share prompt cache via CacheSafeParams.
  * - `cacheSafe: false`: use `modelTier` (default medium). Provider and model
  *   are always taken from the same tier — tiers may use different baseURLs.

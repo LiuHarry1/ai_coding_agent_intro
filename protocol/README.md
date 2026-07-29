@@ -8,12 +8,12 @@ agent engine and a GUI. It is shared by:
 - every **transport** adapter (SSE, stdio NDJSON, ACP) — they only serialize,
 - every **GUI** (web, CLI, desktop, third-party).
 
-The shape is deliberately modeled on Claude Code's SDK protocol so that an
-ACP adapter is a thin translation rather than a rewrite.
+The shape is a stable, typed wire protocol so an ACP adapter stays a
+thin translation rather than a rewrite.
 
 ## Design
 
-| Concept | This package | Claude Code equivalent |
+| Concept | This package | Notes |
 |---|---|---|
 | Version pinned on handshake | `PROTOCOL_VERSION` + `system/init` | `system/init` |
 | Correlation envelope | `session_id` + `uuid` on every message | same |
@@ -33,7 +33,7 @@ ACP adapter is a thin translation rather than a rewrite.
 ## Native emission
 
 The engine in `src` emits typed `ServerMessage`s at the
-boundary via `WireEmitter` (CC: `QueryEngine` yielding `SDKMessage`).
+boundary via `WireEmitter` (streaming typed wire events).
 Transports (SSE, stdio NDJSON) only serialize — no legacy adapter layer.
 
 ### Stdio CLI

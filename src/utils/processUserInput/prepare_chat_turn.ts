@@ -138,7 +138,7 @@ export interface PreparedChatTurn {
   subagentNames: Set<string>
   concurrencyPolicy: ReturnType<typeof buildConcurrencyPolicy>
   permissionMode: Session['permissionMode']['mode']
-  /** Resolved primary profile for this turn (CC mainThreadAgent), if any. */
+  /** Resolved primary profile for this turn, if any. */
   mainThreadProfile: AgentDefinition | null
   planFilePath: string
   modeChanged?: boolean
@@ -263,7 +263,7 @@ export async function prepareChatTurn(
     session.discoveredTools,
   )
 
-  // CC resolveAgentTools(isMainThread): apply profile disallowedTools (globs)
+  // Apply primary-profile disallowedTools (globs ok) on the main thread
   // on the main thread only — skip subagent auto-deny lists.
   const mainThreadProfile =
     session.permissionMode.mode === 'agent'

@@ -59,9 +59,9 @@ const CLEARABLE_TOOL_INPUTS = new Set<string>([
  * Any tool result at least this large is clearable regardless of tool name.
  * MCP tools (doc retrievers, memory search, ...) return some of the biggest
  * payloads yet were invisible to the name-based whitelist — observed as
- * `micro-compact DONE cleared=0` on a 167k-token conversation. CC solves the
- * same problem with a size-based aggregate budget (enforceToolResultBudget)
- * rather than tool names.
+ * `micro-compact DONE cleared=0` on a 167k-token conversation. Prefer a
+ * size-based aggregate budget (enforceToolResultBudget) rather than relying
+ * only on tool names.
  */
 const CLEARABLE_MIN_CHARS = 2_000
 

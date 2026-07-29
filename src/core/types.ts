@@ -206,7 +206,7 @@ export interface AssistantMessage {
    */
   timestamp?: number
   /**
-   * Real API usage from the response that produced this message (CC-aligned:
+   * Real API usage from the response that produced this message (
    * usage lives ON the message so it persists to JSONL and survives session
    * restore �?the previous WeakMap-only storage lost the accurate baseline on
    * every server restart, forcing threshold checks onto chars/4 estimation
@@ -276,7 +276,7 @@ export interface AgentOptions {
   messages?: Message[]
   images?: string[]
   /**
-   * Optional step budget (CC `maxTurns`). When omitted, the loop runs until
+   * Optional step budget (`maxSteps` / maxTurns). When omitted, the loop runs until
    * the model stops calling tools (or errors) �?no artificial cap.
    */
   maxSteps?: number
@@ -418,7 +418,7 @@ export interface Session {
   permissionMode: PermissionModeContext
   /**
    * Main-thread agent profile (`mode: primary` agentType), or null for the
-   * default agent prompt. Independent of `permissionMode` (CC mainThreadAgent).
+   * default agent prompt. Independent of `permissionMode`.
    */
   agentType: string | null
   /** Set when exiting plan �?triggers reentry attachment on next plan entry. */
@@ -499,14 +499,14 @@ export interface AgentDefinition {
    */
   mode?: AgentMode
   /**
-   * Optional step budget (CC `maxTurns`). Built-ins omit this; custom agents
+   * Optional step budget. Built-ins omit this; custom agents
    * may set it via frontmatter `maxSteps:`.
    */
   maxSteps?: number
   /** Optional model id override on the resolved tier's provider. */
   model?: string
   /**
-   * Which configured tier to run on (Claude Code-style static routing).
+   * Which configured tier to run on (static routing by call site).
    * Default when unset: `large`. Explore uses `small`.
    */
   modelTier?: ModelTier
@@ -599,7 +599,7 @@ export interface CompactionConfig {
   timeBasedMicroGapMinutes?: number
 }
 
-/** Background session notes used to accelerate compaction (CC-aligned). */
+/** Background session notes used to accelerate compaction. */
 export interface SessionMemoryConfig {
   /** Master switch. Also requires compaction.enabled for auto extract. */
   enabled: boolean
@@ -607,7 +607,7 @@ export interface SessionMemoryConfig {
   minimumTokensBetweenUpdate: number
   toolCallsBetweenUpdates: number
   /**
-   * When true (CC default), extract reuses the main-loop model + system +
+   * When true (default), extract reuses the main-loop model + system +
    * full tools schema (`CacheSafeParams`) so the fork can hit prompt cache.
    * `canUseTool` still allows only Edit on summary.md.
    * When false, uses a restricted Edit-only fork on `modelTier`.
@@ -625,16 +625,16 @@ export interface SessionMemoryConfig {
 
 /**
  * Runtime auto-memory config (derived from flat AppConfig fields + code defaults).
- * Settings surface matches CC: `autoMemoryEnabled` / `autoMemoryDirectory`.
+ * Settings surface: `autoMemoryEnabled` / `autoMemoryDirectory`.
  */
 export interface AutoMemoryConfig {
   enabled: boolean
   /** Trusted directory; from env / user / local only. */
   directory?: string
-  /** Eligible turn-end extracts; default 1 (CC tengu_bramble_lintel). */
+  /** Eligible turn-end extracts; default 1. */
   extractEveryNTurns: number
   /**
-   * When true (CC default), reuse main-loop model via CacheSafeParams.
+   * When true (default), reuse main-loop model via CacheSafeParams.
    * When false, use `modelTier` (default medium) with a matching provider.
    */
   cacheSafe: boolean
@@ -653,12 +653,12 @@ export interface AppConfig {
   compaction: CompactionConfig
   sessionMemory: SessionMemoryConfig
   /**
-   * Enable auto-memory (CC `autoMemoryEnabled`). Default true.
+   * Enable auto-memory (`autoMemoryEnabled`). Default true.
    * Env `AI_AGENT_DISABLE_AUTO_MEMORY=1` still forces off.
    */
   autoMemoryEnabled: boolean
   /**
-   * Custom auto-memory directory (CC `autoMemoryDirectory`).
+   * Custom auto-memory directory (`autoMemoryDirectory`).
    * Trusted scopes only: user / local / env �?never project settings.
    */
   autoMemoryDirectory?: string

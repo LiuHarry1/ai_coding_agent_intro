@@ -1,6 +1,6 @@
 # Agent (`src/`)
 
-Coding agent 核心实现，布局对齐 [Claude Code](https://github.com/anthropics/claude-code) 的 `src/`：`tools/*Tool/` 包、根级 `tools.ts` 注册表、以及 `core/` / `services/` / `commands/` / `skills/`。
+Coding agent 核心实现：`tools/*Tool/` 包、根级 `tools.ts` 注册表、以及 `core/` / `services/` / `commands/` / `skills/`。
 
 由仓库根目录 [`start.js`](../start.js) 加载（`npm start` / `--stdio` / `--acp`）。
 
@@ -23,7 +23,7 @@ src/
 
 ## 工具约定
 
-每个工具一个文件夹（与 CC 一致）：
+每个工具一个文件夹：
 
 ```text
 tools/FooTool/

@@ -23,7 +23,7 @@ function buildTierProvider(profile: LlmProfile): IProvider {
 }
 
 /**
- * Three-tier model ladder (Claude Code–aligned):
+ * Three-tier model ladder:
  * - large  ≈ Opus / mainLoopModel
  * - medium ≈ Sonnet
  * - small  ≈ Haiku / SMALL_FAST
