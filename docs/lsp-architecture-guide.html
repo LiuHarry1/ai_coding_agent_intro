@@ -398,7 +398,7 @@
   <header class="hero">
     <h1>LSP 架构与用法</h1>
     <p>
-      这份文档总结当前 coding agent 中新增的 LSP 能力：它为什么存在、怎么接入 agent、怎么配置、怎么在真实写代码时发挥作用，以及如何测试。
+      这份文档对齐当前 coding agent 的 LSP 实现：stdio 语言服务器栈、deferred <code>LSP</code> 工具、写后 diagnostics 附件反馈，以及通过 <code>stpl-lsp-bridge</code> 接入 STPL Language Server。
     </p>
     <nav class="nav">
       <a href="#purpose">目的</a>
@@ -407,6 +407,7 @@
       <a href="#timing">同步/异步</a>
       <a href="#flow">调用流程</a>
       <a href="#config">配置</a>
+      <a href="#stpl">STPL Bridge</a>
       <a href="#usage">用法</a>
       <a href="#diagnostics">诊断反馈</a>
       <a href="#test">测试</a>
@@ -418,18 +419,19 @@
       <h2>1. LSP 的目的</h2>
       <div class="card">
         <p>
-          LSP 不是让网页编辑器获得鼠标悬停弹窗，而是给 coding agent 增加一组“语义代码理解工具”。以前 agent 主要靠 <code>Grep</code>、<code>Glob</code>、<code>Read</code> 搜文本和读文件；现在它可以通过语言服务器询问更精确的问题。
+          LSP 不是给网页编辑器做鼠标悬停弹窗，而是给 coding agent 增加一组“语义代码理解工具”。以前 agent 主要靠 <code>Grep</code>、<code>Glob</code>、<code>Read</code> 搜文本和读文件；现在它可以通过语言服务器询问更精确的问题。
         </p>
         <div>
-          <span class="pill blue">hover 类型信息</span>
-          <span class="pill purple">go to definition</span>
-          <span class="pill green">find references</span>
-          <span class="pill amber">document/workspace symbols</span>
-          <span class="pill red">diagnostics feedback</span>
+          <span class="pill blue">hover</span>
+          <span class="pill purple">go_to_definition</span>
+          <span class="pill green">find_references</span>
+          <span class="pill amber">document / workspace symbols</span>
+          <span class="pill blue">go_to_implementation</span>
+          <span class="pill red">diagnostics attachment</span>
         </div>
         <div class="callout ok">
           <strong>真实价值：</strong>
-          当 agent 要改接口、重构函数、追踪类型、修类型错误时，LSP 可以减少“猜”和纯文本搜索带来的误判。
+          当 agent 要改接口、重构函数、追踪类型、修类型错误，或处理 STPL <code>.spec</code> / <code>.flow</code> 等 DSL 时，LSP 可以减少纯文本搜索带来的误判。
         </div>
       </div>
     </section>
@@ -439,7 +441,7 @@
       <div class="flow">
         <div class="step">
           <strong>settings.json</strong>
-          <p>用户在 <code>.ai-agent/settings.json</code> 中配置 <code>lspServers</code>。</p>
+          <p>在 <code>.ai-agent/settings.json</code> 配置 <code>lspServers</code>（含 TS / Python / Java / STPL 等）。</p>
         </div>
         <div class="step">
           <strong>LSP Tool</strong>
@@ -447,11 +449,11 @@
         </div>
         <div class="step">
           <strong>Workspace Manager</strong>
-          <p>按 workspace 和配置 hash 缓存 manager，并按文件扩展路由到 server。</p>
+          <p>按 workspace + config hash 缓存 manager，按扩展名路由 server；相对脚本路径相对 agent 包根解析。</p>
         </div>
         <div class="step">
           <strong>Language Server</strong>
-          <p>通过 stdio JSON-RPC 与真实语言服务器通信。</p>
+          <p>stdio JSON-RPC。普通 LS 直接 spawn；STPL 经 bridge 再连 SWC JVM。</p>
         </div>
       </div>
 
@@ -459,21 +461,26 @@
         <div class="card">
           <h3>核心文件</h3>
           <ul>
-            <li><code>src/services/lsp/client.ts</code>: stdio JSON-RPC 客户端。</li>
-            <li><code>src/services/lsp/server-instance.ts</code>: 单个 language server 生命周期。</li>
-            <li><code>src/services/lsp/server-manager.ts</code>: 扩展名路由、文件同步、诊断注册。</li>
-            <li><code>src/services/lsp/manager.ts</code>: workspace-scoped manager 缓存和 shutdown。</li>
-            <li><code>src/tools/LSPTool/LSPTool.ts</code>: agent 可调用的 <code>LSP</code> 工具。</li>
+            <li><code>src/services/lsp/client.ts</code>：stdio JSON-RPC 客户端。</li>
+            <li><code>src/services/lsp/server-instance.ts</code>：单个 language server 生命周期、initialize、restart。</li>
+            <li><code>src/services/lsp/server-manager.ts</code>：扩展名路由、文件同步、<code>resolveAgentRelativePath</code>。</li>
+            <li><code>src/services/lsp/manager.ts</code>：workspace-scoped manager 缓存与 shutdown。</li>
+            <li><code>src/services/lsp/passiveFeedback.ts</code>：注册 <code>publishDiagnostics</code> 通知处理。</li>
+            <li><code>src/services/lsp/LSPDiagnosticRegistry.ts</code>：pending / delivered 诊断去重与限流。</li>
+            <li><code>src/tools/LSPTool/LSPTool.ts</code>：agent 可调用的 <code>LSP</code> 工具。</li>
+            <li><code>integrations/stpl-lsp-bridge/</code>：STPL 的 stdio ↔ TCP reverse-connect bridge。</li>
           </ul>
         </div>
         <div class="card">
           <h3>接入点</h3>
           <ul>
-            <li><code>core/settings-manager.ts</code>: 读取并合并 <code>lspServers</code>。</li>
-            <li><code>prepare_chat_turn.ts</code>: 将 LSP 配置传给工具上下文。</li>
-            <li><code>tools/FileWriteTool/FileWriteTool.ts</code> 和 <code>tools/FileEditTool/FileEditTool.ts</code>: 写入后同步 <code>didChange</code>/<code>didSave</code>。</li>
-            <li><code>core/agent.ts</code>: 每个 step 前注入新的 LSP diagnostics。</li>
-            <li><code>server/index.ts</code>: 进程退出时关闭 LSP 子进程。</li>
+            <li><code>core/settings-manager.ts</code>：读取并合并 <code>lspServers</code>。</li>
+            <li><code>utils/processUserInput/prepare_chat_turn.ts</code>：把配置写入 <code>ToolContext.lspServers</code>。</li>
+            <li><code>tools/FileWriteTool/FileWriteTool.ts</code> / <code>FileEditTool.ts</code>：写入后 fire-and-forget <code>didChange</code> / <code>didSave</code>。</li>
+            <li><code>utils/attachments.ts</code>：每步收集 diagnostics attachment。</li>
+            <li><code>utils/messages.ts</code>：attachment 展开为 <code>&lt;new-diagnostics&gt;</code> system-reminder。</li>
+            <li><code>core/agent.ts</code>：step 前后调用 <code>getAttachmentMessages</code>。</li>
+            <li><code>server/index.ts</code>：进程退出时 <code>shutdownAllLspManagers()</code>。</li>
           </ul>
         </div>
       </div>
@@ -517,13 +524,13 @@ flowchart TD
 
   subgraph Service["LSP Service"]
     Manager["获取 workspace manager<br/><b>services/lsp/manager.ts</b>"]
-    Route["按扩展名路由<br/><b>services/lsp/server-manager.ts</b><br/>.ts → typescript"]
+    Route["按扩展名路由<br/><b>services/lsp/server-manager.ts</b>"]
     Ensure["确保 server 已启动<br/><b>services/lsp/server-instance.ts</b>"]
     Client["JSON-RPC stdio client<br/><b>services/lsp/client.ts</b>"]
   end
 
-  Server["typescript-language-server<br/>--stdio"]
-  Response["返回 hover / definition / references"]
+  Server["language server<br/>TS / Pyright / bridge→STPL"]
+  Response["返回 hover / definition / references / symbols"]
   Format["格式化为纯文本<br/><b>tools/LSPTool/LSPTool.ts</b>"]
   ToolResult["写回 tool-result message<br/><b>services/tools/tool_execution.ts</b>"]
   Continue["模型读取结果继续推理或写代码<br/><b>core/agent.ts</b>"]
@@ -541,18 +548,18 @@ flowchart TD
         </div>
         <pre class="mermaid">
 flowchart TD
-  Edit["agent 写代码<br/><b>tools/FileWriteTool/FileWriteTool.ts</b><br/><b>tools/FileEditTool/FileEditTool.ts</b>"]
-  Clear["清除旧诊断去重<br/><b>services/lsp/diagnostics.ts</b>"]
-  Change["发送 didChange<br/><b>services/lsp/server-manager.ts</b>"]
-  Save["发送 didSave<br/><b>services/lsp/server-manager.ts</b>"]
-  LangServer["language server 分析文件<br/><b>typescript-language-server</b>"]
-  Publish["publishDiagnostics notification<br/><b>services/lsp/client.ts</b>"]
-  Registry["注册 pending diagnostics<br/><b>services/lsp/diagnostics.ts</b>"]
-  Drain["下一步前 drain<br/><b>utils/attachments/lsp-diagnostics.ts</b>"]
-  Reminder["注入 system-reminder<br/><b>core/agent.ts</b>"]
-  Fix["模型看到错误并继续修复"]
+  Edit["agent 写代码<br/><b>tools/FileWriteTool</b><br/><b>tools/FileEditTool</b>"]
+  Clear["clearDeliveredDiagnosticsForFile<br/><b>LSPDiagnosticRegistry.ts</b>"]
+  Change["发送 didChange<br/><b>server-manager.ts</b>"]
+  Save["发送 didSave<br/><b>server-manager.ts</b>"]
+  LangServer["language server 分析文件"]
+  Publish["publishDiagnostics<br/><b>passiveFeedback.ts</b>"]
+  Registry["registerPendingLSPDiagnostic<br/><b>LSPDiagnosticRegistry.ts</b>"]
+  Attach["getAttachmentMessages<br/><b>utils/attachments.ts</b>"]
+  Expand["expandAttachmentMessagesForAPI<br/><b>utils/messages.ts</b>"]
+  Fix["模型看到 new-diagnostics 并继续修复"]
 
-  Edit --> Clear --> Change --> Save --> LangServer --> Publish --> Registry --> Drain --> Reminder --> Fix
+  Edit --> Clear --> Change --> Save --> LangServer --> Publish --> Registry --> Attach --> Expand --> Fix
         </pre>
       </div>
 
@@ -564,17 +571,37 @@ flowchart TD
         <pre class="mermaid">
 flowchart TD
   subgraph syncFlow ["同步等待: LSP 查询"]
-    S1["LSP tool call<br/><b>tools/LSPTool/LSPTool.ts</b>"] --> S2["await manager.sendRequest<br/><b>services/lsp/server-manager.ts</b>"]
-    S2 --> S3["await JSON-RPC response<br/><b>services/lsp/client.ts</b>"]
+    S1["LSP tool call<br/><b>LSPTool.ts</b>"] --> S2["await manager.sendRequest<br/><b>server-manager.ts</b>"]
+    S2 --> S3["await JSON-RPC response<br/><b>client.ts</b>"]
     S3 --> S4["返回 tool result<br/><b>core/agent.ts</b>"]
   end
 
   subgraph asyncFlow ["异步反馈: diagnostics"]
-    A1["Write/Edit 返回<br/><b>tools/FileWriteTool/FileWriteTool.ts / edit_file.ts</b>"] --> A2["fire-and-forget didChange didSave<br/><b>services/lsp/server-manager.ts</b>"]
-    A2 --> A3["later publishDiagnostics<br/>language server"]
-    A3 --> A4["registry 暂存<br/><b>services/lsp/diagnostics.ts</b>"]
-    A4 --> A5["next step 注入上下文<br/><b>core/agent.ts</b>"]
+    A1["Write/Edit 返回<br/><b>FileWriteTool / FileEditTool</b>"] --> A2["fire-and-forget didChange didSave<br/><b>server-manager.ts</b>"]
+    A2 --> A3["later publishDiagnostics"]
+    A3 --> A4["registry 暂存<br/><b>LSPDiagnosticRegistry.ts</b>"]
+    A4 --> A5["next step → diagnostics attachment<br/><b>attachments.ts → messages.ts</b>"]
   end
+        </pre>
+      </div>
+
+      <div class="mermaid-wrap">
+        <div class="diagram-title">
+          <span class="pill red">Flowchart 5</span>
+          STPL：stdio bridge → SWC JVM
+        </div>
+        <pre class="mermaid">
+flowchart TD
+  Cfg["settings lspServers.stpl<br/>node integrations/stpl-lsp-bridge/index.js"]
+  Spawn["server-instance spawn stdio<br/><b>resolveAgentRelativePath</b>"]
+  Bridge["stpl-lsp-bridge<br/>listen 127.0.0.1:port"]
+  Discover["resolveSwcTarget / JMX serverInfo<br/><b>lib/discover.js lib/jmx.js</b>"]
+  Start["JMX start(port)"]
+  Accept["accept reverse TCP"]
+  Pipe["pipeStdioToSocket<br/>stdio ↔ socket"]
+  Swc["SWC JVM 内 STPL LS"]
+
+  Cfg --> Spawn --> Bridge --> Discover --> Start --> Accept --> Pipe --> Swc
         </pre>
       </div>
 
@@ -584,7 +611,7 @@ flowchart TD
           从启动到 LSP 能力可用，哪些文件参与
         </div>
         <p>
-          这张图按源码文件串起 LSP 的加载路径。注意：这里加载的是配置和工具能力，不是立即启动 language server。
+          启动阶段只加载配置和工具能力，不会立即启动 language server。STPL 也一样：第一次对 <code>.spec</code> 等扩展查询或同步时，才 spawn bridge。
         </p>
         <div class="sequence">
           <div class="node arrow">
@@ -656,7 +683,7 @@ flowchart TD
           </div>
           <div class="node">
             <strong>6. Lazy Start</strong>
-            <p>第一次对 <code>.ts</code> 文件查询时才启动 TypeScript server。</p>
+            <p>第一次对匹配扩展名查询时才 spawn 对应 server（或 STPL bridge）。</p>
             <span class="file-ref">tools/LSPTool/LSPTool.ts<br>services/lsp/manager.ts</span>
           </div>
         </div>
@@ -669,7 +696,7 @@ flowchart TD
         </div>
         <div class="callout ok">
           <strong>这是同步等待流程：</strong>
-          agent 调用 <code>LSP</code> tool 后，tool 会一路 <code>await manager.sendRequest(...)</code>，直到 language server 返回 hover / definition / references 结果，才把 tool result 交还给模型。
+          agent 调用 <code>LSP</code> tool 后，tool 会一路 <code>await manager.sendRequest(...)</code>，直到 language server 返回结果，才把 tool result 交还给模型。
         </div>
         <div class="lane">
           <div class="lane-label">Agent / Model</div>
@@ -685,7 +712,7 @@ flowchart TD
           </div>
           <div class="node arrow">
             <strong>LSP Tool Call</strong>
-            <p><code>operation: hover</code><br><code>file_path</code> + 位置。</p>
+            <p><code>operation: hover</code><br><code>file_path</code> + 1-based 位置。</p>
             <span class="file-ref">tools/LSPTool/LSPTool.ts</span>
           </div>
           <div class="node empty"></div>
@@ -702,7 +729,7 @@ flowchart TD
           </div>
           <div class="node arrow">
             <strong>Route By Extension</strong>
-            <p><code>.ts</code> → <code>typescript</code> server。</p>
+            <p><code>.ts</code> → typescript；<code>.spec</code> → stpl。</p>
             <span class="file-ref">services/lsp/server-manager.ts</span>
           </div>
           <div class="node arrow">
@@ -718,13 +745,13 @@ flowchart TD
           <div class="node empty"></div>
           <div class="node arrow">
             <strong>didOpen</strong>
-            <p>把当前文件内容同步给 server。</p>
+            <p>把当前文件内容同步给 server（≤10MB）。</p>
             <span class="file-ref">services/lsp/server-manager.ts</span>
           </div>
           <div class="node">
             <strong>textDocument/hover</strong>
             <p>通过 JSON-RPC stdio 返回 hover 内容。</p>
-            <span class="file-ref">services/lsp/client.ts<br>typescript-language-server</span>
+            <span class="file-ref">services/lsp/client.ts<br>language server / bridge</span>
           </div>
         </div>
         <div class="callout">
@@ -738,21 +765,21 @@ flowchart TD
           LSP server 怎么把 diagnostics 反馈回来
         </div>
         <p>
-          diagnostics 不是模型主动问出来的，而是 language server 在文件变更后通过 notification 主动推送回来。
+          diagnostics 不是模型主动问出来的，而是 language server 在文件变更后通过 notification 主动推送，再经 attachment 管道注入下一步上下文。
         </p>
         <div class="callout warn">
           <strong>这是异步反馈流程：</strong>
-          <code>Write</code> / <code>Edit</code> 不会等待 diagnostics 返回。写工具只 best-effort 发送 <code>didChange</code> 和 <code>didSave</code>，之后 language server 什么时候发 <code>publishDiagnostics</code>，就由注册表暂存，并在下一次 agent step 前注入上下文。
+          <code>Write</code> / <code>Edit</code> 不会等待 diagnostics。写工具只 best-effort 发送 <code>didChange</code> 和 <code>didSave</code>；之后 <code>publishDiagnostics</code> 进入 registry，并在下一次 agent step 通过 <code>getAttachmentMessages</code> 注入。
         </div>
         <div class="sequence">
           <div class="node arrow">
             <strong>1. Write / Edit</strong>
-            <p>agent 成功写入或编辑 <code>.ts</code> 文件。</p>
-            <span class="file-ref">tools/FileWriteTool/FileWriteTool.ts<br>tools/FileEditTool/FileEditTool.ts</span>
+            <p>agent 成功写入匹配扩展名的文件。</p>
+            <span class="file-ref">FileWriteTool.ts<br>FileEditTool.ts</span>
           </div>
           <div class="node arrow">
             <strong>2. didChange</strong>
-            <p><code>write_file.ts</code> / <code>edit_file.ts</code> 同步新内容。</p>
+            <p>同步新内容到已打开文档。</p>
             <span class="file-ref">services/lsp/server-manager.ts</span>
           </div>
           <div class="node arrow">
@@ -762,27 +789,28 @@ flowchart TD
           </div>
           <div class="node arrow">
             <strong>4. publishDiagnostics</strong>
-            <p>server 主动返回类型错误、警告等。</p>
-            <span class="file-ref">services/lsp/client.ts<br>language server</span>
+            <p><code>passiveFeedback</code> 收到通知并格式化。</p>
+            <span class="file-ref">passiveFeedback.ts</span>
           </div>
           <div class="node arrow">
             <strong>5. Registry</strong>
-            <p><code>diagnostics.ts</code> 去重、排序、限流。</p>
-            <span class="file-ref">services/lsp/diagnostics.ts</span>
+            <p>去重、排序、每文件最多 10 条、总计 30 条。</p>
+            <span class="file-ref">LSPDiagnosticRegistry.ts</span>
           </div>
           <div class="node">
             <strong>6. Next Step</strong>
-            <p><code>agent.ts</code> 在下一步前注入 system-reminder。</p>
-            <span class="file-ref">utils/attachments/lsp-diagnostics.ts<br>core/agent.ts</span>
+            <p>attachment → <code>&lt;new-diagnostics&gt;</code> system-reminder。</p>
+            <span class="file-ref">attachments.ts<br>messages.ts<br>agent.ts</span>
           </div>
         </div>
         <pre><code>Write/Edit result
+  → clearDeliveredDiagnosticsForFile(workspaceKey, abs)
   → manager.changeFile(abs, newContent)
   → manager.saveFile(abs)
   → textDocument/publishDiagnostics
-  → drainPendingLspDiagnostics(workspaceKey)
-  → messages.push(system-reminder)
-  → agent reads diagnostics and fixes code</code></pre>
+  → registerPendingLSPDiagnostic(...)
+  → getAttachmentMessages → type: "diagnostics"
+  → expandAttachmentMessagesForAPI → &lt;new-diagnostics&gt;...</code></pre>
       </div>
 
       <div class="diagram">
@@ -797,7 +825,7 @@ flowchart TD
           <div class="node arrow">
             <strong>Language Server Response</strong>
             <p>返回 LSP JSON-RPC response。</p>
-            <span class="file-ref">typescript-language-server</span>
+            <span class="file-ref">language server / bridge</span>
           </div>
           <div class="node arrow">
             <strong>LspClient</strong>
@@ -806,7 +834,7 @@ flowchart TD
           </div>
           <div class="node arrow">
             <strong>LspServerInstance</strong>
-            <p>处理 transient retry、错误包装。</p>
+            <p>处理 transient retry、错误包装、maxRestarts。</p>
             <span class="file-ref">services/lsp/server-instance.ts</span>
           </div>
           <div class="node arrow">
@@ -834,7 +862,7 @@ flowchart TD
         <div class="card">
           <h3><span class="pill purple">同步 await</span> LSP 查询</h3>
           <p>
-            <code>hover</code>、<code>go_to_definition</code>、<code>find_references</code> 等 request 型操作都是同步等待结果的。这里的“同步”不是阻塞整个 Node 进程，而是当前 tool call 会 await promise，模型要等 tool result 回来后才能继续下一步。
+            <code>hover</code>、<code>go_to_definition</code>、<code>find_references</code>、<code>document_symbol</code>、<code>workspace_symbol</code>、<code>go_to_implementation</code> 都是同步等待结果。这里的“同步”不是阻塞整个 Node 进程，而是当前 tool call 会 await promise，模型要等 tool result 回来后才能继续下一步。
           </p>
           <pre><code>agent calls LSP tool
 → await manager.sendRequest(...)
@@ -847,28 +875,28 @@ flowchart TD
         <div class="card">
           <h3><span class="pill green">异步 notification</span> 诊断反馈</h3>
           <p>
-            <code>didChange</code>、<code>didSave</code> 和 <code>publishDiagnostics</code> 是 notification/反馈链路。写文件工具不会等 TypeScript server 完成诊断；诊断稍后到达后会进入 registry。
+            <code>didChange</code>、<code>didSave</code> 和 <code>publishDiagnostics</code> 是 notification/反馈链路。写文件工具不会等 language server 完成诊断；诊断稍后到达后会进入 registry，再在下一步变成 diagnostics attachment。
           </p>
           <pre><code>Write/Edit returns to model
 → language server later publishes diagnostics
-→ diagnostics registry stores them
-→ next agent step drains registry
-→ system-reminder is injected</code></pre>
+→ LSPDiagnosticRegistry stores them
+→ next agent step drains via attachments.ts
+→ messages.ts expands to system-reminder</code></pre>
         </div>
       </div>
 
       <div class="card">
         <h3><span class="pill blue">懒启动</span> 第一次请求会更慢</h3>
         <p>
-          server 不在 <code>npm start</code> 时启动。第一次查询某个扩展名，或者第一次编辑需要同步到某个 language server 时，才会执行 <code>ensureServerStarted()</code>。所以第一次 <code>hover</code> 可能包含启动、initialize、indexing 的开销；后续复用同一个 workspace manager，会快很多。
+          server 不在 <code>npm start</code> 时启动。第一次查询某个扩展名，或者第一次编辑需要同步到某个 language server 时，才会执行 <code>ensureServerStarted()</code>。STPL 首次启动还会包含 JMX discover / start / reverse-connect，通常比本地 TypeScript server 更慢。
         </p>
-        <pre><code>first .ts LSP request
+        <pre><code>first matching-extension LSP request
 → no server running
-→ spawn npx typescript-language-server --stdio
+→ spawn command/args (maybe bridge)
 → initialize workspace
 → send actual LSP request
 
-later .ts LSP request
+later same-extension request
 → reuse existing server
 → send request directly</code></pre>
       </div>
@@ -880,11 +908,11 @@ later .ts LSP request
         <ol>
           <li>用户让 agent 查询某个文件某个位置的类型或文档。</li>
           <li>如果 <code>LSP</code> 是 deferred tool，模型先用 <code>ToolSearch</code> 加载它。</li>
-          <li><code>LSP</code> 工具读取 <code>file_path</code>、<code>line</code>、<code>character</code>。</li>
+          <li><code>LSP</code> 工具读取 <code>file_path</code>、<code>line</code>、<code>character</code>（1-based）。</li>
           <li><code>getLspManager(cwd, lspServers)</code> 获取当前 workspace 的 manager。</li>
-          <li>manager 按扩展名，比如 <code>.ts</code>，选择 TypeScript server。</li>
-          <li>如果 server 还没启动，<code>server-instance</code> 会懒启动 language server 并发送 <code>initialize</code>。</li>
-          <li>工具先发送 <code>textDocument/didOpen</code>，再发送 <code>textDocument/hover</code>。</li>
+          <li>manager 按扩展名选择 server（例如 <code>.ts</code> → typescript，<code>.spec</code> → stpl）。</li>
+          <li>如果 server 还没启动，<code>server-instance</code> 会懒启动并发送 <code>initialize</code>。</li>
+          <li>若文件未打开且不超过 10MB，工具先 <code>didOpen</code>，再发送 <code>textDocument/hover</code>。</li>
           <li>返回结果被格式化成纯文本，作为 tool result 给模型继续推理。</li>
         </ol>
       </div>
@@ -895,7 +923,7 @@ later .ts LSP request
   → LspServerManager
   → LspServerInstance
   → LspClient
-  → typescript-language-server --stdio
+  → language server (or stpl-lsp-bridge → SWC)
   → hover result</code></pre>
     </section>
 
@@ -903,7 +931,7 @@ later .ts LSP request
       <h2>6. 配置方式</h2>
       <div class="card">
         <p>
-          LSP server 配置放在项目的 <code>.ai-agent/settings.json</code> 中。当前项目已经配置了 TypeScript LSP：
+          LSP server 配置放在 <code>.ai-agent/settings.json</code>。完整示例见 <code>.ai-agent/settings.example.json</code>，可同时配置多种语言：
         </p>
         <pre><code>{
   "lspServers": {
@@ -915,6 +943,36 @@ later .ts LSP request
         ".tsx": "typescriptreact"
       },
       "startupTimeout": 30000
+    },
+    "python": {
+      "command": "npx",
+      "args": ["--yes", "pyright-langserver", "--stdio"],
+      "extensionToLanguage": {
+        ".py": "python",
+        ".pyi": "python"
+      },
+      "startupTimeout": 30000
+    },
+    "stpl": {
+      "command": "node",
+      "args": ["integrations/stpl-lsp-bridge/index.js"],
+      "env": {
+        "STPL_START_MODE": "jmx",
+        "STPL_AUTO_DISCOVER": "true",
+        "STPL_STATUS_FILE": ".ai-agent/stpl-status.json",
+        "STPL_JMX_HELPER": "integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java",
+        "STPL_CONNECT_TIMEOUT_MS": "60000"
+      },
+      "extensionToLanguage": {
+        ".spec": "stpl",
+        ".flow": "stpl",
+        ".dbd": "stpl",
+        ".prog": "stpl",
+        ".seq": "stpl",
+        ".pat": "stpl"
+      },
+      "startupTimeout": 120000,
+      "maxRestarts": 1
     }
   }
 }</code></pre>
@@ -928,31 +986,78 @@ later .ts LSP request
           <tbody>
             <tr>
               <td><code>command</code></td>
-              <td>启动 language server 的命令。Windows 下当前实现使用 shell spawn，因此 <code>npx</code> 可用。</td>
+              <td>启动 language server 的命令。绝对路径 / PATH 上的 bare command（如 <code>npx</code>、<code>jdtls</code>）保持原样；相对路径按 <strong>agent 包根</strong>解析。</td>
             </tr>
             <tr>
               <td><code>args</code></td>
-              <td>传给命令的参数，例如 <code>--stdio</code>。</td>
+              <td>传给命令的参数。相对脚本路径同样相对 agent 包根解析，因此 spawn cwd 是用户 workspace 时，<code>integrations/stpl-lsp-bridge/index.js</code> 仍可找到。</td>
             </tr>
             <tr>
               <td><code>extensionToLanguage</code></td>
-              <td>文件扩展名到 LSP language id 的映射，也是 manager 路由 server 的依据。</td>
+              <td>文件扩展名到 LSP language id 的映射，也是 manager 路由 server 的依据。缺此字段的配置会被跳过。</td>
             </tr>
             <tr>
               <td><code>startupTimeout</code></td>
-              <td>初始化超时时间，避免 language server 卡住 agent。</td>
+              <td>initialize 超时时间，避免 language server 卡住 agent。</td>
+            </tr>
+            <tr>
+              <td><code>maxRestarts</code></td>
+              <td>崩溃后允许的重启次数（默认 3）。STPL 建议设为 <code>1</code>，因为 SWC 同时只允许一个 LS client。</td>
             </tr>
             <tr>
               <td><code>env</code> / <code>workspaceFolder</code> / <code>initializationOptions</code></td>
-              <td>可选字段，用于给特定 language server 传环境变量、工作区路径和初始化参数。</td>
+              <td>可选字段，用于环境变量、工作区路径和初始化参数。</td>
             </tr>
           </tbody>
         </table>
+        <div class="callout">
+          若同一扩展名被多个 server 声明，当前实现使用 <strong>第一个匹配</strong> 的 server。例如想暂时禁用某个 Java server，可把其 <code>extensionToLanguage</code> 改成 <code>_extensionToLanguage</code>（settings.example 里的 jdtls 即此写法）。
+        </div>
+      </div>
+    </section>
+
+    <section id="stpl">
+      <h2>7. STPL Bridge</h2>
+      <div class="card">
+        <p>
+          Agent 的 LSP 客户端<strong>只支持 stdio</strong>。STPL Language Server 跑在已启动的宿主 IDE（SWC）JVM 里，通过 JMX 触发、TCP reverse-connect 通信。因此仓库内置 <code>integrations/stpl-lsp-bridge</code>，对外伪装成普通 <code>command</code>。
+        </p>
+        <pre><code>Agent lspServers.stpl
+  → node integrations/stpl-lsp-bridge/index.js   (stdio LSP)
+    → listen 127.0.0.1:port
+    → arm accept listener
+    → JMX serverInfo (preflight / discover)
+    → JMX start(pid, port)
+    → accept one socket
+    → bidirectional byte pipe
+    → SWC JVM language server</code></pre>
+        <div class="grid two">
+          <div>
+            <h3>对接范围</h3>
+            <ul>
+              <li><strong>使用：</strong>SWC 内嵌 + JMX（<code>STPL_START_MODE=jmx</code>）。</li>
+              <li><strong>不对接：</strong>standalone <code>stplls_start.sh</code> / headless 一键启动。</li>
+              <li><code>wait-for-connect</code> 仅用于 debug / mock smoke。</li>
+            </ul>
+          </div>
+          <div>
+            <h3>关键环境变量</h3>
+            <ul>
+              <li><code>STPL_AUTO_DISCOVER</code>：扫描本机 JVM 找 STPL MBean。</li>
+              <li><code>STPLLS_PID</code>：可选；discover 失败时手工指定。</li>
+              <li><code>STPL_STATUS_FILE</code>：缓存 pid / workspace。</li>
+              <li><code>STPL_JMX_JAVA</code> / <code>STPL_JMX_HELPER</code>：JMX helper 运行时。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout warn">
+          Agent workspace 路径应与 SWC Eclipse workspace 一致。更细的对接说明见 <code>docs/stpl-lsp-integration-requirements.md</code> 与 <code>integrations/stpl-lsp-bridge/README.md</code>。
+        </div>
       </div>
     </section>
 
     <section id="usage">
-      <h2>7. Agent 怎么使用 LSP</h2>
+      <h2>8. Agent 怎么使用 LSP</h2>
       <div class="grid">
         <div class="card">
           <h3>Hover</h3>
@@ -986,47 +1091,81 @@ later .ts LSP request
         </div>
       </div>
 
+      <div class="grid">
+        <div class="card">
+          <h3>Document Symbol</h3>
+          <p>列出单个文件内的符号树；不需要 line/character。</p>
+          <pre><code>{
+  "operation": "document_symbol",
+  "file_path": "src/core/types.ts"
+}</code></pre>
+        </div>
+        <div class="card">
+          <h3>Workspace Symbol</h3>
+          <p>按 query 搜工作区符号；<code>file_path</code> 只用来选 server。</p>
+          <pre><code>{
+  "operation": "workspace_symbol",
+  "file_path": "src/core/types.ts",
+  "query": "LspServerConfig"
+}</code></pre>
+        </div>
+        <div class="card">
+          <h3>Go To Implementation</h3>
+          <p>找接口/抽象的实现位置。</p>
+          <pre><code>{
+  "operation": "go_to_implementation",
+  "file_path": "src/services/lsp/types.ts",
+  "line": 5,
+  "character": 10
+}</code></pre>
+        </div>
+      </div>
+
       <div class="card">
         <h3>推荐提示词</h3>
         <p>在聊天里可以这样让 agent 使用 LSP：</p>
         <pre><code>先用 ToolSearch 加载 LSP 工具。
 然后对 src/core/types.ts 里的 AppConfig 执行 hover，
 再查找它的 references，告诉我哪些地方依赖这个配置类型。</code></pre>
-        <p>或者在复杂修改前这样说：</p>
-        <pre><code>这次修改涉及类型和跨文件引用。
-请优先用 LSP 的 hover / go_to_definition / find_references 理解影响面，
-再开始编辑。</code></pre>
+        <p>对 STPL DSL：</p>
+        <pre><code>先用 ToolSearch 加载 LSP。
+对某个 .spec 文件里的符号做 hover / go_to_definition / find_references，
+再根据 diagnostics 修复问题。</code></pre>
       </div>
     </section>
 
     <section id="diagnostics">
-      <h2>8. 写代码时的诊断反馈</h2>
+      <h2>9. 写代码时的诊断反馈</h2>
       <div class="card">
         <p>
           当前 LSP 不只是查询工具，也会在 agent 写文件后同步给 language server。成功执行 <code>Write</code> 或 <code>Edit</code> 后，会触发：
         </p>
-        <pre><code>clear delivered diagnostics
+        <pre><code>clearDeliveredDiagnosticsForFile
 → textDocument/didChange
 → textDocument/didSave
 → language server publishDiagnostics
-→ diagnostics registry
-→ next agent step system-reminder</code></pre>
+→ LSPDiagnosticRegistry
+→ attachments.ts (type: "diagnostics")
+→ messages.ts expands to &lt;new-diagnostics&gt; system-reminder</code></pre>
         <p>
-          诊断消息在 <code>src/utils/attachments/lsp-diagnostics.ts</code> 中被转换为普通 <code>system-reminder</code> 用户消息，注入到后续模型上下文里。
+          诊断不再走已删除的 <code>utils/attachments/lsp-diagnostics.ts</code>，而是统一进入 attachment 管道：历史里保留 <code>type: "attachment"</code> 记录，发给模型前由 <code>expandAttachmentMessagesForAPI</code> 展开。
         </p>
         <div class="callout">
-          这意味着 agent 写完代码后，如果 TypeScript server 报“属性不存在”“类型不匹配”“缺少 import”等问题，下一步模型可以直接看到并继续修。
+          这意味着 agent 写完代码后，如果 language server 报类型错误、缺 import、STPL 语义问题等，下一步模型可以直接看到并继续修。
+        </div>
+        <div class="callout warn">
+          当前 <code>getLSPDiagnosticAttachments</code> 仅在工具集包含 <code>Bash</code> 时生效（与主线程可写环境对齐）；限流为每文件最多 10 条、总计 30 条，并按 delivered set 去重。
         </div>
       </div>
     </section>
 
     <section id="test">
-      <h2>9. 如何测试</h2>
+      <h2>10. 如何测试</h2>
       <div class="grid two">
         <div class="card">
           <h3>启动前检查</h3>
           <ol>
-            <li>确认 <code>.ai-agent/settings.json</code> 有 <code>lspServers</code>。</li>
+            <li>确认 <code>.ai-agent/settings.json</code> 有目标语言的 <code>lspServers</code>。</li>
             <li>运行 <code>npm install</code>，确保依赖存在。</li>
             <li>运行 <code>npm run typecheck</code>，确认代码编译通过。</li>
             <li>运行 <code>npm start</code> 启动 agent server。</li>
@@ -1036,41 +1175,46 @@ later .ts LSP request
           <h3>聊天内测试</h3>
           <ol>
             <li>让 agent 用 <code>ToolSearch</code> 加载 <code>LSP</code>。</li>
-            <li>对一个 <code>.ts</code> 文件执行 <code>hover</code>。</li>
-            <li>再执行 <code>go_to_definition</code> 或 <code>find_references</code>。</li>
-            <li>让 agent 故意制造一个小的 TypeScript 类型错误，观察下一步是否收到 diagnostics。</li>
+            <li>对一个已配置扩展名的文件执行 <code>hover</code>。</li>
+            <li>再执行 <code>go_to_definition</code> / <code>find_references</code> / <code>document_symbol</code>。</li>
+            <li>故意制造一个小错误，观察下一步是否收到 <code>&lt;new-diagnostics&gt;</code>。</li>
           </ol>
         </div>
       </div>
 
       <div class="card">
-        <h3>底层验证命令</h3>
-        <p>之前已经用下面等价方式验证过 TypeScript LSP hover 能返回结果：</p>
+        <h3>底层验证</h3>
+        <p>TypeScript：</p>
         <pre><code>npx typescript-language-server --stdio
 textDocument/hover
 → LSP hover verification: ok</code></pre>
+        <p>STPL bridge smoke（需 SWC 或 mock）：</p>
+        <pre><code>node integrations/stpl-lsp-bridge/scripts/smoke-hover.mjs
+# 详见 integrations/stpl-lsp-bridge/README.md</code></pre>
       </div>
     </section>
 
     <section>
-      <h2>10. 限制和注意点</h2>
+      <h2>11. 限制和注意点</h2>
       <div class="card">
         <ul>
           <li>当前是 agent 工具能力，不是网页编辑器的鼠标 hover 弹窗。</li>
           <li>LSP tool 是 deferred，模型通常需要先通过 <code>ToolSearch</code> 激活。</li>
-          <li>只实现了 stdio transport，没有实现 socket transport。</li>
-          <li>diagnostics 是文本 system-reminder，暂未做前端专用诊断卡片。</li>
+          <li>Agent 侧只实现 stdio transport；STPL 的 TCP reverse-connect 由 bridge 完成，不是 HTTP/WebSocket LSP URL。</li>
+          <li>diagnostics 以 attachment / system-reminder 文本形式注入，暂未做前端专用诊断卡片。</li>
           <li>LSP diagnostics 不能完全替代 <code>npm run typecheck</code>，复杂构建错误仍应跑项目命令验证。</li>
           <li>如果多个 server 支持同一扩展名，当前使用第一个匹配的 server。</li>
+          <li>单文件超过 10MB 时 <code>LSP</code> tool 会拒绝分析。</li>
+          <li>STPL 依赖已启动的 SWC 与 JMX console；workspace 路径需与 Eclipse workspace 对齐。</li>
         </ul>
       </div>
     </section>
 
     <section>
-      <h2>11. 一句话总结</h2>
+      <h2>12. 一句话总结</h2>
       <div class="card">
         <p>
-          这个 LSP 实现给 coding agent 增加了“语义代码理解”和“写后诊断反馈”能力：它让 agent 在真实写代码时可以先问语言服务器理解类型和引用，再编辑文件，编辑后再根据语言服务器 diagnostics 继续修正。
+          这个 LSP 实现给 coding agent 增加了“语义代码理解”和“写后诊断反馈”能力：模型通过 deferred <code>LSP</code> 工具同步询问语言服务器，写文件后异步收到 diagnostics attachment；对 STPL DSL，则通过 <code>stpl-lsp-bridge</code> 把 stdio 客户端接到 SWC JVM 内的 Language Server。
         </p>
       </div>
     </section>

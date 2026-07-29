@@ -1,12 +1,12 @@
-# SmarTest STPL Language Server 对接需求
+# STPL Language Server 对接需求
 
-本文档描述：如何让本 coding agent（`ai_coding_agent_intro`）接入 **SmarTest 启动后提供的 STPL DSL Language Server**，以便 agent 对 `.spec` / `.flow` / `.dbd` / `.prog` / `.seq` 等文件使用 hover、definition、references、diagnostics 等语义能力。
+本文档描述：如何让本 coding agent（`ai_coding_agent_intro`）接入 **宿主 IDE（SWC）启动后提供的 STPL DSL Language Server**，以便 agent 对 `.spec` / `.flow` / `.dbd` / `.prog` / `.seq` 等文件使用 hover、definition、references、diagnostics 等语义能力。
 
 ---
 
 ## 1. 目标
 
-- Agent 能对 SmarTest test program DSL 发起标准 LSP 请求（至少：hover / go_to_definition / find_references / document_symbol / diagnostics）。
+- Agent 能对 STPL test program DSL 发起标准 LSP 请求（至少：hover / go_to_definition / find_references / document_symbol / diagnostics）。
 - 配置方式与现有 `lspServers` 一致：用户在 `.ai-agent/settings.json` 中声明 server。
 - **不**通过 URL 直连；STPL LS 不是 HTTP/WebSocket LSP endpoint。
 
@@ -41,9 +41,9 @@
 }
 ```
 
-### 2.2 SmarTest STPL Language Server
+### 2.2 STPL Language Server
 
-SmarTest 有两种 LS 启动方式；**本 agent 只对接方式 1**。
+宿主 IDE 有两种 LS 启动方式；**本 agent 只对接方式 1**。
 
 | 方式 | 说明 | Agent |
 |------|------|-------|
@@ -52,8 +52,8 @@ SmarTest 有两种 LS 启动方式；**本 agent 只对接方式 1**。
 
 | 项 | 现状 |
 |----|------|
-| 实现位置（SmarTest 源码） | `com.advantest.itee.lsp.stpl` / `.ui`（已在 `code_index` 等主干树中） |
-| 运行位置（方式 1） | **已启动的 SmarTest / SWC JVM 内**（扩展自 JDT LS） |
+| 实现位置（宿主侧源码） | `com.advantest.itee.lsp.stpl` / `.ui`（已在 `code_index` 等主干树中） |
+| 运行位置（方式 1） | **已启动的 SWC JVM 内**（扩展自 JDT LS） |
 | 传输 | **TCP socket**：客户端先 `listen`，LS **反向 connect** |
 | 启动控制 | `IStplLanguageServerControl.start(port, noExit)`；经 **JMX** `start(String port)` 触发 |
 | JMX MBean | `com.advantest.stpl:type=basic,name=console`（`start`, `serverInfo`；**无 stop**） |
@@ -70,7 +70,7 @@ Coding Agent (或 bridge)
   4. accept() 得到 socket
   5. 在该 socket 上跑 LSP JSON-RPC
 
-SmarTest JVM 内 StplLanguageServer
+host JVM 内 StplLanguageServer
   → connect 到 CLIENT_PORT
 ```
 
@@ -80,8 +80,8 @@ SmarTest JVM 内 StplLanguageServer
 |------|------|
 | `JDTLS_SERVER_PORT` | 客户端 listen 的端口；LS 连过来 |
 | `CLIENT_PORT` | LS 侧使用的同一端口属性（system property / env） |
-| `JDTLS_WORKSPACE_PATH` | SmarTest Eclipse workspace 根路径 |
-| `STPLLS_PID` | SmarTest JVM PID；JMX attach 目标 |
+| `JDTLS_WORKSPACE_PATH` | Eclipse workspace 根路径 |
+| `STPLLS_PID` | host JVM PID；JMX attach 目标 |
 | `watchParentProcess` | 设为 `false` 时，客户端短暂消失不杀 SWC |
 | `JDT_LS_NO_EXIT` | 设为 true 时，LSP `exit` 不退出整个 JVM |
 
@@ -98,7 +98,7 @@ java integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java <pid> start <por
 ## 3. 差距（为什么不能直接配 URL / 直接配 command）
 
 ```
-本 agent LSP client          SmarTest STPL LS
+本 agent LSP client          STPL LS
 ─────────────────          ─────────────────
 spawn(command) + stdio  ≠  已有 JVM + TCP reverse-connect
 config: command/args    ≠  需要 PID + workspace + listen port
@@ -108,7 +108,7 @@ config: command/args    ≠  需要 PID + workspace + listen port
 因此：
 
 - **不能**在 `lspServers` 里写 `url: "http://..."` / `ws://...`。
-- **不能**指望写一个普通 `jdtls`/`stpl` 命令就连上已运行的 SmarTest LS（除非该命令本身是 bridge）。
+- **不能**指望写一个普通 `jdtls`/`stpl` 命令就连上已运行的 STPL LS（除非该命令本身是 bridge）。
 
 ---
 
@@ -132,7 +132,7 @@ Agent lspServers
         │  4) accept socket
         │  5) 双向转发 LSP 帧
         ▼
-   SmarTest JVM 内 StplLanguageServer
+   host JVM 内 StplLanguageServer
 ```
 
 ### 4.1 Agent 侧配置目标形态
@@ -184,7 +184,7 @@ Agent lspServers
 
 | Env | 必需 | 说明 |
 |-----|------|------|
-| `STPLLS_PID` | 是* | SmarTest JVM PID（JMX 模式） |
+| `STPLLS_PID` | 是* | host JVM PID（JMX 模式） |
 | `JDTLS_WORKSPACE_PATH` | 建议 | workspace 根；默认 `cwd`；须与 SWC 一致 |
 | `STPL_LSP_PORT` | 否* | wait-for-connect 时必需；jmx 默认 `0` |
 | `STPL_CONNECT_TIMEOUT_MS` | 否 | accept 超时，默认 `60000` |
@@ -229,8 +229,8 @@ export interface LspServerConfig {
 
 - 把 STPL LS 配成 MCP server / 用 MCP URL 访问。
 - 实现完整 IDE（只做 agent 工具级 LSP：hover / definition / references / symbols / diagnostics）。
-- 替换 SmarTest 内嵌编辑器；也不要求网页编辑器 hover UI。
-- 在未启动 SmarTest 时独立跑完整 STPL LS（standalone `StplLanguageServerApplication` 是另一条路径，本期以「SmarTest 已启动」为主）。
+- 替换宿主 IDE 内嵌编辑器；也不要求网页编辑器 hover UI。
+- 在未启动宿主 IDE 时独立跑完整 STPL LS（standalone `StplLanguageServerApplication` 是另一条路径，本期以「宿主 IDE 已启动」为主）。
 
 ---
 
@@ -240,7 +240,7 @@ export interface LspServerConfig {
 
 1. 新增目录：`tools/stpl-lsp-bridge/`（或 `src/services/lsp/bridges/stpl/`）。
 2. 实现 listen →（可选 JMX start）→ accept → stdio↔socket 转发。
-3. README：如何从运行中的 SmarTest 取 PID / workspace。
+3. README：如何从运行中的宿主 IDE 取 PID / workspace。
 4. 本地手动验证：用 bridge 对某个 `.spec` 发 `initialize` + `textDocument/hover`。
 
 ### P1 — Agent 配置与工具验证
@@ -248,27 +248,27 @@ export interface LspServerConfig {
 1. 在 `.ai-agent/settings.json` 增加 `stpl` `lspServers` 条目（可用 env 占位）。
 2. 确认 `LSPTool` 能对 `.spec` 路由到 `stpl` server。
 3. 验证：`hover` / `go_to_definition` / `find_references`；编辑后是否收到 `publishDiagnostics`。
-4. `startupTimeout` / 失败信息可读（SmarTest 未启动、PID 错误、accept 超时）。
+4. `startupTimeout` / 失败信息可读（宿主 IDE 未启动、PID 错误、accept 超时）。
 
 ### P2 — 体验
 
-1. PID / workspace 自动发现（例如读 SmarTest 写出的状态文件；若暂无则文档化手工步骤）。
-2. `maxRestarts: 1` 与「SmarTest 只允许一个 External IDE / LS client」的行为对齐。
+1. PID / workspace 自动发现（例如读宿主 IDE 写出的状态文件；若暂无则文档化手工步骤）。
+2. `maxRestarts: 1` 与「宿主 IDE 只允许一个 External IDE / LS client」的行为对齐。
 3. Windows / Linux 路径与 JMX helper 可移植。
 
 ---
 
 ## 8. 验收标准
 
-- [ ] SmarTest 已启动且 workspace 打开时，agent 配置 `stpl` server 后，对 `.spec` 调用 `LSP` 工具 `hover` 返回非空语义结果（或明确的 server capability 限制说明）。
+- [ ] 宿主 IDE 已启动且 workspace 打开时，agent 配置 `stpl` server 后，对 `.spec` 调用 `LSP` 工具 `hover` 返回非空语义结果（或明确的 server capability 限制说明）。
 - [ ] `go_to_definition` / `find_references` 至少有一项在样例工程上可用。
-- [ ] SmarTest 未启动或 PID 错误时，agent 得到明确错误（stderr / tool error），不无限挂死。
+- [ ] 宿主 IDE 未启动或 PID 错误时，agent 得到明确错误（stderr / tool error），不无限挂死。
 - [ ] 不破坏现有 typescript/python 等 stdio LSP server。
-- [ ] 配置文档说明：**不是 URL**；需要 SmarTest 进程 + bridge/JMX。
+- [ ] 配置文档说明：**不是 URL**；需要宿主 IDE 进程 + bridge/JMX。
 
 ---
 
-## 9. 参考（SmarTest 侧）
+## 9. 参考（宿主侧）
 
 | 资源 | 说明 |
 |------|------|
@@ -279,13 +279,9 @@ export interface LspServerConfig {
 | `integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java` | Agent 侧内置 JMX attach helper |
 | `packages/stplls_start.sh` | Standalone 启动（方式 2；agent 不对接） |
 
-相关内部文档 / 单号（来自 SmarTest overview）：
-
-- WeShare ARC42.STPL
-- JEP-4561、JEP-4438、JEP-4503
 
 ---
 
 ## 10. 一句话结论
 
-本 agent 的 LSP 配置是 **stdio command**，不是 URL；SmarTest STPL LS 是 **进程内 + TCP reverse-connect（常配合 JMX）**。要在本仓库落地，优先实现一个 **stdio bridge**，再在 `lspServers.stpl` 里用现有配置模型接入。
+本 agent 的 LSP 配置是 **stdio command**，不是 URL；STPL LS 是 **进程内 + TCP reverse-connect（常配合 JMX）**。要在本仓库落地，优先实现一个 **stdio bridge**，再在 `lspServers.stpl` 里用现有配置模型接入。

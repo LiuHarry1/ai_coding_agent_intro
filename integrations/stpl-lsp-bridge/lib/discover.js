@@ -70,7 +70,7 @@ export async function resolveSwcTarget(config) {
   if (found.length === 0) {
     throw new Error(
       'No SWC JVM found with MBean com.advantest.stpl:type=basic,name=console. ' +
-        'Start SmarTest (fully past Choose Workspace) from a build that includes lsp.stpl.',
+        'Start the host IDE (fully past Choose Workspace) from a build that includes lsp.stpl.',
     )
   }
 
@@ -120,7 +120,7 @@ function pickCandidate(found, preferred) {
     return { ...idle[0], _pickReason: 'only-idle' }
   }
 
-  // Prefer PDE / product command lines that look like SmarTest
+  // Prefer PDE / SWC product command lines
   const ranked = [...found].sort((a, b) => scoreDisplay(b) - scoreDisplay(a))
   if (scoreDisplay(ranked[0]) > scoreDisplay(ranked[1])) {
     return { ...ranked[0], _pickReason: 'best-displayName' }
@@ -144,7 +144,6 @@ function scoreDisplay(c) {
   let s = 0
   if (d.includes('ewcproduct') || d.includes('swc.ide')) s += 3
   if (d.includes('pde.launch') || d.includes('runtime-ewc')) s += 2
-  if (d.includes('smartest')) s += 1
   if (!c.running) s += 1
   return s
 }

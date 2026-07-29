@@ -6,7 +6,7 @@
  *   STPL_START_MODE=wait-for-connect STPL_LSP_PORT=50000 \
  *     node scripts/smoke-hover.mjs [path/to/file.spec]
  *
- * For a dry run without SmarTest, use scripts/mock-stpl-ls.mjs after smoke starts:
+ * For a dry run without a live host IDE, use scripts/mock-stpl-ls.mjs after smoke starts:
  *   STPL_START_MODE=wait-for-connect STPL_LSP_PORT=50000 node scripts/smoke-hover.mjs
  *   # other terminal:
  *   node scripts/mock-stpl-ls.mjs 50000

@@ -1,5 +1,5 @@
 /*
- * Attach to a SmarTest / SWC JVM and invoke the STPL LS JMX console.
+ * Attach to a SWC JVM and invoke the STPL LS JMX console.
  *
  * MBean: com.advantest.stpl:type=basic,name=console
  * Ops:   start(String port), serverInfo(String user, String extensionVersion)
@@ -207,7 +207,7 @@ public class StplJmxHelper {
             if (address == null) {
                 throw new IllegalStateException(
                         "No local JMX connector address for pid " + pid
-                                + " (is this a SmarTest/SWC JVM?)");
+                                + " (is this a SWC JVM?)");
             }
             JMXServiceURL url = new JMXServiceURL(address);
             try (JMXConnector connector = JMXConnectorFactory.connect(url)) {

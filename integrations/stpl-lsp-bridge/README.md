@@ -1,6 +1,6 @@
 # stpl-lsp-bridge
 
-stdio ↔ TCP reverse-connect bridge for the STPL language server (SmarTest SWC-embedded path).
+stdio ↔ TCP reverse-connect bridge for the STPL language server (SWC-embedded path).
 
 The agent LSP client only speaks **stdio** (`spawn` + JSON-RPC). The STPL LS runs inside an already-running SWC JVM and connects over **TCP reverse-connect** (this process listens; the LS connects), started via **JMX**. This bridge presents a normal `command` to the agent and performs that handshake.
 
@@ -16,7 +16,7 @@ Agent lspServers.stpl
     → SWC JVM language server
 ```
 
-## Two SmarTest LS startup modes (context)
+## Two STPL LS startup modes (context)
 
 | Mode | What | Agent uses? |
 |------|------|-------------|

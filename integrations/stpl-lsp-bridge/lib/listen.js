@@ -62,7 +62,7 @@ export function acceptOne(server, timeoutMs) {
       }
       settled = true
       cleanup()
-      // Reject further connections: SmarTest External IDE is single-client.
+      // Reject further connections: host External IDE path is single-client.
       server.close()
       resolve(socket)
     }

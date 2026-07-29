@@ -6,17 +6,17 @@ function assert(cond: boolean, msg: string) {
 }
 
 const smart = parseAgentFromMarkdown({
-  filePath: 'x/smartest.md',
+  filePath: 'x/reviewer.md',
   baseDir: 'x',
   source: 'project',
   frontmatter: {
-    name: 'smartest',
-    label: 'SmarTest Agent',
-    description: 'Write SmarTest programs',
+    name: 'reviewer',
+    label: 'Code Reviewer',
+    description: 'Review code before merge',
     mode: 'primary',
     disallowedTools: 'search-memory_*',
   },
-  body: 'You are SmarTest.',
+  body: 'You are the code reviewer.',
 })
 assert(!!smart.agent, smart.error || 'no agent')
 assert(smart.agent!.mode === 'primary', 'mode primary')
@@ -54,7 +54,7 @@ assert(
   'subagent auto-denies Agent',
 )
 
-assert(!!findPrimaryAgent([smart.agent!], 'smartest'), 'findPrimary')
+assert(!!findPrimaryAgent([smart.agent!], 'reviewer'), 'findPrimary')
 assert(findPrimaryAgent([sub.agent!], 'helper') === null, 'sub not primary')
 
 console.log('primary agent parse checks passed')

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * stpl-lsp-bridge — stdio ↔ SmarTest STPL Language Server (TCP reverse-connect)
+ * stpl-lsp-bridge — stdio ↔ STPL Language Server (TCP reverse-connect)
  *
  * Agent sees a normal stdio LSP server (command/args in lspServers).
  * Bridge listens on 127.0.0.1, checks SWC via JMX serverInfo, starts LS via

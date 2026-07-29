@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Tiny mock STPL LS: connects to 127.0.0.1:<port> and speaks minimal LSP.
- * Used to validate the bridge pipe without SmarTest.
+ * Used to validate the bridge pipe without a live host IDE.
  *
  *   node scripts/mock-stpl-ls.mjs <port>
  */
