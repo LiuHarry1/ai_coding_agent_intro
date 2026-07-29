@@ -31,7 +31,7 @@ import {
   getMCPManagerForServers,
   initMcpLifecycle,
   invalidateMCPManagersForCwd,
-} from './mcp-lifecycle.js'
+} from '../core/mcp-lifecycle.js'
 import { initCodePlugins } from '../core/plugins/index.js'
 import { handleChat } from './routes/chat.js'
 import {

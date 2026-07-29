@@ -67,15 +67,12 @@ export type CacheSafeParams = {
   toolUseContext?: ToolContext
 }
 
-// Slot for post-turn forks (prompt suggestion, side notes, etc.).
-let lastCacheSafeParams: CacheSafeParams | null = null
-
-export function saveCacheSafeParams(params: CacheSafeParams | null): void {
-  lastCacheSafeParams = params
-}
+// Slot removed: callers pass CacheSafeParams explicitly into extract/fork.
+// Kept as no-ops so older scripts that import these symbols still typecheck.
+export function saveCacheSafeParams(_params: CacheSafeParams | null): void {}
 
 export function getLastCacheSafeParams(): CacheSafeParams | null {
-  return lastCacheSafeParams
+  return null
 }
 
 /** Build cache-safe params from a main-agent turn snapshot. */

@@ -76,8 +76,11 @@ async function main(): Promise<void> {
     model: 'm',
     messages: [],
   })
+  assert(params.systemPrompt === 'sys', 'cache-safe params shape')
+  assert(params.model === 'm', 'cache-safe model')
+  // Global slot retired — explicit pass-through only.
   saveCacheSafeParams(params)
-  assert(getLastCacheSafeParams() === params, 'cache-safe slot save/get')
+  assert(getLastCacheSafeParams() === null, 'cache-safe global slot is retired')
   saveCacheSafeParams(null)
 
   // Stale inFlight must be cleared by wait

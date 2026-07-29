@@ -16,20 +16,10 @@ import {
   pluginErrorSource,
 } from '../../core/plugins/index.js'
 import { loadProjectRules } from '../rules-loader.js'
-import { filterToolsByEnablement } from '../../core/tool-enablement.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
-import { createToolSearchDefinition } from '../../tools/ToolSearchTool/ToolSearchTool.js'
 import { TOOL_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
-import { applyModeRestrictions } from '../../core/mode-restrictions.js'
-import { definition as enterPlanModeDef } from '../../tools/EnterPlanModeTool/EnterPlanModeTool.js'
-import { definition as exitPlanModeDef } from '../../tools/ExitPlanModeTool/ExitPlanModeTool.js'
 import { getPlanFilePath } from '../plans.js'
 import type { ReadFileState } from '../attachments/types.js'
-import { findPrimaryAgent } from '../../tools/AgentTool/mergeAgents.js'
-import {
-  filterDeferredDefsByDisallowedGlobs,
-  filterToolsRecordByDisallowedGlobs,
-} from '../../tools/AgentTool/toolGlob.js'
 import type {
   AgentDefinition,
   AnyTool,
@@ -45,7 +35,7 @@ import type { SlashEntry } from '../../commands/slashRegistry.js'
 import { extractFilePathCandidates } from './path_candidates.js'
 import { mergeMCPServers } from '../../core/settings-manager.js'
 import { noopWireEmitter } from '../../core/wire-emitter.js'
-import { getMCPManagerForServers } from '../../server/mcp-lifecycle.js'
+import { getMCPManagerForServers } from '../../core/mcp-lifecycle.js'
 import { createSandboxPolicy } from '../../core/sandbox.js'
 import { resolveAutoMemoryConfig } from '../../core/settings-manager.js'
 import {
@@ -53,6 +43,7 @@ import {
   getAutoMemPath,
   isAutoMemoryDisabledByEnv,
 } from '../../services/auto-memory/index.js'
+import { assembleToolPool } from '../../tools/assembleToolPool.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -254,52 +245,15 @@ export async function prepareChatTurn(
     ),
   }
 
-  let { active, deferred, deferredDefs } = (
-    registry as ToolRegistry
-  ).createSplit(
+  const pool = assembleToolPool({
+    registry: registry as ToolRegistry,
     cwd,
+    session,
     toolContext,
-    mcpManager.getAllTools(),
-    session.discoveredTools,
-  )
-
-  // Apply primary-profile disallowedTools (globs ok) on the main thread
-  // on the main thread only — skip subagent auto-deny lists.
-  const mainThreadProfile =
-    session.permissionMode.mode === 'agent'
-      ? findPrimaryAgent(activeAgents, session.agentType)
-      : null
-  const denyGlobs = mainThreadProfile?.disallowedTools
-  if (denyGlobs && denyGlobs.length > 0) {
-    active = filterToolsRecordByDisallowedGlobs(active, denyGlobs)
-    deferred = filterToolsRecordByDisallowedGlobs(deferred, denyGlobs)
-    deferredDefs = filterDeferredDefsByDisallowedGlobs(deferredDefs, denyGlobs)
-    console.log(
-      `[server] agentType=${mainThreadProfile!.agentType} denied globs=[${denyGlobs.join(', ')}]`,
-    )
-  }
-
-  if (deferredDefs.length > 0) {
-    const tsearchDef = createToolSearchDefinition(deferredDefs)
-    active[TOOL_SEARCH_TOOL_NAME] = tsearchDef.create(cwd, toolContext)
-  }
-
-  const enablementFiltered = filterToolsByEnablement(
-    active,
-    registry,
+    mcpTools: mcpManager.getAllTools(),
+    activeAgents,
     toolEnablement,
-  )
-
-  const modeTools: Record<string, AnyTool> = {
-    [enterPlanModeDef.name]: enterPlanModeDef.create(cwd, toolContext),
-    [exitPlanModeDef.name]: exitPlanModeDef.create(cwd, toolContext),
-  }
-
-  const tools = applyModeRestrictions(
-    session.permissionMode.mode,
-    enablementFiltered,
-    modeTools,
-  )
+  })
 
   const reminderParts: string[] = []
   if (activeSkills.length > 0) {
@@ -307,8 +261,8 @@ export async function prepareChatTurn(
       `The following skills are available for use with the skill tool:\n\n${formatSkillListing(activeSkills)}`,
     )
   }
-  if (deferredDefs.length > 0) {
-    const listing = deferredDefs
+  if (pool.deferredDefs.length > 0) {
+    const listing = pool.deferredDefs
       .map(
         (d: { name: string; description: string; isMcp: boolean }) =>
           `- ${d.name}${d.isMcp ? ' (MCP)' : ''}`,
@@ -320,7 +274,7 @@ export async function prepareChatTurn(
   }
 
   console.log(
-    `[server] mode=${session.permissionMode.mode}${mainThreadProfile ? ` agentType=${mainThreadProfile.agentType}` : ''} tools: ${Object.keys(tools).length} active, ${deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ''}`,
+    `[server] mode=${session.permissionMode.mode}${pool.mainThreadProfile ? ` agentType=${pool.mainThreadProfile.agentType}` : ''} tools: ${Object.keys(pool.tools).length} active, ${pool.deferredDefs.length} deferred${session.discoveredTools?.size ? `, ${session.discoveredTools.size} previously discovered` : ''}`,
   )
 
   if (!session.readFileState) {
@@ -333,7 +287,7 @@ export async function prepareChatTurn(
     session,
     readFileState,
     lspServers: config.lspServers,
-    options: { tools },
+    options: { tools: pool.tools },
     skillListingContent:
       reminderParts.length > 0 ? reminderParts.join('\n\n') : undefined,
     agentDefinitions: { activeAgents },
@@ -347,16 +301,16 @@ export async function prepareChatTurn(
     forkSkill: slash.forkSkill,
     manualCompact: slash.manualCompact,
     forceSummary: slash.forceSummary,
-    tools,
-    baseTools: enablementFiltered,
-    modeTools,
-    deferredToolPool: Object.keys(deferred).length > 0 ? deferred : undefined,
+    tools: pool.tools,
+    baseTools: pool.baseTools,
+    modeTools: pool.modeTools,
+    deferredToolPool: pool.deferredToolPool,
     projectRules,
     toolUseContext,
     subagentNames: getSubagentNames(registry),
-    concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(tools)),
+    concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(pool.tools)),
     permissionMode: session.permissionMode.mode,
-    mainThreadProfile,
+    mainThreadProfile: pool.mainThreadProfile,
     planFilePath,
     modeChanged: slash.modeChanged,
     toolContext,

@@ -13,3 +13,11 @@ export function getSessionJsonlPath(sessionId: string): string {
 export function getSessionDataDir(sessionId: string): string {
   return path.join(SESSION_DIR, sessionId)
 }
+
+export function getToolResultFilePath(
+  sessionId: string,
+  toolCallId: string,
+): string {
+  const safe = toolCallId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  return path.join(SESSION_DIR, sessionId, 'tool-results', `${safe}.txt`)
+}

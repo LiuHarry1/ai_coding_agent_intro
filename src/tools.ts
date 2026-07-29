@@ -34,3 +34,4 @@ const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])]
 ].forEach(def => defaultRegistry.register(def))
 
 export { defaultRegistry }
+export { assembleToolPool } from './tools/assembleToolPool.js'

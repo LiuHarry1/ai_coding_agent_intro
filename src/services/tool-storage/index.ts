@@ -21,7 +21,7 @@
  */
 import * as fs from 'fs'
 import * as path from 'path'
-import { getToolResultFilePath } from '../../server/session.js'
+import { getToolResultFilePath } from '../../core/session-paths.js'
 
 export const PERSISTED_OUTPUT_OPEN = '<persisted-output'
 export const PERSISTED_OUTPUT_CLOSE = '</persisted-output>'

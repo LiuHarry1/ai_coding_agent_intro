@@ -6,15 +6,9 @@ import {
 } from '../services/compact/index.js'
 import type { AttachedTokenUsage, CompactEnrichment } from '../services/compact/index.js'
 import {
-  extractSessionMemoryInBackground,
   ensureMessageUuid,
   ensureMessageUuids,
 } from '../services/session-memory/index.js'
-import { extractAutoMemoriesInBackground } from '../services/auto-memory/index.js'
-import {
-  createCacheSafeParams,
-  saveCacheSafeParams,
-} from './forked-agent.js'
 import {
   isContextLengthError,
   isTransientStreamError,
@@ -256,12 +250,9 @@ export async function runAgent(
     cwd,
     compaction,
     sessionMemory,
-    sessionMemoryModelId,
-    sessionMemoryProvider,
-    autoMemory,
-    autoMemoryModelId,
-    autoMemoryProvider,
     onFullCompaction,
+    onAfterStep,
+    onTurnEnd,
     logLabel,
   }: AgentOptions,
 ): Promise<string> {
@@ -377,8 +368,6 @@ export async function runAgent(
         cwd,
         compaction,
         sessionMemory,
-        sessionMemoryModelId,
-        sessionMemoryProvider,
         sessionId,
         onFullCompaction,
         compactEnrichment,
@@ -389,6 +378,18 @@ export async function runAgent(
         // Prefer text from history if the step failed
         // after partial assistant output was already appended.
         return extractPartialResult(messages) ?? finalText
+      }
+
+      if (sessionId && onAfterStep) {
+        onAfterStep({
+          messages,
+          systemPrompt: activeSystemPrompt,
+          tools: activeTools,
+          provider,
+          model: resolvedModel,
+          sessionId,
+          cwd,
+        })
       }
 
       const { text, toolCalls } = stepResult
@@ -433,34 +434,16 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
           wire.thinking()
           continue
         }
-        // Turn-end only: auto-memory extract. Separate from
-        // session-memory which may also run after intermediate steps.
-        if (
-          sessionId &&
-          autoMemory?.enabled &&
-          (autoMemory.cacheSafe !== false || autoMemoryModelId)
-        ) {
-          const cacheSafeParams =
-            autoMemory.cacheSafe !== false
-              ? createCacheSafeParams({
-                  systemPrompt: activeSystemPrompt,
-                  tools: activeTools,
-                  provider,
-                  model: resolvedModel,
-                  messages,
-                })
-              : undefined
-          if (cacheSafeParams) saveCacheSafeParams(cacheSafeParams)
-          extractAutoMemoriesInBackground({
+        // Turn-end host hook (e.g. auto-memory). Never awaited.
+        if (sessionId && onTurnEnd) {
+          onTurnEnd({
             messages,
+            systemPrompt: activeSystemPrompt,
+            tools: activeTools,
+            provider,
+            model: resolvedModel,
             sessionId,
-            provider: autoMemoryProvider ?? provider,
-            modelId: autoMemoryModelId ?? resolvedModel,
-            config: autoMemory,
-            runAgent,
-            cwd: cwd ?? process.cwd(),
-            cacheSafeParams,
-            trustedDirectory: autoMemory.directory,
+            cwd,
           })
         }
         autoCompleteTodos(currentTodos, eventBus, wire)
@@ -666,8 +649,6 @@ interface RunOneStepArgs {
   cwd?: string
   compaction?: AgentOptions['compaction']
   sessionMemory?: AgentOptions['sessionMemory']
-  sessionMemoryModelId?: AgentOptions['sessionMemoryModelId']
-  sessionMemoryProvider?: AgentOptions['sessionMemoryProvider']
   sessionId?: string
   onFullCompaction?: AgentOptions['onFullCompaction']
   compactEnrichment?: CompactEnrichment
@@ -698,8 +679,6 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     cwd,
     compaction,
     sessionMemory,
-    sessionMemoryModelId,
-    sessionMemoryProvider,
     sessionId,
     logLabel,
   } = args
@@ -812,36 +791,6 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
             }
           }
         }
-      }
-
-      // Background session-memory extract (fire-and-forget; never blocks the turn).
-      if (
-        sessionId &&
-        sessionMemory?.enabled &&
-        compaction?.enabled !== false &&
-        (sessionMemory.cacheSafe !== false || sessionMemoryModelId)
-      ) {
-        const cacheSafeParams =
-          sessionMemory.cacheSafe !== false
-            ? createCacheSafeParams({
-                systemPrompt,
-                tools,
-                provider,
-                model: resolvedModel,
-                messages,
-              })
-            : undefined
-        if (cacheSafeParams) saveCacheSafeParams(cacheSafeParams)
-        extractSessionMemoryInBackground({
-          messages,
-          sessionId,
-          provider: sessionMemoryProvider ?? provider,
-          modelId: sessionMemoryModelId ?? resolvedModel,
-          config: sessionMemory,
-          runAgent,
-          cwd,
-          cacheSafeParams,
-        })
       }
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless

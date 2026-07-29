@@ -354,11 +354,32 @@ export interface AgentOptions {
    */
   onFullCompaction?: (messages: readonly Message[]) => void
   /**
-   * Optional prefix for agent console logs (e.g. `session_memory` �?
+   * After each completed step (stream + tools). Host may fire session-memory
+   * extract; the loop never awaits this.
+   */
+  onAfterStep?: (ctx: AgentLifecycleSnapshot) => void
+  /**
+   * Natural turn end (model stopped calling tools). Host may fire auto-memory
+   * extract; the loop never awaits this.
+   */
+  onTurnEnd?: (ctx: AgentLifecycleSnapshot) => void
+  /**
+   * Optional prefix for agent console logs (e.g. `session_memory` →
    * `[agent:session_memory] step …`). Defaults to `main` when omitted so
    * forked agents are always distinguishable from the primary loop.
    */
   logLabel?: string
+}
+
+/** Snapshot passed to turn-host lifecycle hooks from runAgent. */
+export interface AgentLifecycleSnapshot {
+  messages: Message[]
+  systemPrompt: string
+  tools: Record<string, AnyTool>
+  provider: IProvider
+  model: string
+  sessionId?: string
+  cwd?: string
 }
 
 export type RunAgentFn = (

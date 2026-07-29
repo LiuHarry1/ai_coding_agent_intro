@@ -18,7 +18,7 @@ import {
   handlePlanModeTransition,
   transitionPermissionMode,
 } from '../core/permission-mode.js'
-import { appendModeChange } from '../server/session.js'
+import { appendModeChange } from '../session/index.js'
 import { acpModeToExternal, sessionModeState } from './modes.js'
 import { promptBlocksToUserTurn } from './prompt-input.js'
 import { AcpSessionRegistry, runAcpPromptTurn } from './turn-runner.js'

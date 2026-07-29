@@ -31,7 +31,7 @@ import {
 } from '../../core/permission-mode.js'
 import { appendModeChange, appendAgentChange } from '../session.js'
 import type { Message, RunAgentFn } from '../../core/types.js'
-import { createNoopTransport, runChatTurn } from '../run-chat-turn.js'
+import { createNoopTransport, runChatTurn } from '../../turn/run-chat-turn.js'
 import { loadWorkspaceContributions } from '../../core/workspace-load.js'
 import { findPrimaryAgent } from '../../tools/AgentTool/mergeAgents.js'
 

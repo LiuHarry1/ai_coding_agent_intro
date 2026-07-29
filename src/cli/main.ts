@@ -11,10 +11,10 @@
  */
 import type { RunAgentFn } from '../core/types.js'
 import { resolveDefaultWorkspace } from '../core/workspace.js'
-import { createSession, getSession } from '../server/session.js'
+import { createSession, getSession } from '../session/index.js'
 import { createStdioTransport } from '../server/stdio-transport.js'
 import { readStdioClientMessages } from '../server/stdio-input.js'
-import { runChatTurn } from '../server/run-chat-turn.js'
+import { runChatTurn } from '../turn/run-chat-turn.js'
 
 export async function startStdioAgent(runAgent: RunAgentFn): Promise<void> {
   const cwd = resolveDefaultWorkspace()

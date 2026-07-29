@@ -1,7 +1,7 @@
 import type { RunAgentFn, Session } from '../core/types.js'
-import { createSession, getSession } from '../server/session.js'
+import { createSession, getSession } from '../session/index.js'
 import type { SSETransport } from '../core/types.js'
-import { runChatTurn } from '../server/run-chat-turn.js'
+import { runChatTurn } from '../turn/run-chat-turn.js'
 import type { AcpTurnSink } from './translate-outbound.js'
 import { createAcpTransport } from './translate-outbound.js'
 
