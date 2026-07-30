@@ -12,6 +12,7 @@
     "server:restart": "npm run server:stop && npm run start",
     "dev:web": "npm --prefix client/web run dev",
     "build:web": "npm --prefix client/web run build",
+    "build:worker": "node ./scripts/build-worker.cjs",
     "desktop:start": "electron .",
     "desktop:dev": "npm run build:web && npm run desktop:start",
     "desktop:pack": "npm run build:web && electron-builder",
@@ -50,13 +51,14 @@
     "@types/node": "^25.6.0",
     "electron": "^43.0.0",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
     "prettier": "^3.5.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
   "build": {
     "appId": "com.baize.desktop",
-    "productName": "Baize",
+    "productName": "BaiX Agent",
     "directories": {
       "output": "dist-desktop"
     },

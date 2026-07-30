@@ -5,14 +5,29 @@ import {
   createLspServerInstance,
   type LspServerInstance,
 } from './server-instance.js'
-import { registerLSPNotificationHandlers } from './passiveFeedback.js'
+import {
+  registerLSPNotificationHandlers,
+  type DiagnosticsSink,
+} from './passiveFeedback.js'
 import type { ScopedLspServerConfig } from './types.js'
 
-/** Agent package root (repo root containing `integrations/`, `src/`, …). */
-const AGENT_PACKAGE_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../..',
-)
+export type CreateLspServerManagerOptions = {
+  /** When set (Worker), diagnostics are forwarded here instead of in-process registry. */
+  onDiagnostics?: DiagnosticsSink
+}
+
+function resolveAgentPackageRoot(): string {
+  if (process.env.BAIX_AGENT_ROOT) {
+    return path.resolve(process.env.BAIX_AGENT_ROOT)
+  }
+  // Control-plane / tsx path (not used inside bundled worker — Worker always sets BAIX_AGENT_ROOT)
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../..',
+  )
+}
+
+const AGENT_PACKAGE_ROOT = resolveAgentPackageRoot()
 
 export interface LspServerManager {
   readonly workspaceKey: string
@@ -36,6 +51,7 @@ export function createLspServerManager(
   cwd: string,
   configs: Record<string, LspServerConfig>,
   workspaceKey: string,
+  options?: CreateLspServerManagerOptions,
 ): LspServerManager {
   const servers = new Map<string, LspServerInstance>()
   const extensionMap = new Map<string, string[]>()
@@ -213,7 +229,7 @@ export function createLspServerManager(
     shutdown,
   }
 
-  registerLSPNotificationHandlers(manager)
+  registerLSPNotificationHandlers(manager, options?.onDiagnostics)
   return manager
 }
 

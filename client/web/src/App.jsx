@@ -14,6 +14,9 @@ export default function App() {
   const currentSessionId = useChatStore(s => s.currentSessionId)
   const switchSession = useChatStore(s => s.switchSession)
   const chatWorkspace = useChatStore(s => s.workspace)
+  const workspaceEnvId = useChatStore(
+    s => s.workspaceHandle?.environmentId || 'local',
+  )
   const workspaceIdeOpen = useWorkspaceIdeStore(s => s.open)
   const setIdeRootPath = useWorkspaceIdeStore(s => s.setRootPath)
 
@@ -25,12 +28,14 @@ export default function App() {
     if (currentSessionId) switchSession(currentSessionId)
   }, [])
 
-  // Bridge: chat owns "current cwd", IDE just needs *some* root to display.
-  // The IDE module never imports chat-store; this is the one place that
-  // knows about both.
+  // Bridge: chat owns cwd + environment; IDE stores both so FS calls can
+  // route local vs remote without importing chat-store.
   useEffect(() => {
-    setIdeRootPath(chatWorkspace)
-  }, [chatWorkspace, setIdeRootPath])
+    setIdeRootPath(chatWorkspace, {
+      resetTree: true,
+      environmentId: workspaceEnvId,
+    })
+  }, [chatWorkspace, workspaceEnvId, setIdeRootPath])
 
   // Cache MCP server names for accurate `server/tool` labels in chat rows.
   useEffect(() => {

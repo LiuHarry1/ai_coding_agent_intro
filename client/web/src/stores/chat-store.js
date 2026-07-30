@@ -47,6 +47,10 @@ export const useChatStore = create((set, get) => ({
   // ── Sessions ────────────────────────────────
   sessions: [],
   currentSessionId: localStorage.getItem('coding_agent_session_id') || null,
+  /** Display label e.g. `atsrws0049:/home/...` when using execution environments. */
+  workspaceLabel: null,
+  /** Bound WorkspaceHandle from execution plane. */
+  workspaceHandle: null,
 
   // ── Messages ────────────────────────────────
   messages: [],
@@ -274,10 +278,11 @@ export const useChatStore = create((set, get) => ({
 
     const body = {
       message: text,
-      workspace: get().workspace,
+      workspace: get().workspaceHandle?.cwd || get().workspace,
       session_id: get().currentSessionId,
       mode: get().agentMode,
       agentType: get().agentType,
+      environmentId: get().workspaceHandle?.environmentId || 'local',
     }
     if (images.length > 0) body.images = images
 

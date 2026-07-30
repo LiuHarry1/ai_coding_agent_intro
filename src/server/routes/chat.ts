@@ -48,21 +48,23 @@ export async function handleChat(
     return
   }
 
-  const { message, workspace, session_id, images, mode, agentType } = body as {
-    message?: string
-    workspace?: string
-    session_id?: string
-    images?: string[]
-    mode?: string
-    agentType?: string | null
-  }
+  const { message, workspace, session_id, images, mode, agentType, environmentId } =
+    body as {
+      message?: string
+      workspace?: string
+      session_id?: string
+      images?: string[]
+      mode?: string
+      agentType?: string | null
+      /** Optional: bind/use execution environment (default local). */
+      environmentId?: string
+    }
   if (!message) {
     sendJSON(res, 400, { error: "Missing 'message' field" })
     return
   }
 
   const wantsStream = wantsStreamingResponse(req, body)
-  const cwd = resolveRequestCwd(req, workspace)
 
   const requesterEmail = (req as AuthedRequest).user?.email
   let session
@@ -79,8 +81,46 @@ export async function handleChat(
       sendJSON(res, 404, { error: `Session not found: ${session_id}` })
       return
     }
+  }
+
+  // Resolve cwd from Session.workspace handle when present; else legacy path.
+  let cwd: string
+  if (session?.workspace) {
+    cwd = session.workspace.cwd
   } else {
+    cwd = resolveRequestCwd(req, workspace)
+  }
+
+  if (!session) {
     session = createSession(requesterEmail)
+  }
+
+  // Bind WorkspaceHandle when missing.
+  if (!session.workspace) {
+    const envId =
+      typeof environmentId === 'string' && environmentId.length > 0
+        ? environmentId
+        : 'local'
+    const bindCwd =
+      typeof workspace === 'string' && workspace.length > 0 ? workspace : cwd
+    if (envId !== 'local') {
+      // Remote: require an absolute-looking remote path from the picker.
+      if (!bindCwd || bindCwd.includes('\\') || (!bindCwd.startsWith('/') && !bindCwd.startsWith('~'))) {
+        sendJSON(res, 400, {
+          error:
+            'Remote workspace not bound. Use Remote picker to connect and Open Folder first.',
+        })
+        return
+      }
+    }
+    const { setSessionWorkspace } = await import('../session.js')
+    setSessionWorkspace(session.id, {
+      environmentId: envId,
+      cwd: bindCwd,
+    })
+    cwd = bindCwd
+  } else {
+    cwd = session.workspace.cwd
   }
 
   // One turn per session. A duplicate send while a slow step (e.g. full

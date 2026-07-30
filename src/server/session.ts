@@ -13,6 +13,7 @@ export {
   createSession,
   getSession,
   setSessionTitle,
+  setSessionWorkspace,
   listSessions,
   deleteSession,
   appendMessage,

@@ -1,8 +1,19 @@
+import type { DiagnosticFile } from '../../core/types.js'
 import type { LspServerManager } from './server-manager.js'
 import {
   formatDiagnosticsForAttachment,
   registerPendingLSPDiagnostic,
 } from './LSPDiagnosticRegistry.js'
+
+export type DiagnosticsSink = (input: {
+  serverName: string
+  files: DiagnosticFile[]
+}) => void
+
+/** Prefer stderr so Worker NDJSON on stdout stays clean. */
+function diagLog(message: string): void {
+  console.error(`[lsp:diagnostics:verify] ${message}`)
+}
 
 function isPublishDiagnosticsParams(params: unknown): params is {
   uri: string
@@ -29,9 +40,11 @@ function isPublishDiagnosticsParams(params: unknown): params is {
 
 /**
  * Register LSP notification handlers on all servers.
+ * When `onDiagnostics` is provided (Worker), emit there instead of the in-process registry.
  */
 export function registerLSPNotificationHandlers(
   manager: LspServerManager,
+  onDiagnostics?: DiagnosticsSink,
 ): void {
   const workspaceKey = manager.workspaceKey
   const servers = manager.getAllServers()
@@ -41,9 +54,7 @@ export function registerLSPNotificationHandlers(
       !serverInstance ||
       typeof serverInstance.onNotification !== 'function'
     ) {
-      console.warn(
-        `[lsp:diagnostics] skip handler registration for ${serverName}: no onNotification`,
-      )
+      diagLog(`skip handler registration for ${serverName}: no onNotification`)
       continue
     }
 
@@ -52,38 +63,50 @@ export function registerLSPNotificationHandlers(
       (params: unknown) => {
         try {
           if (!isPublishDiagnosticsParams(params)) {
-            console.warn(
-              `[lsp:diagnostics] invalid publishDiagnostics params from ${serverName}`,
+            diagLog(
+              `invalid publishDiagnostics from ${serverName} paramsType=${typeof params}`,
             )
             return
           }
+
+          const count = params.diagnostics.length
+          diagLog(
+            `recv publishDiagnostics server=${serverName} uri=${params.uri} count=${count}`,
+          )
 
           const diagnosticFiles = formatDiagnosticsForAttachment(params)
           const firstFile = diagnosticFiles[0]
           if (!firstFile || firstFile.diagnostics.length === 0) {
-            console.log(
-              `[lsp:diagnostics] publish empty server=${serverName} file=${params.uri}`,
+            diagLog(
+              `skip empty (not forwarded) server=${serverName} uri=${params.uri}`,
             )
             return
           }
 
-          const filePath = firstFile.uri
-          console.log(
-            `[lsp:diagnostics] publish server=${serverName} file=${filePath} diagnostics=${firstFile.diagnostics.length}`,
+          diagLog(
+            `forward server=${serverName} file=${firstFile.uri} diagnostics=${firstFile.diagnostics.length} via=${onDiagnostics ? 'lsp_event' : 'local-registry'}`,
           )
 
-          registerPendingLSPDiagnostic(workspaceKey, {
-            serverName,
-            files: diagnosticFiles,
-          })
+          if (onDiagnostics) {
+            onDiagnostics({ serverName, files: diagnosticFiles })
+          } else {
+            registerPendingLSPDiagnostic(workspaceKey, {
+              serverName,
+              files: diagnosticFiles,
+            })
+          }
         } catch (err) {
-          console.warn(
-            `[lsp:diagnostics] handler error server=${serverName}: ${
+          diagLog(
+            `handler error server=${serverName}: ${
               err instanceof Error ? err.message : String(err)
             }`,
           )
         }
       },
+    )
+
+    diagLog(
+      `handler registered server=${serverName} workspaceKey=${workspaceKey.slice(0, 12)}…`,
     )
   }
 }

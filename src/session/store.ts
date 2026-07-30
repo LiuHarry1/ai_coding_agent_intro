@@ -110,6 +110,24 @@ export function setSessionTitle(sessionId: string, title: string): void {
   })
 }
 
+/** Bind a WorkspaceHandle to the session (persisted in jsonl). */
+export function setSessionWorkspace(
+  sessionId: string,
+  workspace: import('../execution/types.js').WorkspaceHandle,
+): void {
+  const session = getSession(sessionId)
+  if (!session) return
+  session.workspace = {
+    environmentId: workspace.environmentId,
+    cwd: workspace.cwd,
+  }
+  appendLine(sessionId, {
+    type: 'workspace_bound',
+    workspace: session.workspace,
+    timestamp: Date.now(),
+  })
+}
+
 /**
  * List sessions. In SSO mode pass the requester's email to return only that
  * user's sessions; omit it (or run without auth) to list everything.
@@ -262,6 +280,18 @@ function restoreFromDisk(id: string): Session {
     } else if (line.type === 'session_title') {
       if (typeof line.title === 'string' && line.title.trim()) {
         session.title = line.title.trim()
+      }
+    } else if (line.type === 'workspace_bound') {
+      const w = line.workspace
+      if (
+        w &&
+        typeof w.environmentId === 'string' &&
+        typeof w.cwd === 'string'
+      ) {
+        session.workspace = {
+          environmentId: w.environmentId,
+          cwd: w.cwd,
+        }
       }
     } else if (line.type === 'compacted') {
       // Checkpoint: discard everything accumulated so far and adopt the

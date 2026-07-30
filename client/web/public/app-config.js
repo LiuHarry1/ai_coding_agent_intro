@@ -1,6 +1,5 @@
 // Runtime configuration, loaded before the app bundle. In Docker the web
 // image's startup hook (deploy/web-runtime-config.sh) OVERWRITES this file
-// from the AUTH_ENABLED env var, so the same image works for every deploy
-// mode without a rebuild. This default (auth off) is what `npm run dev`
-// and the password/local modes use.
-window.__APP_CONFIG__ = { authEnabled: false };
+// from env vars, so the same image works for every deploy mode without a
+// rebuild. Defaults match `npm run dev` / local Electron (auth off, Remote on).
+window.__APP_CONFIG__ = { authEnabled: false, remoteEnabled: true };

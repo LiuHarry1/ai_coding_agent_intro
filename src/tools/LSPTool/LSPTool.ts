@@ -16,8 +16,21 @@ import type { ToolDefinition } from '../../core/types.js'
 import { LSP_TOOL_NAME } from '../../constants/tool_names.js'
 import { getLspManager } from '../../services/lsp/manager.js'
 import { resolvePath } from '../utils.js'
+import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
 const MAX_LSP_FILE_SIZE_BYTES = 10_000_000
+
+/** file:// URI that keeps POSIX absolute paths intact on a Windows Control Plane. */
+function toFileUri(absolutePath: string): string {
+  const n = absolutePath.replace(/\\/g, '/')
+  if (n.startsWith('/') && !/^[a-zA-Z]:/.test(absolutePath)) {
+    return `file://${n
+      .split('/')
+      .map((seg, i) => (i === 0 ? '' : encodeURIComponent(seg)))
+      .join('/')}`
+  }
+  return pathToFileURL(absolutePath).href
+}
 
 const operations = [
   'go_to_definition',
@@ -75,24 +88,55 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
         character?: number
         query?: string
       }): Promise<string> => {
-        const resolved = resolvePath(cwd, input.file_path)
-        if ('error' in resolved) return `Error: ${resolved.error}`
-        const absolutePath = resolved.abs
+        const worker = isWorkerExecutionBackend(context.execution)
+          ? context.execution
+          : undefined
 
-        const manager = getLspManager(cwd, context.lspServers)
-        if (!manager) {
-          return 'No LSP servers configured. Add lspServers to .ai-agent/settings.json.'
-        }
-
-        const server = manager.getServerForFile(absolutePath)
-        if (!server) {
-          return `No LSP server configured for ${path.extname(absolutePath) || 'this file type'}.`
+        // Prefer ExecutionBackend.resolve so remote POSIX cwd is not mangled
+        // by Windows path.resolve into `C:\home\...`.
+        let absolutePath: string
+        if (worker) {
+          absolutePath = worker.resolve(cwd, input.file_path)
+        } else {
+          const resolved = resolvePath(cwd, input.file_path)
+          if ('error' in resolved) return `Error: ${resolved.error}`
+          absolutePath = resolved.abs
         }
 
         const methodAndParams = getMethodAndParams(input, absolutePath)
         if ('error' in methodAndParams) return methodAndParams.error
 
         try {
+          if (worker) {
+            if (!(await worker.lspHasServerForFile(absolutePath))) {
+              return `No LSP server configured for ${path.extname(absolutePath) || 'this file type'}.`
+            }
+            const opened = await worker.lspIsFileOpen(absolutePath)
+            if (!opened) {
+              const content = await worker.readText(absolutePath)
+              if (Buffer.byteLength(content, 'utf8') > MAX_LSP_FILE_SIZE_BYTES) {
+                return `File too large for LSP analysis (${Math.ceil(Buffer.byteLength(content, 'utf8') / 1_000_000)}MB exceeds 10MB limit).`
+              }
+              await worker.lspOpenFile(absolutePath, content)
+            }
+            const result = await worker.lspRequest(
+              absolutePath,
+              methodAndParams.method,
+              methodAndParams.params,
+            )
+            return formatResult(input.operation, result, cwd)
+          }
+
+          const manager = getLspManager(cwd, context.lspServers)
+          if (!manager) {
+            return 'No LSP servers configured. Add lspServers to .ai-agent/settings.json.'
+          }
+
+          const server = manager.getServerForFile(absolutePath)
+          if (!server) {
+            return `No LSP server configured for ${path.extname(absolutePath) || 'this file type'}.`
+          }
+
           if (!manager.isFileOpen(absolutePath)) {
             const handle = await open(absolutePath, 'r')
             try {
@@ -132,7 +176,7 @@ function getMethodAndParams(
   },
   absolutePath: string,
 ): { method: string; params: unknown } | { error: string } {
-  const uri = pathToFileURL(absolutePath).href
+  const uri = toFileUri(absolutePath)
   const position = makePosition(input)
 
   switch (input.operation) {

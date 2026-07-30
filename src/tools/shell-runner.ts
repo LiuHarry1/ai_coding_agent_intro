@@ -188,6 +188,42 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
 
           const { command, background = false, stdin, timeout = 120_000 } = args
 
+          // ── Remote SSH execution (Control-plane LLM, tools on remote) ──
+          const execution = context.execution
+          if (execution) {
+            if (background) {
+              return 'Error: background mode is not supported over SSH yet. Run foreground commands only.'
+            }
+            if (stdin != null && stdin.length > 0) {
+              return 'Error: stdin piping is not supported over SSH yet.'
+            }
+            try {
+              const result = await execution.exec(command, {
+                cwd: cwdRef.current,
+                timeoutMs: timeout,
+              })
+              if (result.cwdAfter) cwdRef.current = result.cwdAfter
+              let out = result.stdout || ''
+              if (result.stderr) {
+                out += (out ? '\n' : '') + `<stderr>\n${result.stderr}</stderr>`
+              }
+              if (result.code !== 0 && result.code !== null) {
+                out += `\n[exit code: ${result.code}]`
+              }
+              const final =
+                out ||
+                (result.code === 0
+                  ? '(no output)'
+                  : `(no output, exit code ${result.code})`)
+              if (wire && toolUseId) {
+                wire.processOutput(toolUseId, name, final)
+              }
+              return truncate(final)
+            } catch (err) {
+              return `[error: ${err instanceof Error ? err.message : String(err)}]`
+            }
+          }
+
           // Tmpfile the wrapped command writes its post-execution `pwd` to.
           // Unique per call so parallel invocations don't race on the file.
           // Cleaned up after readback (or on bg child close further down).

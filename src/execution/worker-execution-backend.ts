@@ -1,0 +1,246 @@
+/**
+ * ExecutionBackend over RuntimePort fs_op / lsp_op RPC (isomorphic Worker).
+ */
+import * as path from 'path'
+import type { RuntimePort } from './types.js'
+import type { WorkerFsOp, WorkerLspOp } from './runtime-protocol.js'
+import type { ExecResult, ExecutionBackend } from './execution-backend.js'
+import type { LspServerConfig } from '../core/types.js'
+import { registerPendingLSPDiagnostic } from '../services/lsp/LSPDiagnosticRegistry.js'
+import { getLspWorkspaceKey } from '../services/lsp/manager.js'
+
+function posixJoin(cwd: string, filePath: string): string {
+  if (filePath.startsWith('/')) return path.posix.normalize(filePath)
+  return path.posix.normalize(
+    path.posix.join(cwd.replace(/\\/g, '/'), filePath),
+  )
+}
+
+function posixInWorkspace(cwd: string, absPath: string): boolean {
+  const root = path.posix.normalize(cwd.replace(/\\/g, '/')).replace(/\/$/, '')
+  const target = path.posix.normalize(absPath.replace(/\\/g, '/'))
+  if (target === root) return true
+  const rel = path.posix.relative(root, target)
+  return Boolean(rel) && !rel.startsWith('..') && !path.posix.isAbsolute(rel)
+}
+
+function localInWorkspace(cwd: string, absPath: string): boolean {
+  const root = path.resolve(cwd)
+  const target = path.resolve(absPath)
+  const rel = path.relative(root, target)
+  return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel)
+}
+
+export class WorkerExecutionBackend implements ExecutionBackend {
+  readonly kind = 'worker' as const
+  private seq = 0
+  private pending = new Map<
+    string,
+    {
+      resolve: (v: unknown) => void
+      reject: (e: Error) => void
+    }
+  >()
+  private unsub: () => void
+  private workspaceKey: string
+
+  constructor(
+    readonly environmentId: string,
+    private runtime: RuntimePort,
+    private pathStyle: 'posix' | 'local' = environmentId === 'local'
+      ? 'local'
+      : 'posix',
+    private cwd: string = '',
+    private lspServers?: Record<string, LspServerConfig>,
+  ) {
+    this.workspaceKey = getLspWorkspaceKey(this.cwd, this.lspServers)
+    this.unsub = runtime.onMessage(msg => {
+      if (msg.type === 'lsp_event' && msg.event === 'diagnostics') {
+        const count = msg.files.reduce(
+          (n, f) => n + f.diagnostics.length,
+          0,
+        )
+        console.error(
+          `[lsp:diagnostics:verify] cp recv lsp_event env=${this.environmentId} server=${msg.serverName} files=${msg.files.length} diagnostics=${count} workspaceKey=${this.workspaceKey ? this.workspaceKey.slice(0, 12) + '…' : '(empty)'}`,
+        )
+        if (!this.workspaceKey) {
+          console.error(
+            '[lsp:diagnostics:verify] cp drop: workspaceKey empty (pass cwd to WorkerExecutionBackend)',
+          )
+          return
+        }
+        registerPendingLSPDiagnostic(this.workspaceKey, {
+          serverName: msg.serverName,
+          files: msg.files,
+        })
+        return
+      }
+      if (msg.type !== 'fs_op_result' && msg.type !== 'lsp_op_result') return
+      const p = this.pending.get(msg.requestId)
+      if (!p) return
+      this.pending.delete(msg.requestId)
+      if (msg.ok) p.resolve(msg.data)
+      else p.reject(new Error(msg.error))
+    })
+  }
+
+  private requestFs<T>(op: WorkerFsOp, timeoutMs = 180_000): Promise<T> {
+    const requestId = `fs-${++this.seq}-${Date.now()}`
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId)
+        reject(new Error(`Worker fs_op timed out: ${op.op}`))
+      }, timeoutMs)
+      this.pending.set(requestId, {
+        resolve: v => {
+          clearTimeout(timer)
+          resolve(v as T)
+        },
+        reject: e => {
+          clearTimeout(timer)
+          reject(e)
+        },
+      })
+      this.runtime.send({ type: 'fs_op', requestId, op })
+    })
+  }
+
+  private requestLsp<T>(op: WorkerLspOp, timeoutMs = 180_000): Promise<T> {
+    const requestId = `lsp-${++this.seq}-${Date.now()}`
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId)
+        reject(new Error(`Worker lsp_op timed out: ${op.op}`))
+      }, timeoutMs)
+      this.pending.set(requestId, {
+        resolve: v => {
+          clearTimeout(timer)
+          resolve(v as T)
+        },
+        reject: e => {
+          clearTimeout(timer)
+          reject(e)
+        },
+      })
+      this.runtime.send({ type: 'lsp_op', requestId, op })
+    })
+  }
+
+  resolve(cwd: string, filePath: string): string {
+    if (this.pathStyle === 'posix') return posixJoin(cwd, filePath)
+    return path.isAbsolute(filePath)
+      ? path.normalize(filePath)
+      : path.resolve(cwd, filePath)
+  }
+
+  assertInWorkspace(
+    cwd: string,
+    absPath: string,
+    _access: 'read' | 'write',
+  ): void {
+    const ok =
+      this.pathStyle === 'posix'
+        ? posixInWorkspace(cwd, absPath)
+        : localInWorkspace(cwd, absPath)
+    if (!ok) {
+      throw new Error(
+        `Refused: "${absPath}" is outside the workspace "${cwd}".`,
+      )
+    }
+  }
+
+  async readText(absPath: string): Promise<string> {
+    return this.requestFs<string>({ op: 'readText', path: absPath })
+  }
+
+  async writeText(absPath: string, content: string): Promise<void> {
+    await this.requestFs<null>({ op: 'writeText', path: absPath, content })
+  }
+
+  async mkdirp(dirPath: string): Promise<void> {
+    await this.requestFs<null>({ op: 'mkdirp', path: dirPath })
+  }
+
+  async exists(absPath: string): Promise<boolean> {
+    return this.requestFs<boolean>({ op: 'exists', path: absPath })
+  }
+
+  async isDirectory(absPath: string): Promise<boolean> {
+    return this.requestFs<boolean>({ op: 'isDirectory', path: absPath })
+  }
+
+  async exec(
+    command: string,
+    opts: { cwd: string; timeoutMs?: number },
+  ): Promise<ExecResult & { cwdAfter?: string }> {
+    return this.requestFs(
+      {
+        op: 'exec',
+        command,
+        cwd: opts.cwd,
+        timeoutMs: opts.timeoutMs,
+      },
+      (opts.timeoutMs ?? 120_000) + 10_000,
+    )
+  }
+
+  async configureLsp(
+    servers: Record<string, LspServerConfig>,
+  ): Promise<void> {
+    this.lspServers = servers
+    this.workspaceKey = getLspWorkspaceKey(this.cwd, servers)
+    await this.requestLsp({ op: 'configure', servers })
+  }
+
+  async lspHasServerForFile(filePath: string): Promise<boolean> {
+    return this.requestLsp<boolean>({
+      op: 'hasServerForFile',
+      filePath,
+    })
+  }
+
+  async lspEnsure(filePath: string): Promise<unknown> {
+    return this.requestLsp({ op: 'ensure', filePath }, 180_000)
+  }
+
+  async lspRequest<T>(
+    filePath: string,
+    method: string,
+    params: unknown,
+  ): Promise<T | undefined> {
+    return this.requestLsp<T | undefined>(
+      { op: 'request', filePath, method, params },
+      180_000,
+    )
+  }
+
+  async lspOpenFile(filePath: string, content: string): Promise<void> {
+    await this.requestLsp({ op: 'openFile', filePath, content })
+  }
+
+  async lspChangeFile(filePath: string, content: string): Promise<void> {
+    await this.requestLsp({ op: 'changeFile', filePath, content })
+  }
+
+  async lspSaveFile(filePath: string): Promise<void> {
+    await this.requestLsp({ op: 'saveFile', filePath })
+  }
+
+  async lspIsFileOpen(filePath: string): Promise<boolean> {
+    return this.requestLsp<boolean>({ op: 'isFileOpen', filePath })
+  }
+
+  dispose(): void {
+    this.unsub()
+    for (const [, p] of this.pending) {
+      p.reject(new Error('WorkerExecutionBackend disposed'))
+    }
+    this.pending.clear()
+  }
+}
+
+export function isWorkerExecutionBackend(
+  v: ExecutionBackend | undefined,
+): v is WorkerExecutionBackend {
+  return Boolean(v && v.kind === 'worker' && 'configureLsp' in v)
+}

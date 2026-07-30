@@ -9,9 +9,11 @@ import type {
 } from './types.js'
 import {
   DEFAULT_PROFILE,
+  isModelTier,
   profileToRecord,
   resolveModelProfiles,
   type ModelProfiles,
+  type ModelTier,
 } from './llm/index.js'
 import { loadPlugins } from './plugins/index.js'
 import {
@@ -52,6 +54,7 @@ export const DEFAULTS: AppConfig = {
   mcpServers: {},
   lspServers: {},
   disabledTools: [],
+  environments: { ssh: [] },
 }
 
 /** Code defaults for extract/inject (throttle default = 1). */
@@ -65,13 +68,26 @@ const AUTO_MEMORY_RUNTIME_DEFAULTS = {
 } as const
 
 /**
- * Resolve runtime AutoMemoryConfig from flat settings fields.
+ * Resolve runtime AutoMemoryConfig from Claude Code–compatible flat fields
+ * plus agent extensions under nested `autoMemory` (or legacy flat keys).
+ *
+ * CC surface: autoMemoryEnabled / autoMemoryDirectory
+ * Agent-only: autoMemory.cacheSafe / autoMemory.modelTier
  */
 export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
+  const cacheSafe =
+    typeof config.autoMemoryCacheSafe === 'boolean'
+      ? config.autoMemoryCacheSafe
+      : AUTO_MEMORY_RUNTIME_DEFAULTS.cacheSafe
+  const modelTier: ModelTier = isModelTier(config.autoMemoryModelTier)
+    ? config.autoMemoryModelTier
+    : AUTO_MEMORY_RUNTIME_DEFAULTS.modelTier
   return {
     enabled: config.autoMemoryEnabled !== false,
     directory: config.autoMemoryDirectory,
     ...AUTO_MEMORY_RUNTIME_DEFAULTS,
+    cacheSafe,
+    modelTier,
   }
 }
 
@@ -106,11 +122,16 @@ type PartialAppConfig = Partial<{
   sessionMemory: Record<string, unknown>
   autoMemoryEnabled: boolean
   autoMemoryDirectory: string
-  /** Legacy nested shape — migrated in applyLayer. */
+  autoMemoryCacheSafe: boolean
+  autoMemoryModelTier: string
+  /** Nested shape — migrated in applyLayer (enabled/directory/cacheSafe/modelTier). */
   autoMemory: Record<string, unknown>
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   disabledTools: unknown[]
+  environments: {
+    ssh?: Array<Record<string, unknown>>
+  }
 }>
 
 type ParsedSettingsFile = {
@@ -277,20 +298,34 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
     Object.assign(config.sessionMemory, layer.sessionMemory)
   }
 
-  // Flat fields (+ legacy nested autoMemory.{enabled,directory})
+  // Prefer nested autoMemory.{enabled,directory,cacheSafe,modelTier}.
+  // Flat autoMemoryEnabled / autoMemoryDirectory remain CC-compatible aliases;
+  // flat autoMemoryCacheSafe / autoMemoryModelTier are legacy agent aliases.
   if (typeof layer.autoMemoryEnabled === 'boolean') {
     config.autoMemoryEnabled = layer.autoMemoryEnabled
   }
   if (typeof layer.autoMemoryDirectory === 'string') {
     config.autoMemoryDirectory = layer.autoMemoryDirectory
   }
+  if (typeof layer.autoMemoryCacheSafe === 'boolean') {
+    config.autoMemoryCacheSafe = layer.autoMemoryCacheSafe
+  }
+  if (isModelTier(layer.autoMemoryModelTier)) {
+    config.autoMemoryModelTier = layer.autoMemoryModelTier
+  }
   if (layer.autoMemory && typeof layer.autoMemory === 'object') {
-    const legacy = layer.autoMemory
-    if (typeof legacy.enabled === 'boolean') {
-      config.autoMemoryEnabled = legacy.enabled
+    const nested = layer.autoMemory
+    if (typeof nested.enabled === 'boolean') {
+      config.autoMemoryEnabled = nested.enabled
     }
-    if (typeof legacy.directory === 'string') {
-      config.autoMemoryDirectory = legacy.directory
+    if (typeof nested.directory === 'string') {
+      config.autoMemoryDirectory = nested.directory
+    }
+    if (typeof nested.cacheSafe === 'boolean') {
+      config.autoMemoryCacheSafe = nested.cacheSafe
+    }
+    if (isModelTier(nested.modelTier)) {
+      config.autoMemoryModelTier = nested.modelTier
     }
   }
 
@@ -313,6 +348,16 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
       config.disabledTools,
       layer.disabledTools,
     )
+  }
+
+  if (layer.environments && typeof layer.environments === 'object') {
+    const ssh = Array.isArray(layer.environments.ssh)
+      ? layer.environments.ssh
+      : []
+    config.environments = {
+      ...(config.environments ?? {}),
+      ssh: ssh as NonNullable<AppConfig['environments']>['ssh'],
+    }
   }
 }
 
@@ -528,6 +573,12 @@ function mergePatch(
     patch.autoMemoryDirectory === undefined
   ) {
     delete next.autoMemoryDirectory
+  }
+  if (typeof patch.autoMemoryCacheSafe === 'boolean') {
+    next.autoMemoryCacheSafe = patch.autoMemoryCacheSafe
+  }
+  if (isModelTier(patch.autoMemoryModelTier)) {
+    next.autoMemoryModelTier = patch.autoMemoryModelTier
   }
   if (patch.mcpServers) {
     next.mcpServers = {

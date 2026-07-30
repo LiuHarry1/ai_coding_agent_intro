@@ -40,7 +40,11 @@
     "compactMaxTokens": 40000,
     "compactMinTextMessages": 5
   },
-  "autoMemoryEnabled": true,
+  "autoMemory": {
+    "enabled": true,
+    "cacheSafe": true,
+    "modelTier": "medium"
+  },
   "lspServers": {
     "typescript": {
       "command": "npx",
@@ -97,6 +101,9 @@
       "startupTimeout": 120000,
       "maxRestarts": 1
     }
+  },
+  "environments": {
+    "ssh": [{ "sshHost": "atsrws0049", "startDirectory": "~/Device1" }]
   },
   "mcpServers": {
     "mcp_server": {

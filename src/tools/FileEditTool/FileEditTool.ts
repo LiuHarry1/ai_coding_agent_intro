@@ -10,6 +10,7 @@ import type { ToolDefinition } from '../../core/types.js'
 import { EDIT_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
+import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
 export const definition: ToolDefinition = {
   name: EDIT_FILE_TOOL_NAME,
@@ -48,6 +49,60 @@ export const definition: ToolDefinition = {
         new_string: string
         replace_all?: boolean
       }) => {
+        const execution = context.execution
+        if (execution) {
+          try {
+            const abs = execution.resolve(cwd, file_path)
+            execution.assertInWorkspace(cwd, abs, 'write')
+            if (!(await execution.exists(abs))) {
+              return `Error: file not found: ${file_path}`
+            }
+            if (await execution.isDirectory(abs)) {
+              return `Error: ${file_path} is a directory`
+            }
+            if (old_string === new_string) {
+              return `Error: old_string and new_string are identical`
+            }
+            if (!old_string) {
+              return `Error: old_string cannot be empty — use write_file to create files`
+            }
+            const content = await execution.readText(abs)
+            let search = old_string
+            let matchCount = countOccurrences(content, search)
+            if (matchCount === 0) {
+              const fuzzyResult = fuzzyFind(content, old_string)
+              if (!fuzzyResult) {
+                return `Error: old_string not found in ${file_path}. Make sure it matches exactly (including whitespace and indentation).`
+              }
+              search = fuzzyResult
+              matchCount = countOccurrences(content, search)
+            }
+            if (matchCount > 1 && !replace_all) {
+              return `Error: found ${matchCount} matches in ${file_path}. Include more context or set replace_all: true.`
+            }
+            const newContent = replace_all
+              ? content.replaceAll(search, new_string)
+              : content.replace(search, new_string)
+            await execution.writeText(abs, newContent)
+            if (isWorkerExecutionBackend(execution)) {
+              try {
+                const workspaceKey = getLspWorkspaceKey(
+                  cwd,
+                  context.lspServers,
+                )
+                clearDeliveredDiagnosticsForFile(workspaceKey, abs)
+                await execution.lspChangeFile(abs, newContent)
+                await execution.lspSaveFile(abs)
+              } catch {
+                /* LSP optional */
+              }
+            }
+            return `Edited ${file_path} (${replace_all ? matchCount : 1} replacement${matchCount === 1 ? '' : 's'}) [worker:${execution.environmentId}]`
+          } catch (err) {
+            return err instanceof Error ? err.message : String(err)
+          }
+        }
+
         const resolved = resolvePath(cwd, file_path)
         if ('error' in resolved) return resolved.error
         const { abs } = resolved

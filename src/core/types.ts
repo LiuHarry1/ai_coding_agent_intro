@@ -82,6 +82,11 @@ export interface ToolContext {
    * When set, File tools enforce read/write boundaries via core/sandbox.ts.
    */
   sandbox?: import('./sandbox.js').SandboxPolicy
+  /**
+   * Tool execution via isomorphic Agent Worker (RuntimePort RPC).
+   * Always set for both local and SSH workspaces.
+   */
+  execution?: import('../execution/execution-backend.js').ExecutionBackend
 }
 
 export interface ToolDefinition {
@@ -446,6 +451,11 @@ export interface Session {
   hasExitedPlanMode?: boolean
   /** One-shot attachment after plan exit allowing execution. */
   needsPlanModeExitAttachment?: boolean
+  /**
+   * Bound execution workspace: which Environment + cwd tools run against.
+   * Local is also a WorkspaceHandle (`environmentId: "local"`).
+   */
+  workspace?: import('../execution/types.js').WorkspaceHandle
 }
 
 export interface SessionInfo {
@@ -645,8 +655,13 @@ export interface SessionMemoryConfig {
 }
 
 /**
- * Runtime auto-memory config (derived from flat AppConfig fields + code defaults).
- * Settings surface: `autoMemoryEnabled` / `autoMemoryDirectory`.
+ * Runtime auto-memory config (derived from AppConfig + code defaults).
+ *
+ * Preferred nested surface under `autoMemory`:
+ *   - `enabled`, `directory` (trusted scopes), `cacheSafe`, `modelTier`
+ * CC-compatible flat aliases still accepted:
+ *   - `autoMemoryEnabled`, `autoMemoryDirectory`
+ * Legacy flat agent aliases: `autoMemoryCacheSafe` / `autoMemoryModelTier`.
  */
 export interface AutoMemoryConfig {
   enabled: boolean
@@ -674,19 +689,46 @@ export interface AppConfig {
   compaction: CompactionConfig
   sessionMemory: SessionMemoryConfig
   /**
-   * Enable auto-memory (`autoMemoryEnabled`). Default true.
+   * Enable auto-memory. Claude Code–compatible flat key (`autoMemoryEnabled`).
    * Env `AI_AGENT_DISABLE_AUTO_MEMORY=1` still forces off.
    */
   autoMemoryEnabled: boolean
   /**
-   * Custom auto-memory directory (`autoMemoryDirectory`).
-   * Trusted scopes only: user / local / env �?never project settings.
+   * Custom auto-memory directory. Claude Code–compatible (`autoMemoryDirectory`).
+   * Trusted scopes only: user / local / env — never project settings.
    */
   autoMemoryDirectory?: string
+  /**
+   * Agent extension: when false, extract uses `autoMemoryModelTier`.
+   * Prefer settings nested `autoMemory.cacheSafe` (CC does not define this flat key).
+   * Flat `autoMemoryCacheSafe` kept for backward compatibility.
+   */
+  autoMemoryCacheSafe?: boolean
+  /**
+   * Agent extension: tier for non-cacheSafe extract. Default medium.
+   * Prefer settings nested `autoMemory.modelTier`.
+   * Flat `autoMemoryModelTier` kept for backward compatibility.
+   */
+  autoMemoryModelTier?: ModelTier
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */
   disabledTools?: string[]
+  /**
+   * Extra SSH hosts for the execution EnvironmentRegistry (merged with ~/.ssh/config).
+   */
+  environments?: {
+    ssh?: Array<{
+      id?: string
+      name?: string
+      sshHost: string
+      sshUser?: string
+      sshPort?: number
+      sshIdentityFile?: string
+      proxyJump?: string
+      startDirectory?: string
+    }>
+  }
 }
 
 export type { ModelProfiles, ModelRegistry, ModelTier }

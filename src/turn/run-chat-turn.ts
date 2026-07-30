@@ -17,6 +17,8 @@ import type { ModelRegistry } from '../core/llm/index.js'
 import { EventBus } from '../core/event-bus.js'
 import { createModelRegistry, resolveSidePathModel } from '../core/llm/index.js'
 import { resolveSettings, resolveAutoMemoryConfig } from '../core/settings-manager.js'
+import { getDefaultWorkspace } from '../core/workspace.js'
+import { isRemoteWorkspace } from '../execution/index.js'
 import { generateSessionTitle } from '../services/sessionTitle.js'
 import {
   setSessionTitle,
@@ -165,7 +167,10 @@ export async function runChatTurn(
     onClientDisconnect,
   } = input
 
-  const resolvedSettings = resolveSettings(cwd)
+  const settingsCwd = isRemoteWorkspace(session.workspace)
+    ? getDefaultWorkspace()
+    : cwd
+  const resolvedSettings = resolveSettings(settingsCwd)
   const models = createModelRegistry(resolvedSettings.config.models)
   const provider = models.provider('large')
   const wire = createWireEmitter(transport, session.id)

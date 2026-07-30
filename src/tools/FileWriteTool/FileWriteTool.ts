@@ -11,6 +11,7 @@ import type { ToolDefinition } from '../../core/types.js'
 import { WRITE_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
+import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
 export const definition: ToolDefinition = {
   name: WRITE_FILE_TOOL_NAME,
@@ -33,6 +34,32 @@ export const definition: ToolDefinition = {
         file_path: string
         content: string
       }) => {
+        const execution = context.execution
+        if (execution) {
+          try {
+            const abs = execution.resolve(cwd, file_path)
+            execution.assertInWorkspace(cwd, abs, 'write')
+            await execution.writeText(abs, content)
+            if (isWorkerExecutionBackend(execution)) {
+              try {
+                const workspaceKey = getLspWorkspaceKey(
+                  cwd,
+                  context.lspServers,
+                )
+                clearDeliveredDiagnosticsForFile(workspaceKey, abs)
+                await execution.lspChangeFile(abs, content)
+                await execution.lspSaveFile(abs)
+              } catch {
+                /* LSP optional */
+              }
+            }
+            const lines = content.split('\n').length
+            return `Wrote ${file_path} (${lines} lines, ${content.length} chars) [worker:${execution.environmentId}]`
+          } catch (err) {
+            return err instanceof Error ? err.message : String(err)
+          }
+        }
+
         const resolved = resolvePath(cwd, file_path)
         if ('error' in resolved) return resolved.error
         const { abs } = resolved

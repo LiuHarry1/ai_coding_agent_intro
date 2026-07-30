@@ -202,6 +202,47 @@ export const definition: ToolDefinition = {
           multiline = false,
         } = rawArgs
 
+        const execution = toolContext.execution
+        if (execution) {
+          try {
+            const abs = execution.resolve(cwd, inputPath ?? '.')
+            execution.assertInWorkspace(cwd, abs, 'read')
+            const rgArgs: string[] = ['--hidden', '--max-columns', '500']
+            if (multiline) rgArgs.push('-U', '--multiline-dotall')
+            if (case_insensitive) rgArgs.push('-i')
+            if (output_mode === 'files_with_matches') rgArgs.push('-l')
+            else if (output_mode === 'count') rgArgs.push('-c')
+            if (show_line_numbers && output_mode === 'content') rgArgs.push('-n')
+            const ctx = context ?? context_c
+            if (output_mode === 'content') {
+              if (ctx !== undefined) rgArgs.push('-C', String(ctx))
+              else {
+                if (context_before !== undefined)
+                  rgArgs.push('-B', String(context_before))
+                if (context_after !== undefined)
+                  rgArgs.push('-A', String(context_after))
+              }
+            }
+            if (glob) rgArgs.push('--glob', glob)
+            if (type) rgArgs.push('--type', type)
+            rgArgs.push('--', pattern, abs)
+            const quoted = rgArgs.map(a => `'${a.replace(/'/g, `'\"'\"'`)}'`).join(' ')
+            const result = await execution.exec(
+              `command -v rg >/dev/null && rg ${quoted} || grep -RIn ${case_insensitive ? '-i ' : ''}-- ${`'${pattern.replace(/'/g, `'\"'\"'`)}'`} ${`'${abs.replace(/'/g, `'\"'\"'`)}'`}`,
+              { cwd, timeoutMs: 60_000 },
+            )
+            let out = result.stdout || result.stderr || '(no matches)'
+            if (head_limit && head_limit > 0) {
+              out = out.split('\n').slice(offset, offset + head_limit).join('\n')
+            } else if (offset) {
+              out = out.split('\n').slice(offset).join('\n')
+            }
+            return out || '(no matches)'
+          } catch (err) {
+            return err instanceof Error ? err.message : String(err)
+          }
+        }
+
         const resolved = resolvePath(cwd, inputPath ?? '.')
         if ('error' in resolved) return resolved.error
         const absolutePath = resolved.abs

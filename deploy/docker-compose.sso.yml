@@ -114,9 +114,9 @@ services:
       SEARXNG_URL: "${SEARXNG_URL:-http://localhost:8888}"
       WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
     volumes:
-      - ../workspaces:/workspace:rw
+      - ./workspaces:/workspace:rw
       # Chat history (.sessions/*.jsonl) — survives container recreate/redeploy.
-      - ../sessions:/app/.sessions:rw
+      - ./sessions:/app/.sessions:rw
     depends_on:
       analytics:
         condition: service_healthy
@@ -135,9 +135,16 @@ services:
     # The image serves the SPA as a static site (nginx.static.conf is baked
     # in) — no agent upstream and no /sso proxy, so this container is fully
     # independent of the agent and starts even if the agent is unreachable.
+    # RHEL7/CentOS7 (kernel 3.10) + nginx 1.31+: default seccomp blocks
+    # pwrite(/run/nginx.pid). Prefer rebuilding with nginx:1.25-alpine
+    # (Dockerfile.web); this is a runtime fallback.
+    security_opt:
+      - seccomp:unconfined
     environment:
       # Turns on the SPA's SSO login flow (window.__APP_CONFIG__.authEnabled).
       AUTH_ENABLED: "true"
+      # Hide Remote SSH picker in tenant SSO deploys.
+      REMOTE_ENABLED: "false"
       # Browser → agent API origin (cross-origin). Baked into app-config.js.
       API_BASE: "${AGENT_PUBLIC_URL:-http://10.150.115.69:4567}"
       # Browser → auth-service origin for /sso/authorize + /sso/logout.

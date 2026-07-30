@@ -3,5 +3,7 @@ uvicorn[standard]>=0.27.0
 openai>=1.40.0
 pydantic>=2.6.0
 
-# MCP fetch server (config: python -m mcp_server_fetch)
+# MCP fetch (stdio: python -m mcp_server_fetch). Keep mcp on 1.x —
+# mcp-server-fetch still imports McpError (removed/renamed in mcp 2.0).
+mcp>=1.9.0,<2
 mcp-server-fetch>=2025.4.7

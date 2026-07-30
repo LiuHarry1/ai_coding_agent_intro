@@ -5,6 +5,12 @@ import { fileURLToPath } from 'url'
 import { createRouter } from './router.js'
 import type { ServerOptions } from '../core/types.js'
 import { shutdownAllLspManagers } from '../services/lsp/manager.js'
+import {
+  bootstrapExecutionPlane,
+  shutdownExecutionPlane,
+} from '../execution/index.js'
+import { resolveSettings } from '../core/settings-manager.js'
+import { getDefaultWorkspace } from '../core/workspace.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -54,22 +60,42 @@ export function startServer({ runAgent }: ServerOptions): void {
     shuttingDown = true
     console.log(`[server] ${signal}: shutting down`)
     server.close(() => {
-      void shutdownAllLspManagers().finally(() => process.exit(0))
+      void shutdownExecutionPlane()
+        .catch(() => {})
+        .finally(() =>
+          void shutdownAllLspManagers().finally(() => process.exit(0)),
+        )
     })
   }
   process.once('SIGINT', () => shutdown('SIGINT'))
   process.once('SIGTERM', () => shutdown('SIGTERM'))
 
-  server.listen(PORT, () => {
-    console.log(`[server] listening on http://localhost:${PORT}`)
-    console.log(`[server]   POST /sessions     -- create session`)
-    console.log(`[server]   GET  /sessions     -- list sessions`)
-    console.log(`[server]   DELETE /sessions/id -- delete session`)
-    console.log(`[server]   POST /chat         -- chat (SSE stream)`)
-    if (staticDir) {
-      console.log(`[server]   Static files from: ${distDir}`)
+  void (async () => {
+    try {
+      const settings = resolveSettings(getDefaultWorkspace())
+      await bootstrapExecutionPlane({
+        sshHosts: settings.config.environments?.ssh ?? [],
+      })
+      console.log(`[server] execution plane ready (local + ssh providers)`)
+    } catch (err) {
+      console.warn(
+        '[server] execution plane bootstrap failed:',
+        err instanceof Error ? err.message : err,
+      )
     }
-  })
+
+    server.listen(PORT, () => {
+      console.log(`[server] listening on http://localhost:${PORT}`)
+      console.log(`[server]   POST /sessions     -- create session`)
+      console.log(`[server]   GET  /sessions     -- list sessions`)
+      console.log(`[server]   DELETE /sessions/id -- delete session`)
+      console.log(`[server]   POST /chat         -- chat (SSE stream)`)
+      console.log(`[server]   GET  /environments -- list execution environments`)
+      if (staticDir) {
+        console.log(`[server]   Static files from: ${distDir}`)
+      }
+    })
+  })()
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {

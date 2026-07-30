@@ -14,6 +14,9 @@
 #   (/sso/authorize, /sso/logout) to that auth-service origin directly.
 #   Unset / empty → same-origin (nginx proxies /sso/*). Only relevant when
 #   AUTH_ENABLED=true AND the frontend is deployed separately.
+#
+#   REMOTE_ENABLED=false → hide the header "Remote" environment picker
+#   (SSO/admin tenant deploys). Unset / true → show (local / Electron).
 set -eu
 
 CONFIG_FILE="/usr/share/nginx/html/app-config.js"
@@ -24,11 +27,18 @@ else
   AUTH=false
 fi
 
+# Default ON when unset (local/dev). Explicit false/0/no disables.
+_REMOTE_RAW="$(printf '%s' "${REMOTE_ENABLED:-true}" | tr '[:upper:]' '[:lower:]')"
+case "$_REMOTE_RAW" in
+  false|0|no|off) REMOTE=false ;;
+  *) REMOTE=true ;;
+esac
+
 API_BASE_VALUE="${API_BASE:-}"
 AUTH_BASE_VALUE="${AUTH_BASE:-}"
 
 cat > "$CONFIG_FILE" <<EOF
-window.__APP_CONFIG__ = { authEnabled: $AUTH, apiBase: "$API_BASE_VALUE", authBase: "$AUTH_BASE_VALUE" };
+window.__APP_CONFIG__ = { authEnabled: $AUTH, remoteEnabled: $REMOTE, apiBase: "$API_BASE_VALUE", authBase: "$AUTH_BASE_VALUE" };
 EOF
 
-echo "[web-config] app-config.js written (authEnabled=$AUTH, apiBase='$API_BASE_VALUE', authBase='$AUTH_BASE_VALUE')."
+echo "[web-config] app-config.js written (authEnabled=$AUTH, remoteEnabled=$REMOTE, apiBase='$API_BASE_VALUE', authBase='$AUTH_BASE_VALUE')."

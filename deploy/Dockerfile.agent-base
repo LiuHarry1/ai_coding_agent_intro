@@ -57,7 +57,10 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 COPY requirements.txt ./
 RUN python3 -m venv "${VIRTUAL_ENV}" \
   && pip install --no-cache-dir --default-timeout=600 --upgrade pip \
-  && pip install --no-cache-dir --default-timeout=600 -r requirements.txt
+  && pip install --no-cache-dir --default-timeout=600 -r requirements.txt \
+  # MCP stdio fetch server used by settings mcpServers.mcp_server
+  && python -c "import mcp_server_fetch" \
+  && echo "[agent-base] mcp_server_fetch OK ($(python -c 'import mcp_server_fetch; print(getattr(mcp_server_fetch,\"__file__\",\"ok\"))'))"
 
 COPY package.json package-lock.json ./
 # Runtime needs tsx to load TypeScript sources; keep prod deps lean.

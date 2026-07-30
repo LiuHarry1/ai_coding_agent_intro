@@ -2,21 +2,21 @@
   "models": {
     "large": {
       "provider": "openai-compatible",
-      "baseURL": "http://localhost:4141/v1",
-      "apiKey": "sk-xxx",
+      "baseURL": "http://10.150.115.69:50952/v1",
+      "apiKey": "not-needed",
       "model": "claude-opus-4.6"
     },
     "medium": {
       "provider": "openai-compatible",
-      "baseURL": "http://localhost:4141/v1",
-      "apiKey": "sk-xxx",
-      "model": "claude-sonnet-4.6"
+      "baseURL": "http://10.150.115.69:50952/v1",
+      "apiKey": "not-needed",
+      "model": "claude-opus-4.6"
     },
     "small": {
       "provider": "openai-compatible",
-      "baseURL": "http://localhost:4141/v1",
-      "apiKey": "sk-xxx",
-      "model": "claude-haiku-4.5"
+      "baseURL": "http://10.150.10.54:4000",
+      "apiKey": "sk-k3VgdKEpcbc99EbkPc-dzg",
+      "model": "qwen3.6-35b-a3b"
     }
   },
   "compaction": {
@@ -34,13 +34,17 @@
     "minimumTokensToInit": 10000,
     "minimumTokensBetweenUpdate": 5000,
     "toolCallsBetweenUpdates": 3,
-    "cacheSafe": true,
-    "modelTier": "medium",
+    "cacheSafe": false,
+    "modelTier": "small",
     "compactMinTokens": 10000,
     "compactMaxTokens": 40000,
     "compactMinTextMessages": 5
   },
-  "autoMemoryEnabled": true,
+  "autoMemory": {
+    "enabled": true,
+    "cacheSafe": false,
+    "modelTier": "small"
+  },
   "lspServers": {
     "typescript": {
       "command": "npx",
@@ -67,15 +71,10 @@
         ".java": "java"
       },
       "startupTimeout": 30000
-    },
-    "jdtls": {
-      "command": "jdtls",
-      "args": ["-data", ".jdtls-data"],
-      "_extensionToLanguage": {
-        ".java": "java"
-      },
-      "startupTimeout": 120000
     }
+
+
+
   },
   "mcpServers": {
     "mcp_server": {
@@ -83,5 +82,6 @@
       "args": ["-m", "mcp_server_fetch"]
     }
   },
+
   "disabledTools": ["web_fetch"]
 }

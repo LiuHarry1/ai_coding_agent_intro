@@ -3,6 +3,7 @@ import * as path from 'path'
 import type { IncomingMessage, ServerResponse } from 'http'
 import { createWorkspaceRouter } from './workspace/router.js'
 import { createSkillsApi } from './skills-api.js'
+import { createExecutionRouter } from './routes/execution.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
 import { defaultRegistry } from '../tools.js'
 import { registerBuiltinSubagents } from '../tools/AgentTool/index.js'
@@ -75,6 +76,7 @@ async function getMCPStatusForCwd(
 export function createRouter({ runAgent, staticDir }: RouterOptions) {
   const workspaceRouter = createWorkspaceRouter({ root: getDefaultWorkspace() })
   const skillsApi = createSkillsApi({ runAgent })
+  const executionRouter = createExecutionRouter()
 
   return async (req: IncomingMessage, res: ServerResponse) => {
     setCORS(res, req)
@@ -141,6 +143,7 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
 
     if (await workspaceRouter(req, res)) return
     if (await skillsApi(req, res)) return
+    if (await executionRouter(req, res)) return
 
     if (method === 'POST' && url === '/sessions') {
       const session = createSession(authed.user?.email)

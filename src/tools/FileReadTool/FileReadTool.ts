@@ -51,6 +51,41 @@ export const definition: ToolDefinition = {
         limit?: number
         pages?: string
       }): Promise<ReadToolExecuteResult> => {
+        const execution = context.execution
+        if (execution) {
+          try {
+            const abs = execution.resolve(cwd, file_path)
+            execution.assertInWorkspace(cwd, abs, 'read')
+            if (pages) {
+              return {
+                result:
+                  'Error: PDF page reads are not supported over SSH yet. Use bash to inspect PDFs remotely.',
+              }
+            }
+            const text = await execution.readText(abs)
+            const lines = text.split('\n')
+            const start =
+              offset != null && offset < 0
+                ? Math.max(0, lines.length + offset)
+                : Math.max(0, (offset ?? 1) - 1)
+            const end =
+              limit != null ? start + limit : lines.length
+            const slice = lines.slice(start, end)
+            const numbered = slice
+              .map((l, i) => `${String(start + i + 1).padStart(6)}|${l}`)
+              .join('\n')
+            return {
+              result:
+                numbered ||
+                `(empty file or no lines in range)`,
+            }
+          } catch (err) {
+            return {
+              result: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            }
+          }
+        }
+
         const resolved = resolveFileInCwd(cwd, file_path)
         if ('error' in resolved) return { result: `Error: ${resolved.error}` }
 

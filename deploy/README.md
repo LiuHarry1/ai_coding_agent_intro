@@ -31,6 +31,8 @@ docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .
 
 > 密钥(`OPENAI_API_KEY` 等)**不要**打进镜像,放在 `deploy/.env`,compose 会注入容器。
 
+Agent base 镜像通过 `requirements.txt` 安装 **`mcp-server-fetch`**（venv: `/opt/venv`）。SSO seed 里 `mcp_server` 使用 `/opt/venv/bin/python -m mcp_server_fetch`。已有用户目录需手动改 settings 或删目录让 seed 重建。
+
 ---
 
 ## 二、admin 模式(共享密码)
@@ -102,11 +104,12 @@ SSO 模式默认 `SANDBOX_MODE=strict`：`read_file` / `grep` / `glob` / `write_
 
 ## 工作区挂载
 
-两个 compose 都把宿主 `../workspaces` 挂到容器 `/workspace`。把项目放在 `./workspaces/<name>`,调用时传 `"workspace": "/workspace/<name>"`。改挂载路径就编辑 `agent.volumes`:
+两个 compose 都把宿主 `./workspaces` 挂到容器 `/workspace`。把项目放在 `./workspaces/<name>`,调用时传 `"workspace": "/workspace/<name>"`。改挂载路径就编辑 `agent.volumes`:
 
 ```yaml
 volumes:
-  - /data/projects:/workspace:rw   # ← 换成你的路径
+  - ./workspaces:/workspace:rw   # ← 换成你的路径
+  - ./sessions:/app/.sessions:rw
 ```
 
 ---

@@ -15,12 +15,21 @@ export function hasLspServers(
   return Boolean(servers && Object.keys(servers).length > 0)
 }
 
+/** Normalize workspace cwd without Win32-resolving remote POSIX paths. */
+export function normalizeWorkspaceCwd(cwd: string): string {
+  const normalized = cwd.replace(/\\/g, '/')
+  if (normalized.startsWith('/') && !/^[a-zA-Z]:/.test(cwd)) {
+    return path.posix.normalize(normalized)
+  }
+  return path.resolve(cwd)
+}
+
 export function getLspWorkspaceKey(
   cwd: string,
   servers: Record<string, LspServerConfig> | undefined,
 ): string {
   return createHash('sha256')
-    .update(path.resolve(cwd))
+    .update(normalizeWorkspaceCwd(cwd))
     .update('\0')
     .update(stableStringify(servers ?? {}))
     .digest('hex')
@@ -36,10 +45,11 @@ export function getLspManager(
   const existing = managers.get(key)
   if (existing) return existing
 
-  const manager = createLspServerManager(path.resolve(cwd), servers, key)
+  const resolvedCwd = normalizeWorkspaceCwd(cwd)
+  const manager = createLspServerManager(resolvedCwd, servers, key)
   managers.set(key, manager)
   console.log(
-    `[lsp:diagnostics] manager created cwd=${path.resolve(cwd)} servers=${Object.keys(servers).join(', ')}`,
+    `[lsp:diagnostics] manager created cwd=${resolvedCwd} servers=${Object.keys(servers).join(', ')}`,
   )
   return manager
 }

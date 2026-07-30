@@ -71,9 +71,9 @@ services:
       SEARXNG_URL: "${SEARXNG_URL:-http://localhost:8888}"
       WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
     volumes:
-      - ../workspaces:/workspace:rw
+      - ./workspaces:/workspace:rw
       # Chat history (.sessions/*.jsonl) — survives container recreate.
-      - ../sessions:/app/.sessions:rw
+      - ./sessions:/app/.sessions:rw
     restart: unless-stopped
     healthcheck:
       test:
@@ -97,6 +97,8 @@ services:
       WEB_PASSWORD: "${WEB_PASSWORD:-advantest}"
       # ── No SSO: plain password mode (no bearer tokens) ───────────────────
       # AUTH_ENABLED intentionally unset → SPA does not run the SSO flow.
+      # Hide Remote SSH picker in admin tenant deploys.
+      REMOTE_ENABLED: "false"
       # Browser → agent API origin (cross-origin). Baked into app-config.js.
       API_BASE: "${AGENT_PUBLIC_URL:-http://10.150.117.195:4567}"
     ports:

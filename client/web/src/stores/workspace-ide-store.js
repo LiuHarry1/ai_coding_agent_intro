@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { workspaceApi } from '../lib/api/workspace.js'
+import { environmentsApi } from '../lib/api/environments.js'
 import { FILE_MUTATING_TOOLS, SHELL_TOOLS } from '../lib/tool-names.js'
 import { fileName } from '../lib/utils.js'
 
@@ -7,6 +8,56 @@ const STORAGE_KEY_WIDTH = 'coding_agent_ide_width'
 const STORAGE_KEY_TREE_WIDTH = 'coding_agent_ide_tree_width'
 const STORAGE_KEY_SHOW_HIDDEN = 'coding_agent_ide_show_hidden'
 const DEFAULT_TREE_WIDTH = 260
+
+function isRemoteEnvironmentId(environmentId) {
+  return Boolean(
+    environmentId &&
+      environmentId !== 'local' &&
+      !String(environmentId).startsWith('local'),
+  )
+}
+
+function shouldShowEntry(name, showHidden) {
+  if (name === '.' || name === '..') return false
+  if (!name.startsWith('.')) return true
+  if (name === '.ai-agent' || name === '.env' || name.startsWith('.env.')) {
+    return true
+  }
+  return showHidden
+}
+
+/** Normalize environments FS entries to workspace IDE shape `{ isDir }`. */
+function normalizeListPayload(data, dirPath, showHidden) {
+  const dir = data.dir || dirPath
+  const cleaned = dir.replace(/\/$/, '') || '/'
+  const slash = cleaned.lastIndexOf('/')
+  const parent = slash > 0 ? cleaned.slice(0, slash) : cleaned
+  const entries = (data.entries || [])
+    .filter(e => shouldShowEntry(e.name, showHidden))
+    .map(e => ({
+      name: e.name,
+      path: e.path,
+      isDir: e.isDir ?? e.type === 'dir',
+    }))
+  return { dir, parent, entries }
+}
+
+async function listDirForIde(dirPath, showHidden) {
+  const environmentId = useWorkspaceIdeStore.getState().environmentId
+  if (isRemoteEnvironmentId(environmentId)) {
+    const data = await environmentsApi.listDir(environmentId, dirPath)
+    return normalizeListPayload(data, dirPath, showHidden)
+  }
+  return workspaceApi.listDir(dirPath, showHidden)
+}
+
+async function getFileForIde(filePath) {
+  const environmentId = useWorkspaceIdeStore.getState().environmentId
+  if (isRemoteEnvironmentId(environmentId)) {
+    return environmentsApi.getFile(environmentId, filePath)
+  }
+  return workspaceApi.getFile(filePath)
+}
 
 function initialShowHidden() {
   return localStorage.getItem(STORAGE_KEY_SHOW_HIDDEN) === '1'
@@ -79,10 +130,23 @@ export const useWorkspaceIdeStore = create((set, get) => ({
    * here. This breaks the reverse dependency on chat-store.
    */
   rootPath: null,
-  setRootPath: p => {
-    if (get().rootPath === p) return
+  /** Bound execution environment (`local` or e.g. `ssh:host`). Set by App bridge. */
+  environmentId: 'local',
+  /**
+   * @param {string|null} p
+   * @param {{ resetTree?: boolean, environmentId?: string }} [opts]
+   */
+  setRootPath: (p, { resetTree = false, environmentId } = {}) => {
+    const nextEnv =
+      environmentId !== undefined ? environmentId : get().environmentId
+    const pathSame = get().rootPath === p
+    const envSame = get().environmentId === nextEnv
+    if (pathSame && envSame && !resetTree) return
     set({
       rootPath: p,
+      environmentId: nextEnv,
+      dirCache: {},
+      expandedDirs: new Set(),
       // Drop git state so the new repo isn't shown with stale changes.
       changes: { ...DEFAULT_CHANGES },
       diffs: {},
@@ -91,6 +155,9 @@ export const useWorkspaceIdeStore = create((set, get) => ({
       activeView: 'explorer',
       activeKind: get().activeFile ? 'file' : null,
     })
+    // FileTree only auto-expands when rootPath changes; after a same-path
+    // env switch we still need to re-expand and fetch via the new FS API.
+    if (p) queueMicrotask(() => get().expandDir(p))
   },
 
   // ── Visibility / layout ───────────────────────────────
@@ -162,7 +229,7 @@ export const useWorkspaceIdeStore = create((set, get) => ({
 
   loadDir: async dirPath => {
     try {
-      const data = await workspaceApi.listDir(dirPath, get().showHiddenFiles)
+      const data = await listDirForIde(dirPath, get().showHiddenFiles)
       set(s => ({ dirCache: { ...s.dirCache, [dirPath]: data } }))
     } catch (e) {
       console.error('[workspace-ide] listDir failed:', e)
@@ -204,7 +271,7 @@ export const useWorkspaceIdeStore = create((set, get) => ({
     if (!cur || cur.dirty || cur.loading) return
     if (!get().openFiles.includes(filePath)) return
     try {
-      const data = await workspaceApi.getFile(filePath)
+      const data = await getFileForIde(filePath)
       set(s => ({
         fileContents: {
           ...s.fileContents,
@@ -485,7 +552,7 @@ export const useWorkspaceIdeStore = create((set, get) => ({
       fileContents: { ...s.fileContents, [filePath]: { loading: true } },
     }))
     try {
-      const data = await workspaceApi.getFile(filePath)
+      const data = await getFileForIde(filePath)
       // Always seed `draft` with the loaded content so the editor is
       // immediately writable for non-binary, non-truncated files. `dirty`
       // stays false until the user actually changes something.

@@ -62,6 +62,30 @@ export const definition: ToolDefinition = {
         pattern: string
         path?: string
       }) => {
+        const execution = context.execution
+        if (execution) {
+          try {
+            const baseRel = searchPath ?? '.'
+            const searchDir = execution.resolve(cwd, baseRel)
+            execution.assertInWorkspace(cwd, searchDir, 'read')
+            // Prefer rg --files; fall back to find.
+            const result = await execution.exec(
+              `cd '${searchDir.replace(/'/g, `'\"'\"'`)}' && ` +
+                `(command -v rg >/dev/null && rg --files -g '${pattern.replace(/'/g, `'\"'\"'`)}' . || find . -type f -name '${pattern.replace(/'/g, `'\"'\"'`)}' | head -n ${DEFAULT_LIMIT})`,
+              { cwd: searchDir, timeoutMs: 60_000 },
+            )
+            const files = (result.stdout || '')
+              .split('\n')
+              .map(l => l.trim())
+              .filter(Boolean)
+              .slice(0, DEFAULT_LIMIT)
+            if (files.length === 0) return 'No files found'
+            return files.join('\n')
+          } catch (err) {
+            return err instanceof Error ? err.message : String(err)
+          }
+        }
+
         const baseRel = searchPath ?? '.'
         const resolved = resolvePath(cwd, baseRel)
         if ('error' in resolved) return resolved.error

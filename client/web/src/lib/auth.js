@@ -18,6 +18,16 @@ export function authEnabled() {
 }
 
 /**
+ * Show the header "Remote" environment picker.
+ * Default true when unset (local/dev). Set REMOTE_ENABLED=false in Docker
+ * SSO/admin web services to hide it.
+ */
+export function remoteEnabled() {
+  const v = globalThis.__APP_CONFIG__?.remoteEnabled
+  return v === undefined ? true : Boolean(v)
+}
+
+/**
  * Origin of the external auth-service for the SSO browser flow. Empty
  * string = same-origin (the default; nginx reverse-proxies /sso/*). Set
  * window.__APP_CONFIG__.authBase (from AUTH_BASE) when the frontend is

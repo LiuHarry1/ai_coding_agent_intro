@@ -3,15 +3,17 @@ import { useChatStore } from '../stores/chat-store.js'
 import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 import { workspaceApi } from '../lib/api/workspace.js'
 import { isDesktop, pickWorkspaceDir } from '../lib/desktop.js'
-import { authEnabled, getUser, logout } from '../lib/auth.js'
+import { authEnabled, getUser, logout, remoteEnabled } from '../lib/auth.js'
 import SessionSwitcher from './SessionSwitcher.jsx'
 import BaizeLogo from './BaizeLogo.jsx'
 import WorkspacePanel from './WorkspacePanel.jsx'
+import EnvironmentPicker from './EnvironmentPicker.jsx'
 
 export default function Header() {
   // SSO mode: the workspace is pinned server-side to the logged-in user, so
   // the switcher/browser is hidden and shown read-only instead.
   const locked = authEnabled()
+  const showRemote = remoteEnabled()
   const user = locked ? getUser() : null
 
   const workspace = useChatStore(s => s.workspace)
@@ -124,9 +126,10 @@ export default function Header() {
         </button>
         <div className='logo'>
           <BaizeLogo size='sm' />
-          <span className='logo-text'>Baize</span>
+          <span className='logo-text'>BaiX Agent</span>
         </div>
         <SessionSwitcher />
+        {showRemote && <EnvironmentPicker />}
       </div>
 
       {workspaceIdeOpen ? (

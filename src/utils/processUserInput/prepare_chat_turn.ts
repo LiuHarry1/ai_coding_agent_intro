@@ -20,6 +20,11 @@ import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { TOOL_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
 import { getPlanFilePath } from '../plans.js'
 import type { ReadFileState } from '../attachments/types.js'
+import { getDefaultWorkspace } from '../../core/workspace.js'
+import {
+  isRemoteWorkspace,
+  resolveExecutionBackend,
+} from '../../execution/index.js'
 import type {
   AgentDefinition,
   AnyTool,
@@ -167,7 +172,12 @@ export async function prepareChatTurn(
 
   const slash = await resolveSlashCommand(message, cwd, session)
 
-  const plugins = await loadPlugins(cwd)
+  // Plugins/skills/MCP load from a local tree. Remote sessions still use the
+  // Control Plane machine's default workspace for that — tools use remote cwd.
+  const remote = isRemoteWorkspace(session.workspace)
+  const pluginCwd = remote ? getDefaultWorkspace() : cwd
+
+  const plugins = await loadPlugins(pluginCwd)
   if (plugins.plugins.length > 0) {
     console.log(
       `[server] plugins=[${plugins.plugins.map(p => p.name).join(', ')}] ` +
@@ -179,44 +189,61 @@ export async function prepareChatTurn(
     console.warn(`[plugins] ${pluginErrorSource(e)}: ${pluginErrorMessage(e)}`)
   }
   const mcpServers = mergeMCPServers(plugins.mcpServers, config.mcpServers)
-  const mcpManager = await getMCPManagerForServers(cwd, mcpServers)
+  const mcpManager = await getMCPManagerForServers(pluginCwd, mcpServers)
 
   const { activeAgents } = await registerSubagents(
     registry,
-    cwd,
+    pluginCwd,
     plugins.agentFiles,
   )
   const candidateFiles = extractFilePathCandidates(slash.effectiveMessage)
   const { activeSkills, allSkills } = await registerSkills(
     registry,
-    cwd,
+    pluginCwd,
     activeAgents,
     { candidateFiles, pluginSkills: plugins.skills },
   )
   const conditionalHidden = allSkills.length - activeSkills.length
   console.log(
-    `[server] cwd=${cwd}  agents=[${activeAgents.map(a => a.agentType).join(', ')}]  skills=[${activeSkills.map(s => s.name).join(', ')}]${conditionalHidden > 0 ? `  (+${conditionalHidden} conditional hidden)` : ''}`,
+    `[server] cwd=${cwd}${remote ? ` remote=${session.workspace?.environmentId}` : ''}  agents=[${activeAgents.map(a => a.agentType).join(', ')}]  skills=[${activeSkills.map(s => s.name).join(', ')}]${conditionalHidden > 0 ? `  (+${conditionalHidden} conditional hidden)` : ''}`,
   )
 
-  const projectRulesRaw = loadProjectRules(cwd)
+  const projectRulesRaw = remote ? '' : loadProjectRules(cwd)
   const autoMemory = resolveAutoMemoryConfig(config)
   const autoMemoryAppend = buildAutoMemorySystemAppend({
-    cwd,
+    cwd: pluginCwd,
     config: autoMemory,
   })
   const projectRules = [projectRulesRaw, autoMemoryAppend]
     .filter(s => s.trim())
     .join('\n\n')
-  const toolEnablement = { disabledTools: config.disabledTools }
+  const toolEnablement = {
+    disabledTools: [
+      ...(config.disabledTools ?? []),
+      // PowerShell is host-local; remote SSH always uses bash.
+      ...(remote ? ['powershell'] : []),
+    ],
+  }
 
   const autoMemEnabled =
-    autoMemory.enabled && !isAutoMemoryDisabledByEnv()
+    autoMemory.enabled && !isAutoMemoryDisabledByEnv() && !remote
   const autoMemPath = autoMemEnabled
     ? getAutoMemPath({
-        cwd,
+        cwd: pluginCwd,
         trustedDirectory: autoMemory.directory,
       })
     : undefined
+
+  let execution
+  try {
+    execution = await resolveExecutionBackend(session, config.lspServers)
+  } catch (err) {
+    console.warn(
+      `[server] execution backend resolve failed:`,
+      err instanceof Error ? err.message : err,
+    )
+    execution = undefined
+  }
 
   const toolContext: ToolContext = {
     eventBus,
@@ -235,7 +262,7 @@ export async function prepareChatTurn(
     session,
     cwd,
     sandbox: createSandboxPolicy(
-      cwd,
+      remote ? pluginCwd : cwd,
       autoMemPath
         ? {
             extraReadRoots: [autoMemPath],
@@ -243,6 +270,7 @@ export async function prepareChatTurn(
           }
         : undefined,
     ),
+    execution,
   }
 
   const pool = assembleToolPool({
