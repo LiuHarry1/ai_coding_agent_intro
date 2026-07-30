@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 大模型 / 小模型搭配策略</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#d97757; --accent2:#58a6ff;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15; --haiku:#3fb950; --sonnet:#58a6ff; --opus:#bc8cff;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:28px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;border:1px solid}
+.badge.green{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3)}
+.badge.blue{background:rgba(88,166,255,.12);color:var(--accent2);border-color:rgba(88,166,255,.3)}
+.badge.purple{background:rgba(188,140,255,.12);color:var(--purple);border-color:rgba(188,140,255,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:23px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(217,119,87,.12);border:1px solid rgba(217,119,87,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:13px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(88,166,255,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.layers{display:grid;gap:10px;margin:18px 0}
+.layer{display:flex;align-items:flex-start;gap:14px;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;padding:14px 16px}
+.layer .lvl{font-weight:800;font-size:12px;min-width:72px;text-align:center;padding:6px 8px;border-radius:8px;
+  background:var(--panel2);line-height:1.3}
+.layer .lvl.opus{color:var(--opus);border:1px solid rgba(188,140,255,.35)}
+.layer .lvl.sonnet{color:var(--sonnet);border:1px solid rgba(88,166,255,.35)}
+.layer .lvl.haiku{color:var(--haiku);border:1px solid rgba(63,185,80,.35)}
+.layer .ld{flex:1}
+.layer .ld b{font-size:14.5px}
+.layer .ld span{display:block;color:var(--muted);font-size:12.5px;margin-top:4px}
+.pill{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11.5px;font-weight:600;margin:0 2px}
+.pill.haiku{background:rgba(63,185,80,.15);color:var(--haiku)}
+.pill.sonnet{background:rgba(88,166,255,.15);color:var(--sonnet)}
+.pill.opus{background:rgba(188,140,255,.15);color:var(--purple)}
+.pill.main{background:rgba(217,119,87,.15);color:var(--accent)}
+.flow{font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;background:var(--code-bg);
+  border:1px solid var(--border);border-radius:10px;padding:18px 20px;white-space:pre;overflow-x:auto;
+  color:#c9d1d9;line-height:1.55}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+@media(max-width:900px){
+  .layout{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:relative}
+  .main{padding:24px 18px 80px}
+  .grid2{grid-template-columns:1fr}
+}
+.file{font-family:"JetBrains Mono",Consolas,monospace;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <h1>CC 模型搭配</h1>
+  <div class="sub">claude-code-rev 源码 review<br>大模型 × 小模型分工</div>
+  <ul class="toc">
+    <li><a href="#overview">1. 总览</a></li>
+    <li><a href="#two-lanes">2. 双通道架构</a></li>
+    <li><a href="#apis">3. 两个 API 入口</a></li>
+    <li><a href="#call-sites">4. queryHaiku / sideQuery 全场景</a></li>
+    <li><a href="#defaults">5. 默认选型与配置</a></li>
+    <li><a href="#matrix">6. 场景分工矩阵</a></li>
+    <li><a href="#runtime">7. 运行时切换</a></li>
+    <li><a href="#design">8. 设计原则</a></li>
+    <li><a href="#files">9. 关键源码索引</a></li>
+  </ul>
+</aside>
+
+<main class="main">
+  <div class="hero">
+    <h1>Claude Code：大模型 / 小模型搭配策略</h1>
+    <p>基于 <code>claude-code-rev</code> 源码的架构解读：主对话用强模型，旁路任务用小快模型。</p>
+    <p>源码路径：<code>C:\Users\harry.liu\cursor_workspace\public\claude-code-rev</code></p>
+    <span class="badge green">Small Fast = Haiku</span>
+    <span class="badge blue">Main Loop = Sonnet / Opus</span>
+    <span class="badge purple">Side Query = 按任务选模型</span>
+  </div>
+
+  <section id="overview">
+    <h2><span class="num">01</span> 总览</h2>
+    <p>
+      Claude Code <strong>不是</strong>「一个请求里动态路由大/小模型」，而是把模型分成两条明确通道：
+    </p>
+    <div class="layers">
+      <div class="layer">
+        <div class="lvl opus">Main<br>Loop</div>
+        <div class="ld">
+          <b>主循环模型 <code>getMainLoopModel()</code></b>
+          <span>负责对话、工具调用、规划、写代码、上下文压缩等「智能主路径」。默认：Max/Team Premium → Opus；其余 → Sonnet。</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lvl haiku">Small<br>Fast</div>
+        <div class="ld">
+          <b>小快模型 <code>getSmallFastModel()</code></b>
+          <span>默认 Haiku 4.5，可用 <code>ANTHROPIC_SMALL_FAST_MODEL</code> 覆盖。负责标题、摘要、命令前缀、网页抽取、token 探测等「辅助旁路」。</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lvl sonnet">Selective<br>Mid</div>
+        <div class="ld">
+          <b>中间档（少数场景显式选 Sonnet）</b>
+          <span>例如记忆相关性筛选用 <code>getDefaultSonnetModel()</code>——比 Haiku 更准，但不必占用主循环的 Opus 成本。</span>
+        </div>
+      </div>
+    </div>
+    <div class="callout note">
+      <p class="tag">一句话</p>
+      <p>主路径用贵而强的模型；所有「短、结构化、可失败」的旁路任务统一落到 Small Fast（Haiku），必要时再用 Sonnet 做判断任务。</p>
+    </div>
+  </section>
+
+  <section id="two-lanes">
+    <h2><span class="num">02</span> 双通道架构</h2>
+    <div class="flow">用户输入
+   │
+   ├─► Main Loop（query / agent loop）
+   │      model = getMainLoopModel()     ← Opus / Sonnet
+   │      tools, thinking, compact…
+   │
+   └─► Side / Helper 调用（并行或穿插）
+          ├─ queryHaiku()               ← 永远 Small Fast
+          └─ sideQuery({ model })       ← 调用方自选：
+                                          Haiku / Sonnet / Main</div>
+    <h3>核心函数（model.ts）</h3>
+<pre><code>// 小快模型：旁路默认值
+export function getSmallFastModel(): ModelName {
+  return process.env.ANTHROPIC_SMALL_FAST_MODEL || getDefaultHaikuModel()
+}
+
+// 主循环模型：用户配置 → 订阅档默认
+export function getMainLoopModel(): ModelName {
+  const model = getUserSpecifiedModelSetting()
+  if (model !== undefined &amp;&amp; model !== null) {
+    return parseUserSpecifiedModel(model)
+  }
+  return getDefaultMainLoopModel()
+}
+
+// Haiku 默认（全平台 Haiku 4.5）
+export function getDefaultHaikuModel(): ModelName {
+  if (process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL) {
+    return process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL
+  }
+  return getModelStrings().haiku45
+}</code></pre>
+  </section>
+
+  <section id="apis">
+    <h2><span class="num">03</span> 两个 API 入口</h2>
+    <div class="grid2">
+      <div class="layer" style="flex-direction:column">
+        <b><span class="pill haiku">queryHaiku</span></b>
+        <span style="color:var(--muted);font-size:13px;margin-top:8px">
+          在 <code>services/api/claude.ts</code>。强制 <code>model: getSmallFastModel()</code>，
+          <code>thinking: disabled</code>，<code>tools: []</code>，走完整 query 管道但不流式。
+          适合标题、摘要、解析、抽取。
+        </span>
+      </div>
+      <div class="layer" style="flex-direction:column">
+        <b><span class="pill sonnet">sideQuery</span></b>
+        <span style="color:var(--muted);font-size:13px;margin-top:8px">
+          在 <code>utils/sideQuery.ts</code>。轻量旁路 API：自带 OAuth fingerprint、attribution、betas、
+          model 规范化。调用方传入任意 <code>model</code>。适合分类器、权限解释、记忆筛选、会话搜索。
+        </span>
+      </div>
+    </div>
+<pre><code>// queryHaiku：模型写死为 Small Fast
+await queryModelWithoutStreaming({
+  ...
+  options: {
+    model: getSmallFastModel(),
+    enablePromptCaching: options.enablePromptCaching ?? false,
+    ...
+  },
+})
+
+// sideQuery：模型由调用方决定
+await sideQuery({
+  querySource: 'session_search',
+  model: getSmallFastModel(),   // 或 getDefaultSonnetModel() / getMainLoopModel()
+  system, messages, ...
+})</code></pre>
+    <div class="callout warn">
+      <p class="tag">注意</p>
+      <p><code>permissionExplainer.ts</code> 注释写「using Haiku」，实际代码是 <code>getMainLoopModel()</code>——以代码为准。旁路不一定等于小模型。</p>
+    </div>
+  </section>
+
+  <section id="call-sites">
+    <h2><span class="num">04</span> queryHaiku / sideQuery 全场景清单</h2>
+    <p>以下为 <code>claude-code-rev</code> 源码中所有实际调用点（定义本身不计）。</p>
+
+    <h3><span class="pill haiku">queryHaiku</span> — 8 个场景（模型固定 Small Fast）</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>场景</th>
+          <th>文件</th>
+          <th>querySource</th>
+          <th>做什么</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>会话标题</td>
+          <td class="file">utils/sessionTitle.ts</td>
+          <td><code>generate_session_title</code></td>
+          <td>对话 → 3–7 词 sentence-case 标题</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><code>/rename</code> 会话名</td>
+          <td class="file">commands/rename/generateSessionName.ts</td>
+          <td><code>rename_generate_name</code></td>
+          <td>对话 → kebab-case 短名</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Teleport 标题+分支</td>
+          <td class="file">utils/teleport.tsx</td>
+          <td><code>teleport_generate_title</code></td>
+          <td>描述 → title + git branch</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Shell 命令前缀</td>
+          <td class="file">utils/shell/prefix.ts</td>
+          <td><code>bash_extract_prefix</code> 等</td>
+          <td>命令 → 权限前缀（高频、可缓存）</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>WebFetch 内容抽取</td>
+          <td class="file">tools/WebFetchTool/utils.ts</td>
+          <td><code>web_fetch_apply</code></td>
+          <td>网页 markdown + prompt → 短答案</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>Tool Use Summary</td>
+          <td class="file">services/toolUseSummary/toolUseSummaryGenerator.ts</td>
+          <td><code>tool_use_summary_generation</code></td>
+          <td>工具批次 → ~30 字进度标签（SDK）</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>自然语言日期</td>
+          <td class="file">utils/mcp/dateTimeParser.ts</td>
+          <td><code>mcp_datetime_parse</code></td>
+          <td><code>"明天3点"</code> → ISO 8601</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>Feedback GitHub 标题</td>
+          <td class="file">components/Feedback.tsx</td>
+          <td><code>feedback</code></td>
+          <td>bug 描述 → <code>[Bug]/…</code> issue 标题</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3><span class="pill sonnet">sideQuery</span> — 7 个场景（模型由调用方指定）</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>场景</th>
+          <th>文件</th>
+          <th>querySource</th>
+          <th>用的模型</th>
+          <th>做什么</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Auto-mode 安全分类</td>
+          <td class="file">utils/permissions/yoloClassifier.ts</td>
+          <td><code>auto_mode</code></td>
+          <td><span class="pill main">主模型</span>（可配置）</td>
+          <td>判断动作 allow/block；可两阶段</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>权限解释</td>
+          <td class="file">utils/permissions/permissionExplainer.ts</td>
+          <td><code>permission_explainer</code></td>
+          <td><span class="pill main">主模型</span></td>
+          <td>解释命令风险（forced tool）</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>模型可用性校验</td>
+          <td class="file">utils/model/validateModel.ts</td>
+          <td><code>model_validation</code></td>
+          <td>被测模型</td>
+          <td><code>max_tokens=1</code> 探测能否调用</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>会话搜索</td>
+          <td class="file">utils/agenticSessionSearch.ts</td>
+          <td><code>session_search</code></td>
+          <td><span class="pill haiku">Small Fast</span></td>
+          <td>从历史 session 列表挑相关项</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>记忆相关性筛选</td>
+          <td class="file">memdir/findRelevantMemories.ts</td>
+          <td><code>memdir_relevance</code></td>
+          <td><span class="pill sonnet">默认 Sonnet</span></td>
+          <td>从记忆清单选最多 5 个</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>Chrome MCP 旁路</td>
+          <td class="file">utils/claudeInChrome/mcpServer.ts</td>
+          <td><code>chrome_mcp</code></td>
+          <td>请求传入的 model</td>
+          <td>浏览器 MCP 侧的轻量推理</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>Auto-mode 规则 critique</td>
+          <td class="file">cli/handlers/autoMode.ts</td>
+          <td><code>auto_mode_critique</code></td>
+          <td><span class="pill main">主模型</span>（可 <code>--model</code>）</td>
+          <td>评审用户自定义 auto-mode 规则</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>易混淆：同类旁路但未走这两个 API</h3>
+    <table>
+      <thead><tr><th>场景</th><th>文件</th><th>实际入口</th><th>模型</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Away Summary</td>
+          <td class="file">services/awaySummary.ts</td>
+          <td><code>queryModelWithoutStreaming</code></td>
+          <td><span class="pill haiku">getSmallFastModel()</span></td>
+        </tr>
+        <tr>
+          <td>Prompt / Agent Hook</td>
+          <td class="file">utils/hooks/exec*Hook.ts</td>
+          <td>主 query 管道（带 model）</td>
+          <td><span class="pill haiku">默认 Small Fast</span>（可覆盖）</td>
+        </tr>
+        <tr>
+          <td>Skill 改进建议</td>
+          <td class="file">utils/hooks/skillImprovement.ts</td>
+          <td>主 query 管道</td>
+          <td><span class="pill haiku">getSmallFastModel()</span></td>
+        </tr>
+        <tr>
+          <td>Context Compact</td>
+          <td class="file">services/compact/compact.ts</td>
+          <td>主 query 管道</td>
+          <td><span class="pill main">mainLoopModel</span></td>
+        </tr>
+        <tr>
+          <td>WebSearch（实验）</td>
+          <td class="file">tools/WebSearchTool/WebSearchTool.ts</td>
+          <td><code>queryModelWithStreaming</code></td>
+          <td>feature flag 时 Haiku，否则主模型</td>
+        </tr>
+        <tr>
+          <td>Token / API Key / Quota 探测</td>
+          <td class="file">tokenEstimation / claude.ts / claudeAiLimits</td>
+          <td>直接 client 调用</td>
+          <td><span class="pill haiku">Small Fast</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout note">
+      <p class="tag">怎么选</p>
+      <p>
+        一定用小模型、无 tools → <code>queryHaiku</code>；
+        要自选模型 / tools / tool_choice → <code>sideQuery({ model })</code>；
+        主循环与 compact → 不走这两个。
+      </p>
+    </div>
+  </section>
+
+  <section id="defaults">
+    <h2><span class="num">05</span> 默认选型与配置</h2>
+    <h3>主循环默认（按订阅）</h3>
+    <table>
+      <thead><tr><th>用户类型</th><th>默认主模型</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>Max / Team Premium</td><td><span class="pill opus">Opus</span></td><td><code>getDefaultOpusModel()</code>（可带 <code>[1m]</code>）</td></tr>
+        <tr><td>Pro / Team Standard / Enterprise / PAYG</td><td><span class="pill sonnet">Sonnet</span></td><td>1P 默认 Sonnet 4.6；3P 可能仍是 4.5</td></tr>
+        <tr><td>用户显式 <code>/model</code>、<code>--model</code>、<code>ANTHROPIC_MODEL</code>、settings</td><td>覆盖默认</td><td>优先级高于订阅默认</td></tr>
+      </tbody>
+    </table>
+
+    <h3>别名（aliases）</h3>
+    <table>
+      <thead><tr><th>别名</th><th>解析结果</th></tr></thead>
+      <tbody>
+        <tr><td><code>haiku</code></td><td>默认 Haiku</td></tr>
+        <tr><td><code>sonnet</code> / <code>sonnet[1m]</code></td><td>默认 Sonnet（可选 1M）</td></tr>
+        <tr><td><code>opus</code> / <code>opus[1m]</code></td><td>默认 Opus</td></tr>
+        <tr><td><code>best</code></td><td>等同默认 Opus</td></tr>
+        <tr><td><code>opusplan</code></td><td>平时 Sonnet；Plan 模式切 Opus</td></tr>
+      </tbody>
+    </table>
+
+    <h3>相关环境变量</h3>
+    <table>
+      <thead><tr><th>变量</th><th>作用</th></tr></thead>
+      <tbody>
+        <tr><td><code>ANTHROPIC_SMALL_FAST_MODEL</code></td><td>覆盖旁路小模型（Bedrock 用户常用）</td></tr>
+        <tr><td><code>ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION</code></td><td>小模型可走独立 Bedrock 区域</td></tr>
+        <tr><td><code>ANTHROPIC_DEFAULT_HAIKU_MODEL</code></td><td>覆盖默认 Haiku 版本</td></tr>
+        <tr><td><code>ANTHROPIC_DEFAULT_SONNET_MODEL</code> / <code>_OPUS_</code></td><td>覆盖家族默认</td></tr>
+        <tr><td><code>ANTHROPIC_MODEL</code></td><td>主循环模型</td></tr>
+        <tr><td><code>CLAUDE_CODE_SUBAGENT_MODEL</code></td><td>强制子代理模型</td></tr>
+        <tr><td><code>DISABLE_PROMPT_CACHING_HAIKU</code></td><td>单独关闭小模型 prompt cache</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="matrix">
+    <h2><span class="num">06</span> 场景分工矩阵</h2>
+    <p>按「任务性质」选模型，而不是全局统一降级。</p>
+
+    <h3>用小模型（Haiku / Small Fast）</h3>
+    <table>
+      <thead><tr><th>场景</th><th>入口</th><th>文件</th><th>为何用小模型</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>会话标题生成</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">utils/sessionTitle.ts</td>
+          <td>短文本 → 3–7 词标题，结构化 JSON</td>
+        </tr>
+        <tr>
+          <td>/rename 会话名</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">commands/rename/generateSessionName.ts</td>
+          <td>同上，kebab-case 短名</td>
+        </tr>
+        <tr>
+          <td>Teleport 标题+分支名</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">utils/teleport.tsx</td>
+          <td>CCR 会话元数据</td>
+        </tr>
+        <tr>
+          <td>Shell 命令前缀抽取</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">utils/shell/prefix.ts</td>
+          <td>权限系统高频、可缓存，延迟敏感</td>
+        </tr>
+        <tr>
+          <td>WebFetch 内容抽取</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">tools/WebFetchTool/utils.ts</td>
+          <td>二次模型读 markdown，主模型只拿摘要</td>
+        </tr>
+        <tr>
+          <td>Tool Use Summary（SDK）</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">services/toolUseSummary/…</td>
+          <td>~30 字符进度标签</td>
+        </tr>
+        <tr>
+          <td>Away Summary</td>
+          <td><code>getSmallFastModel</code></td>
+          <td class="file">services/awaySummary.ts</td>
+          <td>「离开一会儿」回来的 1–3 句 recap</td>
+        </tr>
+        <tr>
+          <td>会话搜索排序</td>
+          <td><code>sideQuery</code> + Haiku</td>
+          <td class="file">utils/agenticSessionSearch.ts</td>
+          <td>从列表里挑相关 session</td>
+        </tr>
+        <tr>
+          <td>自然语言日期解析</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">utils/mcp/dateTimeParser.ts</td>
+          <td>确定性短输出（ISO 8601）</td>
+        </tr>
+        <tr>
+          <td>Prompt/Agent Hook 默认</td>
+          <td><code>getSmallFastModel</code></td>
+          <td class="file">utils/hooks/exec*Hook.ts</td>
+          <td>hook 可覆盖；默认省成本</td>
+        </tr>
+        <tr>
+          <td>Skill 改进建议</td>
+          <td><code>getSmallFastModel</code></td>
+          <td class="file">utils/hooks/skillImprovement.ts</td>
+          <td>旁路建议，非主对话</td>
+        </tr>
+        <tr>
+          <td>Token 估算 / API Key 校验 / Quota 探测</td>
+          <td>直接用 Small Fast</td>
+          <td class="file">tokenEstimation / claude.ts / claudeAiLimits</td>
+          <td>探测性请求，max_tokens=1，必须便宜快</td>
+        </tr>
+        <tr>
+          <td>Feedback 分类等</td>
+          <td><code>queryHaiku</code></td>
+          <td class="file">components/Feedback.tsx</td>
+          <td>UI 辅助分类</td>
+        </tr>
+        <tr>
+          <td>WebSearch（实验开关）</td>
+          <td>feature flag → Haiku</td>
+          <td class="file">tools/WebSearchTool/WebSearchTool.ts</td>
+          <td><code>tengu_plum_vx3</code> 开启时用 Haiku 强制 tool_choice</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>用主循环模型（Sonnet / Opus）</h3>
+    <table>
+      <thead><tr><th>场景</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>Agent 主循环 / 工具调用</td><td>核心智能路径，始终 <code>mainLoopModel</code></td></tr>
+        <tr><td>Context Compact 摘要</td><td><code>services/compact/compact.ts</code> 用 <code>context.options.mainLoopModel</code>——压缩质量影响后续所有回合，不用 Haiku</td></tr>
+        <tr><td>Auto-mode 安全分类器</td><td><code>yoloClassifier.ts</code> 默认跟主模型（可 GrowthBook / env 覆盖）；安全决策不能降智</td></tr>
+        <tr><td>Permission Explainer</td><td>实际用 <code>getMainLoopModel()</code>，保证解释与当前能力一致</td></tr>
+        <tr><td>子代理默认</td><td><code>inherit</code> 父线程模型；可显式 <code>haiku</code>/<code>sonnet</code>/<code>opus</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>显式用 Sonnet（中间档）</h3>
+    <table>
+      <thead><tr><th>场景</th><th>文件</th><th>原因</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>记忆相关性筛选</td>
+          <td class="file">memdir/findRelevantMemories.ts</td>
+          <td>要从文件清单里挑最多 5 个相关记忆；需要比 Haiku 更好的判断力，又不必用 Opus</td>
+        </tr>
+        <tr>
+          <td>Plan 模式（用户选 haiku 时）</td>
+          <td class="file">getRuntimeMainLoopModel</td>
+          <td>用户主模型是 haiku 时，进入 plan 模式会升到 Sonnet</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="runtime">
+    <h2><span class="num">07</span> 运行时切换与特殊规则</h2>
+
+    <h3>getRuntimeMainLoopModel</h3>
+    <p>同一会话内，主模型可随 permission mode 临时切换：</p>
+<pre><code>// opusplan：Plan 模式用 Opus，平时用 Sonnet
+if (getUserSpecifiedModelSetting() === 'opusplan'
+    &amp;&amp; permissionMode === 'plan' &amp;&amp; !exceeds200kTokens) {
+  return getDefaultOpusModel()
+}
+
+// 用户选了 haiku：Plan 模式升到 Sonnet
+if (getUserSpecifiedModelSetting() === 'haiku'
+    &amp;&amp; permissionMode === 'plan') {
+  return getDefaultSonnetModel()
+}
+
+return mainLoopModel</code></pre>
+
+    <h3>Subagent 模型继承</h3>
+    <p><code>utils/model/agent.ts</code>：默认 <code>inherit</code>；Bedrock 下会继承父模型的跨区域前缀（如 <code>eu.</code> / <code>us.</code>），避免 IAM 区域权限踩坑。</p>
+
+    <h3>Haiku 能力限制</h3>
+    <ul>
+      <li><code>toolSearch.ts</code>：Haiku <strong>不支持</strong> <code>tool_reference</code>；子代理用 Haiku 时需注意与 session 模型能力差。</li>
+      <li>Thinking：1P/Foundry 上 Claude 4+（含 Haiku 4.5）可开；Bedrock/Vertex 上仅 Opus/Sonnet 4+。</li>
+      <li><code>queryHaiku</code> 路径明确关闭 thinking，保持旁路廉价稳定。</li>
+    </ul>
+
+    <h3>Bedrock 小模型独立区域</h3>
+<pre><code>// services/api/client.ts
+const awsRegion =
+  model === getSmallFastModel()
+  &amp;&amp; process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
+    ? process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
+    : getAWSRegion()</code></pre>
+    <p>主模型与小模型可以落在不同 AWS 区域——旁路流量可单独部署/限流。</p>
+  </section>
+
+  <section id="design">
+    <h2><span class="num">08</span> 设计原则（可复用）</h2>
+    <ol>
+      <li>
+        <strong>按任务切模型，不按 token 动态路由。</strong>
+        主路径固定强模型；旁路固定小模型。避免复杂 router，行为可预测。
+      </li>
+      <li>
+        <strong>旁路任务特征：</strong>
+        短输入、短输出、结构化（JSON / tool_choice）、可失败降级、高频、对延迟敏感。
+      </li>
+      <li>
+        <strong>质量敏感任务不降档：</strong>
+        Compact、安全分类、主 Agent 推理留在主模型。
+      </li>
+      <li>
+        <strong>中间档留给「判断但不行动」：</strong>
+        如记忆筛选用 Sonnet——只做选择，不写代码、不改仓库。
+      </li>
+      <li>
+        <strong>统一抽象 + 可覆盖：</strong>
+        <code>getSmallFastModel()</code> 一处定义；env / settings / feature flag / hook.model 可覆盖。
+      </li>
+      <li>
+        <strong>两个出口：</strong>
+        <code>queryHaiku</code>（傻瓜式旁路）vs <code>sideQuery</code>（自选模型的旁路）。新功能优先走这两个，不要直接裸调 SDK。
+      </li>
+      <li>
+        <strong>探测性请求必须用最便宜模型：</strong>
+        API key verify、quota check、token count——否则自己把自己打贵。
+      </li>
+    </ol>
+
+    <div class="callout note">
+      <p class="tag">对 AI Coding Agent 的启示</p>
+      <p>
+        若要在自研 Agent 里做「大小模型搭配」，可直接对齐 CC：
+        <code>mainLoopModel</code> + <code>smallFastModel</code> 双配置；
+        旁路 helper API；场景白名单决定走哪条通道；
+        compact / safety 永不降级。
+      </p>
+    </div>
+  </section>
+
+  <section id="files">
+    <h2><span class="num">09</span> 关键源码索引</h2>
+    <table>
+      <thead><tr><th>路径</th><th>职责</th></tr></thead>
+      <tbody>
+        <tr><td class="file">src/utils/model/model.ts</td><td>getMainLoopModel / getSmallFastModel / 默认与别名解析</td></tr>
+        <tr><td class="file">src/utils/model/configs.ts</td><td>各 provider 的模型 ID 表（Haiku/Sonnet/Opus）</td></tr>
+        <tr><td class="file">src/utils/model/aliases.ts</td><td>sonnet / opus / haiku / opusplan 等别名</td></tr>
+        <tr><td class="file">src/utils/model/agent.ts</td><td>子代理模型 inherit / 区域前缀</td></tr>
+        <tr><td class="file">src/utils/modelCost.ts</td><td>各档位定价（Haiku 最便宜）</td></tr>
+        <tr><td class="file">src/services/api/claude.ts</td><td>queryHaiku、prompt cache 按模型开关、API key verify</td></tr>
+        <tr><td class="file">src/utils/sideQuery.ts</td><td>旁路 API 封装</td></tr>
+        <tr><td class="file">src/services/api/client.ts</td><td>Bedrock 小模型独立 region</td></tr>
+        <tr><td class="file">src/services/compact/compact.ts</td><td>压缩用主模型</td></tr>
+        <tr><td class="file">src/memdir/findRelevantMemories.ts</td><td>记忆筛选用 Sonnet</td></tr>
+        <tr><td class="file">src/utils/permissions/yoloClassifier.ts</td><td>Auto-mode 分类器模型选择</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer style="margin-top:60px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px">
+    源码 review 总结 · Claude Code 大/小模型搭配 · 基于 claude-code-rev
+  </footer>
+</main>
+</div>
+</body>
+</html>

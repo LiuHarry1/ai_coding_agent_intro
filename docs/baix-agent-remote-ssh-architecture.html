@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BaiX Agent：Remote-SSH 架构设计</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#d97757; --accent2:#58a6ff;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:290px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:15px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:26px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.badge{display:inline-block;margin-top:12px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;border:1px solid}
+.badge.green{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3)}
+.badge.blue{background:rgba(88,166,255,.12);color:var(--accent2);border-color:rgba(88,166,255,.3)}
+.badge.purple{background:rgba(188,140,255,.12);color:var(--purple);border-color:rgba(188,140,255,.3)}
+.badge.amber{background:rgba(210,153,34,.12);color:var(--amber);border-color:rgba(210,153,34,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:22px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(217,119,87,.12);border:1px solid rgba(217,119,87,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(88,166,255,.07)}
+.callout.ok{border-color:var(--green);background:rgba(63,185,80,.07)}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.ok .tag{color:var(--green)}
+.callout p{margin:6px 0}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.flow{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin:14px 0;
+  font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;line-height:1.7;color:#c9d1d9;overflow-x:auto;white-space:pre}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+@media (max-width:900px){.grid{grid-template-columns:1fr}.sidebar{display:none}.main{padding:28px 20px 80px}}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.card h4{margin:0 0 8px;font-size:15px}
+.card p{margin:4px 0;font-size:13px;color:var(--muted)}
+.phase{border-left:3px solid var(--accent2);padding-left:14px;margin:14px 0}
+.phase h4{margin:0 0 6px;color:var(--accent2)}
+.file{color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <h1>BaiX Remote-SSH</h1>
+  <div class="sub">架构设计 · 对齐 VS Code + CC</div>
+  <ul class="toc">
+    <li><a href="#s1">1. 问题定义</a></li>
+    <li><a href="#s2">2. 业界怎么做</a></li>
+    <li><a href="#s3">3. 推荐架构</a></li>
+    <li><a href="#s4">4. 连接时序</a></li>
+    <li><a href="#s5">5. 协议</a></li>
+    <li><a href="#s6">6. Workspace 语义</a></li>
+    <li><a href="#s7">7. 安全</a></li>
+    <li><a href="#s8">8. 分阶段落地</a></li>
+    <li><a href="#s9">9. 模块目录</a></li>
+    <li><a href="#s10">10. 路径取舍</a></li>
+    <li><a href="#s11">11. 验收标准</a></li>
+    <li><a href="#s12">12. 总结</a></li>
+  </ul>
+</aside>
+
+<main class="main">
+  <div class="hero">
+    <h1>BaiX Agent：Remote-SSH 架构设计</h1>
+    <p>目标：选一台电脑 → 指定远程目录为 workspace → UI 本地、工具在远端执行（对标 VS Code Remote-SSH）。</p>
+    <p>参考：VS Code / GitHub Codespaces 公开架构 + Claude Code <code>claude ssh</code> + 本仓库现状。</p>
+    <span class="badge green">优先 SSH 路径</span>
+    <span class="badge blue">对齐 CC AuthProxy</span>
+    <span class="badge purple">复用现有 Chat/Tools</span>
+    <span class="badge amber">非完整 IDE Server</span>
+  </div>
+
+  <section id="s1">
+    <h2><span class="num">01</span> 问题定义</h2>
+    <h3>要对齐的体验</h3>
+    <div class="flow">Connect to Host… → atsrws0049
+Open Folder…     → /home/…/ws-code_index
+标题栏           → [SSH: atsrws0049]
+文件 / Bash / Agent tools 全部在远端执行</div>
+
+    <h3>本仓库现状</h3>
+    <table>
+      <tr><th>能力</th><th>现状</th></tr>
+      <tr><td>Workspace</td><td>本机或 Docker 挂载路径（<code>WORKSPACE</code> / 请求体）</td></tr>
+      <tr><td>Agent 进程</td><td>与 HTTP API <strong>同机</strong>；工具直接碰本地盘</td></tr>
+      <tr><td>客户端</td><td>Web / Electron / CLI / ACP</td></tr>
+      <tr><td>Remote-SSH</td><td><strong>无运行时</strong>；仅有 CC 逆向文档</td></tr>
+    </table>
+
+    <div class="callout note">
+      <div class="tag">设计原则</div>
+      <p>Coding Agent ≠ IDE。我们要 <strong>Agent Runtime 远端化</strong>，不是搬完整 VS Code Extension Host。</p>
+      <p>对齐 CC：UI 本地 · 工具远端 · AuthProxy 护凭证 · Session 绑定 <code>remoteCwd</code>。</p>
+    </div>
+
+    <table>
+      <tr><th>层</th><th>VS Code</th><th>CC ssh</th><th>我们</th></tr>
+      <tr><td>UI</td><td>本地 Workbench</td><td>Ink REPL</td><td>Web / Electron</td></tr>
+      <tr><td>执行面</td><td>VS Code Server</td><td>远端 Claude CLI</td><td><strong>远端 Agent Worker</strong></td></tr>
+      <tr><td>传输</td><td>SSH 多路隧道</td><td>ssh -R + stream-json</td><td>SSH + NDJSON / 适配现有流</td></tr>
+      <tr><td>Workspace</td><td>Open Folder</td><td><code>[dir]</code> / startDirectory</td><td><code>host + remotePath</code> 绑 Session</td></tr>
+    </table>
+  </section>
+
+  <section id="s2">
+    <h2><span class="num">02</span> 业界怎么做</h2>
+    <div class="grid">
+      <div class="card">
+        <h4>VS Code Remote-SSH</h4>
+        <p>本地 thin UI → SSH → 远端 <code>~/.vscode-server</code></p>
+        <p>自动 probe / install / start</p>
+        <p>UI 扩展本地；Workspace 扩展远端</p>
+        <p>Host 来自 <code>~/.ssh/config</code></p>
+      </div>
+      <div class="card">
+        <h4>GitHub Codespaces</h4>
+        <p>同一「UI + Remote Server」范式</p>
+        <p>环境是云托管容器，非你的内网机</p>
+        <p>对应 CC 的 CCR/Teleport</p>
+        <p><strong>第一期不做</strong></p>
+      </div>
+    </div>
+
+    <h3>Claude Code SSH（应对齐的契约）</h3>
+    <div class="flow">claude ssh &lt;host&gt; [dir]
+  → probe/deploy remote binary
+  → ssh -R unix-socket → 本地 Auth Proxy
+  → setOriginalCwd(remoteCwd)
+  → UI 本地；tools 远端；permission 回本地</div>
+    <p class="file">参考：<a href="./claude-code-remote-workspace.html">claude-code-remote-workspace.html</a></p>
+  </section>
+
+  <section id="s3">
+    <h2><span class="num">03</span> 推荐架构</h2>
+    <div class="callout ok">
+      <div class="tag">一句话</div>
+      <p>本地 Controller 通过 SSH 在目标机拉起 Agent Worker；Session 绑定 <code>{ hostId, remoteCwd }</code>；聊天与工具流经隧道；权限弹窗回本地。</p>
+    </div>
+
+    <div class="flow">┌─ Client: Web / Electron ─────────────────────────────┐
+│  Host picker · Folder picker · Chat · Permission UI   │
+└────────────────────────┬─────────────────────────────┘
+                         │ HTTP / WS
+                         ▼
+┌─ Local Controller（现有 agent 编排侧扩展）────────────┐
+│  SessionStore + RemoteBinding · SshHostRegistry       │
+│  RemoteSessionManager · AuthProxy · Workspace 双后端  │
+└────────────────────────┬─────────────────────────────┘
+                         │ SSH exec + -R AuthProxy
+                         ▼
+┌─ Remote Agent Worker ────────────────────────────────┐
+│  ~/.baix-agent-server/&lt;ver&gt;/ · cwd = remoteCwd         │
+│  现有 Tools · stream-json · 无长期明文 API Key          │
+└──────────────────────────────────────────────────────┘</div>
+
+    <h3>与现有代码映射</h3>
+    <table>
+      <tr><th>现有模块</th><th>Remote 模式变化</th></tr>
+      <tr><td><code>workspace.ts</code> / <code>request-cwd.ts</code></td><td>有 remote binding 时转发 Worker，不本地 resolve</td></tr>
+      <tr><td><code>session/store.ts</code></td><td>增加 <code>remote?: { hostId, remoteCwd, workerVersion }</code></td></tr>
+      <tr><td><code>workspace/router.ts</code></td><td><code>list/stat</code> 支持 local | ssh 后端</td></tr>
+      <tr><td>Web Header</td><td>Connect Host → Open Folder；标题 <code>[SSH: host]</code></td></tr>
+      <tr><td>Electron</td><td><strong>第一期主战场</strong>（本机有 SSH keys）</td></tr>
+      <tr><td>Docker SSO 钉目录</td><td>与 Remote-SSH 场景分流，不混为一谈</td></tr>
+    </table>
+
+    <h3>核心类型</h3>
+    <pre><code>type SshHostConfig = {
+  id: string; name: string; sshHost: string;
+  sshUser?: string; sshPort?: number; sshIdentityFile?: string;
+  proxyJump?: string; startDirectory?: string;
+}
+
+type RemoteBinding = {
+  hostId: string; remoteCwd: string;
+  workerVersion: string; connectedAt: string;
+}</code></pre>
+  </section>
+
+  <section id="s4">
+    <h2><span class="num">04</span> 连接时序</h2>
+    <div class="flow">1. Connect to Host → atsrws0049
+2. 解析 SshHostConfig / ~/.ssh/config
+3. SSH 连通探测
+4. Probe Worker → 无则 deploy 到 ~/.baix-agent-server/&lt;ver&gt;/
+5. 本地启 AuthProxy
+6. ssh -R + 远端启动 worker --cwd &lt;dir&gt;
+7. Handshake → realpath(remoteCwd)
+8. （可选）Open Folder 列远端目录
+9. Session.remote = { hostId, remoteCwd, … }
+10. Chat → Controller → SSH stream → Worker tools
+    permission ask → 本地 UI → control_response</div>
+  </section>
+
+  <section id="s5">
+    <h2><span class="num">05</span> 协议</h2>
+    <table>
+      <tr><th>段</th><th>协议</th><th>说明</th></tr>
+      <tr><td>Browser ↔ Controller</td><td>现有 REST + 流式</td><td>前端少改；Session 带 remote 元数据</td></tr>
+      <tr><td>Controller ↔ Worker</td><td>NDJSON stream-json 子集（抄 CC）</td><td>经 SSH 转发；含 control_request/response</td></tr>
+    </table>
+    <p>Controller 做协议适配器：对内像「又一个本地 agent 后端」，Web UI 几乎不用重写工具渲染。</p>
+  </section>
+
+  <section id="s6">
+    <h2><span class="num">06</span> Workspace 语义</h2>
+    <table>
+      <tr><th>概念</th><th>含义</th></tr>
+      <tr><td><code>uiWorkspaceLabel</code></td><td><code>atsrws0049:/home/…/ws-code_index</code></td></tr>
+      <tr><td><code>executionCwd</code></td><td>Worker 进程 cwd</td></tr>
+      <tr><td><code>sandbox root</code></td><td>在 <strong>Worker 内</strong>校验；不能用本机 realpath 校验远端路径</td></tr>
+    </table>
+    <ul>
+      <li>Remote Session 忽略客户端乱传的本地 <code>workspace</code></li>
+      <li>换远端文件夹 → 重启 Worker（简单可靠）</li>
+      <li>历史仍存 Controller <code>.sessions/</code>；路径字符串为远端路径</li>
+    </ul>
+  </section>
+
+  <section id="s7">
+    <h2><span class="num">07</span> 安全</h2>
+    <ol>
+      <li><strong>AuthProxy 本地化</strong>：API Key 不落远端环境变量</li>
+      <li>SSH 走用户自己的 key / ssh-agent</li>
+      <li>危险工具权限弹窗仍在本地（对齐 CC <code>useSSHSession</code>）</li>
+      <li>Web SSO 用户通常无内网 SSH → <strong>第一期仅 Electron/本机 CLI</strong></li>
+      <li>审计：记录 <code>hostId + remoteCwd + user</code></li>
+    </ol>
+  </section>
+
+  <section id="s8">
+    <h2><span class="num">08</span> 分阶段落地</h2>
+    <div class="phase">
+      <h4>Phase 0 — 契约与假远端</h4>
+      <p>类型 + settings；<code>--remote-local</code>（对齐 CC <code>--local</code>）本机双进程跑通协议与权限回传。</p>
+    </div>
+    <div class="phase">
+      <h4>Phase 1 — 真 SSH MVP</h4>
+      <p>Host picker、probe/deploy、<code>ssh -R</code> + AuthProxy、Electron 标题 <code>[SSH: host]</code>、Chat 全走 Worker。</p>
+    </div>
+    <div class="phase">
+      <h4>Phase 2 — 打磨</h4>
+      <p>重连、端口转发（预览）、ProxyJump、Host 级 settings。</p>
+    </div>
+    <div class="phase">
+      <h4>Phase 3 — 可选</h4>
+      <p>Bridge 反向注册；CCR 式云环境——另立项。</p>
+    </div>
+  </section>
+
+  <section id="s9">
+    <h2><span class="num">09</span> 模块目录建议</h2>
+    <pre><code>src/remote/
+  types.ts
+  ssh-config-parse.ts
+  host-registry.ts
+  auth-proxy.ts
+  worker-deploy.ts
+  ssh-session.ts              # 对标 CC createSSHSession
+  remote-session-manager.ts
+  protocol-adapter.ts
+  local-fake-session.ts       # Phase 0
+
+client/web/src/components/
+  RemoteHostPicker.jsx
+  RemoteFolderPicker.jsx</code></pre>
+    <p>Worker 复用同一份 agent：<code>node dist/start.js --worker --stdio-sdk --workspace &lt;remoteCwd&gt;</code></p>
+  </section>
+
+  <section id="s10">
+    <h2><span class="num">10</span> 与 CC 四条路径的取舍</h2>
+    <table>
+      <tr><th>CC 路径</th><th>采用？</th><th>原因</th></tr>
+      <tr><td><strong>SSH</strong></td><td><strong>第一优先</strong></td><td>直接对应 VS Code 截图场景</td></tr>
+      <tr><td>Bridge</td><td>第二期可选</td><td>机器主动上线，不是「我连过去」</td></tr>
+      <tr><td>CCR</td><td>远期</td><td>云沙箱 ≠ 内网机</td></tr>
+      <tr><td>Direct Connect</td><td>协议灵感</td><td>已有常驻 agent 时可用</td></tr>
+    </table>
+  </section>
+
+  <section id="s11">
+    <h2><span class="num">11</span> 验收标准</h2>
+    <ol>
+      <li>选 <code>atsrws0049</code>，打开远端目录，标题 <code>[SSH: atsrws0049]</code></li>
+      <li>Agent 改的文件出现在<strong>远端</strong>，本机无副本</li>
+      <li><code>hostname</code> / <code>pwd</code> 显示远端主机与 remoteCwd</li>
+      <li>权限弹窗在本地；Deny 后远端不执行</li>
+      <li>远端看不到完整 LLM API Key</li>
+      <li><code>--remote-local</code> 可不依赖真 SSH 做回归</li>
+    </ol>
+  </section>
+
+  <section id="s12">
+    <h2><span class="num">12</span> 总结</h2>
+    <div class="callout ok">
+      <div class="tag">Bottom line</div>
+      <p><strong>业界</strong>：VS Code = 本地 UI + 远端 Server + SSH；Codespaces = 云托管版。</p>
+      <p><strong>CC</strong>：同一不变量，远端跑 Agent CLI + AuthProxy——更适合我们。</p>
+      <p><strong>我们</strong>：现有 Controller 上加 RemoteSessionManager + AuthProxy + Worker deploy；Session 绑 <code>host + remoteCwd</code>；UI 做 Host/Folder picker。</p>
+      <p>第一期不做完整 Extension Host，也不让 Web SSO 直连 SSH。</p>
+    </div>
+    <p class="file">Markdown：<code>cc_docs/baix-agent-remote-ssh-architecture.md</code> · 配套 CC 分析：<a href="./claude-code-remote-workspace.html">claude-code-remote-workspace.html</a></p>
+  </section>
+</main>
+</div>
+</body>
+</html>

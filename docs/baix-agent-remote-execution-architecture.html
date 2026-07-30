@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BaiX Agent：可扩展远程执行架构（修订版）</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#d97757; --accent2:#58a6ff;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:15px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1100px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:24px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.badge{display:inline-block;margin-top:12px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;border:1px solid}
+.badge.green{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3)}
+.badge.blue{background:rgba(88,166,255,.12);color:var(--accent2);border-color:rgba(88,166,255,.3)}
+.badge.purple{background:rgba(188,140,255,.12);color:var(--purple);border-color:rgba(188,140,255,.3)}
+.badge.amber{background:rgba(210,153,34,.12);color:var(--amber);border-color:rgba(210,153,34,.3)}
+.badge.red{background:rgba(248,81,73,.12);color:var(--red);border-color:rgba(248,81,73,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:21px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:13px;color:var(--accent);background:rgba(217,119,87,.12);border:1px solid rgba(217,119,87,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:16px;color:var(--accent2);margin:24px 0 10px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(88,166,255,.07)}
+.callout.ok{border-color:var(--green);background:rgba(63,185,80,.07)}
+.callout.bad{border-color:var(--red);background:rgba(248,81,73,.07)}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.ok .tag{color:var(--green)}
+.callout.bad .tag{color:var(--red)}
+.callout p{margin:6px 0}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.flow{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin:14px 0;
+  font-family:"JetBrains Mono",Consolas,monospace;font-size:12px;line-height:1.7;color:#c9d1d9;overflow-x:auto;white-space:pre}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:16px 0}
+@media (max-width:1000px){.grid,.grid3{grid-template-columns:1fr}.sidebar{display:none}.main{padding:28px 20px 80px}}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.card h4{margin:0 0 6px;font-size:14px}
+.card p{margin:3px 0;font-size:12.5px;color:var(--muted)}
+.inv{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;padding:12px 14px;margin:8px 0}
+.inv .n{min-width:28px;height:28px;border-radius:8px;background:var(--panel2);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+.file{color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <h1>Execution Environments</h1>
+  <div class="sub">修订版 · 可扩展远程架构</div>
+  <ul class="toc">
+    <li><a href="#s0">0. 上一版复盘</a></li>
+    <li><a href="#s1">1. 不变式</a></li>
+    <li><a href="#s2">2. 概念模型</a></li>
+    <li><a href="#s3">3. 分层架构</a></li>
+    <li><a href="#s4">4. 核心接口</a></li>
+    <li><a href="#s5">5. 主数据流</a></li>
+    <li><a href="#s6">6. Providers</a></li>
+    <li><a href="#s7">7. Workspace</a></li>
+    <li><a href="#s8">8. CredentialBroker</a></li>
+    <li><a href="#s9">9. 模块目录</a></li>
+    <li><a href="#s10">10. 第一期范围</a></li>
+    <li><a href="#s11">11. 扩展检查清单</a></li>
+    <li><a href="#s12">12. 与上一版关系</a></li>
+    <li><a href="#s13">13. 总结</a></li>
+  </ul>
+</aside>
+
+<main class="main">
+  <div class="hero">
+    <h1>可扩展远程执行架构（修订版）</h1>
+    <p>不以 SSH 为根。中心是 Environment × Workspace × Runtime × CredentialBroker；SSH 只是第一个 Provider。</p>
+    <p>不考虑向后兼容；优先让 Bridge / 云 / Direct 后续只加插件、不改主干。</p>
+    <span class="badge red">复盘初稿硬伤</span>
+    <span class="badge green">Local 一等公民</span>
+    <span class="badge blue">Provider 可插拔</span>
+    <span class="badge purple">对齐 CC Environment</span>
+    <span class="badge amber">SSH = 第一期交付</span>
+  </div>
+
+  <section id="s0">
+    <h2><span class="num">00</span> 对上一版的复盘</h2>
+    <div class="callout bad">
+      <div class="tag">初稿能做 MVP，但不适合长期扩展</div>
+      <p>根因：把 SSH 字段写进了 Session / Workspace API / UI 分支，Local 成了特例，连接方式与执行面绑死。</p>
+    </div>
+    <table>
+      <tr><th>问题</th><th>表现</th><th>后果</th></tr>
+      <tr><td>SSH 渗入核心</td><td><code>hostId</code>、<code>transport: local\|ssh</code></td><td>加 Bridge/云要改 Session 与路由</td></tr>
+      <tr><td>Local 是特例</td><td><code>if (remote)</code> 到处都是</td><td>两套路径，难测</td></tr>
+      <tr><td>连接=执行面</td><td>SSH tunnel ≈ Worker</td><td>Direct/Bridge 生命周期塞不进</td></tr>
+      <tr><td>Controller 过载</td><td>编排+SSH+鉴权+工具</td><td>难替换</td></tr>
+      <tr><td>协议被 HTTP 绑架</td><td>「少改前端」驱动架构</td><td>核心形状不对</td></tr>
+    </table>
+    <p>修订原则：<strong>先定不变式与端口；SSH 只是第一个 Environment Provider。</strong></p>
+  </section>
+
+  <section id="s1">
+    <h2><span class="num">01</span> 核心不变式</h2>
+    <div class="inv"><div class="n">1</div><div><b>UI / 执行面分离</b><p style="margin:4px 0;color:var(--muted);font-size:13px">Chat、权限在 Control Plane；文件与工具在 Execution Plane。</p></div></div>
+    <div class="inv"><div class="n">2</div><div><b>Local 也是 Environment</b><p style="margin:4px 0;color:var(--muted);font-size:13px">没有「本地模式 vs 远程模式」两套代码；只有 kind 不同。</p></div></div>
+    <div class="inv"><div class="n">3</div><div><b>Session 绑 WorkspaceHandle</b><p style="margin:4px 0;color:var(--muted);font-size:13px"><code>{ environmentId, cwd }</code>，不是裸路径，也不是 optional <code>remote?</code>。</p></div></div>
+    <div class="inv"><div class="n">4</div><div><b>凭证不进 Execution Plane</b><p style="margin:4px 0;color:var(--muted);font-size:13px">经 CredentialBroker；Worker 只有短时票或隧道反代。</p></div></div>
+    <div class="inv"><div class="n">5</div><div><b>控制消息与数据消息正交</b><p style="margin:4px 0;color:var(--muted);font-size:13px"><code>control_*</code> 与 stream 共用 Runtime 通道，与 SSH/WS 无关。</p></div></div>
+    <div class="inv"><div class="n">6</div><div><b>Provider 可插拔</b><p style="margin:4px 0;color:var(--muted);font-size:13px">新远程形态 = 新 Provider；不改 Session / Agent Loop / Tool 语义。</p></div></div>
+  </section>
+
+  <section id="s2">
+    <h2><span class="num">02</span> 概念模型</h2>
+    <div class="grid3">
+      <div class="card"><h4>Environment</h4><p>在哪跑？</p><p><code>local</code> · <code>ssh:…</code> · <code>bridge:…</code> · <code>cloud:…</code></p></div>
+      <div class="card"><h4>Workspace</h4><p>哪个目录？</p><p><code>/home/u/ws-code_index</code></p></div>
+      <div class="card"><h4>Runtime</h4><p>怎么说话？</p><p>stdio / WS / SSH 隧道上的同一协议</p></div>
+    </div>
+    <p><b>Connector</b> = 环境如何可达（noop / SSH deploy / Bridge poll / 云 create）。与 Runtime 协议分离。</p>
+    <div class="callout ok">
+      <div class="tag">第一期产品</div>
+      <p>只是 <code>Environment(ssh) + Workspace(dir) + Runtime(stream) + Connector(ssh)</code>。主干已为其它 kind 留好位置。</p>
+    </div>
+  </section>
+
+  <section id="s3">
+    <h2><span class="num">03</span> 分层架构</h2>
+    <div class="flow">Clients: Picker · Chat · Permission
+        │ Control API
+        ▼
+CONTROL PLANE
+  SessionService · AgentOrchestrator · EnvironmentRegistry
+  WorkspaceService · RuntimeBroker · CredentialBroker · PermissionGateway
+        │ RuntimePort / FsPort   ← 无 ssh import
+        ▼
+ENVIRONMENT PROVIDERS（插件）
+  Local · Ssh · Bridge · Cloud · Direct
+        │
+        ▼
+EXECUTION PLANE = Agent Worker
+  cwd · Tools · Sandbox · 无长期 API Key
+  只认 Runtime 协议，不认自己怎么被拉起</div>
+  </section>
+
+  <section id="s4">
+    <h2><span class="num">04</span> 核心接口</h2>
+    <pre><code>type WorkspaceHandle = {
+  environmentId: EnvironmentId  // "local" | "ssh:atsrws0049" | ...
+  cwd: string                   // 环境内绝对路径
+}
+
+type Session = {
+  id: string
+  workspace: WorkspaceHandle    // 必有；不是 optional remote?
+  // messages, permissionMode, ...
+}
+
+interface EnvironmentProvider {
+  kind: EnvironmentKind
+  list(): Promise&lt;EnvironmentDescriptor[]&gt;
+  resolve(input: string): Promise&lt;EnvironmentDescriptor&gt;
+  connect(env, opts?): Promise&lt;EnvironmentConnection&gt;
+  disconnect(connectionId: string): Promise&lt;void&gt;
+}
+
+interface EnvironmentConnection {
+  ensureWorker(version: string): Promise&lt;WorkerInstallInfo&gt;
+  openRuntime(cwd: string, auth: RuntimeAuth): Promise&lt;RuntimePort&gt;
+  openFs(): FsPort
+  forwardPort?(port: number): Promise&lt;LocalPortMapping&gt;
+}</code></pre>
+    <p>Control Plane <strong>从不</strong> <code>import ssh</code>。SSH 细节关在 <code>SshProvider</code> 的 <code>endpoint</code> opaque 字段里。</p>
+  </section>
+
+  <section id="s5">
+    <h2><span class="num">05</span> 主数据流（与 Provider 无关）</h2>
+    <div class="flow">选 Environment + Folder
+  → connect → ensureWorker
+  → openFs().realpath → WorkspaceHandle
+  → Session.bind(handle)
+  → RuntimeBroker.getOrCreate → RuntimePort
+  → CredentialBroker.issue
+
+Chat:
+  Orchestrator → RuntimePort.send(user)
+  → Worker tools（sandbox 在 Worker）
+  → control_request → PermissionGateway → UI
+  → control_response → Runtime
+  → stream → Client</div>
+  </section>
+
+  <section id="s6">
+    <h2><span class="num">06</span> Providers 如何挂接</h2>
+    <div class="grid">
+      <div class="card">
+        <h4>LocalProvider</h4>
+        <p>一等公民。推荐始终 child worker，与远程同构，消灭特殊路径。</p>
+      </div>
+      <div class="card">
+        <h4>SshProvider（一期）</h4>
+        <p>config → connect → deploy → ssh -R AuthProxy → RuntimePort / SFTP FsPort。</p>
+        <p>UI「Connect to Host」只是 kind=ssh 的皮肤。</p>
+      </div>
+      <div class="card">
+        <h4>BridgeProvider（后）</h4>
+        <p>注册环境 + poll / ingress WS。无 SSH。Outbound 派活 + Inbound daemon 同一接口。</p>
+      </div>
+      <div class="card">
+        <h4>Cloud / Direct（后）</h4>
+        <p>Cloud：API create + git 物化。Direct：已有 Worker URL，只协商版本。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s7">
+    <h2><span class="num">07</span> Workspace / Sandbox</h2>
+    <ul>
+      <li>废除到处传递「本机 path 字符串」</li>
+      <li>FS API 一律带 <code>WorkspaceHandle</code>，委派当前 connection 的 <code>FsPort</code></li>
+      <li>Sandbox 校验只在 <strong>Worker 内</strong></li>
+      <li>换文件夹 = 新 Handle → 关旧 Runtime → <code>openRuntime(newCwd)</code></li>
+      <li>显示：<code>atsrws0049:/home/u/ws-code_index</code></li>
+    </ul>
+  </section>
+
+  <section id="s8">
+    <h2><span class="num">08</span> CredentialBroker</h2>
+    <p>CC AuthProxy 的泛化：隧道只是到达 Broker 的一种方式。</p>
+    <pre><code>CredentialBroker
+  ├─ issueRuntimeAuth(sessionId, envId) → token
+  ├─ AuthProxy (本地)     ← SshProvider -R
+  └─ HTTP mint endpoint   ← Bridge / Cloud / Direct</code></pre>
+    <p>Worker 只有 <code>BAIX_RUNTIME_TOKEN</code> + 可达的 <code>BAIX_BROKER_URL</code>。禁止长期 Key 写远端。</p>
+  </section>
+
+  <section id="s9">
+    <h2><span class="num">09</span> 模块目录</h2>
+    <pre><code>src/execution/                 # 平台核心（禁止 import ssh）
+  types.ts · environment-registry.ts · runtime-broker.ts
+  workspace-service.ts · credential-broker.ts
+  permission-gateway.ts · agent-orchestrator.ts · runtime-protocol.ts
+  providers/
+    local/ · ssh/ · bridge/ · cloud/ · direct/
+
+src/worker/                    # Execution Plane 入口
+src/server/                    # 薄 HTTP/WS 适配器
+client/.../environment-picker  # 按 kind 渲染，不写死 SSH</code></pre>
+    <div class="callout warn">
+      <div class="tag">硬规则</div>
+      <p><code>session/store</code>、<code>router</code>、<code>tools/*</code> 禁止出现 <code>sshHost</code> / <code>hostId</code>。Session 只存 <code>WorkspaceHandle</code>。</p>
+    </div>
+  </section>
+
+  <section id="s10">
+    <h2><span class="num">10</span> 第一期范围</h2>
+    <p><b>做：</b> LocalProvider（child worker）+ SshProvider + CredentialBroker + Picker + Session 绑 Handle。</p>
+    <p><b>不做：</b> Bridge/Cloud/Direct 完整实现、IDE Extension Host、Web SSO 代持 SSH。</p>
+    <p>验收仍用 VS Code 场景，但验收的是平台上 <code>kind=ssh</code> 的一条 Provider 路径。</p>
+  </section>
+
+  <section id="s11">
+    <h2><span class="num">11</span> 扩展检查清单</h2>
+    <ol>
+      <li>新 EnvironmentKind，还是现有 kind 的能力开关？</li>
+      <li>能否只实现/扩展一个 Provider？</li>
+      <li>Workspace 是否仍是 <code>{ environmentId, cwd }</code>？</li>
+      <li>Runtime 是否仍走同一 RuntimePort 消息？</li>
+      <li>凭证是否仍只经 CredentialBroker？</li>
+      <li>Session / Orchestrator / Chat 是否零改或只加展示？</li>
+    </ol>
+    <p>若 2–6 任一条要改主干 → 先改 Provider 边界，禁止在 Session 上打补丁。</p>
+    <table>
+      <tr><th>需求</th><th>做法</th></tr>
+      <tr><td>连 atsrws0049 开目录</td><td>SshProvider</td></tr>
+      <tr><td>机器常驻网页派活</td><td>BridgeProvider</td></tr>
+      <tr><td>云端 git 沙箱</td><td>CloudProvider</td></tr>
+      <tr><td>已有 Worker URL</td><td>DirectProvider</td></tr>
+      <tr><td>ProxyJump</td><td>SshProvider.endpoint，不改 Session</td></tr>
+      <tr><td>每任务 worktree</td><td>RuntimeBroker / Workspace 策略</td></tr>
+    </table>
+  </section>
+
+  <section id="s12">
+    <h2><span class="num">12</span> 与上一版关系</h2>
+    <table>
+      <tr><th>上一版有价值</th><th>落点</th></tr>
+      <tr><td>SSH probe/deploy/-R/AuthProxy</td><td><code>SshProvider</code> 内部</td></tr>
+      <tr><td>Host/Folder picker UX</td><td>Client 对 kind=ssh 的呈现</td></tr>
+      <tr><td>权限回本地</td><td>PermissionGateway</td></tr>
+      <tr><td><code>--remote-local</code></td><td>LocalProvider child worker</td></tr>
+    </table>
+    <table>
+      <tr><th>应废弃</th><th>原因</th></tr>
+      <tr><td><code>remote?: { hostId }</code></td><td>改为必填 <code>workspace: WorkspaceHandle</code></td></tr>
+      <tr><td><code>transport: local\|ssh</code></td><td>换成 Provider</td></tr>
+      <tr><td>以少改 HTTP 为中心</td><td>Runtime 协议中心 + HTTP 适配器</td></tr>
+      <tr><td>文档以 Remote-SSH 为根</td><td>根是 Execution Environments</td></tr>
+    </table>
+    <p class="file">初稿保留作 SSH 细节备忘：<a href="./baix-agent-remote-ssh-architecture.html">baix-agent-remote-ssh-architecture.html</a></p>
+  </section>
+
+  <section id="s13">
+    <h2><span class="num">13</span> 总结</h2>
+    <div class="callout ok">
+      <div class="tag">Bottom line</div>
+      <p>好架构的中心不是 SSH，而是：</p>
+      <p><b>Environment × Workspace × Runtime × CredentialBroker</b>，Provider 可插拔，Local 一等公民，Session 只绑 WorkspaceHandle。</p>
+      <p>第一期用 SshProvider 满足 VS Code 体验；之后远程需求优先加 Provider，禁止在 Session/Router 上长 <code>if (remoteXxx)</code>。</p>
+    </div>
+    <p class="file">Markdown：<code>cc_docs/baix-agent-remote-execution-architecture.md</code></p>
+  </section>
+</main>
+</div>
+</body>
+</html>

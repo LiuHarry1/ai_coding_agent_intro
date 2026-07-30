@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code：远程连接与 Workspace 指定架构</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#d97757; --accent2:#58a6ff;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:26px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;border:1px solid}
+.badge.green{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3)}
+.badge.blue{background:rgba(88,166,255,.12);color:var(--accent2);border-color:rgba(88,166,255,.3)}
+.badge.purple{background:rgba(188,140,255,.12);color:var(--purple);border-color:rgba(188,140,255,.3)}
+.badge.amber{background:rgba(210,153,34,.12);color:var(--amber);border-color:rgba(210,153,34,.3)}
+.badge.red{background:rgba(248,81,73,.12);color:var(--red);border-color:rgba(248,81,73,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:22px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(217,119,87,.12);border:1px solid rgba(217,119,87,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(88,166,255,.07)}
+.callout.ok{border-color:var(--green);background:rgba(63,185,80,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.ok .tag{color:var(--green)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.path-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+@media (max-width:900px){.path-grid{grid-template-columns:1fr}.sidebar{display:none}.main{padding:28px 20px 80px}}
+.path-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.path-card h4{margin:0 0 8px;color:var(--text);font-size:15px}
+.path-card .kind{font-size:11px;font-weight:700;letter-spacing:.4px;margin-bottom:8px}
+.path-card p{margin:4px 0;font-size:13px;color:var(--muted)}
+.flow{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin:14px 0;
+  font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;line-height:1.7;color:#c9d1d9;overflow-x:auto;white-space:pre}
+.file{color:var(--muted);font-size:12.5px}
+.hl{color:var(--accent)}
+.hl2{color:var(--accent2)}
+.hl3{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <h1>CC Remote + Workspace</h1>
+  <div class="sub">源码 review · claude-code-rev</div>
+  <ul class="toc">
+    <li><a href="#s1">1. 结论速览</a></li>
+    <li><a href="#s2">2. 总体架构</a></li>
+    <li><a href="#s3">3. SSH 路径</a></li>
+    <li><a href="#s4">4. Bridge / Remote Control</a></li>
+    <li><a href="#s5">5. CCR / Teleport</a></li>
+    <li><a href="#s6">6. Direct Connect</a></li>
+    <li><a href="#s7">7. Workspace 对照表</a></li>
+    <li><a href="#s8">8. 端到端时序</a></li>
+    <li><a href="#s9">9. 源码索引</a></li>
+    <li><a href="#s10">10. 配置与开关</a></li>
+    <li><a href="#s11">11. 还原缺口</a></li>
+    <li><a href="#s12">12. 总结</a></li>
+  </ul>
+</aside>
+
+<main class="main">
+  <div class="hero">
+    <h1>Claude Code：远程连接与 Workspace 指定</h1>
+    <p>基于 <code>claude-code-rev</code> 源码梳理：如何远程连到某一台电脑，并指定该电脑上的 workspace。</p>
+    <p>源码根目录：<code>C:\Users\harry.liu\cursor_workspace\public\claude-code-rev</code></p>
+    <span class="badge green">4 条远程路径</span>
+    <span class="badge blue">本地 UI · 远程执行</span>
+    <span class="badge purple">Workspace 按路径分流</span>
+    <span class="badge amber">SSH 实现 stub</span>
+  </div>
+
+  <section id="s1">
+    <h2><span class="num">01</span> 结论速览</h2>
+    <p>CC 里「远程」不是单一模块，而是 <strong>四条并行路径</strong>。「指定远程 workspace」的方式因路径而异。</p>
+    <table>
+      <tr><th>路径</th><th>入口</th><th>Agent 跑在哪</th><th>Workspace 怎么指定</th></tr>
+      <tr>
+        <td><strong>CCR / Teleport</strong></td>
+        <td><code>--remote</code> / <code>--teleport</code></td>
+        <td>Anthropic 云 / BYOC 容器</td>
+        <td>Git clone 或 git bundle；不传本机绝对路径</td>
+      </tr>
+      <tr>
+        <td><strong>Remote Control (Bridge)</strong></td>
+        <td><code>claude remote-control</code> / <code>/remote-control</code></td>
+        <td><strong>本机</strong>（子进程 CLI）</td>
+        <td>注册 <code>directory = cwd</code>；spawn <code>cwd: dir</code> / worktree</td>
+      </tr>
+      <tr>
+        <td><strong>SSH</strong></td>
+        <td><code>claude ssh &lt;host&gt; [dir]</code></td>
+        <td>SSH 远端主机</td>
+        <td>位置参数 <code>[dir]</code> 或 <code>sshConfigs[].startDirectory</code></td>
+      </tr>
+      <tr>
+        <td><strong>Direct Connect</strong></td>
+        <td><code>cc://</code> / <code>cc+unix://</code></td>
+        <td>Peer server 进程</td>
+        <td><code>POST /sessions</code> 带 <code>{ cwd }</code>，可回 <code>work_dir</code></td>
+      </tr>
+    </table>
+    <div class="callout ok">
+      <div class="tag">关键结论</div>
+      <p>真正「连到某一台电脑 + 指定该机上某个目录」的，主要是 <strong>SSH</strong> 与 <strong>Bridge</strong>（本机充当环境）。CCR 是连到云端环境，workspace 由 git/bundle 物化。</p>
+    </div>
+  </section>
+
+  <section id="s2">
+    <h2><span class="num">02</span> 总体架构</h2>
+    <div class="path-grid">
+      <div class="path-card">
+        <div class="kind" style="color:var(--accent2)">LOCAL UI</div>
+        <h4>CLI / Ink REPL</h4>
+        <p><code>useRemoteSession</code> · <code>useReplBridge</code></p>
+        <p><code>useSSHSession</code> · <code>useDirectConnect</code></p>
+        <p>权限：control_request / control_response</p>
+      </div>
+      <div class="path-card">
+        <div class="kind" style="color:var(--purple)">API LAYER</div>
+        <h4>api.anthropic.com</h4>
+        <p><code>/v1/sessions</code> · WS subscribe</p>
+        <p><code>/v1/environment_providers</code></p>
+        <p><code>/v1/environments/bridge</code> · work poll</p>
+      </div>
+      <div class="path-card">
+        <div class="kind" style="color:var(--green)">EXEC TARGETS</div>
+        <h4>Agent 落地位置</h4>
+        <p>Bridge child · CCR container</p>
+        <p>SSH remote binary · Peer server</p>
+      </div>
+      <div class="path-card">
+        <div class="kind" style="color:var(--amber)">SHARED PATTERN</div>
+        <h4>分层不变式</h4>
+        <p>UI 本地 · 工具远程</p>
+        <p>SDK stream-json over WS/HTTP</p>
+        <p>Workspace 在 create/register/spawn 写入</p>
+      </div>
+    </div>
+    <div class="flow">┌──────────────────┐     OAuth      ┌─────────────────────────────┐
+│  Local CLI / REPL │◄──────────────►│  api.anthropic.com          │
+│  (Ink UI)         │  WS subscribe │  /v1/sessions               │
+│  useRemoteSession │◄──────────────►│  /v1/environments/bridge    │
+│  useReplBridge    │  poll work    │  session_ingress WS/SSE     │
+└────────┬─────────┘               └──────────────┬──────────────┘
+         │ spawn / ssh / HTTP                     │ schedule
+         ▼                                        ▼
+┌──────────────────┐               ┌─────────────────────────────┐
+│ Bridge child CLI │               │ CCR container / BYOC        │
+│ cwd = dir/worktree│               │ clone git OR seed bundle    │
+└──────────────────┘               └─────────────────────────────┘
+┌──────────────────┐   ssh -R      ┌─────────────────────────────┐
+│ useSSHSession    │◄─────────────►│ Remote host Claude binary   │
+│ (UI local)       │               │ cwd = [dir]/startDirectory  │
+└──────────────────┘               └─────────────────────────────┘
+┌──────────────────┐   HTTP+WS     ┌─────────────────────────────┐
+│ useDirectConnect │◄─────────────►│ Peer /sessions {cwd}        │
+└──────────────────┘               └─────────────────────────────┘</div>
+  </section>
+
+  <section id="s3">
+    <h2><span class="num">03</span> SSH：指定远程电脑 + workspace</h2>
+    <h3>用户入口</h3>
+    <pre><code>claude ssh &lt;host&gt; [dir]
+claude ssh my-devbox ~/projects/foo
+claude ssh --permission-mode auto my-devbox /tmp/work
+claude ssh --local /some/dir   # e2e：跳过真实 ssh</code></pre>
+    <p class="file">解析位置：<code>src/main.tsx</code>（feature <code>SSH_REMOTE</code>）</p>
+
+    <h3>Settings 默认 workspace</h3>
+    <pre><code>sshConfigs?: Array&lt;{
+  id, name, sshHost, sshPort?, sshIdentityFile?,
+  startDirectory?: string  // 远端默认 cwd，支持 ~；可被 CLI [dir] 覆盖
+}&gt;</code></pre>
+    <p class="file"><code>src/utils/settings/types.ts</code></p>
+
+    <h3>设计意图（main.tsx 注释）</h3>
+    <ol>
+      <li><strong>probe</strong> 远端是否已有 Claude binary</li>
+      <li>需要时 <strong>deploy</strong> binary</li>
+      <li><code>ssh</code> 带 unix-socket <code>-R</code> → 本机 <strong>auth proxy</strong></li>
+      <li>交给 REPL 一个 <code>SSHSession</code>：Tools 远端、UI 本地</li>
+      <li><code>setOriginalCwd(sshSession.remoteCwd)</code> —— workspace 以远端 <code>remoteCwd</code> 为准</li>
+    </ol>
+    <p>会话历史落在远端：<code>~/.claude/projects/&lt;cwd&gt;/</code></p>
+
+    <div class="callout warn">
+      <div class="tag">本树缺口</div>
+      <p><code>src/ssh/createSSHSession.ts</code> 为 stub（<code>return {}</code>），<code>SSHSessionManager</code> 为空类。<code>useSSHSession.ts</code> 期望完整 API。架构与 CLI/settings 契约齐全，运行时实现被剥空。</p>
+    </div>
+  </section>
+
+  <section id="s4">
+    <h2><span class="num">04</span> Bridge / Remote Control</h2>
+    <p>产品主路径之一：在<strong>目标机器</strong>上跑 <code>claude remote-control</code>，注册为 <code>bridge</code> 环境；用户从 claude.ai / 另一台 CLI 派工回来。</p>
+
+    <h3>入口</h3>
+    <table>
+      <tr><th>入口</th><th>说明</th></tr>
+      <tr><td><code>claude remote-control</code>（rc / remote / sync / bridge）</td><td>独立 bridge server</td></tr>
+      <tr><td><code>/remote-control</code></td><td>REPL slash command</td></tr>
+      <tr><td><code>--remote-control</code> / <code>--rc</code></td><td>交互会话内启用</td></tr>
+    </table>
+
+    <h3>Workspace = 注册时的 <code>directory</code></h3>
+    <pre><code>// POST /v1/environments/bridge  — bridgeApi.ts
+{
+  machine_name: config.machineName,
+  directory: config.dir,            // ← workspace（通常 getOriginalCwd()）
+  branch: config.branch,
+  git_repo_url: config.gitRepoUrl,
+  max_sessions: config.maxSessions,
+  metadata: { worker_type: config.workerType },
+}</code></pre>
+
+    <h3>SpawnMode</h3>
+    <table>
+      <tr><th>模式</th><th>行为</th></tr>
+      <tr><td><code>single-session</code></td><td>单 session，cwd = 注册 directory；结束后退出</td></tr>
+      <tr><td><code>same-dir</code></td><td>持久 server，多 session <strong>共享</strong> cwd</td></tr>
+      <tr><td><code>worktree</code></td><td>持久 server，每 session 独立 git worktree</td></tr>
+    </table>
+    <p>CLI：<code>--spawn</code> · <code>--capacity N</code> · <code>--create-session-in-dir</code> · <code>--session-id</code></p>
+
+    <h3>子进程 cwd</h3>
+    <pre><code>// sessionRunner.ts
+const child = spawn(deps.execPath, args, {
+  cwd: dir,   // ← 指定该机上的 workspace
+  stdio: ['pipe', 'pipe', 'pipe'],
+  env,        // CLAUDE_CODE_ENVIRONMENT_KIND=bridge 等
+})</code></pre>
+
+    <div class="flow">registerBridgeEnvironment(directory=cwd)
+  → runBridgeLoop
+  → GET /v1/environments/{id}/work/poll
+  → decode WorkSecret → sdkUrl + session_ingress_token
+  → sessionRunner.spawn(..., dir)
+       child: claude --print --sdk-url …</div>
+  </section>
+
+  <section id="s5">
+    <h2><span class="num">05</span> CCR / Teleport（云端远程）</h2>
+    <pre><code>claude --remote "fix login"      # 创建 CCR session
+claude --teleport &lt;sessionId&gt;    # 恢复 / 附着</code></pre>
+
+    <h3>Workspace 不是本机路径</h3>
+    <pre><code>type SessionContext = {
+  sources: SessionContextSource[]  // git_repository URL + revision
+  cwd: string
+  seed_bundle_file_id?: string     // 非 GitHub：上传 .git bundle
+  // ...
+}</code></pre>
+    <p><code>teleportToRemote</code> 物化顺序：</p>
+    <ol>
+      <li>探测本地 repo → <code>git_repository</code> source</li>
+      <li>或上传 git bundle → <code>seed_bundle_file_id</code></li>
+      <li>都没有 → 空 sandbox</li>
+      <li>选 <code>environment_id</code>：settings 默认 → anthropic_cloud → 非 bridge → 第一个</li>
+    </ol>
+
+    <h3>连接协议</h3>
+    <table>
+      <tr><th>步骤</th><th>机制</th></tr>
+      <tr><td>Auth</td><td>Claude.ai OAuth + org UUID + beta <code>ccr-byoc-2025-07-29</code></td></tr>
+      <tr><td>Create</td><td><code>POST /v1/sessions</code></td></tr>
+      <tr><td>Subscribe</td><td><code>wss://…/v1/sessions/ws/{id}/subscribe</code></td></tr>
+      <tr><td>User input</td><td><code>POST /v1/sessions/{id}/events</code></td></tr>
+      <tr><td>权限 / 中断</td><td>同 WS <code>control_request</code> / <code>control_response</code></td></tr>
+    </table>
+
+    <div class="callout note">
+      <div class="tag">环境 kind</div>
+      <p><code>anthropic_cloud</code> · <code>byoc</code> · <code>bridge</code>。<code>--remote</code> 选默认环境时会优先避开 bridge，避免误派到本机。</p>
+    </div>
+  </section>
+
+  <section id="s6">
+    <h2><span class="num">06</span> Direct Connect</h2>
+    <p>入口：<code>cc://</code> / <code>cc+unix://</code> → <code>createDirectConnectSession</code>。</p>
+    <pre><code>// createDirectConnectSession.ts
+POST ${serverUrl}/sessions
+body: { cwd, dangerously_skip_permissions? }
+→ { session_id, ws_url, work_dir? }</code></pre>
+    <p>客户端可用服务端 <code>work_dir</code> 调用 <code>setOriginalCwd</code> / <code>setCwdState</code>。后续 WebSocket NDJSON；工具在 peer 侧执行。</p>
+    <div class="callout warn">
+      <div class="tag">缺口</div>
+      <p>本树缺失 <code>parseConnectUrl.js</code>，URL 解析路径可能无法 import。</p>
+    </div>
+  </section>
+
+  <section id="s7">
+    <h2><span class="num">07</span> 「指定远程 workspace」对照表</h2>
+    <table>
+      <tr><th>场景</th><th>谁决定路径</th><th>关键字段 / 参数</th><th>落地方式</th></tr>
+      <tr><td>SSH</td><td>用户 CLI / settings</td><td><code>[dir]</code> / <code>startDirectory</code></td><td>远端进程 cwd = remoteCwd</td></tr>
+      <tr><td>Bridge 注册</td><td>目标机当前目录</td><td><code>directory: config.dir</code></td><td>环境元数据 + spawn cwd</td></tr>
+      <tr><td>Bridge worktree</td><td>Bridge spawnMode</td><td><code>createAgentWorktree</code></td><td>每 session 独立目录</td></tr>
+      <tr><td>CCR</td><td>Git 源 / bundle</td><td><code>sources[]</code> / <code>seed_bundle_file_id</code></td><td>容器内 clone</td></tr>
+      <tr><td>Direct Connect</td><td>客户端 POST</td><td><code>cwd</code> → 可选 <code>work_dir</code></td><td>peer 子进程目录</td></tr>
+    </table>
+  </section>
+
+  <section id="s8">
+    <h2><span class="num">08</span> 端到端时序</h2>
+
+    <h3>A. 连某台开发机上的某个目录 —— SSH</h3>
+    <div class="flow">User: claude ssh devbox ~/src/app
+  → parse host + dir
+  → createSSHSession({ host, cwd })
+  → probe/deploy + ssh -R auth proxy
+  → remoteCwd 写回本地 state
+  → launchRepl(sshSession)
+  → useSSHSession：UI 本地，工具远端</div>
+
+    <h3>B. 让某台电脑可被网页远程使用 —— Bridge</h3>
+    <div class="flow">On target machine:
+  cd /path/to/workspace
+  claude remote-control --spawn worktree --capacity 4
+    → POST /v1/environments/bridge { directory: /path/to/workspace }
+    → poll work → spawn child with cwd=dir|worktree
+
+On phone / another laptop / claude.ai:
+  open session targeting that environment
+    → backend enqueue work → bridge picks up
+    → agent runs on target machine workspace</div>
+
+    <h3>C. 云端沙箱 —— CCR</h3>
+    <div class="flow">claude --remote "fix the flaky test"
+  → pick environment_id
+  → POST /v1/sessions + git/bundle context
+  → container clone → worker
+  → local WS subscribe（或打印 resume URL）</div>
+  </section>
+
+  <section id="s9">
+    <h2><span class="num">09</span> 关键源码索引</h2>
+    <table>
+      <tr><th>主题</th><th>路径</th></tr>
+      <tr><td>SSH CLI 解析与启动</td><td><code>src/main.tsx</code>（SSH_REMOTE, _pendingSSH）</td></tr>
+      <tr><td>SSH session 工厂（stub）</td><td><code>src/ssh/createSSHSession.ts</code></td></tr>
+      <tr><td>SSH REPL hook</td><td><code>src/hooks/useSSHSession.ts</code></td></tr>
+      <tr><td>SSH settings</td><td><code>src/utils/settings/types.ts</code> → sshConfigs</td></tr>
+      <tr><td>Bridge 类型 / SpawnMode</td><td><code>src/bridge/types.ts</code></td></tr>
+      <tr><td>Bridge 注册 / poll</td><td><code>src/bridge/bridgeApi.ts</code></td></tr>
+      <tr><td>Bridge 主循环</td><td><code>src/bridge/bridgeMain.ts</code></td></tr>
+      <tr><td>Bridge 子进程 cwd</td><td><code>src/bridge/sessionRunner.ts</code></td></tr>
+      <tr><td>Bridge slash command</td><td><code>src/commands/bridge/bridge.tsx</code></td></tr>
+      <tr><td>CCR 创建 session</td><td><code>src/utils/teleport.tsx</code></td></tr>
+      <tr><td>CCR API 类型</td><td><code>src/utils/teleport/api.ts</code></td></tr>
+      <tr><td>CCR WS 客户端</td><td><code>src/remote/SessionsWebSocket.ts</code> / <code>RemoteSessionManager.ts</code></td></tr>
+      <tr><td>Direct connect</td><td><code>src/server/createDirectConnectSession.ts</code></td></tr>
+    </table>
+  </section>
+
+  <section id="s10">
+    <h2><span class="num">10</span> 配置与开关</h2>
+    <h3>Settings</h3>
+    <pre><code>remote?: { defaultEnvironmentId?: string }
+sshConfigs?: Array&lt;{ id, name, sshHost, sshPort?, sshIdentityFile?, startDirectory? }&gt;</code></pre>
+    <h3>Policy / GrowthBook（节选）</h3>
+    <ul>
+      <li><code>allow_remote_sessions</code> — CCR / <code>--remote</code></li>
+      <li><code>allow_remote_control</code> — Bridge</li>
+      <li><code>tengu_remote_backend</code> · <code>tengu_ccr_bundle_seed_enabled</code> · <code>tengu_ccr_bridge_multi_session</code></li>
+    </ul>
+    <h3>Worker / Bridge 环境变量</h3>
+    <ul>
+      <li><code>CLAUDE_CODE_SESSION_ACCESS_TOKEN</code></li>
+      <li><code>CLAUDE_CODE_ENVIRONMENT_KIND=bridge</code></li>
+      <li><code>CLAUDE_CODE_USE_CCR_V2</code> · <code>CLAUDE_CODE_WORKER_EPOCH</code></li>
+    </ul>
+  </section>
+
+  <section id="s11">
+    <h2><span class="num">11</span> 本还原树缺口</h2>
+    <ol>
+      <li><strong>SSH 实现 stub</strong> —— 架构文档完整，运行时不可用</li>
+      <li><strong>parseConnectUrl.js 缺失</strong> —— <code>cc://</code> 路径可能断</li>
+      <li><strong>environment-runner / self-hosted-runner</strong> —— CLI 入口有，实现目录不在树中</li>
+      <li>无独立 packages/electron remote 文档，设计主要靠源码注释</li>
+    </ol>
+  </section>
+
+  <section id="s12">
+    <h2><span class="num">12</span> 一句话总结</h2>
+    <div class="callout ok">
+      <div class="tag">Bottom line</div>
+      <p><strong>指定「某台电脑 + 某个目录」</strong>：产品契约在 <code>claude ssh &lt;host&gt; [dir]</code>（<code>startDirectory</code>）与 <code>claude remote-control</code> 的 <code>directory</code> / spawn cwd。</p>
+      <p><strong>云端远程</strong>：走 CCR teleport，workspace 由 git/bundle + <code>environment_id</code> 决定。</p>
+      <p><strong>本地 UI、远程执行</strong> 是所有路径的共同分层；workspace 只是各路径在 create / register / spawn 时写入的不同字段。</p>
+    </div>
+    <p class="file">配套 Markdown：<code>cc_docs/claude-code-remote-workspace.md</code></p>
+  </section>
+</main>
+</div>
+</body>
+</html>
