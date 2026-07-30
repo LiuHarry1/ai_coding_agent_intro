@@ -179,7 +179,6 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 ├── src/                  # Agent 实现（tools / core / services）
 ├── client/web/          # React 前端
 ├── electron/             # Electron 桌面壳
-├── shared/               # 共享服务端工具
 ├── client-sdk/           # TypeScript 客户端 SDK
 ├── deploy/               # Docker 部署配置
 └── .ai-agent/            # 项目级 skills / commands / config
@@ -191,8 +190,6 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 |------|------|
 | `npm start` | 启动 agent 后端 |
 | `npm run dev:web` | 启动 Web UI 开发服务器（热更新） |
-| `npm run server:stop` | 释放 4567 端口 |
-| `npm run server:restart` | 重启后端 |
 | `npm run build:web` | 构建前端到 `client/web/dist` |
 | `npm run desktop:dev` | 启动桌面版 |
 | `npm run desktop:pack` | 打包当前平台桌面安装包 |

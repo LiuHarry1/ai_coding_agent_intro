@@ -70,7 +70,6 @@ RUN npm ci --omit=dev \
   && npm cache clean --force
 
 COPY src/ ./src/
-COPY shared/ ./shared/
 # Shared wire-protocol package, imported by the server transports at
 # runtime (tsx loads its .ts directly; zod resolves from /app/node_modules).
 COPY protocol/ ./protocol/

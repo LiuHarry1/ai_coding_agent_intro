@@ -8,8 +8,6 @@
     "start": "tsx start.js",
     "cli": "tsx start.js --stdio",
     "acp": "tsx start.js --acp",
-    "server:stop": "node ./shared/kill-port.cjs 4567",
-    "server:restart": "npm run server:stop && npm run start",
     "dev:web": "npm --prefix client/web run dev",
     "build:web": "npm --prefix client/web run build",
     "build:worker": "node ./scripts/build-worker.cjs",
@@ -18,7 +16,7 @@
     "desktop:pack": "npm run build:web && electron-builder",
     "desktop:pack:win": "npm run build:web && electron-builder --win",
     "typecheck": "tsc --noEmit -p src/tsconfig.json && npm --prefix protocol run typecheck && npm --prefix client-sdk run typecheck",
-    "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"shared/**/*.cjs\""
+    "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\""
   },
   "keywords": [],
   "author": "",
@@ -66,7 +64,6 @@
       "electron/**/*",
       "start.js",
       "src/**/*",
-      "shared/**/*",
       "protocol/**/*",
       "client/web/dist/**/*",
       "package.json",

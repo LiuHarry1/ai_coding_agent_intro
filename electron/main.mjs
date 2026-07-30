@@ -188,7 +188,7 @@ if (!gotLock) {
       stopAgent()
       dialog.showErrorBox(
         'Failed to start',
-        `${err.message}\n\nIf port ${agentPort} is in use, run \`npm run server:stop\` or set PORT.`,
+        `${err.message}\n\nIf port ${agentPort} is in use, free the port or set PORT.`,
       )
       app.quit()
       return
