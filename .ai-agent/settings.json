@@ -2,13 +2,13 @@
   "models": {
     "large": {
       "provider": "openai-compatible",
-      "baseURL": "http://10.150.115.69:50952/v1",
+      "baseURL": "http://localhost:4141/v1",
       "apiKey": "not-needed",
       "model": "claude-opus-4.6"
     },
     "medium": {
       "provider": "openai-compatible",
-      "baseURL": "http://10.150.115.69:50952/v1",
+      "baseURL": "http://localhost:4141/v1",
       "apiKey": "not-needed",
       "model": "claude-opus-4.6"
     },

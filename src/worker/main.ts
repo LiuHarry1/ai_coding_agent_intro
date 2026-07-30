@@ -6,7 +6,6 @@
  */
 import * as fs from 'fs'
 import * as path from 'path'
-import { spawn } from 'child_process'
 import { createInterface } from 'readline'
 import type {
   RuntimeClientMessage,
@@ -20,6 +19,7 @@ import {
   shutdownLspHost,
 } from './lsp-host.js'
 import type { LspServerConfig } from '../core/types.js'
+import { runShellCommand, type ShellKind } from '../core/shell/spawn-shell.js'
 
 const WORKER_VERSION =
   process.env.BAIX_WORKER_VERSION ??
@@ -69,76 +69,18 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
       }
     }
     case 'exec':
-      return execCommand(op.command, op.cwd, op.timeoutMs ?? 120_000)
+      return runShellCommand({
+        shell: (op.shell ?? 'bash') as ShellKind,
+        command: op.command,
+        cwd: op.cwd,
+        timeoutMs: op.timeoutMs ?? 120_000,
+        cwdFilePrefix: 'baix-worker-cwd',
+      })
     default: {
       const _exhaustive: never = op
       throw new Error(`Unknown op: ${JSON.stringify(_exhaustive)}`)
     }
   }
-}
-
-function execCommand(
-  command: string,
-  cwd: string,
-  timeoutMs: number,
-): Promise<{
-  stdout: string
-  stderr: string
-  code: number | null
-  cwdAfter?: string
-}> {
-  const isWin = process.platform === 'win32'
-  const marker = '__BAIX_CWD__'
-  const wrapped = isWin
-    ? command
-    : `cd ${shellQuote(cwd)} || exit 127\n${command}\n__ec=$?\necho "${marker}$(pwd -P)"\nexit $__ec`
-
-  const shell = isWin ? 'cmd.exe' : 'bash'
-  const args = isWin ? ['/d', '/s', '/c', command] : ['-lc', wrapped]
-  const spawnCwd = isWin ? cwd : undefined
-
-  return new Promise((resolve, reject) => {
-    const child = spawn(shell, args, {
-      cwd: spawnCwd,
-      env: { ...process.env, TERM: 'dumb' },
-      windowsHide: true,
-    })
-    let stdout = ''
-    let stderr = ''
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      reject(new Error(`exec timed out after ${timeoutMs}ms`))
-    }, timeoutMs)
-    child.stdout?.on('data', (d: Buffer) => {
-      stdout += d.toString('utf8')
-    })
-    child.stderr?.on('data', (d: Buffer) => {
-      stderr += d.toString('utf8')
-    })
-    child.on('error', err => {
-      clearTimeout(timer)
-      reject(err)
-    })
-    child.on('close', code => {
-      clearTimeout(timer)
-      let cwdAfter: string | undefined
-      if (!isWin) {
-        const idx = stdout.lastIndexOf(marker)
-        if (idx >= 0) {
-          cwdAfter = stdout
-            .slice(idx + marker.length)
-            .trim()
-            .split(/\r?\n/)[0]
-          stdout = stdout.slice(0, idx).replace(/\n$/, '')
-        }
-      }
-      resolve({ stdout, stderr, code, cwdAfter })
-    })
-  })
-}
-
-function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\"'\"'`)}'`
 }
 
 async function handle(msg: RuntimeClientMessage): Promise<void> {

@@ -2,6 +2,7 @@
  * Unified tool execution surface — always backed by Agent Worker (RuntimePort).
  */
 import type { EnvironmentId, FsPort } from './types.js'
+import type { ShellKind } from '../core/shell/spawn-shell.js'
 
 export type ExecResult = {
   stdout: string
@@ -22,7 +23,12 @@ export interface ExecutionBackend {
   isDirectory(absPath: string): Promise<boolean>
   exec(
     command: string,
-    opts: { cwd: string; timeoutMs?: number },
+    opts: {
+      cwd: string
+      timeoutMs?: number
+      /** Default `bash` (Git Bash on Windows). */
+      shell?: ShellKind
+    },
   ): Promise<ExecResult & { cwdAfter?: string }>
   fsPort?: FsPort
 }

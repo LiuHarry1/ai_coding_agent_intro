@@ -1,29 +1,21 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { spawn, type ChildProcess } from 'child_process'
-import * as fs from 'fs'
-import * as os from 'os'
-import * as path from 'path'
 import { truncate } from './utils.js'
-import {
-  killChild,
-  forceKillChild,
-  type ShellConfig,
-} from '../core/platform.js'
+import { killChild, forceKillChild } from '../core/platform.js'
 import type { ToolDefinition, ToolContext } from '../core/types.js'
 import { isShellInputConcurrencySafe } from '../core/shell/shell-readonly.js'
+import {
+  prepareShellSpawn,
+  readCwdAfter,
+  cleanupCwdFile,
+  type ShellKind,
+} from '../core/shell/spawn-shell.js'
 
 /**
- * Shared execution machinery for shell-style tools (bash on Unix, powershell
- * on Windows). The two platforms differ only in:
- *   1. The tool name registered with the model (`bash` vs `powershell`)
- *   2. The tool description (syntax / safety guidance varies wildly)
- *   3. The spawn config (`bash -c <cmd>` vs `powershell.exe -Command <cmd>`)
- *
- * Everything else — background-process tracking, output capping, progress
- * streaming, timeout/kill, pid check/kill modes — is identical. Centralizing
- * it here keeps the per-shell wrapper files (~50 lines each) focused on the
- * prompt content, which is what actually differs between shells.
+ * Shared execution machinery for Bash / PowerShell tools.
+ * Spawn argv/env/cwd tracking: `core/shell/spawn-shell.ts` (same as Worker).
+ * This file owns background PIDs, output capping, progress, timeout/kill.
  */
 
 // ── Background process tracking ──
@@ -106,21 +98,18 @@ function killProcess(pid: number): string {
 // ── Factory ──────────────────────────────
 
 export interface ShellToolOptions {
-  /** Tool name registered with the model (e.g. `bash`, `powershell`). */
+  /** Tool name registered with the model (e.g. `Bash`, `PowerShell`). */
   name: string
-  /** Long-form description shown to the model — covers usage rules,
-   *  syntax warnings, modes. The brief one-line registry summary is
-   *  derived from the first sentence of this string. */
+  /** Long-form description shown to the model. */
   description: string
-  /** Description for the `command` schema field. Vendor the shell name
-   *  (e.g. "The bash command to execute") so the model parses it correctly. */
+  /** Description for the `command` schema field. */
   commandFieldDesc: string
-  /** Spawn configuration: which binary, what args, what env. */
-  shellConfig: ShellConfig
+  /** Which shell backend to spawn (shared with Worker via prepareShellSpawn). */
+  shell: ShellKind
 }
 
 export function createShellTool(opts: ShellToolOptions): ToolDefinition {
-  const { name, description, commandFieldDesc, shellConfig } = opts
+  const { name, description, commandFieldDesc, shell } = opts
   // Registry-list summary takes the first sentence to keep the listing tidy.
   const briefDescription = description.split(/\.\s/)[0] + '.'
 
@@ -201,6 +190,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               const result = await execution.exec(command, {
                 cwd: cwdRef.current,
                 timeoutMs: timeout,
+                shell,
               })
               if (result.cwdAfter) cwdRef.current = result.cwdAfter
               let out = result.stdout || ''
@@ -224,37 +214,31 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             }
           }
 
-          // Tmpfile the wrapped command writes its post-execution `pwd` to.
-          // Unique per call so parallel invocations don't race on the file.
-          // Cleaned up after readback (or on bg child close further down).
-          const cwdFile = path.join(
-            os.tmpdir(),
-            `agent-shell-cwd-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          )
-          const wrappedCmd = shellConfig.wrapCommand(command, cwdFile)
+          // Shared spawn config (same as Worker) — dual cwd paths on Windows.
+          let prepared
+          try {
+            prepared = prepareShellSpawn({
+              shell,
+              userCommand: command,
+              cwdFilePrefix: 'agent-shell-cwd',
+            })
+          } catch (err) {
+            return `[error: ${err instanceof Error ? err.message : String(err)}]`
+          }
 
-          const child = spawn(
-            shellConfig.command,
-            shellConfig.buildArgs(wrappedCmd),
-            {
-              cwd: cwdRef.current,
-              env: shellConfig.spawnEnv(),
-            },
-          )
+          const child = spawn(prepared.command, prepared.args, {
+            cwd: cwdRef.current,
+            env: prepared.env,
+            windowsHide: true,
+          })
 
-          // Read the tracked pwd and update cwdRef. Best-effort: missing or
-          // unreadable file = leave cwdRef alone (e.g. user ran `exec foo`
-          // and the trailer never executed). Always unlink afterwards.
           const updateCwdFromFile = () => {
-            try {
-              const tracked = fs.readFileSync(cwdFile, 'utf8').trim()
-              if (tracked) cwdRef.current = tracked
-            } catch {
-              // No file / read error → keep current cwd unchanged.
-            }
-            try {
-              fs.unlinkSync(cwdFile)
-            } catch {}
+            const tracked = readCwdAfter(
+              prepared.cwdFileNative,
+              prepared.shellKind,
+            )
+            if (tracked) cwdRef.current = tracked
+            cleanupCwdFile(prepared.cwdFileNative)
           }
 
           const proc: TrackedProcess = {
@@ -288,15 +272,11 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             child.on('close', (code: number | null) => {
               proc.exitCode = code
               proc.done = true
-              try {
-                fs.unlinkSync(cwdFile)
-              } catch {}
+              cleanupCwdFile(prepared.cwdFileNative)
             })
             child.on('error', () => {
               proc.done = true
-              try {
-                fs.unlinkSync(cwdFile)
-              } catch {}
+              cleanupCwdFile(prepared.cwdFileNative)
             })
             return `[backgrounded — pid: ${proc.pid}]\nUse ${name}({ pid: ${proc.pid} }) to check, ${name}({ pid: ${proc.pid}, kill: true }) to stop.`
           }
@@ -328,11 +308,8 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               setTimeout(() => {
                 forceKillChild(child)
                 proc.done = true
-                // Killed mid-flight — trailer didn't run, cwdFile likely
-                // missing. Clean up if present and don't update cwdRef.
-                try {
-                  fs.unlinkSync(cwdFile)
-                } catch {}
+                // Killed mid-flight — trailer didn't run; don't update cwdRef.
+                cleanupCwdFile(prepared.cwdFileNative)
                 const out =
                   formatOutput(proc) + `\n[timed out after ${timeout / 1000}s]`
                 if (wire && toolUseId) {
@@ -357,9 +334,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             child.on('error', (err: Error) => {
               clearTimeout(hardTimer)
               proc.done = true
-              try {
-                fs.unlinkSync(cwdFile)
-              } catch {}
+              cleanupCwdFile(prepared.cwdFileNative)
               finish(`[error: ${err.message}]`)
             })
           })

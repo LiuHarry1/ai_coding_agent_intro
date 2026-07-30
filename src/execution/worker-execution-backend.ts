@@ -6,6 +6,7 @@ import type { RuntimePort } from './types.js'
 import type { WorkerFsOp, WorkerLspOp } from './runtime-protocol.js'
 import type { ExecResult, ExecutionBackend } from './execution-backend.js'
 import type { LspServerConfig } from '../core/types.js'
+import type { ShellKind } from '../core/shell/spawn-shell.js'
 import { registerPendingLSPDiagnostic } from '../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspWorkspaceKey } from '../services/lsp/manager.js'
 
@@ -171,7 +172,11 @@ export class WorkerExecutionBackend implements ExecutionBackend {
 
   async exec(
     command: string,
-    opts: { cwd: string; timeoutMs?: number },
+    opts: {
+      cwd: string
+      timeoutMs?: number
+      shell?: ShellKind
+    },
   ): Promise<ExecResult & { cwdAfter?: string }> {
     return this.requestFs(
       {
@@ -179,6 +184,7 @@ export class WorkerExecutionBackend implements ExecutionBackend {
         command,
         cwd: opts.cwd,
         timeoutMs: opts.timeoutMs,
+        shell: opts.shell,
       },
       (opts.timeoutMs ?? 120_000) + 10_000,
     )

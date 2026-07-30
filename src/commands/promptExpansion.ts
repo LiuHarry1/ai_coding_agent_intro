@@ -15,8 +15,8 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { findGitBashPath } from '../core/shell/git-bash.js'
 import { isWindows } from '../core/platform.js'
+import { resolveBashExecutable } from '../core/shell/windows-paths.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -32,13 +32,18 @@ const FILE_MAX_BYTES = 100_000
  * inlining the failure for the model to see.
  */
 async function runInlineShell(cmd: string, cwd: string): Promise<string> {
-  // Default: bash everywhere. On Windows use Git Bash so && / pipes work.
-  const [exe, args] = isWindows
-    ? [findGitBashPath() ?? 'bash', ['-lc', cmd]]
-    : ['sh', ['-c', cmd]]
+  // Default: bash everywhere. On Windows use Git Bash (`-c`, not `-lc`).
+  let exe: string
+  let args: string[]
+  try {
+    exe = isWindows ? resolveBashExecutable() : 'sh'
+    args = isWindows ? ['-c', cmd] : ['-c', cmd]
+  } catch (err) {
+    return `[error: ${err instanceof Error ? err.message : String(err)}]`
+  }
 
   try {
-    const { stdout } = await execFileAsync(exe, args as string[], {
+    const { stdout } = await execFileAsync(exe, args, {
       cwd,
       timeout: SHELL_TIMEOUT_MS,
       maxBuffer: SHELL_MAX_BUFFER,

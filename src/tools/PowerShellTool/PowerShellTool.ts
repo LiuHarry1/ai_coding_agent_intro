@@ -1,5 +1,4 @@
 import { createShellTool } from '../shell-runner.js'
-import { powershellShell } from '../../core/platform.js'
 import { POWERSHELL_TOOL_NAME } from '../../constants/tool_names.js'
 import {
   detectPowerShellEdition,
@@ -80,5 +79,5 @@ export const definition = createShellTool({
   name: POWERSHELL_TOOL_NAME,
   description: DESCRIPTION,
   commandFieldDesc: 'The PowerShell command to execute.',
-  shellConfig: powershellShell,
+  shell: 'powershell',
 })

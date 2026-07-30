@@ -2,7 +2,7 @@ import { isWindows } from '../../core/platform.js'
 
 const windowsNote = isWindows
   ? `
-On Windows this tool runs Git Bash (bash.exe from Git for Windows), not cmd.exe. Install Git for Windows if commands fail with "bash not found".
+On Windows this tool runs Git Bash (not cmd.exe). Install Git for Windows or set BAIX_GIT_BASH_PATH if spawn fails. Prefer the PowerShell tool for native Windows cmdlets. Shell env (\`conda activate\`) does not persist across calls — chain in one command.
 `
   : ''
 
@@ -15,8 +15,8 @@ Modes:
 4. Kill background — provide \`pid\` + \`kill: true\`.
 
 Working directory:
-- Spawned as a login shell (\`-lc\`) so your \`PATH\` / aliases / version-manager init from \`.bash_profile\` / \`.zprofile\` are picked up.
-- The cwd persists across calls — \`cd subdir\` in one call affects the next call.
+- On Unix, spawned as a login shell (\`-lc\`) so \`PATH\` / aliases / version-manager init from \`.bash_profile\` / \`.zprofile\` are picked up. On Windows (Git Bash), non-login \`-c\` + inherited process env (see Windows note above).
+- The cwd persists across calls — \`cd subdir\` in one call affects the next call. Shell variables / \`conda activate\` do **not** persist across calls — chain them in one command (\`conda activate python3_11 && python …\`).
 - Prefer absolute paths or stay in the project root rather than \`cd\`-hopping; deep \`cd\` chains make later calls hard to reason about.
 - Before \`mkdir\` / \`touch\` for a new path, run \`ls\` on the parent directory to confirm it exists and is the one you expect.
 

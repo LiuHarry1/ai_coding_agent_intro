@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process'
-import { isWindows, powershellShell } from '../platform.js'
+import { isWindows } from '../platform.js'
+import { resolvePowerShellExecutable } from './windows-paths.js'
 
 /**
  * "desktop" = Windows PowerShell 5.1 (powershell.exe — bundled with Windows).
@@ -31,7 +32,7 @@ export function detectPowerShellEdition(): PowerShellEdition {
   }
   try {
     const result = spawnSync(
-      powershellShell.command,
+      resolvePowerShellExecutable(),
       [
         '-NoProfile',
         '-NonInteractive',

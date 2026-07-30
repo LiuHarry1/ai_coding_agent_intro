@@ -6,6 +6,8 @@
  * Worker owns all FS/shell/LSP. Messages below are the Worker RPC surface.
  */
 
+import type { ShellKind } from '../core/shell/spawn-shell.js'
+
 export type PermissionDecision =
   | { behavior: 'allow'; updatedInput?: Record<string, unknown> }
   | { behavior: 'deny'; message?: string }
@@ -22,6 +24,8 @@ export type WorkerFsOp =
       command: string
       cwd: string
       timeoutMs?: number
+      /** Default `bash` (Git Bash on Windows). Use `powershell` for the PowerShell tool. */
+      shell?: ShellKind
     }
 
 /** LSP ops executed inside the Worker (Language servers spawn co-located). */
