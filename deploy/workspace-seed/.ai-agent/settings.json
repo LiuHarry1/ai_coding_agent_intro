@@ -1,27 +1,5 @@
 {
   "mcpServers": {
-    "mcp_server": {
-      "command": "/opt/venv/bin/python",
-      "args": ["-m", "mcp_server_fetch"]
-    },
-    "tdc-docs": {
-      "url": "https://ai.advantest.com/V93000/help/mcp",
-      "transport": "http",
-      "headers": {
-        "Authorization": "Bearer IsjuwTyVrjkQft8jJ2vZ"
-      },
-      "type": "streamableHttp"
-    },
-    "search-memory": {
-      "type": "streamableHttp",
-      "transport": "http",
-      "url": "http://10.150.115.69:31118/mcp/memory"
-    },
-    "SMT8_test_method_best_practice": {
-      "type": "streamableHttp",
-      "transport": "http",
-      "url": "http://10.150.115.69:31118/mcp/smt7to8_best_practice"
-    }
   },
   "disabledTools": ["web_fetch"]
 }

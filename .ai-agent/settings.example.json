@@ -86,6 +86,7 @@
       "env": {
         "STPL_START_MODE": "jmx",
         "STPLLS_PID": "REPLACE_WITH_HOST_JVM_PID",
+        "STPL_JMX_OBJECT_NAME": "com.xxx.stpl:type=basic,name=console",
         "STPL_JMX_HELPER": "integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java",
         "STPL_JMX_JAVA": "/usr/lib/jvm/java-25/bin/java",
         "STPL_CONNECT_TIMEOUT_MS": "60000"
@@ -103,7 +104,7 @@
     }
   },
   "environments": {
-    "ssh": [{ "sshHost": "atsrws0049", "startDirectory": "~/Device1" }]
+    "ssh": [{ "sshHost": "yourhost", "startDirectory": "~/yourworkspace" }]
   },
   "mcpServers": {
     "mcp_server": {

@@ -20,7 +20,7 @@ Agent lspServers.stpl
 
 | Mode | What | Agent uses? |
 |------|------|-------------|
-| **1. SWC-embedded + JMX** | LS in the running SWC JVM; MBean `com.advantest.stpl:type=basic,name=console` | **Yes** — `STPL_START_MODE=jmx` |
+| **1. SWC-embedded + JMX** | LS in the running SWC JVM; MBean from `STPL_JMX_OBJECT_NAME` | **Yes** — `STPL_START_MODE=jmx` |
 | **2. Standalone** | `stplls_start.sh` / headless `StplLanguageServerApplication` | **No** (out of scope for this bridge) |
 
 `wait-for-connect` is only for debug/smoke when something else already triggers `start(port)` — it is **not** standalone one-click launch.
@@ -29,7 +29,7 @@ Agent lspServers.stpl
 
 - Node.js 18+
 - JDK 11+ (for bundled `StplJmxHelper.java`; JDK 17/21/25 fine)
-- SWC started from a build that includes `com.advantest.itee.lsp.stpl` and registers the JMX console at startup
+- SWC started from a build that includes `com.xxxa.itee.lsp.stpl` and registers the JMX console at startup
 - Agent workspace path must be the **same absolute path** as the SWC Eclipse workspace
 
 ## Environment variables
@@ -44,6 +44,7 @@ Agent lspServers.stpl
 | `STPL_CONNECT_TIMEOUT_MS` | no | `60000` | Accept timeout |
 | `STPL_JMX_HELPER` | no | bundled `jmx-helper/StplJmxHelper.java` | Helper path |
 | `STPL_JMX_JAVA` | no | `java` | Java executable |
+| `STPL_JMX_OBJECT_NAME` | jmx: yes | — | JMX MBean ObjectName (sensitive; do not commit real value) |
 | `STPL_JMX_USER` | no | `$USER` | Passed to MBean `serverInfo` (must match SWC user) |
 | `STPL_EXTENSION_VERSION` | no | `0.1.0` | Debug default accepted by any SWC (see `LanguageServerJMXConsole`) |
 | `STPL_STATUS_FILE` | no | — | Cache `{ "pid", "workspace?" }`; supports `~/...` or cwd-relative paths; written on discover |
@@ -63,6 +64,7 @@ Do **not** put `JDT_LS_NO_EXIT` / `watchParentProcess` in bridge `env`: those ar
     "STPL_START_MODE": "jmx",
     "STPL_AUTO_DISCOVER": "true",
     "STPL_STATUS_FILE": ".ai-agent/stpl-status.json",
+    "STPL_JMX_OBJECT_NAME": "domain:type=basic,name=console",
     "STPL_JMX_HELPER": "integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java",
     "STPL_JMX_JAVA": "/usr/lib/jvm/java-25/bin/java",
     "STPL_CONNECT_TIMEOUT_MS": "60000"
@@ -80,7 +82,7 @@ Do **not** put `JDT_LS_NO_EXIT` / `watchParentProcess` in bridge `env`: those ar
 }
 ```
 
-No need to hand-edit `STPLLS_PID` after each SWC restart: discover finds the JVM that registered `com.advantest.stpl:type=basic,name=console`, then caches pid/workspace in `STPL_STATUS_FILE`.
+No need to hand-edit `STPLLS_PID` after each SWC restart: discover finds the JVM that registered the MBean named by `STPL_JMX_OBJECT_NAME`, then caches pid/workspace in `STPL_STATUS_FILE`.
 
 Notes:
 
@@ -94,11 +96,12 @@ Notes:
 
 [`jmx-helper/StplJmxHelper.java`](jmx-helper/StplJmxHelper.java) attaches to the SWC PID and invokes:
 
-- ObjectName: `com.advantest.stpl:type=basic,name=console`
+- ObjectName: from env `STPL_JMX_OBJECT_NAME` (required)
 - `serverInfo(user, extensionVersion)` → `running:swcVersion:workspacePath` or empty
 - `start(port)`
 
 ```bash
+export STPL_JMX_OBJECT_NAME='domain:type=basic,name=console'
 java integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java discover
 java integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java <pid> serverInfo
 java integrations/stpl-lsp-bridge/jmx-helper/StplJmxHelper.java <pid> start <port>

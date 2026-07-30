@@ -69,7 +69,7 @@ export async function resolveSwcTarget(config) {
   })
   if (found.length === 0) {
     throw new Error(
-      'No SWC JVM found with MBean com.advantest.stpl:type=basic,name=console. ' +
+      `No SWC JVM found with MBean ${config.jmxObjectName || '(STPL_JMX_OBJECT_NAME)'}. ` +
         'Start the host IDE (fully past Choose Workspace) from a build that includes lsp.stpl.',
     )
   }

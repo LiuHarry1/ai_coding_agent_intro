@@ -17,6 +17,7 @@ import { DEFAULT_JMX_HELPER, resolveHelperPath } from './jmx.js'
  * @property {string} jmxHelper
  * @property {string} jmxJava
  * @property {string} jmxUser
+ * @property {string | undefined} jmxObjectName  STPL_JMX_OBJECT_NAME (required in jmx mode)
  * @property {string} extensionVersion
  * @property {boolean} debug
  * @property {string | undefined} statusFile
@@ -87,6 +88,7 @@ export function loadConfig(env = process.env) {
     emptyToUndefined(merged.USER) ||
     emptyToUndefined(merged.USERNAME) ||
     'unknown'
+  const jmxObjectName = emptyToUndefined(merged.STPL_JMX_OBJECT_NAME)
   const extensionVersion =
     emptyToUndefined(merged.STPL_EXTENSION_VERSION) ||
     DEFAULT_EXTENSION_VERSION
@@ -121,6 +123,11 @@ export function loadConfig(env = process.env) {
       'STPLLS_PID is required when STPL_AUTO_DISCOVER=false (or set STPL_STATUS_FILE with pid)',
     )
   }
+  if (startMode === 'jmx' && !jmxObjectName) {
+    throw new ConfigError(
+      'STPL_JMX_OBJECT_NAME is required in jmx mode (JMX MBean ObjectName)',
+    )
+  }
   if (startMode === 'jmx' && !existsSync(jmxHelper)) {
     throw new ConfigError(
       `STPL_JMX_HELPER not found: ${jmxHelper} (bundled default is jmx-helper/StplJmxHelper.java)`,
@@ -143,6 +150,7 @@ export function loadConfig(env = process.env) {
     jmxHelper,
     jmxJava,
     jmxUser,
+    jmxObjectName,
     extensionVersion,
     debug: truthy(merged.STPL_BRIDGE_DEBUG),
     statusFile,

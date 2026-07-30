@@ -14,9 +14,9 @@
     },
     "small": {
       "provider": "openai-compatible",
-      "baseURL": "http://10.150.10.54:4000",
-      "apiKey": "sk-k3VgdKEpcbc99EbkPc-dzg",
-      "model": "qwen3.6-35b-a3b"
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "claude-haiku-4.5"
     }
   },
   "compaction": {
@@ -34,7 +34,7 @@
     "minimumTokensToInit": 10000,
     "minimumTokensBetweenUpdate": 5000,
     "toolCallsBetweenUpdates": 3,
-    "cacheSafe": false,
+    "cacheSafe": true,
     "modelTier": "small",
     "compactMinTokens": 10000,
     "compactMaxTokens": 40000,
@@ -42,7 +42,7 @@
   },
   "autoMemory": {
     "enabled": true,
-    "cacheSafe": false,
+    "cacheSafe": true,
     "modelTier": "small"
   },
   "lspServers": {

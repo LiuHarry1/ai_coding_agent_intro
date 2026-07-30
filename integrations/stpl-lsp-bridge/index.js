@@ -143,7 +143,7 @@ async function jmxPreflightAndStart(config, port) {
   if (!info) {
     throw new Error(
       'SWC serverInfo returned empty — MBean not registered, user mismatch, ' +
-        'extension version incompatible, or SWC was not restarted with com.advantest.itee.lsp.stpl. ' +
+        'extension version incompatible, or SWC was not restarted with com.xxx.itee.lsp.stpl. ' +
         `Tried user=${config.jmxUser} extensionVersion=${config.extensionVersion} pid=${pid}`,
     )
   }

@@ -4,9 +4,9 @@ Run (from client-sdk-py/)::
 
     conda activate llm_ft
     pip install -e .
-    set AGENT_BASE_URL=http://10.150.115.69:4567
-    set AGENT_JWT_SECRET=9afd313591dc5a84dcf3022cb9f9bea05023672ca24716d1d7d9743d9be5d95d
-    set AGENT_EMAIL=harry.liu@advantest.com
+    set AGENT_BASE_URL=localhost:4567
+    set AGENT_JWT_SECRET=xxx
+    set AGENT_EMAIL=harry.liu@xxx.com
     python examples/quickstart.py              # full demo
     python examples/quickstart.py wetrack      # wetrack skill (streaming, shows steps)
     python examples/quickstart.py wetrack-stream  # same as wetrack
@@ -26,12 +26,12 @@ from agent_client import AgentClient, AgentClientError, collect_text
 
 def create_client() -> AgentClient:
     return AgentClient(
-        base_url=os.environ.get("AGENT_BASE_URL", "http://10.150.115.69:4567"),
+        base_url=os.environ.get("AGENT_BASE_URL", "http://localhost:4567"),
         jwt_secret=os.environ.get(
             "AGENT_JWT_SECRET",
-            "9afd313591dc5a84dcf3022cb9f9bea05023672ca24716d1d7d9743d9be5d95d",
+            "xxx-secret",
         ),
-        email=os.environ.get("AGENT_EMAIL", "harry.liu@advantest.com"),
+        email=os.environ.get("AGENT_EMAIL", "harry.liu@xxx.com"),
     )
 
 

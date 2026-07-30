@@ -1,10 +1,11 @@
 /*
  * Attach to a SWC JVM and invoke the STPL LS JMX console.
  *
- * MBean: com.advantest.stpl:type=basic,name=console
+ * MBean ObjectName: from env STPL_JMX_OBJECT_NAME (required).
  * Ops:   start(String port), serverInfo(String user, String extensionVersion)
  *
  * Usage (JDK 11+, source-file mode):
+ *   export STPL_JMX_OBJECT_NAME='domain:type=basic,name=console'
  *   java StplJmxHelper.java <pid> start <port>
  *   java StplJmxHelper.java <pid> serverInfo [user] [extensionVersion]
  *   java StplJmxHelper.java discover [user] [extensionVersion]
@@ -31,12 +32,17 @@ import com.sun.tools.attach.VirtualMachineDescriptor;
 
 public class StplJmxHelper {
 
-    private static final String OBJECT_NAME = "com.advantest.stpl:type=basic,name=console";
+    private static final String OBJECT_NAME_ENV = "STPL_JMX_OBJECT_NAME";
     private static final String DEFAULT_EXTENSION_VERSION = "0.1.0";
     private static final String LOCAL_CONNECTOR_ADDRESS =
             "com.sun.management.jmxremote.localConnectorAddress";
 
+    /** Resolved from {@link #OBJECT_NAME_ENV} in {@link #main}. */
+    private static String objectName;
+
     public static void main(String[] args) throws Exception {
+        objectName = requireObjectName();
+
         if (args.length < 1) {
             usageAndExit(1);
         }
@@ -116,9 +122,20 @@ public class StplJmxHelper {
         System.out.print("[" + String.join(",", entries) + "]");
     }
 
+    private static String requireObjectName() {
+        String name = System.getenv(OBJECT_NAME_ENV);
+        if (name == null || name.isBlank()) {
+            System.err.println(
+                    OBJECT_NAME_ENV
+                            + " is required (JMX MBean ObjectName, e.g. domain:type=basic,name=console)");
+            System.exit(1);
+        }
+        return name.trim();
+    }
+
     private static boolean hasStplConsole(String pid) throws Exception {
         return withConnection(pid, conn -> {
-            ObjectName name = new ObjectName(OBJECT_NAME);
+            ObjectName name = new ObjectName(objectName);
             return Boolean.valueOf(conn.isRegistered(name));
         });
     }
@@ -151,7 +168,7 @@ public class StplJmxHelper {
 
     private static void invokeStart(String pid, String port) throws Exception {
         withConnection(pid, conn -> {
-            ObjectName name = new ObjectName(OBJECT_NAME);
+            ObjectName name = new ObjectName(objectName);
             conn.invoke(
                     name,
                     "start",
@@ -164,7 +181,7 @@ public class StplJmxHelper {
     private static String invokeServerInfo(String pid, String user, String version)
             throws Exception {
         return withConnection(pid, conn -> {
-            ObjectName name = new ObjectName(OBJECT_NAME);
+            ObjectName name = new ObjectName(objectName);
             Object result = conn.invoke(
                     name,
                     "serverInfo",
@@ -223,7 +240,9 @@ public class StplJmxHelper {
                 "Usage: java StplJmxHelper.java <pid> start <port>\n"
                         + "       java StplJmxHelper.java <pid> serverInfo [user] [extensionVersion]\n"
                         + "       java StplJmxHelper.java discover [user] [extensionVersion]\n"
-                        + "MBean: " + OBJECT_NAME);
+                        + "Requires env "
+                        + OBJECT_NAME_ENV
+                        + (objectName != null ? (" (current: " + objectName + ")") : ""));
         System.exit(code);
     }
 }

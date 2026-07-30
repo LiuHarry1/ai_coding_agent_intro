@@ -51,14 +51,14 @@
 
 services:
   analytics:
-    image: 10.150.115.69/dice-zero/agent-analytics:latest
+    image: agent-analytics:latest
     ports:
       - "${ANALYTICS_PORT:-8200}:8200"
     environment:
-      MYSQL_HOST: "${MYSQL_HOST:-10.150.115.69}"
+      MYSQL_HOST: "${MYSQL_HOST:-localhost}"
       MYSQL_PORT: "${MYSQL_PORT:-3306}"
       MYSQL_USER: "${MYSQL_USER:-root}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-advantest@123456#}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-xxx}"
       MYSQL_DATABASE: "${MYSQL_DATABASE:-knowbot}"
     restart: unless-stopped
     healthcheck:
@@ -72,7 +72,7 @@ services:
 
 
   agent:
-    image: 10.150.115.69/dice-zero/ai-agent-tenant:latest 
+    image: ai-agent-tenant:latest 
     # Published (NOT just `expose`) — in split mode the browser reaches the
     # agent directly at ${AGENT_PUBLIC_URL}, which must map to this port.
     ports:
@@ -89,7 +89,7 @@ services:
       SERVE_STATIC: "0"
       # ── CORS allowlist: the browser calls this API from the web origin ────
       # Must list every frontend origin that talks to this agent.
-      ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://10.150.115.69:8090}"
+      ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://localhost:8090}"
       # ── Auth + per-user workspace pinning ────────────────────────────────
       AUTH_ENABLED: "true"
       # MUST match the external auth-service's secret. Required.
@@ -131,7 +131,7 @@ services:
       start_period: 15s
 
   web:
-    image: 10.150.115.69/dice-zero/ai-agent-web:latest
+    image: ai-agent-web:latest
     # The image serves the SPA as a static site (nginx.static.conf is baked
     # in) — no agent upstream and no /sso proxy, so this container is fully
     # independent of the agent and starts even if the agent is unreachable.
@@ -146,12 +146,12 @@ services:
       # Hide Remote SSH picker in tenant SSO deploys.
       REMOTE_ENABLED: "false"
       # Browser → agent API origin (cross-origin). Baked into app-config.js.
-      API_BASE: "${AGENT_PUBLIC_URL:-http://10.150.115.69:4567}"
+      API_BASE: "${AGENT_PUBLIC_URL:-http://localhost:4567}"
       # Browser → auth-service origin for /sso/authorize + /sso/logout.
       # NOTE: the static web image's web-runtime-config.sh reads AUTH_BASE
       # (NOT AUTH_SERVICE_URL — that's the single-origin admin proxy's var).
       # If left empty the SPA redirects SSO to its own origin and loops.
-      AUTH_BASE: "${AUTH_BASE:-http://10.150.115.69:52320}"
+      AUTH_BASE: "${AUTH_BASE:-http://localhost:52320}"
       # WEB_PASSWORD intentionally unset → Basic Auth OFF (login = auth-service).
     ports:
       - "${WEB_PORT:-8090}:80"
