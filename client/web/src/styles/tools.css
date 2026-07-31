@@ -1139,6 +1139,191 @@
   /* inherits .tool-row margin from .tool-group .tool-row */
 }
 
+.subagent-stop-btn {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c9d1d9;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.subagent-stop-btn:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.12);
+  border-color: rgba(248, 81, 73, 0.45);
+  color: #f85149;
+}
+.subagent-stop-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── Cursor-style subagent timeline row (all subagent types) ───── */
+.subagent-timeline-row {
+  margin: 2px 0;
+}
+.subagent-timeline-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  border-radius: 4px;
+  color: inherit;
+}
+.subagent-timeline-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.subagent-timeline-icon {
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 3px;
+  flex-shrink: 0;
+  min-height: 14px;
+}
+.subagent-timeline-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6e7681;
+  display: inline-block;
+}
+.subagent-timeline-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.subagent-timeline-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.subagent-timeline-title {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.subagent-timeline-badge {
+  color: #8b949e;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.subagent-timeline-subtitle {
+  color: #6e7681;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 0;
+}
+.subagent-timeline-actions {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.subagent-timeline-expanded {
+  margin: 2px 0 6px 30px;
+}
+.subagent-timeline-row.has-error .subagent-timeline-title {
+  color: #f85149;
+}
+
+.waiting-for-subagent {
+  padding: 6px 8px 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #8b949e;
+}
+
+/* ── Turn-level work fold (Cursor `workGroup`) ──────────────────
+   Collapses a finished turn's work rows behind one header; the final
+   assistant message stays outside the fold. */
+.work-group {
+  margin: 4px 0 6px;
+}
+.work-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #8b949e;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.work-group-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #c9d1d9;
+}
+.work-group-chevron {
+  display: inline-block;
+  font-size: 8px;
+  width: 10px;
+  text-align: center;
+  transition: transform 120ms ease;
+  flex-shrink: 0;
+}
+.work-group-chevron.open {
+  transform: rotate(90deg);
+}
+.work-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-group-body {
+  margin: 2px 0 4px 18px;
+}
+
+[data-theme="light"] .work-group-header {
+  color: #59636e;
+}
+[data-theme="light"] .work-group-header:hover {
+  background: #f6f8fa;
+  color: #1f2328;
+}
+
+[data-theme="light"] .subagent-timeline-badge,
+[data-theme="light"] .waiting-for-subagent {
+  color: #59636e;
+}
+[data-theme="light"] .subagent-timeline-header:hover {
+  background: #f6f8fa;
+}
+[data-theme="light"] .subagent-timeline-subtitle {
+  color: #656d76;
+}
+[data-theme="light"] .subagent-stop-btn {
+  background: #f6f8fa;
+  color: #1f2328;
+}
+[data-theme="light"] .subagent-stop-btn:hover:not(:disabled) {
+  background: rgba(207, 34, 46, 0.08);
+  color: #cf222e;
+}
+
 /* ── Explored N tools (Cursor-style density group) ─────────────── */
 .explored-group-body {
   margin: 2px 0 4px 18px;

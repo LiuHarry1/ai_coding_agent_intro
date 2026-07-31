@@ -254,6 +254,7 @@ export async function runAgent(
     onAfterStep,
     onTurnEnd,
     logLabel,
+    abortSignal,
   }: AgentOptions,
 ): Promise<string> {
   if (toolUseContext) {
@@ -332,6 +333,9 @@ export async function runAgent(
 
   try {
     for (let step = 0; step < stepLimit; step++) {
+      if (abortSignal?.aborted) {
+        return finalText || '(Subagent stopped by user.)'
+      }
       wire.stepStart(step)
       const stepStart = Date.now()
 
@@ -372,9 +376,16 @@ export async function runAgent(
         onFullCompaction,
         compactEnrichment,
         logLabel,
+        abortSignal,
       })
 
       if (stepResult === null) {
+        if (abortSignal?.aborted) {
+          return (
+            (extractPartialResult(messages) ?? finalText) ||
+            '(Subagent stopped by user.)'
+          )
+        }
         // Prefer text from history if the step failed
         // after partial assistant output was already appended.
         return extractPartialResult(messages) ?? finalText
@@ -653,6 +664,7 @@ interface RunOneStepArgs {
   onFullCompaction?: AgentOptions['onFullCompaction']
   compactEnrichment?: CompactEnrichment
   logLabel?: string
+  abortSignal?: AbortSignal
 }
 
 /**
@@ -681,6 +693,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     sessionMemory,
     sessionId,
     logLabel,
+    abortSignal,
   } = args
 
   const apiTools = stripToolExecute(tools)
@@ -731,6 +744,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         ...(toolChoice !== undefined ? { toolChoice } : {}),
         maxOutputTokens: getMaxOutputTokens(),
         maxRetries: 3,
+        ...(abortSignal ? { abortSignal } : {}),
         ...provider.streamTextExtras(),
       })
 
@@ -830,6 +844,12 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
       })
       return stepResult
     } catch (err) {
+      if (
+        abortSignal?.aborted ||
+        (err instanceof Error && err.name === 'AbortError')
+      ) {
+        return null
+      }
       if (ctxLengthAttempt === 0 && isContextLengthError(err)) {
         const errMsg = err instanceof Error ? err.message : String(err)
         console.warn(

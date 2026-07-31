@@ -75,4 +75,12 @@ export const agentApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+
+  /** Abort a single in-flight tool (e.g. Explore subagent) by tool_use_id. */
+  abortTool: body =>
+    fetchJSON('/tool/abort', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
 }

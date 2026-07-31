@@ -21,6 +21,12 @@ import { randomUUID } from 'crypto'
 import { buildAgentListSection } from './agentListing.js'
 import { SUBAGENT_NO_OUTPUT_MARKER } from './finalizeAgentTool.js'
 import { isToolNameDisallowed } from './toolGlob.js'
+import {
+  clearToolAbort,
+  registerToolAbort,
+} from '../../core/tool-abort-registry.js'
+
+const SUBAGENT_STOPPED = 'Error: Subagent stopped by user.'
 
 /** tools/AgentTool/AgentTool.tsx — single dispatcher for all subagents. */
 export function createTaskTool(
@@ -101,7 +107,15 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
     name: AGENT_TOOL_NAME,
     description,
     isSubagent: true,
-    isConcurrencySafe: () => false,
+    // Explore is read-only — safe to run several in parallel (Cursor-style).
+    // Plan / general-purpose stay serial.
+    isConcurrencySafe: (input: unknown) => {
+      const t =
+        input && typeof input === 'object'
+          ? (input as { subagent_type?: string }).subagent_type
+          : undefined
+      return t === EXPLORE_AGENT_TYPE || t === 'explore'
+    },
     create(cwd: string, context: ToolContext) {
       const {
         runAgent,
@@ -226,27 +240,47 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
             : def.systemPrompt
 
-          const result = await runAgent(prompt, {
-            tools: subTools,
-            systemPrompt: subSystemPrompt,
-            eventBus,
-            wire: subWire,
-            messages: [],
-            ...(def.maxSteps !== undefined ? { maxSteps: def.maxSteps } : {}),
-            model: subModel,
-            provider: subProvider,
-            cwd,
-            compaction,
-            concurrencyPolicy: registry
-              ? buildConcurrencyPolicy(registry, Object.keys(subTools))
-              : undefined,
-            sessionId: context.sessionId,
-          })
+          const sessionId = context.sessionId ?? ''
+          const abortSignal = sessionId
+            ? registerToolAbort(sessionId, resolvedParentId)
+            : undefined
 
-          // Never hand the parent an empty tool_result —
-          // some models treat that as "nothing to act on" and stop.
-          const text = typeof result === 'string' ? result.trim() : ''
-          return text || SUBAGENT_NO_OUTPUT_MARKER
+          try {
+            const result = await runAgent(prompt, {
+              tools: subTools,
+              systemPrompt: subSystemPrompt,
+              eventBus,
+              wire: subWire,
+              messages: [],
+              ...(def.maxSteps !== undefined ? { maxSteps: def.maxSteps } : {}),
+              model: subModel,
+              provider: subProvider,
+              cwd,
+              compaction,
+              concurrencyPolicy: registry
+                ? buildConcurrencyPolicy(registry, Object.keys(subTools))
+                : undefined,
+              sessionId: context.sessionId,
+              abortSignal,
+            })
+
+            if (abortSignal?.aborted) return SUBAGENT_STOPPED
+
+            // Never hand the parent an empty tool_result —
+            // some models treat that as "nothing to act on" and stop.
+            const text = typeof result === 'string' ? result.trim() : ''
+            return text || SUBAGENT_NO_OUTPUT_MARKER
+          } catch (err) {
+            if (
+              abortSignal?.aborted ||
+              (err instanceof Error && err.name === 'AbortError')
+            ) {
+              return SUBAGENT_STOPPED
+            }
+            throw err
+          } finally {
+            if (sessionId) clearToolAbort(sessionId, resolvedParentId)
+          }
         },
       })
     },

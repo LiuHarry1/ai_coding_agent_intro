@@ -35,6 +35,7 @@ import {
 } from '../core/mcp-lifecycle.js'
 import { initCodePlugins } from '../core/plugins/index.js'
 import { handleChat } from './routes/chat.js'
+import { abortTool } from '../core/tool-abort-registry.js'
 import {
   getSafeSettings,
   parseWritableScope,
@@ -490,6 +491,44 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
           res,
           ok ? 200 : 404,
           ok ? { ok: true } : { error: 'No pending question with that id' },
+        )
+      } catch {
+        sendJSON(res, 400, { error: 'Invalid JSON' })
+      }
+      return
+    }
+
+    if (method === 'POST' && url === '/tool/abort') {
+      try {
+        const body = await readBody(req)
+        const sessionId = body.session_id as string
+        const toolUseId = (body.tool_use_id ?? body.toolCallId) as string
+        if (!sessionId || !toolUseId) {
+          sendJSON(res, 400, {
+            error: "Missing 'session_id' or 'tool_use_id'",
+          })
+          return
+        }
+        const session = getSession(sessionId)
+        const requesterEmail = (req as AuthedRequest).user?.email
+        if (
+          !session ||
+          !canAccessSession(
+            session,
+            requesterEmail,
+            (req as AuthedRequest).user?.role,
+          )
+        ) {
+          sendJSON(res, 404, { error: `Session not found: ${sessionId}` })
+          return
+        }
+        const ok = abortTool(sessionId, toolUseId)
+        sendJSON(
+          res,
+          ok ? 200 : 404,
+          ok
+            ? { ok: true }
+            : { error: 'No running tool with that id' },
         )
       } catch {
         sendJSON(res, 400, { error: 'Invalid JSON' })

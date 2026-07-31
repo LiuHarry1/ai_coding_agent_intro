@@ -369,6 +369,11 @@ export interface AgentOptions {
    */
   onTurnEnd?: (ctx: AgentLifecycleSnapshot) => void
   /**
+   * When aborted, the agent loop stops between / during LLM steps and
+   * returns whatever partial text it has. Used by per-subagent Stop.
+   */
+  abortSignal?: AbortSignal
+  /**
    * Optional prefix for agent console logs (e.g. `session_memory` →
    * `[agent:session_memory] step …`). Defaults to `main` when omitted so
    * forked agents are always distinguishable from the primary loop.

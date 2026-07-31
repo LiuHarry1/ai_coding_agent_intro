@@ -250,6 +250,52 @@ export const useChatStore = create((set, get) => ({
   },
 
   /**
+   * Stop a single in-flight subagent (Agent tool) without aborting the turn.
+   * Marks the card as stopping; the server emits tool_result when abort lands.
+   */
+  stopSubagent: async toolCallId => {
+    if (!toolCallId) return
+    const sessionId = get().currentSessionId
+    if (!sessionId) return
+
+    set(s => {
+      const msgs = [...s.messages]
+      const last = msgs[msgs.length - 1]
+      if (last?.type !== 'assistant') return s
+      const parts = last.parts.map(p =>
+        p.type === 'tool_call' &&
+        p.toolCallId === toolCallId &&
+        p.status !== 'done'
+          ? { ...p, stopping: true, liveTask: 'Stopping…' }
+          : p,
+      )
+      msgs[msgs.length - 1] = { ...last, parts }
+      return { messages: msgs }
+    })
+
+    try {
+      await agentApi.abortTool({
+        session_id: sessionId,
+        tool_use_id: toolCallId,
+      })
+    } catch (err) {
+      console.warn('[chat] abortTool failed', err)
+      set(s => {
+        const msgs = [...s.messages]
+        const last = msgs[msgs.length - 1]
+        if (last?.type !== 'assistant') return s
+        const parts = last.parts.map(p =>
+          p.type === 'tool_call' && p.toolCallId === toolCallId
+            ? { ...p, stopping: false, liveTask: undefined }
+            : p,
+        )
+        msgs[msgs.length - 1] = { ...last, parts }
+        return { messages: msgs }
+      })
+    }
+  },
+
+  /**
    * Send a message and process the SSE response stream.
    */
   /**
@@ -430,6 +476,24 @@ export const useChatStore = create((set, get) => ({
           delta: data.delta.text,
           parentToolCallId: parentId,
         })
+        return
+      }
+      if (data.type === 'system') {
+        if (data.subtype === 'step_start') {
+          store._appendSubagentEvent({
+            type: 'step_start',
+            task: data.task,
+            label: data.label,
+            parentToolCallId: parentId,
+          })
+        } else if (data.subtype === 'tool_input_start') {
+          store._appendSubagentEvent({
+            type: 'tool_input_start',
+            name: data.name,
+            toolCallId: toolUseId(data),
+            parentToolCallId: parentId,
+          })
+        }
       }
       return
     }
@@ -967,14 +1031,53 @@ export const useChatStore = create((set, get) => ({
       }
       if (targetIdx === -1) return s
 
-      const sub = [...(parts[targetIdx].subagentParts || [])]
+      const parent = parts[targetIdx]
+      const sub = [...(parent.subagentParts || [])]
+
+      if (ev.type === 'step_start') {
+        parts[targetIdx] = {
+          ...parent,
+          liveTask: ev.task || parent.liveTask,
+          liveLabel: ev.label || parent.liveLabel,
+        }
+        msgs[msgs.length - 1] = { ...last, parts }
+        return { messages: msgs }
+      }
+
+      if (ev.type === 'tool_input_start') {
+        const exists = sub.some(s => s.toolCallId === ev.toolCallId)
+        if (!exists) {
+          sub.push({
+            type: 'tool_call',
+            name: ev.name,
+            args: {},
+            toolCallId: ev.toolCallId,
+            status: 'streaming-input',
+          })
+        }
+        parts[targetIdx] = { ...parent, subagentParts: sub }
+        msgs[msgs.length - 1] = { ...last, parts }
+        return { messages: msgs }
+      }
+
       if (ev.type === 'tool_call') {
-        sub.push({
-          type: 'tool_call',
-          name: ev.name,
-          args: ev.args,
-          toolCallId: ev.toolCallId,
-        })
+        const idx = sub.findIndex(s => s.toolCallId === ev.toolCallId)
+        if (idx >= 0) {
+          sub[idx] = {
+            ...sub[idx],
+            name: ev.name,
+            args: ev.args,
+            status: 'running',
+          }
+        } else {
+          sub.push({
+            type: 'tool_call',
+            name: ev.name,
+            args: ev.args,
+            toolCallId: ev.toolCallId,
+            status: 'running',
+          })
+        }
       } else if (ev.type === 'tool_result') {
         for (let j = sub.length - 1; j >= 0; j--) {
           if (sub[j].toolCallId === ev.toolCallId) {
@@ -984,7 +1087,8 @@ export const useChatStore = create((set, get) => ({
           }
         }
       }
-      parts[targetIdx] = { ...parts[targetIdx], subagentParts: sub }
+      // text_delta is accepted for nesting but not rendered as a part yet
+      parts[targetIdx] = { ...parent, subagentParts: sub }
       msgs[msgs.length - 1] = { ...last, parts }
       return { messages: msgs }
     })
@@ -1033,6 +1137,8 @@ export const useChatStore = create((set, get) => ({
             result: data.result,
             status: 'done',
             endTime: Date.now(),
+            stopping: false,
+            liveTask: undefined,
           }
           break
         }

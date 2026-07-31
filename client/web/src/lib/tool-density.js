@@ -92,7 +92,10 @@ export function isMcpTool(part) {
 
 /**
  * Coalesce consecutive explore built-ins into explored_run groups when N ≥ 2.
- * Other tools pass through as { type: 'tool', part }.
+ *
+ * Subagents are deliberately NOT coalesced: they always render as their own
+ * row, matching Cursor (`taskToolCall` is excluded from the groupable set and
+ * force-flushes the pending group). Turn-level folding is WorkGroup's job.
  *
  * @param {object[]} items tool_call parts
  * @returns {Array<{ type: 'explored_run', items: object[] } | { type: 'tool', part: object }>}
@@ -121,6 +124,13 @@ export function coalesceToolRuns(items) {
   }
   flushExplore()
   return out
+}
+
+/** True when any subagent (Agent / Skill fork) is still running. */
+export function hasRunningSubagent(items) {
+  return (items || []).some(
+    p => p?.type === 'tool_call' && p.isSubagent && p.status !== 'done',
+  )
 }
 
 /** Short live status for a tool_call (Explored / Subagent subtitle). */

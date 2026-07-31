@@ -88,6 +88,11 @@ export default function ToolRowHeader({
       <span className='tool-row-spacer' />
       {meta}
       {dur && isDone && <span className='tool-row-duration'>{dur}</span>}
+      {actions && (
+        <span className='tool-row-actions' onClick={stop}>
+          {actions}
+        </span>
+      )}
       {!isDone && <span className='spinner spinner-sm' />}
       {isDone && isError && (
         <span
@@ -108,11 +113,6 @@ export default function ToolRowHeader({
       {isDone && !isError && !emptyHint && showSuccess && (
         <span className='tool-row-status tool-row-status--ok' aria-label='done'>
           {'\u2713'}
-        </span>
-      )}
-      {actions && (
-        <span className='tool-row-actions' onClick={stop}>
-          {actions}
         </span>
       )}
     </button>
