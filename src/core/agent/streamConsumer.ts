@@ -199,6 +199,13 @@ export async function consumeStream(
       }
 
       case 'tool-result': {
+        // With manualToolExecution, runToolCalls owns wire.toolResult (incl.
+        // tool_use_result). Ignore SDK tool-result events so we don't paint
+        // a TUR-less result that Grep/Glob cards treat as broken.
+        if (options?.manualToolExecution) {
+          startedInputs.delete(event.toolCallId)
+          break
+        }
         const raw = event.output
         const result = typeof raw === 'string' ? raw : JSON.stringify(raw)
         wire.toolResult({ tool_use_id: event.toolCallId, result })

@@ -72,6 +72,8 @@ export const ToolResultMessageSchema = z.object({
   type: z.literal('tool_result'),
   tool_use_id: z.string(),
   result: z.string(),
+  /** CC-style structured tool Output for UI (not sent to the model). */
+  tool_use_result: z.unknown().optional(),
   is_error: z.boolean().optional(),
   ...envelopeFields,
 })

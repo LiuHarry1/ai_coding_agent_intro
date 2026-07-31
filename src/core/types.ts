@@ -89,6 +89,15 @@ export interface ToolContext {
   execution?: import('../execution/execution-backend.js').ExecutionBackend
 }
 
+/** Claude Code–style API tool_result block produced by a mapper. */
+export interface ToolResultBlockParam {
+  tool_use_id: string
+  type: 'tool_result'
+  content: string
+  /** When true, tool_result is an error for the model / wire (CC Bash interrupt). */
+  is_error?: boolean
+}
+
 export interface ToolDefinition {
   name: string
   description: string
@@ -118,6 +127,20 @@ export interface ToolDefinition {
    * policy �?the model is not told about this flag.
    */
   isConcurrencySafe?: (input: unknown) => boolean
+  /**
+   * CC-style: map structured `data` → model-facing tool_result text.
+   * Present on dual-channel tools; framework calls this after execute.
+   */
+  mapToolResultToToolResultBlockParam?: (
+    output: unknown,
+    toolUseID: string,
+  ) => ToolResultBlockParam
+  /** Optional schema for validating toolUseResult before UI render. */
+  outputSchema?: {
+    safeParse: (
+      value: unknown,
+    ) => { success: boolean; data?: unknown; error?: unknown }
+  }
   create(cwd: string, context: ToolContext): AnyTool
 }
 
@@ -236,6 +259,13 @@ export interface ToolResultPart {
   toolCallId: string
   toolName: string
   output: ToolResultOutput
+  /**
+   * CC envelope sibling: structured tool Output for UI / session reload.
+   * Never sent to the model (stripped by projectMessagesForApi).
+   */
+  toolUseResult?: unknown
+  /** Soft/hard tool failure flag from mapper or thrown errors. */
+  isError?: boolean
 }
 
 export interface ToolMessage {
@@ -247,6 +277,15 @@ export interface ToolMessage {
 
 export type Message =
   UserMessage | AssistantMessage | ToolMessage | AttachmentMessage
+
+/**
+ * Dual-channel tool execute return (CC `ToolResult<T>`).
+ * Model text comes from `mapToolResultToToolResultBlockParam`, not from here.
+ */
+export interface DualChannelToolResult<T = unknown> {
+  data: T
+  newMessages?: Message[]
+}
 
 export function isAttachmentMessage(msg: Message): msg is AttachmentMessage {
   return (msg as AttachmentMessage).type === 'attachment'

@@ -142,4 +142,4 @@ export function listDirectoryEntries(
 }
 
 export type { ReadOutput } from './types.js'
-export { FileTooLargeError } from './types.js'
+export { FileTooLargeError, ReadOutputSchema } from './types.js'

@@ -55,6 +55,13 @@ Available deferred tools: ${nameList}`
     name: TOOL_SEARCH_TOOL_NAME,
     description,
     isConcurrencySafe: () => true,
+    mapToolResultToToolResultBlockParam(output, toolUseID) {
+      return {
+        tool_use_id: toolUseID,
+        type: 'tool_result',
+        content: (output as { text: string }).text,
+      }
+    },
     create(_cwd: string, _context: ToolContext) {
       return tool({
         description,
@@ -65,7 +72,8 @@ Available deferred tools: ${nameList}`
               'Either "select:name1,name2" for exact lookup, or keywords for search.',
             ),
         }),
-        execute: async ({ query }: { query: string }): Promise<string> => {
+        execute: async ({ query }: { query: string }) => {
+          const wrap = (text: string) => ({ data: { text, query } })
           const trimmed = query.trim()
 
           if (trimmed.toLowerCase().startsWith('select:')) {
@@ -99,13 +107,15 @@ Available deferred tools: ${nameList}`
                 `Not found: ${notFound.join(', ')}. Available: ${nameList}`,
               )
             }
-            return parts.join('\n\n') || 'No tools matched.'
+            return wrap(parts.join('\n\n') || 'No tools matched.')
           }
 
           // Keyword search
           const keywords = trimmed.toLowerCase().split(/\s+/).filter(Boolean)
           if (keywords.length === 0) {
-            return `Empty query. Available deferred tools: ${nameList}`
+            return wrap(
+              `Empty query. Available deferred tools: ${nameList}`,
+            )
           }
 
           const hits = deferredDefs
@@ -113,13 +123,15 @@ Available deferred tools: ${nameList}`
             .slice(0, MAX_KEYWORD_RESULTS)
 
           if (hits.length === 0) {
-            return `No matches for "${trimmed}". Available: ${nameList}`
+            return wrap(
+              `No matches for "${trimmed}". Available: ${nameList}`,
+            )
           }
 
           const details = hits
             .map(d => `- ${d.name}: ${d.description}`)
             .join('\n')
-          return `Found ${hits.length} tool(s):\n${details}`
+          return wrap(`Found ${hits.length} tool(s):\n${details}`)
         },
       })
     },

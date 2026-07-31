@@ -30,5 +30,14 @@ export interface ExecutionBackend {
       shell?: ShellKind
     },
   ): Promise<ExecResult & { cwdAfter?: string }>
+  /**
+   * Claude Code–style ripgrep: argv spawn on the Worker.
+   * Exit codes 0 and 1 both succeed (1 = no matches → empty lines).
+   */
+  rg(
+    args: string[],
+    target: string,
+    opts?: { timeoutMs?: number },
+  ): Promise<string[]>
   fsPort?: FsPort
 }

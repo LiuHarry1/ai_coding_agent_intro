@@ -50,10 +50,20 @@ export default function WebFetchCard({ part, nested = false }) {
 
   const { server: mcpServer } = parseMcpToolName(toolName)
 
-  const normalized = useMemo(
-    () => normalizeFetchResult(result, requestUrl),
-    [result, requestUrl],
-  )
+  const normalized = useMemo(() => {
+    if (part.toolUseResult && typeof part.toolUseResult === 'object') {
+      const tur = part.toolUseResult
+      return {
+        text: tur.text || '',
+        title: tur.title || '',
+        excerpt: tur.excerpt,
+        url: tur.url || requestUrl,
+        note: tur.note,
+        error: undefined,
+      }
+    }
+    return normalizeFetchResult(result, requestUrl)
+  }, [part.toolUseResult, result, requestUrl])
 
   const isError = isDone && Boolean(normalized.error)
   const articleUrl = normalized.url || requestUrl

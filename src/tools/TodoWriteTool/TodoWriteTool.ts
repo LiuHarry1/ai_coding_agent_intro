@@ -1,6 +1,16 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import type { ToolDefinition, TodoItem, TodoStatus } from '../../core/types.js'
+import type {
+  DualChannelToolResult,
+  ToolDefinition,
+  TodoItem,
+  TodoStatus,
+} from '../../core/types.js'
+
+export type TodoWriteOutput = {
+  todos: TodoItem[]
+  message: string
+}
 import { emitTodoUpdate } from '../../core/wire-internal.js'
 import { TODO_WRITE_TOOL_NAME } from '../../constants/tool_names.js'
 
@@ -39,6 +49,14 @@ export const definition: ToolDefinition = {
     'Create or update a structured task checklist to track multi-step work',
   shouldDefer: true,
   isConcurrencySafe: () => false,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    const o = output as TodoWriteOutput
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: o.message,
+    }
+  },
 
   create(_cwd, context) {
     const todos = new Map<string, TodoItem>()
@@ -96,7 +114,11 @@ export const definition: ToolDefinition = {
 
         emitTodoUpdate(context.wire, context.eventBus, sorted)
 
-        return summarize(sorted)
+        const data: TodoWriteOutput = {
+          todos: sorted,
+          message: summarize(sorted),
+        }
+        return { data } satisfies DualChannelToolResult<TodoWriteOutput>
       },
     })
   },

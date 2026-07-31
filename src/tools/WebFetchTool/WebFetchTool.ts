@@ -4,11 +4,24 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import { truncate } from '../utils.js'
 import { fetchWithTimeout, stripHtml } from '../http-utils.js'
-import type { ToolDefinition } from '../../core/types.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { WEB_FETCH_TOOL_NAME } from '../../constants/tool_names.js'
 
 const DEFAULT_TIMEOUT_MS = 15000
 const MAX_OUTPUT_CHARS = 20000
+
+export type WebFetchOutput = {
+  url: string
+  status?: number
+  contentType?: string
+  title?: string
+  byline?: string
+  excerpt?: string
+  siteName?: string
+  length?: number
+  note?: string
+  text: string
+}
 
 function normalizeUrl(value: string): string {
   const url = new URL(value)
@@ -22,11 +35,23 @@ function compactText(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
 }
 
+function formatFetchOutput(data: WebFetchOutput, maxChars: number): string {
+  return truncate(JSON.stringify(data, null, 2), maxChars)
+}
+
 export const definition: ToolDefinition = {
   name: WEB_FETCH_TOOL_NAME,
   description: 'Fetch a web page and extract readable article content',
   shouldDefer: true,
   isConcurrencySafe: () => true,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    const data = output as WebFetchOutput
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: formatFetchOutput(data, MAX_OUTPUT_CHARS),
+    }
+  },
   create() {
     return tool({
       description:
@@ -43,7 +68,11 @@ export const definition: ToolDefinition = {
           .optional()
           .describe('Maximum output characters. Default 12000, max 20000.'),
       }),
-      execute: async (args: { url: string; max_chars?: number }) => {
+      execute: async (args: {
+        url: string
+        max_chars?: number
+      }): Promise<DualChannelToolResult<WebFetchOutput> | string> => {
+        const maxChars = args.max_chars ?? 12000
         let url: string
         try {
           url = normalizeUrl(args.url)
@@ -72,66 +101,48 @@ export const definition: ToolDefinition = {
               res.contentType,
             )
           ) {
-            return truncate(
-              JSON.stringify(
-                {
-                  url,
-                  status: res.status,
-                  contentType: res.contentType,
-                  note: 'Non-HTML content; returning raw text preview.',
-                  text: compactText(stripHtml(res.text)),
-                },
-                null,
-                2,
-              ),
-              args.max_chars ?? 12000,
-            )
+            const data: WebFetchOutput = {
+              url,
+              status: res.status,
+              contentType: res.contentType,
+              note: 'Non-HTML content; returning raw text preview.',
+              text: compactText(stripHtml(res.text)).slice(0, maxChars),
+            }
+            return { data }
           }
 
           const { document } = parseHTML(res.text)
           const article = new Readability(document).parse()
 
           if (!article) {
-            return truncate(
-              JSON.stringify(
-                {
-                  url,
-                  status: res.status,
-                  contentType: res.contentType,
-                  note: 'Readability could not extract article content; returning page text preview.',
-                  text: compactText(
-                    document.body?.textContent || stripHtml(res.text),
-                  ),
-                },
-                null,
-                2,
-              ),
-              args.max_chars ?? 12000,
-            )
+            const data: WebFetchOutput = {
+              url,
+              status: res.status,
+              contentType: res.contentType,
+              note: 'Readability could not extract article content; returning page text preview.',
+              text: compactText(
+                document.body?.textContent || stripHtml(res.text),
+              ).slice(0, maxChars),
+            }
+            return { data }
           }
 
           const text = article.textContent
             ? compactText(article.textContent)
             : compactText(stripHtml(article.content || ''))
 
-          return truncate(
-            JSON.stringify(
-              {
-                url,
-                status: res.status,
-                contentType: res.contentType,
-                title: article.title || '',
-                byline: article.byline || undefined,
-                excerpt: article.excerpt || undefined,
-                siteName: article.siteName || undefined,
-                length: article.length,
-                text,
-              },
-              null,
-              2,
-            ),
-            args.max_chars ?? 12000,
-          )
+          const data: WebFetchOutput = {
+            url,
+            status: res.status,
+            contentType: res.contentType,
+            title: article.title || '',
+            byline: article.byline || undefined,
+            excerpt: article.excerpt || undefined,
+            siteName: article.siteName || undefined,
+            length: article.length ?? undefined,
+            text: text.slice(0, maxChars),
+          }
+          return { data }
         } catch (err) {
           if (err instanceof Error && err.name === 'AbortError') {
             return `Error: web fetch timed out after ${DEFAULT_TIMEOUT_MS}ms. URL: ${url}`

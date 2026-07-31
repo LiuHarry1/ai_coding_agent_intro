@@ -20,6 +20,7 @@ import {
 } from './lsp-host.js'
 import type { LspServerConfig } from '../core/types.js'
 import { runShellCommand, type ShellKind } from '../core/shell/spawn-shell.js'
+import { runRg } from './run-rg.js'
 
 const WORKER_VERSION =
   process.env.BAIX_WORKER_VERSION ??
@@ -75,6 +76,12 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
         cwd: op.cwd,
         timeoutMs: op.timeoutMs ?? 120_000,
         cwdFilePrefix: 'baix-worker-cwd',
+      })
+    case 'rg':
+      return runRg({
+        args: op.args,
+        target: op.target,
+        timeoutMs: op.timeoutMs,
       })
     default: {
       const _exhaustive: never = op

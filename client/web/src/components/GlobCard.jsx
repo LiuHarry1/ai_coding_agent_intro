@@ -1,43 +1,32 @@
 import React, { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolRowHeader from './ToolRowHeader.jsx'
+import { FileIcon } from './workspace-ide/icons.jsx'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
-import { shortDisplayPath, truncateEnd } from '../lib/utils.js'
+import { fileName, shortDisplayPath, truncateEnd } from '../lib/utils.js'
 
 /**
- * Cursor-style card for the `glob` tool.
- *
- * Header shape:
- *   Searched files   "**\/*.ts"   src/   · 12 files
- *
- * Glob result string (see src/tools/GlobTool/GlobTool.ts:execute) is either:
- *   - "No files found"
- *   - <relative path>\n<relative path>\n…   (optionally followed by
- *     a trailing "(Results are truncated…)" hint line)
- *   - "Error: …"
+ * Cursor-style Glob card — from `toolUseResult` only.
  */
 
-const TRUNC_HINT = '(Results are truncated'
+function splitPathParts(filePath) {
+  const norm = String(filePath || '').replace(/\\/g, '/')
+  const base = fileName(norm) || norm
+  const dir = norm.includes('/')
+    ? norm.slice(0, norm.length - base.length).replace(/\/$/, '')
+    : ''
+  return { base, dir, full: norm }
+}
 
-function parseResult(result) {
-  if (typeof result !== 'string')
-    return { files: [], truncated: false, empty: false }
-  if (result.startsWith('Error:'))
-    return { files: [], truncated: false, empty: false }
-  if (result.trim() === 'No files found') {
-    return { files: [], truncated: false, empty: true }
+function fromToolUseResult(tur) {
+  if (!tur || typeof tur !== 'object') return null
+  if (!Array.isArray(tur.filenames)) return null
+  return {
+    files: tur.filenames,
+    truncated: !!tur.truncated,
+    filteredCount: tur.filteredCount ?? 0,
+    empty: tur.filenames.length === 0,
   }
-  const lines = result.split('\n').filter(Boolean)
-  let truncated = false
-  const files = []
-  for (const line of lines) {
-    if (line.startsWith(TRUNC_HINT)) {
-      truncated = true
-      continue
-    }
-    files.push(line)
-  }
-  return { files, truncated, empty: false }
 }
 
 export default function GlobCard({ part, nested = false }) {
@@ -45,15 +34,25 @@ export default function GlobCard({ part, nested = false }) {
   const result = part.result
   const isDone = part.status === 'done'
   const isError =
-    isDone && typeof result === 'string' && result.startsWith('Error:')
+    isDone &&
+    (part.isError === true ||
+      (typeof result === 'string' && result.startsWith('Error:')))
 
-  const { files, truncated, empty } = useMemo(
-    () => parseResult(result),
-    [result],
+  const parsed = useMemo(
+    () => fromToolUseResult(part.toolUseResult),
+    [part.toolUseResult],
   )
 
-  // Expanded only while running (to stream results); collapses on done.
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
+  const hasBody =
+    isError ||
+    (!!parsed && (parsed.empty || parsed.files.length > 0))
+
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
+    expandOnceWhen:
+      isDone &&
+      ((isError && !!result) || (!!parsed && !parsed.empty)),
+  })
+  const showBody = expanded && hasBody
 
   const pattern = args.pattern || ''
   const displayPattern = pattern ? truncateEnd(pattern, 44) : ''
@@ -62,20 +61,21 @@ export default function GlobCard({ part, nested = false }) {
 
   const subtitleParts = []
   if (displayPath) subtitleParts.push(displayPath)
-  if (isDone && !isError && files.length > 0) {
+  if (isDone && !isError && parsed && parsed.files.length > 0) {
     subtitleParts.push(
-      `${files.length}${truncated ? '+' : ''} ${files.length === 1 ? 'file' : 'files'}`,
+      `${parsed.files.length}${parsed.truncated ? '+' : ''} ${parsed.files.length === 1 ? 'file' : 'files'}`,
     )
   }
 
-  const emptyHint = isDone && !isError && empty ? 'No files matched' : null
+  const emptyHint =
+    isDone && !isError && parsed?.empty ? 'No files matched' : null
 
   return (
     <div className={`tool-row glob-card ${isError ? 'has-error' : ''}`}>
       <ToolRowHeader
-        expanded={expanded}
-        onToggle={toggleExpanded}
-        showChevron={false}
+        expanded={expanded && hasBody}
+        onToggle={hasBody ? toggleExpanded : undefined}
+        showChevron={hasBody}
         label='Searched files'
         title={displayPattern ? `\u201C${displayPattern}\u201D` : 'glob\u2026'}
         titleTooltip={pattern}
@@ -88,23 +88,29 @@ export default function GlobCard({ part, nested = false }) {
         isError={isError}
         emptyHint={emptyHint}
         actions={
-          isDone && !isError && files.length > 0 ? (
-            <CopyButton text={files.join('\n')} label='Copy' inline />
+          isDone && !isError && parsed && parsed.files.length > 0 ? (
+            <CopyButton text={parsed.files.join('\n')} label='Copy' inline />
           ) : null
         }
       />
 
-      {expanded && isDone && !isError && files.length > 0 && (
-        <ul className='glob-file-list'>
-          {files.map(f => (
-            <li key={f} className='glob-file-item' title={f}>
-              <span className='glob-file-icon' aria-hidden='true'>
-                {'\u{1F4C4}'}
-              </span>
-              <span className='glob-file-path'>{f}</span>
-            </li>
-          ))}
-          {truncated && (
+      {showBody && isDone && !isError && parsed && parsed.files.length > 0 && (
+        <ul className='grep-results'>
+          {parsed.files.map(f => {
+            const parts = splitPathParts(f)
+            return (
+              <li key={f} className='grep-file-row' title={parts.full}>
+                <span className='grep-path'>
+                  <FileIcon size={12} />
+                  <span className='grep-file-name'>{parts.base}</span>
+                  {parts.dir ? (
+                    <span className='grep-file-dir'>{parts.dir}</span>
+                  ) : null}
+                </span>
+              </li>
+            )
+          })}
+          {parsed.truncated && (
             <li className='glob-file-truncated'>
               Results truncated — narrow the pattern or path for more.
             </li>
@@ -112,13 +118,11 @@ export default function GlobCard({ part, nested = false }) {
         </ul>
       )}
 
-      {expanded && isDone && !isError && empty && (
-        <div className='tool-row-body'>
-          No files matched <code>{pattern}</code>.
-        </div>
+      {showBody && isDone && !isError && parsed?.empty && (
+        <div className='grep-empty'>No files matched</div>
       )}
 
-      {expanded && isError && (
+      {showBody && isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
     </div>

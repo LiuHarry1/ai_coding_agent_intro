@@ -1,137 +1,134 @@
 import React, { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolRowHeader from './ToolRowHeader.jsx'
+import { FileIcon } from './workspace-ide/icons.jsx'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import {
+  fileName,
   shortDisplayPath,
   shortGlobPattern,
   truncateEnd,
 } from '../lib/utils.js'
 
 /**
- * Cursor-style card for the `grep` tool.
- *
- * Header shape (varies by output_mode):
- *   Grepped   "pattern"   *.ts · 5 files
- *   Grepped   "pattern"   12 matches in 4 files       (content mode)
- *   Grepped   "pattern"   42 occurrences across 3 files  (count mode)
- *
- * Result-string shapes (see src/tools/GrepTool/GrepTool.ts:execute):
- *   files_with_matches: "Found N file(s) [limit: …]\n<path>\n<path>\n…"
- *                       or "No files found".
- *   content:            "<path>:<line?>:<text>\n…" (+ pagination footer).
- *   count:              "<path>:N\n…\n\nFound X total occurrences across Y files…"
+ * Cursor-style Grep — dense search-panel from `toolUseResult` only.
  */
 
-function parseFilesWithMatches(result) {
-  const lines = result.split('\n')
-  // First line is "Found N file(s) …"; everything after is paths.
-  const header = lines[0] || ''
-  const m = header.match(/^Found\s+(\d+)\s+files?/)
-  const fileCount = m ? +m[1] : null
-  const files = lines.slice(1).filter(Boolean)
-  return { kind: 'files', fileCount, files }
+function splitPathParts(filePath) {
+  const norm = String(filePath || '').replace(/\\/g, '/')
+  const base = fileName(norm) || norm
+  const dir = norm.includes('/')
+    ? norm.slice(0, norm.length - base.length).replace(/\/$/, '')
+    : ''
+  return { base, dir, full: norm }
 }
 
-function parseContent(result, fallbackPath) {
-  // Each line is `<path>:<line_no?>:<content>` — group by path so we can
-  // render a Cursor-style "file → matches" tree.
-  //
-  // Special case: when ripgrep searches a single file it omits the
-  // filename prefix and emits `<line_no>:<content>` directly. We detect
-  // this (first colon-separated token is purely numeric) and attribute
-  // those rows to `fallbackPath` (the `path` argument the user passed).
-  const lines = result.split('\n')
-  const groups = new Map()
-  let totalMatches = 0
-  let paginationFooter = ''
-  for (const raw of lines) {
-    if (!raw) continue
-    if (raw.startsWith('[Showing results with pagination')) {
-      paginationFooter = raw
-      continue
-    }
-    if (raw === 'No matches found') {
-      return {
-        kind: 'content',
-        groups: [],
-        totalMatches: 0,
-        paginationFooter,
-        empty: true,
-      }
-    }
-    const firstColon = raw.indexOf(':')
-    if (firstColon <= 0) continue
-    const head = raw.slice(0, firstColon)
-    const rest = raw.slice(firstColon + 1)
+/**
+ * Parse one ripgrep content line (match `:` or context `-`).
+ *   path:line:text | path:line-text | line:text | line-text
+ */
+function parseRgContentLine(raw, fallbackPath) {
+  if (!raw || raw === '--') return null
+  if (raw.startsWith('[Showing results with pagination')) return null
+  if (raw === 'No matches found') return null
 
-    let filePath
-    let lineNo = null
-    let text
-    if (/^\d+$/.test(head)) {
-      // Single-file rg output: `<line_no>:<text>`
-      filePath = fallbackPath || '(file)'
-      lineNo = head
-      text = rest
-    } else {
-      filePath = head
-      // rest may be `<line_no>:<text>` or just `<text>`.
-      const secondColon = rest.indexOf(':')
-      text = rest
-      if (secondColon > 0 && /^\d+$/.test(rest.slice(0, secondColon))) {
-        lineNo = rest.slice(0, secondColon)
-        text = rest.slice(secondColon + 1)
-      }
-    }
-    if (!groups.has(filePath)) groups.set(filePath, [])
-    groups.get(filePath).push({ lineNo, text })
-    totalMatches += 1
-  }
+  const m = raw.match(/^(?:(.+?):)?(\d+)([:\-])(.*)$/)
+  if (!m) return null
+  const filePath = m[1] || fallbackPath || '(file)'
   return {
-    kind: 'content',
-    groups: [...groups.entries()].map(([file, matches]) => ({ file, matches })),
-    totalMatches,
-    paginationFooter,
-    empty: groups.size === 0,
+    file: filePath,
+    lineNo: m[2],
+    kind: m[3] === ':' ? 'match' : 'context',
+    text: m[4] ?? '',
   }
 }
 
-function parseCount(result) {
-  const summaryIdx = result.lastIndexOf('\n\nFound ')
-  const body = summaryIdx >= 0 ? result.slice(0, summaryIdx) : result
-  const summary = summaryIdx >= 0 ? result.slice(summaryIdx + 2) : ''
-  const entries = body
-    .split('\n')
-    .filter(Boolean)
-    .map(line => {
-      const i = line.lastIndexOf(':')
-      if (i <= 0) return null
-      return { file: line.slice(0, i), count: line.slice(i + 1) }
-    })
-    .filter(Boolean)
-  return { kind: 'count', entries, summary }
+function parseContentLines(content, fallbackPath) {
+  const groups = new Map()
+  if (!content || content === 'No matches found') return []
+  for (const raw of content.split('\n')) {
+    const row = parseRgContentLine(raw, fallbackPath)
+    if (!row) continue
+    if (!groups.has(row.file)) groups.set(row.file, [])
+    groups.get(row.file).push(row)
+  }
+  return [...groups.entries()].map(([file, matches]) => ({ file, matches }))
 }
 
-function parseResult(result, mode, fallbackPath) {
-  if (typeof result !== 'string' || result.length === 0) {
-    return { kind: 'empty' }
+function fromToolUseResult(toolUseResult) {
+  if (!toolUseResult || typeof toolUseResult !== 'object') return null
+  if (!Array.isArray(toolUseResult.filenames) && !Array.isArray(toolUseResult.files)) {
+    return null
   }
-  if (result.startsWith('Error:')) return { kind: 'error' }
-  if (
-    result.trim() === 'No files found' ||
-    result.trim() === 'No matches found'
-  ) {
-    return {
-      kind: mode === 'content' ? 'content' : 'files',
-      empty: true,
-      files: [],
-      groups: [],
-      totalMatches: 0,
+  const mode = toolUseResult.mode || 'files_with_matches'
+  const files = Array.isArray(toolUseResult.files)
+    ? toolUseResult.files
+    : (toolUseResult.filenames || []).map(p => ({
+        path: p,
+        matchCount: 1,
+      }))
+  return {
+    mode,
+    files,
+    numFiles: toolUseResult.numFiles ?? files.length,
+    numMatches: toolUseResult.numMatches,
+    numLines: toolUseResult.numLines,
+    content: toolUseResult.content,
+    empty:
+      (toolUseResult.numFiles ?? files.length) === 0 &&
+      !(toolUseResult.content && toolUseResult.content !== 'No matches found'),
+  }
+}
+
+function HighlightedText({ text, pattern, caseInsensitive }) {
+  if (!pattern || !text) return text
+  try {
+    const re = new RegExp(pattern, caseInsensitive ? 'gi' : 'g')
+    const parts = []
+    let last = 0
+    let key = 0
+    for (const m of String(text).matchAll(re)) {
+      if (m.index > last) {
+        parts.push(
+          <React.Fragment key={key++}>{text.slice(last, m.index)}</React.Fragment>,
+        )
+      }
+      parts.push(
+        <mark key={key++} className='grep-hl'>
+          {m[0]}
+        </mark>,
+      )
+      last = m.index + m[0].length
+    }
+    if (parts.length === 0) return text
+    if (last < text.length) {
+      parts.push(<React.Fragment key={key++}>{text.slice(last)}</React.Fragment>)
+    }
+    return parts
+  } catch {
+    return text
+  }
+}
+
+function FilePathLabel({ path: filePath }) {
+  const { base, dir, full } = splitPathParts(filePath)
+  return (
+    <span className='grep-path' title={full}>
+      <FileIcon size={12} />
+      <span className='grep-file-name'>{base}</span>
+      {dir ? <span className='grep-file-dir'>{dir}</span> : null}
+    </span>
+  )
+}
+
+function countContentStats(groups) {
+  let matches = 0
+  for (const g of groups) {
+    for (const row of g.matches) {
+      if (row.kind === 'match') matches += 1
     }
   }
-  if (mode === 'content') return parseContent(result, fallbackPath)
-  if (mode === 'count') return parseCount(result)
-  return parseFilesWithMatches(result)
+  return { matchN: matches, fileN: groups.length }
 }
 
 export default function GrepCard({ part, nested = false }) {
@@ -139,16 +136,35 @@ export default function GrepCard({ part, nested = false }) {
   const result = part.result
   const isDone = part.status === 'done'
   const isError =
-    isDone && typeof result === 'string' && result.startsWith('Error:')
-  const mode = args.output_mode || 'files_with_matches'
+    isDone &&
+    (part.isError === true ||
+      (typeof result === 'string' && result.startsWith('Error:')))
 
   const parsed = useMemo(
-    () => parseResult(result, mode, args.path),
-    [result, mode, args.path],
+    () => fromToolUseResult(part.toolUseResult),
+    [part.toolUseResult],
   )
 
-  // Nested (inside Explored/Subagent): stay collapsed — parent owns density.
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
+  const contentGroups = useMemo(() => {
+    if (!parsed || parsed.mode !== 'content') return []
+    return parseContentLines(parsed.content, args.path)
+  }, [parsed, args.path])
+
+  const hasBody =
+    isError ||
+    (!!parsed &&
+      (parsed.empty ||
+        (parsed.mode === 'content' && contentGroups.length > 0) ||
+        ((parsed.mode === 'files_with_matches' || parsed.mode === 'count') &&
+          parsed.files.length > 0)))
+
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
+    expandOnceWhen:
+      isDone &&
+      ((isError && !!result) || (!!parsed && !parsed.empty && hasBody)),
+  })
+  // Honor expand state only — do not force-open when isDone.
+  const showBody = expanded && hasBody
 
   const pattern = args.pattern || ''
   const displayPattern = pattern ? truncateEnd(pattern, 44) : ''
@@ -156,9 +172,9 @@ export default function GrepCard({ part, nested = false }) {
   const shortGlob = shortGlobPattern(args.glob)
   const shortPath =
     args.path && args.path !== '.' ? shortDisplayPath(args.path) : null
+  if (shortPath) filterBits.push(`in ${shortPath}`)
   if (shortGlob) filterBits.push(shortGlob)
   if (args.type) filterBits.push(`type:${args.type}`)
-  if (shortPath) filterBits.push(shortPath)
 
   const filterTooltip = [
     args.glob && `glob: ${args.glob}`,
@@ -168,36 +184,45 @@ export default function GrepCard({ part, nested = false }) {
     .filter(Boolean)
     .join('\n')
 
-  // Count sits in `meta` so it stays visible when filters are long.
   let countLabel = null
-  if (isDone && !isError) {
-    if (parsed.kind === 'files') {
-      const n = parsed.fileCount ?? parsed.files?.length ?? 0
-      if (n > 0) countLabel = `${n} ${n === 1 ? 'file' : 'files'}`
-    } else if (parsed.kind === 'content') {
-      const fileN = parsed.groups?.length ?? 0
-      const matchN = parsed.totalMatches ?? 0
+  if (isDone && !isError && parsed && !parsed.empty) {
+    if (parsed.mode === 'files_with_matches' || parsed.mode === 'count') {
+      const n = parsed.numFiles ?? parsed.files.length
+      if (n > 0) {
+        const total =
+          parsed.numMatches ??
+          parsed.files.reduce((s, f) => s + (f.matchCount || 0), 0)
+        countLabel =
+          parsed.mode === 'count' || total > n
+            ? `${total} ${total === 1 ? 'match' : 'matches'} in ${n} ${n === 1 ? 'file' : 'files'}`
+            : parsed.mode === 'files_with_matches' && total > 0
+              ? `${total} ${total === 1 ? 'match' : 'matches'} in ${n} ${n === 1 ? 'file' : 'files'}`
+              : `${n} ${n === 1 ? 'file' : 'files'}`
+      }
+    } else if (parsed.mode === 'content') {
+      const { matchN, fileN } = countContentStats(contentGroups)
       if (matchN > 0) {
         countLabel = `${matchN} ${matchN === 1 ? 'match' : 'matches'} in ${fileN} ${fileN === 1 ? 'file' : 'files'}`
       }
-    } else if (parsed.kind === 'count') {
-      countLabel =
-        parsed.summary?.replace(/\.$/, '').replace(/^Found\s+/, '') || null
     }
   }
-  const subtitle = filterBits.length > 0 ? filterBits.join(' \u00B7 ') : null
 
+  const subtitle = filterBits.length > 0 ? filterBits.join(' \u00B7 ') : null
   const emptyHint =
-    isDone && !isError && (parsed.empty || parsed.kind === 'empty')
-      ? 'No matches'
-      : null
+    isDone && !isError && parsed?.empty ? 'No matches' : null
+  const caseInsensitive = !!args.case_insensitive
+  // Single-file search: path already in subtitle — skip repeating file header.
+  const hideFileHeaders =
+    contentGroups.length === 1 &&
+    !!args.path &&
+    args.path !== '.'
 
   return (
     <div className={`tool-row grep-card ${isError ? 'has-error' : ''}`}>
       <ToolRowHeader
-        expanded={expanded}
-        onToggle={toggleExpanded}
-        showChevron={false}
+        expanded={expanded && hasBody}
+        onToggle={hasBody ? toggleExpanded : undefined}
+        showChevron={hasBody}
         label='Grepped'
         title={displayPattern ? `\u201C${displayPattern}\u201D` : 'grep\u2026'}
         titleTooltip={
@@ -226,87 +251,66 @@ export default function GrepCard({ part, nested = false }) {
         }
       />
 
-      {expanded &&
+      {showBody &&
         isDone &&
         !isError &&
-        parsed.kind === 'files' &&
-        !parsed.empty && (
-          <ul className='glob-file-list'>
-            {(parsed.files || []).map(f => (
-              <li key={f} className='glob-file-item' title={f}>
-                <span className='glob-file-icon' aria-hidden='true'>
-                  {'\u{1F4C4}'}
-                </span>
-                <span className='glob-file-path'>{f}</span>
+        parsed &&
+        !parsed.empty &&
+        (parsed.mode === 'files_with_matches' || parsed.mode === 'count') && (
+          <ul className='grep-results'>
+            {parsed.files.map(f => (
+              <li key={f.path} className='grep-file-row'>
+                <FilePathLabel path={f.path} />
+                {parsed.mode === 'count' && f.matchCount != null ? (
+                  <span className='grep-file-count'>{f.matchCount}</span>
+                ) : null}
               </li>
             ))}
           </ul>
         )}
 
-      {expanded &&
+      {showBody &&
         isDone &&
         !isError &&
-        parsed.kind === 'content' &&
-        !parsed.empty && (
-          <div className='grep-content-body'>
-            {parsed.groups.map(g => (
-              <div key={g.file} className='grep-file-group'>
-                <div className='grep-file-header' title={g.file}>
-                  <span className='glob-file-icon' aria-hidden='true'>
-                    {'\u{1F4C4}'}
-                  </span>
-                  <span className='glob-file-path'>{g.file}</span>
-                  <span className='grep-match-count'>
-                    {g.matches.length}{' '}
-                    {g.matches.length === 1 ? 'match' : 'matches'}
-                  </span>
-                </div>
-                <pre className='grep-match-lines'>
-                  {g.matches
-                    .map(m =>
-                      m.lineNo
-                        ? `${m.lineNo.padStart(5)} │ ${m.text}`
-                        : `      │ ${m.text}`,
-                    )
-                    .join('\n')}
-                </pre>
+        parsed?.mode === 'content' &&
+        contentGroups.length > 0 && (
+          <div className='grep-results'>
+            {contentGroups.map(g => (
+              <div key={g.file} className='grep-file-block'>
+                {!hideFileHeaders && (
+                  <div className='grep-file-header'>
+                    <FilePathLabel path={g.file} />
+                  </div>
+                )}
+                {g.matches.map((m, i) => (
+                  <div
+                    key={`${g.file}:${m.lineNo}:${m.kind}:${i}`}
+                    className={`grep-match-line grep-match-line--${m.kind}`}
+                  >
+                    <span className='grep-line-no'>{m.lineNo}</span>
+                    <span className='grep-line-text'>
+                      {m.kind === 'match' ? (
+                        <HighlightedText
+                          text={m.text}
+                          pattern={pattern}
+                          caseInsensitive={caseInsensitive}
+                        />
+                      ) : (
+                        m.text
+                      )}
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
-            {parsed.paginationFooter && (
-              <div className='grep-footer'>{parsed.paginationFooter}</div>
-            )}
           </div>
         )}
 
-      {expanded && isDone && !isError && parsed.kind === 'count' && (
-        <div className='grep-content-body'>
-          <ul className='glob-file-list'>
-            {parsed.entries.map(e => (
-              <li key={e.file} className='glob-file-item' title={e.file}>
-                <span className='glob-file-icon' aria-hidden='true'>
-                  {'\u{1F4C4}'}
-                </span>
-                <span className='glob-file-path'>{e.file}</span>
-                <span className='grep-match-count'>{e.count}</span>
-              </li>
-            ))}
-          </ul>
-          {parsed.summary && (
-            <div className='grep-footer'>{parsed.summary}</div>
-          )}
-        </div>
+      {showBody && isDone && !isError && parsed?.empty && (
+        <div className='grep-empty'>No matches</div>
       )}
 
-      {expanded &&
-        isDone &&
-        !isError &&
-        (parsed.empty || parsed.kind === 'empty') && (
-          <div className='tool-row-body'>
-            No matches for <code>{pattern}</code>.
-          </div>
-        )}
-
-      {expanded && isError && (
+      {showBody && isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
     </div>

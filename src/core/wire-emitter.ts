@@ -111,12 +111,14 @@ export class WireEmitter {
   toolResult(input: {
     tool_use_id: string
     result: string
+    tool_use_result?: unknown
     is_error?: boolean
   }): void {
     this.emit(
       toolResultMessage({
         tool_use_id: input.tool_use_id,
         result: input.result,
+        tool_use_result: input.tool_use_result,
         is_error: input.is_error,
         env: this.#env,
       }),

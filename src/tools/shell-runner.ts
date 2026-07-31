@@ -3,7 +3,11 @@ import { z } from 'zod'
 import { spawn, type ChildProcess } from 'child_process'
 import { truncate } from './utils.js'
 import { killChild, forceKillChild } from '../core/platform.js'
-import type { ToolDefinition, ToolContext } from '../core/types.js'
+import type {
+  DualChannelToolResult,
+  ToolDefinition,
+  ToolContext,
+} from '../core/types.js'
 import { isShellInputConcurrencySafe } from '../core/shell/shell-readonly.js'
 import {
   prepareShellSpawn,
@@ -16,7 +20,59 @@ import {
  * Shared execution machinery for Bash / PowerShell tools.
  * Spawn argv/env/cwd tracking: `core/shell/spawn-shell.ts` (same as Worker).
  * This file owns background PIDs, output capping, progress, timeout/kill.
+ *
+ * Dual-channel (CC-style): execute returns `{ data: ShellToolOutput }` directly;
+ * mapper builds model text and may set `is_error` (timeout / interrupted).
  */
+
+export type ShellToolOutput = {
+  /** Model + UI narrative (formatted stdout/stderr/status). */
+  text: string
+  stdout?: string
+  stderr?: string
+  exitCode?: number | null
+  pid?: number
+  backgrounded?: boolean
+  /** Timed out or kill-interrupted before natural exit. */
+  interrupted?: boolean
+}
+
+function shellOk(
+  data: ShellToolOutput,
+): DualChannelToolResult<ShellToolOutput> {
+  return { data }
+}
+
+function formatProcText(proc: TrackedProcess): string {
+  let out = proc.stdout || ''
+  if (proc.stderr)
+    out += (out ? '\n' : '') + `<stderr>\n${proc.stderr}</stderr>`
+  if (proc.done && proc.exitCode !== 0 && proc.exitCode !== null)
+    out += `\n[exit code: ${proc.exitCode}]`
+  return (
+    out ||
+    (proc.done
+      ? proc.exitCode === 0
+        ? '(no output)'
+        : `(no output, exit code ${proc.exitCode})`
+      : '(no output yet)')
+  )
+}
+
+function fromProc(
+  proc: TrackedProcess,
+  extra?: Partial<ShellToolOutput>,
+): ShellToolOutput {
+  const text = truncate(formatProcText(proc))
+  return {
+    text,
+    stdout: proc.stdout,
+    stderr: proc.stderr,
+    exitCode: proc.exitCode,
+    pid: proc.pid,
+    ...extra,
+  }
+}
 
 // ── Background process tracking ──
 
@@ -56,43 +112,45 @@ function elapsedSec(start: number): string {
   return ((Date.now() - start) / 1000).toFixed(1)
 }
 
-function formatOutput(proc: TrackedProcess): string {
-  let out = proc.stdout || ''
-  if (proc.stderr)
-    out += (out ? '\n' : '') + `<stderr>\n${proc.stderr}</stderr>`
-  if (proc.done && proc.exitCode !== 0 && proc.exitCode !== null)
-    out += `\n[exit code: ${proc.exitCode}]`
-  return (
-    out ||
-    (proc.done
-      ? proc.exitCode === 0
-        ? '(no output)'
-        : `(no output, exit code ${proc.exitCode})`
-      : '(no output yet)')
-  )
-}
-
-function checkProcess(pid: number): string {
+function checkProcess(
+  pid: number,
+): DualChannelToolResult<ShellToolOutput> | string {
   const proc = bgProcs.get(pid)
   if (!proc) return `Error: no background process with pid ${pid}`
   const status = proc.done
     ? `[pid ${pid}] finished (exit ${proc.exitCode}, ${elapsedSec(proc.startTime)}s)`
     : `[pid ${pid}] running (${elapsedSec(proc.startTime)}s)`
-  const result = truncate(`${status}\n\n${formatOutput(proc)}`)
+  const body = truncate(`${status}\n\n${formatProcText(proc)}`)
   if (proc.done) bgProcs.delete(pid)
-  return result
+  return shellOk({
+    text: body,
+    stdout: proc.stdout,
+    stderr: proc.stderr,
+    exitCode: proc.exitCode,
+    pid,
+  })
 }
 
-function killProcess(pid: number): string {
+function killProcess(
+  pid: number,
+): DualChannelToolResult<ShellToolOutput> | string {
   const proc = bgProcs.get(pid)
   if (!proc) return `Error: no background process with pid ${pid}`
   if (proc.done) {
     bgProcs.delete(pid)
-    return `Process ${pid} already finished.`
+    return shellOk({
+      text: `Process ${pid} already finished.`,
+      exitCode: proc.exitCode,
+      pid,
+    })
   }
   proc.killed = true
   killChild(proc.child)
-  return `Sent kill signal to process ${pid}`
+  return shellOk({
+    text: `Sent kill signal to process ${pid}`,
+    pid,
+    interrupted: true,
+  })
 }
 
 // ── Factory ──────────────────────────────
@@ -117,13 +175,20 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
     name,
     description: briefDescription,
     isConcurrencySafe: isShellInputConcurrencySafe,
+    mapToolResultToToolResultBlockParam(output, toolUseID) {
+      const o = output as ShellToolOutput
+      return {
+        tool_use_id: toolUseID,
+        type: 'tool_result',
+        content: o.text,
+        // Match CC: aborted / timed-out commands are tool errors for the model.
+        ...(o.interrupted ? { is_error: true } : {}),
+      }
+    },
     create(cwd: string, context: ToolContext) {
       const wire = context?.wire
       // Mutable per-tool-instance cwd. Updated after each foreground command
       // by reading the cwd-tracking tmpfile written by the wrapped command.
-      // Lets the model `cd subdir` and have subsequent commands run from
-      // there, matching how a real interactive shell works. Background and
-      // pid-mode calls don't update this (background may still be writing).
       const cwdRef = { current: cwd }
 
       return tool({
@@ -162,12 +227,10 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             timeout?: number
           },
           options?: { toolCallId?: string },
-        ) => {
+        ): Promise<DualChannelToolResult<ShellToolOutput> | string> => {
           const toolUseId = options?.toolCallId ?? ''
-          // ── Check / kill a background process ──
-          // Prefer `command` if provided. Some providers (OpenAI Responses API
-          // with strict tools) may pass `pid: 0` even when the model wants to
-          // run a command, so we only enter pid-mode when no command is given.
+          // Prefer `command` if provided. Some providers may pass `pid: 0`
+          // even when the model wants to run a command.
           if (!args.command && args.pid != null) {
             return args.kill ? killProcess(args.pid) : checkProcess(args.pid)
           }
@@ -177,7 +240,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
 
           const { command, background = false, stdin, timeout = 120_000 } = args
 
-          // ── Remote SSH execution (Control-plane LLM, tools on remote) ──
+          // ── Remote SSH execution ──
           const execution = context.execution
           if (execution) {
             if (background) {
@@ -205,16 +268,25 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
                 (result.code === 0
                   ? '(no output)'
                   : `(no output, exit code ${result.code})`)
+              const text = truncate(final)
               if (wire && toolUseId) {
-                wire.processOutput(toolUseId, name, final)
+                wire.processOutput(toolUseId, name, text)
               }
-              return truncate(final)
+              return shellOk({
+                text,
+                stdout: result.stdout || '',
+                stderr: result.stderr || '',
+                exitCode: result.code,
+              })
             } catch (err) {
-              return `[error: ${err instanceof Error ? err.message : String(err)}]`
+              const msg = err instanceof Error ? err.message : String(err)
+              return shellOk({
+                text: truncate(`[error: ${msg}]`),
+                interrupted: true,
+              })
             }
           }
 
-          // Shared spawn config (same as Worker) — dual cwd paths on Windows.
           let prepared
           try {
             prepared = prepareShellSpawn({
@@ -223,7 +295,11 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               cwdFilePrefix: 'agent-shell-cwd',
             })
           } catch (err) {
-            return `[error: ${err instanceof Error ? err.message : String(err)}]`
+            const msg = err instanceof Error ? err.message : String(err)
+            return shellOk({
+              text: truncate(`[error: ${msg}]`),
+              interrupted: true,
+            })
           }
 
           const child = spawn(prepared.command, prepared.args, {
@@ -262,13 +338,9 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
           if (stdin != null) child.stdin.write(stdin)
           child.stdin.end()
 
-          // ── Background mode: return PID immediately ──
+          // ── Background mode ──
           if (background) {
             bgProcs.set(proc.pid, proc)
-            // Don't update cwdRef from a background process: the bg cmd may
-            // run for hours and its `cd` shouldn't pollute the foreground
-            // working directory. Unlink the unread tmpfile when it eventually
-            // closes so we don't leak files.
             child.on('close', (code: number | null) => {
               proc.exitCode = code
               proc.done = true
@@ -278,18 +350,23 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               proc.done = true
               cleanupCwdFile(prepared.cwdFileNative)
             })
-            return `[backgrounded — pid: ${proc.pid}]\nUse ${name}({ pid: ${proc.pid} }) to check, ${name}({ pid: ${proc.pid}, kill: true }) to stop.`
+            const text = `[backgrounded — pid: ${proc.pid}]\nUse ${name}({ pid: ${proc.pid} }) to check, ${name}({ pid: ${proc.pid}, kill: true }) to stop.`
+            return shellOk({
+              text,
+              pid: proc.pid,
+              backgrounded: true,
+            })
           }
 
-          // ── Default: block until done, stream live output ──
-          return new Promise<string>(resolve => {
+          // ── Foreground: block until done ──
+          return new Promise(resolve => {
             let progressTimer: ReturnType<typeof setInterval> | null = null
             let lastOutputLen = 0
 
             if (wire && toolUseId) {
               progressTimer = setInterval(() => {
                 if (proc.done) return
-                const out = formatOutput(proc)
+                const out = formatProcText(proc)
                 if (out.length !== lastOutputLen) {
                   lastOutputLen = out.length
                   wire.processOutput(toolUseId, name, out)
@@ -297,9 +374,9 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               }, PROGRESS_INTERVAL_MS)
             }
 
-            const finish = (output: string) => {
+            const finish = (data: ShellToolOutput) => {
               if (progressTimer) clearInterval(progressTimer)
-              resolve(truncate(output))
+              resolve(shellOk(data))
             }
 
             const hardTimer = setTimeout(() => {
@@ -308,14 +385,19 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               setTimeout(() => {
                 forceKillChild(child)
                 proc.done = true
-                // Killed mid-flight — trailer didn't run; don't update cwdRef.
                 cleanupCwdFile(prepared.cwdFileNative)
-                const out =
-                  formatOutput(proc) + `\n[timed out after ${timeout / 1000}s]`
+                const text =
+                  truncate(
+                    formatProcText(proc) +
+                      `\n[timed out after ${timeout / 1000}s]`,
+                  )
                 if (wire && toolUseId) {
-                  wire.processOutput(toolUseId, name, out)
+                  wire.processOutput(toolUseId, name, text)
                 }
-                finish(out)
+                finish({
+                  ...fromProc(proc, { interrupted: true }),
+                  text,
+                })
               }, 3000)
             }, timeout)
 
@@ -324,18 +406,23 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               proc.exitCode = code
               proc.done = true
               updateCwdFromFile()
-              const out = formatOutput(proc)
+              const data = fromProc(proc, {
+                interrupted: proc.killed || undefined,
+              })
               if (wire && toolUseId) {
-                wire.processOutput(toolUseId, name, out)
+                wire.processOutput(toolUseId, name, data.text)
               }
-              finish(out)
+              finish(data)
             })
 
             child.on('error', (err: Error) => {
               clearTimeout(hardTimer)
               proc.done = true
               cleanupCwdFile(prepared.cwdFileNative)
-              finish(`[error: ${err.message}]`)
+              finish({
+                text: truncate(`[error: ${err.message}]`),
+                interrupted: true,
+              })
             })
           })
         },

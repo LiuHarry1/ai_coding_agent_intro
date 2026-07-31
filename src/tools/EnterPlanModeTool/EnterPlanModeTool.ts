@@ -3,7 +3,9 @@
  */
 import { tool } from 'ai'
 import { z } from 'zod'
-import type { ToolDefinition } from '../../core/types.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
+
+export type EnterPlanModeOutput = { message: string }
 import { emitModeChanged } from '../../core/wire-internal.js'
 import { ENTER_PLAN_MODE_TOOL_NAME } from '../../constants/tool_names.js'
 import {
@@ -18,6 +20,13 @@ export const definition: ToolDefinition = {
   name: ENTER_PLAN_MODE_TOOL_NAME,
   description: DESCRIPTION,
   isConcurrencySafe: () => true,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: (output as EnterPlanModeOutput).message,
+    }
+  },
   create(_cwd, context) {
     return tool({
       description: `${DESCRIPTION}
@@ -25,15 +34,17 @@ export const definition: ToolDefinition = {
 Use when the task is complex, ambiguous, or risky and you need to explore and design before executing.
 Do NOT use for simple, obvious tasks — execute directly instead.`,
       inputSchema: z.strictObject({}),
-      execute: async () => {
+      execute: async (): Promise<
+        DualChannelToolResult<EnterPlanModeOutput>
+      > => {
         const session = context.session
         if (!session) {
-          return { message: 'EnterPlanMode requires an active session.' }
+          return { data: { message: 'EnterPlanMode requires an active session.' } }
         }
 
         const from = session.permissionMode.mode
         if (from === 'plan') {
-          return { message: 'Already in plan mode.' }
+          return { data: { message: 'Already in plan mode.' } }
         }
 
         handlePlanModeTransition(from, 'plan', session)
@@ -44,8 +55,10 @@ Do NOT use for simple, obvious tasks — execute directly instead.`,
         emitModeChanged(context.wire, context.eventBus, 'plan')
 
         return {
-          message:
-            'Entered plan mode. Follow the 5-phase workflow: Explore agents → Plan agents → Review/Ask → write plan file → ExitPlanMode for approval.',
+          data: {
+            message:
+              'Entered plan mode. Follow the 5-phase workflow: Explore agents → Plan agents → Review/Ask → write plan file → ExitPlanMode for approval.',
+          },
         }
       },
     })

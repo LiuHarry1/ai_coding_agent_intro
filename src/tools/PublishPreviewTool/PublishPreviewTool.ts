@@ -7,8 +7,15 @@ import {
   validatePreviewPort,
   waitForPort,
 } from '../../core/preview.js'
-import type { ToolDefinition } from '../../core/types.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { PUBLISH_PREVIEW_TOOL_NAME } from '../../constants/tool_names.js'
+
+export type PublishPreviewOutput = {
+  text: string
+  url?: string
+  port?: number
+  listening?: boolean
+}
 
 export const definition: ToolDefinition = {
   name: PUBLISH_PREVIEW_TOOL_NAME,
@@ -16,6 +23,13 @@ export const definition: ToolDefinition = {
     'Public preview URL for a dev server in this container (call after Bash background start on 0.0.0.0)',
   isConcurrencySafe: () => true,
   shouldDefer: true,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: (output as PublishPreviewOutput).text,
+    }
+  },
 
   create() {
     return tool({
@@ -54,7 +68,7 @@ export const definition: ToolDefinition = {
         label?: string
         path?: string
         wait_seconds?: number
-      }) => {
+      }): Promise<DualChannelToolResult<PublishPreviewOutput> | string> => {
         const portError = validatePreviewPort(args.port)
         if (portError) return `Error: ${portError}`
 
@@ -62,11 +76,25 @@ export const definition: ToolDefinition = {
         const url = buildPreviewUrl(args.port, args.path ?? '')
 
         if (!listening) {
-          return `Port ${args.port} not listening. Start on 0.0.0.0, then retry.\nURL (when ready): ${url}`
+          return {
+            data: {
+              text: `Port ${args.port} not listening. Start on 0.0.0.0, then retry.\nURL (when ready): ${url}`,
+              url,
+              port: args.port,
+              listening: false,
+            },
+          }
         }
 
         const label = args.label ? ` (${args.label})` : ''
-        return `Preview${label}: ${url}`
+        return {
+          data: {
+            text: `Preview${label}: ${url}`,
+            url,
+            port: args.port,
+            listening: true,
+          },
+        }
       },
     })
   },

@@ -165,7 +165,13 @@ function serverMessageToNotifications(
             content: { type: 'text', text: msg.result },
           },
         ],
-        rawOutput: { result: msg.result, is_error: msg.is_error ?? false },
+        rawOutput: {
+          result: msg.result,
+          is_error: msg.is_error ?? false,
+          ...(msg.tool_use_result !== undefined
+            ? { tool_use_result: msg.tool_use_result }
+            : {}),
+        },
       },
     })
     return out

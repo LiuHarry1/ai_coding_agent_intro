@@ -465,6 +465,8 @@ export const useChatStore = create((set, get) => ({
         store._appendSubagentEvent({
           type: 'tool_result',
           result: data.result,
+          toolUseResult: data.tool_use_result,
+          isError: data.is_error === true,
           toolCallId: toolUseId(data),
           parentToolCallId: parentId,
         })
@@ -622,6 +624,8 @@ export const useChatStore = create((set, get) => ({
         store._updateToolResult({
           toolCallId: toolUseId(data),
           result: data.result,
+          toolUseResult: data.tool_use_result,
+          isError: data.is_error === true,
         })
         break
       case 'control_request':
@@ -1081,7 +1085,15 @@ export const useChatStore = create((set, get) => ({
       } else if (ev.type === 'tool_result') {
         for (let j = sub.length - 1; j >= 0; j--) {
           if (sub[j].toolCallId === ev.toolCallId) {
-            sub[j] = { ...sub[j], result: ev.result, status: 'done' }
+            sub[j] = {
+              ...sub[j],
+              result: ev.result,
+              ...(ev.toolUseResult !== undefined
+                ? { toolUseResult: ev.toolUseResult }
+                : {}),
+              ...(ev.isError ? { isError: true } : {}),
+              status: 'done',
+            }
             notifyIdeFilesystemFromTool(sub[j].name, sub[j].args, ev.result)
             break
           }
@@ -1135,6 +1147,10 @@ export const useChatStore = create((set, get) => ({
           parts[i] = {
             ...parts[i],
             result: data.result,
+            ...(data.toolUseResult !== undefined
+              ? { toolUseResult: data.toolUseResult }
+              : {}),
+            ...(data.isError ? { isError: true } : {}),
             status: 'done',
             endTime: Date.now(),
             stopping: false,

@@ -12,7 +12,15 @@ import type {
   MarkupContent,
   SymbolInformation,
 } from 'vscode-languageserver-types'
-import type { ToolDefinition } from '../../core/types.js'
+import type {
+  DualChannelToolResult,
+  ToolDefinition,
+} from '../../core/types.js'
+
+export type LspToolOutput = {
+  text: string
+  operation?: string
+}
 import { LSP_TOOL_NAME } from '../../constants/tool_names.js'
 import { getLspManager } from '../../services/lsp/manager.js'
 import { resolvePath } from '../utils.js'
@@ -48,8 +56,15 @@ export const definition: ToolDefinition = {
   description: 'Code intelligence via Language Server Protocol',
   shouldDefer: true,
   isConcurrencySafe: () => true,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: (output as LspToolOutput).text,
+    }
+  },
   create(cwd, context) {
-    return tool({
+    const built = tool({
       description: `Use configured Language Server Protocol servers for code intelligence.
 
 Operations:
@@ -87,7 +102,12 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
         line?: number
         character?: number
         query?: string
-      }): Promise<string> => {
+      }): Promise<DualChannelToolResult<LspToolOutput> | string> => {
+        const wrap = (text: string) =>
+          ({
+            data: { text, operation: input.operation },
+          }) satisfies DualChannelToolResult<LspToolOutput>
+
         const worker = isWorkerExecutionBackend(context.execution)
           ? context.execution
           : undefined
@@ -124,7 +144,7 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
               methodAndParams.method,
               methodAndParams.params,
             )
-            return formatResult(input.operation, result, cwd)
+            return wrap(formatResult(input.operation, result, cwd))
           }
 
           const manager = getLspManager(cwd, context.lspServers)
@@ -156,7 +176,7 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
             methodAndParams.method,
             methodAndParams.params,
           )
-          return formatResult(input.operation, result, cwd)
+          return wrap(formatResult(input.operation, result, cwd))
         } catch (err) {
           return `Error performing ${input.operation}: ${
             err instanceof Error ? err.message : String(err)
@@ -164,6 +184,7 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
         }
       },
     })
+    return built
   },
 }
 

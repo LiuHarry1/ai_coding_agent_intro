@@ -6,16 +6,42 @@ import {
   assertAccessibleResolved,
   policyFromContext,
 } from '../../core/sandbox.js'
-import type { ToolDefinition } from '../../core/types.js'
+import type {
+  DualChannelToolResult,
+  ToolDefinition,
+} from '../../core/types.js'
 import { EDIT_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
+export type EditFileOutput = {
+  type: 'update'
+  filePath: string
+  oldString: string
+  newString: string
+  replacements: number
+  message: string
+}
+
+function ok(
+  data: EditFileOutput,
+): DualChannelToolResult<EditFileOutput> {
+  return { data }
+}
+
 export const definition: ToolDefinition = {
   name: EDIT_FILE_TOOL_NAME,
   description: 'Make targeted edits by replacing specific text in a file',
   isConcurrencySafe: () => false,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    const o = output as EditFileOutput
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: o.message,
+    }
+  },
   create(cwd, context) {
     return tool({
       description:
@@ -97,14 +123,22 @@ export const definition: ToolDefinition = {
                 /* LSP optional */
               }
             }
-            return `Edited ${file_path} (${replace_all ? matchCount : 1} replacement${matchCount === 1 ? '' : 's'}) [worker:${execution.environmentId}]`
+            const replacements = replace_all ? matchCount : 1
+            return ok({
+              type: 'update',
+              filePath: file_path,
+              oldString: old_string,
+              newString: new_string,
+              replacements,
+              message: `Edited ${file_path} (${replacements} replacement${replacements === 1 ? '' : 's'}) [worker:${execution.environmentId}]`,
+            })
           } catch (err) {
             return err instanceof Error ? err.message : String(err)
           }
         }
 
         const resolved = resolvePath(cwd, file_path)
-        if ('error' in resolved) return resolved.error
+        if ('error' in resolved) return resolved.error || 'Invalid path'
         const { abs } = resolved
 
         try {
@@ -114,7 +148,7 @@ export const definition: ToolDefinition = {
             'write',
           )
         } catch (err) {
-          return (err as Error).message
+          return err instanceof Error ? err.message : String(err)
         }
 
         if (!fs.existsSync(abs)) return `Error: file not found: ${file_path}`
@@ -182,7 +216,14 @@ export const definition: ToolDefinition = {
         const lineInfo =
           oldLines !== newLines ? ` (${oldLines} → ${newLines} lines)` : ''
 
-        return `Edited ${file_path}: ${replacements} replacement(s)${lineInfo}`
+        return ok({
+          type: 'update',
+          filePath: file_path,
+          oldString: old_string,
+          newString: new_string,
+          replacements,
+          message: `Edited ${file_path}: ${replacements} replacement(s)${lineInfo}`,
+        })
       },
     })
   },

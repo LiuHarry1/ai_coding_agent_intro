@@ -27,6 +27,13 @@ export type WorkerFsOp =
       /** Default `bash` (Git Bash on Windows). Use `powershell` for the PowerShell tool. */
       shell?: ShellKind
     }
+  /** Claude Code–style: spawn `rg` with argv; exit 0/1 both succeed. */
+  | {
+      op: 'rg'
+      args: string[]
+      target: string
+      timeoutMs?: number
+    }
 
 /** LSP ops executed inside the Worker (Language servers spawn co-located). */
 export type WorkerLspOp =

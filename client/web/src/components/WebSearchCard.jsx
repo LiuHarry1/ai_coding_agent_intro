@@ -81,7 +81,12 @@ export default function WebSearchCard({ part, nested = false }) {
   const isError =
     isDone && typeof result === 'string' && result.startsWith('Error:')
 
-  const parsed = useMemo(() => parseResult(result), [result])
+  const parsed = useMemo(() => {
+    if (part.toolUseResult && typeof part.toolUseResult === 'object') {
+      return part.toolUseResult
+    }
+    return parseResult(result)
+  }, [part.toolUseResult, result])
   const results = Array.isArray(parsed?.results) ? parsed.results : []
   const answers = Array.isArray(parsed?.answers) ? parsed.answers : []
   const suggestions = Array.isArray(parsed?.suggestions)

@@ -22,14 +22,20 @@ function posixInWorkspace(cwd: string, absPath: string): boolean {
   const target = path.posix.normalize(absPath.replace(/\\/g, '/'))
   if (target === root) return true
   const rel = path.posix.relative(root, target)
-  return Boolean(rel) && !rel.startsWith('..') && !path.posix.isAbsolute(rel)
+  // Empty rel means same path (Boolean('') would wrongly reject the root).
+  if (!rel) return true
+  return !rel.startsWith('..') && !path.posix.isAbsolute(rel)
 }
 
 function localInWorkspace(cwd: string, absPath: string): boolean {
   const root = path.resolve(cwd)
   const target = path.resolve(absPath)
+  if (root === target) return true
   const rel = path.relative(root, target)
-  return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel)
+  // path.relative(root, root) === '' — must allow workspace root itself
+  // (Grep/Glob with path omitted resolve to cwd).
+  if (!rel) return true
+  return !rel.startsWith('..') && !path.isAbsolute(rel)
 }
 
 export class WorkerExecutionBackend implements ExecutionBackend {
@@ -188,6 +194,19 @@ export class WorkerExecutionBackend implements ExecutionBackend {
       },
       (opts.timeoutMs ?? 120_000) + 10_000,
     )
+  }
+
+  async rg(
+    args: string[],
+    target: string,
+    opts?: { timeoutMs?: number },
+  ): Promise<string[]> {
+    const timeoutMs = opts?.timeoutMs ?? 20_000
+    const result = await this.requestFs<{ lines: string[] }>(
+      { op: 'rg', args, target, timeoutMs },
+      timeoutMs + 10_000,
+    )
+    return result.lines
   }
 
   async configureLsp(

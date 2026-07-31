@@ -42,9 +42,14 @@ function describeBash(args) {
 export default function BashCard({ part }) {
   const [expanded, setExpanded] = useState(false)
   const args = part.args || {}
-  const result = part.result
+  const result =
+    part.toolUseResult?.text != null ? part.toolUseResult.text : part.result
   const isDone = part.status === 'done'
-  const isError = isDone && detectError(part.name || 'Bash', result)
+  const isError =
+    isDone &&
+    (part.isError === true ||
+      part.toolUseResult?.interrupted === true ||
+      detectError(part.name || 'Bash', result))
   const { verb, text } = describeBash(args)
   const hasOutput = typeof result === 'string' && result.length > 0
 

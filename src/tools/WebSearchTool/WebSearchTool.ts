@@ -1,7 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { truncate } from '../utils.js'
-import type { ToolDefinition } from '../../core/types.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { WEB_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
 import {
   executeWebSearch,
@@ -18,12 +18,50 @@ const EMPTY_RESULTS_WARNING =
   'Tell the user the search found nothing and suggest retrying with a simpler query ' +
   'or switching WEB_SEARCH_PROVIDER (exa vs searxng).'
 
-function formatWebSearchOutput(output: WebSearchPayload): string {
-  const payload: WebSearchPayload & { warning?: string } = { ...output }
-  if (payload.results.length === 0 && !payload.content) {
-    payload.warning = EMPTY_RESULTS_WARNING
+/** CC-style model text: prose + source reminder. Structured JSON stays in toolUseResult. */
+function formatWebSearchOutput(
+  output: WebSearchPayload & { warning?: string },
+): string {
+  const lines: string[] = [`Web search results for query: "${output.query}"`, '']
+
+  if (output.warning) {
+    lines.push(output.warning, '')
   }
-  return truncate(JSON.stringify(payload, null, 2), MAX_OUTPUT_CHARS)
+  if (output.note) {
+    lines.push(output.note, '')
+  }
+  if (output.content) {
+    lines.push(output.content, '')
+  }
+  if (output.answers?.length) {
+    lines.push('Answers:')
+    for (const a of output.answers) lines.push(`- ${a}`)
+    lines.push('')
+  }
+
+  const results = output.results ?? []
+  if (results.length === 0 && !output.content) {
+    lines.push('No results found.')
+  } else {
+    for (const hit of results) {
+      const title = hit.title || hit.url || '(untitled)'
+      lines.push(`${hit.rank}. ${title}`)
+      if (hit.url) lines.push(`   ${hit.url}`)
+      if (hit.snippet) lines.push(`   ${hit.snippet}`)
+      lines.push('')
+    }
+  }
+
+  if (output.suggestions?.length) {
+    lines.push(`Suggestions: ${output.suggestions.join(', ')}`)
+    lines.push('')
+  }
+
+  lines.push(
+    'REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.',
+  )
+
+  return truncate(lines.join('\n').trim(), MAX_OUTPUT_CHARS)
 }
 
 function asPositiveInt(value: number | undefined, fallback: number): number {
@@ -37,13 +75,13 @@ function providerDescription(): string {
     return (
       'Search the web for current or external information using Exa AI (MCP). ' +
       'Use this when project files are insufficient, information may be recent, or online references are needed. ' +
-      'Returns compact JSON with titles, URLs, snippets, or LLM-oriented context text.'
+      'Returns titles, URLs, and snippets for citing sources.'
     )
   }
   return (
     'Search the web for current or external information using SearXNG. ' +
     'Use this when project files are insufficient, information may be recent, or online references are needed. ' +
-    'Returns compact JSON with titles, URLs, snippets, engines, and optional suggestions.'
+    'Returns titles, URLs, snippets, engines, and optional suggestions.'
   )
 }
 
@@ -52,6 +90,13 @@ export const definition: ToolDefinition = {
   description: `Search the web (${getWebSearchProvider()})`,
   shouldDefer: true,
   isConcurrencySafe: () => true,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: formatWebSearchOutput(output as WebSearchPayload),
+    }
+  },
   create() {
     return tool({
       description: providerDescription(),
@@ -95,7 +140,11 @@ export const definition: ToolDefinition = {
           return output
         }
 
-        return formatWebSearchOutput(output)
+        const data: WebSearchPayload & { warning?: string } = { ...output }
+        if (data.results.length === 0 && !data.content) {
+          data.warning = EMPTY_RESULTS_WARNING
+        }
+        return { data } satisfies DualChannelToolResult<WebSearchPayload>
       },
     })
   },

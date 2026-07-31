@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export type ReadTextOutput = {
   type: 'text'
   file: {
@@ -53,6 +55,54 @@ export type ReadOutput =
   | ReadNotebookOutput
   | ReadPdfOutput
   | ReadPdfPagesOutput
+
+/** Loose schema for UI/wire validation (CC-style outputSchema gate). */
+export const ReadOutputSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('text'),
+    file: z.object({
+      filePath: z.string(),
+      content: z.string(),
+      numLines: z.number(),
+      startLine: z.number(),
+      totalLines: z.number(),
+    }),
+  }),
+  z.object({
+    type: z.literal('image'),
+    file: z.object({
+      filePath: z.string(),
+      base64: z.string(),
+      mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
+      originalSize: z.number(),
+    }),
+  }),
+  z.object({
+    type: z.literal('notebook'),
+    file: z.object({
+      filePath: z.string(),
+      cells: z.array(z.unknown()),
+    }),
+  }),
+  z.object({
+    type: z.literal('pdf'),
+    file: z.object({
+      filePath: z.string(),
+      base64: z.string(),
+      originalSize: z.number(),
+      pageCount: z.number().nullable(),
+    }),
+  }),
+  z.object({
+    type: z.literal('pdf_pages'),
+    file: z.object({
+      filePath: z.string(),
+      pages: z.string(),
+      text: z.string(),
+      pageCount: z.number(),
+    }),
+  }),
+])
 
 export class FileTooLargeError extends Error {
   constructor(

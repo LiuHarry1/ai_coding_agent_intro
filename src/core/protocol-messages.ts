@@ -102,6 +102,7 @@ export function toolCallMessage(input: {
 export function toolResultMessage(input: {
   tool_use_id: string
   result: string
+  tool_use_result?: unknown
   is_error?: boolean
   env: WireEnvelope
 }): ServerMessage {
@@ -109,6 +110,9 @@ export function toolResultMessage(input: {
     type: 'tool_result',
     tool_use_id: input.tool_use_id,
     result: input.result,
+    ...(input.tool_use_result !== undefined
+      ? { tool_use_result: input.tool_use_result }
+      : {}),
     is_error: input.is_error,
     ...input.env,
   }

@@ -7,7 +7,19 @@ import {
   assertAccessibleResolved,
   policyFromContext,
 } from '../../core/sandbox.js'
-import type { ToolDefinition } from '../../core/types.js'
+import type {
+  DualChannelToolResult,
+  ToolDefinition,
+} from '../../core/types.js'
+
+export type WriteFileOutput = {
+  type: 'create' | 'update'
+  filePath: string
+  content: string
+  numLines: number
+  numChars: number
+  message: string
+}
 import { WRITE_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
@@ -17,6 +29,14 @@ export const definition: ToolDefinition = {
   name: WRITE_FILE_TOOL_NAME,
   description: 'Create or overwrite a file',
   isConcurrencySafe: () => false,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    const o = output as WriteFileOutput
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: o.message,
+    }
+  },
   create(cwd, context) {
     return tool({
       description:
@@ -33,12 +53,26 @@ export const definition: ToolDefinition = {
       }: {
         file_path: string
         content: string
-      }) => {
+      }): Promise<DualChannelToolResult<WriteFileOutput> | string> => {
+        const lines = content.split('\n').length
+        const makeData = (
+          message: string,
+          type: 'create' | 'update',
+        ): WriteFileOutput => ({
+          type,
+          filePath: file_path,
+          content,
+          numLines: lines,
+          numChars: content.length,
+          message,
+        })
+
         const execution = context.execution
         if (execution) {
           try {
             const abs = execution.resolve(cwd, file_path)
             execution.assertInWorkspace(cwd, abs, 'write')
+            const existed = await execution.exists(abs)
             await execution.writeText(abs, content)
             if (isWorkerExecutionBackend(execution)) {
               try {
@@ -53,15 +87,22 @@ export const definition: ToolDefinition = {
                 /* LSP optional */
               }
             }
-            const lines = content.split('\n').length
-            return `Wrote ${file_path} (${lines} lines, ${content.length} chars) [worker:${execution.environmentId}]`
+            const kind = existed ? 'update' : 'create'
+            return {
+              data: makeData(
+                `Wrote ${file_path} (${lines} lines, ${content.length} chars) [worker:${execution.environmentId}]`,
+                kind,
+              ),
+            }
           } catch (err) {
-            return err instanceof Error ? err.message : String(err)
+            return `Error: ${err instanceof Error ? err.message : String(err)}`
           }
         }
 
         const resolved = resolvePath(cwd, file_path)
-        if ('error' in resolved) return resolved.error
+        if ('error' in resolved) {
+          return `Error: ${resolved.error || 'Invalid path'}`
+        }
         const { abs } = resolved
 
         try {
@@ -71,9 +112,10 @@ export const definition: ToolDefinition = {
             'write',
           )
         } catch (err) {
-          return (err as Error).message
+          return `Error: ${err instanceof Error ? err.message : String(err)}`
         }
 
+        const existed = fs.existsSync(abs)
         fs.mkdirSync(path.dirname(abs), { recursive: true })
         fs.writeFileSync(abs, content, 'utf-8')
 
@@ -104,8 +146,12 @@ export const definition: ToolDefinition = {
           )
         }
 
-        const lines = content.split('\n').length
-        return `Wrote ${file_path} (${lines} lines, ${content.length} chars)`
+        return {
+          data: makeData(
+            `Wrote ${file_path} (${lines} lines, ${content.length} chars)`,
+            existed ? 'update' : 'create',
+          ),
+        }
       },
     })
   },

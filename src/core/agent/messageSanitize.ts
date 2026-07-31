@@ -1,5 +1,34 @@
-import type { AssistantContentPart, Message, ToolResultPart } from '../types.js'
+import type {
+  AssistantContentPart,
+  Message,
+  RoleMessage,
+  ToolResultPart,
+} from '../types.js'
 import { isAttachmentMessage, isRoleMessage } from '../types.js'
+
+/**
+ * Drop UI-only `toolUseResult` from tool-result parts before the AI SDK /
+ * provider sees them. Session JSONL and in-memory history keep the field;
+ * this is the equivalent of Claude Code only sending `message.content` to
+ * the API while keeping `toolUseResult` on the envelope.
+ */
+export function projectMessagesForApi(messages: Message[]): RoleMessage[] {
+  return messages
+    .filter(isRoleMessage)
+    .map(m => {
+      if (m.role !== 'tool' || !Array.isArray(m.content)) return m
+      return {
+        ...m,
+        content: (m.content as ToolResultPart[]).map(p => {
+          if (p.type !== 'tool-result' || p.toolUseResult === undefined) {
+            return p
+          }
+          const { toolUseResult: _, ...rest } = p
+          return rest
+        }),
+      }
+    })
+}
 
 /**
  * Maximum number of historical `ReasoningPart`s to inline into the next

@@ -2,8 +2,7 @@
  * Glob tool — fast file pattern matching backed by ripgrep
  * (with pure-Node fallback when `rg` isn't installed).
  *
- * Returns paths sorted by modification time, capped at DEFAULT_LIMIT and
- * relativized to cwd to save tokens.
+ * Dual-channel: execute → `{ data: GlobOutput }`; mapper → model text.
  */
 
 import { tool } from 'ai'
@@ -11,13 +10,18 @@ import { z } from 'zod'
 import * as path from 'path'
 import { glob as runGlob } from '../../utils/glob.js'
 import { resolvePath } from '../utils.js'
-import type { ToolDefinition } from '../../core/types.js'
+import type {
+  DualChannelToolResult,
+  ToolDefinition,
+  ToolResultBlockParam,
+} from '../../core/types.js'
 import {
   assertAccessibleResolved,
   policyFromContext,
 } from '../../core/sandbox.js'
 import { GLOB_TOOL_NAME } from '../../constants/tool_names.js'
 import { AGENT_TOOL_NAME } from '../../constants/tool_names.js'
+import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 import {
   envBool,
   hasDotSegment,
@@ -32,17 +36,55 @@ const DESCRIPTION = `- Fast file pattern matching tool that works with any codeb
 
 const DEFAULT_LIMIT = 150
 
-// One-time diagnostic on the first glob call, so we can see what env the
-// running server actually sees vs. what's in `.env`. Past confusion was
-// debugging "GLOB_NO_IGNORE=false in .env but ripgrep still returns
-// node_modules" — usually root cause was either a stale server, tsx
-// inline-comment parsing, or a subagent in another context.
+export const GlobOutputSchema = z.object({
+  filenames: z.array(z.string()),
+  numFiles: z.number(),
+  truncated: z.boolean(),
+  filteredCount: z.number().optional(),
+  durationMs: z.number().optional(),
+})
+
+export type GlobOutput = z.infer<typeof GlobOutputSchema>
+
 let diagnosticsLogged = false
+
+function mapGlobOutput(
+  output: GlobOutput,
+  toolUseID: string,
+): ToolResultBlockParam {
+  if (output.filenames.length === 0) {
+    const msg =
+      (output.filteredCount ?? 0) > 0
+        ? `No files found (filtered ${output.filteredCount} matches in excluded dirs like .git/node_modules; if you really want those, search inside that directory directly via the \`path\` arg).`
+        : 'No files found'
+    return { tool_use_id: toolUseID, type: 'tool_result', content: msg }
+  }
+  const lines = [...output.filenames]
+  if (output.truncated) {
+    lines.push(
+      '(Results are truncated. Consider using a more specific path or pattern.)',
+    )
+  }
+  if ((output.filteredCount ?? 0) > 0) {
+    lines.push(
+      `(Filtered ${output.filteredCount} additional matches inside excluded dirs: .git, node_modules, dist, build, etc.)`,
+    )
+  }
+  return {
+    tool_use_id: toolUseID,
+    type: 'tool_result',
+    content: lines.join('\n'),
+  }
+}
 
 export const definition: ToolDefinition = {
   name: GLOB_TOOL_NAME,
   description: 'Fast file pattern matching with glob syntax',
   isConcurrencySafe: () => true,
+  outputSchema: GlobOutputSchema,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return mapGlobOutput(output as GlobOutput, toolUseID)
+  },
   create(cwd, context) {
     return tool({
       description: DESCRIPTION,
@@ -61,34 +103,45 @@ export const definition: ToolDefinition = {
       }: {
         pattern: string
         path?: string
-      }) => {
+      }): Promise<DualChannelToolResult<GlobOutput> | string> => {
+        const start = Date.now()
         const execution = context.execution
-        if (execution) {
+        // Local Worker uses native glob below. Remote (SSH) uses Worker `rg`
+        // RPC — argv spawn, exit 0/1 = success (Claude Code style).
+        const useRemoteRg =
+          !!execution &&
+          !(
+            isWorkerExecutionBackend(execution) &&
+            execution.environmentId === 'local'
+          )
+        if (useRemoteRg && execution) {
           try {
             const baseRel = searchPath ?? '.'
             const searchDir = execution.resolve(cwd, baseRel)
             execution.assertInWorkspace(cwd, searchDir, 'read')
-            // Prefer rg --files; fall back to find.
-            const result = await execution.exec(
-              `cd '${searchDir.replace(/'/g, `'\"'\"'`)}' && ` +
-                `(command -v rg >/dev/null && rg --files -g '${pattern.replace(/'/g, `'\"'\"'`)}' . || find . -type f -name '${pattern.replace(/'/g, `'\"'\"'`)}' | head -n ${DEFAULT_LIMIT})`,
-              { cwd: searchDir, timeoutMs: 60_000 },
+            const lines = await execution.rg(
+              ['--files', '-g', pattern],
+              searchDir,
+              { timeoutMs: 60_000 },
             )
-            const files = (result.stdout || '')
-              .split('\n')
-              .map(l => l.trim())
-              .filter(Boolean)
-              .slice(0, DEFAULT_LIMIT)
-            if (files.length === 0) return 'No files found'
-            return files.join('\n')
+            const files = lines.slice(0, DEFAULT_LIMIT)
+            const data: GlobOutput = {
+              filenames: files,
+              numFiles: files.length,
+              truncated: lines.length > DEFAULT_LIMIT,
+              durationMs: Date.now() - start,
+            }
+            return { data }
           } catch (err) {
-            return err instanceof Error ? err.message : String(err)
+            return `Error: ${err instanceof Error ? err.message : String(err)}`
           }
         }
 
         const baseRel = searchPath ?? '.'
         const resolved = resolvePath(cwd, baseRel)
-        if ('error' in resolved) return resolved.error
+        if ('error' in resolved) {
+          return `Error: ${resolved.error || 'Invalid path'}`
+        }
         const searchDir = resolved.abs
 
         try {
@@ -98,17 +151,9 @@ export const definition: ToolDefinition = {
             'read',
           )
         } catch (err) {
-          return (err as Error).message
+          return `Error: ${err instanceof Error ? err.message : String(err)}`
         }
 
-        // We request a much bigger pool than DEFAULT_LIMIT from the
-        // util layer because noise dirs (.git, node_modules) tend to
-        // sort to the top by mtime and would otherwise eat the entire
-        // limit before we get a chance to filter them out here. We use
-        // a big 50× multiplier because on freshly `npm install`-ed
-        // repos there can be tens of thousands of node_modules entries
-        // with recent mtimes — anything smaller risks burying the
-        // actual source tree.
         const FETCH_LIMIT = DEFAULT_LIMIT * 50
 
         if (!diagnosticsLogged) {
@@ -127,8 +172,6 @@ export const definition: ToolDefinition = {
             pattern,
             searchDir,
             { limit: FETCH_LIMIT, offset: 0 },
-            // AI SDK doesn't surface AbortController to tools yet; pass a
-            // never-aborting signal.
             new AbortController().signal,
           )
         } catch (e: unknown) {
@@ -140,9 +183,6 @@ export const definition: ToolDefinition = {
           return rel === '' ? '.' : rel.replaceAll('\\', '/')
         })
 
-        // Telemetry: how much of what utils returned was actually noise?
-        // If this number is large, utils-layer .gitignore / --hidden flags
-        // are not being honored, regardless of what `.env` says.
         const noiseInUtilsResult = allFilenames.filter(
           p =>
             /^(\.git|node_modules|dist|build|target|\.next|\.cache)(\/|$)/.test(
@@ -157,42 +197,23 @@ export const definition: ToolDefinition = {
           )
         }
 
-        // Apply tool-level filters BEFORE truncating to DEFAULT_LIMIT so
-        // the user-facing limit applies to "real" files only:
-        //   1. Noise dir blacklist (.git, node_modules, …).
-        //   2. Dotfile filter when GLOB_HIDDEN is falsy. We honor this
-        //      at the tool layer because tracked dotfiles (e.g. session
-        //      files that were committed before `.gitignore` listed
-        //      them) slip past the utils-layer hidden filter.
         const skipHidden = !envBool(process.env.GLOB_HIDDEN, true)
         const allKept = allFilenames.filter(
           p => !isInsideExcludedDir(p) && !(skipHidden && hasDotSegment(p)),
         )
         const filteredCount = allFilenames.length - allKept.length
-
         const filenames = allKept.slice(0, DEFAULT_LIMIT)
         const truncatedAfterFilter =
           allKept.length > DEFAULT_LIMIT || result.truncated
 
-        if (filenames.length === 0) {
-          return filteredCount > 0
-            ? `No files found (filtered ${filteredCount} matches in excluded dirs like .git/node_modules; if you really want those, search inside that directory directly via the \`path\` arg).`
-            : 'No files found'
+        const data: GlobOutput = {
+          filenames,
+          numFiles: filenames.length,
+          truncated: truncatedAfterFilter,
+          filteredCount,
+          durationMs: Date.now() - start,
         }
-
-        const lines = [...filenames]
-        if (truncatedAfterFilter) {
-          lines.push(
-            '(Results are truncated. Consider using a more specific path or pattern.)',
-          )
-        }
-        if (filteredCount > 0) {
-          lines.push(
-            `(Filtered ${filteredCount} additional matches inside excluded dirs: .git, node_modules, dist, build, etc.)`,
-          )
-        }
-
-        return lines.join('\n')
+        return { data }
       },
     })
   },

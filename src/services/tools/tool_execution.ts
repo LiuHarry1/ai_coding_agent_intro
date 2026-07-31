@@ -1,11 +1,22 @@
 /**
  * Tool execution orchestration -- services/tools/toolExecution.ts
  * Consecutive concurrency-safe calls run in parallel; mutating tools serially.
+ *
+ * Dual-channel tools (CC-style): execute returns `{ data }`, framework maps via
+ * `ToolDefinition.mapToolResultToToolResultBlockParam` to model text, and keeps
+ * `toolUseResult` for UI / transcript.
  */
-import type { AnyTool, Message, ToolMessage } from '../../core/types.js'
+import type {
+  AnyTool,
+  DualChannelToolResult,
+  Message,
+  ToolDefinition,
+  ToolMessage,
+} from '../../core/types.js'
 import type { ConcurrencyPolicyFn } from '../../core/concurrency-policy.js'
 import type { WireEmitter } from '../../core/wire-emitter.js'
 import { formatToolError } from '../../core/agent/toolErrors.js'
+import { defaultRegistry } from '../../core/tool-registry.js'
 import { maybePersistAfterExecute } from '../tool-storage/index.js'
 
 export interface ToolCallRef {
@@ -18,7 +29,9 @@ export interface ExecutedToolResult {
   toolCallId: string
   toolName: string
   result: string
+  toolUseResult?: unknown
   followUpMessages?: Message[]
+  isError?: boolean
 }
 
 type Batch = { isConcurrencySafe: boolean; calls: ToolCallRef[] }
@@ -44,7 +57,7 @@ export function partitionToolCalls(
   calls: readonly ToolCallRef[],
   policy: ConcurrencyPolicyFn,
 ): Batch[] {
- return calls.reduce((acc: Batch[], tc) => {
+  return calls.reduce((acc: Batch[], tc) => {
     const safe = isConcurrencySafe(policy, tc.toolName, tc.input)
     const last = acc[acc.length - 1]
     if (safe && last?.isConcurrencySafe) {
@@ -56,24 +69,35 @@ export function partitionToolCalls(
   }, [])
 }
 
+function isDualChannelReturn(raw: unknown): raw is DualChannelToolResult {
+  return (
+    !!raw &&
+    typeof raw === 'object' &&
+    'data' in raw &&
+    !('result' in (raw as object))
+  )
+}
+
 async function executeOne(
   tc: ToolCallRef,
   tools: Record<string, AnyTool>,
   wire: WireEmitter,
   sessionId?: string,
+  getDefinition?: (name: string) => ToolDefinition | undefined,
 ): Promise<ExecutedToolResult> {
   const tool = tools[tc.toolName] as AnyTool & {
     execute?: (input: unknown, options?: unknown) => Promise<unknown>
   }
+  const lookup = getDefinition ?? ((name: string) => defaultRegistry.get(name))
 
   if (!tool?.execute) {
-    const result = `Error: Unknown tool: ${tc.toolName}`
+    const errResult = `Error: Unknown tool: ${tc.toolName}`
     wire.toolResult({
       tool_use_id: tc.toolCallId,
-      result,
+      result: errResult,
       is_error: true,
     })
-    return { toolCallId: tc.toolCallId, toolName: tc.toolName, result }
+    return { toolCallId: tc.toolCallId, toolName: tc.toolName, result: errResult }
   }
 
   try {
@@ -81,29 +105,81 @@ async function executeOne(
       toolCallId: tc.toolCallId,
       messages: [],
     })
+
+    const def = lookup(tc.toolName)
     let result: string
+    let toolUseResult: unknown | undefined
     let followUpMessages: Message[] | undefined
-    if (typeof raw === 'string') {
+    let isError = false
+
+    if (
+      def?.mapToolResultToToolResultBlockParam &&
+      isDualChannelReturn(raw)
+    ) {
+      followUpMessages = raw.newMessages
+      const mapped = def.mapToolResultToToolResultBlockParam(
+        raw.data,
+        tc.toolCallId,
+      )
+      result =
+        typeof mapped.content === 'string'
+          ? mapped.content
+          : String(mapped.content ?? '')
+      isError = mapped.is_error === true
+
+      // CC: validate Out before UI sees it (transcript/wire may be untyped JSON).
+      // Mapper still runs on raw.data so the model always gets text.
+      if (def.outputSchema) {
+        const parsed = def.outputSchema.safeParse(raw.data)
+        if (parsed.success) {
+          toolUseResult = parsed.data ?? raw.data
+        } else {
+          console.warn(
+            `[tools] ${tc.toolName}: outputSchema validation failed; omitting tool_use_result`,
+            parsed.error,
+          )
+          toolUseResult = undefined
+        }
+      } else {
+        toolUseResult = raw.data
+      }
+    } else if (typeof raw === 'string') {
       result = raw
+      isError = raw.startsWith('Error:')
     } else if (raw && typeof raw === 'object' && 'result' in raw) {
-      const structured = raw as { result: string; followUpMessages?: Message[] }
+      const structured = raw as {
+        result: string
+        followUpMessages?: Message[]
+        newMessages?: Message[]
+      }
       result = structured.result
-      followUpMessages = structured.followUpMessages
+      followUpMessages = structured.followUpMessages ?? structured.newMessages
+      isError = result.startsWith('Error:')
     } else {
       result = JSON.stringify(raw)
     }
+
     result = maybePersistAfterExecute(
       sessionId,
       tc.toolCallId,
       tc.toolName,
       result,
     )
-    wire.toolResult({ tool_use_id: tc.toolCallId, result })
+    wire.toolResult({
+      tool_use_id: tc.toolCallId,
+      result,
+      ...(toolUseResult !== undefined
+        ? { tool_use_result: toolUseResult }
+        : {}),
+      ...(isError ? { is_error: true } : {}),
+    })
     return {
       toolCallId: tc.toolCallId,
       toolName: tc.toolName,
       result,
+      toolUseResult,
       followUpMessages,
+      ...(isError ? { isError: true } : {}),
     }
   } catch (err) {
     const result = `Error: ${formatToolError(tc.toolName, err)}`
@@ -112,7 +188,12 @@ async function executeOne(
       result,
       is_error: true,
     })
-    return { toolCallId: tc.toolCallId, toolName: tc.toolName, result }
+    return {
+      toolCallId: tc.toolCallId,
+      toolName: tc.toolName,
+      result,
+      isError: true,
+    }
   }
 }
 
@@ -122,6 +203,7 @@ async function executeBatchParallel(
   wire: WireEmitter,
   maxConcurrency: number,
   sessionId?: string,
+  getDefinition?: (name: string) => ToolDefinition | undefined,
 ): Promise<ExecutedToolResult[]> {
   const results: ExecutedToolResult[] = new Array(calls.length)
   let nextIndex = 0
@@ -130,7 +212,13 @@ async function executeBatchParallel(
     while (true) {
       const i = nextIndex++
       if (i >= calls.length) return
-      results[i] = await executeOne(calls[i]!, tools, wire, sessionId)
+      results[i] = await executeOne(
+        calls[i]!,
+        tools,
+        wire,
+        sessionId,
+        getDefinition,
+      )
     }
   }
 
@@ -147,6 +235,8 @@ export interface RunToolCallsOptions {
   sessionId?: string
   /** Agent identity for batch logs (default `main`). */
   logLabel?: string
+  /** Override tool definition lookup (defaults to defaultRegistry). */
+  getDefinition?: (name: string) => ToolDefinition | undefined
 }
 
 export async function runToolCalls(
@@ -168,6 +258,7 @@ export async function runToolCalls(
           opts.wire,
           getMaxToolUseConcurrency(),
           opts.sessionId,
+          opts.getDefinition,
         )),
       )
     } else if (batch.isConcurrencySafe) {
@@ -177,12 +268,19 @@ export async function runToolCalls(
           opts.tools,
           opts.wire,
           opts.sessionId,
+          opts.getDefinition,
         ),
       )
     } else {
       for (const tc of batch.calls) {
         allResults.push(
-          await executeOne(tc, opts.tools, opts.wire, opts.sessionId),
+          await executeOne(
+            tc,
+            opts.tools,
+            opts.wire,
+            opts.sessionId,
+            opts.getDefinition,
+          ),
         )
       }
     }
@@ -201,6 +299,10 @@ export function buildToolMessage(
       toolCallId: tr.toolCallId,
       toolName: tr.toolName,
       output: { type: 'text' as const, value: tr.result },
+      ...(tr.toolUseResult !== undefined
+        ? { toolUseResult: tr.toolUseResult }
+        : {}),
+      ...(tr.isError ? { isError: true } : {}),
     })),
   }
 }

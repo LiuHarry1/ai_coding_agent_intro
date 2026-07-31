@@ -161,11 +161,24 @@ type AskUserInput = z.infer<typeof inputSchema>
 // frontend don't hang the agent loop forever.
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 
+export type AskUserQuestionOutput = {
+  text: string
+  answers?: Record<string, string>
+  answered: boolean
+}
+
 export const definition: ToolDefinition = {
   name: ASK_USER_QUESTION_TOOL_NAME,
   description: DESCRIPTION,
   shouldDefer: true,
   isConcurrencySafe: () => false,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: (output as AskUserQuestionOutput).text,
+    }
+  },
   create(_cwd, context) {
     return tool({
       description: `${DESCRIPTION}\n\n${ASK_USER_QUESTION_TOOL_PROMPT}`,
@@ -180,9 +193,13 @@ export const definition: ToolDefinition = {
         const result = await registerQuestion(id, DEFAULT_TIMEOUT_MS)
 
         if (!result.answered) {
-          return result.reason === 'timeout'
-            ? `No answer received within ${Math.round(DEFAULT_TIMEOUT_MS / 1000)}s. Proceed with a reasonable default and note the assumption in your reply.`
-            : `Question was cancelled.`
+          const text =
+            result.reason === 'timeout'
+              ? `No answer received within ${Math.round(DEFAULT_TIMEOUT_MS / 1000)}s. Proceed with a reasonable default and note the assumption in your reply.`
+              : `Question was cancelled.`
+          return {
+            data: { text, answered: false } satisfies AskUserQuestionOutput,
+          }
         }
 
         const { answers, annotations } = result.value
@@ -202,7 +219,14 @@ export const definition: ToolDefinition = {
           })
           .join(', ')
 
-        return `User has answered your questions: ${answersText}. You can now continue with the user's answers in mind.`
+        const text = `User has answered your questions: ${answersText}. You can now continue with the user's answers in mind.`
+        return {
+          data: {
+            text,
+            answers,
+            answered: true,
+          } satisfies AskUserQuestionOutput,
+        }
       },
     })
   },

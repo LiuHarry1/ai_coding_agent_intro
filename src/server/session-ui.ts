@@ -43,6 +43,8 @@ type UIPart = {
   content?: string
   toolCallId?: string
   result?: string
+  toolUseResult?: unknown
+  isError?: boolean
   name?: string
   args?: unknown
   status?: string
@@ -151,11 +153,19 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
           toolCallId: string
           toolName: string
           output: { value: string }
+          toolUseResult?: unknown
+          isError?: boolean
         }>) {
           const tc = currentAssistant.parts.find(
             p => p.type === 'tool_call' && p.toolCallId === tr.toolCallId,
           )
-          if (tc) tc.result = tr.output?.value ?? ''
+          if (tc) {
+            tc.result = tr.output?.value ?? ''
+            if (tr.toolUseResult !== undefined) {
+              tc.toolUseResult = tr.toolUseResult
+            }
+            if (tr.isError) tc.isError = true
+          }
         }
       }
     }

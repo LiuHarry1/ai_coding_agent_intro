@@ -28,6 +28,7 @@ import type { IProvider } from './llm/types.js'
 import {
   ensureToolResultPairing,
   inlineReasoningAsText,
+  projectMessagesForApi,
   regroupToolResults,
   sanitizeReasoningParts,
 } from './agent/messageSanitize.js'
@@ -723,14 +724,17 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         //      simulated tool-result anchors / tool outputs.
         //   6. ensureToolResultPairing -- safety net for orphan/missing
         //      tool-results.
-        //   7. applyCacheControlBreakpoint -- prompt caching marker.
+        //   7. projectMessagesForApi -- drop toolUseResult (UI envelope).
+        //   8. applyCacheControlBreakpoint -- prompt caching marker.
         messages: applyCacheControlBreakpoint(
-          ensureToolResultPairing(
-            smooshSystemReminderSiblings(
-              mergeAdjacentUserMessages(
-                regroupToolResults(
-                  expandAttachmentMessagesForAPI(
-                    inlineReasoningAsText(messages),
+          projectMessagesForApi(
+            ensureToolResultPairing(
+              smooshSystemReminderSiblings(
+                mergeAdjacentUserMessages(
+                  regroupToolResults(
+                    expandAttachmentMessagesForAPI(
+                      inlineReasoningAsText(messages),
+                    ),
                   ),
                 ),
               ),

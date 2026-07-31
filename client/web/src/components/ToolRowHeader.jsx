@@ -49,6 +49,7 @@ export default function ToolRowHeader({
       className='tool-row-header'
       onClick={onToggle}
       aria-expanded={expanded}
+      aria-disabled={!onToggle || undefined}
     >
       {showChevron && (
         <span

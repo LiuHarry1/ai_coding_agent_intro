@@ -116,6 +116,13 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           : undefined
       return t === EXPLORE_AGENT_TYPE || t === 'explore'
     },
+    mapToolResultToToolResultBlockParam(output, toolUseID) {
+      return {
+        tool_use_id: toolUseID,
+        type: 'tool_result',
+        content: (output as { text: string }).text,
+      }
+    },
     create(cwd: string, context: ToolContext) {
       const {
         runAgent,
@@ -264,18 +271,22 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
               abortSignal,
             })
 
-            if (abortSignal?.aborted) return SUBAGENT_STOPPED
+            if (abortSignal?.aborted) {
+              return { data: { text: SUBAGENT_STOPPED } }
+            }
 
             // Never hand the parent an empty tool_result —
             // some models treat that as "nothing to act on" and stop.
             const text = typeof result === 'string' ? result.trim() : ''
-            return text || SUBAGENT_NO_OUTPUT_MARKER
+            return {
+              data: { text: text || SUBAGENT_NO_OUTPUT_MARKER },
+            }
           } catch (err) {
             if (
               abortSignal?.aborted ||
               (err instanceof Error && err.name === 'AbortError')
             ) {
-              return SUBAGENT_STOPPED
+              return { data: { text: SUBAGENT_STOPPED } }
             }
             throw err
           } finally {

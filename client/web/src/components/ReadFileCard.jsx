@@ -1,45 +1,56 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolRowHeader from './ToolRowHeader.jsx'
 import { fileName } from '../lib/utils.js'
 
 /**
- * Single-row card for read_file. Mirrors the Cursor style:
- *   `▶ 📄 Read foo.tsx L1-105`
- *
- * Default-collapsed: read_file is the noisiest tool — letting it claim a
- * full code block per call buries the actual conversation.
+ * Read card — CC dual-channel UI path:
+ * body only from `part.toolUseResult`. Missing TUR → header-only (silent).
  */
 
-/** Tool returns `<path> (lines a-b of total)\n   N│code` or structured read output. */
-function parseHeader(result) {
-  if (typeof result !== 'string') return null
-  const firstLine = result.split('\n', 1)[0] || ''
-  const lineMatch = firstLine.match(/\(lines\s+(\d+)-(\d+)\s+of\s+(\d+)\)/)
-  if (lineMatch) {
-    return {
-      kind: 'text',
-      start: +lineMatch[1],
-      end: +lineMatch[2],
-      total: +lineMatch[3],
-    }
-  }
-  if (firstLine.startsWith('[Image:'))
-    return { kind: 'image', label: firstLine }
-  if (firstLine.startsWith('[PDF:')) return { kind: 'pdf', label: firstLine }
-  if (firstLine.match(/\(\d+ cells\)/))
-    return { kind: 'notebook', label: firstLine }
-  if (firstLine.startsWith('[PDF pages'))
-    return { kind: 'pdf_pages', label: firstLine }
-  return null
-}
-
-/** Drop the leading header line + the `   N│` gutter that read_file adds. */
-function stripDecorations(result) {
-  if (typeof result !== 'string') return ''
-  const lines = result.split('\n')
+function stripDecorations(content) {
+  if (typeof content !== 'string') return ''
+  const lines = content.split('\n')
   const body = lines[0]?.includes('(lines ') ? lines.slice(1) : lines
   return body.map(l => l.replace(/^\s*\d+│/, '')).join('\n')
+}
+
+function fromToolUseResult(tur) {
+  if (!tur || typeof tur !== 'object' || typeof tur.type !== 'string') {
+    return null
+  }
+  if (tur.type === 'text' && tur.file) {
+    return {
+      kind: 'text',
+      start: tur.file.startLine,
+      end: tur.file.startLine + (tur.file.numLines || 1) - 1,
+      total: tur.file.totalLines,
+      content: tur.file.content,
+    }
+  }
+  if (tur.type === 'image') {
+    return {
+      kind: 'image',
+      label: `[Image: ${tur.file?.filePath}, ${tur.file?.mediaType}]`,
+    }
+  }
+  if (tur.type === 'pdf' || tur.type === 'pdf_pages') {
+    return {
+      kind: 'pdf',
+      label:
+        tur.type === 'pdf_pages'
+          ? tur.file?.text || '[PDF pages]'
+          : `[PDF: ${tur.file?.filePath}]`,
+    }
+  }
+  if (tur.type === 'notebook') {
+    return {
+      kind: 'notebook',
+      label: `${tur.file?.filePath} (${tur.file?.cells?.length ?? 0} cells)`,
+      content: JSON.stringify(tur.file?.cells, null, 2),
+    }
+  }
+  return null
 }
 
 export default function ReadFileCard({ part }) {
@@ -48,13 +59,17 @@ export default function ReadFileCard({ part }) {
   const result = part.result
   const isDone = part.status === 'done'
   const isError =
-    isDone && typeof result === 'string' && result.startsWith('Error:')
+    isDone &&
+    (part.isError === true ||
+      (typeof result === 'string' && result.startsWith('Error:')))
   const filePath = args.file_path || args.path || null
   const fName = fileName(filePath) || filePath || '(unknown)'
 
-  // Prefer the line range the tool actually returned; fall back to the
-  // request args so we show *something* mid-flight.
-  const header = parseHeader(result)
+  const header = useMemo(
+    () => fromToolUseResult(part.toolUseResult),
+    [part.toolUseResult],
+  )
+
   let rangeLabel = ''
   if (header?.kind === 'text') {
     rangeLabel = `L${header.start}-${header.end}`
@@ -63,7 +78,7 @@ export default function ReadFileCard({ part }) {
     }
   } else if (header?.kind === 'image') {
     rangeLabel = 'image'
-  } else if (header?.kind === 'pdf' || header?.kind === 'pdf_pages') {
+  } else if (header?.kind === 'pdf') {
     rangeLabel = 'pdf'
   } else if (header?.kind === 'notebook') {
     rangeLabel = 'notebook'
@@ -75,10 +90,12 @@ export default function ReadFileCard({ part }) {
 
   const codeBody =
     isDone && !isError && header?.kind === 'text'
-      ? stripDecorations(result)
+      ? stripDecorations(header.content)
       : ''
   const summaryBody =
-    isDone && !isError && header && header.kind !== 'text' ? result : ''
+    isDone && !isError && header && header.kind !== 'text'
+      ? header.content || header.label || ''
+      : ''
 
   return (
     <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>

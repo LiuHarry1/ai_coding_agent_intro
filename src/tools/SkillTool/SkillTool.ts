@@ -77,6 +77,13 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
     // expanded body visually.
     isSubagent: true,
     isConcurrencySafe: () => false,
+    mapToolResultToToolResultBlockParam(output, toolUseID) {
+      return {
+        tool_use_id: toolUseID,
+        type: 'tool_result',
+        content: (output as { text: string }).text,
+      }
+    },
     create(cwd: string, context: ToolContext) {
       const { runAgent, eventBus, registry, toolEnablement } = context
 
@@ -121,7 +128,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
 
           // ── inline ── return the expanded body as the tool result.
           if (skill.context === 'inline') {
-            return combined
+            return { data: { text: combined, skill_name, mode: 'inline' } }
           }
 
           // ── fork ── dispatch as a subagent using the requested agent
@@ -137,7 +144,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
           }
 
           try {
-            return await runSkillFork({
+            const text = await runSkillFork({
               skill,
               combined,
               cwd,
@@ -153,6 +160,13 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
               sessionId: context.sessionId,
               sandbox: context.sandbox,
             })
+            return {
+              data: {
+                text: typeof text === 'string' ? text : String(text),
+                skill_name,
+                mode: 'fork',
+              },
+            }
           } catch (e) {
             return `Error: ${(e as Error).message}`
           }

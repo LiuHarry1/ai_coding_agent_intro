@@ -4,7 +4,13 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
-import type { ToolDefinition } from '../../core/types.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
+
+export type ExitPlanModeOutput = {
+  message: string
+  approved?: boolean
+  filePath?: string
+}
 import { emitModeChanged, emitPlanReady } from '../../core/wire-internal.js'
 import { EXIT_PLAN_MODE_TOOL_NAME } from '../../constants/tool_names.js'
 import {
@@ -42,6 +48,14 @@ export const definition: ToolDefinition = {
   name: EXIT_PLAN_MODE_TOOL_NAME,
   description: DESCRIPTION,
   isConcurrencySafe: () => false,
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    const o = output as ExitPlanModeOutput
+    return {
+      tool_use_id: toolUseID,
+      type: 'tool_result',
+      content: o.message,
+    }
+  },
   create(_cwd, context) {
     return tool({
       description: `${DESCRIPTION}
@@ -49,7 +63,9 @@ export const definition: ToolDefinition = {
 Call when your plan is complete and ready for review. The user will approve or reject before you can execute changes.
 Read the plan from the plan file — do not pass the plan as a parameter.`,
       inputSchema: z.strictObject({}),
-      execute: async () => {
+      execute: async (): Promise<
+        DualChannelToolResult<ExitPlanModeOutput> | string
+      > => {
         const session = context.session
         const cwd = context.cwd
         if (!session || !cwd) {
@@ -81,12 +97,19 @@ Read the plan from the plan file — do not pass the plan as a parameter.`,
 
         if (!approval.approved) {
           const reason = approval.reason ?? 'rejected'
-          return [
+          const message = [
             `Plan not approved (${reason}).`,
             'Stay in plan mode: revise the plan file based on user feedback, then call ExitPlanMode again.',
             '',
             `Current plan file: ${filePath}`,
           ].join('\n')
+          return {
+            data: {
+              message,
+              approved: false,
+              filePath,
+            },
+          } satisfies DualChannelToolResult<ExitPlanModeOutput>
         }
 
         if (approval.editedPlan?.trim()) {
@@ -112,12 +135,16 @@ Read the plan from the plan file — do not pass the plan as a parameter.`,
         emitModeChanged(context.wire, context.eventBus, targetMode)
 
         return {
-          result: approvedToolResult(plan, filePath),
-          followUpMessages: buildPlanApprovedFollowUps(
+          data: {
+            message: approvedToolResult(plan, filePath),
+            approved: true,
+            filePath,
+          },
+          newMessages: buildPlanApprovedFollowUps(
             filePath,
             planExists(session, cwd),
           ),
-        }
+        } satisfies DualChannelToolResult<ExitPlanModeOutput>
       },
     })
   },
