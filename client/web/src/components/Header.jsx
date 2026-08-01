@@ -8,6 +8,8 @@ import SessionSwitcher from './SessionSwitcher.jsx'
 import BaizeLogo from './BaizeLogo.jsx'
 import WorkspacePanel from './WorkspacePanel.jsx'
 import EnvironmentPicker from './EnvironmentPicker.jsx'
+import { APP_NAME } from '../lib/brand.js'
+import { shortDisplayPath } from '../lib/utils.js'
 
 export default function Header() {
   // SSO mode: the workspace is pinned server-side to the logged-in user, so
@@ -96,12 +98,33 @@ export default function Header() {
     if (dir) setWorkspace(dir)
   }
 
-  const handleKeyDown = e => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      loadDirectory(workspace)
-    }
+  const selectDir = dir => {
+    setWorkspace(dir)
+    setDropdownOpen(false)
+    setNewFolderName(null)
+    setNewFolderError(null)
   }
+
+  const folderIcon = (
+    <svg
+      width='14'
+      height='14'
+      viewBox='0 0 24 24'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='2'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      aria-hidden='true'
+    >
+      <path d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' />
+    </svg>
+  )
+
+  const pathLabel =
+    shortDisplayPath(workspace, 32) || workspace || 'Select workspace'
+
+  const dirs = dropdownData?.entries?.filter(e => e.isDir) || []
 
   return (
     <header className='header'>
@@ -124,208 +147,190 @@ export default function Header() {
             <path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' />
           </svg>
         </button>
+
         <div className='logo'>
           <BaizeLogo size='sm' />
-          <span className='logo-text'>BaiX Agent</span>
+          <span className='logo-text'>{APP_NAME}</span>
         </div>
+
+        <span className='header-sep' aria-hidden='true' />
+
         <SessionSwitcher />
-        {showRemote && <EnvironmentPicker />}
-      </div>
 
-      {workspaceIdeOpen ? (
-        /* When the IDE is open, the cwd is shown in the workspace header. */
-        <div className='header-spacer' />
-      ) : locked ? (
-        <div className='workspace-bar workspace-bar--locked'>
-          <label className='workspace-label'>
-            <svg
-              width='14'
-              height='14'
-              viewBox='0 0 24 24'
-              fill='none'
-              stroke='currentColor'
-              strokeWidth='2'
-              strokeLinecap='round'
-              strokeLinejoin='round'
+        {!workspaceIdeOpen &&
+          (locked ? (
+            <div
+              className='workspace-chip workspace-chip--readonly'
+              title={workspace}
             >
-              <path d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' />
-            </svg>
-          </label>
-          <span
-            className='workspace-input workspace-input--readonly'
-            title={workspace}
-          >
-            {workspace}
-          </span>
-        </div>
-      ) : (
-        <div
-          className={`workspace-bar ${isDesktop() ? 'workspace-bar--desktop' : ''}`}
-          ref={dropdownRef}
-        >
-          <label className='workspace-label' htmlFor='workspace-input'>
-            <svg
-              width='14'
-              height='14'
-              viewBox='0 0 24 24'
-              fill='none'
-              stroke='currentColor'
-              strokeWidth='2'
-              strokeLinecap='round'
-              strokeLinejoin='round'
+              {folderIcon}
+              <span className='workspace-chip-path'>{pathLabel}</span>
+            </div>
+          ) : (
+            <div
+              className={`workspace-bar ${dropdownOpen ? 'open' : ''}`}
+              ref={dropdownRef}
             >
-              <path d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' />
-            </svg>
-          </label>
-          <input
-            id='workspace-input'
-            className='workspace-input'
-            value={workspace}
-            onChange={e => setWorkspace(e.target.value)}
-            onKeyDown={handleKeyDown}
-            spellCheck='false'
-            autoComplete='off'
-            placeholder='loading...'
-          />
-          {isDesktop() && (
-            <button
-              className='workspace-pick-btn'
-              onClick={handlePickFolder}
-              title='Choose folder'
-            >
-              <svg
-                width='12'
-                height='12'
-                viewBox='0 0 24 24'
-                fill='none'
-                stroke='currentColor'
-                strokeWidth='2.5'
-                strokeLinecap='round'
-                strokeLinejoin='round'
+              <button
+                type='button'
+                className={`workspace-chip ${dropdownOpen ? 'open' : ''}`}
+                onClick={handleBrowse}
+                title={workspace || 'Choose workspace'}
               >
-                <path d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' />
-                <line x1='12' y1='11' x2='12' y2='17' />
-                <line x1='9' y1='14' x2='15' y2='14' />
-              </svg>
-            </button>
-          )}
-          <button
-            className={`workspace-browse-btn ${dropdownOpen ? 'open' : ''}`}
-            onClick={handleBrowse}
-            title='Browse directories'
-          >
-            <svg
-              width='12'
-              height='12'
-              viewBox='0 0 24 24'
-              fill='none'
-              stroke='currentColor'
-              strokeWidth='2.5'
-              strokeLinecap='round'
-              strokeLinejoin='round'
-            >
-              <polyline points='6 9 12 15 18 9' />
-            </svg>
-          </button>
+                {folderIcon}
+                <span className='workspace-chip-path'>{pathLabel}</span>
+                <svg
+                  className='workspace-chip-caret'
+                  width='12'
+                  height='12'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2.5'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  aria-hidden='true'
+                >
+                  <polyline points='6 9 12 15 18 9' />
+                </svg>
+              </button>
 
-          {dropdownOpen && dropdownData && (
-            <div className='workspace-dropdown open'>
-              <div className='ws-dropdown-header'>
-                {dropdownData.parent !== dropdownData.dir && (
-                  <button
-                    className='ws-parent-btn'
-                    onClick={e => {
-                      e.stopPropagation()
-                      loadDirectory(dropdownData.parent)
-                    }}
-                  >
-                    ..
-                  </button>
-                )}
-                <span className='ws-path' title={dropdownData.dir}>
-                  {dropdownData.dir}
-                </span>
+              {isDesktop() && (
                 <button
-                  className='ws-new-folder-btn'
-                  onClick={e => {
-                    e.stopPropagation()
-                    setNewFolderName('')
-                    setNewFolderError(null)
-                  }}
-                  title='Create new folder here (use as new workspace)'
+                  type='button'
+                  className='icon-btn workspace-pick-btn'
+                  onClick={handlePickFolder}
+                  title='Choose folder'
                 >
-                  + folder
+                  <svg
+                    width='14'
+                    height='14'
+                    viewBox='0 0 24 24'
+                    fill='none'
+                    stroke='currentColor'
+                    strokeWidth='2'
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                  >
+                    <path d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' />
+                    <line x1='12' y1='11' x2='12' y2='17' />
+                    <line x1='9' y1='14' x2='15' y2='14' />
+                  </svg>
                 </button>
-              </div>
-
-              {newFolderName !== null && (
-                <div
-                  className={`ws-entry ws-entry--new ${newFolderError ? 'ws-entry--error' : ''}`}
-                >
-                  <span className='ws-entry-icon dir'>&#128193;</span>
-                  <input
-                    autoFocus
-                    className='ws-new-folder-input'
-                    value={newFolderName}
-                    placeholder='new folder name'
-                    onChange={e => {
-                      setNewFolderName(e.target.value)
-                      setNewFolderError(null)
-                    }}
-                    onClick={e => e.stopPropagation()}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleCreateFolder()
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        setNewFolderName(null)
-                        setNewFolderError(null)
-                      }
-                    }}
-                  />
-                  {newFolderError && (
-                    <span
-                      className='ws-new-folder-error'
-                      title={newFolderError}
-                    >
-                      {newFolderError}
-                    </span>
-                  )}
-                </div>
               )}
 
-              {dropdownData.entries.filter(e => e.isDir).length === 0 &&
-              newFolderName === null ? (
-                <div className='ws-empty'>No subdirectories</div>
-              ) : (
-                dropdownData.entries
-                  .filter(e => e.isDir)
-                  .map(entry => (
-                    <div
-                      className='ws-entry'
-                      key={entry.path}
-                      onClick={() => loadDirectory(entry.path)}
-                    >
-                      <span className='ws-entry-icon dir'>&#128193;</span>
-                      <span className='ws-entry-name'>{entry.name}</span>
+              {dropdownOpen && dropdownData && (
+                <div className='workspace-dropdown open'>
+                  <div className='ws-dropdown-toolbar'>
+                    {dropdownData.parent !== dropdownData.dir && (
                       <button
-                        className='ws-entry-select'
+                        type='button'
+                        className='ws-parent-btn'
                         onClick={e => {
                           e.stopPropagation()
-                          setWorkspace(entry.path)
-                          setDropdownOpen(false)
+                          loadDirectory(dropdownData.parent)
                         }}
+                        title='Parent folder'
                       >
-                        select
+                        ..
                       </button>
+                    )}
+                    <span className='ws-path' title={dropdownData.dir}>
+                      {dropdownData.dir}
+                    </span>
+                    <button
+                      type='button'
+                      className='ws-open-btn'
+                      onClick={e => {
+                        e.stopPropagation()
+                        selectDir(dropdownData.dir)
+                      }}
+                      title='Use this folder as workspace'
+                    >
+                      Open
+                    </button>
+                  </div>
+
+                  <div className='ws-dropdown-actions'>
+                    <button
+                      type='button'
+                      className='ws-new-folder-btn'
+                      onClick={e => {
+                        e.stopPropagation()
+                        setNewFolderName('')
+                        setNewFolderError(null)
+                      }}
+                    >
+                      + New folder
+                    </button>
+                  </div>
+
+                  {newFolderName !== null && (
+                    <div
+                      className={`ws-entry ws-entry--new ${newFolderError ? 'ws-entry--error' : ''}`}
+                    >
+                      <span className='ws-entry-icon'>{folderIcon}</span>
+                      <input
+                        autoFocus
+                        className='ws-new-folder-input'
+                        value={newFolderName}
+                        placeholder='Folder name'
+                        onChange={e => {
+                          setNewFolderName(e.target.value)
+                          setNewFolderError(null)
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleCreateFolder()
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault()
+                            setNewFolderName(null)
+                            setNewFolderError(null)
+                          }
+                        }}
+                      />
+                      {newFolderError && (
+                        <span
+                          className='ws-new-folder-error'
+                          title={newFolderError}
+                        >
+                          {newFolderError}
+                        </span>
+                      )}
                     </div>
-                  ))
+                  )}
+
+                  <div className='ws-dropdown-list'>
+                    {dirs.length === 0 && newFolderName === null ? (
+                      <div className='ws-empty'>No subfolders</div>
+                    ) : (
+                      dirs.map(entry => (
+                        <button
+                          type='button'
+                          className='ws-entry'
+                          key={entry.path}
+                          onClick={() => loadDirectory(entry.path)}
+                          onDoubleClick={e => {
+                            e.preventDefault()
+                            selectDir(entry.path)
+                          }}
+                          title='Open folder · double-click to use as workspace'
+                        >
+                          <span className='ws-entry-icon'>{folderIcon}</span>
+                          <span className='ws-entry-name'>{entry.name}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-          )}
-        </div>
-      )}
+          ))}
+
+        {showRemote && !workspaceIdeOpen && <EnvironmentPicker />}
+      </div>
 
       <div className='header-right'>
         {locked && user && (
@@ -390,7 +395,11 @@ export default function Header() {
             </svg>
           )}
         </button>
-        <button className='btn-clear' onClick={clearSession}>
+        <button
+          className='btn-clear'
+          onClick={clearSession}
+          title='Clear conversation'
+        >
           Clear
         </button>
         {locked && (

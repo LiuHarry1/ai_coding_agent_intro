@@ -55,7 +55,7 @@ Electron 会自动启动 agent 子进程，窗口加载 `http://127.0.0.1:4567`�
 ```json
 {
   "acp.agents": {
-    "Baize Agent": {
+    "Baize": {
       "command": "npx",
       "args": [
         "tsx",
@@ -72,7 +72,7 @@ Windows 路径用双反斜杠，例如 `C:\\Users\\you\\ai_coding_agent_intro\\s
 
 > **`args` 必须先写 `tsx`**，再写 `start.js` 绝对路径。省略 `tsx` 会导致 agent 启动失败，侧边栏显示 **Failed to load sessions**。
 
-在 Activity Bar 打开 **ACP** 面板，点击 **Baize Agent** 连接即可。可选：在 `args` 末尾加 `"--workspace", "/path/to/project"` 固定默认工作区；API Key 从仓库 `.env` 读取，失败时在 `env` 中补充。
+在 Activity Bar 打开 **ACP** 面板，点击 **Baize** 连接即可。可选：在 `args` 末尾加 `"--workspace", "/path/to/project"` 固定默认工作区；API Key 从仓库 `.env` 读取，失败时在 `env` 中补充。
 
 终端验证：`npm run acp -- --workspace /path/to/project`（看到 `[acp] workspace=...` 后等待输入即正常）。
 
@@ -115,7 +115,7 @@ mkdir -p ~/.jetbrains
     "use_custom_mcp": true
   },
   "agent_servers": {
-    "Baize Agent": {
+    "Baize": {
       "command": "/opt/homebrew/opt/node@22/bin/npx",
       "args": [
         "tsx",
@@ -146,7 +146,7 @@ API Key 通常从仓库根目录的 `.env` 加载。若从 IDE 启动时鉴权�
 
 1. 在 IntelliJ 中打开你的项目。
 2. 打开 **AI Chat**。
-3. 在 agent 下拉框中选择 **Baize Agent**（不要选 Junie / Claude Agent）。
+3. 在 agent 下拉框中选择 **Baize**（不要选 Junie / Claude Agent）。
 4. 发送消息，例如 `/help` 或 `List files in src`。
 
 IntelliJ 还会在 ACP `session/new` 中传入项目目录（`cwd`），因此若你总是先打开目标项目，可在 `args` 中省略 `--workspace`；若需要固定默认目录，则保留 `--workspace`。

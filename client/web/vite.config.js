@@ -1,14 +1,36 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import brand from "../../brand.json";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "../..");
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "brand-html",
+      transformIndexHtml(html) {
+        return html.replace(
+          /<title>.*?<\/title>/,
+          `<title>${brand.name}</title>`,
+        );
+      },
+    },
+  ],
   server: {
     port: 5173,
+    fs: {
+      // Allow importing repo-root brand.json from src/lib/brand.js
+      allow: [repoRoot],
+    },
     proxy: {
       "/chat": "http://localhost:4567",
       "/sessions": "http://localhost:4567",
       "/workspace": "http://localhost:4567",
+      "/environments": "http://localhost:4567",
       "/health": "http://localhost:4567",
       "/slash-commands": "http://localhost:4567",
       "/plan": "http://localhost:4567",
@@ -19,6 +41,7 @@ export default defineConfig({
       "/skills": "http://localhost:4567",
       "/agents": "http://localhost:4567",
       "/plugins": "http://localhost:4567",
+      "/tool": "http://localhost:4567",
       // SSO mode (dev): forward auth-service routes to localhost:8010.
       // Override the target with DEV_AUTH_BACKEND_URL if it runs elsewhere.
       "/sso": process.env.DEV_AUTH_BACKEND_URL || "http://localhost:8010",

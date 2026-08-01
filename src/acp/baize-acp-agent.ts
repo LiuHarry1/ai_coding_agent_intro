@@ -23,7 +23,7 @@ import { acpModeToExternal, sessionModeState } from './modes.js'
 import { promptBlocksToUserTurn } from './prompt-input.js'
 import { AcpSessionRegistry, runAcpPromptTurn } from './turn-runner.js'
 import { AcpTurnSink } from './translate-outbound.js'
-
+import { APP_NAME } from '../brand.js'
 
 export class BaizeAcpAgent {
   readonly #runAgent: RunAgentFn
@@ -38,7 +38,7 @@ export class BaizeAcpAgent {
   initialize(_params: InitializeRequest): InitializeResponse {
     return {
       protocolVersion: PROTOCOL_VERSION,
-      agentInfo: { name: 'Baize Agent', version: '1.0.0' },
+      agentInfo: { name: APP_NAME, version: '1.0.0' },
       agentCapabilities: {
         loadSession: false,
         promptCapabilities: {

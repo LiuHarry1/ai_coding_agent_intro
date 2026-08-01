@@ -1,6 +1,7 @@
 import React from 'react'
 import { useChatStore } from '../stores/chat-store.js'
 import BaizeLogo from './BaizeLogo.jsx'
+import { APP_NAME, APP_TAGLINE } from '../lib/brand.js'
 
 const TOOL_HINTS = [
   {
@@ -68,8 +69,8 @@ export default function WelcomeScreen() {
   return (
     <div className='welcome'>
       <BaizeLogo size='lg' />
-      <h2 className='welcome-title'>Baize</h2>
-      <p className='welcome-subtitle'>白泽</p>
+      <h2 className='welcome-title'>{APP_NAME}</h2>
+      <p className='welcome-subtitle'>{APP_TAGLINE}</p>
       <p className='welcome-desc'>
         Build in the cloud and preview complete projects in your browser.
       </p>

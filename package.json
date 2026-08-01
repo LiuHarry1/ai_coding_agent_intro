@@ -13,8 +13,8 @@
     "build:worker": "node ./scripts/build-worker.cjs",
     "desktop:start": "electron .",
     "desktop:dev": "npm run build:web && npm run desktop:start",
-    "desktop:pack": "npm run build:web && electron-builder",
-    "desktop:pack:win": "npm run build:web && electron-builder --win",
+    "desktop:pack": "npm run build:web && electron-builder --config electron-builder.config.cjs",
+    "desktop:pack:win": "npm run build:web && electron-builder --config electron-builder.config.cjs --win",
     "typecheck": "tsc --noEmit -p src/tsconfig.json && npm --prefix protocol run typecheck && npm --prefix client-sdk run typecheck",
     "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\""
   },
@@ -53,37 +53,5 @@
     "prettier": "^3.5.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
-  },
-  "build": {
-    "appId": "com.baize.desktop",
-    "productName": "BaiX Agent",
-    "directories": {
-      "output": "dist-desktop"
-    },
-    "files": [
-      "electron/**/*",
-      "start.js",
-      "src/**/*",
-      "protocol/**/*",
-      "client/web/dist/**/*",
-      "package.json",
-      "node_modules/**/*"
-    ],
-    "asar": false,
-    "win": {
-      "target": [
-        "nsis"
-      ]
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ]
-    }
   }
 }

@@ -9,9 +9,11 @@ import * as fs from 'node:fs'
 import * as http from 'node:http'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import brand from '../brand.json' with { type: 'json' }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
+const APP_NAME = brand.name
 const DEFAULT_PORT = 4567
 let agentProc = null
 let mainWindow = null
@@ -125,7 +127,7 @@ function createWindow() {
     height: 860,
     minWidth: 900,
     minHeight: 600,
-    title: 'BaiX Agent',
+    title: APP_NAME,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
