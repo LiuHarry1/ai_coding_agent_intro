@@ -255,6 +255,34 @@ export class WorkerExecutionBackend implements ExecutionBackend {
     return this.requestLsp<boolean>({ op: 'isFileOpen', filePath })
   }
 
+  async lspListStatus(): Promise<
+    Array<{
+      name: string
+      state: string
+      command: string
+      args: string[]
+      extensions: string[]
+      languages: string[]
+      error?: string
+    }>
+  > {
+    const data = await this.requestLsp<{ servers?: unknown }>(
+      { op: 'listStatus' },
+      8_000,
+    )
+    return Array.isArray(data?.servers)
+      ? (data.servers as Array<{
+          name: string
+          state: string
+          command: string
+          args: string[]
+          extensions: string[]
+          languages: string[]
+          error?: string
+        }>)
+      : []
+  }
+
   dispose(): void {
     this.unsub()
     for (const [, p] of this.pending) {

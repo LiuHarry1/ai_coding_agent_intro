@@ -37,6 +37,12 @@ export const agentApi = {
     return fetchJSON(`/mcp${qs}`)
   },
 
+  /** Configured / running LSP servers for the workspace. */
+  getLsp: workspace => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(`/lsp${qs}`)
+  },
+
   postChat: (body, signal) =>
     fetch(
       apiUrl('/chat'),

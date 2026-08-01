@@ -5,9 +5,21 @@ import {
   createLspServerManager,
   type LspServerManager,
 } from './server-manager.js'
+import type { LspServerState } from './types.js'
 import { resetAllLSPDiagnosticState } from './LSPDiagnosticRegistry.js'
 
 const managers = new Map<string, LspServerManager>()
+
+/** Status row for Workspace panel / GET /lsp (Claude Code getAllServers shape). */
+export type LspServerStatus = {
+  name: string
+  state: LspServerState
+  command: string
+  args: string[]
+  extensions: string[]
+  languages: string[]
+  error?: string
+}
 
 export function hasLspServers(
   servers: Record<string, LspServerConfig> | undefined,
@@ -52,6 +64,76 @@ export function getLspManager(
     `[lsp:diagnostics] manager created cwd=${resolvedCwd} servers=${Object.keys(servers).join(', ')}`,
   )
   return manager
+}
+
+/** Return existing manager only — does not create or start servers. */
+export function peekLspManager(
+  cwd: string,
+  servers: Record<string, LspServerConfig> | undefined,
+): LspServerManager | undefined {
+  if (!hasLspServers(servers)) return undefined
+  return managers.get(getLspWorkspaceKey(cwd, servers))
+}
+
+/**
+ * List configured LSP servers for a workspace with live runtime state.
+ * Never-started servers report `stopped` (same lazy model as Claude Code).
+ */
+export function getLspStatusForCwd(
+  cwd: string,
+  servers: Record<string, LspServerConfig> | undefined,
+): LspServerStatus[] {
+  if (!hasLspServers(servers)) return []
+
+  const manager = peekLspManager(cwd, servers)
+  if (manager) {
+    return [...manager.getAllServers().values()]
+      .map(instance => statusFromInstance(instance.name, instance))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  return Object.entries(servers)
+    .map(([name, config]) => statusFromConfig(name, config))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function statusFromConfig(
+  name: string,
+  config: LspServerConfig,
+): LspServerStatus {
+  const extMap = config.extensionToLanguage ?? {}
+  return {
+    name,
+    state: 'stopped',
+    command: config.command,
+    args: config.args ?? [],
+    extensions: Object.keys(extMap),
+    languages: [...new Set(Object.values(extMap))],
+  }
+}
+
+function statusFromInstance(
+  name: string,
+  instance: {
+    state: LspServerState
+    lastError: Error | undefined
+    config: {
+      command: string
+      args?: string[]
+      extensionToLanguage: Record<string, string>
+    }
+  },
+): LspServerStatus {
+  const extMap = instance.config.extensionToLanguage ?? {}
+  return {
+    name,
+    state: instance.state,
+    command: instance.config.command,
+    args: instance.config.args ?? [],
+    extensions: Object.keys(extMap),
+    languages: [...new Set(Object.values(extMap))],
+    error: instance.lastError?.message,
+  }
 }
 
 export async function shutdownAllLspManagers(): Promise<void> {

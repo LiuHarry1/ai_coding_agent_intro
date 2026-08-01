@@ -4473,6 +4473,23 @@ async function runLspOp(op) {
       if (!manager) return false;
       return manager.isFileOpen(op.filePath);
     }
+    case "listStatus": {
+      if (!manager) return { servers: [] };
+      const servers = [...manager.getAllServers().values()].map((instance) => {
+        const extMap = instance.config.extensionToLanguage ?? {};
+        return {
+          name: instance.name,
+          state: instance.state,
+          command: instance.config.command,
+          args: instance.config.args ?? [],
+          extensions: Object.keys(extMap),
+          languages: [...new Set(Object.values(extMap))],
+          error: instance.lastError?.message
+        };
+      });
+      servers.sort((a, b) => a.name.localeCompare(b.name));
+      return { servers };
+    }
     default: {
       const _e = op;
       throw new Error(`Unknown lsp op: ${JSON.stringify(_e)}`);
@@ -4772,6 +4789,59 @@ function runShellCommand(opts) {
   });
 }
 
+// src/worker/run-rg.ts
+var import_node_child_process = require("node:child_process");
+var MAX_BUFFER_SIZE = 20 * 1024 * 1024;
+var DEFAULT_TIMEOUT_MS = 2e4;
+function parseLines(stdout) {
+  return stdout.trim().split("\n").map((line) => line.replace(/\r$/, "")).filter(Boolean);
+}
+function runRg(opts) {
+  const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const fullArgs = [...opts.args, opts.target];
+  return new Promise((resolve4, reject) => {
+    (0, import_node_child_process.execFile)(
+      "rg",
+      fullArgs,
+      {
+        maxBuffer: MAX_BUFFER_SIZE,
+        timeout,
+        killSignal: isWindows2 ? void 0 : "SIGKILL",
+        windowsHide: true
+      },
+      (error, stdout, stderr) => {
+        if (!error) {
+          resolve4({ lines: parseLines(stdout) });
+          return;
+        }
+        if (error.code === 1) {
+          resolve4({ lines: [] });
+          return;
+        }
+        if (error.code === "ENOENT") {
+          reject(
+            new Error(
+              "ripgrep (rg) not found on worker host; install rg (https://github.com/BurntSushi/ripgrep)"
+            )
+          );
+          return;
+        }
+        const isTimeout = error.killed || error.signal === "SIGTERM" || error.signal === "SIGKILL" || error.code === "ABORT_ERR";
+        if (isTimeout) {
+          reject(
+            new Error(
+              `ripgrep timed out after ${Math.round(timeout / 1e3)}s with no results`
+            )
+          );
+          return;
+        }
+        const detail = (stderr || "").trim() || error.message;
+        reject(new Error(detail || `rg failed with code ${error.code}`));
+      }
+    );
+  });
+}
+
 // src/worker/main.ts
 var WORKER_VERSION = process.env.BAIX_WORKER_VERSION ?? process.env.npm_package_version ?? "1.0.0";
 var boundCwd = null;
@@ -4821,6 +4891,12 @@ async function runFsOp(op) {
         cwd: op.cwd,
         timeoutMs: op.timeoutMs ?? 12e4,
         cwdFilePrefix: "baix-worker-cwd"
+      });
+    case "rg":
+      return runRg({
+        args: op.args,
+        target: op.target,
+        timeoutMs: op.timeoutMs
       });
     default: {
       const _exhaustive = op;

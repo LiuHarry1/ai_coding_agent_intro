@@ -33,6 +33,9 @@ import {
   initMcpLifecycle,
   invalidateMCPManagersForCwd,
 } from '../core/mcp-lifecycle.js'
+import { getLspStatusForCwd } from '../services/lsp/manager.js'
+import { getExecutionPlane } from '../execution/bootstrap.js'
+import { WorkerExecutionBackend } from '../execution/worker-execution-backend.js'
 import { initCodePlugins } from '../core/plugins/index.js'
 import { handleChat } from './routes/chat.js'
 import { abortTool } from '../core/tool-abort-registry.js'
@@ -73,6 +76,7 @@ async function getMCPStatusForCwd(
   const manager = await getMCPManagerForServers(cwd, mcpServers)
   return manager.getStatus()
 }
+
 
 export function createRouter({ runAgent, staticDir }: RouterOptions) {
   const workspaceRouter = createWorkspaceRouter({ root: getDefaultWorkspace() })
@@ -296,6 +300,50 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
       const effective = await resolveEffectiveSettings(cwd)
       sendJSON(res, 200, {
         servers: await getMCPStatusForCwd(cwd, effective.effectiveMcpServers),
+      })
+      return
+    }
+
+    if (method === 'GET' && url?.startsWith('/lsp')) {
+      const cwd = resolveSettingsRequestCwd(authed, url)
+      const effective = await resolveEffectiveSettings(cwd)
+      let servers = getLspStatusForCwd(cwd, effective.config.lspServers)
+      // Live LSP state lives inside the Worker (not the HTTP process). Prefer
+      // a snapshot from an open runtime for this cwd when available.
+      try {
+        const found = getExecutionPlane().runtimes.findByCwd(cwd)
+        if (found) {
+          const backend = new WorkerExecutionBackend(
+            found.handle.environmentId,
+            found.runtime,
+            found.handle.environmentId === 'local' ? 'local' : 'posix',
+            found.handle.cwd,
+            effective.config.lspServers,
+          )
+          try {
+            const live = await backend.lspListStatus()
+            if (live.length > 0) {
+              servers = live.map(s => ({
+                name: s.name,
+                state: s.state as (typeof servers)[number]['state'],
+                command: s.command,
+                args: s.args,
+                extensions: s.extensions,
+                languages: s.languages,
+                error: s.error,
+              }))
+            }
+          } finally {
+            backend.dispose()
+          }
+        }
+      } catch {
+        // Keep control-plane peek / configured stopped rows.
+      }
+      sendJSON(res, 200, {
+        workspace: cwd,
+        servers,
+        runningCount: servers.filter(s => s.state === 'running').length,
       })
       return
     }

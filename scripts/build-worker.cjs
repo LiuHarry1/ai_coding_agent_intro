@@ -28,13 +28,13 @@ async function main() {
       'import.meta.url': JSON.stringify('file:///baix-worker.cjs'),
     },
   })
+  // Include build time so SSH ensureWorker redeploys when the bundle changes
+  // (package.json version alone stays stable across rebuilds).
+  const builtAt = new Date().toISOString()
+  const version = `${pkg.version || '1.0.0'}+${builtAt.replace(/[-:.]/g, '').replace('T', '').replace('Z', '')}`
   fs.writeFileSync(
     versionFile,
-    JSON.stringify(
-      { version: pkg.version || '1.0.0', builtAt: new Date().toISOString() },
-      null,
-      2,
-    ),
+    JSON.stringify({ version, builtAt }, null, 2),
   )
   console.log(`Wrote ${outfile}`)
   console.log(`Wrote ${versionFile}`)

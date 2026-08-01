@@ -54,6 +54,27 @@ export class RuntimeBroker {
     return this.runtimes.get(handleKey(handle))
   }
 
+  /** Find an open Worker runtime whose cwd matches (local or remote). */
+  findByCwd(
+    cwd: string,
+  ): { handle: WorkspaceHandle; runtime: RuntimePort } | undefined {
+    const want = cwd.replace(/\\/g, '/').replace(/\/$/, '')
+    for (const [key, runtime] of this.runtimes) {
+      const sep = key.indexOf('::')
+      if (sep < 0) continue
+      const environmentId = key.slice(0, sep)
+      const rtCwd = key.slice(sep + 2)
+      const got = rtCwd.replace(/\\/g, '/').replace(/\/$/, '')
+      if (got === want) {
+        return {
+          handle: { environmentId, cwd: rtCwd },
+          runtime,
+        }
+      }
+    }
+    return undefined
+  }
+
   async close(handle: WorkspaceHandle): Promise<void> {
     const key = handleKey(handle)
     const rt = this.runtimes.get(key)

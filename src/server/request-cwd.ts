@@ -24,11 +24,32 @@ export function resolveRequestCwd(
   return getDefaultWorkspace()
 }
 
-/** Settings/MCP routes: optional ?workspace= in non-SSO mode. */
+/**
+ * Settings / MCP / LSP status: optional ?workspace= in non-SSO mode.
+ * Unlike chat file IO, remote SSH cwds are absolute POSIX paths that do not
+ * exist on the control-plane machine — keep them as-is so status can match
+ * the open Worker runtime.
+ */
 export function resolveSettingsRequestCwd(
   req: IncomingMessage,
   url?: string | null,
 ): string {
+  const pinned = (req as AuthedRequest).userWorkspace
+  if (isAuthEnabled() && pinned) return pinned
+
   const query = new URLSearchParams(url?.split('?')[1] ?? '')
-  return resolveRequestCwd(req, query.get('workspace'))
+  const workspace = query.get('workspace')
+  if (typeof workspace === 'string' && workspace.length > 0) {
+    const looksAbsolute =
+      workspace.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(workspace)
+    if (looksAbsolute) {
+      const localResolved = path.resolve(workspace)
+      if (fs.existsSync(localResolved)) return localResolved
+      return workspace.replace(/\\/g, '/').replace(/\/$/, '') || workspace
+    }
+    const resolved = path.resolve(workspace)
+    if (fs.existsSync(resolved)) return resolved
+  }
+
+  return getDefaultWorkspace()
 }

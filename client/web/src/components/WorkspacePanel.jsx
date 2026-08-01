@@ -7,12 +7,22 @@ const TABS = [
   { id: 'skills', label: 'Skills' },
   { id: 'plugins', label: 'Plugins' },
   { id: 'mcp', label: 'MCP' },
+  { id: 'lsp', label: 'LSP' },
 ]
 
 const MCP_STATUS_BADGE = {
   connected: { className: 'ws-badge--active', label: 'connected' },
   error: { className: 'ws-badge--error', label: 'error' },
   disconnected: { className: 'ws-badge--shadow', label: 'disconnected' },
+}
+
+/** Aligns with Claude Code LspServerState + Workspace badge language. */
+const LSP_STATUS_BADGE = {
+  running: { className: 'ws-badge--active', label: 'running' },
+  starting: { className: 'ws-badge--active', label: 'starting' },
+  stopping: { className: 'ws-badge--shadow', label: 'stopping' },
+  stopped: { className: 'ws-badge--shadow', label: 'stopped' },
+  error: { className: 'ws-badge--error', label: 'error' },
 }
 
 const AGENT_SOURCE_ORDER = ['project', 'user', 'plugin', 'built-in']
@@ -240,6 +250,65 @@ function McpTab({ data }) {
   )
 }
 
+function LspTab({ data }) {
+  const servers = data?.servers ?? []
+  if (servers.length === 0) {
+    return (
+      <p className='ws-panel-empty'>
+        No LSP servers configured. Add{' '}
+        <code>lspServers</code> to <code>.ai-agent/settings.json</code>.
+        Servers start lazily when a matching file is opened or LSPTool runs.
+      </p>
+    )
+  }
+
+  const running = servers.filter(s => s.state === 'running').length
+
+  return (
+    <>
+      <p className='ws-panel-sub ws-lsp-summary'>
+        {running} running · {servers.length} configured
+      </p>
+      <ul className='ws-panel-list'>
+        {servers.map(s => {
+          const badge = LSP_STATUS_BADGE[s.state] ?? LSP_STATUS_BADGE.stopped
+          const cmd = [s.command, ...(s.args || [])].join(' ')
+          const langs = (s.languages || []).join(', ')
+          const exts = (s.extensions || []).join(' ')
+          return (
+            <li key={s.name} className='ws-panel-item'>
+              <div className='ws-panel-item-row'>
+                <code className='ws-panel-item-name'>{s.name}</code>
+                <span
+                  className={`ws-badge ${badge.className}`}
+                  title={s.error || undefined}
+                >
+                  {badge.label}
+                </span>
+              </div>
+              {cmd && (
+                <p className='ws-panel-item-meta' title={cmd}>
+                  {cmd}
+                </p>
+              )}
+              {(langs || exts) && (
+                <p className='ws-panel-item-meta'>
+                  {langs ? `langs ${langs}` : ''}
+                  {langs && exts ? ' · ' : ''}
+                  {exts ? `ext ${exts}` : ''}
+                </p>
+              )}
+              {s.state === 'error' && s.error && (
+                <p className='ws-panel-item-desc-short ws-mcp-error'>{s.error}</p>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </>
+  )
+}
+
 function Warnings({ errors }) {
   if (!errors?.length) return null
   return (
@@ -265,6 +334,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
   const [skillsData, setSkillsData] = useState(null)
   const [pluginsData, setPluginsData] = useState(null)
   const [mcpData, setMcpData] = useState(null)
+  const [lspData, setLspData] = useState(null)
 
   const load = useCallback(async () => {
     if (!open) return
@@ -272,18 +342,20 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
     setError(null)
     const ws = workspace || undefined
     try {
-      const [agents, skills, plugins, mcp] = await Promise.all([
+      const [agents, skills, plugins, mcp, lsp] = await Promise.all([
         agentApi.getAgents(ws),
         agentApi.getSkills(ws),
         agentApi.getPlugins(ws),
         // MCP servers may be slow/broken to connect; don't fail the whole
         // panel over them.
         agentApi.getMcp(ws).catch(() => null),
+        agentApi.getLsp(ws).catch(() => null),
       ])
       setAgentsData(agents)
       setSkillsData(skills)
       setPluginsData(plugins)
       setMcpData(mcp)
+      setLspData(lsp)
       if (mcp?.servers) {
         setKnownMcpServers(mcp.servers.map(s => s.name).filter(Boolean))
       }
@@ -293,6 +365,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
       setSkillsData(null)
       setPluginsData(null)
       setMcpData(null)
+      setLspData(null)
     } finally {
       setLoading(false)
     }
@@ -318,6 +391,9 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
     (n, s) => n + (s.tools?.length ?? 0),
     0,
   )
+  const lspRunningCount =
+    lspData?.runningCount ??
+    (lspData?.servers ?? []).filter(s => s.state === 'running').length
 
   const allErrors = useMemo(
     () => [
@@ -346,7 +422,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
             </h2>
             <p className='ws-panel-sub'>
               {activeCount} agents · {skillCount} skills · {pluginCount} plugins
-              {' '}· {mcpToolCount} mcp tools
+              {' '}· {mcpToolCount} mcp tools · {lspRunningCount} lsp running
               {agentsData?.workspace ? (
                 <>
                   {' '}
@@ -401,6 +477,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
           {!error && tab === 'skills' && <SkillsTab data={skillsData} />}
           {!error && tab === 'plugins' && <PluginsTab data={pluginsData} />}
           {!error && tab === 'mcp' && <McpTab data={mcpData} />}
+          {!error && tab === 'lsp' && <LspTab data={lspData} />}
 
           <Warnings errors={allErrors} />
         </div>

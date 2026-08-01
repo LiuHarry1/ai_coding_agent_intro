@@ -166,6 +166,23 @@ export async function runLspOp(op: WorkerLspOp): Promise<unknown> {
       if (!manager) return false
       return manager.isFileOpen(op.filePath)
     }
+    case 'listStatus': {
+      if (!manager) return { servers: [] as const }
+      const servers = [...manager.getAllServers().values()].map(instance => {
+        const extMap = instance.config.extensionToLanguage ?? {}
+        return {
+          name: instance.name,
+          state: instance.state,
+          command: instance.config.command,
+          args: instance.config.args ?? [],
+          extensions: Object.keys(extMap),
+          languages: [...new Set(Object.values(extMap))],
+          error: instance.lastError?.message,
+        }
+      })
+      servers.sort((a, b) => a.name.localeCompare(b.name))
+      return { servers }
+    }
     default: {
       const _e: never = op
       throw new Error(`Unknown lsp op: ${JSON.stringify(_e)}`)

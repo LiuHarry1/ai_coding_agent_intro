@@ -51,6 +51,8 @@ export type WorkerLspOp =
   | { op: 'saveFile'; filePath: string }
   | { op: 'closeFile'; filePath: string }
   | { op: 'isFileOpen'; filePath: string }
+  /** Snapshot of configured LSP servers + live state inside the Worker. */
+  | { op: 'listStatus' }
 
 export type RuntimeClientMessage =
   | {

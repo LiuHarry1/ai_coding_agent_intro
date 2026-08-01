@@ -31,6 +31,7 @@ export default defineConfig({
       "/sessions": "http://localhost:4567",
       "/workspace": "http://localhost:4567",
       "/environments": "http://localhost:4567",
+      "/lsp": "http://localhost:4567",
       "/health": "http://localhost:4567",
       "/slash-commands": "http://localhost:4567",
       "/plan": "http://localhost:4567",

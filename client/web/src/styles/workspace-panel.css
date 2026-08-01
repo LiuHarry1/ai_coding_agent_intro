@@ -230,6 +230,10 @@
   color: #f85149;
 }
 
+.ws-lsp-summary {
+  margin: 0 0 10px;
+}
+
 .ws-panel-warnings {
   margin-top: 12px;
   padding-top: 12px;
