@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { FileIcon } from './workspace-ide/icons.jsx'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 import {
   fileName,
   shortDisplayPath,
@@ -11,7 +12,8 @@ import {
 } from '../lib/utils.js'
 
 /**
- * Cursor-style Grep — dense search-panel from `toolUseResult` only.
+ * Cursor-style Grep — compact file hit list (≈ Composer grepToolCall body).
+ * Shows filename + `dir -- N matches`; click opens the file in the IDE.
  */
 
 function splitPathParts(filePath) {
@@ -57,7 +59,10 @@ function parseContentLines(content, fallbackPath) {
 
 function fromToolUseResult(toolUseResult) {
   if (!toolUseResult || typeof toolUseResult !== 'object') return null
-  if (!Array.isArray(toolUseResult.filenames) && !Array.isArray(toolUseResult.files)) {
+  if (
+    !Array.isArray(toolUseResult.filenames) &&
+    !Array.isArray(toolUseResult.files)
+  ) {
     return null
   }
   const mode = toolUseResult.mode || 'files_with_matches'
@@ -80,55 +85,40 @@ function fromToolUseResult(toolUseResult) {
   }
 }
 
-function HighlightedText({ text, pattern, caseInsensitive }) {
-  if (!pattern || !text) return text
-  try {
-    const re = new RegExp(pattern, caseInsensitive ? 'gi' : 'g')
-    const parts = []
-    let last = 0
-    let key = 0
-    for (const m of String(text).matchAll(re)) {
-      if (m.index > last) {
-        parts.push(
-          <React.Fragment key={key++}>{text.slice(last, m.index)}</React.Fragment>,
-        )
-      }
-      parts.push(
-        <mark key={key++} className='grep-hl'>
-          {m[0]}
-        </mark>,
-      )
-      last = m.index + m[0].length
-    }
-    if (parts.length === 0) return text
-    if (last < text.length) {
-      parts.push(<React.Fragment key={key++}>{text.slice(last)}</React.Fragment>)
-    }
-    return parts
-  } catch {
-    return text
-  }
+/** Cursor secondary: `dir -- N matches` | `N matches` | `dir` */
+function fileSecondary(dir, matchCount) {
+  const n = typeof matchCount === 'number' ? matchCount : 0
+  const matchPart =
+    n > 0 ? `${n} ${n === 1 ? 'match' : 'matches'}` : null
+  if (dir && matchPart) return `${dir} -- ${matchPart}`
+  if (matchPart) return matchPart
+  return dir || null
 }
 
-function FilePathLabel({ path: filePath }) {
+function GrepFileRow({ path: filePath, matchCount, onOpen }) {
   const { base, dir, full } = splitPathParts(filePath)
-  return (
-    <span className='grep-path' title={full}>
-      <FileIcon size={12} />
-      <span className='grep-file-name'>{base}</span>
-      {dir ? <span className='grep-file-dir'>{dir}</span> : null}
-    </span>
-  )
-}
+  const secondary = fileSecondary(dir, matchCount)
+  const clickable = typeof onOpen === 'function'
 
-function countContentStats(groups) {
-  let matches = 0
-  for (const g of groups) {
-    for (const row of g.matches) {
-      if (row.kind === 'match') matches += 1
-    }
-  }
-  return { matchN: matches, fileN: groups.length }
+  return (
+    <li>
+      <button
+        type='button'
+        className={`grep-file-row ${clickable ? 'grep-file-row--clickable' : ''}`}
+        onClick={clickable ? () => onOpen(full) : undefined}
+        title={full}
+        disabled={!clickable}
+      >
+        <span className='grep-path'>
+          <FileIcon size={12} />
+          <span className='grep-file-name'>{base}</span>
+          {secondary ? (
+            <span className='grep-file-secondary'>{secondary}</span>
+          ) : null}
+        </span>
+      </button>
+    </li>
+  )
 }
 
 export default function GrepCard({ part, nested = false }) {
@@ -139,6 +129,7 @@ export default function GrepCard({ part, nested = false }) {
     isDone &&
     (part.isError === true ||
       (typeof result === 'string' && result.startsWith('Error:')))
+  const openFile = useWorkspaceIdeStore(s => s.openFile)
 
   const parsed = useMemo(
     () => fromToolUseResult(part.toolUseResult),
@@ -150,20 +141,29 @@ export default function GrepCard({ part, nested = false }) {
     return parseContentLines(parsed.content, args.path)
   }, [parsed, args.path])
 
+  /** Unified file-hit list for all modes (Cursor composer density). */
+  const fileHits = useMemo(() => {
+    if (!parsed || parsed.empty) return []
+    if (parsed.mode === 'content') {
+      return contentGroups.map(g => ({
+        path: g.file,
+        matchCount: g.matches.filter(m => m.kind === 'match').length,
+      }))
+    }
+    return (parsed.files || []).map(f => ({
+      path: f.path,
+      matchCount: f.matchCount ?? 0,
+    }))
+  }, [parsed, contentGroups])
+
   const hasBody =
-    isError ||
-    (!!parsed &&
-      (parsed.empty ||
-        (parsed.mode === 'content' && contentGroups.length > 0) ||
-        ((parsed.mode === 'files_with_matches' || parsed.mode === 'count') &&
-          parsed.files.length > 0)))
+    isError || (!!parsed && (parsed.empty || fileHits.length > 0))
 
   const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
     expandOnceWhen:
       isDone &&
       ((isError && !!result) || (!!parsed && !parsed.empty && hasBody)),
   })
-  // Honor expand state only — do not force-open when isDone.
   const showBody = expanded && hasBody
 
   const pattern = args.pattern || ''
@@ -185,41 +185,28 @@ export default function GrepCard({ part, nested = false }) {
     .join('\n')
 
   let countLabel = null
-  if (isDone && !isError && parsed && !parsed.empty) {
-    if (parsed.mode === 'files_with_matches' || parsed.mode === 'count') {
-      const n = parsed.numFiles ?? parsed.files.length
-      if (n > 0) {
-        const total =
-          parsed.numMatches ??
-          parsed.files.reduce((s, f) => s + (f.matchCount || 0), 0)
-        countLabel =
-          parsed.mode === 'count' || total > n
-            ? `${total} ${total === 1 ? 'match' : 'matches'} in ${n} ${n === 1 ? 'file' : 'files'}`
-            : parsed.mode === 'files_with_matches' && total > 0
-              ? `${total} ${total === 1 ? 'match' : 'matches'} in ${n} ${n === 1 ? 'file' : 'files'}`
-              : `${n} ${n === 1 ? 'file' : 'files'}`
-      }
-    } else if (parsed.mode === 'content') {
-      const { matchN, fileN } = countContentStats(contentGroups)
-      if (matchN > 0) {
-        countLabel = `${matchN} ${matchN === 1 ? 'match' : 'matches'} in ${fileN} ${fileN === 1 ? 'file' : 'files'}`
-      }
+  if (isDone && !isError && parsed && !parsed.empty && fileHits.length > 0) {
+    const fileN = fileHits.length
+    const matchN = fileHits.reduce((s, f) => s + (f.matchCount || 0), 0)
+    if (matchN > 0) {
+      countLabel = `${matchN} ${matchN === 1 ? 'match' : 'matches'} in ${fileN} ${fileN === 1 ? 'file' : 'files'}`
+    } else {
+      countLabel = `${fileN} ${fileN === 1 ? 'file' : 'files'}`
     }
   }
 
   const subtitle = filterBits.length > 0 ? filterBits.join(' \u00B7 ') : null
   const emptyHint =
     isDone && !isError && parsed?.empty ? 'No matches' : null
-  const caseInsensitive = !!args.case_insensitive
-  // Single-file search: path already in subtitle — skip repeating file header.
-  const hideFileHeaders =
-    contentGroups.length === 1 &&
-    !!args.path &&
-    args.path !== '.'
+
+  const handleOpen = filePath => {
+    if (typeof openFile !== 'function') return
+    void openFile(filePath)
+  }
 
   return (
     <div className={`tool-row grep-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded && hasBody}
         onToggle={hasBody ? toggleExpanded : undefined}
         showChevron={hasBody}
@@ -251,60 +238,18 @@ export default function GrepCard({ part, nested = false }) {
         }
       />
 
-      {showBody &&
-        isDone &&
-        !isError &&
-        parsed &&
-        !parsed.empty &&
-        (parsed.mode === 'files_with_matches' || parsed.mode === 'count') && (
-          <ul className='grep-results'>
-            {parsed.files.map(f => (
-              <li key={f.path} className='grep-file-row'>
-                <FilePathLabel path={f.path} />
-                {parsed.mode === 'count' && f.matchCount != null ? (
-                  <span className='grep-file-count'>{f.matchCount}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-
-      {showBody &&
-        isDone &&
-        !isError &&
-        parsed?.mode === 'content' &&
-        contentGroups.length > 0 && (
-          <div className='grep-results'>
-            {contentGroups.map(g => (
-              <div key={g.file} className='grep-file-block'>
-                {!hideFileHeaders && (
-                  <div className='grep-file-header'>
-                    <FilePathLabel path={g.file} />
-                  </div>
-                )}
-                {g.matches.map((m, i) => (
-                  <div
-                    key={`${g.file}:${m.lineNo}:${m.kind}:${i}`}
-                    className={`grep-match-line grep-match-line--${m.kind}`}
-                  >
-                    <span className='grep-line-no'>{m.lineNo}</span>
-                    <span className='grep-line-text'>
-                      {m.kind === 'match' ? (
-                        <HighlightedText
-                          text={m.text}
-                          pattern={pattern}
-                          caseInsensitive={caseInsensitive}
-                        />
-                      ) : (
-                        m.text
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+      {showBody && isDone && !isError && fileHits.length > 0 && (
+        <ul className='grep-results'>
+          {fileHits.map(f => (
+            <GrepFileRow
+              key={f.path}
+              path={f.path}
+              matchCount={f.matchCount}
+              onOpen={handleOpen}
+            />
+          ))}
+        </ul>
+      )}
 
       {showBody && isDone && !isError && parsed?.empty && (
         <div className='grep-empty'>No matches</div>

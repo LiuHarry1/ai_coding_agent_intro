@@ -145,7 +145,7 @@ export default function DiffViewer({
         showDiffOnly={false}
         extraLinesSurroundingDiff={3}
         // The library always renders TWO line-number gutters in unified
-        // mode (old | new). We hide the OLD gutter via CSS in tools.css to
+        // mode (old | new). We hide the OLD gutter via CSS in styles/tools/file.css to
         // keep just the new-side numbers — that's what users care about.
         styles={isDark ? darkStyles : lightStyles}
       />

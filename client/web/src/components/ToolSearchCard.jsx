@@ -1,5 +1,5 @@
 import React from 'react'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 
 /**
@@ -20,7 +20,7 @@ export default function ToolSearchCard({ part, nested = false }) {
 
   return (
     <div className={`tool-row tool-search-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={toggleExpanded}
         showChevron={Boolean(isDone && result && !isError)}

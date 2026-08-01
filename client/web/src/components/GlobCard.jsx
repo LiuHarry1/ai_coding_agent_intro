@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { FileIcon } from './workspace-ide/icons.jsx'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import { fileName, shortDisplayPath, truncateEnd } from '../lib/utils.js'
@@ -72,11 +72,11 @@ export default function GlobCard({ part, nested = false }) {
 
   return (
     <div className={`tool-row glob-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded && hasBody}
         onToggle={hasBody ? toggleExpanded : undefined}
         showChevron={hasBody}
-        label='Searched files'
+        label='Glob'
         title={displayPattern ? `\u201C${displayPattern}\u201D` : 'glob\u2026'}
         titleTooltip={pattern}
         subtitle={

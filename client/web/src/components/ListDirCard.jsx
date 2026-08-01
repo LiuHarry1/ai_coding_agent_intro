@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 
 /**
  * Single-row card for list_dir, mirroring ReadFileCard.
@@ -35,10 +35,10 @@ export default function ListDirCard({ part }) {
 
   return (
     <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={() => setExpanded(v => !v)}
-        label='Listed'
+        label='LS'
         title={dirPath}
         titleTooltip={dirPath}
         subtitle={meta.length > 0 ? meta.join(' \u00B7 ') : null}

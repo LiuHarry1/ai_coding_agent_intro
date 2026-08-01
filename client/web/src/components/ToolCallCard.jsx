@@ -188,6 +188,10 @@ function LiveTerminal({ output, elapsed, done }) {
   )
 }
 
+/**
+ * Fallback tool UI when no specialized card exists (registry chrome: 'card').
+ * Prefer ToolCallLine-based *Card components for known tools.
+ */
 export default function ToolCallCard({ part }) {
   const hasLiveOutput = part.liveOutput != null
   const name = part.name || ''

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { fileName } from '../lib/utils.js'
 
 /**
@@ -99,7 +99,7 @@ export default function ReadFileCard({ part }) {
 
   return (
     <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={() => setExpanded(v => !v)}
         label='Read'

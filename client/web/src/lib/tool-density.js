@@ -24,6 +24,7 @@ import {
   ENTER_PLAN_MODE,
   EXIT_PLAN_MODE,
 } from './tool-names.js'
+import { EXPLORE_GROUPABLE_NAMES } from './tool-registry-meta.js'
 
 /** All first-party tool names the agent registers (not MCP). */
 export const BUILT_IN_TOOLS = new Set([
@@ -56,26 +57,15 @@ export const BUILT_IN_TOOLS = new Set([
 
 /**
  * Built-ins that fold into "Explored N tools" (Cursor Conversation Density).
- * ToolSearch ≈ Cursor's internal "list available MCP tools" lookup.
+ * Derived from TOOL_META.exploreGroupable in tool-registry-meta.js.
  */
-export const EXPLORE_BUILTINS = new Set([
-  READ,
-  GREP,
-  GLOB,
-  LIST_DIR,
-  WEB_SEARCH,
-  WEB_FETCH,
-  TOOL_SEARCH,
-  'list_directory',
-  'fetch',
-  'search',
-])
+export const EXPLORE_BUILTINS = EXPLORE_GROUPABLE_NAMES
 
 export function isExploreTool(part) {
   if (!part || part.type !== 'tool_call') return false
   if (part.isSubagent) return false
   if (part.name === SKILL) return false
-  return EXPLORE_BUILTINS.has(part.name)
+  return EXPLORE_GROUPABLE_NAMES.has(part.name)
 }
 
 /**

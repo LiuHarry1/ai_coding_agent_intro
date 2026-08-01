@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { formatBytes } from '../lib/utils.js'
 import { parseMcpToolName } from '../lib/tool-kind.js'
 import { normalizeFetchResult, compactFetchError } from '../lib/fetch-result.js'
@@ -86,11 +86,11 @@ export default function WebFetchCard({ part, nested = false }) {
 
   return (
     <div className={`tool-row web-fetch-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={toggleExpanded}
         icon={'\u{1F310}'}
-        label='Fetch'
+        label='Web Fetch'
         title={headline}
         titleTooltip={articleUrl || requestUrl}
         subtitle={subtitle}
@@ -102,7 +102,6 @@ export default function WebFetchCard({ part, nested = false }) {
         duration={part.duration}
         isDone={isDone}
         isError={isError}
-        showSuccess={isDone && !isError}
         actions={
           isDone && !isError && text ? (
             <CopyButton text={text} label='Copy' inline />

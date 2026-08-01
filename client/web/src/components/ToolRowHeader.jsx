@@ -2,17 +2,10 @@ import React from 'react'
 import { formatDuration } from '../lib/utils.js'
 
 /**
- * Shared single-row tool header used by every compact card
- * (BashCard, ReadFileCard, ListDirCard, WebSearchCard, WebFetchCard, SubagentCard).
+ * Shared single-row tool header (implementation of ToolCallLine).
  *
- * Before this component existed each card hand-rolled the same
- * `chevron → icon → verb → name → spacer → duration → status` row
- * with its own CSS classes, totaling ~300 lines of near-identical
- * JSX + ~250 lines of near-identical CSS. Consolidating here means:
- *
- *   - One place to tweak chevron rotation / spinner placement / hover.
- *   - One place to enforce status-icon semantics (✓ / ✗ / spinner).
- *   - One place to add features (e.g. keyboard a11y, focus ring).
+ * Prefer importing `ToolCallLine` in new code — same component, Cursor-aligned name
+ * (≈ `ui-tool-call-line`).
  *
  * Slot layout (left → right):
  *

@@ -2,7 +2,7 @@
 @import './header.css';
 @import './session-switcher.css';
 @import './chat.css';
-@import './tools.css';
+@import './tools/index.css';
 @import './input.css';
 @import './workspace-ide.css';
 @import './workspace-panel.css';

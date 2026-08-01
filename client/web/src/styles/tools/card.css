@@ -1,0 +1,290 @@
+/* Fallback tool-card chrome (≈ Cursor composer-tool-call shell) */
+.tool-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-secondary);
+  margin-bottom: 4px;
+}
+
+.tool-card.has-error { border-color: rgba(248,81,73,0.3); }
+.tool-card.has-error .tool-name { color: var(--red); }
+
+.tool-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  transition: background 0.1s;
+}
+.tool-card-header:hover { background: var(--bg-tertiary); }
+
+.tool-card-header .chevron {
+  font-size: 9px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tool-card-header .tool-icon {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Color semantics:
+   - blue   = read-only / lookup     (web_fetch, web_search, list, explore)
+   - green  = create / record         (todo_write — tasks are net-new entries)
+   - purple = execute / side-effect  (bash, run)
+   - gray   = default / unknown
+   read_file / list_dir / write_file / edit_file have dedicated cards now
+   and don't go through this palette. */
+.tool-icon.read    { background: rgba(88,166,255,0.12); color: var(--accent); }
+.tool-icon.write   { background: var(--green-dim); color: var(--green); }
+.tool-icon.run     { background: var(--purple-dim); color: var(--purple); }
+.tool-icon.search  { background: rgba(88,166,255,0.12); color: var(--accent); }
+.tool-icon.list    { background: rgba(88,166,255,0.12); color: var(--accent); }
+.tool-icon.default { background: var(--bg-tertiary); color: var(--text-muted); }
+
+.tool-card-header .tool-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+/* ── File badge (shows filename inline) ────── */
+.tool-file-badge {
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(88,166,255,0.1);
+  padding: 1px 7px;
+  border-radius: 4px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+.tool-card-header .tool-args-preview {
+  color: var(--text-muted);
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  /* Allow up to 2 lines for long bash commands; longer than that shows
+     ellipsis. Hovering reveals the full text via the title attribute. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.tool-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.tool-duration {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.tool-duration--live { color: var(--green); }
+.tool-check { color: var(--green); font-size: 14px; }
+.tool-error-badge { color: var(--red); font-size: 14px; }
+
+.tool-card-body {
+  display: none;
+  border-top: 1px solid var(--border);
+}
+.tool-card.open .tool-card-body { display: block; }
+
+.tool-card-body details > summary {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tool-card-body details > summary:first-child { border-top: none; }
+.tool-card-body details > summary:hover { color: var(--text-secondary); }
+
+.result-size {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  font-family: var(--font-mono);
+}
+
+/* ── Args & result containers with copy button ── */
+.tool-args-wrap,
+.tool-result-wrap {
+  position: relative;
+}
+
+.tool-args-wrap > .copy-btn,
+.tool-result-wrap > .copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+}
+
+.tool-args-json,
+.tool-result-pre {
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+.result-error > summary { color: var(--red) !important; }
+
+.result-error-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--red);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tool-result-wrap--error {
+  background: rgba(248,81,73,0.06);
+  border-top: 2px solid var(--red);
+}
+
+.tool-result-wrap--error .tool-result-pre {
+  color: var(--red);
+}
+
+/* ── Streaming tool-call arguments ──────── */
+.tool-streaming-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--green);
+  background: rgba(40, 167, 69, 0.06);
+}
+
+.tool-streaming-input-label {
+  font-family: var(--font-mono);
+  letter-spacing: 0.2px;
+}
+
+/* ── Live Terminal (bash wait mode) ──────── */
+.live-terminal {
+  border-bottom: 1px solid var(--border);
+  background: #0a0e14;
+  overflow: hidden;
+}
+
+[data-theme="light"] .live-terminal { background: #1e1e2e; }
+
+.live-terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.live-terminal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: termPulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes termPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-terminal-title {
+  flex: 1;
+  color: var(--text-secondary);
+}
+
+.live-preview-meta {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+}
+
+.live-terminal-output {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  max-height: 250px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  scroll-behavior: smooth;
+}
+
+.live-terminal-output::-webkit-scrollbar { width: 4px; }
+.live-terminal-output::-webkit-scrollbar-track { background: transparent; }
+.live-terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+/* Light theme */
+
+[data-theme="light"] .tool-card.has-error { border-color: rgba(209,36,47,0.3); }
+
+[data-theme="light"] .tool-icon.search,
+[data-theme="light"] .tool-icon.list { background: rgba(9,105,218,0.1); }
+
+[data-theme="light"] .tool-file-badge { background: rgba(9,105,218,0.08); color: var(--accent); }
+
+
+/* Light theme (restored) */
+[data-theme="light"] .tool-card-header .tool-name { color: var(--text-primary); }
+[data-theme="light"] .tool-card-header .tool-args-preview { color: var(--text-secondary); }
+[data-theme="light"] .tool-card-header .chevron { color: var(--text-secondary); }
+[data-theme="light"] .tool-card-body details > summary { color: var(--text-secondary); }
+[data-theme="light"] .tool-result-pre,
+[data-theme="light"] .tool-args-json { color: var(--text-primary); }
+[data-theme="light"] .tool-duration { color: var(--text-secondary); }
+[data-theme="light"] .result-size { color: var(--text-secondary); background: var(--bg-tertiary); }

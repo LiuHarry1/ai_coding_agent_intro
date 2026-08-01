@@ -413,7 +413,7 @@
 }
 
 /* ── Compaction Row ─────────────────────────
-   Rides on .tool-row / .tool-row-header (tools.css) so it matches the
+   Rides on .tool-row / .tool-row-header (styles/tools/shared.css) so it matches the
    surrounding tool rows; only the expanded summary body is styled here. */
 .compaction-summary {
   margin: 4px 8px 6px 26px;

@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { mdComponents } from '../lib/markdown-components.jsx'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import NestedToolRuns from './NestedToolRuns.jsx'
 import { detectError, formatBytes } from '../lib/utils.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
@@ -104,7 +104,7 @@ export default function SkillCard({ part, nested = false }) {
     <div
       className={`tool-row skill-card ${nested ? 'tool-row--nested' : ''} ${isError ? 'has-error' : ''}`}
     >
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={handleHeaderToggle}
         showChevron={showChevron}
@@ -124,7 +124,6 @@ export default function SkillCard({ part, nested = false }) {
         duration={nested ? undefined : part.duration}
         isDone={isDone}
         isError={isError}
-        showSuccess={!nested}
         actions={
           isDone && !isError && hasBody && !isFork ? (
             <CopyButton text={result} label='Copy' inline />

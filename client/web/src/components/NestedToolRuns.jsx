@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import ExploredGroup from './ExploredGroup.jsx'
 import { pickCard } from './pickToolCard.js'
-import { coalesceToolRuns } from '../lib/tool-density.js'
+import { expandToolGroup } from '../lib/timeline.js'
 
 const STEP_PREVIEW_LIMIT = 6
 
@@ -14,7 +14,7 @@ export default function NestedToolRuns({
   onShowAll,
   previewLimit = STEP_PREVIEW_LIMIT,
 }) {
-  const runs = useMemo(() => coalesceToolRuns(steps), [steps])
+  const runs = useMemo(() => expandToolGroup(steps).runs, [steps])
   const flatLimit = showAllSteps ? Infinity : previewLimit
 
   let shown = 0

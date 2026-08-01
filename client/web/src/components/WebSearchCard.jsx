@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { parseMcpToolName } from '../lib/tool-kind.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 
@@ -114,10 +114,10 @@ export default function WebSearchCard({ part, nested = false }) {
 
   return (
     <div className={`tool-row web-search-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={toggleExpanded}
-        icon={'\u{1F50D}'}
+        label='Web Search'
         title={query ? `\u201C${query}\u201D` : 'search\u2026'}
         titleTooltip={query}
         subtitle={

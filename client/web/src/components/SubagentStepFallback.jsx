@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { detectError, fileName, formatBytes } from '../lib/utils.js'
 
 /** One-line title for unknown nested tools — never inline JSON in the header. */
@@ -48,7 +48,7 @@ export default function SubagentStepFallback({ part }) {
     <div
       className={`tool-row subagent-step-fallback tool-row--nested ${isError ? 'has-error' : ''}`}
     >
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={() => setExpanded(v => !v)}
         showChevron={Boolean(isDone && hasBody)}

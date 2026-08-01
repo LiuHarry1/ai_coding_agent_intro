@@ -1,12 +1,11 @@
 import React, { useState } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { detectError } from '../lib/utils.js'
 
 /**
- * Compact one-line card for bash. Four modes:
- *   - { command, background: true } → "Started <command>"
- *   - { command }                   → "Ran <command>"
+ * Compact one-line card for bash (Cursor shellToolCall ≈ action "Shell").
+ *   - { command } / background      → "Shell <command>"
  *   - { kill: true, pid }           → "Killed pid N"
  *   - { pid }                       → "Checked pid N"
  *
@@ -22,11 +21,12 @@ import { detectError } from '../lib/utils.js'
  */
 
 function describeBash(args) {
-  if (!args || typeof args !== 'object') return { verb: 'Ran', text: '' }
+  // Cursor shellToolCall uses action "Shell" + command/description as details.
+  if (!args || typeof args !== 'object') return { verb: 'Shell', text: '' }
 
   const cmd = typeof args.command === 'string' ? args.command.trim() : ''
   if (cmd) {
-    return { verb: args.background ? 'Started' : 'Ran', text: cmd }
+    return { verb: 'Shell', text: cmd }
   }
 
   // Only honor pid when it's a real OS pid (>0). Strict-tools `pid: 0` is
@@ -36,7 +36,7 @@ function describeBash(args) {
     return { verb: args.kill ? 'Killed' : 'Checked', text: `pid ${pid}` }
   }
 
-  return { verb: 'Ran', text: '' }
+  return { verb: 'Shell', text: '' }
 }
 
 export default function BashCard({ part }) {
@@ -55,7 +55,7 @@ export default function BashCard({ part }) {
 
   return (
     <div className={`tool-row bash-card ${isError ? 'has-error' : ''}`}>
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={() => setExpanded(v => !v)}
         label={verb}

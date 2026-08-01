@@ -1,0 +1,414 @@
+/* File change / preview / diff (write_file, edit_file) */
+/* ── Diff Viewer ───────────────────────────── */
+.diff-viewer {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* The library hard-codes `min-width: 1000px` on the diff <table>, which
+   overflows our 860px chat column. Drop the floor so the table fits and
+   its `table-layout: fixed` + `width: 100%` correctly distributes columns
+   (gutter 50px + marker 28px + content fills the rest). */
+.diff-viewer table[class*="diff-container"] {
+  min-width: 0 !important;
+}
+
+.diff-file-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+
+.diff-file-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.diff-file-name {
+  color: var(--accent);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.diff-replace-all-badge {
+  font-size: 9.5px;
+  color: var(--orange);
+  background: var(--orange-dim);
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* If `showDiffOnly={true}` is ever flipped back on, kill the
+   "🔀 N more lines" expand bar — it adds noise without adding info for
+   the small targeted edits edit_file produces. */
+.diff-viewer .diff-add-collapsed,
+.diff-viewer tr[class*="codeFold"] { display: none !important; }
+
+/* ── File Preview (write_file) ────────────── */
+.file-preview {
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
+.file-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+
+.file-preview-meta {
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  margin-left: auto;
+  padding-right: 8px;
+}
+
+.file-preview-body {
+  display: flex;
+  align-items: stretch;
+  max-height: 480px;
+  overflow: auto;
+  background: var(--bg-secondary);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.file-preview-gutter {
+  margin: 0;
+  padding: 10px 8px 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border);
+  text-align: right;
+  user-select: none;
+  white-space: pre;
+  flex-shrink: 0;
+}
+
+.file-preview-code {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.file-preview-toggle {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+}
+.file-preview-toggle:hover { color: var(--accent); background: rgba(88,166,255,0.06); }
+
+.file-preview-body::-webkit-scrollbar,
+.file-preview-code::-webkit-scrollbar { width: 6px; height: 6px; }
+.file-preview-body::-webkit-scrollbar-track,
+.file-preview-code::-webkit-scrollbar-track { background: transparent; }
+.file-preview-body::-webkit-scrollbar-thumb,
+.file-preview-code::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.file-preview-body::-webkit-scrollbar-thumb:hover,
+.file-preview-code::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.file-preview-body::-webkit-scrollbar-button,
+.file-preview-code::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+
+/* Light theme (preview / diff header) */
+
+[data-theme="light"] .file-preview-toggle:hover { background: rgba(9,105,218,0.06); color: var(--accent); }
+
+/* ── File Change Card (write_file / edit_file) ─ */
+.file-change-card {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.file-change-card--write { border-left-color: var(--green); }
+.file-change-card--edit  { border-left-color: var(--orange); }
+.file-change-card.has-error { border-left-color: var(--red); }
+
+/* Compact fallback shown when a write_file/edit_file call is missing
+   file_path — either mid-stream (preparing) or because the call ended
+   without a valid path. Replaces the giant "(unknown) 0 chars" card that
+   used to render in those degenerate states. */
+.file-change-stub {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  opacity: 0.85;
+}
+.file-change-stub.has-error {
+  border-color: rgba(248,81,73,0.35);
+  border-style: solid;
+  opacity: 1;
+}
+.file-change-stub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.file-change-stub-icon { opacity: 0.7; }
+.file-change-stub-name { font-weight: 600; color: var(--text-secondary); }
+.file-change-stub-label { font-style: italic; }
+.file-change-stub-spacer { flex: 1; }
+.file-change-stub-meta { font-size: 11px; color: var(--text-muted); }
+.file-change-stub-error {
+  padding: 6px 10px;
+  border-top: 1px solid rgba(248,81,73,0.25);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--red);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.file-change-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.file-change-header:hover { background: rgba(255,255,255,0.03); }
+.file-change-card .file-change-body + .file-change-error,
+.file-change-card .file-change-body { border-top: 1px solid var(--border); }
+
+.file-change-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.file-change-name {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.file-change-count {
+  display: inline-flex;
+  gap: 4px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.file-change-count--add    { color: var(--green); }
+.file-change-count--remove { color: var(--red); }
+
+.file-change-chevron {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--text-muted);
+  transition: transform 120ms ease;
+  transform: rotate(0deg);
+  width: 10px;
+  text-align: center;
+}
+.file-change-chevron.open { transform: rotate(90deg); }
+
+.file-change-extra-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 0 4px;
+}
+
+.file-change-spacer { flex: 1; }
+
+.file-change-progress,
+.file-change-duration {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Embedded variants: kill the inner card's own header/border so it slots
+   cleanly under FileChangeCard's header without a double divider or
+   rounded-corner clipping. */
+.file-preview--embedded,
+.diff-viewer--embedded {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+.file-preview--embedded .file-preview-body,
+.diff-viewer--embedded { background: transparent; }
+
+.file-change-status { font-size: 13px; flex-shrink: 0; }
+.file-change-status--ok    { color: var(--green); }
+.file-change-status--error { color: var(--red); }
+
+.file-change-body {
+  background: var(--bg-primary);
+}
+/* The nested DiffViewer / FilePreview already paints its own header; we
+   strip our own bottom border to avoid a double divider. */
+.file-change-body .diff-viewer,
+.file-change-body .file-preview {
+  border: none;
+  border-radius: 0;
+}
+
+.file-change-error {
+  padding: 8px 12px;
+  background: rgba(248,81,73,0.08);
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+}
+
+/* Collapsed teaser: 4-line monospace snippet with a fade-out hint that
+   there's more behind the click. */
+.file-change-body--collapsed {
+  cursor: pointer;
+  position: relative;
+  max-height: 96px;
+  overflow: hidden;
+}
+.file-change-body--collapsed::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 32px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(13,17,23,0) 0%, var(--bg-primary) 100%);
+}
+.file-change-collapsed-preview {
+  margin: 0;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre;
+  overflow: hidden;
+}
+
+/* Live preview while the model streams the args. Sits in the body slot
+   like a deferred FilePreview; we keep it dark + monospace and skip line
+   numbers because they'd reflow on every delta. */
+.file-change-live { background: var(--bg-secondary); }
+.file-change-live-meta {
+  padding: 6px 12px;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+.file-change-live-code {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre;
+  max-height: 320px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.file-change-live-code::-webkit-scrollbar { width: 6px; height: 6px; }
+.file-change-live-code::-webkit-scrollbar-track { background: transparent; }
+.file-change-live-code::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.file-change-live-code::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.file-change-live-code::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+
+/* Light theme overrides */
+
+[data-theme="light"] .file-change-header:hover { background: rgba(0,0,0,0.03); }
+
+[data-theme="light"] .file-change-body--collapsed::after {
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, var(--bg-primary) 100%);
+}
+
+[data-theme="light"] .file-change-error {
+  background: rgba(207,34,46,0.06);
+  color: var(--red);
+}
+
+
+/* Light theme (restored) */
+[data-theme="light"] .diff-file-header { background: var(--bg-tertiary); }
+[data-theme="light"] .file-preview-header { background: var(--bg-tertiary); border-color: var(--border); }
+[data-theme="light"] .file-preview-body { background: #fff; }
+[data-theme="light"] .file-preview-gutter { background: var(--bg-secondary); color: var(--text-secondary); border-color: var(--border); }
+[data-theme="light"] .file-preview-code { color: var(--text-primary); }
+[data-theme="light"] .file-preview-meta { color: var(--text-secondary); }
+[data-theme="light"] .file-change-card { background: #fff; }
+[data-theme="light"] .file-change-card--write { border-left-color: var(--green); }
+[data-theme="light"] .file-change-card--edit  { border-left-color: var(--orange); }
+[data-theme="light"] .file-change-card.has-error { border-left-color: var(--red); }
+[data-theme="light"] .file-change-count--add    { color: var(--green); }
+[data-theme="light"] .file-change-count--remove { color: var(--red); }
+[data-theme="light"] .file-change-collapsed-preview { color: var(--text-secondary); }
+[data-theme="light"] .file-change-progress,
+[data-theme="light"] .file-change-duration { color: var(--text-secondary); }
+[data-theme="light"] .file-change-status--ok    { color: var(--green); }
+[data-theme="light"] .file-change-status--error { color: var(--red); }
+[data-theme="light"] .file-change-live { background: var(--bg-secondary); }
+[data-theme="light"] .file-change-live-meta { background: var(--bg-tertiary); color: var(--text-secondary); }
+[data-theme="light"] .file-change-live-code { color: var(--text-primary); }

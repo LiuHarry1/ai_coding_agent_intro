@@ -1,0 +1,13 @@
+/* Chat tool UI styles.
+ *
+ * Layering (aligned with Cursor Composer conversation output):
+ *   shared   ≈ ui-tool-call-line
+ *   card     ≈ composer-tool-call / ui-tool-call-card shell
+ *   file/web/search/subagent ≈ specialized tool bodies
+ */
+@import './shared.css';
+@import './card.css';
+@import './file.css';
+@import './web.css';
+@import './search.css';
+@import './subagent.css';

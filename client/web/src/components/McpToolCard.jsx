@@ -1,6 +1,6 @@
 import React from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { formatBytes, detectError } from '../lib/utils.js'
 import { formatMcpToolTitle } from '../lib/tool-kind.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
@@ -48,7 +48,7 @@ export default function McpToolCard({ part, nested = false }) {
     <div
       className={`tool-row mcp-tool-card ${nested ? 'tool-row--nested' : ''} ${isError ? 'has-error' : ''}`}
     >
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={toggleExpanded}
         showChevron={Boolean(isDone && (hasBody || isError))}
@@ -66,7 +66,6 @@ export default function McpToolCard({ part, nested = false }) {
         duration={nested ? undefined : part.duration}
         isDone={isDone}
         isError={isError}
-        showSuccess={!nested}
         actions={
           isDone && !isError && hasBody ? (
             <CopyButton text={result} label='Copy' inline />

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import ToolRowHeader from './ToolRowHeader.jsx'
+import ToolCallLine from './ToolCallLine.jsx'
 import { pickCard } from './pickToolCard.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import {
@@ -48,7 +48,7 @@ export default function ExploredGroup({ items }) {
     <div
       className={`tool-row explored-group ${anyError ? 'has-error' : ''}`}
     >
-      <ToolRowHeader
+      <ToolCallLine
         expanded={expanded}
         onToggle={toggle}
         label='Explored'
@@ -57,7 +57,6 @@ export default function ExploredGroup({ items }) {
         duration={duration}
         isDone={allDone}
         isError={anyError}
-        showSuccess={allDone && !anyError}
       />
 
       {expanded && (

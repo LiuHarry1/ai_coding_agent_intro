@@ -1,0 +1,224 @@
+/* Web search + fetch cards */
+/* ── Web Search Card ─────────────────────── */
+/* Uses the shared .tool-row-header for the row chrome. Only the expanded
+   results panel + per-result typography lives here. */
+.web-search-meta { font-size: 11px; color: var(--text-muted); }
+
+.web-search-body {
+  margin: 4px 0 6px 18px; /* indent to align under the icon, not the chevron */
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.025);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+}
+
+.web-search-answers { margin-bottom: 8px; }
+.web-search-answer {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(255,210,80,0.08);
+  border-left: 2px solid var(--orange);
+  margin-bottom: 4px;
+}
+
+.web-search-results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.web-search-result {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.web-search-result:last-child { border-bottom: 0; }
+.web-search-result-title {
+  display: block;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1.3;
+  word-break: break-word;
+}
+.web-search-result-title:hover { text-decoration: underline; }
+.web-search-result-host {
+  font-size: 11px;
+  color: var(--green);
+  margin-top: 1px;
+  font-family: var(--font-mono);
+}
+.web-search-result-snippet {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.web-search-more {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.web-search-more:hover { color: var(--accent); border-color: var(--accent); }
+
+.web-search-suggestions {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11.5px;
+}
+.web-search-suggestions-label { color: var(--text-muted); }
+.web-search-suggestion {
+  padding: 2px 8px;
+  background: rgba(88,166,255,0.08);
+  border-radius: 10px;
+  color: var(--accent);
+}
+
+.web-search-error {
+  padding: 8px;
+  background: rgba(248,81,73,0.08);
+  border-radius: 4px;
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.web-search-empty { color: var(--text-muted); font-size: 12px; padding: 4px 0; }
+.web-search-raw {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+
+[data-theme="light"] .web-search-body {
+  background: rgba(0,0,0,0.025);
+  border-left-color: var(--border);
+}
+
+[data-theme="light"] .web-search-answer {
+  background: rgba(212,153,0,0.1);
+  border-left-color: var(--orange);
+}
+[data-theme="light"] .web-search-suggestion {
+  background: rgba(9,105,218,0.08);
+  color: var(--accent);
+}
+
+/* ── Web Fetch Card ──────────────────────── */
+.web-fetch-meta { font-size: 11px; color: var(--text-muted); }
+
+.web-fetch-body {
+  margin: 4px 0 6px 18px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.025);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+}
+
+.web-fetch-link {
+  display: block;
+  font-size: 11px;
+  color: var(--green);
+  font-family: var(--font-mono);
+  text-decoration: none;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+.web-fetch-link:hover { text-decoration: underline; }
+
+.web-fetch-excerpt {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.45;
+  margin-bottom: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+.web-fetch-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.web-fetch-text {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.web-fetch-more {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.web-fetch-more:hover { color: var(--accent); border-color: var(--accent); }
+
+.web-fetch-error {
+  padding: 8px;
+  background: rgba(248,81,73,0.08);
+  border-radius: 4px;
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.web-fetch-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.web-fetch-raw {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+
+[data-theme="light"] .web-fetch-body {
+  background: rgba(0,0,0,0.025);
+  border-left-color: var(--border);
+}
+
+
+/* Light theme (restored) */
+[data-theme="light"] .web-search-result-host { color: var(--green); }
+[data-theme="light"] .web-fetch-link { color: var(--green); }

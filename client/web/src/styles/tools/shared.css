@@ -1,0 +1,246 @@
+/* Shared tool-row / ToolCallLine primitives (≈ Cursor ui-tool-call-line) + copy/show-more */
+/* ── Tool Call Cards ───────────────────────── */
+.tool-group {
+  margin: 2px 0;
+}
+/* Compact row cards (fetch/search/read) stack tighter than full tool-cards */
+.tool-group .tool-row {
+  margin: 0;
+}
+
+/* ── Show more / less button ─────────────── */
+.show-more-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  border: none;
+  border-top: 1px dashed var(--border);
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s;
+}
+.show-more-btn:hover { background: var(--bg-secondary); }
+
+/* ── Copy button (shared) ────────────────── */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.copy-btn--inline {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+
+/* Cursor-style: row actions (copy) appear on hover / focus, not always on. */
+.tool-row-header .tool-row-actions,
+.tool-row-header .copy-btn--inline {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.tool-row-header:hover .tool-row-actions,
+.tool-row-header:focus-visible .tool-row-actions,
+.tool-row-header:hover .copy-btn--inline,
+.tool-row-header:focus-visible .copy-btn--inline,
+.tool-row-header .tool-row-actions:focus-within {
+  opacity: 1;
+}
+
+/* ── Shared single-row tool header ─────────
+   Used by BashCard, ReadFileCard, ListDirCard, WebSearchCard,
+   SubagentCard. Before this lived as 5 byte-identical copies; consolidating
+   here also makes the visual contract enforceable in one place. */
+.tool-row {
+  margin: 0;
+  border-radius: 4px;
+}
+.tool-row.has-error { color: var(--red); }
+
+.tool-row-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font-family: var(--font-mono);
+  /* ≈ Cursor ui-tool-call-line: conversation font size, dense gap */
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.tool-row-header:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+
+.tool-row-chevron {
+  display: inline-block;
+  font-size: 7px;
+  width: 10px;
+  text-align: center;
+  transition: transform 120ms ease;
+  flex-shrink: 0;
+  opacity: 0.55;
+  color: var(--text-muted);
+}
+.tool-row-chevron.open { transform: rotate(90deg); }
+
+.tool-row-icon { font-size: 12px; opacity: 0.85; flex-shrink: 0; }
+.tool-row-label {
+  /* ≈ Cursor ui-tool-call-line-action */
+  color: var(--text-secondary);
+  font-weight: 400;
+  flex-shrink: 0;
+}
+.tool-row-title {
+  /* ≈ Cursor ui-tool-call-line-details — quieter than a loud accent link */
+  color: var(--text-muted);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 48%;
+  font-variant-numeric: tabular-nums;
+  /* For bash, the "title" is the full command which is plain mono text,
+     not a filename — components can override color via a modifier class. */
+}
+.tool-row-header:hover .tool-row-title:not(.tool-row-title--plain) {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--border-light);
+  text-underline-offset: 2px;
+}
+.tool-row-title--plain { color: var(--text-secondary); font-weight: normal; }
+.tool-row-subtitle {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 32%;
+}
+.grep-count-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.tool-row-spacer { flex: 1; }
+.tool-row-duration {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  /* Reserve a stable slot so the trailing status icon doesn't shift
+     horizontally as the row transitions spinner → ✓ → ✗. */
+  min-width: 38px;
+  text-align: right;
+}
+.tool-row-status {
+  font-size: 12px;
+  flex-shrink: 0;
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+}
+.tool-row-status--error { color: var(--red); }
+.tool-row-status--empty { color: var(--text-muted); }
+.tool-row-actions { display: inline-flex; align-items: center; }
+
+.tool-row-meta-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+/* Nested rows inside subagent step lists — slightly tighter than top-level. */
+.tool-row--nested .tool-row-header {
+  padding: 2px 6px;
+  font-size: 11.5px;
+}
+.tool-row--nested .tool-row-label { font-size: 11.5px; }
+.tool-row--nested .tool-row-subtitle { font-size: 10.5px; }
+.tool-row--nested .tool-row-body { margin-left: 14px; font-size: 11px; }
+
+.tool-row-actions-bar {
+  margin: 4px 0 0 14px;
+  display: flex;
+  gap: 6px;
+}
+
+/* Shared body styles for the compact row family. Indented to align under
+   the icon (not the chevron) so the body visually "belongs" to its
+   parent row. */
+.tool-row-body {
+  margin: 4px 0 0 18px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre;
+  max-height: 480px;
+  overflow: auto;
+}
+.tool-row-body--error {
+  color: var(--red);
+  border-color: rgba(248,81,73,0.3);
+  background: rgba(248,81,73,0.08);
+  white-space: pre-wrap;
+}
+.tool-row-empty {
+  margin: 4px 0 0 18px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+[data-theme="light"] .tool-row-body--error {
+  background: rgba(207,34,46,0.06);
+  color: var(--red);
+  border-color: rgba(207,34,46,0.25);
+}
+
+/* Light theme */
+
+
+/* Light theme (restored) */
+[data-theme="light"] .copy-btn { background: #fff; color: var(--text-secondary); border-color: var(--border); }
+[data-theme="light"] .tool-row-header:hover { background: var(--bg-secondary); color: var(--text-primary); }
+[data-theme="light"] .tool-row-header { color: var(--text-secondary); }
+[data-theme="light"] .tool-row-title--plain { color: var(--text-primary); }

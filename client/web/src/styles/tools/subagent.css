@@ -1,0 +1,307 @@
+/* Subagent timeline, work-group, explored-group */
+/* Subagent stop control + timeline (flat tool-row tier; no card chrome). */
+.subagent-stop-btn {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.subagent-stop-btn:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.12);
+  border-color: rgba(248, 81, 73, 0.45);
+  color: var(--red);
+}
+.subagent-stop-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── Cursor-style subagent timeline row (all subagent types) ───── */
+.subagent-timeline-row {
+  margin: 2px 0;
+}
+.subagent-timeline-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  border-radius: 4px;
+  color: inherit;
+}
+.subagent-timeline-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.subagent-timeline-icon {
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 3px;
+  flex-shrink: 0;
+  min-height: 14px;
+}
+.subagent-timeline-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+}
+.subagent-timeline-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.subagent-timeline-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.subagent-timeline-title {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.subagent-timeline-badge {
+  color: var(--text-secondary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.subagent-timeline-subtitle {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 0;
+}
+.subagent-timeline-actions {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.subagent-timeline-expanded {
+  margin: 2px 0 6px 30px;
+}
+.subagent-timeline-row.has-error .subagent-timeline-title {
+  color: var(--red);
+}
+
+.waiting-for-subagent {
+  padding: 6px 8px 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── Turn-level work fold (Cursor `workGroup`) ──────────────────
+   Collapses a finished turn's work rows behind one header; the final
+   assistant message stays outside the fold. */
+.work-group {
+  margin: 2px 0 4px;
+}
+.work-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 6px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.work-group-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+.work-group-chevron {
+  display: inline-block;
+  font-size: 7px;
+  width: 10px;
+  text-align: center;
+  transition: transform 120ms ease;
+  flex-shrink: 0;
+  opacity: 0.55;
+  color: var(--text-muted);
+}
+.work-group-chevron.open {
+  transform: rotate(90deg);
+}
+.work-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-group-body {
+  margin: 2px 0 4px 18px;
+}
+
+[data-theme="light"] .subagent-timeline-subtitle {
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .subagent-stop-btn:hover:not(:disabled) {
+  background: rgba(207, 34, 46, 0.08);
+  color: var(--red);
+}
+
+/* ── Explored N tools (Cursor-style density group) ─────────────── */
+.explored-group-body {
+  margin: 2px 0 4px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.explored-group-step > .tool-row,
+.explored-group-step > .tool-card {
+  margin: 0;
+}
+
+.subagent-step-toggle {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: color 0.12s, text-decoration-color 0.12s;
+}
+.subagent-step-toggle:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.subagent-step-toggle.open {
+  color: var(--text-secondary);
+}
+
+.subagent-expanded {
+  margin: 2px 0 4px 18px;
+  color: var(--text-primary);
+}
+
+.subagent-steps {
+  margin: 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.subagent-steps > .tool-row,
+.subagent-steps > .tool-card,
+.subagent-steps > .subagent-nested-step {
+  margin: 0;
+}
+.subagent-nested-step > .tool-row,
+.subagent-nested-step > .tool-card {
+  margin: 0;
+}
+
+.subagent-more {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+}
+.subagent-more:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+/* Report: flat markdown flow (matches assistant .content, no inner box). */
+.subagent-result {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+.subagent-result h1,
+.subagent-result h2,
+.subagent-result h3,
+.subagent-result h4 {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.subagent-result h1:first-child,
+.subagent-result h2:first-child,
+.subagent-result h3:first-child { margin-top: 0; }
+.subagent-result strong { color: var(--text-primary); font-weight: 600; }
+.subagent-result a { color: var(--accent); }
+.subagent-result li { margin: 2px 0; }
+.subagent-result p { margin: 0 0 8px; }
+.subagent-result p:last-child { margin-bottom: 0; }
+.subagent-result ul,
+.subagent-result ol { margin: 4px 0 8px 20px; }
+.subagent-result code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
+.subagent-result pre {
+  font-size: 12px;
+  padding: 8px;
+  border-radius: 4px;
+  overflow: auto;
+}
+.subagent-result--error { color: var(--red); }
+.subagent-result-error {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--red);
+  white-space: pre-wrap;
+}
+
+[data-theme="light"] .subagent-result code { background: rgba(0,0,0,0.05); }
+
+
+/* Light theme (restored) */
+[data-theme="light"] .work-group-header {
+  color: var(--text-secondary);
+}
+[data-theme="light"] .work-group-header:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+[data-theme="light"] .subagent-timeline-badge,
+[data-theme="light"] .waiting-for-subagent {
+  color: var(--text-secondary);
+}
+[data-theme="light"] .subagent-timeline-header:hover {
+  background: var(--bg-secondary);
+}
