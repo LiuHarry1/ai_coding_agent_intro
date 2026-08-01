@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import DiffViewer from './DiffViewer.jsx'
 import FilePreview from './FilePreview.jsx'
 import CopyButton from './CopyButton.jsx'
+import LiveTerminal from './LiveTerminal.jsx'
 import {
   fileName,
   formatDuration,
@@ -158,31 +159,6 @@ function LivePreview({ text, fileName, startTime }) {
       </div>
       <pre className='live-terminal-output' ref={ref}>
         {text || '(waiting…)'}
-      </pre>
-    </div>
-  )
-}
-
-function LiveTerminal({ output, elapsed, done }) {
-  const termRef = useRef(null)
-
-  useEffect(() => {
-    if (termRef.current) {
-      termRef.current.scrollTop = termRef.current.scrollHeight
-    }
-  }, [output])
-
-  return (
-    <div className='live-terminal'>
-      <div className='live-terminal-header'>
-        <span className='live-terminal-dot' />
-        <span className='live-terminal-title'>
-          {done ? `Finished in ${elapsed}s` : `Running... ${elapsed}s`}
-        </span>
-        {!done && <span className='spinner spinner-sm' />}
-      </div>
-      <pre className='live-terminal-output' ref={termRef}>
-        {output || '(waiting for output...)'}
       </pre>
     </div>
   )

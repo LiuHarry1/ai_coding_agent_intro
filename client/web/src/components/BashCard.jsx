@@ -1,27 +1,17 @@
-import React, { useState } from 'react'
+import React from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolCallLine from './ToolCallLine.jsx'
+import LiveTerminal from './LiveTerminal.jsx'
 import { detectError } from '../lib/utils.js'
+import { liveToolSubtitle } from '../lib/tool-density.js'
+import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 
 /**
  * Compact one-line card for bash (Cursor shellToolCall ≈ action "Shell").
- *   - { command } / background      → "Shell <command>"
- *   - { kill: true, pid }           → "Killed pid N"
- *   - { pid }                       → "Checked pid N"
- *
- * Priority MUST mirror shell-runner's execute(): command wins over pid.
- * Some providers (OpenAI Responses API in strict-tools mode) stuff
- * default `pid: 0` into the args even when the model wants to run a real
- * command — without command-first priority the UI mis-labels every such
- * call as "Checked pid 0".
- *
- * Title uses `tool-row-title--plain` because a shell command is plain
- * mono text, not a clickable identifier — the default accent color for
- * filenames/queries reads wrong on `git status`.
+ * Streams liveOutput into LiveTerminal while running (same data ToolCallCard used).
  */
 
 function describeBash(args) {
-  // Cursor shellToolCall uses action "Shell" + command/description as details.
   if (!args || typeof args !== 'object') return { verb: 'Shell', text: '' }
 
   const cmd = typeof args.command === 'string' ? args.command.trim() : ''
@@ -29,8 +19,6 @@ function describeBash(args) {
     return { verb: 'Shell', text: cmd }
   }
 
-  // Only honor pid when it's a real OS pid (>0). Strict-tools `pid: 0` is
-  // a no-op default that gets confused for an intentional pid check.
   const pid = typeof args.pid === 'number' && args.pid > 0 ? args.pid : null
   if (pid != null) {
     return { verb: args.kill ? 'Killed' : 'Checked', text: `pid ${pid}` }
@@ -40,7 +28,6 @@ function describeBash(args) {
 }
 
 export default function BashCard({ part }) {
-  const [expanded, setExpanded] = useState(false)
   const args = part.args || {}
   const result =
     part.toolUseResult?.text != null ? part.toolUseResult.text : part.result
@@ -52,16 +39,34 @@ export default function BashCard({ part }) {
       detectError(part.name || 'Bash', result))
   const { verb, text } = describeBash(args)
   const hasOutput = typeof result === 'string' && result.length > 0
+  const hasLiveOutput = part.liveOutput != null
+  const isRunning = !isDone
+
+  const [expanded, toggleExpanded] = useStreamingExpanded(
+    isRunning && hasLiveOutput,
+    { expandOnceWhen: isDone && (isError || hasOutput) },
+  )
+
+  const liveSub = !isDone ? liveToolSubtitle(part) : null
+  const showLive = expanded && hasLiveOutput && !isDone
+  const showFinal = expanded && isDone
 
   return (
     <div className={`tool-row bash-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
         expanded={expanded}
-        onToggle={() => setExpanded(v => !v)}
+        onToggle={toggleExpanded}
         label={verb}
         title={text}
         titlePlain
         titleTooltip={text}
+        subtitle={
+          liveSub && liveSub !== text
+            ? liveSub
+            : !isDone && part.liveElapsed != null
+              ? `${part.liveElapsed}s`
+              : null
+        }
         duration={part.duration}
         isDone={isDone}
         isError={isError}
@@ -72,14 +77,22 @@ export default function BashCard({ part }) {
         }
       />
 
-      {expanded && isDone && hasOutput && (
+      {showLive && (
+        <LiveTerminal
+          output={part.liveOutput}
+          elapsed={part.liveElapsed}
+          done={false}
+        />
+      )}
+
+      {showFinal && hasOutput && (
         <pre
           className={`tool-row-body ${isError ? 'tool-row-body--error' : ''}`}
         >
           {result}
         </pre>
       )}
-      {expanded && isDone && !hasOutput && (
+      {showFinal && !hasOutput && (
         <div className='tool-row-empty'>(no output)</div>
       )}
     </div>

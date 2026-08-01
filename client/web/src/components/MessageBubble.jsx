@@ -68,7 +68,7 @@ export default function MessageBubble({ message, isLast = false }) {
           <WorkGroup
             durationMs={fold.durationMs}
             runningTaskCount={fold.runningTaskCount}
-            defaultOpen={isLast}
+            defaultOpen={isLast && !messageStreaming}
           >
             {foldedNodes}
           </WorkGroup>

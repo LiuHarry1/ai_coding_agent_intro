@@ -295,6 +295,16 @@
   font-size: 13px;
 }
 
+/* Match tool-row density during early turn (Cursor-like one-liner). */
+.thinking-indicator--dense {
+  gap: 6px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
 .thinking-indicator .dot,
 .streaming-indicator .dot {
   width: 5px; height: 5px;

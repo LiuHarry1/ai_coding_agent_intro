@@ -157,10 +157,10 @@
 .file-change-card {
   display: flex;
   flex-direction: column;
-  margin: 6px 0;
+  margin: 4px 0;
   border: 1px solid var(--border);
   border-left-width: 3px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-secondary);
   overflow: hidden;
 }
@@ -168,6 +168,35 @@
 .file-change-card--write { border-left-color: var(--green); }
 .file-change-card--edit  { border-left-color: var(--orange); }
 .file-change-card.has-error { border-left-color: var(--red); }
+
+/* Nested under Task / Explored — denser, no heavy card chrome. */
+.file-change-card--nested {
+  margin: 1px 0;
+  border: none;
+  border-left: 2px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.file-change-card--nested.file-change-card--write {
+  border-left-color: var(--green);
+}
+.file-change-card--nested.file-change-card--edit {
+  border-left-color: var(--orange);
+}
+.file-change-card--nested.has-error {
+  border-left-color: var(--red);
+}
+.file-change-card--nested .file-change-header {
+  padding: 2px 6px;
+  gap: 6px;
+  font-size: 12px;
+}
+.file-change-card--nested .file-change-name {
+  max-width: 70%;
+}
+.file-change-card--nested .file-change-body {
+  margin-left: 14px;
+}
 
 /* Compact fallback shown when a write_file/edit_file call is missing
    file_path — either mid-stream (preparing) or because the call ended
@@ -196,7 +225,18 @@
   font-size: 12px;
   color: var(--text-muted);
 }
-.file-change-stub-icon { opacity: 0.7; }
+.file-change-stub--nested {
+  margin: 1px 0;
+  border: none;
+  border-left: 2px dashed var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.file-change-stub-verb {
+  color: var(--text-secondary);
+  font-weight: 600;
+  flex-shrink: 0;
+}
 .file-change-stub-name { font-weight: 600; color: var(--text-secondary); }
 .file-change-stub-label { font-style: italic; }
 .file-change-stub-spacer { flex: 1; }
@@ -214,10 +254,11 @@
 .file-change-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 5px 10px;
   font-family: var(--font-mono);
   font-size: 12.5px;
+  line-height: 1.5;
   border-bottom: 1px solid transparent;
   background: transparent;
   border: 0;
@@ -229,20 +270,23 @@
 .file-change-header:hover { background: rgba(255,255,255,0.03); }
 .file-change-card .file-change-body + .file-change-error,
 .file-change-card .file-change-body { border-top: 1px solid var(--border); }
+.file-change-card--nested .file-change-body {
+  border-top: none;
+}
 
-.file-change-icon {
-  font-size: 14px;
+.file-change-verb {
+  color: var(--text-secondary);
+  font-weight: 600;
   flex-shrink: 0;
-  opacity: 0.85;
 }
 
 .file-change-name {
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--text-primary);
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 60%;
+  max-width: 55%;
 }
 
 .file-change-count {

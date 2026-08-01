@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolCallLine from './ToolCallLine.jsx'
+import { liveToolSubtitle } from '../lib/tool-density.js'
 
 /**
  * Single-row card for list_dir, mirroring ReadFileCard.
@@ -33,6 +34,10 @@ export default function ListDirCard({ part }) {
   if (ignore) meta.push(`ignore ${ignore.length}`)
   if (fileCount != null) meta.push(`${fileCount} files`)
 
+  const liveSub = !isDone ? liveToolSubtitle(part) : null
+  const subtitle =
+    liveSub || (meta.length > 0 ? meta.join(' \u00B7 ') : null)
+
   return (
     <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
@@ -41,7 +46,7 @@ export default function ListDirCard({ part }) {
         label='LS'
         title={dirPath}
         titleTooltip={dirPath}
-        subtitle={meta.length > 0 ? meta.join(' \u00B7 ') : null}
+        subtitle={subtitle}
         duration={part.duration}
         isDone={isDone}
         isError={isError}

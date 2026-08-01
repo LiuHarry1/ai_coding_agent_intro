@@ -5,6 +5,7 @@ import rehypeHighlight from 'rehype-highlight'
 import { mdComponents } from '../lib/markdown-components.jsx'
 import NestedToolRuns from './NestedToolRuns.jsx'
 import { useChatStore } from '../stores/chat-store.js'
+import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import {
   liveToolSubtitle,
   pickLiveMember,
@@ -16,8 +17,8 @@ import {
 } from './pickToolCard.js'
 
 /**
- * Cursor-style subagent row in the parent timeline:
- *   title + type badge
+ * Cursor-style Task row in the parent timeline:
+ *   title + type badge (Task / Explorer / Plan)
  *     live status
  * Expand for nested tools + final report. Stop cancels this tool only.
  */
@@ -27,13 +28,13 @@ const TYPE_BADGES = {
   explore: 'Explorer',
   Plan: 'Plan',
   plan: 'Plan',
-  'general-purpose': 'Agent',
-  general_purpose: 'Agent',
+  'general-purpose': 'Task',
+  general_purpose: 'Task',
 }
 
 function badgeFor(subagentType) {
   if (TYPE_BADGES[subagentType]) return TYPE_BADGES[subagentType]
-  if (!subagentType) return 'Agent'
+  if (!subagentType) return 'Task'
   return subagentType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
@@ -82,7 +83,10 @@ export default function SubagentCard({ part }) {
 
   const steps = useMemo(() => visibleSteps(part), [part.subagentParts])
   const subtitle = rowSubtitle(part, steps)
-  const [expanded, setExpanded] = useState(false)
+  // Auto-open nested steps while the task is live (Cursor task chrome).
+  const [expanded, toggleExpanded] = useStreamingExpanded(
+    !isDone && steps.length > 0,
+  )
   const [showAllSteps, setShowAllSteps] = useState(false)
   const hasReport =
     isDone && typeof part.result === 'string' && part.result.length > 0
@@ -100,7 +104,7 @@ export default function SubagentCard({ part }) {
       <button
         type='button'
         className='subagent-timeline-header'
-        onClick={() => setExpanded(v => !v)}
+        onClick={toggleExpanded}
         aria-expanded={expanded}
       >
         <span className='subagent-timeline-icon' aria-hidden='true'>

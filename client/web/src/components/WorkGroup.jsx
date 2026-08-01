@@ -41,6 +41,9 @@ export default function WorkGroup({
           {'\u25B6'}
         </span>
         <span className='work-group-label'>{label}</span>
+        {runningTaskCount > 0 && (
+          <span className='spinner spinner-sm' aria-hidden='true' />
+        )}
       </button>
 
       {open && <div className='work-group-body'>{children}</div>}

@@ -157,8 +157,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.work-group-header .spinner {
+  margin-left: 2px;
+}
 .work-group-body {
   margin: 2px 0 4px 18px;
+}
+/* Intra-turn fold inside a live tool_group */
+.tool-group > .work-group {
+  margin: 0 0 2px;
 }
 
 [data-theme="light"] .subagent-timeline-subtitle {

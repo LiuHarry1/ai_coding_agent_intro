@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolCallLine from './ToolCallLine.jsx'
 import { fileName } from '../lib/utils.js'
+import { liveToolSubtitle } from '../lib/tool-density.js'
 
 /**
  * Read card — CC dual-channel UI path:
@@ -97,6 +98,8 @@ export default function ReadFileCard({ part }) {
       ? header.content || header.label || ''
       : ''
 
+  const liveSub = !isDone ? liveToolSubtitle(part) : null
+
   return (
     <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
@@ -105,7 +108,7 @@ export default function ReadFileCard({ part }) {
         label='Read'
         title={fName}
         titleTooltip={filePath || ''}
-        subtitle={rangeLabel || null}
+        subtitle={liveSub || rangeLabel || null}
         duration={part.duration}
         isDone={isDone}
         isError={isError}

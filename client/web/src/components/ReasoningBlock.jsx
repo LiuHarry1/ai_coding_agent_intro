@@ -4,6 +4,11 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { getMdComponents } from '../lib/markdown-components.jsx'
 
+/**
+ * Cursor-like thinking row: one-line label while streaming; body only when
+ * the user expands (or after done if they open it). Avoids flooding the
+ * transcript with reasoning markdown mid-turn.
+ */
 export default function ReasoningBlock({ part }) {
   const [open, setOpen] = useState(false)
   const isStreaming = part.status === 'streaming'
@@ -12,6 +17,8 @@ export default function ReasoningBlock({ part }) {
   const label = isStreaming
     ? 'Thinking...'
     : `Thought for ${part.duration ?? 0}s`
+
+  const showBody = open && !!part.content
 
   return (
     <div className={`reasoning-block ${isStreaming ? 'streaming' : 'done'}`}>
@@ -34,7 +41,7 @@ export default function ReasoningBlock({ part }) {
           {label}
         </span>
       </button>
-      {(open || isStreaming) && part.content && (
+      {showBody && (
         <div className='reasoning-content'>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}

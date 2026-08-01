@@ -55,10 +55,98 @@ export function groupAssistantParts(parts) {
   return groupedParts
 }
 
+/** @param {object} row grouped assistant part */
+function isRowSettled(row) {
+  switch (row?.type) {
+    case 'reasoning':
+      return row.status !== 'streaming'
+    case 'thinking':
+      // Ephemeral placeholder — keep outside the fold while visible.
+      return false
+    case 'tool_group':
+      return (
+        Array.isArray(row.items) &&
+        row.items.length > 0 &&
+        row.items.every(it => it.status === 'done')
+      )
+    case 'todo_list':
+      return true
+    case 'compaction_start':
+      return false
+    case 'compaction_done':
+      return true
+    default:
+      return false
+  }
+}
+
 /**
- * Turn-level work fold, mirroring Cursor's `workGroup` split: once the turn
- * is done, every row before the final assistant message collapses behind one
- * header. Bails out when the prefix holds a row that must stay visible
+ * Whether a coalesceToolRuns entry is fully done (for in-group progressive fold).
+ * @param {{ type: string, items?: object[], part?: object }} run
+ */
+export function isToolRunSettled(run) {
+  if (!run) return false
+  if (run.type === 'explored_run') {
+    return (
+      Array.isArray(run.items) &&
+      run.items.length > 0 &&
+      run.items.every(p => p.status === 'done')
+    )
+  }
+  return run.part?.status === 'done'
+}
+
+/**
+ * Split coalesced runs into a settled prefix + live suffix.
+ * @param {ReturnType<typeof coalesceToolRuns>} runs
+ */
+export function splitSettledToolRuns(runs) {
+  const list = runs || []
+  let i = 0
+  for (; i < list.length; i++) {
+    if (!isToolRunSettled(list[i])) break
+  }
+  return { settled: list.slice(0, i), rest: list.slice(i) }
+}
+
+function foldStats(prefix) {
+  let start = Infinity
+  let end = -Infinity
+  let runningTaskCount = 0
+  for (const p of prefix) {
+    if (p.type !== 'tool_group') continue
+    for (const it of p.items || []) {
+      if (typeof it.startTime === 'number') start = Math.min(start, it.startTime)
+      if (typeof it.endTime === 'number') end = Math.max(end, it.endTime)
+      if (it.isSubagent && it.status !== 'done') runningTaskCount++
+    }
+  }
+  return {
+    runningTaskCount,
+    durationMs: end > start ? end - start : undefined,
+  }
+}
+
+function countRunningTasks(rows) {
+  let n = 0
+  for (const p of rows || []) {
+    if (p.type !== 'tool_group') continue
+    for (const it of p.items || []) {
+      if (it.isSubagent && it.status !== 'done') n++
+    }
+  }
+  return n
+}
+
+/**
+ * Turn-level work fold, mirroring Cursor's `workGroup` split.
+ *
+ * - Done turn: collapse every work row before the final assistant text.
+ * - Streaming: collapse the longest settled work prefix when a live suffix
+ *   (more tools, thinking, or answer text) follows — so completed search/read
+ *   batches get out of the way while the agent keeps going.
+ *
+ * Bails out when the prefix holds a row that must stay visible
  * (questions, plan approval, errors).
  *
  * @param {object[]} rows grouped parts from groupAssistantParts
@@ -66,8 +154,6 @@ export function groupAssistantParts(parts) {
  * @returns {null | { split: number, runningTaskCount: number, durationMs?: number }}
  */
 export function computeWorkFold(rows, streaming) {
-  if (streaming) return null
-
   let lastText = -1
   for (let i = rows.length - 1; i >= 0; i--) {
     if (rows[i].type === 'text' && rows[i].content?.trim()) {
@@ -75,27 +161,39 @@ export function computeWorkFold(rows, streaming) {
       break
     }
   }
-  if (lastText <= 0) return null
 
-  const prefix = rows.slice(0, lastText)
-  if (!prefix.every(p => WORK_GROUP_CHILD_TYPES.has(p.type))) return null
-
-  let start = Infinity
-  let end = -Infinity
-  let runningTaskCount = 0
-  for (const p of prefix) {
-    if (p.type !== 'tool_group') continue
-    for (const it of p.items) {
-      if (typeof it.startTime === 'number') start = Math.min(start, it.startTime)
-      if (typeof it.endTime === 'number') end = Math.max(end, it.endTime)
-      if (it.isSubagent && it.status !== 'done') runningTaskCount++
+  if (!streaming) {
+    if (lastText <= 0) return null
+    const prefix = rows.slice(0, lastText)
+    if (!prefix.every(p => WORK_GROUP_CHILD_TYPES.has(p.type))) return null
+    const stats = foldStats(prefix)
+    return {
+      split: lastText,
+      runningTaskCount: stats.runningTaskCount,
+      durationMs: stats.durationMs,
     }
   }
 
+  // Streaming: longest settled work prefix with something still visible after.
+  let split = 0
+  for (let i = 0; i < rows.length; i++) {
+    const p = rows[i]
+    if (p.type === 'text') break
+    if (!WORK_GROUP_CHILD_TYPES.has(p.type)) break
+    if (!isRowSettled(p)) break
+    split = i + 1
+  }
+  if (split <= 0 || split >= rows.length) return null
+
+  const prefix = rows.slice(0, split)
+  if (!prefix.every(p => WORK_GROUP_CHILD_TYPES.has(p.type))) return null
+
+  const stats = foldStats(prefix)
   return {
-    split: lastText,
-    runningTaskCount,
-    durationMs: end > start ? end - start : undefined,
+    split,
+    // Prefer live tasks still open in the turn (usually the suffix).
+    runningTaskCount: countRunningTasks(rows) || stats.runningTaskCount,
+    durationMs: stats.durationMs,
   }
 }
 
