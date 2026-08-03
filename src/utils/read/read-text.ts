@@ -1,18 +1,17 @@
+/**
+ * Slice UTF-8 text / load from disk into dual-channel Read Out.
+ * Formatting for the model lives in format-for-model.ts.
+ */
 import * as fs from 'fs'
 import * as path from 'path'
-import {
-  MAX_LINES_TO_READ,
-  MAX_OUTPUT_SIZE_BYTES,
-} from '../../constants/api_limits.js'
 import { isBinaryContent } from '../../constants/files.js'
+import { MAX_LINES_TO_READ, MAX_OUTPUT_SIZE_BYTES } from './limits.js'
+import { readTextFromString } from './read-from-string.js'
 import type { ReadTextOutput } from './types.js'
 import { FileTooLargeError } from './types.js'
 
-function addLineNumbers(lines: string[], startLine: number): string {
-  return lines
-    .map((line, i) => `${String(startLine + i).padStart(4)}│${line}`)
-    .join('\n')
-}
+export { roughTokenEstimate } from './read-from-string.js'
+export { addLineNumbers, formatTextReadForModel } from './format-for-model.js'
 
 export function readTextFile(
   absPath: string,
@@ -28,8 +27,8 @@ export function readTextFile(
   }
 
   // When the caller supplies offset/limit, read only that window — no
-  // whole-file size gate. Without a range, files larger than
-  // MAX_OUTPUT_SIZE_BYTES must use offset/limit.
+  // whole-file size/line gate. Without a range, files larger than
+  // MAX_OUTPUT_SIZE_BYTES or MAX_LINES_TO_READ must use offset/limit.
   const hasRange =
     options?.limit != null || (options?.offset != null && options.offset > 1)
   if (stat.size > MAX_OUTPUT_SIZE_BYTES) {
@@ -47,34 +46,7 @@ export function readTextFile(
     throw new Error(`binary file detected — cannot display ${displayPath}`)
   }
 
-  let lines = buf.toString('utf-8').split('\n')
-  const totalLines = lines.length
-
-  let startLine = 1
-  const { offset, limit } = options ?? {}
-  if (offset != null && offset < 0) {
-    startLine = Math.max(1, totalLines + offset + 1)
-    lines = lines.slice(startLine - 1)
-  } else if (offset != null && offset > 0) {
-    startLine = offset
-    lines = lines.slice(offset - 1)
-  }
-  if (limit != null && limit > 0) lines = lines.slice(0, limit)
-
-  const endLine = startLine + lines.length - 1
-  const numbered = addLineNumbers(lines, startLine)
-  const header = `${displayPath} (lines ${startLine}-${endLine} of ${totalLines})`
-
-  return {
-    type: 'text',
-    file: {
-      filePath: displayPath,
-      content: `${header}\n${numbered}`,
-      numLines: lines.length,
-      startLine,
-      totalLines,
-    },
-  }
+  return readTextFromString(buf.toString('utf-8'), displayPath, options)
 }
 
 /** Max bytes we'll load whole-file for @-mention truncation (streaming TBD for larger). */
@@ -86,7 +58,10 @@ export function readTextFileTruncated(
   displayPath: string,
   options?: { offset?: number; limit?: number },
 ): ReadTextOutput {
-  const lineLimit = options?.limit ?? MAX_LINES_TO_READ
+  const lineLimit = Math.min(
+    options?.limit ?? MAX_LINES_TO_READ,
+    MAX_LINES_TO_READ,
+  )
   const offset = options?.offset ?? 1
 
   if (isFileWithinReadSizeLimit(absPath)) {
@@ -112,28 +87,11 @@ export function readTextFileTruncated(
     throw new Error(`binary file detected — cannot display ${displayPath}`)
   }
 
-  let lines = buf.toString('utf-8').split('\n')
-  const totalLines = lines.length
-  let startLine = offset
-  if (offset > 0) {
-    lines = lines.slice(offset - 1)
-  }
-  lines = lines.slice(0, lineLimit)
-
-  const endLine = startLine + lines.length - 1
-  const numbered = addLineNumbers(lines, startLine)
-  const header = `${displayPath} (lines ${startLine}-${endLine} of ${totalLines})`
-
-  return {
-    type: 'text',
-    file: {
-      filePath: displayPath,
-      content: `${header}\n${numbered}`,
-      numLines: lines.length,
-      startLine,
-      totalLines,
-    },
-  }
+  return readTextFromString(buf.toString('utf-8'), displayPath, {
+    offset,
+    limit: lineLimit,
+    enforceWholeFileLineGate: false,
+  })
 }
 
 export function isFileWithinReadSizeLimit(

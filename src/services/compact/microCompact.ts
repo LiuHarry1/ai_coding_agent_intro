@@ -5,20 +5,27 @@
  * For write-oriented tools (write_file, edit_file, ...) clears the INPUT.
  * Tool blocks are preserved (only payloads replaced) so tool_call ↔
  * tool_result pairing stays intact.
+ *
+ * When Read results are cleared, matching entries are dropped from
+ * `readFileState` so file_unchanged dedup cannot stub against cleared content.
  */
+import * as path from 'path'
 import type {
   AssistantMessage,
   Message,
   ToolMessage,
 } from '../../core/types.js'
 import { isRoleMessage } from '../../core/types.js'
+import type { ReadFileState } from '../../utils/attachments/types.js'
+import { invalidateReadPaths } from '../../utils/read/read-file-state.js'
+import { resolveFileInCwd } from '../../utils/read/index.js'
 import {
   BASH_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
@@ -42,7 +49,7 @@ const CLEARABLE_TOOL_RESULTS = new Set<string>([
   POWERSHELL_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
 ])
@@ -55,14 +62,6 @@ const CLEARABLE_TOOL_INPUTS = new Set<string>([
   'NotebookEdit',
 ])
 
-/**
- * Any tool result at least this large is clearable regardless of tool name.
- * MCP tools (doc retrievers, memory search, ...) return some of the biggest
- * payloads yet were invisible to the name-based whitelist — observed as
- * `micro-compact DONE cleared=0` on a 167k-token conversation. Prefer a
- * size-based aggregate budget (enforceToolResultBudget) rather than relying
- * only on tool names.
- */
 const CLEARABLE_MIN_CHARS = 2_000
 
 function estStr(s: string): number {
@@ -76,12 +75,52 @@ export interface MicroCompactResult {
   messages: Message[]
   tokensFreed: number
   cleared: number
+  /** Absolute paths whose Read results were cleared (for readFileState sync). */
+  clearedReadAbsPaths: string[]
+}
+
+function collectReadAbsByToolCallId(
+  messages: Message[],
+  cwd?: string,
+): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const m of messages) {
+    if (!isRoleMessage(m) || m.role !== 'assistant') continue
+    for (const part of m.content) {
+      if (part.type !== 'tool-call') continue
+      if (part.toolName !== FILE_READ_TOOL_NAME) continue
+      const fp = part.input?.file_path
+      if (typeof fp !== 'string' || !fp) continue
+      if (cwd) {
+        const resolved = resolveFileInCwd(cwd, fp)
+        if (!('error' in resolved)) {
+          map.set(part.toolCallId, resolved.abs)
+          continue
+        }
+      }
+      map.set(part.toolCallId, path.isAbsolute(fp) ? fp : path.resolve(fp))
+    }
+  }
+  return map
+}
+
+function absFromToolUseResult(tur: unknown, cwd?: string): string | undefined {
+  if (!tur || typeof tur !== 'object') return undefined
+  const file = (tur as { file?: { filePath?: string } }).file
+  const fp = file?.filePath
+  if (typeof fp !== 'string' || !fp) return undefined
+  if (cwd) {
+    const resolved = resolveFileInCwd(cwd, fp)
+    if (!('error' in resolved)) return resolved.abs
+  }
+  return path.isAbsolute(fp) ? fp : path.resolve(fp)
 }
 
 export function microCompact(
   messages: Message[],
   keepRecent: number,
   sessionId?: string,
+  opts?: { cwd?: string; readFileState?: ReadFileState },
 ): MicroCompactResult {
   const toolMsgIdx: number[] = []
   for (let i = 0; i < messages.length; i++) {
@@ -89,10 +128,12 @@ export function microCompact(
     if (isRoleMessage(m) && m.role === 'tool') toolMsgIdx.push(i)
   }
   if (toolMsgIdx.length <= Math.max(0, keepRecent)) {
-    return { messages, tokensFreed: 0, cleared: 0 }
+    return { messages, tokensFreed: 0, cleared: 0, clearedReadAbsPaths: [] }
   }
 
   const clearUpToExclusive = toolMsgIdx[toolMsgIdx.length - keepRecent - 1] + 1
+  const readAbsById = collectReadAbsByToolCallId(messages, opts?.cwd)
+  const clearedReadAbsPaths = new Set<string>()
 
   let tokensFreed = 0
   let cleared = 0
@@ -106,6 +147,9 @@ export function microCompact(
         sessionId,
         () => cleared++,
         n => (tokensFreed += n),
+        readAbsById,
+        clearedReadAbsPaths,
+        opts?.cwd,
       )
     if (m.role === 'assistant')
       return clearToolInputs(
@@ -115,7 +159,17 @@ export function microCompact(
       )
     return m
   })
-  return { messages: out, tokensFreed, cleared }
+
+  if (clearedReadAbsPaths.size > 0) {
+    invalidateReadPaths(opts?.readFileState, clearedReadAbsPaths)
+  }
+
+  return {
+    messages: out,
+    tokensFreed,
+    cleared,
+    clearedReadAbsPaths: [...clearedReadAbsPaths],
+  }
 }
 
 /**
@@ -140,6 +194,9 @@ function clearToolResults(
   sessionId: string | undefined,
   bumpCleared: () => void,
   addFreed: (n: number) => void,
+  readAbsById: Map<string, string>,
+  clearedReadAbsPaths: Set<string>,
+  cwd?: string,
 ): ToolMessage {
   let touched = false
   const newContent = m.content.map(part => {
@@ -150,6 +207,14 @@ function clearToolResults(
       text.length >= CLEARABLE_MIN_CHARS
     if (!clearable) return part
     if (text === MICRO_COMPACT_MARKER || isPersistedReference(text)) return part
+
+    if (part.toolName === FILE_READ_TOOL_NAME) {
+      const fromTur = absFromToolUseResult(part.toolUseResult, cwd)
+      const fromCall = readAbsById.get(part.toolCallId)
+      const abs = fromTur ?? fromCall
+      if (abs) clearedReadAbsPaths.add(abs)
+    }
+
     const replacement = offloadReferenceForCompact(
       sessionId,
       part.toolCallId,

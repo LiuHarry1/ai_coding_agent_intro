@@ -2,7 +2,7 @@ import type { Message, UserContentPart, UserMessage } from '../../core/types.js'
 import type { Attachment } from './types.js'
 import {
   BASH_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import { MAX_LINES_TO_READ } from '../../constants/api_limits.js'
 import { formatReadOutputAsToolString } from '../read/index.js'
@@ -55,16 +55,16 @@ function fileAttachmentToMessages(attachment: {
   truncated?: boolean
 }): Message[] {
   const input = { file_path: attachment.displayPath }
-  const msgs: Message[] = [createToolUseMessage(READ_FILE_TOOL_NAME, input)]
+  const msgs: Message[] = [createToolUseMessage(FILE_READ_TOOL_NAME, input)]
 
   if (attachment.content.type === 'image') {
     msgs.push(
-      createToolResultImageMessage(READ_FILE_TOOL_NAME, attachment.content),
+      createToolResultImageMessage(FILE_READ_TOOL_NAME, attachment.content),
     )
   } else {
     msgs.push(
       createToolResultTextMessage(
-        READ_FILE_TOOL_NAME,
+        FILE_READ_TOOL_NAME,
         formatReadOutputAsToolString(attachment.content),
       ),
     )
@@ -73,7 +73,7 @@ function fileAttachmentToMessages(attachment: {
   if (attachment.truncated) {
     msgs.push(
       metaUserMessage(
-        `Note: The file ${attachment.displayPath} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${READ_FILE_TOOL_NAME} to read more of the file if you need.`,
+        `Note: The file ${attachment.displayPath} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${FILE_READ_TOOL_NAME} to read more of the file if you need.`,
       ),
     )
   }
@@ -106,8 +106,8 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
       return [
         metaUserMessage(
           `PDF file: ${attachment.displayPath} (${attachment.pageCount} pages, ${formatFileSize(attachment.fileSize)}). ` +
-            `This PDF is too large to read all at once. You MUST use the ${READ_FILE_TOOL_NAME} tool with the pages parameter ` +
-            `to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${READ_FILE_TOOL_NAME} without the pages parameter ` +
+            `This PDF is too large to read all at once. You MUST use the ${FILE_READ_TOOL_NAME} tool with the pages parameter ` +
+            `to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${FILE_READ_TOOL_NAME} without the pages parameter ` +
             `or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. ` +
             `Maximum 20 pages per request.`,
         ),

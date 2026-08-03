@@ -7,7 +7,7 @@ import {
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   SKILL_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
@@ -66,7 +66,7 @@ export function toolInfoFromCall(
         kind: 'execute',
       }
     }
-    case READ_FILE_TOOL_NAME: {
+    case FILE_READ_TOOL_NAME: {
       const fp = filePathFromArgs(args)
       return {
         title: fp ? `Read ${toDisplayPath(fp, cwd)}` : 'Read file',

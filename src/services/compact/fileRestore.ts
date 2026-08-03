@@ -5,7 +5,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { Message } from '../../core/types.js'
 import { isRoleMessage } from '../../core/types.js'
-import { READ_FILE_TOOL_NAME } from '../../constants/tool_names.js'
+import { FILE_READ_TOOL_NAME } from '../../constants/tool_names.js'
 
 export type FileRestoreBudget = {
   maxFiles: number
@@ -22,7 +22,7 @@ export function extractRecentlyReadFiles(
     const m = messages[i]
     if (!isRoleMessage(m) || m.role !== 'assistant') continue
     for (const part of m.content) {
-      if (part.type !== 'tool-call' || part.toolName !== READ_FILE_TOOL_NAME)
+      if (part.type !== 'tool-call' || part.toolName !== FILE_READ_TOOL_NAME)
         continue
       const filePath =
         ((part.input as Record<string, unknown>)?.file_path as

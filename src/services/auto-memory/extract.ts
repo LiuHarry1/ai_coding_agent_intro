@@ -30,7 +30,7 @@ import {
   EDIT_FILE_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import {
@@ -142,7 +142,7 @@ export function createAutoMemCanUseTool(
 
   return (toolName, input) => {
     if (
-      toolName === READ_FILE_TOOL_NAME ||
+      toolName === FILE_READ_TOOL_NAME ||
       toolName === GREP_TOOL_NAME ||
       toolName === GLOB_TOOL_NAME
     ) {
@@ -189,7 +189,7 @@ export function createAutoMemCanUseTool(
 
     return {
       behavior: 'deny',
-      message: `only ${READ_FILE_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${EDIT_FILE_TOOL_NAME}/${WRITE_FILE_TOOL_NAME} within ${memPath} are allowed`,
+      message: `only ${FILE_READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${EDIT_FILE_TOOL_NAME}/${WRITE_FILE_TOOL_NAME} within ${memPath} are allowed`,
     }
   }
 }
@@ -372,7 +372,7 @@ async function runAutoMemoryExtract(
       const tools = cacheSafeParams?.tools ?? {}
       const restricted: typeof tools = {}
       for (const name of [
-        READ_FILE_TOOL_NAME,
+        FILE_READ_TOOL_NAME,
         EDIT_FILE_TOOL_NAME,
         WRITE_FILE_TOOL_NAME,
         GREP_TOOL_NAME,

@@ -97,9 +97,8 @@ export type Attachment =
   | SkillListingAttachment
   | AgentListingDeltaAttachment
 
-export interface ReadFileStateEntry {
-  content: string
-  timestamp: number
-}
-
-export type ReadFileState = Map<string, ReadFileStateEntry>
+/** @deprecated Import from `utils/read/types` — re-exported for compatibility. */
+export type {
+  ReadFileState,
+  ReadFileStateEntry,
+} from '../read/types.js'

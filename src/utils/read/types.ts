@@ -49,12 +49,19 @@ export type ReadPdfPagesOutput = {
   }
 }
 
+/** Same path+range Read while mtime unchanged — model should reuse earlier tool_result. */
+export type ReadFileUnchangedOutput = {
+  type: 'file_unchanged'
+  file: { filePath: string }
+}
+
 export type ReadOutput =
   | ReadTextOutput
   | ReadImageOutput
   | ReadNotebookOutput
   | ReadPdfOutput
   | ReadPdfPagesOutput
+  | ReadFileUnchangedOutput
 
 /** Loose schema for UI/wire validation (CC-style outputSchema gate). */
 export const ReadOutputSchema = z.discriminatedUnion('type', [
@@ -102,6 +109,12 @@ export const ReadOutputSchema = z.discriminatedUnion('type', [
       pageCount: z.number(),
     }),
   }),
+  z.object({
+    type: z.literal('file_unchanged'),
+    file: z.object({
+      filePath: z.string(),
+    }),
+  }),
 ])
 
 export class FileTooLargeError extends Error {
@@ -110,15 +123,49 @@ export class FileTooLargeError extends Error {
     public maxBytes: number,
   ) {
     super(
-      `File content (${Math.round(sizeBytes / 1024)} KB) exceeds maximum allowed size (${Math.round(maxBytes / 1024)} KB).`,
+      `File content (${Math.round(sizeBytes / 1024)} KB) exceeds maximum allowed size (${Math.round(maxBytes / 1024)} KB). ` +
+        `Use offset and limit parameters to read specific portions of the file, or search with grep instead of reading the whole file.`,
     )
     this.name = 'FileTooLargeError'
   }
 }
 
 export class MaxFileReadLinesExceededError extends Error {
-  constructor(public totalLines: number) {
-    super(`File has ${totalLines} lines; use offset/limit or grep.`)
+  constructor(
+    public totalLines: number,
+    public maxLines: number,
+  ) {
+    super(
+      `File has ${totalLines} lines (limit ${maxLines}). Use offset and limit parameters to read specific portions, or search with grep instead of reading the whole file.`,
+    )
     this.name = 'MaxFileReadLinesExceededError'
   }
 }
+
+export class MaxFileReadTokenExceededError extends Error {
+  constructor(
+    public tokenCount: number,
+    public maxTokens: number,
+  ) {
+    super(
+      `File content (~${tokenCount} tokens) exceeds maximum allowed tokens (${maxTokens}). ` +
+        `Use offset and limit parameters to read specific portions of the file, or search with grep instead of reading the whole file.`,
+    )
+    this.name = 'MaxFileReadTokenExceededError'
+  }
+}
+
+/** Per-path cache entry for Read dedup + Edit/Write bookkeeping. */
+export interface ReadFileStateEntry {
+  content: string
+  timestamp: number
+  /**
+   * Present when this entry came from the Read tool (enables file_unchanged dedup).
+   * Edit/Write leave these undefined so dedup never matches against post-edit mtime alone.
+   */
+  offset?: number
+  limit?: number
+}
+
+/** Session map: absolute path → last read/write bookkeeping. */
+export type ReadFileState = Map<string, ReadFileStateEntry>

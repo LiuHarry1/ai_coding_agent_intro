@@ -7,7 +7,7 @@ import {
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
 } from '../../constants/tool_names.js'
@@ -29,7 +29,7 @@ File-mutating tools have been disabled for you; attempting to use them will fail
 export const READ_ONLY_TOOLS = `Available tools (inherited from the parent agent, except mutating ones):
 - Use ${GLOB_TOOL_NAME} for broad file pattern matching
 - Use ${GREP_TOOL_NAME} for searching file contents with regex
-- Use ${READ_FILE_TOOL_NAME} when you know the specific file path you need to read
+- Use ${FILE_READ_TOOL_NAME} when you know the specific file path you need to read
 ${SHELL_READ_ONLY_LINE}
 - ${WEB_SEARCH_TOOL_NAME} / ${WEB_FETCH_TOOL_NAME}: look up external docs when relevant.
 - any read-only MCP tools the parent has configured.`

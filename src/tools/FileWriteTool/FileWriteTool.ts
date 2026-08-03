@@ -11,6 +11,12 @@ import type {
   DualChannelToolResult,
   ToolDefinition,
 } from '../../core/types.js'
+import { WRITE_FILE_TOOL_NAME } from '../../constants/tool_names.js'
+import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
+import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
+import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
+import { recordWriteInState } from '../../utils/read/read-file-state.js'
+import type { ReadFileState } from '../../utils/attachments/types.js'
 
 export type WriteFileOutput = {
   type: 'create' | 'update'
@@ -20,10 +26,6 @@ export type WriteFileOutput = {
   numChars: number
   message: string
 }
-import { WRITE_FILE_TOOL_NAME } from '../../constants/tool_names.js'
-import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
-import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
-import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
 export const definition: ToolDefinition = {
   name: WRITE_FILE_TOOL_NAME,
@@ -118,6 +120,11 @@ export const definition: ToolDefinition = {
         const existed = fs.existsSync(abs)
         fs.mkdirSync(path.dirname(abs), { recursive: true })
         fs.writeFileSync(abs, content, 'utf-8')
+        recordWriteInState(
+          context.session?.readFileState as ReadFileState | undefined,
+          abs,
+          content,
+        )
 
         const manager = getLspManager(cwd, context.lspServers)
         if (manager) {

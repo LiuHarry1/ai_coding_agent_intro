@@ -9,7 +9,7 @@ import type {
 import {
   AGENT_TOOL_NAME,
   GLOB_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
 import { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
@@ -56,9 +56,9 @@ ${agentListSection}
 When using the ${AGENT_TOOL_NAME} tool, specify a \`subagent_type\` parameter to select which agent type to use.
 
 When NOT to use the ${AGENT_TOOL_NAME} tool:
-- If you want to read a specific file path, use \`${READ_FILE_TOOL_NAME}\` or \`${GLOB_TOOL_NAME}\` instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
+- If you want to read a specific file path, use \`${FILE_READ_TOOL_NAME}\` or \`${GLOB_TOOL_NAME}\` instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
 - If you are searching for a specific class definition like "class Foo", use \`${GLOB_TOOL_NAME}\` instead, to find the match more quickly
-- If you are searching for code within a specific file or set of 2-3 files, use \`${READ_FILE_TOOL_NAME}\` instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
+- If you are searching for code within a specific file or set of 2-3 files, use \`${FILE_READ_TOOL_NAME}\` instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
 - Other tasks that are not related to the agent descriptions above
 
 Usage notes:

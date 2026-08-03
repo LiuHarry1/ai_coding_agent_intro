@@ -482,8 +482,8 @@ export interface Session {
   ownerEmail?: string
   /** Tool names discovered via `tool_search` �?activated in subsequent turns. */
   discoveredTools?: Set<string>
-  /** Tracks files read for @-mention dedup (mtime-based), per session. */
-  readFileState?: Map<string, { content: string; timestamp: number }>
+  /** Tracks files read for @-mention dedup + Read tool_unchanged (mtime-based). */
+  readFileState?: import('../utils/attachments/types.js').ReadFileState
   /** Session-level Agent / Ask / Plan mode. */
   permissionMode: PermissionModeContext
   /**

@@ -6,7 +6,7 @@ import {
   EDIT_FILE_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import { AUTO_MEM_ENTRYPOINT } from './paths.js'
@@ -85,9 +85,9 @@ export function buildExtractAutoMemoryPrompt(opts: {
   return [
     `You are now acting as the memory extraction subagent. Analyze the most recent ~${newMessageCount} messages above and use them to update your persistent memory systems.`,
     '',
-    `Available tools: ${READ_FILE_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${EDIT_FILE_TOOL_NAME}/${WRITE_FILE_TOOL_NAME} for paths inside \`${memoryDir}\` only. All other tools will be denied.`,
+    `Available tools: ${FILE_READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${EDIT_FILE_TOOL_NAME}/${WRITE_FILE_TOOL_NAME} for paths inside \`${memoryDir}\` only. All other tools will be denied.`,
     '',
-    `You have a limited turn budget. ${EDIT_FILE_TOOL_NAME} requires a prior ${READ_FILE_TOOL_NAME} of the same file, so the efficient strategy is: turn 1 — issue all ${READ_FILE_TOOL_NAME} calls in parallel for every file you might update; turn 2 — issue all ${WRITE_FILE_TOOL_NAME}/${EDIT_FILE_TOOL_NAME} calls in parallel. Do not interleave reads and writes across multiple turns.`,
+    `You have a limited turn budget. ${EDIT_FILE_TOOL_NAME} requires a prior ${FILE_READ_TOOL_NAME} of the same file, so the efficient strategy is: turn 1 — issue all ${FILE_READ_TOOL_NAME} calls in parallel for every file you might update; turn 2 — issue all ${WRITE_FILE_TOOL_NAME}/${EDIT_FILE_TOOL_NAME} calls in parallel. Do not interleave reads and writes across multiple turns.`,
     '',
     `You MUST only use content from the last ~${newMessageCount} messages to update your persistent memories. Do not waste any turns attempting to investigate or verify that content further — no grepping source files, no reading code to confirm a pattern exists, no git commands.` +
       manifest,

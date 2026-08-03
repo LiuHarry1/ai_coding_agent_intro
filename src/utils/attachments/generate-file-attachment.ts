@@ -8,8 +8,8 @@ import type { Attachment, ReadFileState } from './types.js'
 import {
   readFileCore,
   resolveFileInCwd,
-  listDirectoryEntries,
 } from '../read/index.js'
+import { listDirectoryEntries } from '../fs/list-dir.js'
 import {
   readTextFileTruncated,
   isFileWithinReadSizeLimit,

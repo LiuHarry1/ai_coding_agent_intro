@@ -2,7 +2,7 @@ import { isWindows, platformLabel } from '../core/platform.js'
 import {
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
 } from '../constants/tool_names.js'
@@ -32,7 +32,7 @@ export function askSystemPrompt(cwd: string, projectRules?: string): string {
     '',
     '## Guidelines',
     '- Answer questions clearly and concisely about the codebase.',
-    `- Use ${READ_FILE_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME} to explore code.`,
+    `- Use ${FILE_READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME} to explore code.`,
     `- Use ${WEB_SEARCH_TOOL_NAME} or ${WEB_FETCH_TOOL_NAME} for external documentation when helpful.`,
     '- Cite specific file paths and line numbers when referencing code.',
     '- If the user wants changes implemented, tell them to switch to Agent mode.',

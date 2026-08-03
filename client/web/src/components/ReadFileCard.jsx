@@ -7,6 +7,9 @@ import { liveToolSubtitle } from '../lib/tool-density.js'
 /**
  * Read card — CC dual-channel UI path:
  * body only from `part.toolUseResult`. Missing TUR → header-only (silent).
+ *
+ * Out stores raw file lines; line numbers exist only on the model map path.
+ * `stripDecorations` remains for older sessions that still baked numbers into Out.
  */
 
 function stripDecorations(content) {
@@ -19,6 +22,12 @@ function stripDecorations(content) {
 function fromToolUseResult(tur) {
   if (!tur || typeof tur !== 'object' || typeof tur.type !== 'string') {
     return null
+  }
+  if (tur.type === 'file_unchanged') {
+    return {
+      kind: 'unchanged',
+      label: 'Unchanged since last read',
+    }
   }
   if (tur.type === 'text' && tur.file) {
     return {
@@ -73,12 +82,20 @@ export default function ReadFileCard({ part }) {
 
   let rangeLabel = ''
   if (header?.kind === 'text') {
-    rangeLabel = `L${header.start}-${header.end}`
-    if (header.total && header.end - header.start + 1 < header.total) {
-      rangeLabel += ` of ${header.total}`
+    if (header.total === 0) {
+      rangeLabel = 'empty'
+    } else if (!header.content) {
+      rangeLabel = `offset ${header.start} > ${header.total} lines`
+    } else {
+      rangeLabel = `L${header.start}-${header.end}`
+      if (header.total && header.end - header.start + 1 < header.total) {
+        rangeLabel += ` of ${header.total}`
+      }
     }
   } else if (header?.kind === 'image') {
     rangeLabel = 'image'
+  } else if (header?.kind === 'unchanged') {
+    rangeLabel = 'unchanged'
   } else if (header?.kind === 'pdf') {
     rangeLabel = 'pdf'
   } else if (header?.kind === 'notebook') {
@@ -90,13 +107,20 @@ export default function ReadFileCard({ part }) {
   }
 
   const codeBody =
-    isDone && !isError && header?.kind === 'text'
+    isDone && !isError && header?.kind === 'text' && header.content
       ? stripDecorations(header.content)
+      : ''
+  // Empty / OOB text: no raw lines — show a short note instead of a blank expand.
+  const emptyTextNote =
+    isDone && !isError && header?.kind === 'text' && !header.content
+      ? header.total === 0
+        ? 'File exists but is empty.'
+        : `Offset ${header.start} is past end of file (${header.total} lines).`
       : ''
   const summaryBody =
     isDone && !isError && header && header.kind !== 'text'
       ? header.content || header.label || ''
-      : ''
+      : emptyTextNote
 
   const liveSub = !isDone ? liveToolSubtitle(part) : null
 

@@ -5,7 +5,7 @@ import {
   GREP_TOOL_NAME,
   INTERACTIVE_TOOLS,
   MUTATING_TOOLS,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   AGENT_TOOL_NAME,
 } from '../../../constants/tool_names.js'
 
@@ -31,7 +31,7 @@ Your strengths:
 Guidelines:
 - Use ${GLOB_TOOL_NAME} for broad file pattern matching
 - Use ${GREP_TOOL_NAME} for searching file contents with regex
-- Use ${READ_FILE_TOOL_NAME} when you know the specific file path you need to read
+- Use ${FILE_READ_TOOL_NAME} when you know the specific file path you need to read
 - Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
 - NEVER use ${BASH_TOOL_NAME} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
 - Adapt your search approach based on the thoroughness level specified by the caller

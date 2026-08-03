@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 工具结果双路数据</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
+  --text:#e6edf3; --muted:#9aa7b4; --accent:#d97757; --accent2:#58a6ff;
+  --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  --code-bg:#0b0f15;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65;font-size:15px}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px}
+.sidebar h1{font-size:16px;margin:0 0 4px;color:var(--accent)}
+.sidebar .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.toc{list-style:none;margin:0;padding:0;font-size:13.5px}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--muted)}
+.toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+.toc a.active{background:rgba(217,119,87,.15);color:var(--accent);font-weight:600}
+.main{flex:1;min-width:0;padding:42px 56px 120px;max-width:1080px;margin:0 auto}
+.hero{border:1px solid var(--border);background:linear-gradient(135deg,#1c2230,#161b22);
+  border-radius:14px;padding:30px 34px;margin-bottom:34px}
+.hero h1{margin:0 0 10px;font-size:28px;letter-spacing:.3px}
+.hero p{margin:4px 0;color:var(--muted);font-size:14px}
+.hero .badge{display:inline-block;margin-top:14px;margin-right:8px;padding:4px 12px;border-radius:20px;
+  font-size:12px;background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+.hero .badge.warn{background:rgba(210,153,34,.12);color:var(--amber);border-color:rgba(210,153,34,.3)}
+section{margin-bottom:46px;scroll-margin-top:20px}
+h2{font-size:23px;border-bottom:2px solid var(--border);padding-bottom:10px;margin:0 0 18px;
+  display:flex;align-items:center;gap:10px}
+h2 .num{font-size:14px;color:var(--accent);background:rgba(217,119,87,.12);border:1px solid rgba(217,119,87,.3);
+  border-radius:8px;padding:2px 10px;font-weight:700}
+h3{font-size:17px;color:var(--accent2);margin:26px 0 10px}
+h4{font-size:15px;color:var(--purple);margin:18px 0 8px}
+p{margin:10px 0}
+code{font-family:"JetBrains Mono",Consolas,"SF Mono",monospace;font-size:.86em;
+  background:var(--panel2);padding:2px 6px;border-radius:5px;color:#f0d8b0}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font-size:13px;line-height:1.55}
+pre code{background:none;padding:0;color:#c9d1d9}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  background:var(--panel);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--panel2);color:var(--text);font-weight:600;font-size:13px}
+tr:last-child td{border-bottom:none}
+td code{font-size:.82em}
+.callout{border-left:4px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;
+  padding:12px 18px;margin:16px 0}
+.callout.warn{border-color:var(--amber);background:rgba(210,153,34,.07)}
+.callout.note{border-color:var(--accent2);background:rgba(88,166,255,.07)}
+.callout.danger{border-color:var(--red);background:rgba(248,81,73,.07)}
+.callout p{margin:6px 0}
+.callout .tag{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)}
+.callout.warn .tag{color:var(--amber)}
+.callout.note .tag{color:var(--accent2)}
+.callout.danger .tag{color:var(--red)}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.vs .col{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.vs .col h4{margin:0 0 8px}
+.vs .llm h4{color:var(--accent2)}
+.vs .ui h4{color:var(--green)}
+.vs .col pre{margin:8px 0 0;font-size:12px}
+.fail{background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.35);border-radius:10px;padding:12px 16px;margin:12px 0}
+.fail .label{font-weight:700;color:var(--red);font-size:12px;letter-spacing:.4px;text-transform:uppercase}
+.flow{font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;line-height:1.7;background:var(--code-bg);
+  border:1px solid var(--border);border-radius:10px;padding:16px 18px;overflow-x:auto;white-space:pre}
+.tag-file{font-family:monospace;font-size:12px;color:var(--amber)}
+.footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:24px;border-top:1px solid var(--border)}
+@media(max-width:920px){.sidebar{display:none}.main{padding:24px}.vs{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar">
+  <h1>CC Dual-Path Tools</h1>
+  <div class="sub">工具结果双路数据 · 源码解读</div>
+  <ul class="toc" id="toc">
+    <li><a href="#s0">0. 结论：为何必须双路</a></li>
+    <li><a href="#s1">1. 架构与写入点</a></li>
+    <li><a href="#s2">2. 四种分流模式</a></li>
+    <li><a href="#s3">3. 按工具举例</a></li>
+    <li><a href="#s4">4. 只有 LLM 路的总账</a></li>
+    <li><a href="#s5">5. 反方意见驳回</a></li>
+    <li><a href="#s6">6. 源码索引</a></li>
+  </ul>
+</nav>
+<main class="main">
+
+<div class="hero">
+  <h1>工具结果双路数据</h1>
+  <p>一路给 LLM（<code>mapToolResultToToolResultBlockParam</code> → <code>tool_result</code>）</p>
+  <p>一路给页面（<code>toolUseResult</code> → <code>renderToolResultMessage</code>）</p>
+  <p>基于 <code>claude-code-rev</code> 源码。目标：读完后能说服自己——为什么要引入，以及没有它会怎样。</p>
+  <span class="badge">架构刚需</span>
+  <span class="badge warn">非重复渲染</span>
+</div>
+
+<section id="s0">
+  <h2><span class="num">0</span> 结论：为什么必须是双路</h2>
+  <p>每次工具 <code>call()</code> 成功后，原生结果 <code>Out</code> 会被投影成<strong>两条完全不同的消费路径</strong>——不是同一字符串画两遍。</p>
+  <table>
+    <tr><th>路径</th><th>字段 / 函数</th><th>消费者</th><th>设计目标</th></tr>
+    <tr>
+      <td>LLM 路</td>
+      <td><code>mapToolResult…</code> → <code>message.content</code></td>
+      <td>API / 下一轮模型</td>
+      <td>完整载荷、行为指令、reminder、持久化指针、内部 ID</td>
+    </tr>
+    <tr>
+      <td>UI 路</td>
+      <td><code>toolUseResult</code> → <code>renderToolResultMessage</code></td>
+      <td>Transcript / Ink / 搜索</td>
+      <td>摘要 chrome、diff、裸 stdout；屏蔽模型专用噪音</td>
+    </tr>
+  </table>
+  <div class="callout note">
+    <div class="tag">源码铁证 · transcriptSearch.ts</div>
+    <p><code>b.content</code> 是 MODEL-facing serialization；UI 渲染 <code>msg.toolUseResult</code>——<strong>DIFFERENT text</strong>。若用模型文本做搜索：<code>/malware</code> 命中安全提醒，但屏幕上根本没有那行字（phantom）。</p>
+  </div>
+  <div class="callout danger">
+    <div class="tag">若只有大模型一路</div>
+    <p>Transcript 变成模型草稿纸；Edit 看不到 diff；Agent 的 <code>agentId</code> 和 “do not mention to user” 上屏；Bash 大输出变成 <code>&lt;persisted-output&gt;</code> 协议文案。下面用具体工具证明。</p>
+  </div>
+</section>
+
+<section id="s1">
+  <h2><span class="num">1</span> 架构与写入点</h2>
+  <div class="flow">tool.call()
+    │
+    ▼
+  Out  （原生结构化结果 = toolUseResult）
+    │
+    ├──────────────────────────────┐
+    ▼                              ▼
+mapToolResultToToolResultBlockParam   renderToolResultMessage
+    │                              │
+    ▼                              ▼
+message.content (tool_result)      Ink / transcript UI
+    │
+    ▼
+normalizeMessagesForAPI → 只送 content
+（toolUseResult / mcpMeta 留本地，不进模型）</div>
+
+  <h3>1.1 类型契约 · <span class="tag-file">src/Tool.ts</span></h3>
+  <ul>
+    <li><code>mapToolResultToToolResultBlockParam</code> — 唯一决定模型看到的 <code>tool_result</code></li>
+    <li><code>renderToolResultMessage</code>（可选）— transcript 长什么样；省略则不渲染（如 TodoWrite 走侧栏）</li>
+    <li><code>extractSearchText</code>（可选）— 必须返回<strong>屏幕可见</strong>文本，禁止编入 system-reminder / persisted-output</li>
+  </ul>
+
+  <h3>1.2 同时写入 · <span class="tag-file">toolExecution.ts</span></h3>
+<pre><code>createUserMessage({
+  content: contentBlocks,       // LLM：已 map 的 tool_result
+  toolUseResult: toolUseResult, // UI：原生 Out
+  mcpMeta: mcpMeta,             // SDK：never sent to model
+})</code></pre>
+
+  <h3>1.3 UI 拒绝读 content · <span class="tag-file">UserToolSuccessMessage.tsx</span></h3>
+<pre><code>if (!message.toolUseResult || !tool) return null
+tool.renderToolResultMessage?.(toolResult, …)</code></pre>
+  <p>产品层已假设：没有 <code>toolUseResult</code> = 没有可展示的成功态。</p>
+
+  <h3>1.4 为何不能共用一份字符串</h3>
+  <table>
+    <tr><th>约束</th><th>LLM 路</th><th>UI 路</th></tr>
+    <tr><td>长度</td><td>可很长；过大则落盘</td><td>必须短、可扫</td></tr>
+    <tr><td>指令注入</td><td>需要 reminder /「勿提 ID」</td><td>绝不能显示</td></tr>
+    <tr><td>结构</td><td>压成 API blocks</td><td>需要 structuredPatch / stdout 等字段</td></tr>
+    <tr><td>搜索</td><td>无关</td><td>必须与像素一致</td></tr>
+  </table>
+</section>
+
+<section id="s2">
+  <h2><span class="num">2</span> 四种分流模式</h2>
+  <table>
+    <tr><th>模式</th><th>含义</th><th>代表</th></tr>
+    <tr><td><strong>A. 反转载荷</strong></td><td>模型拿全文；UI 只拿 chrome</td><td>FileRead, WebSearch, WebFetch</td></tr>
+    <tr><td><strong>B. 反转 ACK</strong></td><td>模型拿一句话；UI 拿完整 diff</td><td>FileEdit, FileWrite</td></tr>
+    <tr><td><strong>C. 同源不同包装</strong></td><td>都基于 stdout/命中，模型多包装</td><td>Bash, Grep, Glob</td></tr>
+    <tr><td><strong>D. 指令侧信道</strong></td><td>模型拿编排指令；UI 拿状态/侧栏</td><td>Agent, TodoWrite, Skill</td></tr>
+  </table>
+  <p>A/B 是「必须双路」的铁证；C/D 说明即使数据同源，序列化目标不同也不能合并。</p>
+</section>
+
+<section id="s3">
+  <h2><span class="num">3</span> 按工具：双路内容 + 只有 LLM 路会怎样</h2>
+
+  <h3>3.1 FileRead（模式 A）— 最强反例</h3>
+  <div class="vs">
+    <div class="col llm">
+      <h4>LLM 路</h4>
+      <p>带行号全文 + <code>CYBER_RISK_MITIGATION_REMINDER</code> + 空文件 <code>&lt;system-reminder&gt;</code>；图片为 base64 block</p>
+    </div>
+    <div class="col ui">
+      <h4>UI 路</h4>
+      <p>仅 <code>Read N lines</code> / <code>Read image (42KB)</code> — <strong>从不展示正文</strong></p>
+    </div>
+  </div>
+  <div class="fail">
+    <div class="label">只有 LLM 路 · 举例</div>
+    <p>读 800 行 <code>auth.ts</code> → 页面刷出整文件 + 安全提醒。对话变成代码瀑布；搜 <code>malware</code> 命中提醒文案但屏幕无对应行（phantom）。图片则吐出巨量 base64。</p>
+  </div>
+  <div class="callout">
+    <div class="tag">说服点</div>
+    <p>产品语义是「知道读了什么、多少行」；模型语义是「这是文件内容，请推理」。不可共用文本。</p>
+  </div>
+
+  <h3>3.2 FileEdit / FileWrite（模式 B）— 另一极</h3>
+  <div class="vs">
+    <div class="col llm">
+      <h4>LLM 路</h4>
+      <pre><code>The file payment.ts has been
+updated successfully.</code></pre>
+    </div>
+    <div class="col ui">
+      <h4>UI 路</h4>
+      <p>完整彩色 diff，依赖 Out 里的 <code>structuredPatch</code> / 原文——这些字段<strong>从不</strong>进入 mapped ACK。</p>
+    </div>
+  </div>
+  <div class="fail">
+    <div class="label">只有 LLM 路 · 举例</div>
+    <p>改了计费逻辑 → 页面只剩一句 ACK → <strong>用户无法审查任何 diff</strong>。从 ACK 字符串还原不了 patch。UI 路是审查数据的唯一通道，不是美化。</p>
+  </div>
+
+  <h3>3.3 Bash（模式 C）</h3>
+  <div class="vs">
+    <div class="col llm">
+      <h4>LLM 路</h4>
+      <p>stdout/stderr + 中断标签 + <strong>backgroundInfo</strong>（含 task ID）+ 大输出改写为 <code>&lt;persisted-output&gt;</code> 预览</p>
+    </div>
+    <div class="col ui">
+      <h4>UI 路</h4>
+      <p>直接渲染裸 <code>stdout</code>/<code>stderr</code>。源码注释：UI never shows persistedOutputPath wrapper, backgroundInfo</p>
+    </div>
+  </div>
+  <div class="fail">
+    <div class="label">只有 LLM 路 · 举例</div>
+    <p><code>npm test</code> 输出 2MB → 模型看到 preview + 磁盘路径协议；若 UI 渲染同一段，用户看到 XML 包装器而非真实测试日志，或误以为命令只输出了 preview 那么点。</p>
+  </div>
+
+  <h3>3.4 Grep / Glob</h3>
+  <p>模型拿命中全文以便继续定位；UI 默认 <code>Found N files</code> chrome。只有 LLM 路时，一次宽 Grep 把成百上千行砸进 scrollback，verbose 开关失效。</p>
+
+  <h3>3.5 WebSearch（模式 A）</h3>
+  <div class="vs">
+    <div class="col llm">
+      <h4>LLM 路</h4>
+      <pre><code>Web search results for query: "…"
+Links: […]
+REMINDER: You MUST include the
+sources above … markdown hyperlinks.</code></pre>
+    </div>
+    <div class="col ui">
+      <h4>UI 路</h4>
+      <p>仅 <code>Did N searches in Xs</code>。<code>extractSearchText</code> 故意返回空串。</p>
+    </div>
+  </div>
+  <div class="fail">
+    <div class="label">只有 LLM 路 · 举例</div>
+    <p>用户看见整页链接 JSON + 「你必须用 markdown 引用」——这是对模型的引用纪律，不是给人看的结果页。</p>
+  </div>
+
+  <h3>3.6 WebFetch</h3>
+  <p>模型拿页面正文；UI 默认 <code>Received 42KB (200 OK)</code>。只有 LLM 路：每次 fetch 把整页灌进 transcript。</p>
+
+  <h3>3.7 Agent（模式 D）— 隐私与编排</h3>
+  <div class="vs">
+    <div class="col llm">
+      <h4>LLM 路（异步启动节选）</h4>
+      <pre><code>agentId: xxx (internal ID - do not
+mention to user. Use SendMessage
+with to: 'xxx' to continue…)</code></pre>
+    </div>
+    <div class="col ui">
+      <h4>UI 路</h4>
+      <p><code>Done (N tool uses · tokens · duration)</code> / <code>Backgrounded agent</code> 统计 chrome</p>
+    </div>
+  </div>
+  <div class="fail">
+    <div class="label">只有 LLM 路 · 举例</div>
+    <p>页面明文出现 <code>agentId</code> 和 “do not mention to user”——产品自己打脸；用户被 mailbox 协议污染。</p>
+  </div>
+  <div class="callout">
+    <div class="tag">说服点</div>
+    <p>这里双路是 <strong>need-to-know 信息隔离</strong>：编排元数据只给父 agent，不给人类。</p>
+  </div>
+
+  <h3>3.8 TodoWrite（模式 D）</h3>
+  <p>模型拿「继续用 todo」+ 可能的 verification nudge；UI <strong>不实现</strong> <code>renderToolResultMessage</code>——结果进 todo 面板（Out 的 <code>oldTodos</code>/<code>newTodos</code>）。只有 LLM 路：要么刷说教话术，要么丢面板数据。</p>
+
+  <h3>3.9 NotebookEdit / Skill / MCP</h3>
+  <ul>
+    <li><strong>NotebookEdit</strong>：模型扁平字符串；UI 高亮代码块。</li>
+    <li><strong>Skill</strong>：模型 “Launching skill…”；UI “Successfully loaded skill”。</li>
+    <li><strong>MCP</strong>：另有 <code>mcpMeta</code>（<code>_meta</code> / <code>structuredContent</code>）第三条旁路，永不送模型。只有 LLM 路则 SDK 宿主与富渲染双损。</li>
+  </ul>
+</section>
+
+<section id="s4">
+  <h2><span class="num">4</span> 「只有大模型一路」的总账</h2>
+  <table>
+    <tr><th>#</th><th>后果</th><th>直接原因</th></tr>
+    <tr><td>1</td><td>Transcript 不可用</td><td>Read/Search/Fetch 全文 + Bash 包装器淹没对话</td></tr>
+    <tr><td>2</td><td>无法做变更审查</td><td>diff 只在 Out，不在 mapped ACK</td></tr>
+    <tr><td>3</td><td>搜索说谎（phantom）</td><td>索引 reminder / background / persisted-output</td></tr>
+    <tr><td>4</td><td>内部编排泄漏</td><td>Agent agentId、「勿告知用户」上屏</td></tr>
+    <tr><td>5</td><td>大输出 UX 错误</td><td>人看到持久化协议而非真实 stdout</td></tr>
+    <tr><td>6</td><td>行为指令污染 UI</td><td>WebSearch REMINDER、Todo nudge 像故障文案</td></tr>
+    <tr><td>7</td><td>SDK/MCP 宿主受损</td><td>mcpMeta / 结构化 Out 无法从纯字符串还原</td></tr>
+    <tr><td>8</td><td>Resume 渲染脆弱</td><td>UI 依赖 <code>outputSchema.safeParse(toolUseResult)</code></td></tr>
+    <tr><td>9</td><td>子 agent 内存策略失效</td><td>今日可丢掉子 agent 的 toolUseResult，只留 mapped content</td></tr>
+  </table>
+  <div class="callout warn">
+    <div class="tag">对称失败</div>
+    <p>若只有 UI Out、不做 map：模型丢掉 reminder、continuation ID、persisted 指针、空结果防呆、Edit 短 ACK——agent 循环质量同样崩。双路是<strong>双向刚需</strong>。</p>
+  </div>
+</section>
+
+<section id="s5">
+  <h2><span class="num">5</span> 反方意见与驳回</h2>
+  <h3>「让模型也看 UI 摘要？」</h3>
+  <p>不够推理：Read 只说「42 行」无法改代码；Edit 只给 diff 会重复占上下文，且缺少「用户改过你的提案」等元信息通道。</p>
+  <h3>「让 UI 从 tool_result 再解析？」</h3>
+  <p><code>map*</code> 有意丢弃 <code>structuredPatch</code>、完整 todos、超大 stdout。从 ACK 反解 diff 不可能；为 UI 剥离 reminder 又是脆弱字符串协议。原生 Out 才是 UI 的 source of truth。</p>
+  <h3>「这不是重复存储浪费吗？」</h3>
+  <p>子 agent 可丢 <code>toolUseResult</code>；进 API 前本来就丢掉 UI 字段。换来正确的人机界面 + 正确的模型控制面。本质是 <strong>CQRS：一次写入，两种读模型</strong>。</p>
+</section>
+
+<section id="s6">
+  <h2><span class="num">6</span> 源码索引</h2>
+  <table>
+    <tr><th>主题</th><th>路径</th></tr>
+    <tr><td>双路接口</td><td><span class="tag-file">src/Tool.ts</span></td></tr>
+    <tr><td>执行后同时写入</td><td><span class="tag-file">src/services/tools/toolExecution.ts</span></td></tr>
+    <tr><td>消息工厂 / mcpMeta</td><td><span class="tag-file">src/utils/messages.ts</span></td></tr>
+    <tr><td>UI 只读 toolUseResult</td><td><span class="tag-file">…/UserToolSuccessMessage.tsx</span></td></tr>
+    <tr><td>两路文本不同（铁证）</td><td><span class="tag-file">src/utils/transcriptSearch.ts</span></td></tr>
+    <tr><td>大结果只改 LLM 路</td><td><span class="tag-file">toolResultStorage.ts</span> / BashTool</td></tr>
+    <tr><td>Read / Edit / Agent / WebSearch</td><td><span class="tag-file">src/tools/*</span></td></tr>
+  </table>
+  <div class="callout note">
+    <div class="tag">一句话记住</div>
+    <p><strong>Out 是事实；map 是给模型的简报+指令；render 是给人的工作台视图。</strong>取消双路 = 强迫人类读模型简报，或强迫模型读人类摘要——同时失去「能干活」和「能被信任地看着干活」。</p>
+  </div>
+</section>
+
+<div class="footer">
+  Claude Code Dual-Path Tool Results · 基于 claude-code-rev 源码整理 ·
+  同目录另有 <a href="./claude-code-dual-path-tool-results.md">Markdown 版</a>
+</div>
+</main>
+</div>
+<script>
+const links = [...document.querySelectorAll('.toc a')];
+const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+  }
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>

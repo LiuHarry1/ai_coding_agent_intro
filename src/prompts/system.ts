@@ -9,7 +9,7 @@ import {
   EDIT_FILE_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
-  READ_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
@@ -93,7 +93,7 @@ When you encounter an obstacle, do not use destructive actions as a shortcut to 
 
 # Using your tools
  - Do NOT use the ${BASH_TOOL_NAME} to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work. This is CRITICAL to assisting the user:
-  - To read files use ${READ_FILE_TOOL_NAME} instead of cat, head, tail, or sed
+  - To read files use ${FILE_READ_TOOL_NAME} instead of cat, head, tail, or sed
   - To edit files use ${EDIT_FILE_TOOL_NAME} instead of sed or awk
   - To create files use ${WRITE_FILE_TOOL_NAME} instead of cat with heredoc or echo redirection
   - To search for files use ${GLOB_TOOL_NAME} instead of find or ls

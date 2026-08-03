@@ -308,6 +308,9 @@ export async function runChatTurn(
           force: true,
           instructions: instructions || undefined,
           sessionMemory: resolvedSettings.config.sessionMemory,
+          readFileState: session.readFileState as
+            | import('../utils/attachments/types.js').ReadFileState
+            | undefined,
         },
         resolvedSettings.config.compaction,
         provider,

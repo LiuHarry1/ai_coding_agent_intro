@@ -1,26 +1,46 @@
 import { tool } from 'ai'
 import { z } from 'zod'
+import * as fs from 'fs'
 import type {
   DualChannelToolResult,
   ToolDefinition,
 } from '../../core/types.js'
-import { READ_FILE_TOOL_NAME, buildReadToolDescription } from './prompt.js'
+import { FILE_READ_TOOL_NAME, buildReadToolDescription } from './prompt.js'
+import { PDF_MAX_PAGES_PER_READ } from './limits.js'
 import {
   readFileCore,
   formatReadOutputAsToolString,
   resolveFileInCwd,
   ReadOutputSchema,
   type ReadOutput,
+  recordReadInState,
+  shouldDedupRead,
+  formatFileNotFoundMessage,
+  readTextFromString,
 } from '../../utils/read/index.js'
-import { PDF_MAX_PAGES_PER_READ } from '../../constants/api_limits.js'
+import type { ReadFileState } from '../../utils/read/types.js'
 import {
   assertAccessibleResolved,
   policyFromContext,
 } from '../../core/sandbox.js'
 
+function sessionReadFileState(
+  context: { session?: { readFileState?: ReadFileState } },
+): ReadFileState | undefined {
+  return context.session?.readFileState
+}
+
+function unchanged(
+  file_path: string,
+): DualChannelToolResult<ReadOutput> {
+  return {
+    data: { type: 'file_unchanged', file: { filePath: file_path } },
+  }
+}
+
 /** FileReadTool — dual-channel: `{ data: ReadOutput }` + mapper. */
 export const definition: ToolDefinition = {
-  name: READ_FILE_TOOL_NAME,
+  name: FILE_READ_TOOL_NAME,
   description: 'Read files, images, PDFs, notebooks',
   isConcurrencySafe: () => true,
   outputSchema: ReadOutputSchema,
@@ -59,39 +79,25 @@ export const definition: ToolDefinition = {
         limit?: number
         pages?: string
       }): Promise<DualChannelToolResult<ReadOutput> | string> => {
+        const state = sessionReadFileState(context)
         const execution = context.execution
-        if (execution) {
+        // Local worker still has real disk mtime — use the FS path below for
+        // dedup + images/PDF. Only remote environments use readText RPC.
+        const useRemoteFs =
+          !!execution && execution.environmentId !== 'local'
+
+        if (useRemoteFs) {
           try {
             const abs = execution.resolve(cwd, file_path)
             execution.assertInWorkspace(cwd, abs, 'read')
             if (pages) {
               return 'Error: PDF page reads are not supported over SSH yet. Use bash to inspect PDFs remotely.'
             }
+            // Remote FS: no reliable local mtime — skip dedup; share slice/gates.
             const text = await execution.readText(abs)
-            const lines = text.split('\n')
-            const start =
-              offset != null && offset < 0
-                ? Math.max(0, lines.length + offset)
-                : Math.max(0, (offset ?? 1) - 1)
-            const end = limit != null ? start + limit : lines.length
-            const slice = lines.slice(start, end)
-            const numbered = slice
-              .map((l, i) => `${String(start + i + 1).padStart(6)}│${l}`)
-              .join('\n')
-            const content =
-              numbered || `(empty file or no lines in range)`
-            const header = `${file_path} (lines ${start + 1}-${start + Math.max(slice.length, 1)} of ${lines.length})\n`
-            const data: ReadOutput = {
-              type: 'text',
-              file: {
-                filePath: file_path,
-                content: header + content,
-                numLines: slice.length,
-                startLine: start + 1,
-                totalLines: lines.length,
-              },
+            return {
+              data: readTextFromString(text, file_path, { offset, limit }),
             }
-            return { data }
           } catch (err) {
             return `Error: ${err instanceof Error ? err.message : String(err)}`
           }
@@ -110,12 +116,33 @@ export const definition: ToolDefinition = {
           return err instanceof Error ? err.message : String(err)
         }
 
+        if (!fs.existsSync(resolved.abs)) {
+          return `Error: ${formatFileNotFoundMessage(cwd, resolved.abs, resolved.displayPath)}`
+        }
+
+        // Text-only dedup (images/PDF/pages always re-fetch).
+        if (
+          !pages &&
+          shouldDedupRead(state, resolved.abs, offset, limit)
+        ) {
+          return unchanged(file_path)
+        }
+
         try {
           const { output, followUpMessages } = await readFileCore(
             cwd,
             file_path,
             { offset, limit, pages },
           )
+          if (output.type === 'text') {
+            recordReadInState(
+              state,
+              resolved.abs,
+              output.file.content,
+              offset,
+              limit,
+            )
+          }
           return {
             data: output,
             newMessages: followUpMessages,

@@ -16,6 +16,8 @@ import type {
 import type { WireEmitter } from '../../core/wire-emitter.js'
 import { isRoleMessage } from '../../core/types.js'
 import { DEFAULTS } from '../../core/settings-manager.js'
+import type { ReadFileState } from '../../utils/attachments/types.js'
+import { clearReadFileState } from '../../utils/read/read-file-state.js'
 import { tokenCountWithEstimation } from './tokens.js'
 import { microCompact } from './microCompact.js'
 import {
@@ -164,6 +166,8 @@ export interface CompactOptions {
   enrichment?: CompactEnrichment
   /** Session-memory config; when set, prefer SM compact before full LLM. */
   sessionMemory?: SessionMemoryConfig
+  /** Session Read cache — invalidated when Read tool_results are micro-cleared / full-compacted. */
+  readFileState?: ReadFileState
 }
 
 /**
@@ -259,7 +263,10 @@ export async function compactIfNeeded(
           : ''),
     )
     const tokensBeforeMicro = tokens
-    const r = microCompact(working, microKeep, sessionId)
+    const r = microCompact(working, microKeep, sessionId, {
+      cwd,
+      readFileState: opts.readFileState,
+    })
     tokens = Math.max(0, tokensBeforeMicro - r.tokensFreed)
     if (r.cleared > 0) {
       eventBus.emit('compaction_micro', {
@@ -336,6 +343,7 @@ export async function compactIfNeeded(
       if (sm) {
         consecutiveFailures = 0
         clearLastSummarizedMessageId(sessionId)
+        clearReadFileState(opts.readFileState)
         eventBus.emit('compaction_done', {
           summary: sm.summaryText,
           summaryLength: sm.summaryText.length,
@@ -401,6 +409,7 @@ export async function compactIfNeeded(
 
     consecutiveFailures = 0
     if (sessionId) clearLastSummarizedMessageId(sessionId)
+    clearReadFileState(opts.readFileState)
     eventBus.emit('compaction_done', {
       summary: result.summary,
       summaryLength: result.summaryLength,

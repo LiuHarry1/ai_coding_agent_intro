@@ -355,6 +355,7 @@ export async function runAgent(
         onFullCompaction,
         compactEnrichment,
         logLabel,
+        toolUseContext?.readFileState,
       )
 
       const stepResult = await runOneStep({
@@ -378,6 +379,7 @@ export async function runAgent(
         compactEnrichment,
         logLabel,
         abortSignal,
+        readFileState: toolUseContext?.readFileState,
       })
 
       if (stepResult === null) {
@@ -609,6 +611,7 @@ async function runCompactionAndLog(
   onFullCompaction?: AgentOptions['onFullCompaction'],
   compactEnrichment?: CompactEnrichment,
   logLabel?: string,
+  readFileState?: import('../utils/attachments/types.js').ReadFileState,
 ): Promise<void> {
   const compactStart = Date.now()
   const managed = await compactIfNeeded(
@@ -618,7 +621,11 @@ async function runCompactionAndLog(
     resolvedModel,
     cwd ?? process.cwd(),
     currentTodos,
-    { enrichment: compactEnrichment, sessionMemory },
+    {
+      enrichment: compactEnrichment,
+      sessionMemory,
+      readFileState,
+    },
     compaction,
     provider,
     sessionId,
@@ -666,6 +673,7 @@ interface RunOneStepArgs {
   compactEnrichment?: CompactEnrichment
   logLabel?: string
   abortSignal?: AbortSignal
+  readFileState?: import('../utils/attachments/types.js').ReadFileState
 }
 
 /**
@@ -872,6 +880,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
             aggressive: true,
             enrichment: args.compactEnrichment,
             sessionMemory: args.sessionMemory,
+            readFileState: args.readFileState,
           },
           compaction,
           provider,

@@ -1,17 +1,17 @@
-import * as fs from 'fs'
 import * as path from 'path'
 import {
   isImageExtension,
   isNotebookExtension,
   isPdfExtension,
-  MAX_DIR_ENTRIES,
 } from '../../constants/api_limits.js'
-import { fileExtension, readTextFile } from './read-text.js'
+import { fileExtension, formatTextReadForModel, readTextFile } from './read-text.js'
 import { readImageFile } from './read-image.js'
 import { readNotebookFile } from './read-notebook.js'
 import { readPdfFile } from './read-pdf.js'
 import type { ReadImageOutput, ReadOutput } from './types.js'
 import type { Message, UserContentPart } from '../../core/types.js'
+import { formatTextReadBoundaryReminder } from './boundary-reminders.js'
+import { FILE_UNCHANGED_STUB } from './read-file-state.js'
 
 export interface ReadFileOptions {
   offset?: number
@@ -21,7 +21,7 @@ export interface ReadFileOptions {
 
 export interface ReadFileResult {
   output: ReadOutput
- /** Extra user messages for multimodal content (images/PDF), `newMessages` pattern. */
+  /** Extra user messages for multimodal content (images/PDF), `newMessages` pattern. */
   followUpMessages?: Message[]
 }
 
@@ -105,11 +105,19 @@ function buildImageFollowUp(output: ReadImageOutput): Message | null {
   return { role: 'user', content: parts }
 }
 
-/** Format Read output as tool result string (for agent tool execute). */
+/** Format Read output as tool result string (for agent tool execute / LLM path). */
 export function formatReadOutputAsToolString(output: ReadOutput): string {
   switch (output.type) {
+    case 'file_unchanged':
+      return FILE_UNCHANGED_STUB
     case 'text':
-      return output.file.content
+      // Empty content is the dual-channel signal for empty file / offset OOB —
+      // map to a short system-reminder for the model (not malware mitigation).
+      if (!output.file.content) {
+        return formatTextReadBoundaryReminder(output.file)
+      }
+      // Out stores raw lines; line numbers / header only on the model path.
+      return formatTextReadForModel(output.file)
     case 'image':
       return `[Image: ${output.file.filePath}, ${output.file.mediaType}, ${output.file.originalSize} bytes — image attached in follow-up message]`
     case 'notebook':
@@ -121,25 +129,34 @@ export function formatReadOutputAsToolString(output: ReadOutput): string {
   }
 }
 
-export function listDirectoryEntries(
-  absPath: string,
-  displayPath: string,
-): string {
-  if (!fs.existsSync(absPath)) {
-    throw new Error(`directory not found: ${displayPath}`)
-  }
-  const stat = fs.statSync(absPath)
-  if (!stat.isDirectory()) {
-    throw new Error(`${displayPath} is not a directory`)
-  }
-  const entries = fs.readdirSync(absPath)
-  const truncated = entries.length > MAX_DIR_ENTRIES
-  const names = entries.slice(0, MAX_DIR_ENTRIES)
-  if (truncated) {
-    names.push(`… and ${entries.length - MAX_DIR_ENTRIES} more entries`)
-  }
-  return names.join('\n')
-}
-
-export type { ReadOutput } from './types.js'
-export { FileTooLargeError, ReadOutputSchema } from './types.js'
+export type { ReadOutput, ReadFileState, ReadFileStateEntry } from './types.js'
+export {
+  FileTooLargeError,
+  MaxFileReadLinesExceededError,
+  MaxFileReadTokenExceededError,
+  ReadOutputSchema,
+} from './types.js'
+export {
+  EMPTY_FILE_READ_REMINDER,
+  FILE_UNCHANGED_STUB,
+  formatTextReadBoundaryReminder,
+  offsetBeyondEofReminder,
+} from './boundary-reminders.js'
+export {
+  clearReadFileState,
+  invalidateReadPaths,
+  recordReadInState,
+  recordWriteInState,
+  shouldDedupRead,
+} from './read-file-state.js'
+export {
+  formatTextReadForModel,
+  addLineNumbers,
+  roughTokenEstimate,
+} from './read-text.js'
+export { readTextFromString } from './read-from-string.js'
+export {
+  findSimilarFile,
+  suggestPathUnderCwd,
+  formatFileNotFoundMessage,
+} from './path-suggest.js'
