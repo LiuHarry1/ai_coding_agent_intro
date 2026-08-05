@@ -388,7 +388,7 @@ export interface AgentOptions {
    */
   refreshTools?: () => Record<string, AnyTool>
   /** Rebuild system prompt when permission mode changes mid-turn. */
-  refreshSystemPrompt?: () => string
+  refreshSystemPrompt?: () => string | Promise<string>
   /** Inject plan-exit reminders when transitioning out of plan mode mid-turn. */
   onPermissionModeChange?: () => Message[]
   /**

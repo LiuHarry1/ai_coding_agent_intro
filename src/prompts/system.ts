@@ -1,4 +1,3 @@
-import { isWindows, platformLabel } from '../core/platform.js'
 import {
   EXPLORE_AGENT_MIN_QUERIES,
   EXPLORE_AGENT_TYPE,
@@ -15,17 +14,12 @@ import {
   WRITE_FILE_TOOL_NAME,
 } from '../constants/tool_names.js'
 import { SKILL_TOOL_NAME } from '../tools/SkillTool/SkillTool.js'
-import { previewSection } from './preview.js'
+import { computeSimpleEnvInfo } from '../constants/prompts.js'
+import { setCwd } from '../utils/cwd.js'
 import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
+import { previewSection } from './preview.js'
 
 // Static system prompt sections. Uses tool/agent names via constants.
-
-function shellInfoLine(): string {
-  if (isWindows) {
-    return 'Shell: bash (use Unix shell syntax, not Windows — e.g. /dev/null not NUL, forward slashes in paths)'
-  }
-  return `Shell: ${BASH_TOOL_NAME}`
-}
 
 /** Agent tool usage guidance. */
 function agentToolSection(): string {
@@ -49,18 +43,23 @@ function toolSearchGuidanceSection(): string {
   return `Some tools are deferred — their names are listed in <system-reminder> messages but their full schemas are not loaded. When you need a deferred tool, call ${TOOL_SEARCH_TOOL_NAME} first (with \`select:tool_name\` for exact lookup or keywords for search). The tool will be activated and available for your next action. Do not attempt to call a deferred tool without discovering it first — the call will fail.`
 }
 
-export function systemPrompt(cwd: string, projectRules?: string): string {
+export async function systemPrompt(
+  cwd: string,
+  projectRules?: string,
+  modelId = '',
+): Promise<string> {
+  setCwd(cwd)
+  const env =
+    (await computeSimpleEnvInfo(modelId)) +
+    previewSection() +
+    workspaceBoundaryPromptSection(cwd)
   const rulesAppend = projectRules ? `\n\n${projectRules}` : ''
 
   return `You are an interactive agent1 that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.
 
-# Environment
- - Primary working directory: ${cwd}
- - Platform: ${platformLabel}
- - ${shellInfoLine()}${previewSection()}
-${workspaceBoundaryPromptSection(cwd)}
+${env}
 # Tone and style
  - Only use emojis if the user explicitly requests it. Avoid using emojis in all communication unless asked.
  - Your responses should be short and concise.

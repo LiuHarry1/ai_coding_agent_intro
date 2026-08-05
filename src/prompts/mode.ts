@@ -8,21 +8,22 @@ export interface SystemPromptOptions {
   planExists?: boolean
 }
 
-export function getSystemPromptForMode(
+export async function getSystemPromptForMode(
   mode: ExternalMode,
   cwd: string,
   projectRules?: string,
   options: SystemPromptOptions = {},
-): string {
+  modelId = '',
+): Promise<string> {
   switch (mode) {
     case 'ask':
-      return askSystemPrompt(cwd, projectRules)
+      return askSystemPrompt(cwd, projectRules, modelId)
     case 'plan':
       return planSystemPrompt(cwd, projectRules, {
         planFilePath: options.planFilePath ?? '.ai-agent/plans/plan.md',
         planExists: options.planExists ?? false,
-      })
+      }, modelId)
     default:
-      return systemPrompt(cwd, projectRules)
+      return systemPrompt(cwd, projectRules, modelId)
   }
 }

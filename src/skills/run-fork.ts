@@ -21,6 +21,8 @@ import { AGENT_TOOL_NAME } from '../constants/tool_names.js'
 import { SKILL_TOOL_NAME } from '../tools/SkillTool/SkillTool.js'
 import { SUBAGENT_NO_OUTPUT_MARKER } from '../tools/AgentTool/finalizeAgentTool.js'
 import { isToolNameDisallowed } from '../tools/AgentTool/toolGlob.js'
+import { enhanceSystemPromptWithEnvDetails } from '../constants/prompts.js'
+import { setCwd } from '../utils/cwd.js'
 import type { SkillDefinition } from './types.js'
 
 export interface RunSkillForkOptions {
@@ -118,9 +120,17 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     )
   }
 
+  setCwd(cwd)
+  const systemPrompt = (
+    await enhanceSystemPromptWithEnvDetails(
+      [targetAgent.systemPrompt],
+      forkModel ?? '',
+    )
+  ).join('\n\n')
+
   const result = await runAgent(combined, {
     tools: subTools,
-    systemPrompt: targetAgent.systemPrompt,
+    systemPrompt,
     eventBus,
     wire,
     messages: [],

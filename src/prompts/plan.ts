@@ -1,4 +1,3 @@
-import { isWindows, platformLabel } from '../core/platform.js'
 import {
   ASK_USER_QUESTION_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
@@ -20,14 +19,9 @@ import {
   getPlanModeExploreAgentCount,
 } from '../utils/plan-config.js'
 import { PLAN_PHASE4_SECTION } from './plan-phase4.js'
+import { computeSimpleEnvInfo } from '../constants/prompts.js'
+import { setCwd } from '../utils/cwd.js'
 import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
-
-function shellInfoLine(): string {
-  if (isWindows) {
-    return 'Shell: bash (use Unix shell syntax, not Windows — e.g. /dev/null not NUL, forward slashes in paths)'
-  }
-  return 'Shell: Bash'
-}
 
 export interface PlanPromptOptions {
   planFilePath: string
@@ -37,11 +31,17 @@ export interface PlanPromptOptions {
 /**
  * Plan mode system prompt — 5-phase workflow.
  */
-export function planSystemPrompt(
+export async function planSystemPrompt(
   cwd: string,
   projectRules: string | undefined,
   options: PlanPromptOptions,
-): string {
+  modelId = '',
+): Promise<string> {
+  setCwd(cwd)
+  const env =
+    (await computeSimpleEnvInfo(modelId)) +
+    workspaceBoundaryPromptSection(cwd)
+
   const { planFilePath, planExists } = options
   const agentCount = getPlanModeAgentCount()
   const exploreAgentCount = getPlanModeExploreAgentCount()
@@ -121,11 +121,7 @@ Example perspectives by task type:
     '',
     `NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications using the ${ASK_USER_QUESTION_TOOL_NAME} tool. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.`,
     '',
-    '## Environment',
-    `- Working directory: ${cwd}`,
-    `- Platform: ${platformLabel}`,
-    `- ${shellInfoLine()}`,
-    workspaceBoundaryPromptSection(cwd).trim(),
+    env.trim(),
     '',
     '## Tool usage (read-only during Phases 1-3)',
     `- Exploration agents: ${EXPLORE_AGENT_TYPE} (Phase 1), ${PLAN_AGENT_TYPE} (Phase 2)`,

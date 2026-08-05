@@ -307,10 +307,12 @@ export async function runAgent(
       )
     }
     if (refreshSystemPrompt) {
-      activeSystemPrompt = refreshSystemPrompt()
-      console.log(
-        `[${agentLogTag(logLabel)}] refreshed system prompt for mode=${newMode}`,
-      )
+      void Promise.resolve(refreshSystemPrompt()).then(prompt => {
+        activeSystemPrompt = prompt
+        console.log(
+          `[${agentLogTag(logLabel)}] refreshed system prompt for mode=${newMode}`,
+        )
+      })
     }
   }
 

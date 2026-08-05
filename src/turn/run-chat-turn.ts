@@ -96,13 +96,13 @@ const noopTransport: SSETransport = {
 /**
  * Primary profile REPLACE when in agent mode (overrides default system prompt).
  */
-function resolveTurnSystemPrompt(
+async function resolveTurnSystemPrompt(
   session: Session,
   cwd: string,
   projectRules: string | undefined,
   profile: AgentDefinition | null,
   planOpts: { planFilePath: string; planExists: boolean },
-): string {
+): Promise<string> {
   if (session.permissionMode.mode === 'agent' && profile) {
     return getSystemPromptForAgentProfile(profile, cwd, projectRules)
   }
@@ -354,7 +354,7 @@ export async function runChatTurn(
     if (!sm.enabled) {
       replyText = 'Session memory is disabled in settings.'
     } else {
-      const systemPrompt = resolveTurnSystemPrompt(
+      const systemPrompt = await resolveTurnSystemPrompt(
         session,
         cwd,
         prepared.projectRules || undefined,
@@ -440,7 +440,7 @@ export async function runChatTurn(
     uuid: randomUUID(),
   }
 
-  const systemPrompt = resolveTurnSystemPrompt(
+  const systemPrompt = await resolveTurnSystemPrompt(
     session,
     cwd,
     prepared.projectRules || undefined,

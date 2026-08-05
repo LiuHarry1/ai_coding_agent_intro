@@ -14,6 +14,8 @@ import {
 import { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
 import { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
 import { loadProjectRules } from '../../utils/rules-loader.js'
+import { enhanceSystemPromptWithEnvDetails } from '../../constants/prompts.js'
+import { setCwd } from '../../utils/cwd.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { createSubagentWire } from '../../core/brokers/subagent-wire.js'
 import { randomUUID } from 'crypto'
@@ -243,9 +245,16 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           delete subTools[AGENT_TOOL_NAME]
 
           const projectRules = def.omitProjectRules ? '' : loadProjectRules(cwd)
-          const subSystemPrompt = projectRules
+          const withRules = projectRules
             ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
             : def.systemPrompt
+          setCwd(cwd)
+          const subSystemPrompt = (
+            await enhanceSystemPromptWithEnvDetails(
+              [withRules],
+              subModel ?? '',
+            )
+          ).join('\n\n')
 
           const sessionId = context.sessionId ?? ''
           const abortSignal = sessionId
