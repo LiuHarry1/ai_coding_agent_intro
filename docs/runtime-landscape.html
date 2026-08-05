@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>V8 · Blink · Chrome · Node · Electron 关系图</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5a6a7e;
+      --line: #c5d0dc;
+      --paper: #f3f6f9;
+      --v8: #e8a838;
+      --blink: #3d8bfd;
+      --webkit: #2a9d8f;
+      --chrome: #4285f4;
+      --chromium: #5c6bc0;
+      --node: #3c873a;
+      --electron: #9b59b6;
+      --html: #e34c26;
+      --css: #264de4;
+      --js: #c6a000;
+      --panel: rgba(255, 255, 255, 0.72);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #dbe7f5 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #e8f0e4 0%, transparent 50%),
+        linear-gradient(180deg, #eef2f6 0%, var(--paper) 40%, #e8edf3 100%);
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    .wrap {
+      width: min(1080px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 3rem 0 5rem;
+    }
+
+    header {
+      margin-bottom: 3rem;
+      animation: rise 0.7s ease both;
+    }
+
+    header h1 {
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 0.75rem;
+    }
+
+    header p {
+      color: var(--muted);
+      max-width: 42rem;
+      font-size: 1.05rem;
+    }
+
+    section {
+      margin-bottom: 2.75rem;
+      animation: rise 0.7s ease both;
+    }
+
+    section:nth-child(2) { animation-delay: 0.05s; }
+    section:nth-child(3) { animation-delay: 0.1s; }
+    section:nth-child(4) { animation-delay: 0.15s; }
+    section:nth-child(5) { animation-delay: 0.2s; }
+    section:nth-child(6) { animation-delay: 0.25s; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-title {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.45rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .section-desc {
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+      max-width: 46rem;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+      padding: 1.25rem 1.35rem 1.4rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.88rem;
+    }
+
+    .swatch {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .swatch i {
+      width: 0.75rem;
+      height: 0.75rem;
+      display: inline-block;
+    }
+
+    /* ── Diagram 1: webpage stack ── */
+    .stack {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .layer {
+      border: 2px solid transparent;
+      padding: 0.9rem 1rem;
+      display: grid;
+      grid-template-columns: 7.5rem 1fr;
+      gap: 1rem;
+      align-items: center;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .layer:hover {
+      transform: translateX(4px);
+      box-shadow: 0 8px 24px rgba(26, 35, 50, 0.08);
+    }
+
+    .layer .tag {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      font-size: 0.92rem;
+    }
+
+    .layer .note { color: var(--muted); font-size: 0.92rem; }
+
+    .layer.html { background: color-mix(in srgb, var(--html) 14%, white); border-color: color-mix(in srgb, var(--html) 45%, white); }
+    .layer.css  { background: color-mix(in srgb, var(--css) 12%, white); border-color: color-mix(in srgb, var(--css) 40%, white); }
+    .layer.js   { background: color-mix(in srgb, var(--js) 16%, white); border-color: color-mix(in srgb, var(--js) 45%, white); }
+    .layer.blink { background: color-mix(in srgb, var(--blink) 12%, white); border-color: color-mix(in srgb, var(--blink) 45%, white); }
+    .layer.v8 { background: color-mix(in srgb, var(--v8) 16%, white); border-color: color-mix(in srgb, var(--v8) 50%, white); }
+    .layer.chrome { background: color-mix(in srgb, var(--chrome) 10%, white); border-color: color-mix(in srgb, var(--chrome) 40%, white); }
+
+    .arrow-down {
+      text-align: center;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      padding: 0.15rem 0;
+    }
+
+    /* ── Diagram 2: nested boxes ── */
+    .nest {
+      border: 2px solid var(--chromium);
+      background: color-mix(in srgb, var(--chromium) 6%, white);
+      padding: 1rem;
+    }
+
+    .nest > .label {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      color: var(--chromium);
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    .nest-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    @media (max-width: 700px) {
+      .nest-row { grid-template-columns: 1fr; }
+      .layer { grid-template-columns: 1fr; gap: 0.25rem; }
+    }
+
+    .box {
+      border: 2px solid;
+      padding: 0.85rem 1rem;
+      min-height: 5.5rem;
+    }
+
+    .box .name {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
+    }
+
+    .box .hint { color: var(--muted); font-size: 0.9rem; }
+
+    .box.blink { border-color: var(--blink); background: color-mix(in srgb, var(--blink) 10%, white); }
+    .box.v8 { border-color: var(--v8); background: color-mix(in srgb, var(--v8) 12%, white); }
+    .box.chrome-outer {
+      border-color: var(--chrome);
+      background: color-mix(in srgb, var(--chrome) 5%, white);
+      padding: 1rem;
+      margin-top: 0.85rem;
+    }
+
+    .chrome-outer > .label {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      color: var(--chrome);
+      margin-bottom: 0.65rem;
+    }
+
+    /* ── Diagram 3: compare browsers ── */
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 700px) {
+      .compare { grid-template-columns: 1fr; }
+    }
+
+    .engine {
+      border: 2px solid;
+      padding: 1rem;
+    }
+
+    .engine.chromium-side { border-color: var(--chromium); }
+    .engine.webkit-side { border-color: var(--webkit); }
+
+    .engine h3 {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .engine ul {
+      list-style: none;
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .engine li {
+      padding: 0.55rem 0.7rem;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.7);
+      font-size: 0.92rem;
+    }
+
+    .engine li strong {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+    }
+
+    /* ── Diagram 4: three runtimes ── */
+    .runtimes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.85rem;
+    }
+
+    @media (max-width: 800px) {
+      .runtimes { grid-template-columns: 1fr; }
+    }
+
+    .runtime {
+      border: 2px solid;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      transition: transform 0.25s ease;
+    }
+
+    .runtime:hover { transform: translateY(-3px); }
+
+    .runtime.browser { border-color: var(--chrome); }
+    .runtime.node { border-color: var(--node); }
+    .runtime.electron { border-color: var(--electron); }
+
+    .runtime h3 {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.15rem;
+    }
+
+    .chip {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.55rem;
+      border: 1px solid;
+      width: fit-content;
+    }
+
+    .runtime.browser .chip { border-color: var(--blink); color: #1a4f9c; background: color-mix(in srgb, var(--blink) 12%, white); }
+    .runtime.node .chip { border-color: var(--node); color: #1f5a1d; background: color-mix(in srgb, var(--node) 12%, white); }
+    .runtime.electron .chip { border-color: var(--electron); color: #5b2c6f; background: color-mix(in srgb, var(--electron) 10%, white); }
+
+    .runtime p { color: var(--muted); font-size: 0.9rem; flex: 1; }
+
+    .pieces {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.25rem;
+    }
+
+    .piece {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      padding: 0.28rem 0.45rem;
+      border: 1px solid var(--line);
+      background: white;
+    }
+
+    .piece.v8 { border-color: var(--v8); background: color-mix(in srgb, var(--v8) 18%, white); }
+    .piece.blink { border-color: var(--blink); background: color-mix(in srgb, var(--blink) 14%, white); }
+    .piece.node { border-color: var(--node); background: color-mix(in srgb, var(--node) 14%, white); }
+    .piece.muted { opacity: 0.45; text-decoration: line-through; }
+
+    /* ── Diagram 5: flow svg-ish with flex ── */
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 0.35rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.86rem;
+    }
+
+    .flow span {
+      padding: 0.45rem 0.65rem;
+      border: 1.5px solid var(--line);
+      background: white;
+    }
+
+    .flow .op { border: none; background: transparent; color: var(--muted); padding: 0 0.15rem; }
+
+    .flow .v8 { border-color: var(--v8); background: color-mix(in srgb, var(--v8) 15%, white); }
+    .flow .blink { border-color: var(--blink); background: color-mix(in srgb, var(--blink) 12%, white); }
+    .flow .html { border-color: var(--html); background: color-mix(in srgb, var(--html) 12%, white); }
+    .flow .css { border-color: var(--css); background: color-mix(in srgb, var(--css) 10%, white); }
+    .flow .js { border-color: var(--js); background: color-mix(in srgb, var(--js) 14%, white); }
+
+    footer {
+      margin-top: 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    code {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.88em;
+      background: rgba(26, 35, 50, 0.06);
+      padding: 0.1em 0.35em;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>网页与运行时关系图</h1>
+      <p>
+        同一门 JavaScript，可以跑在浏览器、Node.js、Electron 里。
+        差别主要在：有没有页面渲染（Blink / WebKit），以及包了哪些系统能力。
+      </p>
+    </header>
+
+    <div class="legend">
+      <span class="swatch"><i style="background:var(--html)"></i>HTML</span>
+      <span class="swatch"><i style="background:var(--css)"></i>CSS</span>
+      <span class="swatch"><i style="background:var(--js)"></i>JS</span>
+      <span class="swatch"><i style="background:var(--v8)"></i>V8</span>
+      <span class="swatch"><i style="background:var(--blink)"></i>Blink</span>
+      <span class="swatch"><i style="background:var(--webkit)"></i>WebKit</span>
+      <span class="swatch"><i style="background:var(--chromium)"></i>Chromium</span>
+      <span class="swatch"><i style="background:var(--node)"></i>Node.js</span>
+      <span class="swatch"><i style="background:var(--electron)"></i>Electron</span>
+    </div>
+
+    <!-- 1 -->
+    <section>
+      <h2 class="section-title">1. 打开一个网页时，谁处理什么？</h2>
+      <p class="section-desc">
+        HTML / CSS / JS 是你写的内容；Blink 负责把页面画出来；V8 负责执行 JS；Chrome 是完整产品。
+      </p>
+      <div class="panel">
+        <div class="stack">
+          <div class="layer html">
+            <div class="tag">HTML</div>
+            <div class="note">结构：标题、按钮、段落……「页面里有什么」</div>
+          </div>
+          <div class="layer css">
+            <div class="tag">CSS</div>
+            <div class="note">样式：颜色、布局、字体……「长什么样」</div>
+          </div>
+          <div class="layer js">
+            <div class="tag">JavaScript</div>
+            <div class="note">行为：点击、请求数据、改页面……「怎么动」</div>
+          </div>
+          <div class="arrow-down">▼ 交给浏览器组件处理</div>
+          <div class="layer blink">
+            <div class="tag">Blink</div>
+            <div class="note">渲染引擎：读 HTML/CSS，计算布局并绘制页面</div>
+          </div>
+          <div class="layer v8">
+            <div class="tag">V8</div>
+            <div class="note">JS 引擎：执行 JavaScript（不负责画页面）</div>
+          </div>
+          <div class="arrow-down">▼ 组装成产品</div>
+          <div class="layer chrome">
+            <div class="tag">Chrome</div>
+            <div class="note">完整浏览器：Chromium 内核 + Google 服务、自动更新、同步等</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section>
+      <h2 class="section-title">2. Chromium ⊃ Blink + V8；Chrome ⊃ Chromium</h2>
+      <p class="section-desc">
+        Chromium 是开源浏览器项目；Blink / V8 是其中两块核心引擎；Chrome 基于 Chromium 再加闭源部分。
+      </p>
+      <div class="panel">
+        <div class="box chrome-outer" style="margin-top:0">
+          <div class="label">Chrome（产品）</div>
+          <div class="nest">
+            <div class="label">Chromium（开源浏览器核心）</div>
+            <div class="nest-row">
+              <div class="box blink">
+                <div class="name" style="color:var(--blink)">Blink</div>
+                <div class="hint">渲染引擎<br />处理 HTML + CSS → 页面画面</div>
+              </div>
+              <div class="box v8">
+                <div class="name" style="color:#9a6a10">V8</div>
+                <div class="hint">JavaScript 引擎<br />处理 JS → 执行逻辑</div>
+              </div>
+            </div>
+          </div>
+          <p style="margin-top:0.85rem;color:var(--muted);font-size:0.9rem">
+            还有网络栈、安全沙箱、DevTools……这里只突出和前端最相关的两块。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section>
+      <h2 class="section-title">3. Chromium / Blink  vs  WebKit</h2>
+      <p class="section-desc">
+        都是「浏览器内核家族」，但路线不同。Safari 用 WebKit；Chrome / Edge / 新 Opera 等走 Chromium。
+      </p>
+      <div class="panel">
+        <div class="compare">
+          <div class="engine chromium-side">
+            <h3 style="color:var(--chromium)">Chromium 路线</h3>
+            <ul>
+              <li><strong>渲染：</strong> Blink（从 WebKit 分叉出来）</li>
+              <li><strong>JS：</strong> V8</li>
+              <li><strong>产品例子：</strong> Chrome、Edge、新 Opera、许多 Electron 应用</li>
+            </ul>
+          </div>
+          <div class="engine webkit-side">
+            <h3 style="color:var(--webkit)">WebKit 路线</h3>
+            <ul>
+              <li><strong>渲染：</strong> WebKit</li>
+              <li><strong>JS：</strong> JavaScriptCore（不是 V8）</li>
+              <li><strong>产品例子：</strong> Safari、部分 iOS 内嵌浏览器</li>
+            </ul>
+          </div>
+        </div>
+        <p style="margin-top:1rem;color:var(--muted);font-size:0.9rem">
+          记法：<strong>WebKit</strong> 和 <strong>Blink</strong> 都偏「画页面」；
+          <strong>V8</strong> 和 <strong>JavaScriptCore</strong> 都偏「跑 JS」。不要把 V8 和 WebKit 当成同一层东西。
+        </p>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section>
+      <h2 class="section-title">4. Chrome · Node.js · Electron：三套舞台</h2>
+      <p class="section-desc">
+        都可能用到 V8，但「有没有 Blink / 有没有 Node API」不同。
+      </p>
+      <div class="panel">
+        <div class="runtimes">
+          <article class="runtime browser">
+            <h3>浏览器（Chrome）</h3>
+            <span class="chip">看网页</span>
+            <p>有页面、有 DOM。用户访问网址时，在这里跑前端 JS。</p>
+            <div class="pieces">
+              <span class="piece v8">V8 ✓</span>
+              <span class="piece blink">Blink ✓</span>
+              <span class="piece muted">Node API</span>
+            </div>
+          </article>
+          <article class="runtime node">
+            <h3>Node.js</h3>
+            <span class="chip">跑脚本 / 服务</span>
+            <p>没有网页 DOM。可读文件、起服务器。你项目的 <code>tsx start.js</code> 就在这条路上。</p>
+            <div class="pieces">
+              <span class="piece v8">V8 ✓</span>
+              <span class="piece muted">Blink</span>
+              <span class="piece node">Node API ✓</span>
+            </div>
+          </article>
+          <article class="runtime electron">
+            <h3>Electron</h3>
+            <span class="chip">桌面应用</span>
+            <p>内嵌 Chromium（会画 UI）+ Node（能碰系统）。你项目的 <code>electron .</code> 属于这里。</p>
+            <div class="pieces">
+              <span class="piece v8">V8 ✓</span>
+              <span class="piece blink">Blink ✓</span>
+              <span class="piece node">Node API ✓</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section>
+      <h2 class="section-title">5. 一条线串起来</h2>
+      <p class="section-desc">从源码到不同产品，可以这样记：</p>
+      <div class="panel">
+        <div class="flow" style="margin-bottom:1rem">
+          <span class="html">HTML</span>
+          <span class="op">+</span>
+          <span class="css">CSS</span>
+          <span class="op">→</span>
+          <span class="blink">Blink / WebKit</span>
+          <span class="op">→</span>
+          <span>页面画面</span>
+        </div>
+        <div class="flow" style="margin-bottom:1rem">
+          <span class="js">JavaScript</span>
+          <span class="op">→</span>
+          <span class="v8">V8</span>
+          <span class="op">（或 Safari 的 JSC）→</span>
+          <span>执行逻辑</span>
+        </div>
+        <div class="flow" style="margin-bottom:1rem">
+          <span class="blink">Blink</span>
+          <span class="op">+</span>
+          <span class="v8">V8</span>
+          <span class="op">+ … →</span>
+          <span style="border-color:var(--chromium)">Chromium</span>
+          <span class="op">+ Google 服务 →</span>
+          <span style="border-color:var(--chrome)">Chrome</span>
+        </div>
+        <div class="flow">
+          <span class="v8">V8</span>
+          <span class="op">+ 系统 API →</span>
+          <span style="border-color:var(--node)">Node.js</span>
+          <span class="op">；</span>
+          <span style="border-color:var(--chromium)">Chromium</span>
+          <span class="op">+</span>
+          <span style="border-color:var(--node)">Node</span>
+          <span class="op">→</span>
+          <span style="border-color:var(--electron)">Electron</span>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      本地打开本文件即可查看：<code>docs/runtime-landscape.html</code>
+      · 用浏览器打开，无需 Node。
+    </footer>
+  </div>
+</body>
+</html>
