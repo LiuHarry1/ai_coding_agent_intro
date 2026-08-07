@@ -3,26 +3,39 @@ import ToolCallLine from './ToolCallLine.jsx'
 import { detectError } from '../lib/utils.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import { getTur } from '../lib/tool-result.js'
-import { toolActionLabel } from '../lib/tool-action-labels.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * ≈ Cursor awaitToolCall / Waiting→Waited.
  * Body prefers TUR.output; model text may include XML wrappers.
  */
 
-function formatWaitDetails(part, taskId) {
+const SHORT_OUTPUT_CHARS = 2000
+
+function formatWaitDetails(part, args, taskId, isDone) {
+  if (!isDone) {
+    const timeoutMs =
+      typeof args.timeout === 'number'
+        ? args.timeout
+        : typeof args.block_until_ms === 'number'
+          ? args.block_until_ms
+          : null
+    if (typeof timeoutMs === 'number' && timeoutMs > 0) {
+      const secs = Math.max(1, Math.round(timeoutMs / 1000))
+      return `up to ${secs}s for shell`
+    }
+    return 'for shell'
+  }
+
   const ms =
     typeof part.duration === 'number'
       ? part.duration
       : typeof part.durationMs === 'number'
         ? part.durationMs
         : null
-  if (ms === 0) return 'briefly'
-  if (typeof ms === 'number' && ms > 0) {
-    if (ms < 1000) return `${ms}ms`
-    return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
-  }
-  return taskId || ''
+  if (ms == null || ms < 500) return 'briefly'
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
 }
 
 export default function TaskOutputCard({ part }) {
@@ -47,18 +60,24 @@ export default function TaskOutputCard({ part }) {
   }, [tur, result])
 
   const hasOutput = typeof displayBody === 'string' && displayBody.length > 0
+  const shortSuccess =
+    isDone &&
+    !isError &&
+    hasOutput &&
+    displayBody.length <= SHORT_OUTPUT_CHARS
   const retrieval = tur?.retrieval_status ?? null
   const taskStatus = tur?.task_status ?? null
 
   const [expanded, toggleExpanded] = useStreamingExpanded(!isDone, {
-    expandOnceWhen: isDone && isError,
+    expandOnceWhen: isDone && (isError || shortSuccess),
   })
 
   const action = toolActionLabel('await', {
     loading: !isDone,
     hasError: isError,
   })
-  const details = isDone ? formatWaitDetails(part, taskId) : taskId || '…'
+  const rawDetails = formatWaitDetails(part, args, taskId, isDone)
+  const details = isError ? toolErrorDetails(rawDetails, true) : rawDetails
 
   const titleTooltip = [
     taskId,

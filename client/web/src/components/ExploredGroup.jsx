@@ -9,6 +9,7 @@ import {
   detectToolError,
 } from '../lib/tool-density.js'
 import { toolPartKey } from '../lib/timeline.js'
+import { toolActionLabel } from '../lib/tool-action-labels.js'
 
 /**
  * Cursor-style "Explored N tools" group for consecutive built-in explore calls.
@@ -44,6 +45,10 @@ export default function ExploredGroup({ items }) {
   }, [items, allDone])
 
   const title = `${n} tool${n === 1 ? '' : 's'}`
+  const action = toolActionLabel('explore', {
+    loading: anyRunning,
+    hasError: anyError,
+  })
 
   return (
     <div
@@ -52,12 +57,13 @@ export default function ExploredGroup({ items }) {
       <ToolCallLine
         expanded={expanded}
         onToggle={toggle}
-        label='Explored'
+        label={action}
         title={title}
         subtitle={subtitle || undefined}
         duration={duration}
         isDone={allDone}
         isError={anyError}
+        showSuccess={allDone && !anyError}
       />
 
       {expanded && (

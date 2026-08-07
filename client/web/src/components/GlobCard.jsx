@@ -3,10 +3,12 @@ import CopyButton from './CopyButton.jsx'
 import ToolCallLine from './ToolCallLine.jsx'
 import { FileIcon } from './workspace-ide/icons.jsx'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 import { fileName, shortDisplayPath, truncateEnd } from '../lib/utils.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
- * Cursor-style Glob card — from `toolUseResult` only.
+ * Cursor-style Glob card — Searching/Searched files + clickable paths.
  */
 
 function splitPathParts(filePath) {
@@ -37,6 +39,7 @@ export default function GlobCard({ part, nested = false }) {
     isDone &&
     (part.isError === true ||
       (typeof result === 'string' && result.startsWith('Error:')))
+  const openFile = useWorkspaceIdeStore(s => s.openFile)
 
   const parsed = useMemo(
     () => fromToolUseResult(part.toolUseResult),
@@ -70,14 +73,32 @@ export default function GlobCard({ part, nested = false }) {
   const emptyHint =
     isDone && !isError && parsed?.empty ? 'No files matched' : null
 
+  const action = toolActionLabel('glob', {
+    loading: !isDone,
+    hasError: isError,
+  })
+  const title = isError
+    ? toolErrorDetails(
+        displayPattern ? `\u201C${displayPattern}\u201D` : 'glob\u2026',
+        true,
+      )
+    : displayPattern
+      ? `\u201C${displayPattern}\u201D`
+      : 'glob\u2026'
+
+  const handleOpen = filePath => {
+    if (typeof openFile !== 'function') return
+    void openFile(filePath)
+  }
+
   return (
     <div className={`tool-row glob-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
         expanded={expanded && hasBody}
         onToggle={hasBody ? toggleExpanded : undefined}
         showChevron={hasBody}
-        label='Glob'
-        title={displayPattern ? `\u201C${displayPattern}\u201D` : 'glob\u2026'}
+        label={action}
+        title={title}
         titleTooltip={pattern}
         subtitle={
           subtitleParts.length > 0 ? subtitleParts.join(' \u00B7 ') : null
@@ -86,6 +107,7 @@ export default function GlobCard({ part, nested = false }) {
         duration={part.duration}
         isDone={isDone}
         isError={isError}
+        showSuccess={isDone && !isError}
         emptyHint={emptyHint}
         actions={
           isDone && !isError && parsed && parsed.files.length > 0 ? (
@@ -99,14 +121,21 @@ export default function GlobCard({ part, nested = false }) {
           {parsed.files.map(f => {
             const parts = splitPathParts(f)
             return (
-              <li key={f} className='grep-file-row' title={parts.full}>
-                <span className='grep-path'>
-                  <FileIcon size={12} />
-                  <span className='grep-file-name'>{parts.base}</span>
-                  {parts.dir ? (
-                    <span className='grep-file-dir'>{parts.dir}</span>
-                  ) : null}
-                </span>
+              <li key={f}>
+                <button
+                  type='button'
+                  className='grep-file-row grep-file-row--clickable'
+                  onClick={() => handleOpen(parts.full)}
+                  title={parts.full}
+                >
+                  <span className='grep-path'>
+                    <FileIcon size={12} />
+                    <span className='grep-file-name'>{parts.base}</span>
+                    {parts.dir ? (
+                      <span className='grep-file-dir'>{parts.dir}</span>
+                    ) : null}
+                  </span>
+                </button>
               </li>
             )
           })}

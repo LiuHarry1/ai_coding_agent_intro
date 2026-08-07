@@ -37,6 +37,8 @@ export interface MiddlewareContext {
   result?: unknown
   error?: unknown
   duration?: number
+  /** Correlates timing / hooks to the in-flight tool_use when available. */
+  toolCallId?: string
   /** Agent identity for console logs (e.g. `main`, `session_memory`). */
   logLabel?: string
 }

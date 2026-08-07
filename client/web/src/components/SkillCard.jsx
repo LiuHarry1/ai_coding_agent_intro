@@ -17,6 +17,7 @@ import {
   SUPPRESSED_TOOL_CARDS,
   SUBAGENT_SUPPRESSED,
 } from './pickToolCard.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * Unified Skill row — inline stays collapsed; fork is one-line with live
@@ -100,6 +101,14 @@ export default function SkillCard({ part, nested = false }) {
     ? hasReport || steps.length > 0
     : Boolean(isDone && hasBody)
 
+  const action = toolActionLabel('skill', {
+    loading: !isDone,
+    hasError: isError,
+  })
+  const title = isError
+    ? toolErrorDetails(skillName || '\u2026', true)
+    : skillName || '\u2026'
+
   return (
     <div
       className={`tool-row skill-card ${nested ? 'tool-row--nested' : ''} ${isError ? 'has-error' : ''}`}
@@ -109,8 +118,8 @@ export default function SkillCard({ part, nested = false }) {
         onToggle={handleHeaderToggle}
         showChevron={showChevron}
         icon={'\u2699'}
-        label='Skill'
-        title={skillName || '\u2026'}
+        label={action}
+        title={title}
         titleTooltip={[skillName, hint].filter(Boolean).join('\n') || undefined}
         subtitle={subtitle || undefined}
         meta={
@@ -124,6 +133,7 @@ export default function SkillCard({ part, nested = false }) {
         duration={nested ? undefined : part.duration}
         isDone={isDone}
         isError={isError}
+        showSuccess={isDone && !isError}
         actions={
           isDone && !isError && hasBody && !isFork ? (
             <CopyButton text={result} label='Copy' inline />

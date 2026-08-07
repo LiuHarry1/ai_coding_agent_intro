@@ -1213,23 +1213,46 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Attach execute() wall time from middleware.
+   * Prefer `tool_use_id` — name-only matching mis-attributes parallel Bash.
+   * Timing is emitted from middleware afterTool, which runs BEFORE tool_result
+   * is wired — so match by id even while status is still running.
+   */
   _updateLastToolTiming: data => {
+    const toolCallId = data.tool_use_id ?? data.toolCallId
     set(s => {
       const msgs = [...s.messages]
       const last = msgs[msgs.length - 1]
       if (last?.type !== 'assistant') return { messages: msgs }
 
       const parts = [...last.parts]
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (
-          parts[i].type === 'tool_call' &&
-          parts[i].name === data.name &&
-          parts[i].status === 'done'
-        ) {
-          parts[i] = { ...parts[i], duration: data.duration }
-          break
+      let target = -1
+      if (toolCallId) {
+        target = parts.findIndex(
+          p => p.type === 'tool_call' && p.toolCallId === toolCallId,
+        )
+      } else if (data.name) {
+        // Legacy (no id): FIFO among same-name cards still missing duration.
+        target = parts.findIndex(
+          p =>
+            p.type === 'tool_call' &&
+            p.name === data.name &&
+            p.duration == null,
+        )
+        if (target < 0) {
+          for (let i = parts.length - 1; i >= 0; i--) {
+            if (parts[i].type === 'tool_call' && parts[i].name === data.name) {
+              target = i
+              break
+            }
+          }
         }
       }
+      if (target < 0 || typeof data.duration !== 'number') {
+        return { messages: msgs }
+      }
+      parts[target] = { ...parts[target], duration: data.duration }
       msgs[msgs.length - 1] = { ...last, parts }
       return { messages: msgs }
     })

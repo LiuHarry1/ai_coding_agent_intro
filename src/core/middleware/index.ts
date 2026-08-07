@@ -29,7 +29,18 @@ export class Middleware implements IMiddleware {
   ): (args: unknown, options?: unknown) => Promise<unknown> {
     const self = this
     return async (args: unknown, options?: unknown) => {
-      const ctx: MiddlewareContext = { name, args, startTime: Date.now() }
+      const toolCallId =
+        options &&
+        typeof options === 'object' &&
+        typeof (options as { toolCallId?: unknown }).toolCallId === 'string'
+          ? (options as { toolCallId: string }).toolCallId
+          : undefined
+      const ctx: MiddlewareContext = {
+        name,
+        args,
+        startTime: Date.now(),
+        ...(toolCallId ? { toolCallId } : {}),
+      }
       await self.#run('beforeTool', ctx)
       try {
         const result = await executeFn(args, options)
@@ -54,8 +65,11 @@ export function createTimingMiddleware(
   const tag = `agent:${logLabel}`
   return {
     afterTool(ctx: MiddlewareContext): void {
-      console.log(`[${tag}] tool_timing ${ctx.name} ${ctx.duration}`)
-      wire.toolTiming(ctx.name, ctx.duration ?? 0)
+      console.log(
+        `[${tag}] tool_timing ${ctx.name} ${ctx.duration}` +
+          (ctx.toolCallId ? ` id=${ctx.toolCallId}` : ''),
+      )
+      wire.toolTiming(ctx.name, ctx.duration ?? 0, ctx.toolCallId)
     },
   }
 }

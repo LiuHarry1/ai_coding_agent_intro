@@ -158,6 +158,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+}
+.work-group-action {
+  color: inherit;
+}
+.work-group-details {
+  color: var(--text-muted);
+  font-weight: 400;
 }
 .work-group-header .spinner {
   margin-left: 2px;

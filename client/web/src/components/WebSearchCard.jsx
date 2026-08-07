@@ -3,6 +3,7 @@ import CopyButton from './CopyButton.jsx'
 import ToolCallLine from './ToolCallLine.jsx'
 import { parseMcpToolName } from '../lib/tool-kind.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * Dedicated card for the `web_search` tool. Replaces the generic ToolCallCard's
@@ -93,8 +94,16 @@ export default function WebSearchCard({ part, nested = false }) {
     ? parsed.suggestions
     : []
 
-  // Expanded only while running; collapses on done (user can still click).
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
+  const hasScannableBody =
+    isError ||
+    results.length > 0 ||
+    answers.length > 0 ||
+    (typeof result === 'string' && result.length > 0)
+
+  // Keep expanded while running; on success keep results scannable.
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
+    expandOnceWhen: isDone && hasScannableBody,
+  })
   const [showAll, setShowAll] = useState(false)
 
   const query = args.query || parsed?.query || ''
@@ -112,13 +121,23 @@ export default function WebSearchCard({ part, nested = false }) {
   const emptyHint =
     isDone && !isError && results.length === 0 ? 'No results' : null
 
+  const action = toolActionLabel('webSearch', {
+    loading: !isDone,
+    hasError: isError,
+  })
+  const titleText = isError
+    ? toolErrorDetails(query ? `\u201C${query}\u201D` : 'search\u2026', true)
+    : query
+      ? `\u201C${query}\u201D`
+      : 'search\u2026'
+
   return (
     <div className={`tool-row web-search-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
         expanded={expanded}
         onToggle={toggleExpanded}
-        label='Web Search'
-        title={query ? `\u201C${query}\u201D` : 'search\u2026'}
+        label={action}
+        title={titleText}
         titleTooltip={query}
         subtitle={
           filter.length > 0
@@ -137,6 +156,7 @@ export default function WebSearchCard({ part, nested = false }) {
         duration={part.duration}
         isDone={isDone}
         isError={isError}
+        showSuccess={isDone && !isError}
         emptyHint={emptyHint}
         actions={
           isDone && !isError && typeof result === 'string' ? (

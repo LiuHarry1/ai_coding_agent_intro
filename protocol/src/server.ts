@@ -213,6 +213,8 @@ export const ToolTimingMessageSchema = z.object({
   subtype: z.literal('tool_timing'),
   name: z.string(),
   duration: z.number(),
+  /** Correlates timing to a specific tool_call when multiple share `name`. */
+  tool_use_id: z.string().optional(),
   ...envelopeFields,
 })
 

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolCallLine from './ToolCallLine.jsx'
 import LiveTerminal from './LiveTerminal.jsx'
@@ -6,7 +6,7 @@ import { detectError } from '../lib/utils.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import { useChatStore } from '../stores/chat-store.js'
 import { getTur } from '../lib/tool-result.js'
-import { toolActionLabel } from '../lib/tool-action-labels.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * ≈ Cursor `ShellToolCallView` (`ui-shell-tool-call`):
@@ -14,6 +14,10 @@ import { toolActionLabel } from '../lib/tool-action-labels.js'
  *   details: description ?? "Running/Ran command" (not raw command by default)
  * Done body prefers TUR stdout/stderr; model `text` may include wrappers.
  */
+
+const PREVIEW_LINES = 5
+const PREVIEW_CHARS = 2000
+const BG_NUDGE_MS = 5000
 
 function parseBackgroundTaskId(part) {
   const tur = getTur(part)
@@ -57,6 +61,39 @@ function shellDisplayParts(part) {
   return { stdout: '', stderr: '', exitCode: null, textFallback: null }
 }
 
+/** Cursor-style first-pass truncate (~5 lines / 2k chars). */
+function truncateShellText(text) {
+  if (typeof text !== 'string' || !text) {
+    return { preview: '', truncated: false }
+  }
+  const lines = text.split('\n')
+  let preview = text
+  let truncated = false
+  if (lines.length > PREVIEW_LINES) {
+    preview = lines.slice(0, PREVIEW_LINES).join('\n')
+    truncated = true
+  }
+  if (preview.length > PREVIEW_CHARS) {
+    preview = preview.slice(0, PREVIEW_CHARS)
+    truncated = true
+  }
+  return { preview, truncated }
+}
+
+function StopIcon() {
+  return (
+    <svg
+      className='ui-shell-tool-call__stop-icon'
+      width='10'
+      height='10'
+      viewBox='0 0 10 10'
+      aria-hidden='true'
+    >
+      <rect x='1.5' y='1.5' width='7' height='7' rx='1' fill='currentColor' />
+    </svg>
+  )
+}
+
 export default function BashCard({ part }) {
   const stopTool = useChatStore(s => s.stopSubagent)
   const args = part.args || {}
@@ -80,9 +117,10 @@ export default function BashCard({ part }) {
   const description =
     typeof args?.description === 'string' ? args.description.trim() : ''
   // Cursor: prefer description; else generic phrase (not raw command in details)
-  const details =
+  const rawDetails =
     description ||
     (!isDone ? 'Running command' : isError ? 'Run command' : 'Ran command')
+  const details = toolErrorDetails(rawDetails, isError)
 
   const wantsBackground = !!args.run_in_background
   const backgroundTaskId =
@@ -120,6 +158,32 @@ export default function BashCard({ part }) {
       expandOnceWhen: isDone && !isBackgrounded && (isError || hasOutput),
     },
   )
+  const [showFullOutput, setShowFullOutput] = useState(false)
+  const [showBgNudge, setShowBgNudge] = useState(false)
+
+  useEffect(() => {
+    if (isDone || wantsBackground || isBackgrounded) {
+      setShowBgNudge(false)
+      return
+    }
+    const t = setTimeout(() => setShowBgNudge(true), BG_NUDGE_MS)
+    return () => clearTimeout(t)
+  }, [isDone, wantsBackground, isBackgrounded, part.toolCallId])
+
+  const stdoutTrunc = useMemo(
+    () => truncateShellText(display.stdout),
+    [display.stdout],
+  )
+  const stderrTrunc = useMemo(
+    () => truncateShellText(display.stderr),
+    [display.stderr],
+  )
+  const fallbackTrunc = useMemo(
+    () => truncateShellText(display.textFallback || ''),
+    [display.textFallback],
+  )
+  const anyTruncated =
+    stdoutTrunc.truncated || stderrTrunc.truncated || fallbackTrunc.truncated
 
   const showLive = expanded && hasLiveOutput && !isDone && !wantsBackground
   const showFinal = expanded && isDone && !isBackgrounded
@@ -140,6 +204,16 @@ export default function BashCard({ part }) {
     display.exitCode !== 0 ? (
       <span className='tool-row-meta-badge' title='Exit code'>
         exit {display.exitCode}
+      </span>
+    ) : null
+
+  const nudgeBadge =
+    showBgNudge && isRunning ? (
+      <span
+        className='ui-shell-tool-call__bg-nudge'
+        title='Long-running — set run_in_background on the next Shell call'
+      >
+        Run in background?
       </span>
     ) : null
 
@@ -171,7 +245,12 @@ export default function BashCard({ part }) {
         subtitle={
           !isDone && part.liveElapsed != null ? `${part.liveElapsed}s` : null
         }
-        meta={exitBadge}
+        meta={
+          <>
+            {nudgeBadge}
+            {exitBadge}
+          </>
+        }
         duration={isBackgrounded ? undefined : part.duration}
         isDone={isDone}
         isError={isError}
@@ -185,8 +264,13 @@ export default function BashCard({ part }) {
                 onClick={onStop}
                 disabled={!!part.stopping}
                 aria-label='Stop command'
+                title={part.stopping ? 'Stopping…' : 'Stop'}
               >
-                {part.stopping ? 'Stopping…' : 'Stop'}
+                {part.stopping ? (
+                  <span className='ui-shell-tool-call__stop-label'>…</span>
+                ) : (
+                  <StopIcon />
+                )}
               </button>
             )}
             {isDone && !isError && hasOutput && !isBackgrounded ? (
@@ -211,27 +295,56 @@ export default function BashCard({ part }) {
         <div className='ui-shell-tool-call__streams'>
           {display.stdout ? (
             <pre
-              className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''}`}
+              className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''} ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}
             >
-              {display.stdout}
+              {showFullOutput ? display.stdout : stdoutTrunc.preview}
+              {!showFullOutput && stdoutTrunc.truncated ? '\n…' : ''}
             </pre>
           ) : null}
           {display.stderr ? (
-            <pre className='tool-row-body tool-row-body--error ui-shell-tool-call__stderr'>
-              {display.stderr}
+            <pre className={`tool-row-body tool-row-body--error ui-shell-tool-call__stderr ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}>
+              {showFullOutput ? display.stderr : stderrTrunc.preview}
+              {!showFullOutput && stderrTrunc.truncated ? '\n…' : ''}
             </pre>
           ) : null}
           {!display.stdout && !display.stderr && (
             <div className='tool-row-empty'>(no output)</div>
           )}
+          {anyTruncated && (
+            <button
+              type='button'
+              className='ui-shell-tool-call__more'
+              onClick={e => {
+                e.stopPropagation()
+                setShowFullOutput(v => !v)
+              }}
+            >
+              {showFullOutput ? 'Show less' : 'Show more'}
+            </button>
+          )}
         </div>
       )}
       {showFinal && !hasStructured && hasFallback && (
-        <pre
-          className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''}`}
-        >
-          {display.textFallback}
-        </pre>
+        <>
+          <pre
+            className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''} ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}
+          >
+            {showFullOutput ? display.textFallback : fallbackTrunc.preview}
+            {!showFullOutput && fallbackTrunc.truncated ? '\n…' : ''}
+          </pre>
+          {fallbackTrunc.truncated && (
+            <button
+              type='button'
+              className='ui-shell-tool-call__more'
+              onClick={e => {
+                e.stopPropagation()
+                setShowFullOutput(v => !v)
+              }}
+            >
+              {showFullOutput ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </>
       )}
       {showFinal && !hasOutput && (
         <div className='tool-row-empty'>(no output)</div>

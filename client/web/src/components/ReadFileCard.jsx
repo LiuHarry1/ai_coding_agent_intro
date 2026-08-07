@@ -3,6 +3,7 @@ import CopyButton from './CopyButton.jsx'
 import ToolCallLine from './ToolCallLine.jsx'
 import { fileName } from '../lib/utils.js'
 import { liveToolSubtitle } from '../lib/tool-density.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * Read card — CC dual-channel UI path:
@@ -123,19 +124,22 @@ export default function ReadFileCard({ part }) {
       : emptyTextNote
 
   const liveSub = !isDone ? liveToolSubtitle(part) : null
+  const action = toolActionLabel('read', { loading: !isDone, hasError: isError })
+  const title = isError ? toolErrorDetails(fName, true) : fName
 
   return (
     <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
         expanded={expanded}
         onToggle={() => setExpanded(v => !v)}
-        label='Read'
-        title={fName}
+        label={action}
+        title={title}
         titleTooltip={filePath || ''}
         subtitle={liveSub || rangeLabel || null}
         duration={part.duration}
         isDone={isDone}
         isError={isError}
+        showSuccess={isDone && !isError}
         actions={
           isDone && codeBody ? (
             <CopyButton text={codeBody} label='Copy' inline />

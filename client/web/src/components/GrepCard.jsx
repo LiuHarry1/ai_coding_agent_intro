@@ -10,10 +10,12 @@ import {
   shortGlobPattern,
   truncateEnd,
 } from '../lib/utils.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * Cursor-style Grep — compact file hit list (≈ Composer grepToolCall body).
- * Shows filename + `dir -- N matches`; click opens the file in the IDE.
+ * files_with_matches: filename + `dir -- N matches`
+ * content: path header + match/context lines (path + line + snippet)
  */
 
 function splitPathParts(filePath) {
@@ -121,6 +123,53 @@ function GrepFileRow({ path: filePath, matchCount, onOpen }) {
   )
 }
 
+function GrepContentGroup({ file, matches, onOpen }) {
+  const { base, dir, full } = splitPathParts(file)
+  const matchCount = matches.filter(m => m.kind === 'match').length
+  const secondary = fileSecondary(dir, matchCount)
+  const clickable = typeof onOpen === 'function'
+
+  return (
+    <li className='grep-content-group'>
+      <button
+        type='button'
+        className={`grep-file-row ${clickable ? 'grep-file-row--clickable' : ''}`}
+        onClick={clickable ? () => onOpen(full) : undefined}
+        title={full}
+        disabled={!clickable}
+      >
+        <span className='grep-path'>
+          <FileIcon size={12} />
+          <span className='grep-file-name'>{base}</span>
+          {secondary ? (
+            <span className='grep-file-secondary'>{secondary}</span>
+          ) : null}
+        </span>
+      </button>
+      <ul className='grep-match-lines'>
+        {matches.map((row, i) => (
+          <li
+            key={`${row.lineNo}-${i}`}
+            className={`grep-match-line grep-match-line--${row.kind}`}
+            title={`${full}:${row.lineNo}`}
+            onClick={
+              clickable
+                ? e => {
+                    e.stopPropagation()
+                    onOpen(full)
+                  }
+                : undefined
+            }
+          >
+            <span className='grep-match-line-no'>{row.lineNo}</span>
+            <span className='grep-match-text'>{row.text}</span>
+          </li>
+        ))}
+      </ul>
+    </li>
+  )
+}
+
 export default function GrepCard({ part, nested = false }) {
   const args = part.args || {}
   const result = part.result
@@ -199,10 +248,25 @@ export default function GrepCard({ part, nested = false }) {
   const emptyHint =
     isDone && !isError && parsed?.empty ? 'No matches' : null
 
+  const action = toolActionLabel('grep', {
+    loading: !isDone,
+    hasError: isError,
+  })
+  const title = isError
+    ? toolErrorDetails(
+        displayPattern ? `\u201C${displayPattern}\u201D` : 'grep\u2026',
+        true,
+      )
+    : displayPattern
+      ? `\u201C${displayPattern}\u201D`
+      : 'grep\u2026'
+
   const handleOpen = filePath => {
     if (typeof openFile !== 'function') return
     void openFile(filePath)
   }
+
+  const isContentMode = parsed?.mode === 'content' && contentGroups.length > 0
 
   return (
     <div className={`tool-row grep-card ${isError ? 'has-error' : ''}`}>
@@ -210,8 +274,8 @@ export default function GrepCard({ part, nested = false }) {
         expanded={expanded && hasBody}
         onToggle={hasBody ? toggleExpanded : undefined}
         showChevron={hasBody}
-        label='Grepped'
-        title={displayPattern ? `\u201C${displayPattern}\u201D` : 'grep\u2026'}
+        label={action}
+        title={title}
         titleTooltip={
           [pattern && `pattern: ${pattern}`, filterTooltip]
             .filter(Boolean)
@@ -227,6 +291,7 @@ export default function GrepCard({ part, nested = false }) {
         duration={part.duration}
         isDone={isDone}
         isError={isError}
+        showSuccess={isDone && !isError}
         emptyHint={emptyHint}
         actions={
           isDone &&
@@ -238,18 +303,35 @@ export default function GrepCard({ part, nested = false }) {
         }
       />
 
-      {showBody && isDone && !isError && fileHits.length > 0 && (
+      {showBody && isDone && !isError && isContentMode && (
         <ul className='grep-results'>
-          {fileHits.map(f => (
-            <GrepFileRow
-              key={f.path}
-              path={f.path}
-              matchCount={f.matchCount}
+          {contentGroups.map(g => (
+            <GrepContentGroup
+              key={g.file}
+              file={g.file}
+              matches={g.matches}
               onOpen={handleOpen}
             />
           ))}
         </ul>
       )}
+
+      {showBody &&
+        isDone &&
+        !isError &&
+        !isContentMode &&
+        fileHits.length > 0 && (
+          <ul className='grep-results'>
+            {fileHits.map(f => (
+              <GrepFileRow
+                key={f.path}
+                path={f.path}
+                matchCount={f.matchCount}
+                onOpen={handleOpen}
+              />
+            ))}
+          </ul>
+        )}
 
       {showBody && isDone && !isError && parsed?.empty && (
         <div className='grep-empty'>No matches</div>

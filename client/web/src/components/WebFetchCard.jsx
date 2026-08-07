@@ -5,6 +5,7 @@ import { formatBytes } from '../lib/utils.js'
 import { parseMcpToolName } from '../lib/tool-kind.js'
 import { normalizeFetchResult, compactFetchError } from '../lib/fetch-result.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * Dedicated card for URL-fetch tools:
@@ -71,8 +72,13 @@ export default function WebFetchCard({ part, nested = false }) {
   const title = normalized.title || ''
   const host = hostname(articleUrl)
 
-  // Expanded only while running; collapses on done (user can still click).
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
+  const hasScannableBody =
+    isError || Boolean(text) || Boolean(normalized.excerpt) || Boolean(normalized.note)
+
+  // Keep expanded while running; on success keep results scannable (don't force-collapse).
+  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
+    expandOnceWhen: isDone && hasScannableBody,
+  })
   const [showFull, setShowAll] = useState(false)
 
   const headline = isDone && title ? title : urlHeadline(articleUrl)
@@ -84,14 +90,20 @@ export default function WebFetchCard({ part, nested = false }) {
   const resultSize =
     text.length || (typeof result === 'string' ? result.length : 0)
 
+  const action = toolActionLabel('webFetch', {
+    loading: !isDone,
+    hasError: isError,
+  })
+  const titleText = isError ? toolErrorDetails(headline, true) : headline
+
   return (
     <div className={`tool-row web-fetch-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
         expanded={expanded}
         onToggle={toggleExpanded}
         icon={'\u{1F310}'}
-        label='Web Fetch'
-        title={headline}
+        label={action}
+        title={titleText}
         titleTooltip={articleUrl || requestUrl}
         subtitle={subtitle}
         meta={
@@ -102,6 +114,7 @@ export default function WebFetchCard({ part, nested = false }) {
         duration={part.duration}
         isDone={isDone}
         isError={isError}
+        showSuccess={isDone && !isError}
         actions={
           isDone && !isError && text ? (
             <CopyButton text={text} label='Copy' inline />

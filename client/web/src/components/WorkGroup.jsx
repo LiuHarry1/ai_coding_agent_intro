@@ -4,7 +4,7 @@ import { formatWorkedDuration } from '../lib/timeline.js'
 /**
  * Cursor default-chat `workGroup` disclosure (completed turn only).
  *
- * Label ≈ action "Worked" + details `g0m(durationMs)` → "Worked for 7s".
+ * Label ≈ action "Worked" + details `g0m(durationMs)` → "for 7s".
  * With running tasks: "N working" (Cursor `runningTaskCount`).
  *
  * Controlled open via `open` + `onOpenChange` (parent keys by stable rowId).
@@ -28,18 +28,11 @@ export default function WorkGroup({
   }
 
   const dur = formatWorkedDuration(durationMs)
-  let label
-  if (runningTaskCount > 0) {
-    label = `${runningTaskCount} working`
-  } else if (dur) {
-    label = `Worked ${dur}`
-  } else {
-    label = 'Worked'
-  }
+  const isRunning = runningTaskCount > 0
 
   return (
     <div
-      className={`work-group ${open ? 'open' : ''} ${runningTaskCount > 0 ? 'active' : ''}`}
+      className={`work-group ${open ? 'open' : ''} ${isRunning ? 'active' : ''}`}
     >
       <button
         type='button'
@@ -53,8 +46,21 @@ export default function WorkGroup({
         >
           {'\u25B6'}
         </span>
-        <span className='work-group-label'>{label}</span>
-        {runningTaskCount > 0 && (
+        <span className='work-group-label'>
+          {isRunning ? (
+            <span className='work-group-action'>
+              {runningTaskCount} working
+            </span>
+          ) : (
+            <>
+              <span className='work-group-action'>Worked</span>
+              {dur ? (
+                <span className='work-group-details'>{dur}</span>
+              ) : null}
+            </>
+          )}
+        </span>
+        {isRunning && (
           <span className='spinner spinner-sm' aria-hidden='true' />
         )}
       </button>

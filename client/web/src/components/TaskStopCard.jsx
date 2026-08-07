@@ -3,7 +3,7 @@ import ToolCallLine from './ToolCallLine.jsx'
 import { detectError } from '../lib/utils.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import { getTur } from '../lib/tool-result.js'
-import { toolActionLabel } from '../lib/tool-action-labels.js'
+import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * ≈ Cursor kill / stop background shell — compact action row.
@@ -36,6 +36,9 @@ export default function TaskStopCard({ part }) {
     loading: !isDone,
     hasError: isError,
   })
+  const title = isError
+    ? toolErrorDetails(taskId || '…', true)
+    : taskId || '…'
 
   return (
     <div className={`tool-row task-stop-card ${isError ? 'has-error' : ''}`}>
@@ -44,7 +47,7 @@ export default function TaskStopCard({ part }) {
         onToggle={hasOutput || isError ? toggleExpanded : undefined}
         showChevron={Boolean(isDone && (hasOutput || isError))}
         label={action}
-        title={taskId || '…'}
+        title={title}
         titlePlain
         titleTooltip={taskId}
         duration={part.duration}

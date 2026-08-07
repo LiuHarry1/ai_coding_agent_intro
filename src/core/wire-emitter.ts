@@ -214,12 +214,13 @@ export class WireEmitter {
     })
   }
 
-  toolTiming(name: string, duration: number): void {
+  toolTiming(name: string, duration: number, toolUseId?: string): void {
     this.emit({
       type: 'system',
       subtype: 'tool_timing',
       name,
       duration,
+      ...(toolUseId ? { tool_use_id: toolUseId } : {}),
       ...this.#env,
     })
   }

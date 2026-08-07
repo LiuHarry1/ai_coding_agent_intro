@@ -272,11 +272,46 @@
 /* ── Cursor ShellToolCallView chrome (ui-shell-tool-call*) ── */
 .ui-shell-tool-call__glass-stop {
   margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 2px 6px;
+}
+.ui-shell-tool-call__stop-icon {
+  display: block;
+}
+.ui-shell-tool-call__stop-label {
+  font-size: 11px;
+  line-height: 1;
+}
+.ui-shell-tool-call__bg-nudge {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+.ui-shell-tool-call__more {
+  align-self: flex-start;
+  margin: 2px 0 0 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent, #6cb6ff);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.ui-shell-tool-call__more:hover {
+  text-decoration: underline;
 }
 
 .ui-shell-tool-call__output {
   max-height: calc(5 * 1.55em + 24px);
   overflow-y: auto;
+}
+.ui-shell-tool-call__output--full {
+  max-height: min(60vh, 480px);
 }
 
 .ui-shell-tool-call__streams {
