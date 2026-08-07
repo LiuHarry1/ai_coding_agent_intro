@@ -15,7 +15,16 @@ import { setTaskSessionId } from '../../utils/task/diskOutput.js'
 export type TaskStopToolResult = {
   text: string
   task_id: string
+  stopped: boolean
+  message: string
 }
+
+export const TaskStopToolResultSchema = z.object({
+  text: z.string(),
+  task_id: z.string(),
+  stopped: z.boolean(),
+  message: z.string(),
+})
 
 const DESCRIPTION = `Stop a background shell task by task_id (from Bash/PowerShell run_in_background).`
 
@@ -23,6 +32,7 @@ export const definition: ToolDefinition = {
   name: TASK_STOP_TOOL_NAME,
   description: DESCRIPTION,
   isConcurrencySafe: () => false,
+  outputSchema: TaskStopToolResultSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as TaskStopToolResult
     return {
@@ -61,7 +71,12 @@ export const definition: ToolDefinition = {
             context.execution,
           )
           return {
-            data: { text: message, task_id: taskId },
+            data: {
+              text: message,
+              task_id: taskId,
+              stopped: true,
+              message,
+            },
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)

@@ -634,3 +634,24 @@
 
 .ask-card__submit:disabled { opacity: 0.5; cursor: not-allowed; }
 .ask-card--done { padding: 10px 14px; color: var(--text-muted); font-size: 13px; }
+.ask-card__answers {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ask-card__answers li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ask-card__q {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.ask-card__a {
+  font-size: 13px;
+  color: var(--text-primary);
+}

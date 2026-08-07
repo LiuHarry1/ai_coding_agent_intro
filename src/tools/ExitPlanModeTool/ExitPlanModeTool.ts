@@ -5,12 +5,6 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
-
-export type ExitPlanModeOutput = {
-  message: string
-  approved?: boolean
-  filePath?: string
-}
 import { emitModeChanged, emitPlanReady } from '../../core/wire-internal.js'
 import { EXIT_PLAN_MODE_TOOL_NAME } from '../../constants/tool_names.js'
 import {
@@ -25,6 +19,18 @@ import {
   writePlan,
 } from '../../utils/plans.js'
 import { buildPlanApprovedFollowUps } from '../../utils/attachments/plan-mode.js'
+
+export type ExitPlanModeOutput = {
+  message: string
+  approved?: boolean
+  filePath?: string
+}
+
+export const ExitPlanModeOutputSchema = z.object({
+  message: z.string(),
+  approved: z.boolean().optional(),
+  filePath: z.string().optional(),
+})
 
 const DESCRIPTION =
   'Exit plan mode and submit the plan for user approval before implementation.'
@@ -48,6 +54,7 @@ export const definition: ToolDefinition = {
   name: EXIT_PLAN_MODE_TOOL_NAME,
   description: DESCRIPTION,
   isConcurrencySafe: () => false,
+  outputSchema: ExitPlanModeOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as ExitPlanModeOutput
     return {

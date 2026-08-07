@@ -16,15 +16,20 @@ import type {
   DualChannelToolResult,
   ToolDefinition,
 } from '../../core/types.js'
+import { LSP_TOOL_NAME } from '../../constants/tool_names.js'
+import { getLspManager } from '../../services/lsp/manager.js'
+import { resolvePath } from '../utils.js'
+import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
 export type LspToolOutput = {
   text: string
   operation?: string
 }
-import { LSP_TOOL_NAME } from '../../constants/tool_names.js'
-import { getLspManager } from '../../services/lsp/manager.js'
-import { resolvePath } from '../utils.js'
-import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
+
+export const LspToolOutputSchema = z.object({
+  text: z.string(),
+  operation: z.string().optional(),
+})
 
 const MAX_LSP_FILE_SIZE_BYTES = 10_000_000
 
@@ -56,6 +61,7 @@ export const definition: ToolDefinition = {
   description: 'Code intelligence via Language Server Protocol',
   shouldDefer: true,
   isConcurrencySafe: () => true,
+  outputSchema: LspToolOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return {
       tool_use_id: toolUseID,

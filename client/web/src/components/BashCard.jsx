@@ -5,21 +5,24 @@ import LiveTerminal from './LiveTerminal.jsx'
 import { detectError } from '../lib/utils.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import { useChatStore } from '../stores/chat-store.js'
+import { getTur } from '../lib/tool-result.js'
+import { toolActionLabel } from '../lib/tool-action-labels.js'
 
 /**
  * ≈ Cursor `ShellToolCallView` (`ui-shell-tool-call`):
  *   action: Running | Ran | Run(error) | Shell(backgrounded)
- *   details: description ?? command
- * Backgrounded rows stay compact — live terminal lives in
- * `background-terminals` (ComposerTerminalService), not an agent-hint banner.
+ *   details: description ?? "Running/Ran command" (not raw command by default)
+ * Done body prefers TUR stdout/stderr; model `text` may include wrappers.
  */
 
 function parseBackgroundTaskId(part) {
-  const fromData = part.toolUseResult?.backgroundTaskId
-  if (typeof fromData === 'string' && fromData) return fromData
+  const tur = getTur(part)
+  if (typeof tur?.backgroundTaskId === 'string' && tur.backgroundTaskId) {
+    return tur.backgroundTaskId
+  }
   const text =
-    typeof part.toolUseResult?.text === 'string'
-      ? part.toolUseResult.text
+    typeof tur?.text === 'string'
+      ? tur.text
       : typeof part.result === 'string'
         ? part.result
         : ''
@@ -29,50 +32,92 @@ function parseBackgroundTaskId(part) {
   return m ? m[1] : null
 }
 
-function shellAction({ isDone, isError, isBackgrounded }) {
-  // Cursor jlm(): pending → "Running", else "Ran"
-  // Explored / backgrounded shellToolCall → action "Shell"
-  if (!isDone) return 'Running'
-  if (isError) return 'Run'
-  if (isBackgrounded) return 'Shell'
-  return 'Ran'
+/** Build display body from TUR fields; strip model wrappers. */
+function shellDisplayParts(part) {
+  const tur = getTur(part)
+  if (tur) {
+    const stdout = typeof tur.stdout === 'string' ? tur.stdout : ''
+    const stderr = typeof tur.stderr === 'string' ? tur.stderr : ''
+    const exitCode = tur.exitCode
+    if (stdout || stderr || exitCode != null) {
+      return { stdout, stderr, exitCode, textFallback: null }
+    }
+    if (typeof tur.text === 'string') {
+      return { stdout: '', stderr: '', exitCode: null, textFallback: tur.text }
+    }
+  }
+  if (typeof part.result === 'string') {
+    return {
+      stdout: '',
+      stderr: '',
+      exitCode: null,
+      textFallback: part.result,
+    }
+  }
+  return { stdout: '', stderr: '', exitCode: null, textFallback: null }
 }
 
 export default function BashCard({ part }) {
   const stopTool = useChatStore(s => s.stopSubagent)
   const args = part.args || {}
-  const result =
-    part.toolUseResult?.text != null ? part.toolUseResult.text : part.result
+  const tur = getTur(part)
+  const display = shellDisplayParts(part)
   const isDone = part.status === 'done'
+  const modelText =
+    typeof tur?.text === 'string'
+      ? tur.text
+      : typeof part.result === 'string'
+        ? part.result
+        : ''
   const isError =
     isDone &&
     (part.isError === true ||
-      part.toolUseResult?.interrupted === true ||
-      detectError(part.name || 'Bash', result))
+      tur?.interrupted === true ||
+      (typeof display.exitCode === 'number' && display.exitCode !== 0) ||
+      detectError(part.name || 'Bash', modelText))
 
   const command = typeof args?.command === 'string' ? args.command.trim() : ''
   const description =
     typeof args?.description === 'string' ? args.description.trim() : ''
-  // Cursor: T7r(n.description ?? n.args?.description)
-  const details = description || command || '…'
+  // Cursor: prefer description; else generic phrase (not raw command in details)
+  const details =
+    description ||
+    (!isDone ? 'Running command' : isError ? 'Run command' : 'Ran command')
 
   const wantsBackground = !!args.run_in_background
   const backgroundTaskId =
     isDone && !isError ? parseBackgroundTaskId(part) : null
   const isBackgrounded =
-    !!backgroundTaskId || (wantsBackground && isDone && !isError)
+    !!backgroundTaskId ||
+    tur?.backgrounded === true ||
+    (wantsBackground && isDone && !isError)
 
-  const action = shellAction({ isDone, isError, isBackgrounded })
-  const hasOutput = typeof result === 'string' && result.length > 0
+  const action = toolActionLabel('shell', {
+    loading: !isDone,
+    hasError: isError,
+    backgrounded: isBackgrounded,
+  })
+
+  const hasStructured =
+    Boolean(display.stdout) ||
+    Boolean(display.stderr) ||
+    (display.exitCode != null && display.exitCode !== 0)
+  const hasFallback =
+    typeof display.textFallback === 'string' && display.textFallback.length > 0
+  const hasOutput = hasStructured || hasFallback
   const hasLiveOutput = part.liveOutput != null
   const isRunning = !isDone
 
-  // Backgrounded: never auto-expand raw tool text (paths / agent copy).
+  const copyText = hasStructured
+    ? [display.stdout, display.stderr ? `stderr:\n${display.stderr}` : '']
+        .filter(Boolean)
+        .join('\n')
+    : display.textFallback || ''
+
   const [expanded, toggleExpanded] = useStreamingExpanded(
     isRunning && hasLiveOutput && !wantsBackground,
     {
-      expandOnceWhen:
-        isDone && !isBackgrounded && (isError || hasOutput),
+      expandOnceWhen: isDone && !isBackgrounded && (isError || hasOutput),
     },
   )
 
@@ -81,13 +126,22 @@ export default function BashCard({ part }) {
   const titleTooltip =
     description && command && description !== command
       ? `${description}\n${command}`
-      : details
+      : command || details
 
   const onStop = e => {
     e.stopPropagation()
     if (isDone || part.stopping || !part.toolCallId) return
     void stopTool(part.toolCallId)
   }
+
+  const exitBadge =
+    isDone &&
+    display.exitCode != null &&
+    display.exitCode !== 0 ? (
+      <span className='tool-row-meta-badge' title='Exit code'>
+        exit {display.exitCode}
+      </span>
+    ) : null
 
   return (
     <div
@@ -115,10 +169,9 @@ export default function BashCard({ part }) {
         titlePlain
         titleTooltip={titleTooltip}
         subtitle={
-          !isDone && part.liveElapsed != null
-            ? `${part.liveElapsed}s`
-            : null
+          !isDone && part.liveElapsed != null ? `${part.liveElapsed}s` : null
         }
+        meta={exitBadge}
         duration={isBackgrounded ? undefined : part.duration}
         isDone={isDone}
         isError={isError}
@@ -137,7 +190,7 @@ export default function BashCard({ part }) {
               </button>
             )}
             {isDone && !isError && hasOutput && !isBackgrounded ? (
-              <CopyButton text={result} label='Copy output' inline />
+              <CopyButton text={copyText} label='Copy output' inline />
             ) : null}
             {isDone && !isError && command ? (
               <CopyButton text={command} label='Copy command' inline />
@@ -154,11 +207,30 @@ export default function BashCard({ part }) {
         />
       )}
 
-      {showFinal && hasOutput && (
+      {showFinal && hasStructured && (
+        <div className='ui-shell-tool-call__streams'>
+          {display.stdout ? (
+            <pre
+              className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''}`}
+            >
+              {display.stdout}
+            </pre>
+          ) : null}
+          {display.stderr ? (
+            <pre className='tool-row-body tool-row-body--error ui-shell-tool-call__stderr'>
+              {display.stderr}
+            </pre>
+          ) : null}
+          {!display.stdout && !display.stderr && (
+            <div className='tool-row-empty'>(no output)</div>
+          )}
+        </div>
+      )}
+      {showFinal && !hasStructured && hasFallback && (
         <pre
           className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''}`}
         >
-          {result}
+          {display.textFallback}
         </pre>
       )}
       {showFinal && !hasOutput && (

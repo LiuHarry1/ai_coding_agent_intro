@@ -90,6 +90,16 @@ export const definition: ToolDefinition = {
   description: `Search the web (${getWebSearchProvider()})`,
   shouldDefer: true,
   isConcurrencySafe: () => true,
+  // Mode A — structured results for UI; prose + reminder for model
+  outputSchema: z.object({
+    query: z.string(),
+    results: z.array(z.record(z.unknown())).optional(),
+    answers: z.array(z.string()).optional(),
+    suggestions: z.array(z.string()).optional(),
+    content: z.string().optional(),
+    note: z.string().optional(),
+    warning: z.string().optional(),
+  }).passthrough(),
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return {
       tool_use_id: toolUseID,

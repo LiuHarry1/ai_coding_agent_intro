@@ -23,6 +23,19 @@ export type WebFetchOutput = {
   text: string
 }
 
+export const WebFetchOutputSchema = z.object({
+  url: z.string(),
+  status: z.number().optional(),
+  contentType: z.string().optional(),
+  title: z.string().optional(),
+  byline: z.string().optional(),
+  excerpt: z.string().optional(),
+  siteName: z.string().optional(),
+  length: z.number().optional(),
+  note: z.string().optional(),
+  text: z.string(),
+})
+
 function normalizeUrl(value: string): string {
   const url = new URL(value)
   if (!['http:', 'https:'].includes(url.protocol)) {
@@ -44,6 +57,7 @@ export const definition: ToolDefinition = {
   description: 'Fetch a web page and extract readable article content',
   shouldDefer: true,
   isConcurrencySafe: () => true,
+  outputSchema: WebFetchOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const data = output as WebFetchOutput
     return {

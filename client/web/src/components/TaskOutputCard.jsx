@@ -2,11 +2,12 @@ import React, { useMemo } from 'react'
 import ToolCallLine from './ToolCallLine.jsx'
 import { detectError } from '../lib/utils.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { getTur } from '../lib/tool-result.js'
+import { toolActionLabel } from '../lib/tool-action-labels.js'
 
 /**
- * ≈ Cursor awaitToolCall / Waiting→Waited (ShellToolCallView sibling).
- * details prefer elapsed duration ("briefly" / "1.2s"), fallback task id.
- * Expanded body shows shell output only — not the raw TaskOutput XML wrapper.
+ * ≈ Cursor awaitToolCall / Waiting→Waited.
+ * Body prefers TUR.output; model text may include XML wrappers.
  */
 
 function formatWaitDetails(part, taskId) {
@@ -24,50 +25,45 @@ function formatWaitDetails(part, taskId) {
   return taskId || ''
 }
 
-/** Strip TaskOutput XML envelope for UI; keep status for tooltip. */
-function parseTaskOutputDisplay(raw) {
-  if (typeof raw !== 'string' || !raw) {
-    return { body: '', taskStatus: null, retrieval: null }
-  }
-  const retrieval = raw.match(/<retrieval_status>([^<]*)<\/retrieval_status>/)?.[1] ?? null
-  const taskStatus = raw.match(/<status>([^<]*)<\/status>/)?.[1] ?? null
-  const out = raw.match(/<output>\r?\n?([\s\S]*?)\r?\n?<\/output>/)
-  const body = (out ? out[1] : raw).replace(/^\n+|\n+$/g, '')
-  return { body, taskStatus, retrieval }
-}
-
 export default function TaskOutputCard({ part }) {
   const args = part.args || {}
-  const taskId = args.task_id || args.shell_id || ''
+  const tur = getTur(part)
+  const taskId = tur?.task_id || args.task_id || args.shell_id || ''
   const result =
-    part.toolUseResult?.text != null ? part.toolUseResult.text : part.result
+    typeof tur?.text === 'string' ? tur.text : part.result
   const isDone = part.status === 'done'
   const isError =
     isDone &&
     (part.isError === true ||
       detectError(part.name || 'TaskOutput', result) ||
-      (typeof result === 'string' && result.startsWith('Error:')))
+      (typeof result === 'string' && result.startsWith('Error:')) ||
+      tur?.retrieval_status === 'timeout')
 
-  const parsed = useMemo(() => parseTaskOutputDisplay(result), [result])
-  const displayBody = parsed.body
+  const displayBody = useMemo(() => {
+    if (typeof tur?.output === 'string') return tur.output
+    if (typeof result !== 'string' || !result) return ''
+    const out = result.match(/<output>\r?\n?([\s\S]*?)\r?\n?<\/output>/)
+    return (out ? out[1] : result).replace(/^\n+|\n+$/g, '')
+  }, [tur, result])
+
   const hasOutput = typeof displayBody === 'string' && displayBody.length > 0
+  const retrieval = tur?.retrieval_status ?? null
+  const taskStatus = tur?.task_status ?? null
 
   const [expanded, toggleExpanded] = useStreamingExpanded(!isDone, {
-    // Don't dump output into the transcript by default —
-    // Cursor keeps Waited compact; expand only on errors.
     expandOnceWhen: isDone && isError,
   })
 
-  // Cursor: action "Waiting" | "Waited"
-  const action = !isDone ? 'Waiting' : isError ? 'Wait' : 'Waited'
-  const details = isDone
-    ? formatWaitDetails(part, taskId)
-    : taskId || '…'
+  const action = toolActionLabel('await', {
+    loading: !isDone,
+    hasError: isError,
+  })
+  const details = isDone ? formatWaitDetails(part, taskId) : taskId || '…'
 
   const titleTooltip = [
     taskId,
-    parsed.taskStatus ? `status: ${parsed.taskStatus}` : null,
-    parsed.retrieval ? `retrieval: ${parsed.retrieval}` : null,
+    taskStatus ? `status: ${taskStatus}` : null,
+    retrieval ? `retrieval: ${retrieval}` : null,
   ]
     .filter(Boolean)
     .join('\n')

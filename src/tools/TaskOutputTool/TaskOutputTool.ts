@@ -20,7 +20,18 @@ export type TaskOutputToolResult = {
   text: string
   task_id: string
   retrieval_status: 'success' | 'timeout' | 'not_ready'
+  /** Raw shell output for UI (no XML envelope). */
+  output: string
+  task_status?: string
 }
+
+export const TaskOutputToolResultSchema = z.object({
+  text: z.string(),
+  task_id: z.string(),
+  retrieval_status: z.enum(['success', 'timeout', 'not_ready']),
+  output: z.string(),
+  task_status: z.string().optional(),
+})
 
 // Aligned with Claude Code TaskOutputTool.prompt() + long-lived note
 const DESCRIPTION = `DEPRECATED: Prefer using the Read tool on the task's output file path instead. Background tasks return their output file path in the tool result, and you receive a <task-notification> with the same path when the task completes — Read that file directly (session task output paths are allowed even when outside the project cwd).
@@ -51,6 +62,7 @@ export const definition: ToolDefinition = {
   name: TASK_OUTPUT_TOOL_NAME,
   description: DESCRIPTION,
   isConcurrencySafe: () => true,
+  outputSchema: TaskOutputToolResultSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as TaskOutputToolResult
     return {
@@ -109,7 +121,8 @@ export const definition: ToolDefinition = {
 
         const raw = getTaskOutput(taskId)
         const { content } = formatTaskOutput(raw || '(no output yet)', taskId)
-        const statusLine = `<retrieval_status>${retrieval_status}</retrieval_status>\n<task_id>${taskId}</task_id>\n<status>${getTask(sessionId, taskId)?.status ?? 'unknown'}</status>\n`
+        const taskStatus = getTask(sessionId, taskId)?.status ?? 'unknown'
+        const statusLine = `<retrieval_status>${retrieval_status}</retrieval_status>\n<task_id>${taskId}</task_id>\n<status>${taskStatus}</status>\n`
         const text = `${statusLine}<output>\n${content}\n</output>`
 
         return {
@@ -117,6 +130,8 @@ export const definition: ToolDefinition = {
             text,
             task_id: taskId,
             retrieval_status,
+            output: content,
+            task_status: String(taskStatus),
           },
         }
       },

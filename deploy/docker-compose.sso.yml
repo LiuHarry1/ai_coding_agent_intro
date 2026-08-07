@@ -109,8 +109,7 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       GOOGLE_GENERATIVE_AI_API_KEY: "${GOOGLE_GENERATIVE_AI_API_KEY:-}"
-      # ── Preview disabled (see header note) ───────────────────────────────
-      PREVIEW_ENABLED: "0"
+      # ── Preview proxy removed (PublishPreview deleted) ────────────────────
       SEARXNG_URL: "${SEARXNG_URL:-http://localhost:8888}"
       WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
     volumes:

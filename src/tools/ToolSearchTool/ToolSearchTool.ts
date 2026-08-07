@@ -12,7 +12,7 @@
 
 import { tool } from 'ai'
 import { z } from 'zod'
-import type { ToolDefinition, ToolContext, AnyTool } from '../../core/types.js'
+import type { ToolDefinition, ToolContext } from '../../core/types.js'
 
 import { TOOL_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
 
@@ -21,6 +21,19 @@ interface DeferredEntry {
   description: string
   isMcp: boolean
 }
+
+export const ToolSearchOutputSchema = z.object({
+  text: z.string(),
+  query: z.string(),
+  matches: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string().optional(),
+    }),
+  ),
+})
+
+export type ToolSearchOutput = z.infer<typeof ToolSearchOutputSchema>
 
 function buildIndex(deferredDefs: DeferredEntry[]): Map<string, DeferredEntry> {
   const idx = new Map<string, DeferredEntry>()
@@ -55,11 +68,12 @@ Available deferred tools: ${nameList}`
     name: TOOL_SEARCH_TOOL_NAME,
     description,
     isConcurrencySafe: () => true,
+    outputSchema: ToolSearchOutputSchema,
     mapToolResultToToolResultBlockParam(output, toolUseID) {
       return {
         tool_use_id: toolUseID,
         type: 'tool_result',
-        content: (output as { text: string }).text,
+        content: (output as ToolSearchOutput).text,
       }
     },
     create(_cwd: string, _context: ToolContext) {
@@ -73,7 +87,12 @@ Available deferred tools: ${nameList}`
             ),
         }),
         execute: async ({ query }: { query: string }) => {
-          const wrap = (text: string) => ({ data: { text, query } })
+          const wrap = (
+            text: string,
+            matches: ToolSearchOutput['matches'] = [],
+          ) => ({
+            data: { text, query, matches } satisfies ToolSearchOutput,
+          })
           const trimmed = query.trim()
 
           if (trimmed.toLowerCase().startsWith('select:')) {
@@ -85,12 +104,17 @@ Available deferred tools: ${nameList}`
             const found: string[] = []
             const notFound: string[] = []
             const details: string[] = []
+            const matches: ToolSearchOutput['matches'] = []
 
             for (const name of names) {
               const entry = index.get(name)
               if (entry) {
                 found.push(name)
                 details.push(`- ${entry.name}: ${entry.description}`)
+                matches.push({
+                  name: entry.name,
+                  description: entry.description,
+                })
               } else {
                 notFound.push(name)
               }
@@ -107,7 +131,7 @@ Available deferred tools: ${nameList}`
                 `Not found: ${notFound.join(', ')}. Available: ${nameList}`,
               )
             }
-            return wrap(parts.join('\n\n') || 'No tools matched.')
+            return wrap(parts.join('\n\n') || 'No tools matched.', matches)
           }
 
           // Keyword search
@@ -131,7 +155,10 @@ Available deferred tools: ${nameList}`
           const details = hits
             .map(d => `- ${d.name}: ${d.description}`)
             .join('\n')
-          return wrap(`Found ${hits.length} tool(s):\n${details}`)
+          return wrap(
+            `Found ${hits.length} tool(s):\n${details}`,
+            hits.map(d => ({ name: d.name, description: d.description })),
+          )
         },
       })
     },

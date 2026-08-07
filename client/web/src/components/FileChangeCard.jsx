@@ -8,10 +8,13 @@ import {
   formatBytes,
   shortDisplayPath,
 } from '../lib/utils.js'
+import { getTur } from '../lib/tool-result.js'
+import { toolActionLabel } from '../lib/tool-action-labels.js'
 
 /**
  * File-centric card for Write / Edit (Cursor edit chrome):
  * verb + path + +/- counts, expandable preview/diff.
+ * Done body prefers toolUseResult (TUR); running uses args + livePreview.
  */
 
 function LivePreviewInline({ text, startTime }) {
@@ -42,27 +45,52 @@ function LivePreviewInline({ text, startTime }) {
   )
 }
 
-/**
- * Count line-level additions/removals between two strings. Mirrors the
- * "+N -M" badges shown by Cursor / Continue diff cards.
- */
+/** LCS-style line add/remove counts for badge (Cursor +/-). */
 function diffLineCounts(oldStr, newStr) {
-  const oldLines = (oldStr ?? '').split('\n').length
-  const newLines = (newStr ?? '').split('\n').length
-  const removed = oldLines - (oldStr === '' ? 1 : 0)
-  const added = newLines - (newStr === '' ? 1 : 0)
-  return { added: Math.max(added, 0), removed: Math.max(removed, 0) }
+  const a = (oldStr ?? '').split('\n')
+  const b = (newStr ?? '').split('\n')
+  const m = a.length
+  const n = b.length
+  // Cap for very large files — fall back to length delta.
+  if (m * n > 400_000) {
+    const removed = Math.max(0, m - n)
+    const added = Math.max(0, n - m)
+    return { added: added || (oldStr !== newStr ? 1 : 0), removed }
+  }
+  const dp = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1))
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1] + 1
+          : Math.max(dp[i - 1][j], dp[i][j - 1])
+    }
+  }
+  const lcs = dp[m][n]
+  return { added: n - lcs, removed: m - lcs }
 }
 
-/**
- * Inline counts after the path (e.g. `+12` / `+3 -1`).
- */
-function ChangeBadge({ kind, args }) {
+function ChangeBadge({ kind, before, after, content }) {
   if (kind === 'write') {
-    const content = args?.content ?? ''
-    if (!content) return null
-    const lines = content.split('\n').length
-    const visible = content.endsWith('\n') ? lines - 1 : lines
+    if (typeof before === 'string' && typeof after === 'string') {
+      const { added, removed } = diffLineCounts(before, after)
+      if (added === 0 && removed === 0) return null
+      return (
+        <span className='file-change-count'>
+          {added > 0 && (
+            <span className='file-change-count--add'>+{added}</span>
+          )}
+          {added > 0 && removed > 0 && ' '}
+          {removed > 0 && (
+            <span className='file-change-count--remove'>-{removed}</span>
+          )}
+        </span>
+      )
+    }
+    const text = content ?? ''
+    if (!text) return null
+    const lines = text.split('\n').length
+    const visible = text.endsWith('\n') ? lines - 1 : lines
     if (visible <= 0) return null
     return (
       <span className='file-change-count file-change-count--add'>
@@ -71,10 +99,7 @@ function ChangeBadge({ kind, args }) {
     )
   }
   if (kind === 'edit') {
-    const { added, removed } = diffLineCounts(
-      args?.old_string,
-      args?.new_string,
-    )
+    const { added, removed } = diffLineCounts(before ?? '', after ?? '')
     if (added === 0 && removed === 0) return null
     return (
       <span className='file-change-count'>
@@ -105,6 +130,7 @@ function FileChangeStub({
   duration,
   liveInputBytes,
   nested,
+  verb,
 }) {
   let status
   if (!isDone) {
@@ -133,9 +159,7 @@ function FileChangeStub({
       className={`file-change-stub ${isError ? 'has-error' : ''} ${nested ? 'file-change-stub--nested' : ''}`}
     >
       <div className='file-change-stub-row'>
-        <span className='file-change-stub-verb'>
-          {isDone ? 'Edit' : 'Editing'}
-        </span>
+        <span className='file-change-stub-verb'>{verb}</span>
         <span className='file-change-stub-name'>{name || 'tool_call'}</span>
         <span className='file-change-stub-label'>
           {isDone ? 'missing file_path' : 'preparing arguments'}
@@ -153,26 +177,53 @@ function FileChangeStub({
 export default function FileChangeCard({ part, nested = false }) {
   const name = part.name || ''
   const args = part.args || {}
+  const tur = getTur(part)
   const result = part.result
   const isDone = part.status === 'done'
   const isError =
     isDone && typeof result === 'string' && result.startsWith('Error:')
   const duration = formatDuration(part.duration)
-  const filePath = args.file_path || args.path || null
+  const filePath =
+    tur?.filePath || args.file_path || args.path || null
   const isWrite = name === 'Write' || name === 'write_file'
   const kind = isWrite ? 'write' : 'edit'
-  const verb = isDone
-    ? isWrite
-      ? 'Created'
-      : 'Edited'
-    : isWrite
-      ? 'Creating'
-      : 'Editing'
+  const writeType = tur?.type === 'update' ? 'update' : 'create'
+  const isNewFile = isWrite && writeType !== 'update'
+  const verb = toolActionLabel(isWrite ? 'write' : 'edit', {
+    loading: !isDone,
+    hasError: isError,
+    isNewFile,
+  })
+
   const hasLivePreview =
     !isDone &&
     typeof part.livePreview === 'string' &&
     part.livePreview.length > 0
 
+  // Done: TUR before/after or write content. Running: args / live.
+  const beforeContent =
+    typeof tur?.beforeContent === 'string'
+      ? tur.beforeContent
+      : !isWrite && typeof args.old_string === 'string'
+        ? args.old_string
+        : undefined
+  const afterContent =
+    typeof tur?.afterContent === 'string'
+      ? tur.afterContent
+      : typeof tur?.content === 'string'
+        ? tur.content
+        : !isWrite && typeof args.new_string === 'string'
+          ? args.new_string
+          : isWrite && typeof args.content === 'string'
+            ? args.content
+            : undefined
+
+  const hasTurBody =
+    isDone &&
+    !isError &&
+    (typeof tur?.beforeContent === 'string' ||
+      typeof tur?.afterContent === 'string' ||
+      typeof tur?.content === 'string')
   const hasArgsContent =
     (isWrite
       ? typeof args.content === 'string' && args.content.length > 0
@@ -180,7 +231,7 @@ export default function FileChangeCard({ part, nested = false }) {
     (!isWrite &&
       (typeof args.new_string === 'string' ||
         typeof args.old_string === 'string'))
-  const hasAnythingToShow = hasLivePreview || hasArgsContent
+  const hasAnythingToShow = hasLivePreview || hasArgsContent || hasTurBody
   if (!filePath && !hasAnythingToShow) {
     return (
       <FileChangeStub
@@ -191,6 +242,7 @@ export default function FileChangeCard({ part, nested = false }) {
         duration={duration}
         liveInputBytes={part.liveInputBytes}
         nested={nested}
+        verb={verb}
       />
     )
   }
@@ -201,15 +253,11 @@ export default function FileChangeCard({ part, nested = false }) {
     filePath ||
     (isDone ? '(missing file_path)' : 'writing…')
 
-  // Badge args: prefer final content; while streaming a write, use livePreview.
-  const badgeArgs =
-    isWrite && !args.content && hasLivePreview
-      ? { content: part.livePreview }
-      : args
-
-  const previewSource = isWrite
-    ? args.content || (hasLivePreview ? part.livePreview : null)
-    : args.new_string
+  const previewSource = hasLivePreview
+    ? part.livePreview
+    : afterContent ||
+      (isWrite ? args.content : args.new_string) ||
+      null
   const changedLineCount = previewSource
     ? (previewSource.match(/\n/g)?.length ?? 0) + 1
     : 0
@@ -234,14 +282,58 @@ export default function FileChangeCard({ part, nested = false }) {
         startTime={part.liveInputStart}
       />
     )
+  } else if (isDone && !isError && isWrite) {
+    if (
+      typeof beforeContent === 'string' &&
+      typeof afterContent === 'string' &&
+      beforeContent !== afterContent
+    ) {
+      body = (
+        <DiffViewer
+          oldStr={beforeContent}
+          newStr={afterContent}
+          filePath={filePath}
+          embedded
+        />
+      )
+      copyText = afterContent
+    } else if (typeof afterContent === 'string') {
+      body = (
+        <FilePreview content={afterContent} filePath={filePath} embedded />
+      )
+      copyText = afterContent
+      const lines = afterContent.split('\n')
+      const visible = afterContent.endsWith('\n')
+        ? lines.length - 1
+        : lines.length
+      extraMeta = `${visible} lines`
+    }
+  } else if (
+    isDone &&
+    !isError &&
+    !isWrite &&
+    typeof beforeContent === 'string' &&
+    typeof afterContent === 'string'
+  ) {
+    body = (
+      <DiffViewer
+        oldStr={beforeContent}
+        newStr={afterContent}
+        filePath={filePath}
+        replaceAll={args.replace_all}
+        embedded
+      />
+    )
+    copyText = afterContent
+    if (tur?.replacements > 1 || args.replace_all) {
+      extraMeta =
+        tur?.replacements > 1
+          ? `${tur.replacements} replacements`
+          : 'replace all'
+    }
   } else if (isWrite && typeof args.content === 'string') {
     body = <FilePreview content={args.content} filePath={filePath} embedded />
     copyText = args.content
-    const lines = args.content.split('\n')
-    const visible = args.content.endsWith('\n')
-      ? lines.length - 1
-      : lines.length
-    extraMeta = `${visible} lines`
   } else if (
     !isWrite &&
     typeof args.old_string === 'string' &&
@@ -257,7 +349,6 @@ export default function FileChangeCard({ part, nested = false }) {
       />
     )
     copyText = args.new_string
-    if (args.replace_all) extraMeta = 'replace all'
   }
 
   const toggle = () => {
@@ -286,7 +377,12 @@ export default function FileChangeCard({ part, nested = false }) {
         <span className='file-change-name' title={filePath || ''}>
           {displayPath}
         </span>
-        <ChangeBadge kind={kind} args={badgeArgs} />
+        <ChangeBadge
+          kind={kind}
+          before={beforeContent}
+          after={afterContent}
+          content={afterContent}
+        />
         {extraMeta && isDone && (
           <span className='file-change-extra-meta'>{extraMeta}</span>
         )}

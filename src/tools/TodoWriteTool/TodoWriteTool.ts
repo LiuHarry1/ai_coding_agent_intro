@@ -6,13 +6,24 @@ import type {
   TodoItem,
   TodoStatus,
 } from '../../core/types.js'
+import { emitTodoUpdate } from '../../core/wire-internal.js'
+import { TODO_WRITE_TOOL_NAME } from '../../constants/tool_names.js'
 
 export type TodoWriteOutput = {
   todos: TodoItem[]
   message: string
 }
-import { emitTodoUpdate } from '../../core/wire-internal.js'
-import { TODO_WRITE_TOOL_NAME } from '../../constants/tool_names.js'
+
+export const TodoWriteOutputSchema = z.object({
+  todos: z.array(
+    z.object({
+      id: z.string(),
+      content: z.string(),
+      status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']),
+    }),
+  ),
+  message: z.string(),
+})
 
 const STATUS_ORDER: Record<TodoStatus, number> = {
   in_progress: 0,
@@ -49,6 +60,8 @@ export const definition: ToolDefinition = {
     'Create or update a structured task checklist to track multi-step work',
   shouldDefer: true,
   isConcurrencySafe: () => false,
+  // Mode D — todos for UI/side panel; message for model
+  outputSchema: TodoWriteOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as TodoWriteOutput
     return {

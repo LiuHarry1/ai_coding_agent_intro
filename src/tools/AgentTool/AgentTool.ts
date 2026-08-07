@@ -125,6 +125,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
         content: (output as { text: string }).text,
       }
     },
+    outputSchema: z.object({
+      text: z.string(),
+    }),
     create(cwd: string, context: ToolContext) {
       const {
         runAgent,

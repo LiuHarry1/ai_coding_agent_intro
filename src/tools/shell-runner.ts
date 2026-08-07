@@ -36,6 +36,16 @@ export type ShellToolOutput = {
   interrupted?: boolean
 }
 
+export const ShellToolOutputSchema = z.object({
+  text: z.string(),
+  stdout: z.string().optional(),
+  stderr: z.string().optional(),
+  exitCode: z.number().nullable().optional(),
+  backgroundTaskId: z.string().optional(),
+  backgrounded: z.boolean().optional(),
+  interrupted: z.boolean().optional(),
+})
+
 function shellOk(
   data: ShellToolOutput,
 ): DualChannelToolResult<ShellToolOutput> {
@@ -66,6 +76,8 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
     name,
     description: briefDescription,
     isConcurrencySafe: isShellInputConcurrencySafe,
+    // Mode C — model may get wrappers in `text`; UI uses stdout/stderr
+    outputSchema: ShellToolOutputSchema,
     mapToolResultToToolResultBlockParam(output, toolUseID) {
       const o = output as ShellToolOutput
       return {
@@ -205,6 +217,9 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               const msg = err instanceof Error ? err.message : String(err)
               return shellOk({
                 text: truncate(`[error: ${msg}]`),
+                stdout: '',
+                stderr: msg,
+                exitCode: 1,
                 interrupted: true,
               })
             }

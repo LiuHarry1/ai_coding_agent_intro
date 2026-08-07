@@ -4,14 +4,18 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
-
-export type EnterPlanModeOutput = { message: string }
 import { emitModeChanged } from '../../core/wire-internal.js'
 import { ENTER_PLAN_MODE_TOOL_NAME } from '../../constants/tool_names.js'
 import {
   handlePlanModeTransition,
   prepareContextForPlanMode,
 } from '../../core/permission-mode.js'
+
+export type EnterPlanModeOutput = { message: string }
+
+export const EnterPlanModeOutputSchema = z.object({
+  message: z.string(),
+})
 
 const DESCRIPTION =
   'Request to enter plan mode for designing an implementation before making changes.'
@@ -20,6 +24,7 @@ export const definition: ToolDefinition = {
   name: ENTER_PLAN_MODE_TOOL_NAME,
   description: DESCRIPTION,
   isConcurrencySafe: () => true,
+  outputSchema: EnterPlanModeOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return {
       tool_use_id: toolUseID,

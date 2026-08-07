@@ -17,18 +17,21 @@ import { isWorkerExecutionBackend } from '../../execution/worker-execution-backe
 import { recordWriteInState } from '../../utils/read/read-file-state.js'
 import type { ReadFileState } from '../../utils/attachments/types.js'
 
-export type EditFileOutput = {
-  type: 'update'
-  filePath: string
-  oldString: string
-  newString: string
-  replacements: number
-  message: string
-}
+/** Mode B: model gets `message` ACK; UI gets before/after for Cursor-style diff. */
+export const EditFileOutputSchema = z.object({
+  type: z.literal('update'),
+  filePath: z.string(),
+  oldString: z.string(),
+  newString: z.string(),
+  replacements: z.number(),
+  message: z.string(),
+  beforeContent: z.string(),
+  afterContent: z.string(),
+})
 
-function ok(
-  data: EditFileOutput,
-): DualChannelToolResult<EditFileOutput> {
+export type EditFileOutput = z.infer<typeof EditFileOutputSchema>
+
+function ok(data: EditFileOutput): DualChannelToolResult<EditFileOutput> {
   return { data }
 }
 
@@ -36,6 +39,8 @@ export const definition: ToolDefinition = {
   name: EDIT_FILE_TOOL_NAME,
   description: 'Make targeted edits by replacing specific text in a file',
   isConcurrencySafe: () => false,
+  // Mode B — ACK for model; before/after for UI
+  outputSchema: EditFileOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as EditFileOutput
     return {
@@ -132,6 +137,8 @@ export const definition: ToolDefinition = {
               oldString: old_string,
               newString: new_string,
               replacements,
+              beforeContent: content,
+              afterContent: newContent,
               message: `Edited ${file_path} (${replacements} replacement${replacements === 1 ? '' : 's'}) [worker:${execution.environmentId}]`,
             })
           } catch (err) {
@@ -229,6 +236,8 @@ export const definition: ToolDefinition = {
           oldString: old_string,
           newString: new_string,
           replacements,
+          beforeContent: content,
+          afterContent: newContent,
           message: `Edited ${file_path}: ${replacements} replacement(s)${lineInfo}`,
         })
       },

@@ -7,7 +7,6 @@ import type { AgentDefinition } from '../core/types.js'
 import { computeSimpleEnvInfo } from '../constants/prompts.js'
 import { setCwd } from '../utils/cwd.js'
 import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
-import { previewSection } from './preview.js'
 
 /**
  * Build the effective system prompt for a primary agent profile.
@@ -23,7 +22,6 @@ export async function getSystemPromptForAgentProfile(
   setCwd(cwd)
   const env =
     (await computeSimpleEnvInfo(modelId)) +
-    previewSection() +
     workspaceBoundaryPromptSection(cwd)
 
   const rulesAppend =

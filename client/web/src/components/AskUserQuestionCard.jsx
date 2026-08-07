@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useChatStore } from '../stores/chat-store.js'
+import { getTur } from '../lib/tool-result.js'
 
 function QuestionBlock({ question, answers, onChange }) {
   const { question: text, header, options, multiSelect } = question
@@ -51,10 +52,15 @@ function QuestionBlock({ question, answers, onChange }) {
 
 export default function AskUserQuestionCard({ part }) {
   const answerQuestion = useChatStore(s => s.answerQuestion)
+  const tur = getTur(part)
   const [answers, setAnswers] = useState({})
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [done, setDone] = useState(part.status === 'answered')
+  const [done, setDone] = useState(
+    part.status === 'answered' ||
+      part.status === 'done' ||
+      tur?.answered === true,
+  )
 
   const questions = part.questions ?? []
   const allAnswered = useMemo(
@@ -84,9 +90,22 @@ export default function AskUserQuestionCard({ part }) {
   }
 
   if (done) {
+    const saved =
+      tur?.answers && typeof tur.answers === 'object' ? tur.answers : answers
+    const entries = Object.entries(saved || {})
     return (
       <div className='ask-card ask-card--done'>
         <span className='ask-card__title'>Answers submitted</span>
+        {entries.length > 0 && (
+          <ul className='ask-card__answers'>
+            {entries.map(([q, a]) => (
+              <li key={q}>
+                <span className='ask-card__q'>{q}</span>
+                <span className='ask-card__a'>{a}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     )
   }

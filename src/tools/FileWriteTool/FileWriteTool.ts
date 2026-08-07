@@ -18,19 +18,25 @@ import { isWorkerExecutionBackend } from '../../execution/worker-execution-backe
 import { recordWriteInState } from '../../utils/read/read-file-state.js'
 import type { ReadFileState } from '../../utils/attachments/types.js'
 
-export type WriteFileOutput = {
-  type: 'create' | 'update'
-  filePath: string
-  content: string
-  numLines: number
-  numChars: number
-  message: string
-}
+/** Mode B: model gets `message` ACK; UI gets content (+ beforeContent on update). */
+export const WriteFileOutputSchema = z.object({
+  type: z.enum(['create', 'update']),
+  filePath: z.string(),
+  content: z.string(),
+  numLines: z.number(),
+  numChars: z.number(),
+  message: z.string(),
+  beforeContent: z.string().optional(),
+})
+
+export type WriteFileOutput = z.infer<typeof WriteFileOutputSchema>
 
 export const definition: ToolDefinition = {
   name: WRITE_FILE_TOOL_NAME,
   description: 'Create or overwrite a file',
   isConcurrencySafe: () => false,
+  // Mode B — ACK for model; content/before for UI
+  outputSchema: WriteFileOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as WriteFileOutput
     return {
@@ -60,6 +66,7 @@ export const definition: ToolDefinition = {
         const makeData = (
           message: string,
           type: 'create' | 'update',
+          beforeContent?: string,
         ): WriteFileOutput => ({
           type,
           filePath: file_path,
@@ -67,6 +74,7 @@ export const definition: ToolDefinition = {
           numLines: lines,
           numChars: content.length,
           message,
+          ...(beforeContent !== undefined ? { beforeContent } : {}),
         })
 
         const execution = context.execution
@@ -75,6 +83,14 @@ export const definition: ToolDefinition = {
             const abs = execution.resolve(cwd, file_path)
             execution.assertInWorkspace(cwd, abs, 'write')
             const existed = await execution.exists(abs)
+            let beforeContent: string | undefined
+            if (existed && !(await execution.isDirectory(abs))) {
+              try {
+                beforeContent = await execution.readText(abs)
+              } catch {
+                beforeContent = undefined
+              }
+            }
             await execution.writeText(abs, content)
             if (isWorkerExecutionBackend(execution)) {
               try {
@@ -94,6 +110,7 @@ export const definition: ToolDefinition = {
               data: makeData(
                 `Wrote ${file_path} (${lines} lines, ${content.length} chars) [worker:${execution.environmentId}]`,
                 kind,
+                beforeContent,
               ),
             }
           } catch (err) {
@@ -118,6 +135,14 @@ export const definition: ToolDefinition = {
         }
 
         const existed = fs.existsSync(abs)
+        let beforeContent: string | undefined
+        if (existed && !fs.statSync(abs).isDirectory()) {
+          try {
+            beforeContent = fs.readFileSync(abs, 'utf-8')
+          } catch {
+            beforeContent = undefined
+          }
+        }
         fs.mkdirSync(path.dirname(abs), { recursive: true })
         fs.writeFileSync(abs, content, 'utf-8')
         recordWriteInState(
@@ -157,6 +182,7 @@ export const definition: ToolDefinition = {
           data: makeData(
             `Wrote ${file_path} (${lines} lines, ${content.length} chars)`,
             existed ? 'update' : 'create',
+            beforeContent,
           ),
         }
       },

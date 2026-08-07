@@ -77,6 +77,11 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
     // expanded body visually.
     isSubagent: true,
     isConcurrencySafe: () => false,
+    outputSchema: z.object({
+      text: z.string(),
+      skill_name: z.string().optional(),
+      mode: z.string().optional(),
+    }),
     mapToolResultToToolResultBlockParam(output, toolUseID) {
       return {
         tool_use_id: toolUseID,

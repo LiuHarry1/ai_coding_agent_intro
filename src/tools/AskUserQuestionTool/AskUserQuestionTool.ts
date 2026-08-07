@@ -167,11 +167,19 @@ export type AskUserQuestionOutput = {
   answered: boolean
 }
 
+export const AskUserQuestionOutputSchema = z.object({
+  text: z.string(),
+  answers: z.record(z.string()).optional(),
+  answered: z.boolean(),
+})
+
 export const definition: ToolDefinition = {
   name: ASK_USER_QUESTION_TOOL_NAME,
   description: DESCRIPTION,
   shouldDefer: true,
   isConcurrencySafe: () => false,
+  // Mode D — status chrome for UI; text for model
+  outputSchema: AskUserQuestionOutputSchema,
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return {
       tool_use_id: toolUseID,

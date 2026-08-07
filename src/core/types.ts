@@ -129,13 +129,21 @@ export interface ToolDefinition {
   isConcurrencySafe?: (input: unknown) => boolean
   /**
    * CC-style: map structured `data` → model-facing tool_result text.
-   * Present on dual-channel tools; framework calls this after execute.
+   * Required on built-in dual-channel tools; framework calls after execute.
+   * Projection modes (document per tool):
+   *   A — model gets body; UI gets chrome (Read, Web*)
+   *   B — model gets ACK; UI gets diff/preview (Edit, Write)
+   *   C — same streams; model may wrap; UI raw stdout/stderr (Bash)
+   *   D — model orchestration; UI side panel / status (Todo, Ask)
    */
   mapToolResultToToolResultBlockParam?: (
     output: unknown,
     toolUseID: string,
   ) => ToolResultBlockParam
-  /** Optional schema for validating toolUseResult before UI render. */
+  /**
+   * Validate Out before UI sees toolUseResult (CC outputSchema).
+   * Built-in tools should set this; failed parse omits TUR (model text still OK).
+   */
   outputSchema?: {
     safeParse: (
       value: unknown,

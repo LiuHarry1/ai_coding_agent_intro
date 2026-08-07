@@ -17,7 +17,6 @@ import { SKILL_TOOL_NAME } from '../tools/SkillTool/SkillTool.js'
 import { computeSimpleEnvInfo } from '../constants/prompts.js'
 import { setCwd } from '../utils/cwd.js'
 import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
-import { previewSection } from './preview.js'
 
 // Static system prompt sections. Uses tool/agent names via constants.
 
@@ -51,7 +50,6 @@ export async function systemPrompt(
   setCwd(cwd)
   const env =
     (await computeSimpleEnvInfo(modelId)) +
-    previewSection() +
     workspaceBoundaryPromptSection(cwd)
   const rulesAppend = projectRules ? `\n\n${projectRules}` : ''
 

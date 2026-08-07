@@ -2,28 +2,40 @@ import React from 'react'
 import ToolCallLine from './ToolCallLine.jsx'
 import { detectError } from '../lib/utils.js'
 import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { getTur } from '../lib/tool-result.js'
+import { toolActionLabel } from '../lib/tool-action-labels.js'
 
 /**
  * ≈ Cursor kill / stop background shell — compact action row.
  */
 export default function TaskStopCard({ part }) {
   const args = part.args || {}
-  const taskId = args.task_id || args.shell_id || ''
-  const result =
-    part.toolUseResult?.text != null ? part.toolUseResult.text : part.result
+  const tur = getTur(part)
+  const taskId = tur?.task_id || args.task_id || args.shell_id || ''
+  const message =
+    typeof tur?.message === 'string'
+      ? tur.message
+      : typeof tur?.text === 'string'
+        ? tur.text
+        : typeof part.result === 'string'
+          ? part.result
+          : ''
   const isDone = part.status === 'done'
   const isError =
     isDone &&
     (part.isError === true ||
-      detectError(part.name || 'TaskStop', result) ||
-      (typeof result === 'string' && result.startsWith('Error:')))
-  const hasOutput = typeof result === 'string' && result.length > 0
+      detectError(part.name || 'TaskStop', message) ||
+      (typeof message === 'string' && message.startsWith('Error:')))
+  const hasOutput = typeof message === 'string' && message.length > 0
 
   const [expanded, toggleExpanded] = useStreamingExpanded(false, {
     expandOnceWhen: isDone && isError,
   })
 
-  const action = !isDone ? 'Stopping' : isError ? 'Stop' : 'Stopped'
+  const action = toolActionLabel('stop', {
+    loading: !isDone,
+    hasError: isError,
+  })
 
   return (
     <div className={`tool-row task-stop-card ${isError ? 'has-error' : ''}`}>
@@ -44,7 +56,7 @@ export default function TaskStopCard({ part }) {
         <pre
           className={`tool-row-body ${isError ? 'tool-row-body--error' : ''}`}
         >
-          {result}
+          {message}
         </pre>
       )}
     </div>

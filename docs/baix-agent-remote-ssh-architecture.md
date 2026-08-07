@@ -284,7 +284,7 @@ Remote 后必须拆成两个概念：
 ### Phase 2 — 体验打磨
 
 - 断线重连 / Worker 保活  
-- 端口转发（预览 `preview.ts` 场景）  
+- 端口转发（可选）  
 - Host 级 settings（远端 CLAUDE.md / `.ai-agent` 读策略）  
 - IdentityFile / ProxyJump / 跳板机  
 
