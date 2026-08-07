@@ -34,7 +34,7 @@ export const definition: ToolDefinition = {
   create() {
     return tool({
       description:
-        'Return the public preview URL for a port. Use after starting a dev server with Bash (background: true) on 0.0.0.0.',
+        'Return the public preview URL for a port. Use after starting a dev server with Bash (run_in_background: true) on 0.0.0.0.',
       inputSchema: z.object({
         port: z
           .number()

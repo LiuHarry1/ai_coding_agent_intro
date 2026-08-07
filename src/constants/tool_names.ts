@@ -23,6 +23,8 @@ export const SKILL_TOOL_NAME = 'Skill'
 export const AGENT_TOOL_NAME = 'Agent'
 export const ENTER_PLAN_MODE_TOOL_NAME = 'EnterPlanMode'
 export const EXIT_PLAN_MODE_TOOL_NAME = 'ExitPlanMode'
+export const TASK_OUTPUT_TOOL_NAME = 'TaskOutput'
+export const TASK_STOP_TOOL_NAME = 'TaskStop'
 
 export const MUTATING_TOOLS: readonly string[] = [
   WRITE_FILE_TOOL_NAME,
@@ -51,4 +53,6 @@ export const PLAN_MODE_DENIED_TOOLS: readonly string[] = [
   ),
   BASH_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
+  TASK_OUTPUT_TOOL_NAME,
+  TASK_STOP_TOOL_NAME,
 ]

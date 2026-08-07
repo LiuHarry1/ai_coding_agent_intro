@@ -5,6 +5,7 @@ import { agentApi } from './lib/api/agent.js'
 import { setKnownMcpServers } from './lib/tool-kind.js'
 import Header from './components/Header.jsx'
 import ChatView from './components/ChatView.jsx'
+import BackgroundTerminals from './components/BackgroundTerminals.jsx'
 import InputArea from './components/InputArea.jsx'
 import WorkspaceIDE from './components/workspace-ide/index.js'
 
@@ -76,6 +77,7 @@ export default function App() {
       <div className={`main-panel ${workspaceIdeOpen ? 'with-ide' : ''}`}>
         <Header />
         <ChatView />
+        <BackgroundTerminals />
         <InputArea />
       </div>
     </div>

@@ -10,6 +10,11 @@ export const agentApi = {
   deleteSession: id =>
     fetch(apiUrl(`/sessions/${id}`), withAuth({ method: 'DELETE' })),
   getSessionMessages: id => fetchJSON(`/sessions/${id}/messages`),
+  listSessionTasks: id => fetchJSON(`/sessions/${id}/tasks`),
+  stopSessionTask: (sessionId, taskId) =>
+    fetchJSON(`/sessions/${sessionId}/tasks/${taskId}/stop`, {
+      method: 'POST',
+    }),
 
   getSlashCommands: workspace => {
     const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''

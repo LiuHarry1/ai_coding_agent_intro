@@ -11,6 +11,7 @@
  */
 import * as fs from 'fs'
 import * as path from 'path'
+import { SESSION_DIR } from './session-paths.js'
 import { isPathInWorkspace } from './workspace.js'
 
 export type SandboxMode = 'off' | 'strict'
@@ -72,7 +73,10 @@ export function createSandboxPolicy(
   opts?: CreateSandboxPolicyOptions,
 ): SandboxPolicy {
   const envReads = parseExtraReadRoots()
+  // Session task outputs / tool-results live under SESSION_DIR (often outside
+  // the user's project cwd) — same carve-out as Claude Code project temp.
   const extraReads = [
+    path.resolve(SESSION_DIR),
     ...envReads,
     ...(opts?.extraReadRoots ?? []).map(p => path.resolve(p)),
   ]

@@ -14,12 +14,16 @@ import { definition as grepTool } from './tools/GrepTool/GrepTool.js'
 import { definition as lspTool } from './tools/LSPTool/LSPTool.js'
 import { definition as askUserQuestion } from './tools/AskUserQuestionTool/AskUserQuestionTool.js'
 import { definition as publishPreview } from './tools/PublishPreviewTool/PublishPreviewTool.js'
+import { definition as taskOutput } from './tools/TaskOutputTool/TaskOutputTool.js'
+import { definition as taskStop } from './tools/TaskStopTool/TaskStopTool.js'
 
 // Default: bash always; powershell additionally on Windows.
 const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])]
 
 ;[
   ...shellTools,
+  taskOutput,
+  taskStop,
   readFile,
   writeFile,
   editFile,

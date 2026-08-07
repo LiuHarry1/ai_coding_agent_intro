@@ -1,33 +1,46 @@
 import React, { useState } from 'react'
-import { formatDuration } from '../lib/utils.js'
+import { formatWorkedDuration } from '../lib/timeline.js'
 
 /**
- * Turn-level work fold, mirroring Cursor's `workGroup` transcript row.
+ * Cursor default-chat `workGroup` disclosure (completed turn only).
  *
- * Once a turn completes, every work row before the final assistant message
- * (reasoning, tool rows, subagent rows, compaction, todos) collapses under a
- * single header. The final answer itself stays outside the fold.
+ * Label ≈ action "Worked" + details `g0m(durationMs)` → "Worked for 7s".
+ * With running tasks: "N working" (Cursor `runningTaskCount`).
  *
- * Header reads `N working` while tasks are still active, else `Worked for Ns`.
+ * Controlled open via `open` + `onOpenChange` (parent keys by stable rowId).
  */
 export default function WorkGroup({
   children,
   durationMs,
   runningTaskCount = 0,
   defaultOpen = false,
+  open: openControlled,
+  onOpenChange,
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [openUncontrolled, setOpenUncontrolled] = useState(defaultOpen)
+  const controlled = typeof openControlled === 'boolean'
+  const open = controlled ? openControlled : openUncontrolled
 
-  const dur = formatDuration(durationMs)
-  const label =
-    runningTaskCount > 0
-      ? `${runningTaskCount} working`
-      : dur
-        ? `Worked for ${dur}`
-        : 'Worked'
+  const setOpen = next => {
+    const value = typeof next === 'function' ? next(open) : next
+    if (!controlled) setOpenUncontrolled(value)
+    onOpenChange?.(value)
+  }
+
+  const dur = formatWorkedDuration(durationMs)
+  let label
+  if (runningTaskCount > 0) {
+    label = `${runningTaskCount} working`
+  } else if (dur) {
+    label = `Worked ${dur}`
+  } else {
+    label = 'Worked'
+  }
 
   return (
-    <div className={`work-group ${open ? 'open' : ''}`}>
+    <div
+      className={`work-group ${open ? 'open' : ''} ${runningTaskCount > 0 ? 'active' : ''}`}
+    >
       <button
         type='button'
         className='work-group-header'
@@ -46,7 +59,13 @@ export default function WorkGroup({
         )}
       </button>
 
-      {open && <div className='work-group-body'>{children}</div>}
+      <div
+        className='work-group-body'
+        hidden={!open}
+        aria-hidden={!open}
+      >
+        {children}
+      </div>
     </div>
   )
 }

@@ -85,6 +85,16 @@ export type AgentListingDeltaAttachment = {
   isInitial: boolean
 }
 
+export type TaskNotificationAttachment = {
+  type: 'task_notification'
+  taskId: string
+  outputFile: string
+  status: 'completed' | 'failed' | 'killed'
+  summary: string
+  toolUseId?: string
+  rawXml: string
+}
+
 export type Attachment =
   | FileAttachment
   | PdfReferenceAttachment
@@ -96,6 +106,7 @@ export type Attachment =
   | PlanModeExitAttachment
   | SkillListingAttachment
   | AgentListingDeltaAttachment
+  | TaskNotificationAttachment
 
 /** @deprecated Import from `utils/read/types` — re-exported for compatibility. */
 export type {

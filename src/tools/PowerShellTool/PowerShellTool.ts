@@ -40,9 +40,7 @@ ${getEditionSection(detectPowerShellEdition())}
 
 Modes:
 1. Run command — provide \`command\`. Blocks until completion, streams live output to the UI.
-2. Background — \`background: true\`. Returns PID immediately. Use ONLY for processes that don't exit on their own (dev servers, watchers).
-3. Check background — provide \`pid\` only.
-4. Kill background — provide \`pid\` + \`kill: true\`.
+2. Background — \`run_in_background: true\`. Only use this if you don't need the result immediately and are OK being notified when the command completes later. You do not need to check the output right away — you'll be notified when it finishes. Prefer Read on the output-file path (session task files are readable even outside the project cwd). For a non-blocking peek while still running, use TaskOutput with block: false. Do not poll. Long-lived processes never exit: after backgrounding, optionally Read/TaskOutput(block: false) once to confirm startup, then reply to the user — do not use TaskOutput(block: true) on them; use TaskStop only when asked to stop.
 
 Working directory:
 - The cwd persists across calls — \`Set-Location subdir\` (or \`cd\`) in one call affects the next.

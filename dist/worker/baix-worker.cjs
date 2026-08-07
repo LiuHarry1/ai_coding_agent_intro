@@ -4789,6 +4789,9 @@ function runShellCommand(opts) {
   });
 }
 
+// src/worker/main.ts
+var import_child_process5 = require("child_process");
+
 // src/worker/run-rg.ts
 var import_node_child_process = require("node:child_process");
 var MAX_BUFFER_SIZE = 20 * 1024 * 1024;
@@ -4847,6 +4850,17 @@ var WORKER_VERSION = process.env.BAIX_WORKER_VERSION ?? process.env.npm_package_
 var boundCwd = null;
 var boundEnvId = "local";
 var shuttingDown = false;
+var bgByTask = /* @__PURE__ */ new Map();
+process.on("exit", () => {
+  for (const e of bgByTask.values()) {
+    if (!e.done) {
+      try {
+        forceKillChild(e.child);
+      } catch {
+      }
+    }
+  }
+});
 function send(msg) {
   process.stdout.write(`${JSON.stringify(msg)}
 `);
@@ -4892,6 +4906,67 @@ async function runFsOp(op) {
         timeoutMs: op.timeoutMs ?? 12e4,
         cwdFilePrefix: "baix-worker-cwd"
       });
+    case "exec_bg_start": {
+      await fs2.promises.mkdir(path6.dirname(op.outputPath), { recursive: true });
+      await fs2.promises.writeFile(op.outputPath, "", "utf-8");
+      const prepared = prepareShellSpawn({
+        shell: op.shell ?? "bash",
+        userCommand: op.command,
+        cwdFilePrefix: "baix-worker-bg-cwd"
+      });
+      const child = (0, import_child_process5.spawn)(prepared.command, prepared.args, {
+        cwd: op.cwd,
+        env: prepared.env,
+        windowsHide: true,
+        detached: process.platform !== "win32"
+      });
+      const entry = {
+        taskId: op.taskId,
+        child,
+        done: false,
+        exitCode: null,
+        killed: false
+      };
+      const append = (chunk) => {
+        try {
+          fs2.appendFileSync(op.outputPath, chunk);
+        } catch {
+        }
+      };
+      child.stdout?.on("data", append);
+      child.stderr?.on("data", append);
+      child.on("close", (code) => {
+        entry.done = true;
+        entry.exitCode = code;
+      });
+      child.on("error", () => {
+        entry.done = true;
+        entry.exitCode = 1;
+      });
+      bgByTask.set(op.taskId, entry);
+      const pid = child.pid;
+      if (pid == null) throw new Error("Failed to spawn background process");
+      return { pid };
+    }
+    case "exec_bg_poll": {
+      const e = bgByTask.get(op.taskId);
+      if (!e) {
+        return { done: true, exitCode: null, killed: false };
+      }
+      return {
+        done: e.done,
+        exitCode: e.exitCode,
+        killed: e.killed
+      };
+    }
+    case "exec_bg_kill": {
+      const e = bgByTask.get(op.taskId);
+      if (e && !e.done) {
+        e.killed = true;
+        forceKillChild(e.child);
+      }
+      return { ok: true };
+    }
     case "rg":
       return runRg({
         args: op.args,

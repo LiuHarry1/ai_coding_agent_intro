@@ -23,6 +23,8 @@ import {
   AGENT,
   ENTER_PLAN_MODE,
   EXIT_PLAN_MODE,
+  TASK_OUTPUT,
+  TASK_STOP,
 } from './tool-names.js'
 import { EXPLORE_GROUPABLE_NAMES } from './tool-registry-meta.js'
 
@@ -45,6 +47,8 @@ export const BUILT_IN_TOOLS = new Set([
   AGENT,
   ENTER_PLAN_MODE,
   EXIT_PLAN_MODE,
+  TASK_OUTPUT,
+  TASK_STOP,
   // legacy / alt spellings seen in older transcripts
   'bash',
   'powershell',

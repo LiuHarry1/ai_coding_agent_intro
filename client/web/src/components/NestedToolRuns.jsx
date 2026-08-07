@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import ExploredGroup from './ExploredGroup.jsx'
 import { pickCard } from './pickToolCard.js'
-import { expandToolGroup } from '../lib/timeline.js'
+import { expandToolGroup, toolPartKey } from '../lib/timeline.js'
 
 const STEP_PREVIEW_LIMIT = 6
 
@@ -30,16 +30,24 @@ export default function NestedToolRuns({
     }
     shown += weight
     if (run.type === 'explored_run') {
+      const first = toolPartKey(run.items[0], `nex-a-${i}`)
+      const last = toolPartKey(
+        run.items[run.items.length - 1],
+        `nex-b-${i}`,
+      )
       nodes.push(
         <ExploredGroup
-          key={run.items[0]?.id ?? `ex-${i}`}
+          key={`explored-${first}-${last}`}
           items={run.items}
         />,
       )
     } else {
       const Card = pickCard(run.part, { nested: true })
       nodes.push(
-        <div className='subagent-nested-step' key={run.part.id ?? i}>
+        <div
+          className='subagent-nested-step'
+          key={toolPartKey(run.part, `nstep-${i}`)}
+        >
           <Card part={run.part} nested />
         </div>,
       )

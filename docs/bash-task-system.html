@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后台 Shell Task 系统 — LocalShellTask / TaskOutput / TaskStop</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap");
+
+    :root {
+      --bg: #f0f4f8;
+      --surface: #ffffff;
+      --text: #1a2332;
+      --muted: #5a6a7a;
+      --teal: #0d9488;
+      --teal-dark: #0f766e;
+      --teal-light: #ccfbf1;
+      --slate: #334155;
+      --amber: #b45309;
+      --amber-light: #fef3c7;
+      --green: #047857;
+      --green-light: #d1fae5;
+      --red: #b91c1c;
+      --red-light: #fee2e2;
+      --border: #d8e0e8;
+      --code-bg: #1e293b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .hero {
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 0%, rgba(13, 148, 136, 0.35), transparent),
+        linear-gradient(145deg, #134e4a 0%, #0f766e 45%, #164e63 100%);
+      color: white;
+      padding: 52px 24px 56px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 700;
+      margin-bottom: 14px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero .lead {
+      max-width: 720px;
+      margin: 0 auto 18px;
+      color: #ccfbf1;
+      font-size: 16px;
+    }
+
+    .hero .tag {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      font-size: 12px;
+      color: #e2e8f0;
+      margin: 0 4px 6px;
+    }
+
+    .wrap {
+      max-width: 880px;
+      margin: -28px auto 64px;
+      padding: 0 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .card h2 {
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: var(--teal-dark);
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--teal-light);
+    }
+
+    .card h3 {
+      font-size: 16px;
+      margin: 20px 0 8px;
+      color: var(--slate);
+    }
+
+    p { margin-bottom: 12px; color: var(--text); }
+    .muted { color: var(--muted); font-size: 14px; }
+
+    ul, ol { margin: 8px 0 14px 1.25rem; }
+    li { margin-bottom: 6px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 12px 0 16px;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: 600;
+      color: var(--slate);
+    }
+
+    code, .mono {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.88em;
+    }
+
+    p code, li code, td code {
+      background: #eef2f7;
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: #0f766e;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: #e2e8f0;
+      padding: 16px 18px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
+      line-height: 1.55;
+      margin: 12px 0 16px;
+    }
+
+    .callout {
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    .callout.why {
+      background: var(--amber-light);
+      border-left: 4px solid var(--amber);
+    }
+
+    .callout.ok {
+      background: var(--green-light);
+      border-left: 4px solid var(--green);
+    }
+
+    .callout.note {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+
+    .flow .step {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+
+    .flow .arrow {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .toc a {
+      color: var(--teal-dark);
+      text-decoration: none;
+    }
+
+    .toc a:hover { text-decoration: underline; }
+
+    .toc ol { margin-left: 1.2rem; }
+
+    .tree {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre;
+      overflow-x: auto;
+      color: #334155;
+    }
+
+    a.doc-link { color: var(--teal-dark); }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 8px 20px 40px;
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <h1>后台 Shell Task 系统</h1>
+    <p class="lead">
+      对齐 Claude Code 的 <code style="color:#fcd34d;background:rgba(0,0,0,.2);padding:1px 6px;border-radius:4px">LocalShellTask</code>
+      + <code style="color:#fcd34d;background:rgba(0,0,0,.2);padding:1px 6px;border-radius:4px">TaskOutput</code>
+      + <code style="color:#fcd34d;background:rgba(0,0,0,.2);padding:1px 6px;border-radius:4px">TaskStop</code>。
+      UI 对应 Cursor Composer background terminals；工具名与协议仍是 CC 风格（没有 AwaitShell）。
+    </p>
+    <span class="tag">task_id</span>
+    <span class="tag">disk output</span>
+    <span class="tag">task-notification</span>
+    <span class="tag">Worker exec_bg_*</span>
+  </header>
+
+  <div class="wrap">
+    <nav class="card toc">
+      <h2>目录</h2>
+      <ol>
+        <li><a href="#what">是什么</a></li>
+        <li><a href="#why">为什么需要</a></li>
+        <li><a href="#api">模型侧 API</a></li>
+        <li><a href="#runtime">运行时两条路径</a></li>
+        <li><a href="#code">代码地图</a></li>
+        <li><a href="#http">HTTP / Web UI</a></li>
+        <li><a href="#vs-agent">和子代理的区别</a></li>
+        <li><a href="#usage">推荐用法</a></li>
+        <li><a href="#tradeoffs">设计取舍</a></li>
+        <li><a href="#refs">相关文档</a></li>
+      </ol>
+    </nav>
+
+    <section class="card" id="what">
+      <h2>1. 是什么</h2>
+      <p>把长驻 / 慢 shell 从「堵死一次 Bash」拆成：</p>
+      <ol>
+        <li><code>Bash|PowerShell(run_in_background: true)</code> → <strong>立刻</strong>返回稳定 <code>task_id</code> + 输出文件路径</li>
+        <li>进程继续跑，stdout/stderr <strong>追加</strong>到 <code>.sessions/{sessionId}/tasks/{taskId}.output</code></li>
+        <li>自然结束 → 注入 <code>&lt;task-notification&gt;</code>（若尚未 <code>notified</code>）</li>
+        <li>模型用 <strong>Read(输出文件)</strong> / <code>TaskOutput</code> / <code>TaskStop</code> 跟进</li>
+      </ol>
+
+      <div class="flow">
+        <span class="step">run_in_background</span>
+        <span class="arrow">→</span>
+        <span class="step">spawnShellTask</span>
+        <span class="arrow">→</span>
+        <span class="step">exec_bg_* / ShellCommand</span>
+        <span class="arrow">→</span>
+        <span class="step">ID + path</span>
+        <span class="arrow">→</span>
+        <span class="step">watchUntilDone</span>
+        <span class="arrow">→</span>
+        <span class="step">task-notification</span>
+      </div>
+
+      <pre>Bash(run_in_background: true)
+  → spawnShellTask → registerTask(running)
+  → Worker exec_bg_start  或  同进程 ShellCommand
+  → 工具结果：ID + output path（不阻塞）
+  → watchUntilDone(~400ms poll) → completed|failed|killed
+  → enqueueShellNotification → getAttachments → &lt;task-notification&gt;</pre>
+
+      <div class="callout note">
+        这不是 TodoWrite，也不是 Agent 子代理；<strong>专指后台 shell 进程</strong>。
+      </div>
+    </section>
+
+    <section class="card" id="why">
+      <h2>2. 为什么需要</h2>
+      <table>
+        <thead>
+          <tr><th>问题</th><th>做法</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>长驻命令卡死一轮 tool call</td><td><code>run_in_background</code> 立刻返回</td></tr>
+          <tr><td>OS PID 复用、跨会话不稳</td><td>逻辑 <code>task_id</code>（<code>local_bash</code> → <code>b</code> + 8 位）</td></tr>
+          <tr><td>大日志撑爆上下文</td><td>落盘；给模型看时截断（默认约 32k，<code>TASK_MAX_OUTPUT_LENGTH</code>）</td></tr>
+          <tr><td>查 / 停和「跑」混在一个工具</td><td><code>TaskOutput</code> / <code>TaskStop</code> 独立；<strong>优先 Read 输出文件</strong></td></tr>
+          <tr><td>模型不知道何时结束</td><td><code>&lt;task-notification&gt;</code> 走步间 attachments</td></tr>
+          <tr><td>Chat 必须进 Worker</td><td><code>exec_bg_start</code> / <code>poll</code> / <code>kill</code>；无 Worker 时同进程路径</td></tr>
+        </tbody>
+      </table>
+      <div class="callout why">
+        <strong>已删除：</strong>旧 <code>background</code> / <code>pid</code> / <code>kill</code> 挤在 Bash 上的 API。<br />
+        <strong>刻意不做：</strong>沙盒开关、Ctrl+B 前台转后台、超时自动 background、Stall watchdog。
+      </div>
+    </section>
+
+    <section class="card" id="api">
+      <h2>3. 模型侧 API</h2>
+
+      <h3>3.1 Bash / PowerShell</h3>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>command</code></td><td>必填</td></tr>
+          <tr><td><code>description</code></td><td>可选；UI / 通知文案</td></tr>
+          <tr><td><code>timeout</code></td><td>前台默认 <code>120000</code> ms；<strong>后台忽略</strong></td></tr>
+          <tr><td><code>run_in_background</code></td><td><code>true</code> → 立刻返回</td></tr>
+          <tr><td><code>stdin</code></td><td>后台模式<strong>不支持</strong></td></tr>
+        </tbody>
+      </table>
+
+      <p class="muted">工具结果文案（与代码一致）：</p>
+      <pre>Command running in background with ID: b3k9m2x1a. Output is being written to: …/.sessions/&lt;session&gt;/tasks/b3k9m2x1a.output</pre>
+      <p>结构化字段：<code>backgroundTaskId</code>、<code>backgrounded: true</code>。</p>
+
+      <p><strong>Prompt 约定（摘要）：</strong></p>
+      <ul>
+        <li>不需要立刻结果时才 background；<strong>不要</strong>在命令末尾加 <code>&amp;</code></li>
+        <li>完成后会有 <code>&lt;task-notification&gt;</code> → <strong>不要轮询</strong></li>
+        <li>优先 <strong>Read</strong> 结果 / 通知里的 output-file（session 路径允许在 cwd 外）</li>
+        <li>长驻进程（dev server）：可 <code>TaskOutput(block: false)</code> 看一眼启动日志，<strong>禁止</strong> <code>block: true</code>；用户要停再用 <code>TaskStop</code></li>
+        <li>Ask / Plan 模式：Bash、PowerShell、TaskOutput、TaskStop 均不可用</li>
+      </ul>
+
+      <h3>3.2 TaskOutput（次选；文档标 DEPRECATED）</h3>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>默认</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>task_id</code></td><td>—</td><td>后台任务 ID</td></tr>
+          <tr><td><code>block</code></td><td><code>true</code>（<code>block !== false</code>）</td><td>等到终态</td></tr>
+          <tr><td><code>timeout</code></td><td><code>30000</code>（最大 600000）</td><td>block 最长等待</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><code>block: false</code> → 非阻塞 peek（仍在跑时 <code>retrieval_status: not_ready</code>）</li>
+        <li>成功读到终态 → <code>markTaskNotified</code>，<strong>抑制</strong>后续 <code>&lt;task-notification&gt;</code> 重复</li>
+        <li>返回里带 <code>&lt;retrieval_status&gt;</code> / <code>&lt;task_id&gt;</code> / <code>&lt;status&gt;</code> / <code>&lt;output&gt;</code></li>
+      </ul>
+
+      <h3>3.3 TaskStop</h3>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>task_id</code></td><td>要停的任务</td></tr>
+          <tr><td><code>shell_id</code></td><td>兼容别名（等同 <code>task_id</code>）</td></tr>
+        </tbody>
+      </table>
+      <div class="callout ok">
+        Kill 后 <code>status=killed</code> 且 <strong><code>notified: true</code></strong> → <strong>不再</strong>入队完成通知；以工具结果为准。
+      </div>
+
+      <h3>3.4 <code>&lt;task-notification&gt;</code></h3>
+      <pre>&lt;task-notification&gt;
+&lt;task-id&gt;b3k9m2x1a&lt;/task-id&gt;
+&lt;output-file&gt;/path/to/.sessions/sess/tasks/b3k9m2x1a.output&lt;/output-file&gt;
+&lt;status&gt;completed&lt;/status&gt;
+&lt;summary&gt;Background command "npm run dev" completed (exit code 0)&lt;/summary&gt;
+&lt;/task-notification&gt;</pre>
+      <p class="muted"><code>status</code>：<code>completed</code> | <code>failed</code> | <code>killed</code>（自然退出路径；TaskStop 主动杀通常不出这条）。</p>
+    </section>
+
+    <section class="card" id="runtime">
+      <h2>4. 运行时两条路径</h2>
+      <table>
+        <thead>
+          <tr><th>场景</th><th>行为</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Chat（有 <code>context.execution</code>）</strong></td>
+            <td><code>spawnShellTask</code> → Worker <code>exec_bg_*</code>；输出写到约定 <code>outputPath</code></td>
+          </tr>
+          <tr>
+            <td><strong>测试 / 无 Worker</strong></td>
+            <td><code>utils/ShellCommand.ts</code> 同进程 spawn，同一套 registry / disk / 通知</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>共用：<code>task_id</code>、<code>framework</code> registry、<code>diskOutput</code>、TaskOutput / TaskStop、attachments。</p>
+      <p>控制面：<code>watchUntilDone</code> 约 <strong>400ms</strong> poll；TaskOutput block 约 <strong>100ms</strong> poll。</p>
+      <p><strong>落盘：</strong></p>
+      <ul>
+        <li>目录：<code>.sessions/{sessionId}/tasks/</code></li>
+        <li>文件：<code>{taskId}.output</code>（追加；磁盘硬顶约 5GB）</li>
+        <li><code>setTaskSessionId</code> 后再解析路径；<code>isReadableInternalPath</code> 允许 Read 会话内文件</li>
+      </ul>
+    </section>
+
+    <section class="card" id="code">
+      <h2>5. 代码地图</h2>
+      <div class="tree">src/
+  Task.ts                          # generateTaskId / TaskStatus / Task 接口
+  tasks.ts                         # getTaskByType → LocalShellTask
+  tasks/
+    stopTask.ts                    # TaskStop / HTTP stop 入口
+    LocalShellTask/
+      LocalShellTask.ts            # spawnShellTask + watchUntilDone + 通知
+      guards.ts
+      killShellTasks.ts            # killTask（设 notified）
+  utils/
+    ShellCommand.ts                # 无 Worker 同进程后台
+    task/
+      framework.ts                 # register / get / update / list / markNotified
+      pendingNotifications.ts
+      diskOutput.ts                # 路径与读写
+      outputFormatting.ts          # 截断给模型
+      TaskOutput.ts                # 薄封装（当前工具路径未用）
+  tools/
+    BashTool/  PowerShellTool/     # run_in_background（prompt 含用法）
+    shell-runner.ts                # 共享执行 + 后台分支
+    TaskOutputTool/
+    TaskStopTool/
+  execution/
+    runtime-protocol.ts            # exec_bg_*
+    worker-execution-backend.ts
+  worker/main.ts                   # Worker 侧进程表 + 写文件
+  server/router.ts                 # GET/POST …/tasks
+  core/session-paths.ts            # .sessions + ReadableInternalPath
+
+client/web/src/components/
+  BackgroundTerminals.jsx          # 输入框上方「N background terminals」
+  BashCard.jsx                     # 后台结果紧凑行
+  TaskOutputCard.jsx               # Waiting / Waited
+  TaskStopCard.jsx                 # Stopping / Stopped</div>
+
+      <table>
+        <thead>
+          <tr><th>本仓库</th><th>Claude Code</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Task.ts</code> / <code>utils/task/*</code> / <code>tasks/LocalShellTask/*</code></td><td>同名（CC 多为 <code>.tsx</code>）</td></tr>
+          <tr><td><code>TaskOutputTool</code> / <code>TaskStopTool</code></td><td>同名</td></tr>
+          <tr><td>BackgroundTerminals UI</td><td>≈ Cursor Composer footer（非 CC 工具名）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card" id="http">
+      <h2>6. HTTP / Web UI</h2>
+      <p>供前端面板，<strong>不是</strong>模型工具：</p>
+      <table>
+        <thead>
+          <tr><th>接口</th><th>作用</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>GET /sessions/:id/tasks</code></td>
+            <td>列表：id、type、status、description、起止时间、outputFile、command</td>
+          </tr>
+          <tr>
+            <td><code>POST /sessions/:id/tasks/:taskId/stop</code></td>
+            <td>停任务（走 <code>stopTask</code>）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>BackgroundTerminals</h3>
+      <ul>
+        <li>只展示 <code>running</code> / <code>pending</code></li>
+        <li>在 <code>isStreaming</code> <strong>或</strong> 仍有 running 任务时每 <strong>1.5s</strong> 刷新（避免中途 background 要等流结束才出现）</li>
+        <li>Stop → 上述 POST</li>
+      </ul>
+      <p class="muted">Transcript 卡片：后台 Bash 不展开 live terminal；TaskOutput / TaskStop 为独立行。</p>
+    </section>
+
+    <section class="card" id="vs-agent">
+      <h2>7. 和子代理的区别</h2>
+      <table>
+        <thead>
+          <tr><th></th><th>后台 Shell Task</th><th>Agent 子代理</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>跑什么</td><td>长驻 <strong>shell</strong></td><td>另一路 <strong>LLM 循环</strong></td></tr>
+          <tr><td>句柄</td><td><code>task_id</code>（<code>b…</code>）</td><td>tool_use / 子会话</td></tr>
+          <tr><td>工具</td><td>Bash + Read/TaskOutput + TaskStop</td><td>Agent 等</td></tr>
+        </tbody>
+      </table>
+      <div class="callout note">不要把 <code>task_id</code> 当成子代理 ID。</div>
+    </section>
+
+    <section class="card" id="usage">
+      <h2>8. 推荐用法</h2>
+
+      <h3>会结束的后台命令</h3>
+      <pre>{ "command": "sleep 2 &amp;&amp; echo done", "run_in_background": true, "description": "short sleep" }</pre>
+      <p>完成后等 <code>&lt;task-notification&gt;</code>，再 <strong>Read</strong> <code>output-file</code>。若要主动等：</p>
+      <pre>{ "task_id": "b……", "block": true, "timeout": 10000 }</pre>
+      <p class="muted">（TaskOutput；能 Read 则不必）</p>
+
+      <h3>长驻再停</h3>
+      <pre>{ "command": "npm run dev", "run_in_background": true, "description": "dev server" }</pre>
+      <pre>{ "task_id": "b……", "block": false }</pre>
+      <p class="muted">（可选 peek）</p>
+      <pre>{ "task_id": "b……" }</pre>
+      <p class="muted">（TaskStop，用户要求停时）</p>
+
+      <h3>本地单测（无 LLM）</h3>
+      <pre>npx tsx src/scripts/test-bash-tasks.ts
+npx tsx src/scripts/test-bash-tasks-live.ts   # 需后端在跑</pre>
+    </section>
+
+    <section class="card" id="tradeoffs">
+      <h2>9. 设计取舍</h2>
+      <table>
+        <thead>
+          <tr><th>选择</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>task_id</code> 而非 PID</td><td>稳定、可落盘、可通知、可跨工具引用</td></tr>
+          <tr><td>查停拆工具 + 优先 Read</td><td>与 CC 一致；大日志不进上下文</td></tr>
+          <tr><td>完成通知走 attachments</td><td>不改 agent 主循环</td></tr>
+          <tr><td>TaskStop 设 <code>notified</code></td><td>避免「已 Stop」再刷一条 completion XML</td></tr>
+          <tr><td>仅显式 <code>run_in_background</code></td><td>主路径清晰；自动转后台留以后</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card" id="refs">
+      <h2>10. 相关文档</h2>
+      <ul>
+        <li>LLM 标签（含 <code>task-notification</code>）：<a class="doc-link" href="./cc_docs/llm-prompt-xml-tags.md">docs/cc_docs/llm-prompt-xml-tags.md</a></li>
+        <li>Markdown 源（内容以此为准）：<a class="doc-link" href="./bash-task-system.md">docs/bash-task-system.md</a></li>
+      </ul>
+    </section>
+  </div>
+
+  <footer>Baize · Background Shell Task System · 与 bash-task-system.md 同步</footer>
+</body>
+</html>

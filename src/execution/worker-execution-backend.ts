@@ -196,6 +196,38 @@ export class WorkerExecutionBackend implements ExecutionBackend {
     )
   }
 
+  async execBgStart(opts: {
+    taskId: string
+    command: string
+    cwd: string
+    outputPath: string
+    shell?: ShellKind
+  }): Promise<{ pid: number }> {
+    return this.requestFs(
+      {
+        op: 'exec_bg_start',
+        taskId: opts.taskId,
+        command: opts.command,
+        cwd: opts.cwd,
+        outputPath: opts.outputPath,
+        shell: opts.shell,
+      },
+      30_000,
+    )
+  }
+
+  async execBgPoll(taskId: string): Promise<{
+    done: boolean
+    exitCode: number | null
+    killed?: boolean
+  }> {
+    return this.requestFs({ op: 'exec_bg_poll', taskId }, 15_000)
+  }
+
+  async execBgKill(taskId: string): Promise<void> {
+    await this.requestFs({ op: 'exec_bg_kill', taskId }, 15_000)
+  }
+
   async rg(
     args: string[],
     target: string,

@@ -4,6 +4,7 @@ import {
   isNotebookExtension,
   isPdfExtension,
 } from '../../constants/api_limits.js'
+import { isReadableInternalPath } from '../../core/session-paths.js'
 import { fileExtension, formatTextReadForModel, readTextFile } from './read-text.js'
 import { readImageFile } from './read-image.js'
 import { readNotebookFile } from './read-notebook.js'
@@ -34,6 +35,11 @@ export function resolveFileInCwd(
     : path.resolve(cwd, filePath)
   const rel = path.relative(cwd, abs)
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    // Claude Code: task output / tool-results live outside project cwd but
+    // are auto-allowed for Read (checkReadableInternalPath / project temp).
+    if (isReadableInternalPath(abs)) {
+      return { abs, displayPath: path.basename(abs) }
+    }
     return { error: `Path escapes workspace: ${filePath}` }
   }
   const displayPath = rel.split(path.sep).join('/') || path.basename(abs)

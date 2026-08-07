@@ -30,6 +30,20 @@ export interface ExecutionBackend {
       shell?: ShellKind
     },
   ): Promise<ExecResult & { cwdAfter?: string }>
+  /** Start background shell; output appended to outputPath on the Worker. */
+  execBgStart?(opts: {
+    taskId: string
+    command: string
+    cwd: string
+    outputPath: string
+    shell?: ShellKind
+  }): Promise<{ pid: number }>
+  execBgPoll?(taskId: string): Promise<{
+    done: boolean
+    exitCode: number | null
+    killed?: boolean
+  }>
+  execBgKill?(taskId: string): Promise<void>
   /**
    * Claude Code–style ripgrep: argv spawn on the Worker.
    * Exit codes 0 and 1 both succeed (1 = no matches → empty lines).

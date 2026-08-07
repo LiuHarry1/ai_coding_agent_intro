@@ -20,6 +20,8 @@ import ToolSearchCard from './ToolSearchCard.jsx'
 import SkillCard from './SkillCard.jsx'
 import McpToolCard from './McpToolCard.jsx'
 import SubagentStepFallback from './SubagentStepFallback.jsx'
+import TaskOutputCard from './TaskOutputCard.jsx'
+import TaskStopCard from './TaskStopCard.jsx'
 import { isFetchTool, isSearchTool } from '../lib/tool-kind.js'
 import { isMcpTool } from '../lib/tool-density.js'
 import { getToolChrome, getToolMeta } from '../lib/tool-registry-meta.js'
@@ -36,6 +38,8 @@ import {
   GREP,
   TOOL_SEARCH,
   SKILL,
+  TASK_OUTPUT,
+  TASK_STOP,
   SUPPRESSED_TOOL_CARDS,
   SUBAGENT_SUPPRESSED,
 } from '../lib/tool-names.js'
@@ -49,6 +53,8 @@ const TOOL_CARDS = {
   [LIST_DIR]: ListDirCard,
   [BASH]: BashCard,
   [POWERSHELL]: BashCard,
+  [TASK_OUTPUT]: TaskOutputCard,
+  [TASK_STOP]: TaskStopCard,
   [WEB_SEARCH]: WebSearchCard,
   [WEB_FETCH]: WebFetchCard,
   [GLOB]: GlobCard,

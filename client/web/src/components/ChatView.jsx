@@ -25,8 +25,14 @@ export default function ChatView() {
     }
   }, [])
 
+  // Only stick to bottom when the user is already near it — otherwise stream
+  // updates yank the viewport closed while they read an expanded Worked group
+  // (Cursor transcript keeps scroll position on disclosure).
   useEffect(() => {
-    scrollToBottom()
+    const el = scrollRef.current
+    if (!el) return
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (dist < 140) scrollToBottom()
   }, [messages, scrollToBottom])
 
   const handleScroll = useCallback(() => {
@@ -44,7 +50,7 @@ export default function ChatView() {
           <div className='messages'>
             {messages.map((msg, i) => (
               <MessageBubble
-                key={i}
+                key={msg.id ?? `msg-${i}-${msg.type}`}
                 message={msg}
                 isLast={i === messages.length - 1}
               />

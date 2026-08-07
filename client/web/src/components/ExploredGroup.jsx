@@ -8,6 +8,7 @@ import {
   summarizeToolSteps,
   detectToolError,
 } from '../lib/tool-density.js'
+import { toolPartKey } from '../lib/timeline.js'
 
 /**
  * Cursor-style "Explored N tools" group for consecutive built-in explore calls.
@@ -64,7 +65,10 @@ export default function ExploredGroup({ items }) {
           {items.map((item, i) => {
             const Card = pickCard(item, { nested: true })
             return (
-              <div className='explored-group-step' key={item.id ?? i}>
+              <div
+                className='explored-group-step'
+                key={toolPartKey(item, `step-${i}`)}
+              >
                 <Card part={item} nested />
               </div>
             )

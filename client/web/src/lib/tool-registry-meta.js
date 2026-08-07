@@ -24,6 +24,8 @@ import {
   SKILL,
   TODO_WRITE,
   ASK_USER_QUESTION,
+  TASK_OUTPUT,
+  TASK_STOP,
 } from './tool-names.js'
 
 /** @typedef {'line' | 'card'} ToolChrome */
@@ -48,6 +50,8 @@ export const TOOL_META = {
   [POWERSHELL]: { chrome: 'line' },
   bash: { chrome: 'line' },
   powershell: { chrome: 'line' },
+  [TASK_OUTPUT]: { chrome: 'line' },
+  [TASK_STOP]: { chrome: 'line' },
 
   [WRITE]: { chrome: 'card' },
   [EDIT]: { chrome: 'card' },

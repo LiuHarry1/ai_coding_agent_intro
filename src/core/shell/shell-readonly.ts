@@ -39,14 +39,11 @@ export function isShellCommandReadOnly(command: string): boolean {
 export function isShellInputConcurrencySafe(input: unknown): boolean {
   const args = input as {
     command?: string
+    run_in_background?: boolean
     background?: boolean
-    pid?: number
-    kill?: boolean
   }
 
-  if (args.background) return false
-  if (args.kill) return false
-  if (!args.command && args.pid != null) return true
+  if (args.run_in_background || args.background) return false
   if (!args.command) return false
   return isShellCommandReadOnly(args.command)
 }

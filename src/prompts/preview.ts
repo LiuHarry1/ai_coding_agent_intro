@@ -12,7 +12,7 @@ export function previewSection(): string {
 
   return `
 # Web preview
-- Remote container: user cannot open localhost - bind dev servers to 0.0.0.0, then call ${PUBLISH_PREVIEW_TOOL_NAME} after ${BASH_TOOL_NAME} (background: true).
+- Remote container: user cannot open localhost - bind dev servers to 0.0.0.0, then call ${PUBLISH_PREVIEW_TOOL_NAME} after ${BASH_TOOL_NAME} (\`run_in_background: true\`).
 - Share only the URL from ${PUBLISH_PREVIEW_TOOL_NAME}; avoid localhost in code and in replies.
 - CRITICAL - base path: The preview proxy routes via ${prefix}/<port>/. Apps MUST be configured to use this as their base path so assets and routes resolve correctly:
   - Vite: set \`base: "${prefix}/<port>/"\` in vite.config (or pass \`--base ${prefix}/<port>/\` to the CLI).

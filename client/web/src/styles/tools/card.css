@@ -269,6 +269,24 @@
 .live-terminal-output::-webkit-scrollbar-track { background: transparent; }
 .live-terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 
+/* ── Cursor ShellToolCallView chrome (ui-shell-tool-call*) ── */
+.ui-shell-tool-call__glass-stop {
+  margin-right: 2px;
+}
+
+.ui-shell-tool-call__output {
+  max-height: calc(5 * 1.55em + 24px);
+  overflow-y: auto;
+}
+
+.ui-shell-tool-call--backgrounded .tool-row-header {
+  opacity: 0.92;
+}
+
+.ui-shell-tool-call--backgrounded .tool-row-chevron {
+  visibility: hidden;
+}
+
 /* Light theme */
 
 [data-theme="light"] .tool-card.has-error { border-color: rgba(209,36,47,0.3); }

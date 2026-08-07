@@ -1,4 +1,8 @@
 import { isWindows } from '../../core/platform.js'
+import {
+  TASK_OUTPUT_TOOL_NAME,
+  TASK_STOP_TOOL_NAME,
+} from '../../constants/tool_names.js'
 
 const windowsNote = isWindows
   ? `
@@ -10,9 +14,7 @@ export const DESCRIPTION = `Run bash commands in the workspace shell.${windowsNo
 
 Modes:
 1. Run command — provide \`command\`. Blocks until completion, streams live output to the UI.
-2. Background — \`background: true\`. Returns PID immediately. Use ONLY for processes that don't exit on their own (dev servers, watchers).
-3. Check background — provide \`pid\` only.
-4. Kill background — provide \`pid\` + \`kill: true\`.
+2. Background — \`run_in_background: true\`. Only use this if you don't need the result immediately and are OK being notified when the command completes later. You do not need to check the output right away — you'll be notified when it finishes (\`<task-notification>\`). You do not need to use \`&\` at the end of the command. Prefer Read on the output-file path from the tool result (session task files are readable even outside the project cwd). For a non-blocking peek while still running, use ${TASK_OUTPUT_TOOL_NAME} with \`block: false\`. If waiting for a background task you started with \`run_in_background\`, you will be notified when it completes — do not poll. Long-lived processes (dev servers, watchers) never exit: after backgrounding, optionally Read/\`${TASK_OUTPUT_TOOL_NAME}\`(\`block: false\`) once to confirm startup, then reply to the user — do not use \`${TASK_OUTPUT_TOOL_NAME}\` with \`block: true\` on them; use ${TASK_STOP_TOOL_NAME} only when asked to stop.
 
 Working directory:
 - On Unix, the shell binary is \`$SHELL\` when it is bash/zsh/sh (else \`/bin/bash\`), spawned as a login shell (\`-lc\`) so \`PATH\` / aliases / version-manager init from profile scripts are picked up. On Windows (Git Bash), non-login \`-c\` + inherited process env (see Windows note above).
@@ -34,8 +36,8 @@ Issuing multiple commands:
 
 Constraints:
 - Non-interactive only — no TTY. Anything that prompts will hang until timeout.
-- Combined stdout+stderr capped at ~100KB; older output is truncated.
-- Default timeout 120s. Pass \`timeout\` for slower commands.
+- Combined stdout+stderr for foreground is capped; large background output is written to the task output file.
+- Default timeout 120s for foreground. Pass \`timeout\` for slower commands. Ignored when \`run_in_background\` is true.
 
 Workspace boundary:
 - Prefer dedicated tools (\`read_file\`, \`grep\`, \`glob\`, \`write_file\`, \`edit_file\`) for file I/O — they enforce the workspace boundary.
@@ -51,5 +53,3 @@ IMPORTANT: Avoid using this tool to run \`find\`, \`grep\`, \`cat\`, \`head\`, \
 - Write files: Use \`write_file\` (NOT echo >/cat <<EOF)
 
 Reserve this tool for system commands and terminal operations (git, package managers, build/test runners) and read-only directory checks (\`ls\`, \`git status\`, etc.).`
-
-

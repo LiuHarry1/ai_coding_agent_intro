@@ -27,6 +27,17 @@ export type WorkerFsOp =
       /** Default `bash` (Git Bash on Windows). Use `powershell` for the PowerShell tool. */
       shell?: ShellKind
     }
+  /** Background shell: spawn, write stdout/stderr to outputPath, return pid. */
+  | {
+      op: 'exec_bg_start'
+      taskId: string
+      command: string
+      cwd: string
+      outputPath: string
+      shell?: ShellKind
+    }
+  | { op: 'exec_bg_poll'; taskId: string }
+  | { op: 'exec_bg_kill'; taskId: string }
   /** Claude Code–style: spawn `rg` with argv; exit 0/1 both succeed. */
   | {
       op: 'rg'

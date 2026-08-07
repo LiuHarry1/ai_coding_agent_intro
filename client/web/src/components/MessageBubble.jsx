@@ -1,11 +1,38 @@
-import React, { useState } from 'react'
-import { buildAssistantTimeline } from '../lib/timeline.js'
+import React, { useCallback, useState } from 'react'
+import {
+  buildAssistantTimeline,
+  timelineRowKey,
+} from '../lib/timeline.js'
 import CompactionRow from './CompactionRow.jsx'
 import PartRenderer from './PartRenderer.jsx'
 import WorkGroup from './WorkGroup.jsx'
 
-export default function MessageBubble({ message, isLast = false }) {
+/**
+ * Assistant / user bubble.
+ *
+ * Work folds only appear on completed turns (Cursor default `U0m`).
+ * Expand state is keyed by stable work_group `rowId`
+ * (≈ `expansionOverrides` / `workGroupControl`).
+ */
+export default function MessageBubble({ message }) {
   const [lightbox, setLightbox] = useState(null)
+  const [expansionOverrides, setExpansionOverrides] = useState(
+    () => new Map(),
+  )
+
+  const isWorkOpen = useCallback(
+    rowId => expansionOverrides.get(rowId) ?? false,
+    [expansionOverrides],
+  )
+
+  const setWorkOpen = useCallback((rowId, open) => {
+    setExpansionOverrides(prev => {
+      if (prev.get(rowId) === open) return prev
+      const next = new Map(prev)
+      next.set(rowId, open)
+      return next
+    })
+  }, [])
 
   if (message.type === 'compact_boundary') {
     return (
@@ -45,38 +72,40 @@ export default function MessageBubble({ message, isLast = false }) {
 
   const { parts = [] } = message
   const messageStreaming = message.status === 'streaming'
-  const { rows, fold } = buildAssistantTimeline(parts, {
+  const { rows } = buildAssistantTimeline(parts, {
     streaming: messageStreaming,
+    messageId: message.id,
   })
 
-  const nodes = rows.map((part, i) => (
+  const renderPart = (part, i, rowCount) => (
     <PartRenderer
-      key={i}
+      key={timelineRowKey(part, i)}
       part={part}
       index={i}
-      rowCount={rows.length}
+      rowCount={rowCount}
       messageStreaming={messageStreaming}
     />
-  ))
-  const foldedNodes = fold ? nodes.slice(0, fold.split) : null
-  const showFold = !!fold && foldedNodes.some(n => n != null)
+  )
 
   return (
     <div className='msg msg-assistant'>
-      {showFold ? (
-        <>
-          <WorkGroup
-            durationMs={fold.durationMs}
-            runningTaskCount={fold.runningTaskCount}
-            defaultOpen={isLast && !messageStreaming}
-          >
-            {foldedNodes}
-          </WorkGroup>
-          {nodes.slice(fold.split)}
-        </>
-      ) : (
-        nodes
-      )}
+      {rows.map((row, i) => {
+        if (row.type === 'work_group') {
+          const kids = row.children || []
+          return (
+            <WorkGroup
+              key={row.rowId}
+              durationMs={row.durationMs}
+              runningTaskCount={row.runningTaskCount}
+              open={isWorkOpen(row.rowId)}
+              onOpenChange={open => setWorkOpen(row.rowId, open)}
+            >
+              {kids.map((child, j) => renderPart(child, j, kids.length))}
+            </WorkGroup>
+          )
+        }
+        return renderPart(row, i, rows.length)
+      })}
     </div>
   )
 }

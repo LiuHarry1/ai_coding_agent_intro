@@ -226,7 +226,13 @@ export const useChatStore = create((set, get) => ({
     if (!id) return
     try {
       const data = await agentApi.getSessionMessages(id)
-      if (data.messages?.length > 0) set({ messages: data.messages })
+      if (data.messages?.length > 0) {
+        set({
+          messages: data.messages.map(m =>
+            m.id ? m : { ...m, id: crypto.randomUUID() },
+          ),
+        })
+      }
     } catch (err) {
       // Agent restart drops in-memory sessions; drop stale localStorage id.
       if (
@@ -314,11 +320,17 @@ export const useChatStore = create((set, get) => ({
       messages: [
         ...s.messages,
         {
+          id: crypto.randomUUID(),
           type: 'user',
           content: text,
           images: images.length > 0 ? images : undefined,
         },
-        { type: 'assistant', parts: [], status: 'streaming' },
+        {
+          id: crypto.randomUUID(),
+          type: 'assistant',
+          parts: [],
+          status: 'streaming',
+        },
       ],
     }))
 
@@ -533,8 +545,9 @@ export const useChatStore = create((set, get) => ({
             }
             break
           case 'reasoning_start':
-            store._removeThinking()
-            store._startReasoning()
+            // Single set: drop placeholder + start reasoning (avoid WorkGroup
+            // remount gap from removeThinking then _startReasoning).
+            store._replaceThinkingWithReasoning()
             break
           case 'reasoning_end':
             store._finalizeReasoning()
@@ -550,8 +563,7 @@ export const useChatStore = create((set, get) => ({
             store._updateTodos(data.todos)
             break
           case 'tool_input_start':
-            store._removeThinking()
-            store._appendPart({
+            store._beginToolCall({
               type: 'tool_call',
               name: data.name,
               toolCallId: toolUseId(data),
@@ -686,6 +698,38 @@ export const useChatStore = create((set, get) => ({
     })
   },
 
+  /** Drop Thinking... placeholder and start a reasoning block in one update. */
+  _replaceThinkingWithReasoning: () => {
+    set(s => {
+      const msgs = [...s.messages]
+      const last = msgs[msgs.length - 1]
+      if (last?.type !== 'assistant') return s
+      const parts = last.parts.filter(p => p.type !== 'thinking')
+      parts.push({
+        id: crypto.randomUUID(),
+        type: 'reasoning',
+        content: '',
+        status: 'streaming',
+        startTime: Date.now(),
+      })
+      msgs[msgs.length - 1] = { ...last, parts }
+      return { messages: msgs }
+    })
+  },
+
+  /** Drop Thinking... and append a tool_call in one update (no fold remount gap). */
+  _beginToolCall: part => {
+    set(s => {
+      const msgs = [...s.messages]
+      const last = msgs[msgs.length - 1]
+      if (last?.type !== 'assistant') return s
+      const parts = last.parts.filter(p => p.type !== 'thinking')
+      parts.push(part)
+      msgs[msgs.length - 1] = { ...last, parts }
+      return { messages: msgs }
+    })
+  },
+
   _startReasoning: () => {
     set(s => {
       const msgs = [...s.messages]
@@ -693,6 +737,7 @@ export const useChatStore = create((set, get) => ({
       if (last?.type !== 'assistant') return s
       const parts = [...last.parts]
       parts.push({
+        id: crypto.randomUUID(),
         type: 'reasoning',
         content: '',
         status: 'streaming',
@@ -1234,3 +1279,8 @@ export const useChatStore = create((set, get) => ({
     })
   },
 }))
+
+// Dev-only: browser / CDP harness can inject transcript fixtures.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  window.__BAIZE_CHAT_STORE__ = useChatStore
+}

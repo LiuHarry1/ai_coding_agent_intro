@@ -20,6 +20,9 @@ import {
 } from './lsp-host.js'
 import type { LspServerConfig } from '../core/types.js'
 import { runShellCommand, type ShellKind } from '../core/shell/spawn-shell.js'
+import { prepareShellSpawn } from '../core/shell/spawn-shell.js'
+import { forceKillChild } from '../core/platform.js'
+import { spawn, type ChildProcess } from 'child_process'
 import { runRg } from './run-rg.js'
 
 const WORKER_VERSION =
@@ -30,6 +33,28 @@ const WORKER_VERSION =
 let boundCwd: string | null = null
 let boundEnvId = 'local'
 let shuttingDown = false
+
+type BgEntry = {
+  taskId: string
+  child: ChildProcess
+  done: boolean
+  exitCode: number | null
+  killed: boolean
+}
+
+const bgByTask = new Map<string, BgEntry>()
+
+process.on('exit', () => {
+  for (const e of bgByTask.values()) {
+    if (!e.done) {
+      try {
+        forceKillChild(e.child)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+})
 
 function send(msg: RuntimeServerMessage): void {
   process.stdout.write(`${JSON.stringify(msg)}\n`)
@@ -77,6 +102,68 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
         timeoutMs: op.timeoutMs ?? 120_000,
         cwdFilePrefix: 'baix-worker-cwd',
       })
+    case 'exec_bg_start': {
+      await fs.promises.mkdir(path.dirname(op.outputPath), { recursive: true })
+      await fs.promises.writeFile(op.outputPath, '', 'utf-8')
+      const prepared = prepareShellSpawn({
+        shell: (op.shell ?? 'bash') as ShellKind,
+        userCommand: op.command,
+        cwdFilePrefix: 'baix-worker-bg-cwd',
+      })
+      const child = spawn(prepared.command, prepared.args, {
+        cwd: op.cwd,
+        env: prepared.env,
+        windowsHide: true,
+        detached: process.platform !== 'win32',
+      })
+      const entry: BgEntry = {
+        taskId: op.taskId,
+        child,
+        done: false,
+        exitCode: null,
+        killed: false,
+      }
+      const append = (chunk: Buffer) => {
+        try {
+          fs.appendFileSync(op.outputPath, chunk)
+        } catch {
+          /* ignore */
+        }
+      }
+      child.stdout?.on('data', append)
+      child.stderr?.on('data', append)
+      child.on('close', code => {
+        entry.done = true
+        entry.exitCode = code
+      })
+      child.on('error', () => {
+        entry.done = true
+        entry.exitCode = 1
+      })
+      bgByTask.set(op.taskId, entry)
+      const pid = child.pid
+      if (pid == null) throw new Error('Failed to spawn background process')
+      return { pid }
+    }
+    case 'exec_bg_poll': {
+      const e = bgByTask.get(op.taskId)
+      if (!e) {
+        return { done: true, exitCode: null, killed: false }
+      }
+      return {
+        done: e.done,
+        exitCode: e.exitCode,
+        killed: e.killed,
+      }
+    }
+    case 'exec_bg_kill': {
+      const e = bgByTask.get(op.taskId)
+      if (e && !e.done) {
+        e.killed = true
+        forceKillChild(e.child)
+      }
+      return { ok: true }
+    }
     case 'rg':
       return runRg({
         args: op.args,

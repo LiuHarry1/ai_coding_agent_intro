@@ -208,6 +208,59 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
       return
     }
 
+    // Background shell tasks (CC BackgroundTasksDialog / Cursor background terminals)
+    const tasksListMatch = url?.match(/^\/sessions\/([^/]+)\/tasks$/)
+    if (method === 'GET' && tasksListMatch) {
+      const id = tasksListMatch[1]!
+      const session = getSession(id)
+      if (
+        !session ||
+        !canAccessSession(session, authed.user?.email, authed.user?.role)
+      ) {
+        sendJSON(res, 404, { error: 'Session not found' })
+        return
+      }
+      const { listSessionTasks } = await import('../utils/task/framework.js')
+      const tasks = listSessionTasks(id).map(t => ({
+        id: t.id,
+        type: t.type,
+        status: t.status,
+        description: t.description,
+        startTime: t.startTime,
+        endTime: t.endTime,
+        outputFile: t.outputFile,
+        command: 'command' in t ? (t as { command?: string }).command : undefined,
+      }))
+      sendJSON(res, 200, { tasks })
+      return
+    }
+    const taskStopMatch = url?.match(/^\/sessions\/([^/]+)\/tasks\/([^/]+)\/stop$/)
+    if (method === 'POST' && taskStopMatch) {
+      const id = taskStopMatch[1]!
+      const taskId = taskStopMatch[2]!
+      const session = getSession(id)
+      if (
+        !session ||
+        !canAccessSession(session, authed.user?.email, authed.user?.role)
+      ) {
+        sendJSON(res, 404, { error: 'Session not found' })
+        return
+      }
+      try {
+        const { resolveExecutionBackend } = await import(
+          '../execution/resolve-backend.js'
+        )
+        const { stopTask } = await import('../tasks/stopTask.js')
+        const execution = await resolveExecutionBackend(session)
+        const result = await stopTask(id, taskId, execution)
+        sendJSON(res, 200, result)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        sendJSON(res, 400, { error: msg })
+      }
+      return
+    }
+
     if (method === 'GET' && url?.startsWith('/settings')) {
       const cwd = resolveSettingsRequestCwd(authed, url)
       const effective = await resolveEffectiveSettings(cwd)

@@ -20,11 +20,26 @@ import {
 import { getLspWorkspaceKey, hasLspServers } from '../services/lsp/manager.js'
 import { BASH_TOOL_NAME } from '../constants/tool_names.js'
 import { getAgentListingDeltaAttachments } from '../tools/AgentTool/agentListing.js'
+import { drainTaskNotifications } from '../utils/task/pendingNotifications.js'
 
 function getSkillListingAttachments(ctx: ToolUseContext): Attachment[] {
   const content = ctx.skillListingContent?.trim()
   if (!content) return []
   return [{ type: 'skill_listing', content }]
+}
+
+function getTaskNotificationAttachments(ctx: ToolUseContext): Attachment[] {
+  const sessionId = ctx.session?.id
+  if (!sessionId) return []
+  return drainTaskNotifications(sessionId).map(n => ({
+    type: 'task_notification' as const,
+    taskId: n.taskId,
+    outputFile: n.outputFile,
+    status: n.status,
+    summary: n.summary,
+    toolUseId: n.toolUseId,
+    rawXml: n.rawXml,
+  }))
 }
 
 async function maybe<A>(label: string, f: () => Promise<A[]>): Promise<A[]> {
@@ -102,6 +117,9 @@ export async function getAttachments(
 
   const mainThreadAttachments = [
     maybe('lsp_diagnostics', () => getLSPDiagnosticAttachments(toolUseContext)),
+    maybe('task_notifications', () =>
+      Promise.resolve(getTaskNotificationAttachments(toolUseContext)),
+    ),
   ]
 
   const [userResults, threadResults, mainResults] = await Promise.all([

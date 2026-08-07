@@ -112,9 +112,8 @@
   color: var(--text-secondary);
 }
 
-/* ── Turn-level work fold (Cursor `workGroup`) ──────────────────
-   Collapses a finished turn's work rows behind one header; the final
-   assistant message stays outside the fold. */
+/* ── Turn-level work fold (Cursor default `workGroup`) ──────────
+   Only on completed turns; final answer stays outside the fold. */
 .work-group {
   margin: 2px 0 4px;
 }
@@ -133,6 +132,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 4px;
+}
+.work-group.active .work-group-header {
+  color: var(--text-primary);
 }
 .work-group-header:hover {
   background: rgba(255, 255, 255, 0.04);
@@ -163,9 +165,8 @@
 .work-group-body {
   margin: 2px 0 4px 18px;
 }
-/* Intra-turn fold inside a live tool_group */
-.tool-group > .work-group {
-  margin: 0 0 2px;
+.work-group-body[hidden] {
+  display: none !important;
 }
 
 [data-theme="light"] .subagent-timeline-subtitle {

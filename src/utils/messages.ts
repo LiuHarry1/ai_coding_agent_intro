@@ -190,6 +190,12 @@ You have exited plan mode. You can now make edits, run tools, and take actions.$
         metaUserMessage(parts.join('\n\n')),
       ])
     }
+
+    case 'task_notification': {
+      return wrapMessagesInSystemReminder([
+        metaUserMessage(attachment.rawXml),
+      ])
+    }
   }
 }
 

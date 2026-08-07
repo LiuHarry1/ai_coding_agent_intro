@@ -19,6 +19,8 @@ export const SKILL = 'Skill'
 export const AGENT = 'Agent'
 export const ENTER_PLAN_MODE = 'EnterPlanMode'
 export const EXIT_PLAN_MODE = 'ExitPlanMode'
+export const TASK_OUTPUT = 'TaskOutput'
+export const TASK_STOP = 'TaskStop'
 
 /** Shown elsewhere (TodoListCard) — hide duplicate tool_call rows. */
 export const SUPPRESSED_TOOL_CARDS = new Set([

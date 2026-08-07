@@ -6,8 +6,8 @@ import { getMdComponents } from '../lib/markdown-components.jsx'
 
 /**
  * Cursor-like thinking row: one-line label while streaming; body only when
- * the user expands (or after done if they open it). Avoids flooding the
- * transcript with reasoning markdown mid-turn.
+ * the user expands. Never auto-open — stream updates must not dump reasoning
+ * (or leaked system-reminder / tool-prompt text) into the transcript.
  */
 export default function ReasoningBlock({ part }) {
   const [open, setOpen] = useState(false)
@@ -18,11 +18,22 @@ export default function ReasoningBlock({ part }) {
     ? 'Thinking...'
     : `Thought for ${part.duration ?? 0}s`
 
-  const showBody = open && !!part.content
+  // Strip agent-facing reminder wrappers if the model echoed them into reasoning.
+  const displayContent = (part.content || '')
+    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
+    .replace(/<task-notification>[\s\S]*?<\/task-notification>/gi, '')
+    .trim()
+
+  const showBody = open && !!displayContent
 
   return (
     <div className={`reasoning-block ${isStreaming ? 'streaming' : 'done'}`}>
-      <button className='reasoning-toggle' onClick={() => setOpen(v => !v)}>
+      <button
+        type='button'
+        className='reasoning-toggle'
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+      >
         <svg
           className={`reasoning-arrow ${open ? 'open' : ''}`}
           width='12'
@@ -48,7 +59,7 @@ export default function ReasoningBlock({ part }) {
             rehypePlugins={[rehypeHighlight]}
             components={mdComponents}
           >
-            {part.content}
+            {displayContent}
           </ReactMarkdown>
         </div>
       )}

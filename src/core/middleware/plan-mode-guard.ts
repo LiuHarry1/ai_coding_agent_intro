@@ -8,13 +8,20 @@ import { isSessionPlanFile } from '../../utils/plans.js'
 import {
   BASH_TOOL_NAME,
   POWERSHELL_TOOL_NAME,
+  TASK_OUTPUT_TOOL_NAME,
+  TASK_STOP_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
   AGENT_TOOL_NAME,
   TODO_WRITE_TOOL_NAME,
 } from '../../constants/tool_names.js'
 
-const SHELL_TOOLS = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME])
+const SHELL_TOOLS = new Set([
+  BASH_TOOL_NAME,
+  POWERSHELL_TOOL_NAME,
+  TASK_OUTPUT_TOOL_NAME,
+  TASK_STOP_TOOL_NAME,
+])
 const FILE_MUTATING = new Set([WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME])
 
 export class PlanModeGuardError extends Error {
