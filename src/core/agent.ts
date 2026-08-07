@@ -49,6 +49,13 @@ import {
   runToolCalls,
 } from '../services/tools/tool_execution.js'
 import {
+  createDumpPromptsRecorder,
+  createNoopDumpPromptsRecorder,
+  isDumpPromptsEnabled,
+  toolsForDump,
+  type DumpPromptsRecorder,
+} from '../services/api/dumpPrompts.js'
+import {
   BASH_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
@@ -334,6 +341,14 @@ export async function runAgent(
       ? maxSteps
       : Number.POSITIVE_INFINITY
 
+  // CC query.ts: create dump recorder once per agent run (not per step).
+  const dumpKey = logLabel
+    ? `${sessionId ?? 'unknown'}__${logLabel}`
+    : (sessionId ?? 'unknown')
+  const dumpPrompts: DumpPromptsRecorder = isDumpPromptsEnabled()
+    ? createDumpPromptsRecorder(dumpKey)
+    : createNoopDumpPromptsRecorder()
+
   try {
     for (let step = 0; step < stepLimit; step++) {
       if (abortSignal?.aborted) {
@@ -382,6 +397,7 @@ export async function runAgent(
         logLabel,
         abortSignal,
         readFileState: toolUseContext?.readFileState,
+        dumpPrompts,
       })
 
       if (stepResult === null) {
@@ -676,6 +692,8 @@ interface RunOneStepArgs {
   logLabel?: string
   abortSignal?: AbortSignal
   readFileState?: import('../utils/attachments/types.js').ReadFileState
+  /** CC dump-prompts recorder (one per runAgent). */
+  dumpPrompts?: DumpPromptsRecorder
 }
 
 /**
@@ -707,6 +725,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     abortSignal,
   } = args
 
+  const dumpPrompts = args.dumpPrompts ?? createNoopDumpPromptsRecorder()
   const apiTools = stripToolExecute(tools)
   const executors = tools
 
@@ -717,6 +736,36 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
 
   while (true) {
     try {
+      // Final API-bound messages (same array streamText receives).
+      const apiMessages = applyCacheControlBreakpoint(
+        projectMessagesForApi(
+          ensureToolResultPairing(
+            smooshSystemReminderSiblings(
+              mergeAdjacentUserMessages(
+                regroupToolResults(
+                  expandAttachmentMessagesForAPI(
+                    inlineReasoningAsText(messages),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        provider,
+      ) as RoleMessage[]
+
+      // CC dumpRequest equivalent — async; does not block TTFB.
+      const dumpTs = dumpPrompts.dumpRequest({
+        model: resolvedModel,
+        system: systemPrompt,
+        messages: apiMessages,
+        tools: toolsForDump(apiTools),
+        ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
+        provider: provider.describe(),
+        step,
+        logLabel: logLabel ?? 'main',
+      })
+
       const stream = streamText({
         model: provider.chatModel(resolvedModel),
         system: systemPrompt,
@@ -736,22 +785,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         //      tool-results.
         //   7. projectMessagesForApi -- drop toolUseResult (UI envelope).
         //   8. applyCacheControlBreakpoint -- prompt caching marker.
-        messages: applyCacheControlBreakpoint(
-          projectMessagesForApi(
-            ensureToolResultPairing(
-              smooshSystemReminderSiblings(
-                mergeAdjacentUserMessages(
-                  regroupToolResults(
-                    expandAttachmentMessagesForAPI(
-                      inlineReasoningAsText(messages),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          provider,
-        ) as RoleMessage[],
+        messages: apiMessages,
         // Schema-only tools -- execution is handled by toolOrchestration so
         // we can batch concurrency-safe reads in parallel.
         tools: apiTools,
@@ -840,6 +874,19 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           }
         }
       }
+
+      // CC dumpResponse equivalent — assistant content + usage for this call.
+      dumpPrompts.dumpResponse(dumpTs, {
+        messages: sdkMessages,
+        usage,
+        toolCalls: stepResult.toolCalls.map(tc => ({
+          toolName: tc.toolName,
+          toolCallId: tc.toolCallId,
+          input: tc.input,
+        })),
+        step,
+        logLabel: logLabel ?? 'main',
+      })
 
       logStepCompletion({
         step,
