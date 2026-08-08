@@ -7,13 +7,14 @@
  * as `baseDir` so the skill body can reference its own bundled assets via
  * `${SKILL_DIR}` substitution in `tools/SkillTool/SkillTool.ts`.
  *
- * Layout:
+ * Layout (CC loadSkillsDir + managedPath):
  *
- *   <ancestor>/.ai-agent/skills/<skill-name>/SKILL.md   # project-scope
- *   ~/.ai-agent/skills/<skill-name>/SKILL.md             # user-scope
+ *   {managed}/.ai-agent/skills/<name>/SKILL.md   # policy / managed
+ *   ~/.ai-agent/skills/<name>/SKILL.md             # user
+ *   <ancestor>/.ai-agent/skills/<name>/SKILL.md    # project
  *
- * Precedence on duplicate skill name (highest wins): deepest project dir →
- * shallower project dirs → user dir.
+ * Precedence on duplicate name (highest wins): managed → deepest project →
+ * user. Set CLAUDE_CODE_DISABLE_POLICY_SKILLS to skip managed (CC env name).
  *
  * Frontmatter:
  *
@@ -44,8 +45,13 @@ import matter from 'gray-matter'
 import ignore from 'ignore'
 import type { SkillDefinition, SkillContextMode } from './types.js'
 import type { ExtensionSource } from '../utils/markdownConfigLoader.js'
-import { getProjectAppDirsUpToHome, getUserSubdir } from '../utils/app-dir.js'
+import { getProjectAppDirsUpToHome } from '../utils/app-dir.js'
+import {
+  getExtensionDir,
+  isPolicySkillsDisabled,
+} from '../utils/managed-path.js'
 import { parseArgumentNames, parseString } from '../utils/frontmatterParser.js'
+import { sourceRank } from '../utils/markdownConfigLoader.js'
 
 export interface SkillLoadResult {
   skill: SkillDefinition | null
@@ -292,11 +298,11 @@ function getProjectSkillsDirsUpToHome(cwd: string): string[] {
 }
 
 /**
- * Scan user + project skill directories for skill folders.
+ * Scan managed + user + project skill directories.
  *
- * Precedence (highest wins on duplicate name):
- *   1. `<cwd>/.ai-agent/skills/` and ancestors up to home (workspace/project)
- *   2. `~/.ai-agent/skills/` (user / root-level baked config)
+ * Precedence on duplicate **name** (highest wins): managed → deepest project
+ * → user. (CC dedupes by inode and may keep same-name skills from different
+ * files; we collapse by name for a single skill tool catalog.)
  *
  * This is intentionally unmemoized — the router calls it per chat request
  * so a user editing a SKILL.md sees the change on the next message
@@ -307,23 +313,28 @@ export async function loadSkillsFromDisk(cwd: string): Promise<{
   skills: SkillDefinition[]
   errors: Array<{ filePath: string; error: string }>
 }> {
-  const userDir = getUserSubdir('skills')
+  const userDir = getExtensionDir('user', 'skills')
+  const managedDir = getExtensionDir('managed', 'skills')
   const projectDirs = getProjectSkillsDirsUpToHome(cwd)
+  const skipManaged = isPolicySkillsDisabled()
 
-  const [userResults, ...projectResultsByDir] = await Promise.all([
-    loadSkillsFromDir(userDir, 'user'),
-    ...projectDirs.map(d => loadSkillsFromDir(d, 'project')),
-  ])
+  const [managedResults, userResults, ...projectResultsByDir] =
+    await Promise.all([
+      skipManaged
+        ? Promise.resolve([] as SkillLoadResult[])
+        : loadSkillsFromDir(managedDir, 'managed'),
+      loadSkillsFromDir(userDir, 'user'),
+      ...projectDirs.map(d => loadSkillsFromDir(d, 'project')),
+    ])
 
   const errors: Array<{ filePath: string; error: string }> = []
 
-  // Fill order: user first (lowest priority), then project dirs SHALLOWEST
-  // → DEEPEST so the deepest dir overwrites everything. `projectDirs` is
-  // already deepest-first (see getProjectSkillsDirsUpToHome), so iterate
-  // it in reverse here.
+  // Lowest → highest so Map last-write wins: user, project shallow→deep, managed.
+  // `projectDirs` is deepest-first; reverse for shallow-first among project.
   const orderedResults = [
     ...userResults,
     ...projectResultsByDir.slice().reverse().flat(),
+    ...managedResults,
   ]
 
   const byName = new Map<string, SkillDefinition>()
@@ -343,24 +354,28 @@ export async function loadSkillsFromDisk(cwd: string): Promise<{
   return { skills: [...byName.values()], errors }
 }
 
+function skillSourceRank(source: SkillDefinition['source']): number {
+  if (source === 'built-in') return -1
+  return sourceRank(source)
+}
+
 /**
- * Merge skill lists by name. Inputs are ordered LOWEST priority first, so
- * later lists override earlier ones on duplicate names. Used to layer disk
- * skills (`.ai-agent/skills/`) on top of plugin-contributed skills.
+ * Merge skill lists by name using `sourceRank` (managed > project > user >
+ * plugin). Same-rank later entries still win.
  */
 export function mergeSkillsByName(
   ...lists: ReadonlyArray<readonly SkillDefinition[]>
 ): SkillDefinition[] {
   const byName = new Map<string, SkillDefinition>()
-  for (const list of lists) {
-    for (const skill of list) {
-      if (byName.has(skill.name)) {
-        console.log(
-          `[skills] overriding '${skill.name}' from ${skill.filePath ?? skill.baseDir}`,
-        )
-      }
-      byName.set(skill.name, skill)
+  const flat = lists.flat()
+  flat.sort((a, b) => skillSourceRank(a.source) - skillSourceRank(b.source))
+  for (const skill of flat) {
+    if (byName.has(skill.name)) {
+      console.log(
+        `[skills] overriding '${skill.name}' from ${skill.filePath ?? skill.baseDir}`,
+      )
     }
+    byName.set(skill.name, skill)
   }
   return [...byName.values()]
 }

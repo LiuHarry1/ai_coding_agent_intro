@@ -25,16 +25,24 @@ const LSP_STATUS_BADGE = {
   error: { className: 'ws-badge--error', label: 'error' },
 }
 
-const AGENT_SOURCE_ORDER = ['project', 'user', 'plugin', 'built-in']
+const AGENT_SOURCE_ORDER = [
+  'managed',
+  'project',
+  'user',
+  'plugin',
+  'built-in',
+]
 const AGENT_SOURCE_LABELS = {
+  managed: 'Managed',
   project: 'Project',
   user: 'User',
   plugin: 'Plugin',
   'built-in': 'Built-in',
 }
 
-const SKILL_SOURCE_ORDER = ['project', 'user', 'plugin']
+const SKILL_SOURCE_ORDER = ['managed', 'project', 'user', 'plugin']
 const SKILL_SOURCE_LABELS = {
+  managed: 'Managed',
   project: 'Project',
   user: 'User',
   plugin: 'Plugin',

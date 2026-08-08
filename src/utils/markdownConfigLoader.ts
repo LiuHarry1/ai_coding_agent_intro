@@ -5,15 +5,13 @@
  * with bundled assets, not flat `.md` files — but both share the project
  * directory walk in `utils/app-dir.ts`.
  *
- * Directory layout:
+ * Directory layout (CC markdownConfigLoader + managedPath):
  *
- *   <ancestor>/.ai-agent/agents/ (recursive .md)
- *   <ancestor>/.ai-agent/commands/ (recursive .md)
+ *   {managed}/.ai-agent/agents|commands/   # policySettings
+ *   ~/.ai-agent/agents|commands/
+ *   <ancestor>/.ai-agent/agents|commands/
  *
- *   ~/.ai-agent/agents/*.md
- *   ~/.ai-agent/commands/*.md
- *
- * Resolution: deepest project dir wins, project beats user.
+ * Resolution: managed > deepest project > user > plugin.
  */
 
 import { promises as fs } from 'fs'
@@ -24,20 +22,20 @@ import {
   getProjectAppDirsUpToHome,
   getUserSubdir,
 } from './app-dir.js'
+import { getExtensionDir } from './managed-path.js'
 
 /** Flat-file kinds. Skills live in folders and use their own loader. */
 export type FlatMarkdownKind = 'agents' | 'commands'
 
 /**
- * Where an extension was discovered. `"plugin"` is the lowest priority so
- * local `.ai-agent/` config always overrides a plugin's contribution of the
- * same name (see `sourceRank`).
+ * Where an extension was discovered. `"plugin"` is lowest; `"managed"` is
+ * policy (CC `policySettings`) and highest (see `sourceRank`).
  */
-export type ExtensionSource = 'plugin' | 'user' | 'project'
+export type ExtensionSource = 'plugin' | 'user' | 'project' | 'managed'
 
 /**
- * Override precedence (higher wins on duplicate name): project > user > plugin.
- * Shared by `mergeAgents` / `mergeCommands` so the rule lives in one place.
+ * Override precedence (higher wins on duplicate name):
+ * managed > project > user > plugin (CC policySettings spirit).
  */
 export function sourceRank(source: ExtensionSource): number {
   switch (source) {
@@ -47,6 +45,8 @@ export function sourceRank(source: ExtensionSource): number {
       return 1
     case 'project':
       return 2
+    case 'managed':
+      return 3
   }
 }
 
@@ -177,34 +177,46 @@ export async function loadMarkdownFile(
 }
 
 /**
- * Load all `.md` files for a flat extension kind from user + project dirs.
+ * Load all `.md` files for a flat extension kind.
+ * CC always loads managed; then user + project (when enabled).
  *
- * Returned order: project files (shallow → deep), then user files. Per-kind
- * parsers fill a Map keyed by `name` from this list — the last write wins,
- * so deeper project paths override shallower ones, which override user files.
+ * Returned list is unordered for merge purposes — callers sort via
+ * `sourceRank` (managed wins on name collision).
  */
 export async function loadMarkdownConfigs(
   kind: FlatMarkdownKind,
   cwd: string,
 ): Promise<MarkdownFile[]> {
-  // `getProjectAppDirsUpToHome` returns deepest-first; we want shallow-first
-  // here so a later in-Map write from a deeper dir overrides.
+  // `getProjectAppDirsUpToHome` returns deepest-first; reverse → shallow-first
+  // so deeper project paths still win among project sources when sorted equal.
   const projectAppDirs = getProjectAppDirsUpToHome(cwd).slice().reverse()
-  const userDir = getUserSubdir(kind)
+  const userDir = getExtensionDir('user', kind)
+  const managedDir = getExtensionDir('managed', kind)
+  // projectAppDirs are already `…/.ai-agent` roots; kind dir = join(appDir, kind)
+  // ≡ getExtensionDir('project', kind, ancestor) when ancestor = dirname(appDir).
 
-  const projectLoads = await Promise.all(
-    projectAppDirs.map(async appDir => {
-      const kindDir = path.join(appDir, kind)
-      const paths = await listMarkdownFiles(kindDir)
-      return Promise.all(paths.map(p => readAndParse(p, kindDir, 'project')))
-    }),
+  const [managedPaths, userPaths, ...projectPathLists] = await Promise.all([
+    listMarkdownFiles(managedDir),
+    listMarkdownFiles(userDir),
+    ...projectAppDirs.map(appDir =>
+      listMarkdownFiles(path.join(appDir, kind)),
+    ),
+  ])
+
+  const managedFiles = await Promise.all(
+    managedPaths.map(p => readAndParse(p, managedDir, 'managed')),
   )
-  const userPaths = await listMarkdownFiles(userDir)
   const userFiles = await Promise.all(
     userPaths.map(p => readAndParse(p, userDir, 'user')),
   )
+  const projectFilesNested = await Promise.all(
+    projectPathLists.map((paths, i) => {
+      const kindDir = path.join(projectAppDirs[i]!, kind)
+      return Promise.all(paths.map(p => readAndParse(p, kindDir, 'project')))
+    }),
+  )
 
-  return [...projectLoads.flat(), ...userFiles].filter(
+  return [...managedFiles, ...userFiles, ...projectFilesNested.flat()].filter(
     (f): f is MarkdownFile => f !== null,
   )
 }
@@ -212,7 +224,7 @@ export async function loadMarkdownConfigs(
 /** Where would a user/project file for `kind` named `name` live? */
 export function suggestedPath(
   kind: FlatMarkdownKind,
-  scope: ExtensionSource,
+  scope: Exclude<ExtensionSource, 'plugin' | 'managed'>,
   name: string,
   cwd: string,
 ): string {

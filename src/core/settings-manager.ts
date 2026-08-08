@@ -21,6 +21,11 @@ import {
   LOCAL_SETTINGS_FILE_NAME,
   SETTINGS_FILE_NAME,
 } from '../utils/app-dir.js'
+import {
+  getManagedDir,
+  getManagedSettingsDropInDir,
+  getManagedSettingsPath,
+} from '../utils/managed-path.js'
 
 function defaultModels(): ModelProfiles {
   const large = { ...DEFAULT_PROFILE }
@@ -107,7 +112,11 @@ export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
   }
 }
 
-export type SettingsScope = 'user' | 'project' | 'local'
+/** Writable scopes — excludes managed (CC EditableSettingSource). */
+export type WritableSettingsScope = 'user' | 'project' | 'local'
+
+/** All settings sources including policy/managed (CC SettingSource). */
+export type SettingsScope = WritableSettingsScope | 'managed'
 
 export interface SettingsSource {
   scope: SettingsScope
@@ -125,6 +134,8 @@ export interface ResolvedSettings {
   userPath: string
   projectPath: string
   localPath: string
+  managedDir: string
+  managedPath: string
 }
 
 export interface EffectiveSettings extends ResolvedSettings {
@@ -177,16 +188,182 @@ export function resolveSettingsPaths(cwd: string): {
   userPath: string
   projectPath: string
   localPath: string
+  managedDir: string
+  managedPath: string
 } {
   const userDir = path.join(os.homedir(), getAppDirName())
   const projectDir = path.join(path.resolve(cwd), getAppDirName())
+  const managedDir = getManagedDir()
   return {
     userDir,
     projectDir,
     userPath: path.join(userDir, SETTINGS_FILE_NAME),
     projectPath: path.join(projectDir, SETTINGS_FILE_NAME),
     localPath: path.join(projectDir, LOCAL_SETTINGS_FILE_NAME),
+    managedDir,
+    managedPath: getManagedSettingsPath(),
   }
+}
+
+/**
+ * List managed settings files in CC order: managed-settings.json first, then
+ * managed-settings.d/*.json sorted alphabetically (drop-ins override base).
+ * Used for mtime cache keys; prefer `loadManagedFileSettings` for merge.
+ */
+export function listManagedSettingsFiles(): string[] {
+  const files: string[] = [getManagedSettingsPath()]
+  const dropInDir = getManagedSettingsDropInDir()
+  try {
+    const names = fs
+      .readdirSync(dropInDir, { withFileTypes: true })
+      .filter(
+        d =>
+          (d.isFile() || d.isSymbolicLink()) &&
+          d.name.endsWith('.json') &&
+          !d.name.startsWith('.'),
+      )
+      .map(d => d.name)
+      .sort()
+    for (const name of names) {
+      files.push(path.join(dropInDir, name))
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      console.warn(
+        `[settings] managed drop-in dir read failed: ${(err as Error).message}`,
+      )
+    }
+  }
+  return files
+}
+
+/**
+ * CC `loadManagedFileSettings`: merge base + drop-ins into one object.
+ * Base first, then drop-ins alphabetically (later wins on key collision via
+ * applyLayer semantics when applied as a single layer).
+ */
+export function loadManagedFileSettings(): {
+  settings: PartialAppConfig | null
+  errors: string[]
+  /** Files that contributed (for diagnostics / mtime). */
+  files: string[]
+} {
+  const errors: string[] = []
+  const files: string[] = []
+  let merged: PartialAppConfig = {}
+  let found = false
+
+  for (const filePath of listManagedSettingsFiles()) {
+    const { settings, error } = readSettingsFile(filePath)
+    if (error) {
+      errors.push(`${filePath}: ${error}`)
+      console.warn(`[settings] Failed to parse ${filePath}: ${error}`)
+      continue
+    }
+    if (!settings || Object.keys(settings).length === 0) continue
+    files.push(filePath)
+    merged = deepMergeSettingsLayer(merged, settings)
+    found = true
+  }
+
+  return { settings: found ? merged : null, errors, files }
+}
+
+/** Merge two partial settings objects (drop-in over base). */
+function deepMergeSettingsLayer(
+  base: PartialAppConfig,
+  overlay: PartialAppConfig,
+): PartialAppConfig {
+  const out: PartialAppConfig = { ...base, ...overlay }
+  if (base.models || overlay.models) {
+    out.models = {
+      ...(base.models as object | undefined),
+      ...(overlay.models as object | undefined),
+    } as PartialAppConfig['models']
+    for (const tier of ['large', 'medium', 'small'] as const) {
+      const b = (base.models as Record<string, unknown> | undefined)?.[tier]
+      const o = (overlay.models as Record<string, unknown> | undefined)?.[tier]
+      if (b || o) {
+        ;(out.models as Record<string, unknown>)[tier] = {
+          ...((b as object) ?? {}),
+          ...((o as object) ?? {}),
+        }
+      }
+    }
+  }
+  if (base.mcpServers || overlay.mcpServers) {
+    out.mcpServers = {
+      ...(base.mcpServers ?? {}),
+      ...(overlay.mcpServers ?? {}),
+    }
+  }
+  if (base.lspServers || overlay.lspServers) {
+    out.lspServers = {
+      ...(base.lspServers ?? {}),
+      ...(overlay.lspServers ?? {}),
+    }
+  }
+  if (base.autoMemory || overlay.autoMemory) {
+    out.autoMemory = {
+      ...((base.autoMemory as object) ?? {}),
+      ...((overlay.autoMemory as object) ?? {}),
+    } as PartialAppConfig['autoMemory']
+  }
+  if (base.compaction || overlay.compaction) {
+    out.compaction = {
+      ...((base.compaction as object) ?? {}),
+      ...((overlay.compaction as object) ?? {}),
+    } as PartialAppConfig['compaction']
+  }
+  if (base.sessionMemory || overlay.sessionMemory) {
+    out.sessionMemory = {
+      ...((base.sessionMemory as object) ?? {}),
+      ...((overlay.sessionMemory as object) ?? {}),
+    } as PartialAppConfig['sessionMemory']
+  }
+  if (base.disabledTools || overlay.disabledTools) {
+    out.disabledTools = [
+      ...new Set([
+        ...(base.disabledTools ?? []),
+        ...(overlay.disabledTools ?? []),
+      ]),
+    ]
+  }
+  return out
+}
+
+/**
+ * Strip autoMemory directory overrides from untrusted scopes (project/local).
+ */
+function stripUntrustedAutoMemoryDirectory(
+  settings: PartialAppConfig,
+  sourcePath: string,
+): PartialAppConfig {
+  const next = { ...settings }
+  if (next.autoMemoryDirectory !== undefined) {
+    console.warn(
+      `[settings] Ignoring autoMemoryDirectory from ${sourcePath} (trusted scopes only)`,
+    )
+    delete next.autoMemoryDirectory
+  }
+  if (
+    next.autoMemory &&
+    typeof next.autoMemory === 'object' &&
+    'directory' in next.autoMemory
+  ) {
+    const { directory: _ignored, ...restAuto } = next.autoMemory as Record<
+      string,
+      unknown
+    > & { directory?: unknown }
+    if (_ignored !== undefined) {
+      console.warn(
+        `[settings] Ignoring autoMemory.directory from ${sourcePath} (trusted scopes only)`,
+      )
+    }
+    next.autoMemory = restAuto
+  }
+  return next
 }
 
 function fileMtimeMs(filePath: string): number {
@@ -378,9 +555,33 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
   }
 }
 
+function applySettingsSource(
+  config: AppConfig,
+  source: SettingsSource,
+): void {
+  source.exists = fileMtimeMs(source.path) > 0
+  const { settings, error } = readSettingsFile(source.path)
+  if (error) {
+    source.error = error
+    console.warn(`[settings] Failed to parse ${source.path}: ${error}`)
+    return
+  }
+  if (!settings) return
+
+  let toApply: PartialAppConfig = settings
+  if (source.scope === 'project' || source.scope === 'local') {
+    toApply = stripUntrustedAutoMemoryDirectory(settings, source.path)
+  }
+  applyLayer(config, toApply)
+  source.applied = true
+  console.log(`[settings] Loaded ${source.scope} settings from ${source.path}`)
+}
+
 function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   const paths = resolveSettingsPaths(cwd)
   const config = cloneDefaults()
+  // CC order: user → project → local → flag → policy(managed last).
+  // We have no flag layer; managed is policySettings.
   const sources: SettingsSource[] = [
     { scope: 'user', path: paths.userPath, exists: false, applied: false },
     {
@@ -393,46 +594,26 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   ]
 
   for (const source of sources) {
-    source.exists = fileMtimeMs(source.path) > 0
-    const { settings, error } = readSettingsFile(source.path)
-    if (error) {
-      source.error = error
-      console.warn(`[settings] Failed to parse ${source.path}: ${error}`)
-      continue
-    }
-    if (!settings) continue
-    // Project settings must never set autoMemoryDirectory (path escape risk).
-    let toApply = settings
-    if (source.scope === 'project') {
-      const next = { ...settings }
-      if (next.autoMemoryDirectory !== undefined) {
-        console.warn(
-          `[settings] Ignoring project autoMemoryDirectory from ${source.path} (trusted scopes only)`,
-        )
-        delete next.autoMemoryDirectory
-      }
-      if (
-        next.autoMemory &&
-        typeof next.autoMemory === 'object' &&
-        'directory' in next.autoMemory
-      ) {
-        const { directory: _ignored, ...restAuto } = next.autoMemory as Record<
-          string,
-          unknown
-        > & { directory?: unknown }
-        if (_ignored !== undefined) {
-          console.warn(
-            `[settings] Ignoring project autoMemory.directory from ${source.path} (trusted scopes only)`,
-          )
-        }
-        next.autoMemory = restAuto
-      }
-      toApply = next
-    }
-    applyLayer(config, toApply)
-    source.applied = true
+    applySettingsSource(config, source)
+  }
+
+  // Managed / policySettings — CC loadManagedFileSettings then one apply.
+  const managed = loadManagedFileSettings()
+  const managedSource: SettingsSource = {
+    scope: 'managed',
+    path: paths.managedPath,
+    exists: managed.files.length > 0,
+    applied: false,
+  }
+  sources.push(managedSource)
+  if (managed.settings) {
+    applyLayer(config, managed.settings)
+    managedSource.applied = true
     console.log(
-      `[settings] Loaded ${source.scope} settings from ${source.path}`,
+      `[settings] Loaded managed settings from ${paths.managedPath}` +
+        (managed.files.length > 1
+          ? ` (+${managed.files.length - 1} drop-in)`
+          : ''),
     )
   }
 
@@ -450,6 +631,7 @@ export function resolveSettings(cwd: string): ResolvedSettings {
     paths.userPath,
     paths.projectPath,
     paths.localPath,
+    ...listManagedSettingsFiles(),
   ])
   const cached = resolvedCache.get(cacheKey)
   if (cached && cached.mtimeKey === mtimeKey) return cached.result
@@ -505,14 +687,19 @@ export function getSafeSettings(resolved: ResolvedSettings): AppConfig {
 }
 
 /**
- * EditableSettingSource excludes read-only policy/flag sources.
+ * EditableSettingSource excludes read-only policy/managed (CC).
  * In SSO mode user scope writes to the container home and is blocked.
  */
 export function parseWritableScope(
   value: unknown,
   opts: { ssoMode: boolean },
-): SettingsScope {
-  const scope: SettingsScope =
+): WritableSettingsScope {
+  if (value === 'managed') {
+    throw new Error(
+      'managed scope is not writable (enterprise policy settings)',
+    )
+  }
+  const scope: WritableSettingsScope =
     value === 'user' || value === 'local' || value === 'project'
       ? value
       : 'project'
@@ -524,7 +711,7 @@ export function parseWritableScope(
   return scope
 }
 
-function pathForScope(cwd: string, scope: SettingsScope): string {
+function pathForScope(cwd: string, scope: WritableSettingsScope): string {
   const paths = resolveSettingsPaths(cwd)
   if (scope === 'user') return paths.userPath
   if (scope === 'project') return paths.projectPath
@@ -620,7 +807,7 @@ function mergePatch(
 
 export function patchSettings(
   cwd: string,
-  scope: SettingsScope,
+  scope: WritableSettingsScope,
   patch: Partial<AppConfig>,
 ): ResolvedSettings {
   const filePath = pathForScope(cwd, scope)
@@ -631,7 +818,7 @@ export function patchSettings(
 
 export function setMCPServer(
   cwd: string,
-  scope: SettingsScope,
+  scope: WritableSettingsScope,
   name: string,
   config: MCPServerConfig | null,
 ): ResolvedSettings {

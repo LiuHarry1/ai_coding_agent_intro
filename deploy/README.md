@@ -31,6 +31,32 @@ docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .
 
 > 密钥(`OPENAI_API_KEY` 等)**不要**打进镜像,放在 `deploy/.env`,compose 会注入容器。
 
+### Managed / policy（对齐 Claude Code `getManagedFilePath`）
+
+Tenant 镜像打到 **`/etc/ai-agent/`**（可用 `AI_AGENT_MANAGED_DIR` 覆盖）：
+
+| 镜像源 | 容器路径 |
+|--------|----------|
+| `.ai-agent/settings.json` | `/etc/ai-agent/managed-settings.json` |
+| [`deploy/managed/AGENTS.md`](managed/AGENTS.md) | `/etc/ai-agent/AGENTS.md` |
+| [`deploy/managed/.ai-agent/`](managed/) | `/etc/ai-agent/.ai-agent/{skills,agents,commands,rules}` |
+
+**不要**把整个项目 `.ai-agent/skills` 打进 `/etc`——平台扩展只放 `deploy/managed/`；用户可见模板放 `deploy/workspace-seed/`。
+
+| 层 | 说明 |
+|----|------|
+| settings | `user → project → local → managed`（drop-in 先合成再 apply 一次） |
+| skills / agents / commands | 同名时 **managed > project > user > plugin** |
+| rules | 拼接 managed → user → project；入口 `AGENTS.md` 或 `CLAUDE.md` |
+
+`CLAUDE_CODE_DISABLE_POLICY_SKILLS=1` 可跳过 managed skills。
+
+| 平台默认目录 | 路径 |
+|-------------|------|
+| Linux | `/etc/ai-agent` |
+| macOS | `/Library/Application Support/AiAgent` |
+| Windows | `C:\Program Files\AiAgent` |
+
 Agent base 镜像通过 `requirements.txt` 安装 **`mcp-server-fetch`**（venv: `/opt/venv`）。SSO seed 里 `mcp_server` 使用 `/opt/venv/bin/python -m mcp_server_fetch`。已有用户目录需手动改 settings 或删目录让 seed 重建。
 
 ---

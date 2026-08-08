@@ -1,6 +1,7 @@
 node_modules
 .env
 .ai-agent/settings.local.json
+.managed-demo
 .sessions
 sessions/
 client/web/dist

@@ -553,7 +553,12 @@ export interface SSETransport {
 
 // ── Subagent ────────────────────────────────────
 
-export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project'
+export type AgentSource =
+  | 'built-in'
+  | 'plugin'
+  | 'user'
+  | 'project'
+  | 'managed'
 
 /** Whether a disk agent is a ModePicker primary or AgentTool-only subagent. */
 export type AgentMode = 'primary' | 'subagent'

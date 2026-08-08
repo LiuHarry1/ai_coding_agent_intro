@@ -40,13 +40,16 @@ FROM 10.150.115.69:80/dice-zero/ai-agent-base:${BASE_TAG}
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# Copy this deployment's agent config (agents/, skills/, commands/,
-# settings.json, ...). Anything not present here falls back to the agent
-# code's built-in defaults.
-COPY .ai-agent/ /root/.ai-agent/
+# ── Managed / policy (CC getManagedFilePath) → /etc/ai-agent ───────────────
+# Settings: tenant models/MCP from repo .ai-agent/settings.json
+COPY .ai-agent/settings.json /etc/ai-agent/managed-settings.json
+# Extensions + AGENTS.md: only platform content from deploy/managed/
+# (do NOT bake the whole project .ai-agent/skills into policy)
+COPY deploy/managed/AGENTS.md /etc/ai-agent/AGENTS.md
+COPY deploy/managed/.ai-agent/ /etc/ai-agent/.ai-agent/
 
 # Per-user workspace template — copied on first SSO login into
-# /workspace/users/<slug>/. See deploy/workspace-seed/README.md.
+# /workspace/users/<slug>/. User-visible agents/skills go here — not /etc.
 COPY deploy/workspace-seed/ /opt/workspace-seed/
 
 # Optional: override the default CMD from the base image.

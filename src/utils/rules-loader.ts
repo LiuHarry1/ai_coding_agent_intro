@@ -3,16 +3,21 @@ import * as path from 'path'
 import { execSync } from 'child_process'
 import { normalizeGitPath } from '../core/platform.js'
 import { getAppDirName, getUserAppDir } from './app-dir.js'
+import {
+  getExtensionDir,
+  getManagedDir,
+  getManagedMemoryEntryPaths,
+} from './managed-path.js'
 
 /**
- * Project / user instructions loader.
+ * Instructions loader (CC memory + rules, with managed policy layer).
  *
- *   ~/.ai-agent/AGENTS.md (+ rules/)     — user scope (loaded first)
- *   AGENTS.md | {appDir}/AGENTS.md | {appDir}/rules/
- *   AGENTS.local.md | {appDir}/AGENTS.local.md — local overrides (higher)
+ *   {managed}/AGENTS.md (+ {managed}/.ai-agent/rules/)  — policy (first)
+ *   ~/.ai-agent/AGENTS.md (+ rules/)                    — user
+ *   AGENTS.md | {appDir}/AGENTS.md | {appDir}/rules/      — project
+ *   AGENTS.local.md                                       — local (highest among project)
  *
  * Walk cwd → git root; closer files load later (higher model priority).
- * {appDir} defaults to .ai-agent (AI_AGENT_DIR / getAppDirName()).
  */
 
 /** Single entry file per directory (repo root or nested package). */
@@ -148,6 +153,45 @@ function collectAppDirRules(projectDir: string): RuleSource[] {
   return out
 }
 
+function formatRuleSources(
+  sources: RuleSource[],
+  scopeLabel: string,
+): string {
+  if (sources.length === 0) return ''
+  return sources
+    .map(s =>
+      sources.length === 1
+        ? s.content
+        : `<!-- from ${scopeLabel}:${s.label} -->\n${s.content}`,
+    )
+    .join('\n\n')
+}
+
+/**
+ * Managed / policy rules — CC `getMemoryPath('Managed')` + `getManagedClaudeRulesDir`.
+ * Root entry: `{managed}/AGENTS.md`, else `{managed}/CLAUDE.md` (CC name).
+ */
+export function loadManagedRules(): string {
+  const sources: RuleSource[] = []
+  const managedRoot = getManagedDir()
+  for (const entryPath of getManagedMemoryEntryPaths()) {
+    if (fs.existsSync(entryPath) && fs.statSync(entryPath).isFile()) {
+      const content = readRuleFile(entryPath)
+      if (content !== null) {
+        sources.push({
+          dir: managedRoot,
+          label: path.basename(entryPath),
+          content,
+        })
+      }
+      break
+    }
+  }
+  const rulesDir = getExtensionDir('managed', 'rules')
+  sources.push(...collectRulesDir(managedRoot, rulesDir, 'rules'))
+  return formatRuleSources(sources, 'managed')
+}
+
 /** User-scope rules: ~/.ai-agent/AGENTS.md + ~/.ai-agent/rules/*.md */
 export function loadUserRules(): string {
   const userDir = getUserAppDir()
@@ -162,14 +206,7 @@ export function loadUserRules(): string {
   sources.push(
     ...collectRulesDir(userDir, path.join(userDir, 'rules'), 'rules'),
   )
-  if (sources.length === 0) return ''
-  return sources
-    .map(s =>
-      sources.length === 1
-        ? s.content
-        : `<!-- from user:${s.label} -->\n${s.content}`,
-    )
-    .join('\n\n')
+  return formatRuleSources(sources, 'user')
 }
 
 /**
@@ -228,9 +265,13 @@ export function loadProjectRules(cwd: string): string {
   return combined
 }
 
-/** User rules first, then project/local (closer overrides). */
+/** Managed → user → project/local (closer project overrides among itself). */
 export function loadAllAgentRules(cwd: string): string {
-  const parts = [loadUserRules(), loadProjectRules(cwd)].filter(s => s.trim())
+  const parts = [
+    loadManagedRules(),
+    loadUserRules(),
+    loadProjectRules(cwd),
+  ].filter(s => s.trim())
   if (parts.length === 0) return ''
   let combined = parts.join('\n\n')
   if (Buffer.byteLength(combined, 'utf-8') > MAX_RULES_BYTES) {

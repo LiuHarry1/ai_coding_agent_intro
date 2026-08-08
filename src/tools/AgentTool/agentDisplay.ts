@@ -6,6 +6,7 @@ export type ResolvedAgent = AgentDefinition & {
 
 export const AGENT_SOURCE_GROUPS: Array<{ label: string; source: AgentSource }> =
   [
+    { label: 'Managed agents', source: 'managed' },
     { label: 'Project agents', source: 'project' },
     { label: 'User agents', source: 'user' },
     { label: 'Plugin agents', source: 'plugin' },

@@ -264,12 +264,23 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
     if (method === 'GET' && url?.startsWith('/settings')) {
       const cwd = resolveSettingsRequestCwd(authed, url)
       const effective = await resolveEffectiveSettings(cwd)
+      const ssoMode = isAuthEnabled() && !!authed.userWorkspace
+      // Hide absolute managed (policy) paths from SSO tenants — same idea as
+      // not exposing enterprise policy file locations in the product UI.
+      const sources = ssoMode
+        ? effective.sources.map(s =>
+            s.scope === 'managed'
+              ? { ...s, path: '[managed]' }
+              : s,
+          )
+        : effective.sources
       sendJSON(res, 200, {
         ...getSafeSettings(effective),
         cwd,
-        sources: effective.sources,
+        sources,
         userDir: effective.userDir,
         projectDir: effective.projectDir,
+        managedDir: ssoMode ? undefined : effective.managedDir,
         settingsPath: effective.projectPath,
         mcpServers: effective.config.mcpServers,
         effectiveMcpServers: effective.effectiveMcpServers,

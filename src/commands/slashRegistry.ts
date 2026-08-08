@@ -122,9 +122,7 @@ export async function loadSlashRegistry(cwd: string): Promise<{
       loadSkillsFromDisk(cwd),
       loadPlugins(cwd),
     ])
-  // Plugin contributions are lowest priority: plugin files first so disk
-  // commands/skills override them on a name collision (mergeCommands sorts by
-  // sourceRank; mergeSkillsByName takes lowest-priority first).
+  // Plugin lowest; managed (policy) highest via sourceRank / mergeSkillsByName.
   const commands = mergeCommands([
     ...contributions.commandFiles,
     ...commandFiles,
