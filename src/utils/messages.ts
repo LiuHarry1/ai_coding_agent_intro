@@ -196,6 +196,14 @@ You have exited plan mode. You can now make edits, run tools, and take actions.$
         metaUserMessage(attachment.rawXml),
       ])
     }
+
+    case 'relevant_memories': {
+      return wrapMessagesInSystemReminder(
+        attachment.memories.map(m =>
+          metaUserMessage(`${m.header}\n\n${m.content}`),
+        ),
+      )
+    }
   }
 }
 

@@ -1,37 +1,32 @@
 /**
- * Inject truncated MEMORY.md into system context (after AGENTS.md).
+ * Auto-memory system append (guide only — MEMORY.md index is not injected).
+ * Relevant topic files are surfaced via prefetch attachments.
  */
 import type { AutoMemoryConfig } from '../../core/types.js'
 import { loadAutoMemoryPrompt } from './prompts.js'
 import {
   ensureAutoMemDir,
   getAutoMemPath,
-  isAutoMemoryDisabledByEnv,
   type AutoMemPathOptions,
 } from './paths.js'
-import {
-  formatMemoryManifest,
-  readEntrypointRaw,
-  scanMemoryFiles,
-  truncateEntrypointContent,
-} from './scan.js'
+import { formatMemoryManifest, scanMemoryFiles } from './scan.js'
 
 export type BuildAutoMemoryAppendOpts = {
   cwd: string
   config: AutoMemoryConfig
-  /** Trusted directory from user/local/env only. */
+  /** Trusted directory from user/local settings only. */
   trustedDirectory?: string
 }
 
 /**
- * Guide + optional index section for system prompt (AGENTS already applied).
- * Empty / whitespace-only MEMORY.md → guide only (or '' if disabled).
+ * Behavioral guide for system prompt (AGENTS already applied).
+ * Never injects MEMORY.md body — prefetch handles recall.
  */
 export function buildAutoMemorySystemAppend(
   opts: BuildAutoMemoryAppendOpts,
 ): string {
   const { cwd, config } = opts
-  if (!config.enabled || isAutoMemoryDisabledByEnv()) return ''
+  if (!config.enabled) return ''
 
   const pathOpts: AutoMemPathOptions = {
     cwd,
@@ -40,34 +35,8 @@ export function buildAutoMemorySystemAppend(
   const memPath = getAutoMemPath(pathOpts)
   ensureAutoMemDir(memPath)
 
-  const parts: string[] = [loadAutoMemoryPrompt(memPath)]
-
-  if (config.injectIndex !== false) {
-    const raw = readEntrypointRaw(memPath)
-    if (raw.trim()) {
-      let { content } = truncateEntrypointContent(raw)
-      const maxLines = config.injectMaxIndexLines ?? 50
-      if (maxLines > 0) {
-        const lines = content.split('\n')
-        if (lines.length > maxLines) {
-          content =
-            lines.slice(0, maxLines).join('\n') +
-            '\n\n[... truncated — older index lines omitted]'
-        }
-      }
-      parts.push(
-        [
-          '## Auto memory index',
-          '',
-          `Contents of \`${memPath}/MEMORY.md\` (topic details: Read files under that directory):`,
-          '',
-          content.trimEnd(),
-        ].join('\n'),
-      )
-    }
-  }
-
-  return parts.join('\n\n')
+  const skipIndex = config.prefetchEnabled !== false
+  return loadAutoMemoryPrompt(memPath, skipIndex)
 }
 
 /** Pre-inject manifest string for extract forks. */

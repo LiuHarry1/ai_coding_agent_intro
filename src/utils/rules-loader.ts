@@ -2,14 +2,14 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { execSync } from 'child_process'
 import { normalizeGitPath } from '../core/platform.js'
-import { getAppDirName } from './app-dir.js'
+import { getAppDirName, getUserAppDir } from './app-dir.js'
 
 /**
- * Project instructions loader.
+ * Project / user instructions loader.
  *
- * Naming follows the open AGENTS.md convention:
- *
+ *   ~/.ai-agent/AGENTS.md (+ rules/)     — user scope (loaded first)
  *   AGENTS.md | {appDir}/AGENTS.md | {appDir}/rules/
+ *   AGENTS.local.md | {appDir}/AGENTS.local.md — local overrides (higher)
  *
  * Walk cwd → git root; closer files load later (higher model priority).
  * {appDir} defaults to .ai-agent (AI_AGENT_DIR / getAppDirName()).
@@ -17,6 +17,7 @@ import { getAppDirName } from './app-dir.js'
 
 /** Single entry file per directory (repo root or nested package). */
 const ENTRY_FILENAMES = ['AGENTS.md']
+const LOCAL_ENTRY_FILENAMES = ['AGENTS.local.md']
 
 const MAX_SINGLE_FILE_BYTES = 40 * 1024
 const MAX_RULES_BYTES = 40 * 1024
@@ -128,13 +129,53 @@ function collectAppDirRules(projectDir: string): RuleSource[] {
     ),
   )
 
+  // Local overrides (same directory, higher priority when reversed later)
+  const localNested = findRuleFile(
+    path.join(projectDir, appDir),
+    LOCAL_ENTRY_FILENAMES,
+  )
+  if (localNested) {
+    const content = readRuleFile(localNested)
+    if (content !== null) {
+      out.push({
+        dir: projectDir,
+        label: `${appDir}/${path.basename(localNested)}`,
+        content,
+      })
+    }
+  }
+
   return out
+}
+
+/** User-scope rules: ~/.ai-agent/AGENTS.md + ~/.ai-agent/rules/*.md */
+export function loadUserRules(): string {
+  const userDir = getUserAppDir()
+  const sources: RuleSource[] = []
+  const entry = findRuleFile(userDir, ENTRY_FILENAMES)
+  if (entry) {
+    const content = readRuleFile(entry)
+    if (content !== null) {
+      sources.push({ dir: userDir, label: path.basename(entry), content })
+    }
+  }
+  sources.push(
+    ...collectRulesDir(userDir, path.join(userDir, 'rules'), 'rules'),
+  )
+  if (sources.length === 0) return ''
+  return sources
+    .map(s =>
+      sources.length === 1
+        ? s.content
+        : `<!-- from user:${s.label} -->\n${s.content}`,
+    )
+    .join('\n\n')
 }
 
 /**
  * Load project agent instructions for `cwd`.
  * Prefer colocating under `{appDir}/AGENTS.md`; root `AGENTS.md` also works
- * (agents.md standard / monorepo packages).
+ * (agents.md standard / monorepo packages). Includes AGENTS.local.md.
  */
 export function loadProjectRules(cwd: string): string {
   const absDir = path.resolve(cwd)
@@ -152,6 +193,14 @@ export function loadProjectRules(cwd: string): string {
       }
     }
     sources.push(...collectAppDirRules(cur))
+
+    const local = findRuleFile(cur, LOCAL_ENTRY_FILENAMES)
+    if (local) {
+      const content = readRuleFile(local)
+      if (content !== null) {
+        sources.push({ dir: cur, label: path.basename(local), content })
+      }
+    }
 
     if (cur === ceiling || cur === path.dirname(cur)) break
     cur = path.dirname(cur)
@@ -176,6 +225,19 @@ export function loadProjectRules(cwd: string): string {
       '\n\n[...truncated — combined rules exceeded cap]'
   }
 
+  return combined
+}
+
+/** User rules first, then project/local (closer overrides). */
+export function loadAllAgentRules(cwd: string): string {
+  const parts = [loadUserRules(), loadProjectRules(cwd)].filter(s => s.trim())
+  if (parts.length === 0) return ''
+  let combined = parts.join('\n\n')
+  if (Buffer.byteLength(combined, 'utf-8') > MAX_RULES_BYTES) {
+    combined =
+      combined.slice(0, MAX_RULES_BYTES) +
+      '\n\n[...truncated — combined rules exceeded cap]'
+  }
   return combined
 }
 

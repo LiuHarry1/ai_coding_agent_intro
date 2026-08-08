@@ -6,7 +6,6 @@ export {
   getAutoMemEntrypoint,
   getAutoMemPath,
   isAutoMemPath,
-  isAutoMemoryDisabledByEnv,
   sanitizePath,
 } from './paths.js'
 export type { AutoMemPathOptions } from './paths.js'
@@ -29,8 +28,42 @@ export {
   readEntrypointRaw,
   ensureIndexEntry,
   rebuildIndex,
+  readFileCapped,
 } from './scan.js'
 export type { MemoryFileMeta } from './scan.js'
+
+export {
+  memoryAgeDays,
+  memoryAge,
+  memoryFreshnessText,
+  memoryHeader,
+} from './memoryAge.js'
+
+export {
+  findRelevantMemories,
+  createSelectRelevantMemories,
+  readMemoriesForSurfacing,
+  MAX_MEMORY_LINES,
+  MAX_MEMORY_BYTES,
+  MAX_SESSION_BYTES,
+} from './findRelevant.js'
+export type {
+  RelevantMemory,
+  SurfacedMemory,
+  FindRelevantOpts,
+  SelectRelevantFn,
+} from './findRelevant.js'
+
+export {
+  startRelevantMemoryPrefetch,
+  consumeMemoryPrefetchIfReady,
+  collectSurfacedMemories,
+  collectRecentSuccessfulTools,
+  RELEVANT_MEMORIES_CONFIG,
+} from './prefetch.js'
+export type { MemoryPrefetch, StartPrefetchOpts } from './prefetch.js'
+
+export { sideQueryJson, parseJsonFromModelText } from './sideQuery.js'
 
 export {
   loadAutoMemoryPrompt,

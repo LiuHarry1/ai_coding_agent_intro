@@ -42,8 +42,10 @@
   },
   "autoMemory": {
     "enabled": true,
+    "prefetchEnabled": true,
     "cacheSafe": true,
-    "modelTier": "small"
+    "modelTier": "small",
+    "prefetchModelTier": "small"
   },
   "lspServers": {
     "typescript": {

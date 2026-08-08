@@ -33,6 +33,10 @@ import { applyModeRestrictions } from '../core/mode-restrictions.js'
 import { planExists } from '../utils/plans.js'
 import { createMemoryLifecycleHooks } from './memory-lifecycle.js'
 import {
+  getAutoMemPath,
+  startRelevantMemoryPrefetch,
+} from '../services/auto-memory/index.js'
+import {
   compactIfNeeded,
   tokenCountWithEstimation,
 } from '../services/compact/index.js'
@@ -491,6 +495,14 @@ export async function runChatTurn(
       mainModelId,
       defaultTier: 'medium',
     })
+    const prefetchSide = resolveSidePathModel({
+      models,
+      cacheSafe: false,
+      modelTier: autoMemoryConfig.prefetchModelTier,
+      mainProvider: provider,
+      mainModelId,
+      defaultTier: 'small',
+    })
     const memoryHooks = createMemoryLifecycleHooks({
       sessionMemory: resolvedSettings.config.sessionMemory,
       sessionMemoryModelId: sessionMemorySide.modelId,
@@ -502,34 +514,64 @@ export async function runChatTurn(
       runAgent,
     })
 
-    finalText = await runAgent(prepared.effectiveMessage, {
-      tools: prepared.tools,
-      systemPrompt,
-      eventBus,
-      wire,
-      provider,
-      cwd,
-      compaction: resolvedSettings.config.compaction,
-      sessionMemory: resolvedSettings.config.sessionMemory,
-      messages: session.messages,
-      images: images?.length ? images : undefined,
-      subagentNames: prepared.subagentNames,
-      deferredToolPool: prepared.deferredToolPool,
-      concurrencyPolicy: prepared.concurrencyPolicy,
-      sessionId: session.id,
-      toolUseContext: prepared.toolUseContext,
-      refreshTools,
-      refreshSystemPrompt,
-      onAfterStep: memoryHooks.onAfterStep,
-      onTurnEnd: memoryHooks.onTurnEnd,
-      onFullCompaction: compactedMessages => {
-        const checkpoint = compactedMessages.filter(m => !isAttachmentMessage(m))
-        appendCompaction(session.id, checkpoint)
-        session.messages.push(userTurnForDisplay)
-        appendMessage(session.id, userTurnForDisplay)
-        persistFrom = session.messages.length
-      },
-    })
+    const remote = isRemoteWorkspace(session.workspace)
+    const memPath =
+      autoMemoryConfig.enabled &&
+      !remote &&
+      autoMemoryConfig.prefetchEnabled !== false
+        ? getAutoMemPath({
+            cwd,
+            trustedDirectory: autoMemoryConfig.directory,
+          })
+        : undefined
+
+    const memoryPrefetch =
+      memPath != null
+        ? startRelevantMemoryPrefetch(session.messages, {
+            config: autoMemoryConfig,
+            memPath,
+            provider: prefetchSide.provider,
+            modelId: prefetchSide.modelId,
+            readFileState: prepared.toolUseContext.readFileState,
+            queryText: prepared.effectiveMessage,
+          })
+        : undefined
+
+    try {
+      finalText = await runAgent(prepared.effectiveMessage, {
+        tools: prepared.tools,
+        systemPrompt,
+        eventBus,
+        wire,
+        provider,
+        cwd,
+        compaction: resolvedSettings.config.compaction,
+        sessionMemory: resolvedSettings.config.sessionMemory,
+        messages: session.messages,
+        images: images?.length ? images : undefined,
+        subagentNames: prepared.subagentNames,
+        deferredToolPool: prepared.deferredToolPool,
+        concurrencyPolicy: prepared.concurrencyPolicy,
+        sessionId: session.id,
+        toolUseContext: prepared.toolUseContext,
+        refreshTools,
+        refreshSystemPrompt,
+        memoryPrefetch,
+        onAfterStep: memoryHooks.onAfterStep,
+        onTurnEnd: memoryHooks.onTurnEnd,
+        onFullCompaction: compactedMessages => {
+          const checkpoint = compactedMessages.filter(
+            m => !isAttachmentMessage(m),
+          )
+          appendCompaction(session.id, checkpoint)
+          session.messages.push(userTurnForDisplay)
+          appendMessage(session.id, userTurnForDisplay)
+          persistFrom = session.messages.length
+        },
+      })
+    } finally {
+      memoryPrefetch?.dispose()
+    }
   } catch (e) {
     runError = e as Error
   } finally {

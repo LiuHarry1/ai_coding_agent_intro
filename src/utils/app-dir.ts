@@ -7,7 +7,7 @@
  *   ~/.ai-agent/agents/*.md
  *   ~/.ai-agent/commands/*.md
  *   ~/.ai-agent/skills/<name>/SKILL.md
- *   ~/.ai-agent/AGENTS.md              (optional user-scope instructions — if wired)
+ *   ~/.ai-agent/AGENTS.md              (user-scope instructions; loaded by rules-loader)
  *
  *   <ancestor>/.ai-agent/settings.json
  *   <ancestor>/.ai-agent/settings.local.json

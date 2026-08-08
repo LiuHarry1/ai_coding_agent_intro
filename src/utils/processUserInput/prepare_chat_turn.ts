@@ -15,7 +15,7 @@ import {
   pluginErrorMessage,
   pluginErrorSource,
 } from '../../core/plugins/index.js'
-import { loadProjectRules } from '../rules-loader.js'
+import { loadAllAgentRules } from '../rules-loader.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { TOOL_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
 import { getPlanFilePath } from '../plans.js'
@@ -46,7 +46,6 @@ import { resolveAutoMemoryConfig } from '../../core/settings-manager.js'
 import {
   buildAutoMemorySystemAppend,
   getAutoMemPath,
-  isAutoMemoryDisabledByEnv,
 } from '../../services/auto-memory/index.js'
 import { assembleToolPool } from '../../tools/assembleToolPool.js'
 
@@ -208,7 +207,7 @@ export async function prepareChatTurn(
     `[server] cwd=${cwd}${remote ? ` remote=${session.workspace?.environmentId}` : ''}  agents=[${activeAgents.map(a => a.agentType).join(', ')}]  skills=[${activeSkills.map(s => s.name).join(', ')}]${conditionalHidden > 0 ? `  (+${conditionalHidden} conditional hidden)` : ''}`,
   )
 
-  const projectRulesRaw = remote ? '' : loadProjectRules(cwd)
+  const projectRulesRaw = remote ? '' : loadAllAgentRules(cwd)
   const autoMemory = resolveAutoMemoryConfig(config)
   const autoMemoryAppend = buildAutoMemorySystemAppend({
     cwd: pluginCwd,
@@ -225,8 +224,7 @@ export async function prepareChatTurn(
     ],
   }
 
-  const autoMemEnabled =
-    autoMemory.enabled && !isAutoMemoryDisabledByEnv() && !remote
+  const autoMemEnabled = autoMemory.enabled && !remote
   const autoMemPath = autoMemEnabled
     ? getAutoMemPath({
         cwd: pluginCwd,

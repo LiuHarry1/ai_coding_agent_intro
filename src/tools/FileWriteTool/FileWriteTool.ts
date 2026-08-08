@@ -78,7 +78,14 @@ export const definition: ToolDefinition = {
         })
 
         const execution = context.execution
-        if (execution) {
+        // Local Worker has real disk — use FS path below so SANDBOX_MODE
+        // extraWriteRoots (auto-memory under ~/.ai-agent) apply. Remote SSH
+        // still goes through Worker RPC + assertInWorkspace.
+        // Match FileReadTool: gate on environmentId, not isWorkerExecutionBackend
+        // (that helper also requires configureLsp).
+        const useRemoteFs =
+          !!execution && execution.environmentId !== 'local'
+        if (useRemoteFs && execution) {
           try {
             const abs = execution.resolve(cwd, file_path)
             execution.assertInWorkspace(cwd, abs, 'write')

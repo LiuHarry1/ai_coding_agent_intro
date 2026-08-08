@@ -46,7 +46,6 @@ import {
   ensureAutoMemDir,
   getAutoMemPath,
   isAutoMemPath,
-  isAutoMemoryDisabledByEnv,
 } from './paths.js'
 import { buildExtractAutoMemoryPrompt } from './prompts.js'
 import {
@@ -340,10 +339,12 @@ async function runAutoMemoryExtract(
     state.lastAutoMemoryMessageUuid,
   )
   const existing = buildExistingMemoriesManifest(memPath)
+  const skipIndex = config.prefetchEnabled !== false
   const userPrompt = buildExtractAutoMemoryPrompt({
     newMessageCount: Math.max(1, newMessageCount),
     existingMemories: existing,
     memoryDir: memPath,
+    skipIndex,
   })
 
   const canUseTool = createAutoMemCanUseTool(memPath, cwd)
@@ -420,12 +421,16 @@ async function runAutoMemoryExtract(
       }
     }
 
-    const verify = verifyAndRepairIndex(memPath)
+    // Prefetch mode (default): do not maintain MEMORY.md index.
+    const verify = skipIndex
+      ? { topics: after.length, repaired: 0, indexLines: 0 }
+      : verifyAndRepairIndex(memPath)
     advanceCursor(sessionId, messages)
 
     console.log(
       `[auto-memory] extract ran wrote=${written} topics=${verify.topics} ` +
         `indexLines=${verify.indexLines} repaired=${verify.repaired} ` +
+        `skipIndex=${skipIndex ? 'yes' : 'no'} ` +
         `cacheSafe=${useCacheSafe ? 'yes' : 'no'} session=${sessionId}`,
     )
     return { ok: true, memoryPath: memPath, written }
@@ -442,7 +447,7 @@ async function runAutoMemoryExtract(
 export async function extractAutoMemories(
   args: ExtractAutoMemoryArgs,
 ): Promise<ExtractAutoMemoryResult> {
-  if (!args.config.enabled || isAutoMemoryDisabledByEnv()) {
+  if (!args.config.enabled) {
     return { ok: false, error: 'disabled' }
   }
 

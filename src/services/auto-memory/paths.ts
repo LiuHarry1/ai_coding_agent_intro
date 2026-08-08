@@ -73,13 +73,10 @@ export type AutoMemPathOptions = {
 
 /**
  * Resolve auto-memory directory.
- * Order: AI_AGENT_MEMORY_PATH → trustedDirectory → default under ~/.ai-agent/projects/
+ * Order: settings `autoMemory.directory` / `autoMemoryDirectory`
+ * (via trustedDirectory) → default under ~/.ai-agent/projects/
  */
 export function getAutoMemPath(opts: AutoMemPathOptions): string {
-  const envOverride = process.env.AI_AGENT_MEMORY_PATH?.trim()
-  if (envOverride) {
-    return path.resolve(expandTilde(envOverride))
-  }
   if (opts.trustedDirectory?.trim()) {
     return path.resolve(expandTilde(opts.trustedDirectory.trim()))
   }
@@ -108,13 +105,6 @@ export function ensureAutoMemDir(memPath: string): void {
   if (!fs.existsSync(entry)) {
     fs.writeFileSync(entry, '', { encoding: 'utf-8', mode: 0o600 })
   }
-}
-
-export function isAutoMemoryDisabledByEnv(): boolean {
-  const v = String(process.env.AI_AGENT_DISABLE_AUTO_MEMORY ?? '')
-    .trim()
-    .toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
 }
 
 /** App dir basename for logging (e.g. .ai-agent). */

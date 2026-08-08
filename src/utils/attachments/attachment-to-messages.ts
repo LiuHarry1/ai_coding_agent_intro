@@ -119,6 +119,8 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'skill_listing':
     case 'agent_listing_delta':
     case 'task_notification':
+    case 'relevant_memories':
+      // Handled in messages.normalizeAttachmentForAPI (system-reminder path).
       return []
     default: {
       const _exhaustive: never = attachment

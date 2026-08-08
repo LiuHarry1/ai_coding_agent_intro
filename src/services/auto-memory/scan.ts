@@ -1,5 +1,6 @@
 /**
- * Scan topic files + truncate MEMORY.md index.
+ * Scan topic files + MEMORY.md index helpers.
+ * Manifest format aligned with Claude Code memoryScan.ts.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -10,11 +11,18 @@ const MAX_INDEX_LINES = 200
 const MAX_INDEX_BYTES = 25 * 1024
 const MAX_SCAN_FILES = 200
 
+/** Topic file header (CC MemoryHeader + legacy absPath/relPath aliases). */
 export type MemoryFileMeta = {
+  /** Relative path under memdir (CC `filename`). */
+  filename: string
+  /** Absolute path (CC `filePath`). */
+  filePath: string
+  /** @deprecated use filePath */
   absPath: string
+  /** @deprecated use filename */
   relPath: string
   name?: string
-  description?: string
+  description: string | null
   type?: MemoryType
   mtimeMs: number
 }
@@ -47,7 +55,14 @@ export function scanMemoryFiles(memPath: string): MemoryFileMeta[] {
     for (const ent of entries) {
       const abs = path.join(dir, ent.name)
       if (ent.isDirectory()) {
-        if (ent.name === 'team' || ent.name === 'logs') continue
+        // Skip CC team/logs plus local hold/backup dirs (e.g. _backup_*).
+        if (
+          ent.name === 'team' ||
+          ent.name === 'logs' ||
+          ent.name.startsWith('_')
+        ) {
+          continue
+        }
         walk(abs)
         continue
       }
@@ -62,11 +77,14 @@ export function scanMemoryFiles(memPath: string): MemoryFileMeta[] {
         continue
       }
       const fm = parseFrontmatter(content)
+      const rel = path.relative(memPath, abs).split(path.sep).join('/')
       out.push({
+        filename: rel,
+        filePath: abs,
         absPath: abs,
-        relPath: path.relative(memPath, abs).split(path.sep).join('/'),
+        relPath: rel,
         name: fm.name,
-        description: fm.description,
+        description: fm.description ?? null,
         type: parseMemoryType(fm.type),
         mtimeMs: st.mtimeMs,
       })
@@ -78,19 +96,23 @@ export function scanMemoryFiles(memPath: string): MemoryFileMeta[] {
   return out.slice(0, MAX_SCAN_FILES)
 }
 
+/**
+ * CC format: `- [type] filename (ISO): description`
+ */
 export function formatMemoryManifest(files: MemoryFileMeta[]): string {
   if (files.length === 0) return ''
   return files
-    .map(f => {
-      const title = f.name ?? f.relPath
-      const desc = f.description ? ` — ${f.description}` : ''
-      const typ = f.type ? ` [${f.type}]` : ''
-      return `- ${f.relPath}${typ}: ${title}${desc}`
+    .map(m => {
+      const tag = m.type ? `[${m.type}] ` : ''
+      const ts = new Date(m.mtimeMs).toISOString()
+      return m.description
+        ? `- ${tag}${m.filename} (${ts}): ${m.description}`
+        : `- ${tag}${m.filename} (${ts})`
     })
     .join('\n')
 }
 
-/** Truncate MEMORY.md to line + byte caps. */
+/** Truncate MEMORY.md to line + byte caps (for tools / UI; not injected). */
 export function truncateEntrypointContent(raw: string): {
   content: string
   truncated: boolean
@@ -138,7 +160,7 @@ export function ensureIndexEntry(
   memPath: string,
   relPath: string,
   title: string,
-  hook?: string,
+  hook?: string | null,
 ): boolean {
   const entry = getAutoMemEntrypoint(memPath)
   let raw = ''
@@ -151,7 +173,9 @@ export function ensureIndexEntry(
     return false
   }
   const line = `- [${title}](${relPath})${hook ? ` — ${hook}` : ''}`
-  const next = raw.trimEnd() ? `${raw.replace(/\n*$/, '')}\n${line}\n` : `${line}\n`
+  const next = raw.trimEnd()
+    ? `${raw.replace(/\n*$/, '')}\n${line}\n`
+    : `${line}\n`
   fs.writeFileSync(entry, next, { encoding: 'utf-8', mode: 0o600 })
   return true
 }
@@ -160,13 +184,58 @@ export function ensureIndexEntry(
 export function rebuildIndex(memPath: string): void {
   const files = scanMemoryFiles(memPath)
   const lines = files.map(f => {
-    const title = f.name ?? f.relPath.replace(/\.md$/i, '')
+    const title = f.name ?? f.filename.replace(/\.md$/i, '')
     const hook = f.description ?? ''
-    return `- [${title}](${f.relPath})${hook ? ` — ${hook}` : ''}`
+    return `- [${title}](${f.filename})${hook ? ` — ${hook}` : ''}`
   })
   const body = lines.length ? lines.join('\n') + '\n' : ''
   fs.writeFileSync(getAutoMemEntrypoint(memPath), body, {
     encoding: 'utf-8',
     mode: 0o600,
   })
+}
+
+/** Read a file capped by line and/or byte limits (for surfacing memories). */
+export function readFileCapped(
+  absPath: string,
+  maxLines: number,
+  maxBytes: number,
+): {
+  content: string
+  totalLines: number
+  truncatedByLines: boolean
+  truncatedByBytes: boolean
+  lineCount: number
+  mtimeMs: number
+} {
+  const st = fs.statSync(absPath)
+  const raw = fs.readFileSync(absPath, 'utf-8')
+  const allLines = raw.split('\n')
+  const totalLines = allLines.length
+  let truncatedByLines = false
+  let truncatedByBytes = false
+  let lines = allLines
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines)
+    truncatedByLines = true
+  }
+  let content = lines.join('\n')
+  if (Buffer.byteLength(content, 'utf-8') > maxBytes) {
+    truncatedByBytes = true
+    while (
+      content.length > 0 &&
+      Buffer.byteLength(content, 'utf-8') > maxBytes
+    ) {
+      const nl = content.lastIndexOf('\n')
+      content = nl >= 0 ? content.slice(0, nl) : content.slice(0, maxBytes)
+    }
+  }
+  return {
+    content,
+    totalLines,
+    truncatedByLines,
+    truncatedByBytes,
+    lineCount: content.split('\n').length,
+    mtimeMs: st.mtimeMs,
+  }
 }

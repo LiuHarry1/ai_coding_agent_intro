@@ -39,6 +39,7 @@ import {
   smooshSystemReminderSiblings,
 } from '../utils/messages.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
+import { consumeMemoryPrefetchIfReady } from '../services/auto-memory/prefetch.js'
 import { consumeStream, type StreamResult } from './agent/streamConsumer.js'
 import { emitTodoUpdate } from './wire-internal.js'
 import type { WireEmitter } from './wire-emitter.js'
@@ -263,6 +264,7 @@ export async function runAgent(
     onTurnEnd,
     logLabel,
     abortSignal,
+    memoryPrefetch,
   }: AgentOptions,
 ): Promise<string> {
   if (toolUseContext) {
@@ -410,6 +412,29 @@ export async function runAgent(
         // Prefer text from history if the step failed
         // after partial assistant output was already appended.
         return extractPartialResult(messages) ?? finalText
+      }
+
+      // CC post-tools consume: only if settled — never block first API call.
+      try {
+        const memAtts = await consumeMemoryPrefetchIfReady(
+          memoryPrefetch,
+          toolUseContext?.readFileState,
+          step,
+        )
+        for (const att of memAtts) {
+          messages.push(ensureMessageUuid(att))
+        }
+        if (memAtts.length > 0) {
+          console.log(
+            `[${agentLogTag(logLabel)}] relevant_memories attached count=${memAtts.length} step=${step}`,
+          )
+        }
+      } catch (e) {
+        console.warn(
+          `[${agentLogTag(logLabel)}] memory prefetch consume failed: ${
+            e instanceof Error ? e.message : e
+          }`,
+        )
       }
 
       if (sessionId && onAfterStep) {

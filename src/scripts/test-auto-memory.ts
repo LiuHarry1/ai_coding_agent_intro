@@ -15,6 +15,7 @@ import {
   getAutoMemPath,
   getAutoMemoryState,
   hasMemoryWritesSince,
+  parseJsonFromModelText,
   rebuildIndex,
   resetAutoMemoryState,
   sanitizePath,
@@ -23,6 +24,7 @@ import {
   truncateEntrypointContent,
   verifyAndRepairIndex,
 } from '../services/auto-memory/index.js'
+import { definition as writeFileDefinition } from '../tools/FileWriteTool/FileWriteTool.js'
 import {
   ensureMessageUuid,
   getMessageUuid,
@@ -126,12 +128,12 @@ function assistantWrite(filePath: string): Message {
 // ── inject empty vs non-empty ────────────────────
 {
   const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mem-inj-'))
-  process.env.AI_AGENT_MEMORY_PATH = mem
   ensureAutoMemDir(mem)
 
   const enabledCfg = resolveAutoMemoryConfig({
     ...DEFAULTS,
     autoMemoryEnabled: true,
+    autoMemoryDirectory: mem,
   })
   const emptyAppend = buildAutoMemorySystemAppend({
     cwd: process.cwd(),
@@ -140,7 +142,11 @@ function assistantWrite(filePath: string): Message {
   assert(emptyAppend.includes('# auto memory'), 'enabled injects guide')
   assert(
     !emptyAppend.includes('## Auto memory index'),
-    'empty MEMORY.md skips index section',
+    'prefetch mode never injects MEMORY.md index',
+  )
+  assert(
+    emptyAppend.includes('system-reminder'),
+    'skipIndex guide mentions system-reminder recall',
   )
 
   fs.writeFileSync(
@@ -152,8 +158,14 @@ function assistantWrite(filePath: string): Message {
     cwd: process.cwd(),
     config: enabledCfg,
   })
-  assert(withIndex.includes('## Auto memory index'), 'non-empty injects index')
-  assert(withIndex.includes('prefer-concise.md'), 'index content present')
+  assert(
+    !withIndex.includes('## Auto memory index'),
+    'non-empty MEMORY.md still not injected',
+  )
+  assert(
+    !withIndex.includes('prefer-concise.md'),
+    'index body not in system append',
+  )
 
   const disabled = buildAutoMemorySystemAppend({
     cwd: process.cwd(),
@@ -164,7 +176,6 @@ function assistantWrite(filePath: string): Message {
   })
   assert(disabled === '', 'disabled injects nothing')
 
-  delete process.env.AI_AGENT_MEMORY_PATH
   fs.rmSync(mem, { recursive: true, force: true })
 }
 
@@ -226,16 +237,39 @@ function assistantWrite(filePath: string): Message {
   fs.rmSync(mem, { recursive: true, force: true })
 }
 
-// ── getAutoMemPath env override ──────────────────
+// ── getAutoMemPath settings directory override ───
 {
-  const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mem-env-'))
-  process.env.AI_AGENT_MEMORY_PATH = mem
+  const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mem-dir-'))
   assert(
-    getAutoMemPath({ cwd: process.cwd() }) === path.resolve(mem),
-    'AI_AGENT_MEMORY_PATH overrides default',
+    getAutoMemPath({ cwd: process.cwd(), trustedDirectory: mem }) ===
+      path.resolve(mem),
+    'settings directory (trustedDirectory) overrides default',
   )
-  delete process.env.AI_AGENT_MEMORY_PATH
+  const viaCfg = resolveAutoMemoryConfig({
+    ...DEFAULTS,
+    autoMemoryDirectory: mem,
+  })
+  assert(
+    getAutoMemPath({ cwd: process.cwd(), trustedDirectory: viaCfg.directory }) ===
+      path.resolve(mem),
+    'resolveAutoMemoryConfig.directory feeds getAutoMemPath',
+  )
   fs.rmSync(mem, { recursive: true, force: true })
+}
+
+// ── prefetchEnabled from nested settings ─────────
+{
+  assert(
+    resolveAutoMemoryConfig(DEFAULTS).prefetchEnabled === true,
+    'default prefetchEnabled true',
+  )
+  assert(
+    resolveAutoMemoryConfig({
+      ...DEFAULTS,
+      autoMemory: { prefetchEnabled: false },
+    }).prefetchEnabled === false,
+    'nested prefetchEnabled false',
+  )
 }
 
 // ── flat settings + project directory strip ───────
@@ -265,5 +299,66 @@ function assistantWrite(filePath: string): Message {
   )
   fs.rmSync(tmp, { recursive: true, force: true })
 }
+
+// ── scan skips _backup / _hold dirs ──────────────
+{
+  const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mem-scan-'))
+  fs.writeFileSync(
+    path.join(mem, 'keep.md'),
+    '---\nname: Keep\ndescription: visible\ntype: user\n---\nbody\n',
+    'utf-8',
+  )
+  const bak = path.join(mem, '_backup_test')
+  fs.mkdirSync(bak)
+  fs.writeFileSync(
+    path.join(bak, 'hidden.md'),
+    '---\nname: Hidden\ndescription: should skip\ntype: user\n---\nx\n',
+    'utf-8',
+  )
+  const scanned = scanMemoryFiles(mem)
+  assert(scanned.length === 1, 'scan finds one topic')
+  assert(scanned[0]!.filename === 'keep.md', 'skips _backup_* trees')
+  fs.rmSync(mem, { recursive: true, force: true })
+}
+
+// ── sideQuery JSON recovery ──────────────────────
+{
+  const a = parseJsonFromModelText<{ selected_memories: string[] }>(
+    '{"selected_memories":["a.md"]}',
+  )
+  assert(a?.selected_memories?.[0] === 'a.md', 'raw JSON')
+  const b = parseJsonFromModelText<{ selected_memories: string[] }>(
+    '这里是结果：\n{"selected_memories":["b.md"]}\n谢谢',
+  )
+  assert(b?.selected_memories?.[0] === 'b.md', 'prose-wrapped JSON')
+  assert(parseJsonFromModelText('我听到了。') === null, 'non-JSON → null')
+}
+
+// ── Write tool honors extraWriteRoots with local Worker stub ──
+async function testWriteCarveOut(): Promise<void> {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'am-write-root-'))
+  const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'am-write-mem-'))
+  const tool = writeFileDefinition.create(root, {
+    sandbox: createSandboxPolicy(root, { extraWriteRoots: [mem] }),
+    // Local Worker stub: previously assertInWorkspace blocked memdir.
+    execution: { kind: 'worker', environmentId: 'local' } as never,
+  })
+  const target = path.join(mem, 'extract_ok.md')
+  const out = await (
+    tool as { execute: (args: unknown) => Promise<unknown> }
+  ).execute({
+    file_path: target,
+    content: '---\nname: Ok\ntype: user\n---\nok\n',
+  })
+  assert(fs.existsSync(target), 'Write reaches memdir via carve-out')
+  assert(
+    typeof out === 'object' && out !== null && 'data' in (out as object),
+    'Write returns data ACK',
+  )
+  fs.rmSync(root, { recursive: true, force: true })
+  fs.rmSync(mem, { recursive: true, force: true })
+}
+
+await testWriteCarveOut()
 
 console.log('\nAll auto-memory tests passed.')

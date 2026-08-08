@@ -370,6 +370,17 @@ export interface AgentOptions {
    */
   autoMemoryProvider?: IProvider
   /**
+   * Prefetch handle started by the turn host (non-blocking relevance select).
+   * Consumed post-tools inside runAgent; disposed by the host in finally.
+   * Shape matches `MemoryPrefetch` in services/auto-memory/prefetch.ts.
+   */
+  memoryPrefetch?: {
+    promise: Promise<Attachment[]>
+    settledAt: number | null
+    consumedOnIteration: number
+    dispose: () => void
+  }
+  /**
    * Names of tools that are subagent wrappers. Used purely for UI: when
    * provided, the agent tags `tool_call` / `tool_input_start` events with
    * `isSubagent: true` so the frontend can render them with the special
@@ -733,8 +744,13 @@ export interface AutoMemoryConfig {
    * Default medium when omitted.
    */
   modelTier?: ModelTier
-  injectIndex: boolean
-  injectMaxIndexLines: number
+  /**
+   * When true (default), prefetch relevant topic memories each turn and do
+   * not inject MEMORY.md into the system prompt (CC tengu_moth_copse).
+   */
+  prefetchEnabled: boolean
+  /** Selector model tier; default small (product choice vs CC Sonnet). */
+  prefetchModelTier: ModelTier
 }
 
 export interface AppConfig {
@@ -744,12 +760,13 @@ export interface AppConfig {
   sessionMemory: SessionMemoryConfig
   /**
    * Enable auto-memory. Claude Code–compatible flat key (`autoMemoryEnabled`).
-   * Env `AI_AGENT_DISABLE_AUTO_MEMORY=1` still forces off.
+   * Prefer nested `autoMemory.enabled` in settings.json.
    */
   autoMemoryEnabled: boolean
   /**
    * Custom auto-memory directory. Claude Code–compatible (`autoMemoryDirectory`).
-   * Trusted scopes only: user / local / env — never project settings.
+   * Trusted scopes only: user / local settings — never project settings.
+   * Prefer nested `autoMemory.directory`.
    */
   autoMemoryDirectory?: string
   /**
@@ -764,6 +781,18 @@ export interface AppConfig {
    * Flat `autoMemoryModelTier` kept for backward compatibility.
    */
   autoMemoryModelTier?: ModelTier
+  /**
+   * Nested auto-memory settings (prefetch, cacheSafe, …).
+   * Flat CC keys still win when set; nested fills the rest.
+   */
+  autoMemory?: {
+    enabled?: boolean
+    directory?: string
+    cacheSafe?: boolean
+    modelTier?: ModelTier
+    prefetchEnabled?: boolean
+    prefetchModelTier?: ModelTier
+  }
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
   /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */

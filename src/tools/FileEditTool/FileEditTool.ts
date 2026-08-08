@@ -83,7 +83,12 @@ export const definition: ToolDefinition = {
         replace_all?: boolean
       }) => {
         const execution = context.execution
-        if (execution) {
+        // Local Worker: FS path + sandbox (extraWriteRoots for auto-memory).
+        // Remote SSH: Worker RPC + assertInWorkspace.
+        // Match FileReadTool: gate on environmentId only.
+        const useRemoteFs =
+          !!execution && execution.environmentId !== 'local'
+        if (useRemoteFs && execution) {
           try {
             const abs = execution.resolve(cwd, file_path)
             execution.assertInWorkspace(cwd, abs, 'write')

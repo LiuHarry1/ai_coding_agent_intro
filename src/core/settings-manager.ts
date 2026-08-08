@@ -57,14 +57,14 @@ export const DEFAULTS: AppConfig = {
   environments: { ssh: [] },
 }
 
-/** Code defaults for extract/inject (throttle default = 1). */
+/** Code defaults for extract/prefetch (throttle default = 1). */
 const AUTO_MEMORY_RUNTIME_DEFAULTS = {
   extractEveryNTurns: 1,
   cacheSafe: true,
   /** Used only when cacheSafe is false. */
   modelTier: 'medium' as const,
-  injectIndex: true,
-  injectMaxIndexLines: 50,
+  prefetchEnabled: true,
+  prefetchModelTier: 'small' as const,
 } as const
 
 /**
@@ -72,7 +72,7 @@ const AUTO_MEMORY_RUNTIME_DEFAULTS = {
  * plus agent extensions under nested `autoMemory` (or legacy flat keys).
  *
  * CC surface: autoMemoryEnabled / autoMemoryDirectory
- * Agent-only: autoMemory.cacheSafe / autoMemory.modelTier
+ * Agent-only: autoMemory.cacheSafe / autoMemory.modelTier / prefetch*
  */
 export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
   const cacheSafe =
@@ -82,12 +82,28 @@ export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
   const modelTier: ModelTier = isModelTier(config.autoMemoryModelTier)
     ? config.autoMemoryModelTier
     : AUTO_MEMORY_RUNTIME_DEFAULTS.modelTier
+
+  const nested = config.autoMemory
+
+  const prefetchEnabled =
+    typeof nested?.prefetchEnabled === 'boolean'
+      ? nested.prefetchEnabled
+      : AUTO_MEMORY_RUNTIME_DEFAULTS.prefetchEnabled
+
+  const prefetchModelTier: ModelTier = isModelTier(nested?.prefetchModelTier)
+    ? nested.prefetchModelTier
+    : AUTO_MEMORY_RUNTIME_DEFAULTS.prefetchModelTier
+
   return {
     enabled: config.autoMemoryEnabled !== false,
-    directory: config.autoMemoryDirectory,
-    ...AUTO_MEMORY_RUNTIME_DEFAULTS,
+    directory:
+      config.autoMemoryDirectory ??
+      (typeof nested?.directory === 'string' ? nested.directory : undefined),
+    extractEveryNTurns: AUTO_MEMORY_RUNTIME_DEFAULTS.extractEveryNTurns,
     cacheSafe,
     modelTier,
+    prefetchEnabled,
+    prefetchModelTier,
   }
 }
 
@@ -315,6 +331,7 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
   }
   if (layer.autoMemory && typeof layer.autoMemory === 'object') {
     const nested = layer.autoMemory
+    config.autoMemory = { ...config.autoMemory, ...nested }
     if (typeof nested.enabled === 'boolean') {
       config.autoMemoryEnabled = nested.enabled
     }

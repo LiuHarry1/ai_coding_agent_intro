@@ -13,7 +13,7 @@ import {
 } from '../../constants/tool_names.js'
 import { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
 import { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
-import { loadProjectRules } from '../../utils/rules-loader.js'
+import { loadAllAgentRules } from '../../utils/rules-loader.js'
 import { enhanceSystemPromptWithEnvDetails } from '../../constants/prompts.js'
 import { setCwd } from '../../utils/cwd.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
@@ -247,9 +247,11 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           }
           delete subTools[AGENT_TOOL_NAME]
 
-          const projectRules = def.omitProjectRules ? '' : loadProjectRules(cwd)
+          const projectRules = def.omitProjectRules
+            ? ''
+            : loadAllAgentRules(cwd)
           const withRules = projectRules
-            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded from the project (AGENTS.md / CLAUDE.md / .cursor/rules/*.md / .cursorrules). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded (user ~/.ai-agent/AGENTS.md, project AGENTS.md / .ai-agent/AGENTS.md / .ai-agent/rules/*.md, and AGENTS.local.md). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
             : def.systemPrompt
           setCwd(cwd)
           const subSystemPrompt = (

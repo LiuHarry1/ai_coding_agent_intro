@@ -1,6 +1,6 @@
 /**
  * Auto-memory system + extract prompts.
- * Local naming uses AGENTS.md; tool names come from constants.
+ * Prefetch mode uses skipIndex (no MEMORY.md Step 2 / no index inject).
  */
 import {
   EDIT_FILE_TOOL_NAME,
@@ -22,11 +22,49 @@ import {
 const DIR_EXISTS_GUIDANCE =
   'This directory already exists — write to it directly with the Write tool (do not run mkdir or check for its existence).'
 
+function howToSaveSection(skipIndex: boolean): string[] {
+  if (skipIndex) {
+    return [
+      '## How to save memories',
+      '',
+      'Write each memory to its own file (e.g., `user_role.md`, `feedback_testing.md`) using this frontmatter format:',
+      '',
+      ...MEMORY_FRONTMATTER_EXAMPLE,
+      '',
+      '- Keep the name, description, and type fields in memory files up-to-date with the content',
+      '- Organize memory semantically by topic, not chronologically',
+      '- Update or remove memories that turn out to be wrong or outdated',
+      '- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.',
+      '- Relevant memories may be injected via system-reminder attachments; you can also Read/Grep under the memory directory when needed.',
+    ]
+  }
+  return [
+    '## How to save memories',
+    '',
+    'Saving a memory is a two-step process:',
+    '',
+    '**Step 1** — write the memory to its own file (e.g., `user_role.md`, `feedback_testing.md`) using this frontmatter format:',
+    '',
+    ...MEMORY_FRONTMATTER_EXAMPLE,
+    '',
+    `**Step 2** — add a pointer to that file in \`${AUTO_MEM_ENTRYPOINT}\`. \`${AUTO_MEM_ENTRYPOINT}\` is an index, not a memory — each entry should be one line, under ~150 characters: \`- [Title](file.md) — one-line hook\`. It has no frontmatter. Never write memory content directly into \`${AUTO_MEM_ENTRYPOINT}\`.`,
+    '',
+    `- \`${AUTO_MEM_ENTRYPOINT}\` lines after 200 will be truncated, so keep the index concise`,
+    '- Keep the name, description, and type fields in memory files up-to-date with the content',
+    '- Organize memory semantically by topic, not chronologically',
+    '- Update or remove memories that turn out to be wrong or outdated',
+    '- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.',
+  ]
+}
+
 /**
- * Main-agent behavioral guide (individual entries / skipIndex=false).
- * MEMORY.md body is injected separately after AGENTS.md.
+ * Main-agent behavioral guide.
+ * Default skipIndex=true (prefetch path — no MEMORY.md inject).
  */
-export function loadAutoMemoryPrompt(memoryDir: string): string {
+export function loadAutoMemoryPrompt(
+  memoryDir: string,
+  skipIndex = true,
+): string {
   return [
     '# auto memory',
     '',
@@ -39,21 +77,7 @@ export function loadAutoMemoryPrompt(memoryDir: string): string {
     ...TYPES_SECTION_INDIVIDUAL,
     ...WHAT_NOT_TO_SAVE_SECTION,
     '',
-    '## How to save memories',
-    '',
-    'Saving a memory is a two-step process:',
-    '',
-    '**Step 1** — write the memory to its own file (e.g., `user_role.md`, `feedback_testing.md`) using this frontmatter format:',
-    '',
-    ...MEMORY_FRONTMATTER_EXAMPLE,
-    '',
-    `**Step 2** — add a pointer to that file in \`${AUTO_MEM_ENTRYPOINT}\`. \`${AUTO_MEM_ENTRYPOINT}\` is an index, not a memory — each entry should be one line, under ~150 characters: \`- [Title](file.md) — one-line hook\`. It has no frontmatter. Never write memory content directly into \`${AUTO_MEM_ENTRYPOINT}\`.`,
-    '',
-    `- \`${AUTO_MEM_ENTRYPOINT}\` is always loaded into your conversation context — lines after 200 will be truncated, so keep the index concise`,
-    '- Keep the name, description, and type fields in memory files up-to-date with the content',
-    '- Organize memory semantically by topic, not chronologically',
-    '- Update or remove memories that turn out to be wrong or outdated',
-    '- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.',
+    ...howToSaveSection(skipIndex),
     '',
     ...WHEN_TO_ACCESS_SECTION,
     '',
@@ -75,8 +99,10 @@ export function buildExtractAutoMemoryPrompt(opts: {
   newMessageCount: number
   existingMemories: string
   memoryDir: string
+  skipIndex?: boolean
 }): string {
   const { newMessageCount, existingMemories, memoryDir } = opts
+  const skipIndex = opts.skipIndex !== false
   const manifest =
     existingMemories.length > 0
       ? `\n\n## Existing memory files\n\n${existingMemories}\n\nCheck this list before writing — update an existing file rather than creating a duplicate.`
@@ -97,19 +123,6 @@ export function buildExtractAutoMemoryPrompt(opts: {
     ...TYPES_SECTION_INDIVIDUAL,
     ...WHAT_NOT_TO_SAVE_SECTION,
     '',
-    '## How to save memories',
-    '',
-    'Saving a memory is a two-step process:',
-    '',
-    '**Step 1** — write the memory to its own file (e.g., `user_role.md`, `feedback_testing.md`) using this frontmatter format:',
-    '',
-    ...MEMORY_FRONTMATTER_EXAMPLE,
-    '',
-    `**Step 2** — add a pointer to that file in \`${AUTO_MEM_ENTRYPOINT}\`. \`${AUTO_MEM_ENTRYPOINT}\` is an index, not a memory — each entry should be one line, under ~150 characters: \`- [Title](file.md) — one-line hook\`. It has no frontmatter. Never write memory content directly into \`${AUTO_MEM_ENTRYPOINT}\`.`,
-    '',
-    `- \`${AUTO_MEM_ENTRYPOINT}\` is always loaded into your system prompt — lines after 200 will be truncated, so keep the index concise`,
-    '- Organize memory semantically by topic, not chronologically',
-    '- Update or remove memories that turn out to be wrong or outdated',
-    '- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.',
+    ...howToSaveSection(skipIndex),
   ].join('\n')
 }

@@ -95,6 +95,18 @@ export type TaskNotificationAttachment = {
   rawXml: string
 }
 
+/** Prefetched auto-memory topic files (CC relevant_memories). */
+export type RelevantMemoriesAttachment = {
+  type: 'relevant_memories'
+  memories: Array<{
+    path: string
+    content: string
+    mtimeMs: number
+    header: string
+    limit?: number
+  }>
+}
+
 export type Attachment =
   | FileAttachment
   | PdfReferenceAttachment
@@ -107,6 +119,7 @@ export type Attachment =
   | SkillListingAttachment
   | AgentListingDeltaAttachment
   | TaskNotificationAttachment
+  | RelevantMemoriesAttachment
 
 /** @deprecated Import from `utils/read/types` — re-exported for compatibility. */
 export type {
