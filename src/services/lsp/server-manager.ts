@@ -17,10 +17,10 @@ export type CreateLspServerManagerOptions = {
 }
 
 function resolveAgentPackageRoot(): string {
-  if (process.env.BAIX_AGENT_ROOT) {
-    return path.resolve(process.env.BAIX_AGENT_ROOT)
+  if (process.env.AGENT_ROOT) {
+    return path.resolve(process.env.AGENT_ROOT)
   }
-  // Control-plane / tsx path (not used inside bundled worker — Worker always sets BAIX_AGENT_ROOT)
+  // Control-plane / tsx path (not used inside bundled worker — Worker always sets AGENT_ROOT)
   return path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     '../../..',

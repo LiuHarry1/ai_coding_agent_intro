@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BaiX Agent：Remote-SSH 架构设计</title>
+<title>Baize Agent：Remote-SSH 架构设计</title>
 <style>
 :root{
   --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
@@ -82,7 +82,7 @@ li{margin:5px 0}
 <body>
 <div class="layout">
 <aside class="sidebar">
-  <h1>BaiX Remote-SSH</h1>
+  <h1>Baize Remote-SSH</h1>
   <div class="sub">架构设计 · 对齐 VS Code + CC</div>
   <ul class="toc">
     <li><a href="#s1">1. 问题定义</a></li>
@@ -102,7 +102,7 @@ li{margin:5px 0}
 
 <main class="main">
   <div class="hero">
-    <h1>BaiX Agent：Remote-SSH 架构设计</h1>
+    <h1>Baize Agent：Remote-SSH 架构设计</h1>
     <p>目标：选一台电脑 → 指定远程目录为 workspace → UI 本地、工具在远端执行（对标 VS Code Remote-SSH）。</p>
     <p>参考：VS Code / GitHub Codespaces 公开架构 + Claude Code <code>claude ssh</code> + 本仓库现状。</p>
     <span class="badge green">优先 SSH 路径</span>
@@ -190,7 +190,7 @@ Open Folder…     → /home/…/ws-code_index
                          │ SSH exec + -R AuthProxy
                          ▼
 ┌─ Remote Agent Worker ────────────────────────────────┐
-│  ~/.baix-agent-server/&lt;ver&gt;/ · cwd = remoteCwd         │
+│  ~/.baize-agent-worker/&lt;ver&gt;/ · cwd = remoteCwd        │
 │  现有 Tools · stream-json · 无长期明文 API Key          │
 └──────────────────────────────────────────────────────┘</div>
 
@@ -223,7 +223,7 @@ type RemoteBinding = {
     <div class="flow">1. Connect to Host → atsrws0049
 2. 解析 SshHostConfig / ~/.ssh/config
 3. SSH 连通探测
-4. Probe Worker → 无则 deploy 到 ~/.baix-agent-server/&lt;ver&gt;/
+4. Probe Worker → 无则 deploy 到 ~/.baize-agent-worker/&lt;ver&gt;/
 5. 本地启 AuthProxy
 6. ssh -R + 远端启动 worker --cwd &lt;dir&gt;
 7. Handshake → realpath(remoteCwd)
@@ -340,7 +340,7 @@ client/web/src/components/
       <p><strong>我们</strong>：现有 Controller 上加 RemoteSessionManager + AuthProxy + Worker deploy；Session 绑 <code>host + remoteCwd</code>；UI 做 Host/Folder picker。</p>
       <p>第一期不做完整 Extension Host，也不让 Web SSO 直连 SSH。</p>
     </div>
-    <p class="file">Markdown：<code>cc_docs/baix-agent-remote-ssh-architecture.md</code> · 配套 CC 分析：<a href="./claude-code-remote-workspace.html">claude-code-remote-workspace.html</a></p>
+    <p class="file">Markdown：<code>cc_docs/baize-agent-remote-ssh-architecture.md</code> · 配套 CC 分析：<a href="./claude-code-remote-workspace.html">claude-code-remote-workspace.html</a></p>
   </section>
 </main>
 </div>

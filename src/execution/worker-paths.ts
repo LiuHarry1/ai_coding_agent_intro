@@ -5,6 +5,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
+import { WORKER_BUNDLE_NAME } from '../brand.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
@@ -15,9 +16,15 @@ export function getRepoRoot(): string {
 }
 
 export function getWorkerBundlePath(): string {
-  const cjs = path.join(getRepoRoot(), 'dist', 'worker', 'baix-worker.cjs')
+  const cjs = path.join(getRepoRoot(), 'dist', 'worker', WORKER_BUNDLE_NAME)
   if (fs.existsSync(cjs)) return cjs
-  return path.join(getRepoRoot(), 'dist', 'worker', 'baix-worker.js')
+  // Dev alias if someone builds .js instead of .cjs
+  return path.join(
+    getRepoRoot(),
+    'dist',
+    'worker',
+    WORKER_BUNDLE_NAME.replace(/\.cjs$/, '.js'),
+  )
 }
 
 export function getWorkerVersionPath(): string {
@@ -33,7 +40,7 @@ export function readWorkerVersion(): string {
     /* fall through */
   }
   return (
-    process.env.BAIX_WORKER_VERSION ??
+    process.env.WORKER_VERSION ??
     process.env.npm_package_version ??
     '1.0.0'
   )
@@ -49,7 +56,7 @@ export type WorkerLaunch = {
 }
 
 /**
- * Prefer dist/worker/baix-worker.js; fall back to tsx for local dev.
+ * Prefer bundled worker; fall back to tsx for local dev.
  */
 export function resolveWorkerLaunch(): WorkerLaunch {
   const root = getRepoRoot()

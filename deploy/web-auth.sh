@@ -25,7 +25,7 @@ if [ -n "${WEB_PASSWORD:-}" ]; then
   # plaintext password). 640 would give "Permission denied" 500s.
   chmod 644 "$HTPASSWD"
   cat > "$AUTH_INC" <<EOF
-auth_basic           "BaiX AI Agent — login required";
+auth_basic           "Baize AI Agent — login required";
 auth_basic_user_file $HTPASSWD;
 EOF
   echo "[web-auth] Basic Auth ENABLED for user '$USERNAME'."

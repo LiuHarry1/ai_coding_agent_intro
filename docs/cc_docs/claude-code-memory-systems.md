@@ -624,7 +624,7 @@ Claude Code 的 memory = **指令层（CLAUDE.md）** + **跨会话学习层（A
 
 ## 相关文档
 
-- 本仓库对照实现（BaiX agent）：`docs/agent-memory-guide.md`  
+- 本仓库对照实现（Baize agent）：`docs/agent-memory-guide.md`  
 - Session Memory 设计笔记：`docs/cc_docs/session-memory-design.md`、`docs/cc_docs/claude-code-session-memory.md`  
 - Auto Memory 设计笔记：`docs/cc_docs/auto-memory-design.md`  
 - Compact 相关：`docs/cc_docs/claude-code-compacting.md`

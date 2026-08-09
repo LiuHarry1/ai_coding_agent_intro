@@ -73,7 +73,7 @@ export class CredentialBroker {
     }
     // Fallback until AuthProxy is started — workers may still use HTTP mint
     // on the control plane later.
-    return process.env.BAIX_BROKER_URL ?? 'http://127.0.0.1:0'
+    return process.env.BROKER_URL ?? 'http://127.0.0.1:0'
   }
 
   getProxyPort(): number | null {

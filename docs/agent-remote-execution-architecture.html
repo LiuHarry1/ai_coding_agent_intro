@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BaiX Agent：可扩展远程执行架构（修订版）</title>
+<title>Baize Agent：可扩展远程执行架构（修订版）</title>
 <style>
 :root{
   --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2d333b;
@@ -268,7 +268,7 @@ Chat:
   ├─ issueRuntimeAuth(sessionId, envId) → token
   ├─ AuthProxy (本地)     ← SshProvider -R
   └─ HTTP mint endpoint   ← Bridge / Cloud / Direct</code></pre>
-    <p>Worker 只有 <code>BAIX_RUNTIME_TOKEN</code> + 可达的 <code>BAIX_BROKER_URL</code>。禁止长期 Key 写远端。</p>
+    <p>Worker 只有 <code>RUNTIME_TOKEN</code> + 可达的 <code>BROKER_URL</code>。禁止长期 Key 写远端。</p>
   </section>
 
   <section id="s9">
@@ -334,7 +334,7 @@ client/.../environment-picker  # 按 kind 渲染，不写死 SSH</code></pre>
       <tr><td>以少改 HTTP 为中心</td><td>Runtime 协议中心 + HTTP 适配器</td></tr>
       <tr><td>文档以 Remote-SSH 为根</td><td>根是 Execution Environments</td></tr>
     </table>
-    <p class="file">初稿保留作 SSH 细节备忘：<a href="./baix-agent-remote-ssh-architecture.html">baix-agent-remote-ssh-architecture.html</a></p>
+    <p class="file">初稿保留作 SSH 细节备忘：<a href="./baize-agent-remote-ssh-architecture.html">baize-agent-remote-ssh-architecture.html</a></p>
   </section>
 
   <section id="s13">
@@ -345,7 +345,7 @@ client/.../environment-picker  # 按 kind 渲染，不写死 SSH</code></pre>
       <p><b>Environment × Workspace × Runtime × CredentialBroker</b>，Provider 可插拔，Local 一等公民，Session 只绑 WorkspaceHandle。</p>
       <p>第一期用 SshProvider 满足 VS Code 体验；之后远程需求优先加 Provider，禁止在 Session/Router 上长 <code>if (remoteXxx)</code>。</p>
     </div>
-    <p class="file">Markdown：<code>cc_docs/baix-agent-remote-execution-architecture.md</code></p>
+    <p class="file">Markdown：<code>cc_docs/baize-agent-remote-execution-architecture.md</code></p>
   </section>
 </main>
 </div>

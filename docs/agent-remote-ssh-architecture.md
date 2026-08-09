@@ -1,6 +1,6 @@
-# BaiX Agent：Remote-SSH 架构设计（初稿 · SSH 细节备忘）
+# Baize Agent：Remote-SSH 架构设计（初稿 · SSH 细节备忘）
 
-> **已修订**：长期架构请看 [`baix-agent-remote-execution-architecture.md`](./baix-agent-remote-execution-architecture.md)。  
+> **已修订**：长期架构请看 [`baize-agent-remote-execution-architecture.md`](./baize-agent-remote-execution-architecture.md)。  
 > 本文保留为 **SshProvider 实现细节** 备忘（probe/deploy/`-R`/AuthProxy/时序），不再作为平台根设计。
 
 > 目标：实现类似 VS Code Remote-SSH 的体验——**选一台电脑 → 指定远程目录为 workspace → UI 本地、工具/文件在远端执行**。  
@@ -93,7 +93,7 @@ claude ssh <host> [dir]
 
 ---
 
-## 3. 推荐架构（BaiX Remote-SSH）
+## 3. 推荐架构（Baize Remote-SSH）
 
 ### 3.1 一句话
 
@@ -126,7 +126,7 @@ claude ssh <host> [dir]
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Remote Agent Worker（目标机）                               │
-│  - 安装于 ~/.baix-agent-server/<version>/                    │
+│  - 安装于 ~/.baize-agent-worker/<version>/                   │
 │  - cwd = remoteCwd                                           │
 │  - 执行 Read/Edit/Bash/Grep…（现有 tools，cwd 相对远端）      │
 │  - 会话流：stream-json / NDJSON over unix socket → SSH -R    │
@@ -202,10 +202,10 @@ Settings 建议放在 `.ai-agent/settings.json`：
 2. Controller: 解析 SshHostConfig / ssh config
 3. ssh 连通性探测（BatchMode / 超时）
 4. Probe: 远端是否已有兼容 Agent Worker
-     无 → 本地打包/下载 worker → scp/sftp 到 ~/.baix-agent-server/<ver>/
+     无 → 本地打包/下载 worker → scp/sftp 到 ~/.baize-agent-worker/<ver>/
 5. 本地启动 AuthProxy（监听 unix socket 或 127.0.0.1 高位端口）
 6. ssh -R <remote_sock>:<local_auth_proxy>
-     + 远端启动: baix-agent-worker --cwd <dir> --sdk-url unix://... --print
+     + 远端启动: baize-worker --stdio（AGENT_ROOT 指向部署目录）
 7. Handshake：协商 protocol version、返回 remoteCwd（realpath）
 8. UI: Open Folder（若未指定 dir）→ 远端 list_dir → 用户确认
 9. Session.remote = { hostId, remoteCwd, workerVersion }

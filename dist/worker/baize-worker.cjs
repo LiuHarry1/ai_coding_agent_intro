@@ -1245,8 +1245,8 @@ var require_semaphore = __commonJS({
         this._waiting = [];
       }
       lock(thunk) {
-        return new Promise((resolve4, reject) => {
-          this._waiting.push({ thunk, resolve: resolve4, reject });
+        return new Promise((resolve5, reject) => {
+          this._waiting.push({ thunk, resolve: resolve5, reject });
           this.runNext();
         });
       }
@@ -2871,9 +2871,9 @@ ${JSON.stringify(message, null, 4)}`);
           if (typeof cancellationStrategy.sender.enableCancellation === "function") {
             cancellationStrategy.sender.enableCancellation(requestMessage);
           }
-          return new Promise(async (resolve4, reject) => {
+          return new Promise(async (resolve5, reject) => {
             const resolveWithCleanup = (r) => {
-              resolve4(r);
+              resolve5(r);
               cancellationStrategy.sender.cleanup(id);
               disposable?.dispose();
             };
@@ -3303,10 +3303,10 @@ var require_ril = __commonJS({
         return api_1.Disposable.create(() => this.stream.off("end", listener));
       }
       write(data, encoding) {
-        return new Promise((resolve4, reject) => {
+        return new Promise((resolve5, reject) => {
           const callback = (error) => {
             if (error === void 0 || error === null) {
-              resolve4();
+              resolve5();
             } else {
               reject(error);
             }
@@ -3442,8 +3442,8 @@ var require_main = __commonJS({
     exports2.createMessageConnection = createMessageConnection2;
     var ril_1 = __importDefault(require_ril());
     ril_1.default.install();
-    var path7 = __importStar(require("path"));
-    var os2 = __importStar(require("os"));
+    var path8 = __importStar(require("path"));
+    var os3 = __importStar(require("os"));
     var fs3 = __importStar(require("fs"));
     var crypto_1 = require("crypto");
     var net_1 = require("net");
@@ -3585,7 +3585,7 @@ var require_main = __commonJS({
       }
       let randomLength = 32;
       const fixedLength = "/lsp-.sock".length;
-      const tmpDir = fs3.realpathSync(XDG_RUNTIME_DIR ?? os2.tmpdir());
+      const tmpDir = fs3.realpathSync(XDG_RUNTIME_DIR ?? os3.tmpdir());
       const limit = safeIpcPathLengths.get(process.platform);
       if (limit !== void 0) {
         randomLength = Math.min(limit - tmpDir.length - fixedLength, randomLength);
@@ -3594,14 +3594,14 @@ var require_main = __commonJS({
         throw new Error(`Unable to generate a random pipe name with ${randomLength} characters.`);
       }
       const randomSuffix = (0, crypto_1.randomBytes)(Math.floor(randomLength / 2)).toString("hex");
-      return path7.join(tmpDir, `lsp-${randomSuffix}.sock`);
+      return path8.join(tmpDir, `lsp-${randomSuffix}.sock`);
     }
     function createClientPipeTransport(pipeName, encoding = "utf-8") {
       let connectResolve;
-      const connected = new Promise((resolve4, _reject) => {
-        connectResolve = resolve4;
+      const connected = new Promise((resolve5, _reject) => {
+        connectResolve = resolve5;
       });
-      return new Promise((resolve4, reject) => {
+      return new Promise((resolve5, reject) => {
         const server = (0, net_1.createServer)((socket) => {
           server.close();
           connectResolve([
@@ -3612,7 +3612,7 @@ var require_main = __commonJS({
         server.on("error", reject);
         server.listen(pipeName, () => {
           server.removeListener("error", reject);
-          resolve4({
+          resolve5({
             onConnected: () => {
               return connected;
             }
@@ -3629,10 +3629,10 @@ var require_main = __commonJS({
     }
     function createClientSocketTransport(port, encoding = "utf-8") {
       let connectResolve;
-      const connected = new Promise((resolve4, _reject) => {
-        connectResolve = resolve4;
+      const connected = new Promise((resolve5, _reject) => {
+        connectResolve = resolve5;
       });
-      return new Promise((resolve4, reject) => {
+      return new Promise((resolve5, reject) => {
         const server = (0, net_1.createServer)((socket) => {
           server.close();
           connectResolve([
@@ -3643,7 +3643,7 @@ var require_main = __commonJS({
         server.on("error", reject);
         server.listen(port, "127.0.0.1", () => {
           server.removeListener("error", reject);
-          resolve4({
+          resolve5({
             onConnected: () => {
               return connected;
             }
@@ -3682,7 +3682,7 @@ var require_main = __commonJS({
 
 // src/worker/main.ts
 var fs2 = __toESM(require("fs"), 1);
-var path6 = __toESM(require("path"), 1);
+var path7 = __toESM(require("path"), 1);
 var import_readline = require("readline");
 
 // src/worker/lsp-host.ts
@@ -3734,10 +3734,10 @@ function createLspClient(serverName, onCrash) {
       if (!child.stdin || !child.stdout) {
         throw new Error(`LSP server ${serverName} stdio is unavailable`);
       }
-      await new Promise((resolve4, reject) => {
+      await new Promise((resolve5, reject) => {
         const onSpawn = () => {
           cleanup();
-          resolve4();
+          resolve5();
         };
         const onError = (err) => {
           cleanup();
@@ -4022,7 +4022,7 @@ function createLspServerInstance(name, config) {
   };
 }
 function sleep(ms) {
-  return new Promise((resolve4) => setTimeout(resolve4, ms));
+  return new Promise((resolve5) => setTimeout(resolve5, ms));
 }
 function withTimeout(promise, ms, message) {
   let timer;
@@ -4149,11 +4149,11 @@ function registerLSPNotificationHandlers(manager2, onDiagnostics) {
 
 // src/services/lsp/server-manager.ts
 function resolveAgentPackageRoot() {
-  if (process.env.BAIX_AGENT_ROOT) {
-    return path2.resolve(process.env.BAIX_AGENT_ROOT);
+  if (process.env.AGENT_ROOT) {
+    return path2.resolve(process.env.AGENT_ROOT);
   }
   return path2.resolve(
-    path2.dirname((0, import_url3.fileURLToPath)("file:///baix-worker.cjs")),
+    path2.dirname((0, import_url3.fileURLToPath)("file:///baize-worker.cjs")),
     "../../.."
   );
 }
@@ -4506,8 +4506,8 @@ async function shutdownLspHost() {
 // src/core/shell/spawn-shell.ts
 var import_child_process4 = require("child_process");
 var fs = __toESM(require("fs"), 1);
-var os = __toESM(require("os"), 1);
-var path5 = __toESM(require("path"), 1);
+var os2 = __toESM(require("os"), 1);
+var path6 = __toESM(require("path"), 1);
 
 // src/core/shell/windows-paths.ts
 var import_fs = require("fs");
@@ -4550,7 +4550,7 @@ var cachedGitBash;
 function findGitBashPath() {
   if (!isWindows) return null;
   if (cachedGitBash !== void 0) return cachedGitBash;
-  for (const envKey of ["BAIX_GIT_BASH_PATH", "CLAUDE_CODE_GIT_BASH_PATH"]) {
+  for (const envKey of ["GIT_BASH_PATH", "CLAUDE_CODE_GIT_BASH_PATH"]) {
     const fromEnv = process.env[envKey]?.trim();
     if (fromEnv && (0, import_fs.existsSync)(fromEnv)) {
       cachedGitBash = fromEnv;
@@ -4602,7 +4602,7 @@ function resolveBashExecutable() {
   const gitBash = findGitBashPath();
   if (!gitBash) {
     throw new Error(
-      "Git Bash not found. Install Git for Windows (https://git-scm.com/downloads/win) or set BAIX_GIT_BASH_PATH (or CLAUDE_CODE_GIT_BASH_PATH) to bash.exe. Alternatively use the PowerShell tool."
+      "Git Bash not found. Install Git for Windows (https://git-scm.com/downloads/win) or set GIT_BASH_PATH (or CLAUDE_CODE_GIT_BASH_PATH) to bash.exe. Alternatively use the PowerShell tool."
     );
   }
   return gitBash;
@@ -4665,11 +4665,59 @@ function forceKillChild(child) {
   }
 }
 
+// src/utils/request-scope.ts
+var import_node_async_hooks = require("node:async_hooks");
+var os = __toESM(require("os"), 1);
+var path5 = __toESM(require("path"), 1);
+var requestScopeAls = new import_node_async_hooks.AsyncLocalStorage();
+function authEnabled() {
+  return String(process.env.AUTH_ENABLED ?? "").trim().toLowerCase() === "true";
+}
+function getAgentHome() {
+  if (!authEnabled()) {
+    return os.homedir();
+  }
+  const scope = requestScopeAls.getStore();
+  if (!scope?.agentHome) {
+    throw new Error(
+      "getAgentHome() called with AUTH_ENABLED but no agent home in context; wrap the request with runWithRequestScope({ agentHome, cwd })"
+    );
+  }
+  return scope.agentHome;
+}
+function getShellHome() {
+  try {
+    return getAgentHome();
+  } catch (err) {
+    if (authEnabled()) {
+      const pinned = process.env.HOME?.trim();
+      if (pinned) return path5.resolve(pinned);
+    }
+    throw err;
+  }
+}
+
+// brand.json
+var brand_default = {
+  name: "Baize",
+  tagline: "\u767D\u6CFD",
+  slug: "baize"
+};
+
+// src/brand.ts
+var APP_NAME = brand_default.name;
+var APP_TAGLINE = brand_default.tagline;
+var APP_SLUG = brand_default.slug;
+var WORKER_BUNDLE_NAME = `${APP_SLUG}-worker.cjs`;
+var WORKER_HOME_DIRNAME = `.${APP_SLUG}-agent-worker`;
+var WORKER_CWD_FILE_PREFIX = `${APP_SLUG}-worker-cwd`;
+var WORKER_BG_CWD_FILE_PREFIX = `${APP_SLUG}-worker-bg-cwd`;
+
 // src/core/shell/spawn-shell.ts
 var isWindows3 = process.platform === "win32";
 function makeCwdFile(prefix) {
-  return path5.join(
-    os.tmpdir(),
+  return path6.join(
+    os2.tmpdir(),
     `${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
 }
@@ -4690,6 +4738,12 @@ function wrapPowerShell(userCmd, cwdFileNative) {
 }
 function prepareShellSpawn(opts) {
   const cwdFileNative = makeCwdFile(opts.cwdFilePrefix ?? "agent-shell-cwd");
+  const agentHome = getShellHome();
+  const homeEnv = {
+    ...process.env,
+    HOME: agentHome,
+    ...isWindows3 ? { USERPROFILE: agentHome } : {}
+  };
   if (opts.shell === "powershell") {
     return {
       shellKind: "powershell",
@@ -4702,7 +4756,7 @@ function prepareShellSpawn(opts) {
         "-Command",
         wrapPowerShell(opts.userCommand, cwdFileNative)
       ],
-      env: { ...process.env },
+      env: homeEnv,
       cwdFileNative
     };
   }
@@ -4711,7 +4765,7 @@ function prepareShellSpawn(opts) {
     shellKind: "bash",
     command: resolveBashExecutable(),
     args: isWindows3 ? ["-c", wrapBash(opts.userCommand, cwdFileForBash)] : ["-lc", wrapBash(opts.userCommand, cwdFileForBash)],
-    env: { ...process.env, TERM: "dumb" },
+    env: { ...homeEnv, TERM: "dumb" },
     cwdFileNative
   };
 }
@@ -4741,12 +4795,12 @@ function runShellCommand(opts) {
     prepared = prepareShellSpawn({
       shell: opts.shell,
       userCommand: opts.command,
-      cwdFilePrefix: opts.cwdFilePrefix ?? "baix-worker-cwd"
+      cwdFilePrefix: opts.cwdFilePrefix ?? WORKER_CWD_FILE_PREFIX
     });
   } catch (err) {
     return Promise.reject(err instanceof Error ? err : new Error(String(err)));
   }
-  return new Promise((resolve4, reject) => {
+  return new Promise((resolve5, reject) => {
     const child = (0, import_child_process4.spawn)(prepared.command, prepared.args, {
       cwd: opts.cwd,
       env: prepared.env,
@@ -4784,7 +4838,7 @@ function runShellCommand(opts) {
       settled = true;
       const cwdAfter = readCwdAfter(prepared.cwdFileNative, prepared.shellKind);
       cleanupCwdFile(prepared.cwdFileNative);
-      resolve4({ stdout, stderr, code, cwdAfter });
+      resolve5({ stdout, stderr, code, cwdAfter });
     });
   });
 }
@@ -4802,7 +4856,7 @@ function parseLines(stdout) {
 function runRg(opts) {
   const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const fullArgs = [...opts.args, opts.target];
-  return new Promise((resolve4, reject) => {
+  return new Promise((resolve5, reject) => {
     (0, import_node_child_process.execFile)(
       "rg",
       fullArgs,
@@ -4814,11 +4868,11 @@ function runRg(opts) {
       },
       (error, stdout, stderr) => {
         if (!error) {
-          resolve4({ lines: parseLines(stdout) });
+          resolve5({ lines: parseLines(stdout) });
           return;
         }
         if (error.code === 1) {
-          resolve4({ lines: [] });
+          resolve5({ lines: [] });
           return;
         }
         if (error.code === "ENOENT") {
@@ -4846,7 +4900,7 @@ function runRg(opts) {
 }
 
 // src/worker/main.ts
-var WORKER_VERSION = process.env.BAIX_WORKER_VERSION ?? process.env.npm_package_version ?? "1.0.0";
+var WORKER_VERSION = process.env.WORKER_VERSION ?? process.env.npm_package_version ?? "1.0.0";
 var boundCwd = null;
 var boundEnvId = "local";
 var shuttingDown = false;
@@ -4867,7 +4921,7 @@ function send(msg) {
 }
 setLspEventSender(send);
 function logErr(msg) {
-  process.stderr.write(`[baix-worker] ${msg}
+  process.stderr.write(`[${APP_SLUG}-worker] ${msg}
 `);
 }
 async function runFsOp(op) {
@@ -4875,7 +4929,7 @@ async function runFsOp(op) {
     case "readText":
       return fs2.promises.readFile(op.path, "utf-8");
     case "writeText": {
-      await fs2.promises.mkdir(path6.dirname(op.path), { recursive: true });
+      await fs2.promises.mkdir(path7.dirname(op.path), { recursive: true });
       await fs2.promises.writeFile(op.path, op.content, "utf-8");
       return null;
     }
@@ -4904,15 +4958,15 @@ async function runFsOp(op) {
         command: op.command,
         cwd: op.cwd,
         timeoutMs: op.timeoutMs ?? 12e4,
-        cwdFilePrefix: "baix-worker-cwd"
+        cwdFilePrefix: WORKER_CWD_FILE_PREFIX
       });
     case "exec_bg_start": {
-      await fs2.promises.mkdir(path6.dirname(op.outputPath), { recursive: true });
+      await fs2.promises.mkdir(path7.dirname(op.outputPath), { recursive: true });
       await fs2.promises.writeFile(op.outputPath, "", "utf-8");
       const prepared = prepareShellSpawn({
         shell: op.shell ?? "bash",
         userCommand: op.command,
-        cwdFilePrefix: "baix-worker-bg-cwd"
+        cwdFilePrefix: WORKER_BG_CWD_FILE_PREFIX
       });
       const child = (0, import_child_process5.spawn)(prepared.command, prepared.args, {
         cwd: op.cwd,
@@ -4986,7 +5040,7 @@ async function handle(msg) {
       try {
         boundCwd = await fs2.promises.realpath(msg.workspace.cwd);
       } catch {
-        boundCwd = path6.resolve(msg.workspace.cwd);
+        boundCwd = path7.resolve(msg.workspace.cwd);
       }
       try {
         process.chdir(boundCwd);
@@ -5069,7 +5123,8 @@ async function handle(msg) {
 }
 function main() {
   if (!process.argv.includes("--stdio")) {
-    process.stderr.write("Usage: baix-worker --stdio\n");
+    process.stderr.write(`Usage: ${WORKER_BUNDLE_NAME.replace(/\.cjs$/, "")} --stdio
+`);
     process.exit(2);
   }
   const rl = (0, import_readline.createInterface)({ input: process.stdin, crlfDelay: Infinity });
@@ -5090,8 +5145,8 @@ function main() {
     if (!shuttingDown) process.exit(0);
   });
   logErr(
-    `started version=${WORKER_VERSION} pid=${process.pid} agentRoot=${process.env.BAIX_AGENT_ROOT || "(default)"}`
+    `started version=${WORKER_VERSION} pid=${process.pid} agentRoot=${process.env.AGENT_ROOT || "(default)"}`
   );
 }
 main();
-//# sourceMappingURL=baix-worker.cjs.map
+//# sourceMappingURL=baize-worker.cjs.map

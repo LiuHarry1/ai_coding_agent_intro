@@ -6,7 +6,7 @@ import {
 
 const windowsNote = isWindows
   ? `
-On Windows this tool runs Git Bash (not cmd.exe). Install Git for Windows or set BAIX_GIT_BASH_PATH if spawn fails. Prefer the PowerShell tool for native Windows cmdlets. Shell env (\`conda activate\`) does not persist across calls — chain in one command.
+On Windows this tool runs Git Bash (not cmd.exe). Install Git for Windows or set GIT_BASH_PATH if spawn fails. Prefer the PowerShell tool for native Windows cmdlets. Shell env (\`conda activate\`) does not persist across calls — chain in one command.
 `
   : ''
 

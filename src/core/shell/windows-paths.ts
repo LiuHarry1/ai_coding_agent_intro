@@ -56,14 +56,14 @@ let cachedGitBash: string | null | undefined
 
 /**
  * Locate Git for Windows bash.exe.
- * Order: BAIX_GIT_BASH_PATH → CLAUDE_CODE_GIT_BASH_PATH → Program Files → where git.
+ * Order: GIT_BASH_PATH → CLAUDE_CODE_GIT_BASH_PATH → Program Files → where git.
  * Returns null if missing — never fall back to System32/WSL bash.
  */
 export function findGitBashPath(): string | null {
   if (!isWindows) return null
   if (cachedGitBash !== undefined) return cachedGitBash
 
-  for (const envKey of ['BAIX_GIT_BASH_PATH', 'CLAUDE_CODE_GIT_BASH_PATH']) {
+  for (const envKey of ['GIT_BASH_PATH', 'CLAUDE_CODE_GIT_BASH_PATH']) {
     const fromEnv = process.env[envKey]?.trim()
     if (fromEnv && existsSync(fromEnv)) {
       cachedGitBash = fromEnv
@@ -130,7 +130,7 @@ export function resolveBashExecutable(): string {
   if (!gitBash) {
     throw new Error(
       'Git Bash not found. Install Git for Windows (https://git-scm.com/downloads/win) ' +
-        'or set BAIX_GIT_BASH_PATH (or CLAUDE_CODE_GIT_BASH_PATH) to bash.exe. ' +
+        'or set GIT_BASH_PATH (or CLAUDE_CODE_GIT_BASH_PATH) to bash.exe. ' +
         'Alternatively use the PowerShell tool.',
     )
   }

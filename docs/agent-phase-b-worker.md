@@ -1,18 +1,18 @@
-# BaiX：目标架构（Isomorphic Agent Worker）
+# Baize：目标架构（Isomorphic Agent Worker）
 
 > **立场**：要最好的架构，不要过渡方案、不要双轨、不考虑向后兼容。  
 > 本文取代此前「Phase A / B1 务实切片」作为 **唯一目标形态**。  
-> 平台骨架仍见 [`baix-agent-remote-execution-architecture.md`](./baix-agent-remote-execution-architecture.md)；本文把「执行面」钉死。
+> 平台骨架仍见 [`baize-agent-remote-execution-architecture.md`](./baize-agent-remote-execution-architecture.md)；本文把「执行面」钉死。
 
 ## 实现状态（2026-07-30）
 
 **已落地（本仓）：**
 
-- `src/worker/main.ts` + `npm run build:worker` → `dist/worker/baix-worker.cjs`
+- `src/worker/main.ts` + `npm run build:worker` → `dist/worker/baize-worker.cjs`
 - Local：强制 spawn Worker（stdio NDJSON）
 - SSH：`ensureRemoteWorker`（scp Worker + `integrations/stpl-lsp-bridge`）+ stdio Runtime
 - `WorkerExecutionBackend`：`fs_op` + **`lsp_op`**（LSP 在 Worker 内 spawn）
-- STPL：settings 用 `STPL_AUTO_DISCOVER`；远程 `BAIX_AGENT_ROOT` 指向部署目录
+- STPL：settings 用 `STPL_AUTO_DISCOVER`；远程 `AGENT_ROOT` 指向部署目录
 - 冒烟：`npx tsx src/execution/smoke-stpl-worker.ts`（bridge + mock LS，hover OK）
 
 **已落地（diagnostics）：** Worker `publishDiagnostics` → `lsp_event` → Control Plane `LSPDiagnosticRegistry` → 下轮 attachments（对齐 CC / VS Code 推送模型）
@@ -76,7 +76,7 @@
          │                                       │ Bridge/Cloud: 同 Worker，换接入
 ```
 
-**Local**：`node baix-worker --stdio` 子进程，cwd = 本地 workspace。  
+**Local**：`node baize-worker --stdio` 子进程，cwd = 本地 workspace。  
 **SSH**：`ensureWorker` 上传同版本包 → `ssh` 起进程 → stdio 帧 = 同一协议。  
 对 Orchestrator 而言：**只有 `RuntimePort`，没有 `kind === 'ssh'`。**
 
@@ -156,7 +156,7 @@ interrupt · ping/pong · shutdown · error
 
 ```
 构建产物（一份）：
-  dist/worker/baix-worker.js   # bundle，尽量零 native
+  dist/worker/baize-worker.cjs   # bundle，尽量零 native
   dist/worker/version.json
   （可选）bundled stpl-lsp-bridge + jmx helper
 
@@ -164,7 +164,7 @@ LocalProvider.ensureWorker:
   校验本机 dist 版本即可（或始终用当前 build）
 
 SshProvider.ensureWorker(version):
-  1. 远端 ~/.baix-agent-worker/<ver>/.installed 比对
+  1. 远端 ~/.baize-agent-worker/<ver>/.installed 比对
   2. 否则 tar|ssh 或 scp 上传（默认 localServerDownload 语义：本机有包再传）
   3. node 冒烟
   4. openRuntime: ssh -R authSock · 起 worker --stdio · 帧适配 RuntimePort

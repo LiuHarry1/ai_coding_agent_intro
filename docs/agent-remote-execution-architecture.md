@@ -1,16 +1,16 @@
-# BaiX Agent：可扩展远程执行架构（修订版）
+# Baize Agent：可扩展远程执行架构（修订版）
 
 > 目标：第一期落地 VS Code 式「连某台机器 + 打开远端目录」，同时让 Bridge / 云环境 / Direct Connect 等后续需求 **只加 Provider，不改主干**。  
 > 约束：**不考虑向后兼容**；优先干净抽象。  
 > 参考：VS Code Remote 分层、CC 的 Environment/Session 模型、上一版设计的复盘。
 
-配套 HTML：[`baix-agent-remote-execution-architecture.html`](./baix-agent-remote-execution-architecture.html)
+配套 HTML：[`baize-agent-remote-execution-architecture.html`](./baize-agent-remote-execution-architecture.html)
 
 ---
 
 ## 0. 对上一版设计的复盘（问题）
 
-上一版（`baix-agent-remote-ssh-architecture` 初稿）能做 SSH MVP，但作为长期架构有几个硬伤：
+上一版（`baize-agent-remote-ssh-architecture` 初稿）能做 SSH MVP，但作为长期架构有几个硬伤：
 
 | 问题 | 表现 | 后果 |
 |------|------|------|
@@ -287,7 +287,7 @@ Chat turn:
 |------|------|
 | list/resolve | `~/.ssh/config` + settings `environments.ssh[]` |
 | connect | `ssh` 连通；保存 Connection |
-| ensureWorker | probe `~/.baix-agent-worker/<ver>`；缺则 scp 上传 |
+| ensureWorker | probe `~/.baize-agent-worker/<ver>`；缺则 scp 上传 |
 | openRuntime | `ssh -R` → CredentialBroker AuthProxy；远端起 worker；封装为 RuntimePort |
 | openFs | sftp 或 worker 旁路 fs RPC |
 | forwardPort | `LocalForward` / 动态转发 |
@@ -304,7 +304,7 @@ UI：「Connect to Host…」只是 EnvironmentPicker 在 `kind=ssh` 时的皮�
 两种角色都用同一 Provider 接口表达：
 
 - **Outbound bridge client**（网页派活到已注册机器）  
-- **Inbound bridge daemon**（本机 `baix remote-control`）——可作为单独二进制，向 Registry 注册 Environment
+- **Inbound bridge daemon**（本机 `baize remote-control`）——可作为单独二进制，向 Registry 注册 Environment
 
 ### 6.4 CloudProvider（后续，对标 CCR/Codespaces）
 
@@ -355,7 +355,7 @@ CredentialBroker
 
 规则：
 
-- Worker 环境变量只有 `BAIX_RUNTIME_TOKEN` + `BAIX_BROKER_URL`（经隧道可达）  
+- Worker 环境变量只有 `RUNTIME_TOKEN` + `BROKER_URL`（经隧道可达）  
 - 禁止把长期 LLM Key 写入远端磁盘 / 远端 env  
 - Token 绑定 `sessionId + environmentId`，可吊销  
 
@@ -466,7 +466,7 @@ Session 只存 `WorkspaceHandle`；SSH 细节进 `EnvironmentDescriptor.endpoint
 | 以「少改现有 HTTP」为架构中心 | 改为 Runtime 协议中心 + HTTP 适配器 |
 | 文档标题/目录以 Remote-SSH 为根 | 根是 **Execution Environments**；SSH 是 Provider |
 
-初稿保留作 SSH 细节备忘：[`baix-agent-remote-ssh-architecture.md`](./baix-agent-remote-ssh-architecture.md)
+初稿保留作 SSH 细节备忘：[`baize-agent-remote-ssh-architecture.md`](./baize-agent-remote-ssh-architecture.md)
 
 ---
 

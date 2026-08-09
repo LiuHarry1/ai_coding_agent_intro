@@ -1,7 +1,7 @@
 /**
  * Agent Worker — FS/shell/LSP for Control Plane via stdio NDJSON.
  *
- * Run: node dist/worker/baix-worker.js --stdio
+ * Run: node dist/worker/{slug}-worker.cjs --stdio
  *   or: npx tsx src/worker/main.ts --stdio
  */
 import * as fs from 'fs'
@@ -24,9 +24,15 @@ import { prepareShellSpawn } from '../core/shell/spawn-shell.js'
 import { forceKillChild } from '../core/platform.js'
 import { spawn, type ChildProcess } from 'child_process'
 import { runRg } from './run-rg.js'
+import {
+  APP_SLUG,
+  WORKER_BG_CWD_FILE_PREFIX,
+  WORKER_BUNDLE_NAME,
+  WORKER_CWD_FILE_PREFIX,
+} from '../brand.js'
 
 const WORKER_VERSION =
-  process.env.BAIX_WORKER_VERSION ??
+  process.env.WORKER_VERSION ??
   process.env.npm_package_version ??
   '1.0.0'
 
@@ -63,7 +69,7 @@ function send(msg: RuntimeServerMessage): void {
 setLspEventSender(send)
 
 function logErr(msg: string): void {
-  process.stderr.write(`[baix-worker] ${msg}\n`)
+  process.stderr.write(`[${APP_SLUG}-worker] ${msg}\n`)
 }
 
 async function runFsOp(op: WorkerFsOp): Promise<unknown> {
@@ -100,7 +106,7 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
         command: op.command,
         cwd: op.cwd,
         timeoutMs: op.timeoutMs ?? 120_000,
-        cwdFilePrefix: 'baix-worker-cwd',
+        cwdFilePrefix: WORKER_CWD_FILE_PREFIX,
       })
     case 'exec_bg_start': {
       await fs.promises.mkdir(path.dirname(op.outputPath), { recursive: true })
@@ -108,7 +114,7 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
       const prepared = prepareShellSpawn({
         shell: (op.shell ?? 'bash') as ShellKind,
         userCommand: op.command,
-        cwdFilePrefix: 'baix-worker-bg-cwd',
+        cwdFilePrefix: WORKER_BG_CWD_FILE_PREFIX,
       })
       const child = spawn(prepared.command, prepared.args, {
         cwd: op.cwd,
@@ -267,7 +273,7 @@ async function handle(msg: RuntimeClientMessage): Promise<void> {
 
 function main(): void {
   if (!process.argv.includes('--stdio')) {
-    process.stderr.write('Usage: baix-worker --stdio\n')
+    process.stderr.write(`Usage: ${WORKER_BUNDLE_NAME.replace(/\.cjs$/, '')} --stdio\n`)
     process.exit(2)
   }
 
@@ -290,7 +296,7 @@ function main(): void {
   })
 
   logErr(
-    `started version=${WORKER_VERSION} pid=${process.pid} agentRoot=${process.env.BAIX_AGENT_ROOT || '(default)'}`,
+    `started version=${WORKER_VERSION} pid=${process.pid} agentRoot=${process.env.AGENT_ROOT || '(default)'}`,
   )
 }
 

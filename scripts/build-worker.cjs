@@ -1,12 +1,18 @@
 /**
- * Bundle Agent Worker to dist/worker/baix-worker.cjs (CJS for Node LSP deps).
+ * Bundle Agent Worker to dist/worker/{slug}-worker.cjs (CJS for Node LSP deps).
+ * slug comes from brand.json.
  */
 const esbuild = require('esbuild')
 const fs = require('fs')
 const path = require('path')
 
 const root = path.join(__dirname, '..')
-const outfile = path.join(root, 'dist', 'worker', 'baix-worker.cjs')
+const brand = JSON.parse(
+  fs.readFileSync(path.join(root, 'brand.json'), 'utf8'),
+)
+const slug = brand.slug || 'baize'
+const workerFile = `${slug}-worker.cjs`
+const outfile = path.join(root, 'dist', 'worker', workerFile)
 const versionFile = path.join(root, 'dist', 'worker', 'version.json')
 const pkg = JSON.parse(
   fs.readFileSync(path.join(root, 'package.json'), 'utf8'),
@@ -24,8 +30,8 @@ async function main() {
     sourcemap: true,
     logLevel: 'info',
     define: {
-      // Bundled worker always relies on BAIX_AGENT_ROOT; avoid empty import.meta.url
-      'import.meta.url': JSON.stringify('file:///baix-worker.cjs'),
+      // Bundled worker always relies on AGENT_ROOT; avoid empty import.meta.url
+      'import.meta.url': JSON.stringify(`file:///${workerFile}`),
     },
   })
   // Include build time so SSH ensureWorker redeploys when the bundle changes
@@ -36,6 +42,16 @@ async function main() {
     versionFile,
     JSON.stringify({ version, builtAt }, null, 2),
   )
+  // Remove legacy artifact name if present
+  const legacy = path.join(root, 'dist', 'worker', 'baix-worker.cjs')
+  const legacyMap = `${legacy}.map`
+  for (const p of [legacy, legacyMap]) {
+    try {
+      fs.unlinkSync(p)
+    } catch {
+      /* ignore */
+    }
+  }
   console.log(`Wrote ${outfile}`)
   console.log(`Wrote ${versionFile}`)
 }

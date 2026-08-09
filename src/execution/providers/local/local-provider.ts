@@ -139,8 +139,8 @@ class LocalConnection implements EnvironmentConnection {
                 : {}),
             }
           : {}),
-        BAIX_WORKER_VERSION: launch.version,
-        BAIX_AGENT_ROOT: getRepoRoot(),
+        WORKER_VERSION: launch.version,
+        AGENT_ROOT: getRepoRoot(),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,

@@ -1,5 +1,5 @@
 /**
- * Deploy baix-worker + integrations (stpl-lsp-bridge) to remote.
+ * Deploy agent worker + integrations (stpl-lsp-bridge) to remote.
  */
 import { spawn } from 'child_process'
 import * as fs from 'fs'
@@ -13,6 +13,10 @@ import {
   resolveWorkerLaunch,
 } from '../../worker-paths.js'
 import type { WorkerInstallInfo } from '../../types.js'
+import {
+  WORKER_BUNDLE_NAME,
+  WORKER_HOME_DIRNAME,
+} from '../../../brand.js'
 
 function buildScpArgs(host: ParsedSshHost): string[] {
   const args: string[] = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15']
@@ -93,9 +97,12 @@ export async function ensureRemoteWorker(
     throw new Error(`Missing worker bundle at ${localBundle}`)
   }
 
+  const homeDir = WORKER_HOME_DIRNAME
+  const bundleName = WORKER_BUNDLE_NAME
+
   const probe = await sshExecOk(
     host,
-    `d="$HOME/.baix-agent-worker/${version}"; if [ -f "$d/.installed" ] && [ -f "$d/baix-worker.cjs" ]; then cat "$d/.installed"; else echo MISSING; fi`,
+    `d="$HOME/${homeDir}/${version}"; if [ -f "$d/.installed" ] && [ -f "$d/${bundleName}" ]; then cat "$d/.installed"; else echo MISSING; fi`,
     { timeoutMs: 20_000 },
   )
   const installed = probe.trim().split(/\r?\n/)[0]
@@ -104,20 +111,20 @@ export async function ensureRemoteWorker(
   if (needUpload) {
     await sshExecOk(
       host,
-      `mkdir -p "$HOME/.baix-agent-worker/${version}"`,
+      `mkdir -p "$HOME/${homeDir}/${version}"`,
       { timeoutMs: 20_000 },
     )
     await scpUpload(
       host,
       localBundle,
-      `.baix-agent-worker/${version}/baix-worker.cjs`,
+      `${homeDir}/${version}/${bundleName}`,
     )
     const verLocal = path.join(path.dirname(localBundle), 'version.json')
     if (fs.existsSync(verLocal)) {
       await scpUpload(
         host,
         verLocal,
-        `.baix-agent-worker/${version}/version.json`,
+        `${homeDir}/${version}/version.json`,
       )
     }
 
@@ -130,37 +137,39 @@ export async function ensureRemoteWorker(
     if (fs.existsSync(bridgeSrc)) {
       await sshExecOk(
         host,
-        `mkdir -p "$HOME/.baix-agent-worker/${version}/integrations"`,
+        `mkdir -p "$HOME/${homeDir}/${version}/integrations"`,
         { timeoutMs: 15_000 },
       )
       await scpUploadRecursive(
         host,
         bridgeSrc,
-        `.baix-agent-worker/${version}/integrations/stpl-lsp-bridge`,
+        `${homeDir}/${version}/integrations/stpl-lsp-bridge`,
       )
     }
 
     await sshExecOk(
       host,
-      `printf '%s' ${shQuote(version)} > "$HOME/.baix-agent-worker/${version}/.installed"`,
+      `printf '%s' ${shQuote(version)} > "$HOME/${homeDir}/${version}/.installed"`,
       { timeoutMs: 15_000 },
     )
   }
 
   await sshExecOk(
     host,
-    `test -f "$HOME/.baix-agent-worker/${version}/baix-worker.cjs"`,
+    `test -f "$HOME/${homeDir}/${version}/${bundleName}"`,
     { timeoutMs: 15_000 },
   )
 
   return {
     version,
-    path: `~/.baix-agent-worker/${version}/baix-worker.cjs`,
+    path: `~/${homeDir}/${version}/${bundleName}`,
     freshlyInstalled: needUpload,
   }
 }
 
-/** Remote command that starts worker on stdio with BAIX_AGENT_ROOT set. */
+/** Remote command that starts worker on stdio with AGENT_ROOT set. */
 export function remoteWorkerStdioCommand(version: string): string {
-  return `export BAIX_AGENT_ROOT="$HOME/.baix-agent-worker/${version}"; export BAIX_WORKER_VERSION=${shQuote(version)}; node "$BAIX_AGENT_ROOT/baix-worker.cjs" --stdio`
+  const homeDir = WORKER_HOME_DIRNAME
+  const bundleName = WORKER_BUNDLE_NAME
+  return `export AGENT_ROOT="$HOME/${homeDir}/${version}"; export WORKER_VERSION=${shQuote(version)}; node "$AGENT_ROOT/${bundleName}" --stdio`
 }

@@ -14,6 +14,7 @@ import {
 } from './windows-paths.js'
 import { forceKillChild, killChild } from '../platform.js'
 import { getShellHome } from '../../utils/request-scope.js'
+import { WORKER_CWD_FILE_PREFIX } from '../../brand.js'
 
 const isWindows = process.platform === 'win32'
 
@@ -144,7 +145,7 @@ export function runShellCommand(opts: {
     prepared = prepareShellSpawn({
       shell: opts.shell,
       userCommand: opts.command,
-      cwdFilePrefix: opts.cwdFilePrefix ?? 'baix-worker-cwd',
+      cwdFilePrefix: opts.cwdFilePrefix ?? WORKER_CWD_FILE_PREFIX,
     })
   } catch (err) {
     return Promise.reject(err instanceof Error ? err : new Error(String(err)))
