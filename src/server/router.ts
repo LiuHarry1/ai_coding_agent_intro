@@ -27,7 +27,7 @@ import {
   AuthError,
   type AuthedRequest,
 } from './auth/identity.js'
-import { runWithAgentHome } from '../utils/agent-home.js'
+import { runWithRequestScope } from '../utils/request-scope.js'
 import { serveStaticFile } from './static.js'
 import {
   getMCPManagerForServers,
@@ -116,7 +116,13 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
         sendJSON(res, 500, { error: 'Auth succeeded without user workspace' })
         return
       }
-      return runWithAgentHome(authed.userWorkspace, () => handleProtected())
+      return runWithRequestScope(
+        {
+          agentHome: authed.userWorkspace,
+          cwd: authed.userWorkspace,
+        },
+        () => handleProtected(),
+      )
     }
 
     return handleProtected()

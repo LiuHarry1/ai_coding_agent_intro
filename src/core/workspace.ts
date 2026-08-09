@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { getAgentHome } from '../utils/agent-home.js'
+import { getAgentHome } from '../utils/request-scope.js'
 
 /**
  * Workspace = the default project root the agent operates on when a request

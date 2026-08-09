@@ -12,7 +12,7 @@ import {
 import * as os from 'os'
 import { resolveSettings } from '../core/settings-manager.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
-import { runWithAgentHome } from '../utils/agent-home.js'
+import { runWithRequestScope } from '../utils/request-scope.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -75,15 +75,19 @@ export function startServer({ runAgent }: ServerOptions): void {
   void (async () => {
     try {
       // AUTH fail-closed: getAgentHome() needs ALS. Boot is outside any
-      // request — pin OS home so resolveSettings/bootstrap can load SSH hosts
-      // (managed still comes from getManagedDir). Per-request HOME is set in
-      // the router via runWithAgentHome(userWorkspace).
-      await runWithAgentHome(os.homedir(), async () => {
-        const settings = resolveSettings(getDefaultWorkspace())
-        await bootstrapExecutionPlane({
-          sshHosts: settings.config.environments?.ssh ?? [],
-        })
-      })
+      // request — pin OS home + default workspace so resolveSettings/bootstrap
+      // can load SSH hosts (managed still comes from getManagedDir).
+      // Per-request scope is set in the router via runWithRequestScope.
+      const bootCwd = getDefaultWorkspace()
+      await runWithRequestScope(
+        { agentHome: os.homedir(), cwd: bootCwd },
+        async () => {
+          const settings = resolveSettings(bootCwd)
+          await bootstrapExecutionPlane({
+            sshHosts: settings.config.environments?.ssh ?? [],
+          })
+        },
+      )
       console.log(`[server] execution plane ready (local + ssh providers)`)
     } catch (err) {
       console.warn(

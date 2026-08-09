@@ -4,7 +4,7 @@
 import { execSync } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getAgentHome } from '../../utils/agent-home.js'
+import { getAgentHome } from '../../utils/request-scope.js'
 import { getAppDirName, getUserAppDir } from '../../utils/app-dir.js'
 import { normalizeGitPath } from '../../core/platform.js'
 import { isPathInWorkspace } from '../../core/workspace.js'

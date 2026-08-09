@@ -12,7 +12,10 @@ import type { IProvider } from '../core/llm/types.js'
 import { createCacheSafeParams } from '../core/forked-agent.js'
 import { extractSessionMemoryInBackground } from '../services/session-memory/index.js'
 import { extractAutoMemoriesInBackground } from '../services/auto-memory/index.js'
-import { getAgentHome, runWithAgentHome } from '../utils/agent-home.js'
+import {
+  getRequestScope,
+  runWithRequestScope,
+} from '../utils/request-scope.js'
 
 export function createMemoryLifecycleHooks(opts: {
   sessionMemory?: SessionMemoryConfig
@@ -56,10 +59,10 @@ export function createMemoryLifecycleHooks(opts: {
               messages: snap.messages,
             })
           : undefined
-      // Capture HOME now; re-enter ALS so background extract keeps tenant home
-      // after the HTTP request callback returns.
-      const agentHome = getAgentHome()
-      runWithAgentHome(agentHome, () => {
+      // Capture scope now; re-enter ALS so background extract keeps tenant
+      // home/cwd after the HTTP request callback returns.
+      const scope = getRequestScope()
+      const reenter = () => {
         extractSessionMemoryInBackground({
           messages: snap.messages,
           sessionId: snap.sessionId!,
@@ -70,7 +73,9 @@ export function createMemoryLifecycleHooks(opts: {
           cwd: snap.cwd ?? process.cwd(),
           cacheSafeParams,
         })
-      })
+      }
+      if (scope) runWithRequestScope(scope, reenter)
+      else reenter()
     },
 
     /** Natural turn end (no more tools) — fire-and-forget auto-memory extract. */
@@ -92,8 +97,8 @@ export function createMemoryLifecycleHooks(opts: {
               messages: snap.messages,
             })
           : undefined
-      const agentHome = getAgentHome()
-      runWithAgentHome(agentHome, () => {
+      const scope = getRequestScope()
+      const reenter = () => {
         extractAutoMemoriesInBackground({
           messages: snap.messages,
           sessionId: snap.sessionId!,
@@ -105,7 +110,9 @@ export function createMemoryLifecycleHooks(opts: {
           cacheSafeParams,
           trustedDirectory: autoMemory.directory,
         })
-      })
+      }
+      if (scope) runWithRequestScope(scope, reenter)
+      else reenter()
     },
   }
 }

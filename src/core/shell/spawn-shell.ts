@@ -13,7 +13,7 @@ import {
   windowsPathToPosixPath,
 } from './windows-paths.js'
 import { forceKillChild, killChild } from '../platform.js'
-import { getShellHome } from '../../utils/agent-home.js'
+import { getShellHome } from '../../utils/request-scope.js'
 
 const isWindows = process.platform === 'win32'
 

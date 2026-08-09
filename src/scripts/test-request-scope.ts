@@ -1,15 +1,17 @@
 /**
- * Per-user agent HOME (ALS) — dual-user isolation, fail-closed, settings dedupe.
- *   conda activate llm_ft && npx tsx src/scripts/test-agent-home.ts
+ * RequestScope — dual fields, isolation, fail-closed, settings.
+ *   conda activate llm_ft && npx tsx src/scripts/test-request-scope.ts
  */
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import {
   getAgentHome,
+  getRequestCwd,
+  getRequestScope,
   getShellHome,
-  runWithAgentHome,
-} from '../utils/agent-home.js'
+  runWithRequestScope,
+} from '../utils/request-scope.js'
 import { getAppDirName, getUserAppDir } from '../utils/app-dir.js'
 import { getAutoMemPath } from '../services/auto-memory/paths.js'
 import { prepareShellSpawn } from '../core/shell/spawn-shell.js'
@@ -25,8 +27,16 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)
 }
 
+/** SSO-style pin: agentHome === cwd. */
+function withTenant<T>(workspace: string, fn: () => T): T {
+  return runWithRequestScope(
+    { agentHome: workspace, cwd: workspace },
+    fn,
+  )
+}
+
 const prevAuth = process.env.AUTH_ENABLED
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-home-'))
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'request-scope-'))
 
 try {
   // ── AUTH off: OS home ──────────────────────────────────────────────────
@@ -41,6 +51,31 @@ try {
   )
   console.log('ok: AUTH off uses OS home')
 
+  // ── AUTH off: home ≠ cwd when scope is explicit (boot-like) ─────────────
+  const projectCwd = path.join(tmpRoot, 'project')
+  fs.mkdirSync(projectCwd, { recursive: true })
+  runWithRequestScope(
+    { agentHome: os.homedir(), cwd: projectCwd },
+    () => {
+      assert(
+        getAgentHome() === os.homedir(),
+        'AUTH off: getAgentHome stays os.homedir()',
+      )
+      assert(
+        getRequestCwd() === path.resolve(projectCwd),
+        `AUTH off: getRequestCwd should be project, got ${getRequestCwd()}`,
+      )
+      assert(
+        getAgentHome() !== getRequestCwd(),
+        'AUTH off: agentHome and cwd may differ',
+      )
+      const scope = getRequestScope()
+      assert(scope?.agentHome === path.resolve(os.homedir()), 'scope.agentHome')
+      assert(scope?.cwd === path.resolve(projectCwd), 'scope.cwd')
+    },
+  )
+  console.log('ok: AUTH off dual fields (home ≠ cwd)')
+
   // ── AUTH on + no ALS: fail-closed ──────────────────────────────────────
   process.env.AUTH_ENABLED = 'true'
   let threw = false
@@ -54,16 +89,40 @@ try {
     )
   }
   assert(threw, 'AUTH on without ALS must throw')
+  let cwdThrew = false
+  try {
+    getRequestCwd()
+  } catch {
+    cwdThrew = true
+  }
+  assert(cwdThrew, 'AUTH on without ALS: getRequestCwd must throw')
   console.log('ok: AUTH on without ALS fails closed')
 
-  // ── Dual-user isolation ────────────────────────────────────────────────
+  // ── AUTH on: SSO pin — agentHome === cwd ───────────────────────────────
   const alice = path.join(tmpRoot, 'alice')
   const bob = path.join(tmpRoot, 'bob')
   fs.mkdirSync(alice, { recursive: true })
   fs.mkdirSync(bob, { recursive: true })
 
-  const aliceApp = runWithAgentHome(alice, () => getUserAppDir())
-  const bobApp = runWithAgentHome(bob, () => getUserAppDir())
+  withTenant(alice, () => {
+    assert(
+      getAgentHome() === path.resolve(alice),
+      `SSO getAgentHome=${getAgentHome()}`,
+    )
+    assert(
+      getRequestCwd() === path.resolve(alice),
+      `SSO getRequestCwd=${getRequestCwd()}`,
+    )
+    assert(
+      getAgentHome() === getRequestCwd(),
+      'SSO: agentHome and cwd are the same pin',
+    )
+  })
+  console.log('ok: SSO dual fields equal')
+
+  // ── Dual-user isolation ────────────────────────────────────────────────
+  const aliceApp = withTenant(alice, () => getUserAppDir())
+  const bobApp = withTenant(bob, () => getUserAppDir())
   assert(
     aliceApp === path.join(alice, getAppDirName()),
     `alice app=${aliceApp}`,
@@ -71,22 +130,20 @@ try {
   assert(bobApp === path.join(bob, getAppDirName()), `bob app=${bobApp}`)
   assert(aliceApp !== bobApp, 'users must not share app dir')
 
-  const aliceMem = runWithAgentHome(alice, () =>
-    getAutoMemPath({ cwd: alice }),
-  )
-  const bobMem = runWithAgentHome(bob, () => getAutoMemPath({ cwd: bob }))
+  const aliceMem = withTenant(alice, () => getAutoMemPath({ cwd: alice }))
+  const bobMem = withTenant(bob, () => getAutoMemPath({ cwd: bob }))
   assert(aliceMem.startsWith(aliceApp), 'alice memory under alice app')
   assert(bobMem.startsWith(bobApp), 'bob memory under bob app')
   assert(aliceMem !== bobMem, 'memory paths must not cross')
 
-  const aliceHomeEnv = runWithAgentHome(alice, () => {
+  const aliceHomeEnv = withTenant(alice, () => {
     const prepared = prepareShellSpawn({
       shell: 'bash',
       userCommand: 'true',
     })
     return prepared.env.HOME
   })
-  const bobHomeEnv = runWithAgentHome(bob, () => {
+  const bobHomeEnv = withTenant(bob, () => {
     const prepared = prepareShellSpawn({
       shell: 'bash',
       userCommand: 'true',
@@ -96,14 +153,13 @@ try {
   assert(aliceHomeEnv === path.resolve(alice), `alice HOME=${aliceHomeEnv}`)
   assert(bobHomeEnv === path.resolve(bob), `bob HOME=${bobHomeEnv}`)
 
-  // Concurrent ALS: nested / sequential stores do not leak
   const seen: string[] = []
   await Promise.all([
-    runWithAgentHome(alice, async () => {
+    withTenant(alice, async () => {
       await new Promise(r => setTimeout(r, 20))
       seen.push(getAgentHome())
     }),
-    runWithAgentHome(bob, async () => {
+    withTenant(bob, async () => {
       await new Promise(r => setTimeout(r, 5))
       seen.push(getAgentHome())
     }),
@@ -125,7 +181,7 @@ try {
       disabledTools: ['web_fetch'],
     }) + '\n',
   )
-  const resolved = runWithAgentHome(alice, () => resolveSettings(alice))
+  const resolved = withTenant(alice, () => resolveSettings(alice))
   assert(
     resolved.userPath === resolved.projectPath,
     'SSO cwd=home → userPath === projectPath',
@@ -163,7 +219,6 @@ try {
   console.log('ok: getShellHome worker env fallback')
 
   // ── Super list ≠ owner HOME (ACL still request-scoped) ─────────────────
-  // Session store is global; canAccessSession lets super view any owner.
   const fakeAliceSession = {
     id: 's-alice',
     ownerEmail: 'alice@example.com',
@@ -176,12 +231,11 @@ try {
     !canAccessSession(fakeAliceSession, 'bob@example.com', 'user'),
     'peer user must not view alice session',
   )
-  // listSessions(undefined) is the super "view all" path — just ensure callable
   const all = listSessions(undefined)
   assert(Array.isArray(all), 'listSessions(undefined) returns array')
   console.log('ok: super session ACL unchanged (view_all path)')
 
-  console.log('\nAll agent-home checks passed.')
+  console.log('\nAll request-scope checks passed.')
 } finally {
   if (prevAuth === undefined) delete process.env.AUTH_ENABLED
   else process.env.AUTH_ENABLED = prevAuth

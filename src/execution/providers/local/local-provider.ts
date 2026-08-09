@@ -25,7 +25,7 @@ import {
   StdioRuntimePort,
   bindStdioRuntime,
 } from '../../stdio-runtime-port.js'
-import { getAgentHome } from '../../../utils/agent-home.js'
+import { getAgentHome } from '../../../utils/request-scope.js'
 
 const LOCAL_CAPS = {
   canBrowseFs: true,
