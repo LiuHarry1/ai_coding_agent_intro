@@ -37,11 +37,11 @@ Tenant 镜像打到 **`/etc/ai-agent/`**（可用 `AI_AGENT_MANAGED_DIR` 覆盖�
 
 | 镜像源 | 容器路径 |
 |--------|----------|
-| `.ai-agent/settings.json` | `/etc/ai-agent/managed-settings.json` |
+| [`deploy/managed/managed-settings.json`](managed/managed-settings.json) | `/etc/ai-agent/managed-settings.json` |
 | [`deploy/managed/AGENTS.md`](managed/AGENTS.md) | `/etc/ai-agent/AGENTS.md` |
 | [`deploy/managed/.ai-agent/`](managed/) | `/etc/ai-agent/.ai-agent/{skills,agents,commands,rules}` |
 
-**不要**把整个项目 `.ai-agent/skills` 打进 `/etc`——平台扩展只放 `deploy/managed/`；用户可见模板放 `deploy/workspace-seed/`。
+**不要**把整个项目 `.ai-agent/` 打进 `/etc`——平台策略只放 `deploy/managed/`；本地开发仍用仓库根 `.ai-agent/settings.json`；用户可见模板放 `deploy/workspace-seed/`。
 
 | 层 | 说明 |
 |----|------|

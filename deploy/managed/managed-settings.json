@@ -1,0 +1,85 @@
+{
+  "models": {
+    "large": {
+      "provider": "openai-compatible",
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "not-needed",
+      "model": "claude-opus-4.6"
+    },
+    "medium": {
+      "provider": "openai-compatible",
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "not-needed",
+      "model": "claude-opus-4.6"
+    },
+    "small": {
+      "provider": "openai-compatible",
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "claude-haiku-4.5"
+    }
+  },
+  "compaction": {
+    "enabled": true,
+    "contextWindow": 200000,
+    "microCompactKeepRecent": 5,
+    "maxFilesToRestore": 5,
+    "maxTokensPerFile": 5000,
+    "fileBudget": 50000,
+    "timeBasedMicroEnabled": true,
+    "timeBasedMicroGapMinutes": 5
+  },
+  "sessionMemory": {
+    "enabled": true,
+    "minimumTokensToInit": 10000,
+    "minimumTokensBetweenUpdate": 5000,
+    "toolCallsBetweenUpdates": 3,
+    "cacheSafe": true,
+    "modelTier": "small",
+    "compactMinTokens": 10000,
+    "compactMaxTokens": 40000,
+    "compactMinTextMessages": 5
+  },
+  "autoMemory": {
+    "enabled": true,
+    "prefetchEnabled": true,
+    "cacheSafe": true,
+    "modelTier": "small",
+    "prefetchModelTier": "small"
+  },
+  "lspServers": {
+    "typescript": {
+      "command": "npx",
+      "args": ["--yes", "typescript-language-server", "--stdio"],
+      "extensionToLanguage": {
+        ".ts": "typescript",
+        ".tsx": "typescriptreact"
+      },
+      "startupTimeout": 30000
+    },
+    "python": {
+      "command": "npx",
+      "args": ["--yes", "pyright-langserver", "--stdio"],
+      "extensionToLanguage": {
+        ".py": "python",
+        ".pyi": "python"
+      },
+      "startupTimeout": 30000
+    },
+    "java-language-server": {
+      "command": "npx",
+      "args": ["--yes", "jj-language-server", "--stdio"],
+      "extensionToLanguage": {
+        ".java": "java"
+      },
+      "startupTimeout": 30000
+    }
+  },
+  "mcpServers": {
+    "mcp_server": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"]
+    }
+  },
+  "disabledTools": ["web_fetch"]
+}
