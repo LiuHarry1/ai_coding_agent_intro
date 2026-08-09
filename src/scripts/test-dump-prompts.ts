@@ -1,6 +1,6 @@
 /**
  * Unit smoke for CC-aligned dump-prompts (no live LLM required).
- * Run: BAIZE_DUMP_PROMPTS=1 npx tsx src/scripts/test-dump-prompts.ts
+ * Run: DUMP_PROMPTS=1 npx tsx src/scripts/test-dump-prompts.ts
  */
 import assert from 'node:assert/strict'
 import { promises as fs } from 'node:fs'
@@ -17,9 +17,9 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  process.env.BAIZE_DUMP_PROMPTS = '1'
+  process.env.DUMP_PROMPTS = '1'
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'dump-prompts-test-'))
-  process.env.BAIZE_DUMP_PROMPTS_DIR = dir
+  process.env.DUMP_PROMPTS_DIR = dir
 
   clearAllDumpState()
   assert.equal(isDumpPromptsEnabled(), true)

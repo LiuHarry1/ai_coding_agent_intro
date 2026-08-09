@@ -9,9 +9,9 @@
  * from `runOneStep` with the post-sanitize `streamText` payload (equivalent
  * interception point for multi-provider AI SDK).
  *
- * Enable:  BAIZE_DUMP_PROMPTS=1
+ * Enable:  DUMP_PROMPTS=1
  * Path:    ~/.ai-agent/dump-prompts/{sessionKey}.jsonl
- * Override dir: BAIZE_DUMP_PROMPTS_DIR
+ * Override dir: DUMP_PROMPTS_DIR
  */
 
 import { createHash } from 'crypto'
@@ -39,7 +39,7 @@ function envTruthy(v: string | undefined): boolean {
 
 /** Gate — mirrors CC `config.gates.isAnt` for dump write path. */
 export function isDumpPromptsEnabled(): boolean {
-  return envTruthy(process.env.BAIZE_DUMP_PROMPTS)
+  return envTruthy(process.env.DUMP_PROMPTS)
 }
 
 // Cache last few API requests (CC: ant /issue). Useful for local debug too.
@@ -87,7 +87,7 @@ export function addApiRequestToCache(requestData: unknown): void {
 }
 
 function getDumpPromptsDir(): string {
-  const override = process.env.BAIZE_DUMP_PROMPTS_DIR?.trim()
+  const override = process.env.DUMP_PROMPTS_DIR?.trim()
   if (override) return override
   return join(getUserAppDir(), 'dump-prompts')
 }

@@ -32,12 +32,12 @@ npm start              # 加载 src/，监听 http://localhost:4567
 调试真实 LLM prompt / tool 轨迹（CC 风格 dump-prompts）时，可开启：
 
 ```bash
-BAIZE_DUMP_PROMPTS=1 npm start
+DUMP_PROMPTS=1 npm start
 # 或
-BAIZE_DUMP_PROMPTS=1 BAIZE_DUMP_PROMPTS_DIR=/tmp/baize-dump-prompts-live npm start
+DUMP_PROMPTS=1 DUMP_PROMPTS_DIR=/tmp/dump-prompts-live npm start
 ```
 
-默认写入 `~/.ai-agent/dump-prompts/{sessionId}.jsonl`；设置 `BAIZE_DUMP_PROMPTS_DIR` 可覆盖输出目录。
+默认写入 `~/.ai-agent/dump-prompts/{sessionId}.jsonl`；设置 `DUMP_PROMPTS_DIR` 可覆盖输出目录。
 
 ### 4. 启动 Web UI(终端 B,开发模式,支持热更新)
 
