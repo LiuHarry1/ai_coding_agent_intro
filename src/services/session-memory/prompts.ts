@@ -2,9 +2,8 @@
  * Session-memory update prompts (Edit-only instructions).
  */
 import * as fs from 'fs'
-import * as os from 'os'
 import * as path from 'path'
-import { getAppDirName } from '../../utils/app-dir.js'
+import { getAppDirName, getUserAppDir } from '../../utils/app-dir.js'
 import { DEFAULT_SESSION_MEMORY_TEMPLATE } from './template.js'
 
 export const MAX_SECTION_CHARS = 2000 * 4
@@ -54,9 +53,9 @@ REMEMBER: Use the Edit tool in parallel and stop. Do not continue after the edit
 function sessionMemoryConfigDirs(cwd?: string): string[] {
   const dirs: string[] = []
   if (cwd) {
-    dirs.push(path.join(cwd, '.ai-agent', 'session-memory'))
+    dirs.push(path.join(cwd, getAppDirName(), 'session-memory'))
   }
-  dirs.push(path.join(os.homedir(), getAppDirName(), 'session-memory'))
+  dirs.push(path.join(getUserAppDir(), 'session-memory'))
   return dirs
 }
 

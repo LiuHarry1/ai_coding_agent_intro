@@ -3,8 +3,8 @@
  */
 import { execSync } from 'child_process'
 import * as fs from 'fs'
-import * as os from 'os'
 import * as path from 'path'
+import { getAgentHome } from '../../utils/agent-home.js'
 import { getAppDirName, getUserAppDir } from '../../utils/app-dir.js'
 import { normalizeGitPath } from '../../core/platform.js'
 import { isPathInWorkspace } from '../../core/workspace.js'
@@ -55,9 +55,9 @@ export function findCanonicalGitRoot(cwd: string): string | null {
 }
 
 function expandTilde(p: string): string {
-  if (p === '~') return os.homedir()
+  if (p === '~') return getAgentHome()
   if (p.startsWith('~/') || p.startsWith('~\\')) {
-    return path.join(os.homedir(), p.slice(2))
+    return path.join(getAgentHome(), p.slice(2))
   }
   return p
 }

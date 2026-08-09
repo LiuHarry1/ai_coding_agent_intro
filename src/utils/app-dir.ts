@@ -22,8 +22,8 @@
  * added automatically.
  */
 
-import * as os from 'os'
 import * as path from 'path'
+import { getAgentHome } from './agent-home.js'
 
 /** Default basename — change here if the product name ever moves off `.ai-agent`. */
 export const DEFAULT_APP_DIR_NAME = '.ai-agent'
@@ -43,9 +43,9 @@ export function getAppDirName(): string {
   return raw.startsWith('.') ? raw : `.${raw}`
 }
 
-/** User-scope root: `~/.ai-agent` (or whatever `getAppDirName()` returns). */
+/** User-scope root: `<agentHome>/.ai-agent` (or whatever `getAppDirName()` returns). */
 export function getUserAppDir(): string {
-  return path.join(os.homedir(), getAppDirName())
+  return path.join(getAgentHome(), getAppDirName())
 }
 
 /** User-scope subdir, e.g. `~/.ai-agent/skills`. */
@@ -65,11 +65,11 @@ export function getProjectSubdir(kind: AppSubdir, dir: string): string {
 
 /**
  * Walk from `cwd` upward, collecting every project app dir, **deepest first**
- * (deepest project dir first). Stops at the home directory
+ * (deepest project dir first). Stops at the logical agent home
  * (exclusive — home is user-scope, not project-scope).
  */
 export function getProjectAppDirsUpToHome(cwd: string): string[] {
-  const home = os.homedir()
+  const home = getAgentHome()
   const dirs: string[] = []
 
   let current = path.resolve(cwd)

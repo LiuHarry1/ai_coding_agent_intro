@@ -27,6 +27,7 @@ import {
   AuthError,
   type AuthedRequest,
 } from './auth/identity.js'
+import { runWithAgentHome } from '../utils/agent-home.js'
 import { serveStaticFile } from './static.js'
 import {
   getMCPManagerForServers,
@@ -101,6 +102,7 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
     // ── Auth gate (only when AUTH_ENABLED=true) ──────────────────────────
     // Verifies the bearer token and pins `req.userWorkspace`. Everything
     // below this line is protected; `/health` and OPTIONS above are not.
+    // Under AUTH, bind logical agent HOME (ALS) once for the whole request.
     const authed = req as AuthedRequest
     if (isAuthEnabled()) {
       try {
@@ -110,8 +112,16 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
         sendJSON(res, err.statusCode ?? 401, { error: err.message })
         return
       }
+      if (!authed.userWorkspace) {
+        sendJSON(res, 500, { error: 'Auth succeeded without user workspace' })
+        return
+      }
+      return runWithAgentHome(authed.userWorkspace, () => handleProtected())
     }
 
+    return handleProtected()
+
+    async function handleProtected() {
     if (method === 'GET' && url?.startsWith('/slash-commands')) {
       const query = new URLSearchParams(url.split('?')[1] ?? '')
       const workspace = query.get('workspace')
@@ -656,5 +666,6 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
     if (staticDir && serveStaticFile(req, res, staticDir)) return
 
     sendJSON(res, 404, { error: 'Not found' })
+    } // handleProtected
   }
 }

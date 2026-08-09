@@ -1,5 +1,4 @@
 import * as fs from 'fs'
-import * as os from 'os'
 import * as path from 'path'
 import type {
   AppConfig,
@@ -18,6 +17,7 @@ import {
 import { loadPlugins } from './plugins/index.js'
 import {
   getAppDirName,
+  getUserAppDir,
   LOCAL_SETTINGS_FILE_NAME,
   SETTINGS_FILE_NAME,
 } from '../utils/app-dir.js'
@@ -191,7 +191,7 @@ export function resolveSettingsPaths(cwd: string): {
   managedDir: string
   managedPath: string
 } {
-  const userDir = path.join(os.homedir(), getAppDirName())
+  const userDir = getUserAppDir()
   const projectDir = path.join(path.resolve(cwd), getAppDirName())
   const managedDir = getManagedDir()
   return {
@@ -582,16 +582,30 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   const config = cloneDefaults()
   // CC order: user → project → local → flag → policy(managed last).
   // We have no flag layer; managed is policySettings.
-  const sources: SettingsSource[] = [
-    { scope: 'user', path: paths.userPath, exists: false, applied: false },
-    {
+  // SSO: cwd === agent home → userPath === projectPath; apply once as user
+  // (trusted — may carry autoMemory.directory). Still load local separately.
+  const sources: SettingsSource[] = []
+  const sameUserProject = paths.userPath === paths.projectPath
+  sources.push({
+    scope: 'user',
+    path: paths.userPath,
+    exists: false,
+    applied: false,
+  })
+  if (!sameUserProject) {
+    sources.push({
       scope: 'project',
       path: paths.projectPath,
       exists: false,
       applied: false,
-    },
-    { scope: 'local', path: paths.localPath, exists: false, applied: false },
-  ]
+    })
+  }
+  sources.push({
+    scope: 'local',
+    path: paths.localPath,
+    exists: false,
+    applied: false,
+  })
 
   for (const source of sources) {
     applySettingsSource(config, source)
@@ -688,11 +702,12 @@ export function getSafeSettings(resolved: ResolvedSettings): AppConfig {
 
 /**
  * EditableSettingSource excludes read-only policy/managed (CC).
- * In SSO mode user scope writes to the container home and is blocked.
+ * SSO may write `user` or `project` — when paths collapse they hit the same file.
+ * `opts.ssoMode` is retained for call-site compatibility (no longer blocks user).
  */
 export function parseWritableScope(
   value: unknown,
-  opts: { ssoMode: boolean },
+  _opts: { ssoMode: boolean },
 ): WritableSettingsScope {
   if (value === 'managed') {
     throw new Error(
@@ -703,11 +718,6 @@ export function parseWritableScope(
     value === 'user' || value === 'local' || value === 'project'
       ? value
       : 'project'
-  if (opts.ssoMode && scope === 'user') {
-    throw new Error(
-      'user scope is not writable in SSO mode; use project or local',
-    )
-  }
   return scope
 }
 

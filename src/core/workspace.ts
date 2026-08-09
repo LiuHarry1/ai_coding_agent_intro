@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import * as os from 'os'
+import { getAgentHome } from '../utils/agent-home.js'
 
 /**
  * Workspace = the default project root the agent operates on when a request
@@ -35,9 +35,9 @@ function parseCliWorkspace(argv: string[]): string | undefined {
 }
 
 function expandTilde(p: string): string {
-  if (p === '~') return os.homedir()
+  if (p === '~') return getAgentHome()
   if (p.startsWith('~/') || p.startsWith('~\\'))
-    return path.join(os.homedir(), p.slice(2))
+    return path.join(getAgentHome(), p.slice(2))
   return p
 }
 

@@ -12,6 +12,7 @@ import type { IProvider } from '../core/llm/types.js'
 import { createCacheSafeParams } from '../core/forked-agent.js'
 import { extractSessionMemoryInBackground } from '../services/session-memory/index.js'
 import { extractAutoMemoriesInBackground } from '../services/auto-memory/index.js'
+import { getAgentHome, runWithAgentHome } from '../utils/agent-home.js'
 
 export function createMemoryLifecycleHooks(opts: {
   sessionMemory?: SessionMemoryConfig
@@ -55,15 +56,20 @@ export function createMemoryLifecycleHooks(opts: {
               messages: snap.messages,
             })
           : undefined
-      extractSessionMemoryInBackground({
-        messages: snap.messages,
-        sessionId: snap.sessionId,
-        provider: sessionMemoryProvider ?? snap.provider,
-        modelId: sessionMemoryModelId ?? snap.model,
-        config: sessionMemory,
-        runAgent,
-        cwd: snap.cwd ?? process.cwd(),
-        cacheSafeParams,
+      // Capture HOME now; re-enter ALS so background extract keeps tenant home
+      // after the HTTP request callback returns.
+      const agentHome = getAgentHome()
+      runWithAgentHome(agentHome, () => {
+        extractSessionMemoryInBackground({
+          messages: snap.messages,
+          sessionId: snap.sessionId!,
+          provider: sessionMemoryProvider ?? snap.provider,
+          modelId: sessionMemoryModelId ?? snap.model,
+          config: sessionMemory,
+          runAgent,
+          cwd: snap.cwd ?? process.cwd(),
+          cacheSafeParams,
+        })
       })
     },
 
@@ -86,16 +92,19 @@ export function createMemoryLifecycleHooks(opts: {
               messages: snap.messages,
             })
           : undefined
-      extractAutoMemoriesInBackground({
-        messages: snap.messages,
-        sessionId: snap.sessionId,
-        provider: autoMemoryProvider ?? snap.provider,
-        modelId: autoMemoryModelId ?? snap.model,
-        config: autoMemory,
-        runAgent,
-        cwd: snap.cwd ?? process.cwd(),
-        cacheSafeParams,
-        trustedDirectory: autoMemory.directory,
+      const agentHome = getAgentHome()
+      runWithAgentHome(agentHome, () => {
+        extractAutoMemoriesInBackground({
+          messages: snap.messages,
+          sessionId: snap.sessionId!,
+          provider: autoMemoryProvider ?? snap.provider,
+          modelId: autoMemoryModelId ?? snap.model,
+          config: autoMemory,
+          runAgent,
+          cwd: snap.cwd ?? process.cwd(),
+          cacheSafeParams,
+          trustedDirectory: autoMemory.directory,
+        })
       })
     },
   }

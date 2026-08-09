@@ -13,6 +13,7 @@ import {
   windowsPathToPosixPath,
 } from './windows-paths.js'
 import { forceKillChild, killChild } from '../platform.js'
+import { getShellHome } from '../../utils/agent-home.js'
 
 const isWindows = process.platform === 'win32'
 
@@ -65,6 +66,13 @@ export function prepareShellSpawn(opts: {
 }): PreparedShellSpawn {
   const cwdFileNative = makeCwdFile(opts.cwdFilePrefix ?? 'agent-shell-cwd')
 
+  const agentHome = getShellHome()
+  const homeEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOME: agentHome,
+    ...(isWindows ? { USERPROFILE: agentHome } : {}),
+  }
+
   if (opts.shell === 'powershell') {
     return {
       shellKind: 'powershell',
@@ -77,7 +85,7 @@ export function prepareShellSpawn(opts: {
         '-Command',
         wrapPowerShell(opts.userCommand, cwdFileNative),
       ],
-      env: { ...process.env },
+      env: homeEnv,
       cwdFileNative,
     }
   }
@@ -91,7 +99,7 @@ export function prepareShellSpawn(opts: {
     args: isWindows
       ? ['-c', wrapBash(opts.userCommand, cwdFileForBash)]
       : ['-lc', wrapBash(opts.userCommand, cwdFileForBash)],
-    env: { ...process.env, TERM: 'dumb' },
+    env: { ...homeEnv, TERM: 'dumb' },
     cwdFileNative,
   }
 }

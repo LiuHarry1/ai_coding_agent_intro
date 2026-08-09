@@ -113,6 +113,20 @@ docker compose -f deploy/docker-compose.sso.yml --env-file deploy/.env up -d
 
 每个用户被锁定到 `/workspace/users/<email>`,首次登录会从 `deploy/workspace-seed/`(打进 tenant 镜像)复制一份初始内容。
 
+### 逻辑 HOME（`AUTH_ENABLED`）
+
+SSO 请求里 **逻辑 HOME = 用户 workspace**（`USERS_ROOT/<slug>`），不是容器 `/root`：
+
+| 路径 | 含义 |
+|------|------|
+| `<userWorkspace>/.ai-agent` | 用户 settings / skills / memory 默认根（seed 写入） |
+| `/etc/ai-agent` | 平台 managed/policy（镜像 bake；**不**跟 ALS） |
+| `.sessions`（全局挂载） | 会话历史；super 可 `GET /sessions` 看全部 |
+
+- Bash / 本地 worker 的 `$HOME`（Windows：`USERPROFILE`）在请求内指向用户 workspace；**不是** OS 级隔离，仍可用绝对路径摸到别人目录。
+- Seed 只放用户可见模板；敏感默认（模型 key、强制禁用工具等）进 `/etc/ai-agent`，不要进 seed。
+- Super 看别人的 session ≠ 代操对方 HOME；工具仍在**请求者** workspace 下跑。
+
 ### 工作区沙箱 (`SANDBOX_MODE`)
 
 SSO 模式默认 `SANDBOX_MODE=strict`：`read_file` / `grep` / `glob` / `write_file` / `edit_file` 以及 HTTP `/workspace/*` 只能访问当前用户的 pinned 目录。系统提示词也会声明该边界。

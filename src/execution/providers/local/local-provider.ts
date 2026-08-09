@@ -25,6 +25,7 @@ import {
   StdioRuntimePort,
   bindStdioRuntime,
 } from '../../stdio-runtime-port.js'
+import { getAgentHome } from '../../../utils/agent-home.js'
 
 const LOCAL_CAPS = {
   canBrowseFs: true,
@@ -118,10 +119,26 @@ class LocalConnection implements EnvironmentConnection {
       .realpath(path.resolve(cwd))
       .catch(() => path.resolve(cwd))
     const launch = resolveWorkerLaunch()
+    // Pin logical HOME into the worker so prepareShellSpawn/getShellHome
+    // see the tenant workspace (worker has AUTH_ENABLED but no ALS).
+    let agentHome: string | undefined
+    try {
+      agentHome = getAgentHome()
+    } catch {
+      agentHome = undefined
+    }
     const child = spawn(launch.command, launch.args, {
       cwd: launch.cwd,
       env: {
         ...process.env,
+        ...(agentHome
+          ? {
+              HOME: agentHome,
+              ...(process.platform === 'win32'
+                ? { USERPROFILE: agentHome }
+                : {}),
+            }
+          : {}),
         BAIX_WORKER_VERSION: launch.version,
         BAIX_AGENT_ROOT: getRepoRoot(),
       },

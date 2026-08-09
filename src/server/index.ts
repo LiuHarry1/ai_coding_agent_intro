@@ -9,8 +9,10 @@ import {
   bootstrapExecutionPlane,
   shutdownExecutionPlane,
 } from '../execution/index.js'
+import * as os from 'os'
 import { resolveSettings } from '../core/settings-manager.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
+import { runWithAgentHome } from '../utils/agent-home.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -72,9 +74,15 @@ export function startServer({ runAgent }: ServerOptions): void {
 
   void (async () => {
     try {
-      const settings = resolveSettings(getDefaultWorkspace())
-      await bootstrapExecutionPlane({
-        sshHosts: settings.config.environments?.ssh ?? [],
+      // AUTH fail-closed: getAgentHome() needs ALS. Boot is outside any
+      // request — pin OS home so resolveSettings/bootstrap can load SSH hosts
+      // (managed still comes from getManagedDir). Per-request HOME is set in
+      // the router via runWithAgentHome(userWorkspace).
+      await runWithAgentHome(os.homedir(), async () => {
+        const settings = resolveSettings(getDefaultWorkspace())
+        await bootstrapExecutionPlane({
+          sshHosts: settings.config.environments?.ssh ?? [],
+        })
       })
       console.log(`[server] execution plane ready (local + ssh providers)`)
     } catch (err) {
