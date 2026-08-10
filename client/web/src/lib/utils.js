@@ -107,3 +107,18 @@ export function detectError(name, result) {
   }
   return false
 }
+
+/**
+ * UUID for React keys / message ids. Prefer crypto.randomUUID, but fall back
+ * on non-secure origins (http://LAN-IP) where randomUUID is unavailable.
+ */
+export function newId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+  } catch {
+    /* insecure context / polyfill gaps */
+  }
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}

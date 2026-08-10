@@ -42,12 +42,13 @@ async function main() {
     versionFile,
     JSON.stringify({ version, builtAt }, null, 2),
   )
-  // Remove legacy artifact name if present
-  const legacy = path.join(root, 'dist', 'worker', 'baix-worker.cjs')
-  const legacyMap = `${legacy}.map`
-  for (const p of [legacy, legacyMap]) {
+  // Remove stale worker bundles from other brand slugs
+  const workerDir = path.join(root, 'dist', 'worker')
+  for (const name of fs.readdirSync(workerDir)) {
+    if (!/^[a-z0-9]+-worker\.cjs(\.map)?$/i.test(name)) continue
+    if (name === workerFile || name === `${workerFile}.map`) continue
     try {
-      fs.unlinkSync(p)
+      fs.unlinkSync(path.join(workerDir, name))
     } catch {
       /* ignore */
     }

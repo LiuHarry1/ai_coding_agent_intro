@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { agentApi } from '../lib/api/agent.js'
 import { useWorkspaceIdeStore } from './workspace-ide-store.js'
+import { newId } from '../lib/utils.js'
 
 /** Find a tool_call part (top-level or nested in a subagent) by id. */
 function findToolCallInAssistant(assistantMsg, toolCallId) {
@@ -226,13 +227,10 @@ export const useChatStore = create((set, get) => ({
     if (!id) return
     try {
       const data = await agentApi.getSessionMessages(id)
-      if (data.messages?.length > 0) {
-        set({
-          messages: data.messages.map(m =>
-            m.id ? m : { ...m, id: crypto.randomUUID() },
-          ),
-        })
-      }
+      const msgs = (data.messages || []).map(m =>
+        m.id ? m : { ...m, id: newId() },
+      )
+      set({ messages: msgs })
     } catch (err) {
       // Agent restart drops in-memory sessions; drop stale localStorage id.
       if (
@@ -240,6 +238,8 @@ export const useChatStore = create((set, get) => ({
         String(err.message).includes('Session not found')
       ) {
         get().clearSession()
+      } else {
+        console.warn('[chat] failed to load session messages', id, err)
       }
     }
   },
@@ -320,13 +320,13 @@ export const useChatStore = create((set, get) => ({
       messages: [
         ...s.messages,
         {
-          id: crypto.randomUUID(),
+          id: newId(),
           type: 'user',
           content: text,
           images: images.length > 0 ? images : undefined,
         },
         {
-          id: crypto.randomUUID(),
+          id: newId(),
           type: 'assistant',
           parts: [],
           status: 'streaming',
@@ -706,7 +706,7 @@ export const useChatStore = create((set, get) => ({
       if (last?.type !== 'assistant') return s
       const parts = last.parts.filter(p => p.type !== 'thinking')
       parts.push({
-        id: crypto.randomUUID(),
+        id: newId(),
         type: 'reasoning',
         content: '',
         status: 'streaming',
@@ -737,7 +737,7 @@ export const useChatStore = create((set, get) => ({
       if (last?.type !== 'assistant') return s
       const parts = [...last.parts]
       parts.push({
-        id: crypto.randomUUID(),
+        id: newId(),
         type: 'reasoning',
         content: '',
         status: 'streaming',

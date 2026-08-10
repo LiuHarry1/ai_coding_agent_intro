@@ -1,4 +1,5 @@
 import type { Message } from '../core/types.js'
+import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
@@ -53,12 +54,14 @@ type UIPart = {
 
 type UIAssistantMessage = {
   type: 'assistant'
+  id?: string
   parts: UIPart[]
   status: 'done'
 }
 
 export type UICompactBoundaryMessage = {
   type: 'compact_boundary'
+  id?: string
   summary: string
   summaryLength: number
   messagesBefore?: number
@@ -124,15 +127,21 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
         const summary = extractCompactSummaryBody(content)
         uiMessages.push({
           type: 'compact_boundary',
+          id: randomUUID(),
           summary,
           summaryLength: summary.length,
         } satisfies UICompactBoundaryMessage)
         continue
       }
-      uiMessages.push({ type: 'user', content })
+      uiMessages.push({ type: 'user', id: randomUUID(), content })
     } else if (msg.role === 'assistant') {
       if (!currentAssistant) {
-        currentAssistant = { type: 'assistant', parts: [], status: 'done' }
+        currentAssistant = {
+          type: 'assistant',
+          id: randomUUID(),
+          parts: [],
+          status: 'done',
+        }
         uiMessages.push(currentAssistant)
       }
       appendAssistantParts(
@@ -249,6 +258,7 @@ export function sessionJsonlToUIMessages(sessionId: string): unknown[] {
       flushBatch()
       ui.push({
         type: 'compact_boundary',
+        id: randomUUID(),
         summary: item.summary,
         summaryLength: item.summary.length,
         messagesBefore: item.messagesBefore,

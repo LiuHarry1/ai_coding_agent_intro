@@ -1,6 +1,9 @@
 node_modules
 client/web/node_modules
 **/dist
+!dist/
+!dist/worker/
+!dist/worker/**
 .git
 .env
 .env.*

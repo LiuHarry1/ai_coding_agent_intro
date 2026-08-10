@@ -74,6 +74,10 @@ COPY src/ ./src/
 # runtime (tsx loads its .ts directly; zod resolves from /app/node_modules).
 COPY protocol/ ./protocol/
 COPY start.js ./
+# Product branding - imported by src/brand.ts as ../brand.json
+COPY brand.json ./brand.json
+# Bundled remote/local worker used by execution plane (slug from brand.json)
+COPY dist/worker/ ./dist/worker/
 
 # Pre-create the config dir so tenant images can COPY into it without
 # worrying about directory existence / ownership.
