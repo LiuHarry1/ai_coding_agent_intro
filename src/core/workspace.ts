@@ -15,7 +15,8 @@ import { getAgentHome } from '../utils/request-scope.js'
  *
  * Boundary semantics (see `isPathInWorkspace` / `core/sandbox.ts`):
  *   - When SANDBOX_MODE=off: reading outside is allowed for grep/bash;
- *     write_file / edit_file still refuse paths outside the workspace.
+ *     write_file / edit_file still refuse paths outside the workspace,
+ *     except trusted carve-outs in extraWriteRoots (e.g. auto-memory).
  *   - When SANDBOX_MODE=strict (SSO): read and write tools refuse paths
  *     outside the request workspace (symlink realpath checked too).
  *   - Bash is not OS-sandboxed by this module.
@@ -85,6 +86,11 @@ export function resolveDefaultWorkspace(): string {
 export function getDefaultWorkspace(): string {
   return cachedDefault ?? resolveDefaultWorkspace()
 }
+
+export {
+  normalizeWorkspacePath,
+  isPosixAbsolutePath,
+} from './workspace-path.js'
 
 // ── Boundary check ───────────────────────────────────────────────────────────
 

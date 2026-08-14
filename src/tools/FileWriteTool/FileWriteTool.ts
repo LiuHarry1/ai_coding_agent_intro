@@ -52,7 +52,11 @@ export const definition: ToolDefinition = {
         'Creates parent directories automatically. ' +
         'Use for NEW files only. For modifying existing files, use edit_file instead.',
       inputSchema: z.object({
-        file_path: z.string().describe('Path to write (relative to cwd)'),
+        file_path: z
+          .string()
+          .describe(
+            'Path to write. Absolute paths are used as-is; relative paths resolve against cwd. For auto-memory, pass the absolute memory directory path from the system prompt.',
+          ),
         content: z.string().describe('Full file content'),
       }),
       execute: async ({

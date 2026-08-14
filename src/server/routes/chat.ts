@@ -34,6 +34,7 @@ import type { Message, RunAgentFn } from '../../core/types.js'
 import { createNoopTransport, runChatTurn } from '../../turn/run-chat-turn.js'
 import { loadWorkspaceContributions } from '../../core/workspace-load.js'
 import { findPrimaryAgent } from '../../tools/AgentTool/mergeAgents.js'
+import { normalizeWorkspacePath } from '../../core/workspace-path.js'
 
 export async function handleChat(
   req: IncomingMessage,
@@ -86,7 +87,7 @@ export async function handleChat(
   // Resolve cwd from Session.workspace handle when present; else legacy path.
   let cwd: string
   if (session?.workspace) {
-    cwd = session.workspace.cwd
+    cwd = normalizeWorkspacePath(session.workspace.cwd)
   } else {
     cwd = resolveRequestCwd(req, workspace)
   }
@@ -116,11 +117,11 @@ export async function handleChat(
     const { setSessionWorkspace } = await import('../session.js')
     setSessionWorkspace(session.id, {
       environmentId: envId,
-      cwd: bindCwd,
+      cwd: normalizeWorkspacePath(bindCwd),
     })
-    cwd = bindCwd
+    cwd = normalizeWorkspacePath(bindCwd)
   } else {
-    cwd = session.workspace.cwd
+    cwd = normalizeWorkspacePath(session.workspace.cwd)
   }
 
   // One turn per session. A duplicate send while a slow step (e.g. full

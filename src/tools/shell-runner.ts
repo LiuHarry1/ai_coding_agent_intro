@@ -225,6 +225,23 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             }
           }
 
+          // Remote sessions must never run shell on the Control Plane host
+          // (Windows path.resolve turns /home/... into C:\home\... → /c/home/...).
+          const envId =
+            context.session?.workspace?.environmentId ??
+            context.execution?.environmentId
+          if (envId && envId !== 'local') {
+            return shellOk({
+              text: truncate(
+                `[error: no Worker execution backend for remote environment ${envId}; refusing local shell fallback]`,
+              ),
+              stdout: '',
+              stderr: `Remote shell requires Worker execution (env=${envId})`,
+              exitCode: 1,
+              interrupted: true,
+            })
+          }
+
           // ── In-process foreground (tests / no Worker) ──
           let prepared
           try {

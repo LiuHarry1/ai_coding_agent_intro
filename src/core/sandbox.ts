@@ -13,6 +13,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { SESSION_DIR } from './session-paths.js'
 import { isPathInWorkspace } from './workspace.js'
+import { normalizeWorkspacePath } from './workspace-path.js'
 
 export type SandboxMode = 'off' | 'strict'
 
@@ -212,7 +213,7 @@ export function policyFromContext(
 /** System-prompt section when strict mode is on; empty otherwise. */
 export function workspaceBoundaryPromptSection(cwd: string): string {
   if (resolveSandboxMode() !== 'strict') return ''
-  const root = path.resolve(cwd)
+  const root = normalizeWorkspacePath(cwd)
   return `
 # Workspace boundary (enforced)
  - Your only project directory is: ${root}

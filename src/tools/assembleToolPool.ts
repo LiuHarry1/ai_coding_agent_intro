@@ -4,7 +4,10 @@
  */
 import { filterToolsByEnablement } from '../core/tool-enablement.js'
 import { createToolSearchDefinition } from './ToolSearchTool/ToolSearchTool.js'
-import { TOOL_SEARCH_TOOL_NAME } from '../constants/tool_names.js'
+import {
+  READ_ONLY_TOOLS,
+  TOOL_SEARCH_TOOL_NAME,
+} from '../constants/tool_names.js'
 import { applyModeRestrictions } from '../core/mode-restrictions.js'
 import { definition as enterPlanModeDef } from './EnterPlanModeTool/EnterPlanModeTool.js'
 import { definition as exitPlanModeDef } from './ExitPlanModeTool/ExitPlanModeTool.js'
@@ -77,7 +80,7 @@ export function assembleToolPool(
     )
   }
 
-  if (deferredDefs.length > 0) {
+  if (deferredDefs.length > 0 && session.permissionMode.mode !== 'ask') {
     const tsearchDef = createToolSearchDefinition(deferredDefs)
     active[TOOL_SEARCH_TOOL_NAME] = tsearchDef.create(cwd, toolContext)
   }
@@ -93,18 +96,40 @@ export function assembleToolPool(
     [exitPlanModeDef.name]: exitPlanModeDef.create(cwd, toolContext),
   }
 
+  // Ask mode: promote read-only deferred tools (LSP/WebSearch/…) into the
+  // active set. Do not expose ToolSearch or mutating/MCP deferred tools.
+  if (session.permissionMode.mode === 'ask') {
+    const readOnly = new Set<string>(READ_ONLY_TOOLS)
+    for (const name of READ_ONLY_TOOLS) {
+      if (deferred[name] && !enablementFiltered[name]) {
+        enablementFiltered[name] = deferred[name]!
+      }
+    }
+    for (const name of Object.keys(deferred)) {
+      if (!readOnly.has(name)) delete deferred[name]
+    }
+    // No ToolSearch in ask — mutating deferred tools stay withheld.
+  }
+
   const tools = applyModeRestrictions(
     session.permissionMode.mode,
     enablementFiltered,
     modeTools,
   )
 
+  const askMode = session.permissionMode.mode === 'ask'
+  const deferredForTurn = askMode ? {} : deferred
+  const deferredDefsForTurn = askMode
+    ? []
+    : deferredDefs.filter(d => deferred[d.name])
+
   return {
     tools,
     baseTools: enablementFiltered,
     modeTools,
-    deferredToolPool: Object.keys(deferred).length > 0 ? deferred : undefined,
-    deferredDefs,
+    deferredToolPool:
+      Object.keys(deferredForTurn).length > 0 ? deferredForTurn : undefined,
+    deferredDefs: deferredDefsForTurn,
     mainThreadProfile,
   }
 }

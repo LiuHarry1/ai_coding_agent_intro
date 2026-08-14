@@ -236,10 +236,14 @@ export async function prepareChatTurn(
   try {
     execution = await resolveExecutionBackend(session, config.lspServers)
   } catch (err) {
-    console.warn(
-      `[server] execution backend resolve failed:`,
-      err instanceof Error ? err.message : err,
-    )
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(`[server] execution backend resolve failed:`, msg)
+    if (remote) {
+      throw new Error(
+        `Remote execution backend unavailable (${session.workspace?.environmentId}): ${msg}. ` +
+          `Shell/file tools cannot fall back to the local machine.`,
+      )
+    }
     execution = undefined
   }
 

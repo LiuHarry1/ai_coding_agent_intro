@@ -12,6 +12,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import * as os from 'os'
 import * as path from 'path'
+import { normalizeWorkspacePath } from '../core/workspace-path.js'
 
 export type RequestScope = {
   /** Logical HOME for user-scope app-dir, tilde expand, shell $HOME. */
@@ -33,8 +34,11 @@ function authEnabled(): boolean {
 /** Run `fn` with request scope bound for the current async context. */
 export function runWithRequestScope<T>(scope: RequestScope, fn: () => T): T {
   const resolved: RequestScope = {
+    // agentHome is always a host-local path (SSO pin / os.homedir).
     agentHome: path.resolve(scope.agentHome),
-    cwd: path.resolve(scope.cwd),
+    // cwd may be a remote POSIX path when AUTH wraps an SSH session — never
+    // Win32-resolve those (would turn /home/... into C:\home\...).
+    cwd: normalizeWorkspacePath(scope.cwd),
   }
   return requestScopeAls.run(resolved, fn)
 }

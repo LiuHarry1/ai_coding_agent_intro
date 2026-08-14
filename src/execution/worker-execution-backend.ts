@@ -10,8 +10,16 @@ import type { ShellKind } from '../core/shell/spawn-shell.js'
 import { registerPendingLSPDiagnostic } from '../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspWorkspaceKey } from '../services/lsp/manager.js'
 
+/** Windows drive/UNC abs must not go through posix.join (treated as relative). */
+function isWindowsAbsolutePath(p: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(p) || /^\\\\[^\\/]+[\\/]/.test(p)
+}
+
 function posixJoin(cwd: string, filePath: string): string {
   if (filePath.startsWith('/')) return path.posix.normalize(filePath)
+  // Keep Windows abs paths intact even when worker pathStyle is posix
+  // (e.g. mis-tagged local) — posix.join would yield cwd/C:\Users\….
+  if (isWindowsAbsolutePath(filePath)) return path.normalize(filePath)
   return path.posix.normalize(
     path.posix.join(cwd.replace(/\\/g, '/'), filePath),
   )

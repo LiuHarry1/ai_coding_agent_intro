@@ -78,6 +78,50 @@ function scpUploadRecursive(
   })
 }
 
+function localBridgeSrc(): string | null {
+  const src = path.join(getRepoRoot(), 'integrations', 'stpl-lsp-bridge')
+  return fs.existsSync(path.join(src, 'index.js')) ? src : null
+}
+
+/**
+ * Ship STPL bridge so relative lspServers args resolve on remote.
+ * Runs even when the worker version stamp already matches (repair path).
+ */
+async function ensureRemoteBridge(
+  host: ParsedSshHost,
+  homeDir: string,
+  version: string,
+): Promise<boolean> {
+  const bridgeSrc = localBridgeSrc()
+  if (!bridgeSrc) return false
+
+  const probe = await sshExecOk(
+    host,
+    `d="$HOME/${homeDir}/${version}"; if [ -f "$d/integrations/stpl-lsp-bridge/index.js" ]; then echo OK; else echo MISSING; fi`,
+    { timeoutMs: 15_000 },
+  )
+  if (probe.trim().split(/\r?\n/)[0] === 'OK') return false
+
+  await sshExecOk(
+    host,
+    `rm -rf "$HOME/${homeDir}/${version}/integrations/stpl-lsp-bridge" && mkdir -p "$HOME/${homeDir}/${version}/integrations"`,
+    { timeoutMs: 15_000 },
+  )
+  // Upload into integrations/ so the local folder name becomes stpl-lsp-bridge/
+  // (scp -r to .../stpl-lsp-bridge nests when that path already exists).
+  await scpUploadRecursive(
+    host,
+    bridgeSrc,
+    `${homeDir}/${version}/integrations`,
+  )
+  await sshExecOk(
+    host,
+    `test -f "$HOME/${homeDir}/${version}/integrations/stpl-lsp-bridge/index.js"`,
+    { timeoutMs: 15_000 },
+  )
+  return true
+}
+
 /**
  * Ensure remote worker binary + STPL bridge match local build.
  */
@@ -128,31 +172,16 @@ export async function ensureRemoteWorker(
       )
     }
 
-    // Ship STPL bridge + helpers so relative lspServers args resolve on remote.
-    const bridgeSrc = path.join(
-      getRepoRoot(),
-      'integrations',
-      'stpl-lsp-bridge',
-    )
-    if (fs.existsSync(bridgeSrc)) {
-      await sshExecOk(
-        host,
-        `mkdir -p "$HOME/${homeDir}/${version}/integrations"`,
-        { timeoutMs: 15_000 },
-      )
-      await scpUploadRecursive(
-        host,
-        bridgeSrc,
-        `${homeDir}/${version}/integrations/stpl-lsp-bridge`,
-      )
-    }
-
     await sshExecOk(
       host,
       `printf '%s' ${shQuote(version)} > "$HOME/${homeDir}/${version}/.installed"`,
       { timeoutMs: 15_000 },
     )
   }
+
+  // Bridge is independent of worker version stamp: older installs / Electron
+  // packs without integrations/ left AGENT_ROOT with no index.js.
+  const bridgeUploaded = await ensureRemoteBridge(host, homeDir, version)
 
   await sshExecOk(
     host,
@@ -163,7 +192,7 @@ export async function ensureRemoteWorker(
   return {
     version,
     path: `~/${homeDir}/${version}/${bundleName}`,
-    freshlyInstalled: needUpload,
+    freshlyInstalled: needUpload || bridgeUploaded,
   }
 }
 

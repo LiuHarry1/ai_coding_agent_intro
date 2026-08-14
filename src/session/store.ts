@@ -10,6 +10,7 @@ import {
   getSessionJsonlPath,
   getToolResultFilePath,
 } from '../core/session-paths.js'
+import { normalizeWorkspacePath } from '../core/workspace-path.js'
 
 const sessions = new Map<string, Session>()
 
@@ -119,7 +120,7 @@ export function setSessionWorkspace(
   if (!session) return
   session.workspace = {
     environmentId: workspace.environmentId,
-    cwd: workspace.cwd,
+    cwd: normalizeWorkspacePath(workspace.cwd),
   }
   appendLine(sessionId, {
     type: 'workspace_bound',

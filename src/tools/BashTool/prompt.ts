@@ -1,55 +1,99 @@
-import { isWindows } from '../../core/platform.js'
+/**
+ * Bash tool prompt — Claude Code `tools/BashTool/prompt.ts` `getSimplePrompt`.
+ * Non-embedded / non-ant / non-MONITOR_TOOL path only (BaiX has no those gates).
+ * Omits `getSimpleSandboxSection` / `getCommitAndPRInstructions` (CC helpers
+ * not ported here; workspace/git guidance lives in system prompt).
+ */
+import { prependBullets } from '../../constants/prompts.js'
 import {
-  TASK_OUTPUT_TOOL_NAME,
-  TASK_STOP_TOOL_NAME,
+  BASH_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  WRITE_FILE_TOOL_NAME,
 } from '../../constants/tool_names.js'
+import {
+  getDefaultBashTimeoutMs,
+  getMaxBashTimeoutMs,
+} from '../../utils/timeouts.js'
 
-const windowsNote = isWindows
-  ? `
-On Windows this tool runs Git Bash (not cmd.exe). Install Git for Windows or set GIT_BASH_PATH if spawn fails. Prefer the PowerShell tool for native Windows cmdlets. Shell env (\`conda activate\`) does not persist across calls — chain in one command.
-`
-  : ''
+export function getDefaultTimeoutMs(): number {
+  return getDefaultBashTimeoutMs()
+}
 
-export const DESCRIPTION = `Run bash commands in the workspace shell.${windowsNote}
+export function getMaxTimeoutMs(): number {
+  return getMaxBashTimeoutMs()
+}
 
-Modes:
-1. Run command — provide \`command\`. Blocks until completion, streams live output to the UI.
-2. Background — \`run_in_background: true\`. Only use this if you don't need the result immediately and are OK being notified when the command completes later. You do not need to check the output right away — you'll be notified when it finishes (\`<task-notification>\`). You do not need to use \`&\` at the end of the command. Prefer Read on the output-file path from the tool result (session task files are readable even outside the project cwd). For a non-blocking peek while still running, use ${TASK_OUTPUT_TOOL_NAME} with \`block: false\`. If waiting for a background task you started with \`run_in_background\`, you will be notified when it completes — do not poll. Long-lived processes (dev servers, watchers) never exit: after backgrounding, optionally Read/\`${TASK_OUTPUT_TOOL_NAME}\`(\`block: false\`) once to confirm startup, then reply to the user — do not use \`${TASK_OUTPUT_TOOL_NAME}\` with \`block: true\` on them; use ${TASK_STOP_TOOL_NAME} only when asked to stop.
+function getBackgroundUsageNote(): string | null {
+  return "You can use the `run_in_background` parameter to run the command in the background. Only use this if you don't need the result immediately and are OK being notified when the command completes later. You do not need to check the output right away - you'll be notified when it finishes. You do not need to use '&' at the end of the command when using this parameter."
+}
 
-Working directory:
-- On Unix, the shell binary is \`$SHELL\` when it is bash/zsh/sh (else \`/bin/bash\`), spawned as a login shell (\`-lc\`) so \`PATH\` / aliases / version-manager init from profile scripts are picked up. On Windows (Git Bash), non-login \`-c\` + inherited process env (see Windows note above).
-- The cwd persists across calls — \`cd subdir\` in one call affects the next call. Shell variables / \`conda activate\` do **not** persist across calls — chain them in one command (\`conda activate python3_11 && python …\`).
-- Prefer absolute paths or stay in the project root rather than \`cd\`-hopping; deep \`cd\` chains make later calls hard to reason about.
-- Before \`mkdir\` / \`touch\` for a new path, run \`ls\` on the parent directory to confirm it exists and is the one you expect.
+export function getSimplePrompt(): string {
+  const toolPreferenceItems = [
+    `File search: Use ${GLOB_TOOL_NAME} (NOT find or ls)`,
+    `Content search: Use ${GREP_TOOL_NAME} (NOT grep or rg)`,
+    `Read files: Use ${FILE_READ_TOOL_NAME} (NOT cat/head/tail)`,
+    `Edit files: Use ${EDIT_FILE_TOOL_NAME} (NOT sed/awk)`,
+    `Write files: Use ${WRITE_FILE_TOOL_NAME} (NOT echo >/cat <<EOF)`,
+    'Communication: Output text directly (NOT echo/printf)',
+  ]
 
-Syntax tips:
-- Chain with \`&&\` (run-if-success), \`||\` (run-if-failure), \`;\` (always run), \`|\` (pipe).
-- Quote paths with spaces. Use single quotes to suppress \`$\` / backtick expansion.
-- HEREDOCs work, but prefer the dedicated \`write_file\` / \`edit_file\` tools for file I/O.
-- Pass \`--no-pager\` or pipe to \`cat\` for git/less commands so they don't hang on a pager.
+  const avoidCommands =
+    '`find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo`'
 
-Issuing multiple commands:
-- **Independent commands → multiple bash tool calls in ONE response.** If you need \`git status\` and \`git diff\`, send them as two parallel tool calls, not one chained call.
-- **Dependent commands → ONE bash call with \`&&\`** (e.g. \`cd build && cmake ..\`). Do not split into two calls — the cwd / env from the first won't carry over reliably under load.
-- Use \`;\` only when later commands should run regardless of earlier failures.
-- Do NOT split commands across newlines in a single call to fake parallelism. Newlines are fine inside quoted strings / HEREDOCs.
+  const multipleCommandsSubitems = [
+    `If the commands are independent and can run in parallel, make multiple ${BASH_TOOL_NAME} tool calls in a single message. Example: if you need to run "git status" and "git diff", send a single message with two ${BASH_TOOL_NAME} tool calls in parallel.`,
+    `If the commands depend on each other and must run sequentially, use a single ${BASH_TOOL_NAME} call with '&&' to chain them together.`,
+    "Use ';' only when you need to run commands sequentially but don't care if earlier commands fail.",
+    'DO NOT use newlines to separate commands (newlines are ok in quoted strings).',
+  ]
 
-Constraints:
-- Non-interactive only — no TTY. Anything that prompts will hang until timeout.
-- Combined stdout+stderr for foreground is capped; large background output is written to the task output file.
-- Default timeout 120s for foreground. Pass \`timeout\` for slower commands. Ignored when \`run_in_background\` is true.
+  const gitSubitems = [
+    'Prefer to create a new commit rather than amending an existing commit.',
+    'Before running destructive operations (e.g., git reset --hard, git push --force, git checkout --), consider whether there is a safer alternative that achieves the same goal. Only use destructive operations when they are truly the best approach.',
+    'Never skip hooks (--no-verify) or bypass signing (--no-gpg-sign, -c commit.gpgsign=false) unless the user has explicitly asked for it. If a hook fails, investigate and fix the underlying issue.',
+  ]
 
-Workspace boundary:
-- Prefer dedicated tools (\`read_file\`, \`grep\`, \`glob\`, \`write_file\`, \`edit_file\`) for file I/O — they enforce the workspace boundary.
-- When SANDBOX_MODE=strict (SSO multi-tenant), do NOT list, read, or modify paths outside the current working directory (including sibling user workspaces). Stay inside the project root.
-- When sandbox is off (local/admin), read-only commands (\`ls\`, \`cat\`, \`grep\`, \`git log\`, etc.) MAY target paths outside the workspace for system config or sibling projects; file mutations still belong to \`write_file\` / \`edit_file\`.
-- Don't use bash redirections (\`>\`, \`>>\`, \`tee\`) or \`rm\` / \`mv\` / \`cp\` to write OUTSIDE the workspace — that's the user's filesystem, not yours.
+  const sleepSubitems = [
+    'Do not sleep between commands that can run immediately — just run them.',
+    'If your command is long running and you would like to be notified when it finishes — use `run_in_background`. No sleep needed.',
+    'Do not retry failing commands in a sleep loop — diagnose the root cause.',
+    'If waiting for a background task you started with `run_in_background`, you will be notified when it completes — do not poll.',
+    'If you must poll an external process, use a check command (e.g. `gh run view`) rather than sleeping first.',
+    'If you must sleep, keep the duration short (1-5 seconds) to avoid blocking the user.',
+  ]
+  const backgroundNote = getBackgroundUsageNote()
 
-IMPORTANT: Avoid using this tool to run \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Prefer the dedicated tools instead:
-- File search: Use \`glob\` (NOT find or ls)
-- Content search: Use \`grep\` (the tool) (NOT grep or rg)
-- Read files: Use \`read_file\` (NOT cat/head/tail)
-- Edit files: Use \`edit_file\` (NOT sed/awk)
-- Write files: Use \`write_file\` (NOT echo >/cat <<EOF)
+  const instructionItems: Array<string | string[]> = [
+    'If your command will create new directories or files, first use this tool to run `ls` to verify the parent directory exists and is the correct location.',
+    'Always quote file paths that contain spaces with double quotes in your command (e.g., cd "path with spaces/file.txt")',
+    'Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of `cd`. You may use `cd` if the User explicitly requests it.',
+    `You may specify an optional timeout in milliseconds (up to ${getMaxTimeoutMs()}ms / ${getMaxTimeoutMs() / 60000} minutes). By default, your command will timeout after ${getDefaultTimeoutMs()}ms (${getDefaultTimeoutMs() / 60000} minutes).`,
+    ...(backgroundNote !== null ? [backgroundNote] : []),
+    'When issuing multiple commands:',
+    multipleCommandsSubitems,
+    'For git commands:',
+    gitSubitems,
+    'Avoid unnecessary `sleep` commands:',
+    sleepSubitems,
+  ]
 
-Reserve this tool for system commands and terminal operations (git, package managers, build/test runners) and read-only directory checks (\`ls\`, \`git status\`, etc.).`
+  return [
+    'Executes a given bash command and returns its output.',
+    '',
+    "The working directory persists between commands, but shell state does not. The shell environment is initialized from the user's profile (bash or zsh).",
+    '',
+    `IMPORTANT: Avoid using this tool to run ${avoidCommands} commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool as this will provide a much better experience for the user:`,
+    '',
+    ...prependBullets(toolPreferenceItems),
+    `While the ${BASH_TOOL_NAME} tool can do similar things, it's better to use the built-in tools as they provide a better user experience and make it easier to review tool calls and give permission.`,
+    '',
+    '# Instructions',
+    ...prependBullets(instructionItems),
+  ].join('\n')
+}
+
+/** Static description for tool registration (CC uses `prompt()` → getSimplePrompt). */
+export const DESCRIPTION = getSimplePrompt()

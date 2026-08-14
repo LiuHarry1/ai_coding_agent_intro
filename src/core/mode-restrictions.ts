@@ -47,10 +47,10 @@ export function applyModeRestrictions(
 
   switch (mode) {
     case 'ask': {
-      const allowed = [...READ_ONLY_TOOLS]
-      const filtered = pickTools(merged, allowed)
-      if (merged['ToolSearch']) filtered['ToolSearch'] = merged['ToolSearch']
-      return filtered
+      // Read-only only. Do NOT re-add ToolSearch — discovering deferred
+      // write/shell/MCP tools would bypass this filter mid-turn
+      // (activateDeferredTools mutates activeTools directly).
+      return pickTools(merged, [...READ_ONLY_TOOLS])
     }
     case 'plan': {
       const denied = new Set([
