@@ -1,5 +1,4 @@
 {
-  "mcpServers": {
-  },
-  "disabledTools": ["web_fetch"]
+  "mcpServers": {},
+  "disabledTools": []
 }

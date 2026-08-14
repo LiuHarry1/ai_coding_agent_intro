@@ -21,6 +21,7 @@ import type {
   AnyTool,
   Session,
   ToolContext,
+  ToolDefinition,
 } from '../core/types.js'
 import type { ToolRegistry } from '../core/tool-registry.js'
 import type { ToolEnablementSource } from '../core/tool-enablement.js'
@@ -42,6 +43,12 @@ export interface AssembleToolPoolResult {
   modeTools: Record<string, AnyTool>
   deferredToolPool?: Record<string, AnyTool>
   deferredDefs: Array<{ name: string; description: string; isMcp: boolean }>
+  /**
+   * Definitions built per turn instead of living on the registry (ToolSearch).
+   * The executor needs them to reach `mapToolResultToToolResultBlockParam` /
+   * `outputSchema`; a registry lookup alone would miss them.
+   */
+  dynamicDefs: Record<string, ToolDefinition>
   mainThreadProfile: AgentDefinition | null
 }
 
@@ -80,9 +87,11 @@ export function assembleToolPool(
     )
   }
 
+  const dynamicDefs: Record<string, ToolDefinition> = {}
   if (deferredDefs.length > 0 && session.permissionMode.mode !== 'ask') {
     const tsearchDef = createToolSearchDefinition(deferredDefs)
     active[TOOL_SEARCH_TOOL_NAME] = tsearchDef.create(cwd, toolContext)
+    dynamicDefs[TOOL_SEARCH_TOOL_NAME] = tsearchDef
   }
 
   const enablementFiltered = filterToolsByEnablement(
@@ -130,6 +139,7 @@ export function assembleToolPool(
     deferredToolPool:
       Object.keys(deferredForTurn).length > 0 ? deferredForTurn : undefined,
     deferredDefs: deferredDefsForTurn,
+    dynamicDefs,
     mainThreadProfile,
   }
 }

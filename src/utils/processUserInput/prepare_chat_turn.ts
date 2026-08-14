@@ -32,6 +32,7 @@ import type {
   IToolRegistry,
   Session,
   ToolContext,
+  ToolDefinition,
   ToolUseContext,
   AppConfig,
 } from '../../core/types.js'
@@ -128,6 +129,8 @@ export interface PreparedChatTurn {
   baseTools: Record<string, AnyTool>
   modeTools: Record<string, AnyTool>
   deferredToolPool?: Record<string, AnyTool>
+  /** Per-turn dynamic defs first, then the registry. */
+  getToolDefinition: (name: string) => ToolDefinition | undefined
   projectRules: string
   toolUseContext: ToolUseContext
   subagentNames: Set<string>
@@ -335,6 +338,8 @@ export async function prepareChatTurn(
     baseTools: pool.baseTools,
     modeTools: pool.modeTools,
     deferredToolPool: pool.deferredToolPool,
+    getToolDefinition: (name: string) =>
+      pool.dynamicDefs[name] ?? registry.get(name),
     projectRules,
     toolUseContext,
     subagentNames: getSubagentNames(registry),

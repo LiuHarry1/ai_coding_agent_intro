@@ -9,7 +9,7 @@ import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
  * Dedicated card for URL-fetch tools:
- * - built-in `web_fetch` (JSON article payload)
+ * - built-in `WebFetch` (processed `result` text + HTTP status/size chrome)
  * - MCP fetch tools like `mcp_server_fetch` (markdown / content blocks)
  *
  * Cursor show a compact row (action + URL/title), not
@@ -52,8 +52,21 @@ export default function WebFetchCard({ part, nested = false }) {
   const { server: mcpServer } = parseMcpToolName(toolName)
 
   const normalized = useMemo(() => {
-    if (part.toolUseResult && typeof part.toolUseResult === 'object') {
-      const tur = part.toolUseResult
+    const tur = part.toolUseResult
+    if (tur && typeof tur === 'object') {
+      // Built-in WebFetch: { bytes, code, codeText, result, durationMs, url }
+      if (typeof tur.result === 'string') {
+        return {
+          text: tur.result,
+          title: '',
+          url: tur.url || requestUrl,
+          bytes: tur.bytes,
+          code: tur.code,
+          codeText: tur.codeText,
+          error: undefined,
+        }
+      }
+      // Article payload from sessions predating the CC-style output
       return {
         text: tur.text || '',
         title: tur.title || '',
@@ -73,7 +86,10 @@ export default function WebFetchCard({ part, nested = false }) {
   const host = hostname(articleUrl)
 
   const hasScannableBody =
-    isError || Boolean(text) || Boolean(normalized.excerpt) || Boolean(normalized.note)
+    isError ||
+    Boolean(text) ||
+    Boolean(normalized.excerpt) ||
+    Boolean(normalized.note)
 
   // Keep expanded while running; on success keep results scannable (don't force-collapse).
   const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
@@ -89,6 +105,13 @@ export default function WebFetchCard({ part, nested = false }) {
   const hasMore = text.length > PREVIEW_CHARS
   const resultSize =
     text.length || (typeof result === 'string' ? result.length : 0)
+  // Fetched size + HTTP status, as `Received 12.3KB (200 OK)`
+  const fetchedBytes =
+    typeof normalized.bytes === 'number' ? normalized.bytes : 0
+  const httpStatus =
+    normalized.code != null
+      ? `${normalized.code} ${normalized.codeText || ''}`.trim()
+      : ''
 
   const action = toolActionLabel('webFetch', {
     loading: !isDone,
@@ -107,8 +130,11 @@ export default function WebFetchCard({ part, nested = false }) {
         titleTooltip={articleUrl || requestUrl}
         subtitle={subtitle}
         meta={
-          isDone && resultSize > 0 ? (
-            <span className='web-fetch-meta'>{formatBytes(resultSize)}</span>
+          isDone && (fetchedBytes > 0 || resultSize > 0) ? (
+            <span className='web-fetch-meta'>
+              {formatBytes(fetchedBytes || resultSize)}
+              {httpStatus ? ` (${httpStatus})` : ''}
+            </span>
           ) : null
         }
         duration={part.duration}

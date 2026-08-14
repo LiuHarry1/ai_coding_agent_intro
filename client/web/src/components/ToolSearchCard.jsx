@@ -21,6 +21,11 @@ export default function ToolSearchCard({ part, nested = false }) {
     ''
   const matches = Array.isArray(tur?.matches) ? tur.matches : null
   const hasMatches = matches && matches.length > 0
+  // `select:Foo,Bar` is wire syntax, not something worth showing verbatim.
+  const queryLabel = query.replace(/^select:/i, '').replace(/,\s*/g, ', ')
+  const summary = hasMatches
+    ? matches.map(m => m.name).join(', ')
+    : queryLabel
   const hasTextFallback =
     !hasMatches && typeof result === 'string' && result.trim()
   const hasBody = isError || hasMatches || hasTextFallback
@@ -34,8 +39,8 @@ export default function ToolSearchCard({ part, nested = false }) {
     hasError: isError,
   })
   const title = isError
-    ? toolErrorDetails(query || 'ToolSearch\u2026', true)
-    : query || 'ToolSearch\u2026'
+    ? toolErrorDetails(queryLabel || 'ToolSearch\u2026', true)
+    : summary || 'ToolSearch\u2026'
 
   return (
     <div className={`tool-row tool-search-card ${isError ? 'has-error' : ''}`}>

@@ -551,6 +551,7 @@ export async function runChatTurn(
         images: images?.length ? images : undefined,
         subagentNames: prepared.subagentNames,
         deferredToolPool: prepared.deferredToolPool,
+        getToolDefinition: prepared.getToolDefinition,
         concurrencyPolicy: prepared.concurrencyPolicy,
         sessionId: session.id,
         toolUseContext: prepared.toolUseContext,

@@ -108,11 +108,6 @@
   "environments": {
     "ssh": [{ "sshHost": "yourhost", "startDirectory": "~/yourworkspace" }]
   },
-  "mcpServers": {
-    "mcp_server": {
-      "command": "python",
-      "args": ["-m", "mcp_server_fetch"]
-    }
-  },
-  "disabledTools": ["web_fetch"]
+  "mcpServers": {},
+  "disabledTools": []
 }

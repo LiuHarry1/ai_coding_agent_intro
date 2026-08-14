@@ -1,6 +1,6 @@
 /**
  * Normalize fetch tool results from:
- * - built-in web_fetch (JSON with title, text, …)
+ * - built-in WebFetch (plain processed text; JSON with title/text in older sessions)
  * - MCP fetch / mcp_server_fetch (markdown text or content-block JSON)
  */
 
@@ -78,7 +78,7 @@ export function normalizeFetchResult(result, requestUrl) {
     }
   }
 
-  // Built-in web_fetch JSON
+  // Built-in web_fetch JSON (sessions predating the CC-style plain-text result)
   if (result.startsWith('{')) {
     try {
       const parsed = JSON.parse(result)

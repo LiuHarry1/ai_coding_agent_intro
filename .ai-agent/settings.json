@@ -4,19 +4,19 @@
       "provider": "openai-compatible",
       "baseURL": "http://localhost:4141/v1",
       "apiKey": "not-needed",
-      "model": "claude-opus-4.6"
+      "model": "gpt-5.4"
     },
     "medium": {
       "provider": "openai-compatible",
       "baseURL": "http://localhost:4141/v1",
       "apiKey": "not-needed",
-      "model": "claude-opus-4.6"
+      "model": "gpt-4.1"
     },
     "small": {
       "provider": "openai-compatible",
       "baseURL": "http://localhost:4141/v1",
       "apiKey": "sk-xxx",
-      "model": "claude-haiku-4.5"
+      "model": "gpt-4o-mini"
     }
   },
   "compaction": {
@@ -78,12 +78,7 @@
 
 
   },
-  "mcpServers": {
-    "mcp_server": {
-      "command": "python",
-      "args": ["-m", "mcp_server_fetch"]
-    }
-  },
+  "mcpServers": {},
 
-  "disabledTools": ["web_fetch"]
+  "disabledTools": []
 }

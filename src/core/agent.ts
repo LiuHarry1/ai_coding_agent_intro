@@ -250,6 +250,7 @@ export async function runAgent(
     model,
     subagentNames,
     deferredToolPool,
+    getToolDefinition,
     concurrencyPolicy,
     sessionId,
     toolUseContext,
@@ -390,6 +391,7 @@ export async function runAgent(
         stepStart,
         currentTodos,
         concurrencyPolicy: toolPolicy,
+        getToolDefinition,
         cwd,
         compaction,
         sessionMemory,
@@ -708,6 +710,7 @@ interface RunOneStepArgs {
   stepStart: number
   currentTodos: TodoItem[]
   concurrencyPolicy: ConcurrencyPolicyFn
+  getToolDefinition?: AgentOptions['getToolDefinition']
   cwd?: string
   compaction?: AgentOptions['compaction']
   sessionMemory?: AgentOptions['sessionMemory']
@@ -742,6 +745,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
     step,
     stepStart,
     concurrencyPolicy,
+    getToolDefinition,
     cwd,
     compaction,
     sessionMemory,
@@ -840,6 +844,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           concurrencyPolicy,
           sessionId,
           logLabel,
+          getDefinition: getToolDefinition,
         })
         stepResult.toolResults.push(...executed)
       }

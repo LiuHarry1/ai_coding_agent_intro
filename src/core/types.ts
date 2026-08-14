@@ -395,6 +395,12 @@ export interface AgentOptions {
    */
   deferredToolPool?: Record<string, AnyTool>
   /**
+   * Resolves a tool definition by name for dual-channel result mapping.
+   * Needed for defs built per turn (ToolSearch) that the registry never sees;
+   * defaults to a registry-only lookup when omitted.
+   */
+  getToolDefinition?: (name: string) => ToolDefinition | undefined
+  /**
    * Per-tool concurrency policy for manual tool orchestration. When omitted,
    * all tools run serially (safe default).
    */

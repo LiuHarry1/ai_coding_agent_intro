@@ -16,9 +16,15 @@ import {
   type WriteFileOutput,
 } from '../tools/FileWriteTool/FileWriteTool.js'
 import { ShellToolOutputSchema } from '../tools/shell-runner.js'
-import { buildToolMessage } from '../services/tools/tool_execution.js'
+import {
+  buildToolMessage,
+  runToolCalls,
+} from '../services/tools/tool_execution.js'
 import { projectMessagesForApi } from '../core/agent/messageSanitize.js'
-import type { Message } from '../core/types.js'
+import { createToolSearchDefinition } from '../tools/ToolSearchTool/ToolSearchTool.js'
+import { noopWireEmitter } from '../core/wire-emitter.js'
+import { TOOL_SEARCH_TOOL_NAME } from '../constants/tool_names.js'
+import type { AnyTool, Message, ToolContext } from '../core/types.js'
 
 function testRegistryGate() {
   const missing: string[] = []
@@ -100,8 +106,67 @@ function testShellSchema() {
   console.log('ok Shell outputSchema')
 }
 
+/**
+ * ToolSearch is built per turn, so it never lands on the registry and the gate
+ * loop above cannot see it. The executor must therefore be handed its
+ * definition explicitly, or the model gets `{"data":{...}}` and the UI loses
+ * tool_use_result.
+ */
+async function testToolSearchDynamicDef() {
+  assert.equal(
+    defaultRegistry.get(TOOL_SEARCH_TOOL_NAME),
+    undefined,
+    'ToolSearch is per-turn; it must stay off the registry',
+  )
+
+  const def = createToolSearchDefinition([
+    { name: 'WebFetch', description: 'Fetch a URL', isMcp: false },
+  ])
+  assert.ok(def.mapToolResultToToolResultBlockParam)
+  assert.ok(def.outputSchema)
+
+  const tools = {
+    [TOOL_SEARCH_TOOL_NAME]: def.create('/tmp', {} as ToolContext),
+  } as Record<string, AnyTool>
+  const toolCalls = [
+    {
+      toolCallId: 'ts1',
+      toolName: TOOL_SEARCH_TOOL_NAME,
+      input: { query: 'select:WebFetch' },
+    },
+  ]
+
+  const [withDef] = await runToolCalls({
+    toolCalls,
+    tools,
+    wire: noopWireEmitter,
+    concurrencyPolicy: () => true,
+    getDefinition: name => (name === TOOL_SEARCH_TOOL_NAME ? def : undefined),
+  })
+  assert.equal(
+    withDef!.result,
+    'Loaded 1 tool(s). You can now use them:\n- WebFetch: Fetch a URL',
+  )
+  assert.deepEqual((withDef!.toolUseResult as { matches: unknown }).matches, [
+    { name: 'WebFetch', description: 'Fetch a URL' },
+  ])
+
+  const [withoutDef] = await runToolCalls({
+    toolCalls,
+    tools,
+    wire: noopWireEmitter,
+    concurrencyPolicy: () => true,
+  })
+  assert.ok(
+    withoutDef!.result.startsWith('{"data"'),
+    'registry-only lookup leaks raw JSON — keep getDefinition wired through',
+  )
+  console.log('ok ToolSearch dynamic def routing')
+}
+
 testRegistryGate()
 testEditModeB()
 testWriteModeB()
 testShellSchema()
+await testToolSearchDynamicDef()
 console.log('all dual-channel tests passed')
