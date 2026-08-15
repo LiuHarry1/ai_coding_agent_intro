@@ -19,6 +19,7 @@ import {
 import { ensureMessageUuid } from '../session-memory/messageUuid.js'
 import { sliceMessagesToKeep } from '../session-memory/keepIndex.js'
 import { formatCompactSummaryMessage } from '../session-memory/prompts.js'
+import { toolResultOutputToText } from '../../utils/tool-result-content.js'
 
 export type { CompactEnrichment } from './post-compact-attachments.js'
 
@@ -456,8 +457,7 @@ function formatForSummary(msg: Message): string {
 
   return msg.content
     .map(p => {
-      const v = p.output?.value ?? ''
-      const text = typeof v === 'string' ? v : JSON.stringify(v)
+      const text = toolResultOutputToText(p.output)
       const short = text.length > 500 ? text.slice(0, 500) + '...' : text
       return `[${p.toolName} result]: ${short}`
     })

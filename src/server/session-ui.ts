@@ -1,4 +1,4 @@
-import type { Message } from '../core/types.js'
+import type { Message, ToolResultOutput } from '../core/types.js'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -7,6 +7,7 @@ import { SESSION_DIR } from '../session/index.js'
 import { getSubagentNames } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools.js'
 import { isSystemReminderContent } from '../utils/system-reminder.js'
+import { toolResultOutputToText } from '../utils/tool-result-content.js'
 
 const COMPACT_SUMMARY_PREFIX =
   '[Previous conversation compacted — context continues below]\n\n'
@@ -161,7 +162,7 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
           type: string
           toolCallId: string
           toolName: string
-          output: { value: string }
+          output?: ToolResultOutput
           toolUseResult?: unknown
           isError?: boolean
         }>) {
@@ -169,7 +170,7 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
             p => p.type === 'tool_call' && p.toolCallId === tr.toolCallId,
           )
           if (tc) {
-            tc.result = tr.output?.value ?? ''
+            tc.result = toolResultOutputToText(tr.output)
             if (tr.toolUseResult !== undefined) {
               tc.toolUseResult = tr.toolUseResult
             }

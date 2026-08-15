@@ -17,6 +17,9 @@ export const openaiCompatibleStrategy: ProviderStrategy = {
       chatModel: id => client.chatModel(id),
       streamTextExtras: () => ({}),
       defaultModelId: () => p.model,
+      // chat/completions JSON.stringifies content arrays — images must be
+      // relocated to a user message instead.
+      supportsToolResultContentBlocks: () => false,
       describe: () => `openai-compatible model=${p.model}`,
     }
   },

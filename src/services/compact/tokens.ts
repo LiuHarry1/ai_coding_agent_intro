@@ -4,6 +4,10 @@
  */
 import type { Message } from '../../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
+import {
+  countOutputImages,
+  toolResultOutputToText,
+} from '../../utils/tool-result-content.js'
 
 // ── Pure estimation ─────────────────────────────────────
 
@@ -38,10 +42,10 @@ export function estimateMessageTokens(msg: Message): number {
     return total
   }
   for (const part of msg.content) {
-    const v = part.output?.value ?? ''
     total +=
       estStr(part.toolName) +
-      estStr(typeof v === 'string' ? v : JSON.stringify(v))
+      estStr(toolResultOutputToText(part.output)) +
+      countOutputImages(part.output) * IMAGE_TOKEN_ESTIMATE
   }
   return total
 }

@@ -376,8 +376,20 @@ function appendTextToToolResult(
   part: ToolResultPart,
   extraText: string,
 ): ToolResultPart {
-  const existing = part.output.type === 'text' ? part.output.value.trim() : ''
-  const value = [existing, extraText.trim()].filter(Boolean).join('\n\n')
+  const extra = extraText.trim()
+  if (!extra) return part
+  // Multimodal results keep their blocks; the reminder becomes a trailing
+  // text block so the image still reaches the model.
+  if (part.output.type === 'content') {
+    return {
+      ...part,
+      output: {
+        type: 'content',
+        value: [...part.output.value, { type: 'text', text: extra }],
+      },
+    }
+  }
+  const value = [part.output.value.trim(), extra].filter(Boolean).join('\n\n')
   return {
     ...part,
     output: { type: 'text', value },

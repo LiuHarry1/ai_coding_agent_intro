@@ -6,7 +6,14 @@ import assert from 'node:assert/strict'
 import { definition as grepDef, type GrepOutput } from '../tools/GrepTool/GrepTool.js'
 import { buildToolMessage } from '../services/tools/tool_execution.js'
 import { projectMessagesForApi } from '../core/agent/messageSanitize.js'
-import type { Message } from '../core/types.js'
+import type { Message, ToolResultContentBlockParam } from '../core/types.js'
+import { toolResultBlocksToText } from '../utils/tool-result-content.js'
+
+function mappedText(
+  content: string | ToolResultContentBlockParam[],
+): string {
+  return typeof content === 'string' ? content : toolResultBlocksToText(content)
+}
 
 function testMapperFiles() {
   const data: GrepOutput = {
@@ -50,8 +57,12 @@ function testMapperCount() {
     numMatches: 4,
   }
   const mapped = grepDef.mapToolResultToToolResultBlockParam!(data, 't3')
-  assert.ok(mapped.content.includes('a.ts:3'))
-  assert.ok(mapped.content.includes('Found 4 total occurrences across 2 files.'))
+  assert.ok(mappedText(mapped.content).includes('a.ts:3'))
+  assert.ok(
+    mappedText(mapped.content).includes(
+      'Found 4 total occurrences across 2 files.',
+    ),
+  )
   console.log('ok mapper count')
 }
 
@@ -67,7 +78,7 @@ function testBuildAndProject() {
     {
       toolCallId: 'id1',
       toolName: 'Grep',
-      result: mapped.content,
+      result: mappedText(mapped.content),
       toolUseResult: data,
     },
   ])

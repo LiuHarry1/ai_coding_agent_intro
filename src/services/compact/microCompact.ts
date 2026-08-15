@@ -35,6 +35,7 @@ import {
   isPersistedReference,
   offloadReferenceForCompact,
 } from '../tool-storage/index.js'
+import { toolResultOutputToText } from '../../utils/tool-result-content.js'
 
 const MICRO_COMPACT_MARKER = '[Old tool result content cleared to save context]'
 
@@ -200,8 +201,7 @@ function clearToolResults(
 ): ToolMessage {
   let touched = false
   const newContent = m.content.map(part => {
-    const v = part.output?.value ?? ''
-    const text = typeof v === 'string' ? v : JSON.stringify(v)
+    const text = toolResultOutputToText(part.output)
     const clearable =
       CLEARABLE_TOOL_RESULTS.has(part.toolName) ||
       text.length >= CLEARABLE_MIN_CHARS

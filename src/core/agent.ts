@@ -779,6 +779,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
               ),
             ),
           ),
+          provider,
         ),
         provider,
       ) as RoleMessage[]
@@ -812,7 +813,9 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         //      simulated tool-result anchors / tool outputs.
         //   6. ensureToolResultPairing -- safety net for orphan/missing
         //      tool-results.
-        //   7. projectMessagesForApi -- drop toolUseResult (UI envelope).
+        //   7. projectMessagesForApi -- drop toolUseResult (UI envelope) and,
+        //      on providers without multimodal tool results, relocate
+        //      tool-result images into a following user message.
         //   8. applyCacheControlBreakpoint -- prompt caching marker.
         messages: apiMessages,
         // Schema-only tools -- execution is handled by toolOrchestration so

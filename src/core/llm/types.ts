@@ -55,6 +55,18 @@ export interface IProvider {
    * @see https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
    */
   cacheControlOptions?(): Record<string, unknown> | undefined
+  /**
+   * Whether this provider serializes `ToolResultOutput.type: 'content'` into
+   * real multimodal blocks. Anthropic Messages and the OpenAI Responses API
+   * do; chat-completions endpoints `JSON.stringify` the array instead, which
+   * would dump base64 into the prompt. When false, `projectMessagesForApi`
+   * relocates tool-result images into a following user message.
+   *
+   * Declared per strategy rather than derived from `ProviderId` because it
+   * depends on which endpoint the strategy picks (`responses()` vs `chat()`).
+   * Omitted → treated as unsupported.
+   */
+  supportsToolResultContentBlocks?(): boolean
 }
 
 export interface ProviderStrategy {

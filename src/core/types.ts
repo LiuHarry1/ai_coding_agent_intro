@@ -91,11 +91,42 @@ export interface ToolContext {
   execution?: import('../execution/execution-backend.js').ExecutionBackend
 }
 
+export type ImageMediaType =
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/gif'
+  | 'image/webp'
+
+/** CC/Anthropic `Base64ImageSource`. `data` is bare base64, no data: prefix. */
+export interface Base64ImageSource {
+  type: 'base64'
+  media_type: ImageMediaType
+  data: string
+}
+
+/** CC/Anthropic `ImageBlockParam`. */
+export interface ImageBlockParam {
+  type: 'image'
+  source: Base64ImageSource
+}
+
+/**
+ * Blocks allowed inside `tool_result.content`. CC additionally permits
+ * search_result / document blocks; we carry the two the agent produces.
+ */
+export type ToolResultContentBlockParam = TextPart | ImageBlockParam
+
 /** Claude Code–style API tool_result block produced by a mapper. */
 export interface ToolResultBlockParam {
   tool_use_id: string
   type: 'tool_result'
-  content: string
+  /**
+   * String for text-only results, or CC-style blocks when the tool returns
+   * images (screenshots, image reads). Image blocks bypass tool-result disk
+   * persistence and are dropped when `is_error` is set — the API rejects
+   * non-text content on error results.
+   */
+  content: string | ToolResultContentBlockParam[]
   /** When true, tool_result is an error for the model / wire (CC Bash interrupt). */
   is_error?: boolean
 }
@@ -259,10 +290,19 @@ export interface AssistantMessage {
   }
 }
 
-export interface ToolResultOutput {
-  type: 'text'
-  value: string
-}
+/** Parts of an AI SDK `content` tool output (subset we emit). */
+export type ToolResultOutputContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image-data'; data: string; mediaType: string }
+
+/**
+ * AI SDK `ToolResultOutput`. `content` carries multimodal results (CC sends
+ * image blocks nested in `tool_result.content`; the SDK equivalent is a
+ * content array with `image-data` parts).
+ */
+export type ToolResultOutput =
+  | { type: 'text'; value: string }
+  | { type: 'content'; value: ToolResultOutputContentPart[] }
 
 export interface ToolResultPart {
   type: 'tool-result'

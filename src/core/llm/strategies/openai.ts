@@ -47,6 +47,9 @@ export const openaiStrategy: ProviderStrategy = {
       chatModel: id => client.responses(id),
       streamTextExtras: () => thinkingToExtras(p.thinking),
       defaultModelId: () => p.model,
+      // Responses API maps content parts to `input_image`; keep this in sync
+      // if `chatModel` ever switches to `client.chat(id)`.
+      supportsToolResultContentBlocks: () => true,
       describe: () =>
         `openai(responses) thinking=${p.thinking.mode}${
           p.thinking.mode === 'budget' ? `(${p.thinking.tokens})` : ''

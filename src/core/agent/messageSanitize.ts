@@ -3,17 +3,80 @@ import type {
   Message,
   RoleMessage,
   ToolResultPart,
+  UserContentPart,
 } from '../types.js'
 import { isAttachmentMessage, isRoleMessage } from '../types.js'
+import type { IProvider } from '../llm/types.js'
+import { toolResultOutputToText } from '../../utils/tool-result-content.js'
+
+/**
+ * Move images out of `tool_result` content and into a meta user message that
+ * immediately follows the tool message.
+ *
+ * Needed for chat-completions providers, which `JSON.stringify` a `content`
+ * output — the base64 would land in the prompt as text the model can't see.
+ * The relocated form is the same channel Read already uses for image files,
+ * and mirrors how CC delivers extracted PDF pages.
+ */
+function relocateToolResultImages(messages: RoleMessage[]): RoleMessage[] {
+  const out: RoleMessage[] = []
+
+  for (const m of messages) {
+    if (m.role !== 'tool' || !Array.isArray(m.content)) {
+      out.push(m)
+      continue
+    }
+
+    const relocated: UserContentPart[] = []
+    const content = (m.content as ToolResultPart[]).map(p => {
+      if (p.type !== 'tool-result' || p.output?.type !== 'content') return p
+
+      for (const part of p.output.value) {
+        if (part.type !== 'image-data') continue
+        relocated.push({
+          type: 'text',
+          text: `<system-reminder>\nImage from ${p.toolName} (${part.mediaType}).\n</system-reminder>`,
+        })
+        relocated.push({
+          type: 'image',
+          image: Buffer.from(part.data, 'base64'),
+          mediaType: part.mediaType,
+        })
+      }
+
+      return {
+        ...p,
+        output: {
+          type: 'text' as const,
+          value: toolResultOutputToText(p.output),
+        },
+      }
+    })
+
+    out.push({ ...m, content })
+    if (relocated.length > 0) {
+      out.push({ role: 'user', content: relocated, isMeta: true })
+    }
+  }
+
+  return out
+}
 
 /**
  * Drop UI-only `toolUseResult` from tool-result parts before the AI SDK /
  * provider sees them. Session JSONL and in-memory history keep the field;
  * this is the equivalent of Claude Code only sending `message.content` to
  * the API while keeping `toolUseResult` on the envelope.
+ *
+ * Also downgrades multimodal tool results for providers that can't carry
+ * them. History keeps the blocks either way, so switching providers changes
+ * the request shape without migrating past sessions.
  */
-export function projectMessagesForApi(messages: Message[]): RoleMessage[] {
-  return messages
+export function projectMessagesForApi(
+  messages: Message[],
+  provider?: IProvider,
+): RoleMessage[] {
+  const projected = messages
     .filter(isRoleMessage)
     .map(m => {
       if (m.role !== 'tool' || !Array.isArray(m.content)) return m
@@ -28,6 +91,10 @@ export function projectMessagesForApi(messages: Message[]): RoleMessage[] {
         }),
       }
     })
+
+  return provider?.supportsToolResultContentBlocks?.()
+    ? projected
+    : relocateToolResultImages(projected)
 }
 
 /**

@@ -12,12 +12,19 @@ import type {
   Message,
   ToolDefinition,
   ToolMessage,
+  ToolResultContentBlockParam,
 } from '../../core/types.js'
 import type { ConcurrencyPolicyFn } from '../../core/concurrency-policy.js'
 import type { WireEmitter } from '../../core/wire-emitter.js'
 import { formatToolError } from '../../core/agent/toolErrors.js'
 import { defaultRegistry } from '../../core/tool-registry.js'
 import { maybePersistAfterExecute } from '../tool-storage/index.js'
+import {
+  blocksToToolResultOutputParts,
+  hasImageBlock,
+  stripImageBlocks,
+  toolResultBlocksToText,
+} from '../../utils/tool-result-content.js'
 
 export interface ToolCallRef {
   toolCallId: string
@@ -28,7 +35,13 @@ export interface ToolCallRef {
 export interface ExecutedToolResult {
   toolCallId: string
   toolName: string
+  /** Text projection — wire, transcript, persistence, compaction. */
   result: string
+  /**
+   * Model-facing blocks, set only when the mapper returned image content.
+   * `result` stays the text projection of these blocks.
+   */
+  resultBlocks?: ToolResultContentBlockParam[]
   toolUseResult?: unknown
   followUpMessages?: Message[]
   isError?: boolean
@@ -108,6 +121,7 @@ async function executeOne(
 
     const def = lookup(tc.toolName)
     let result: string
+    let resultBlocks: ToolResultContentBlockParam[] | undefined
     let toolUseResult: unknown | undefined
     let followUpMessages: Message[] | undefined
     let isError = false
@@ -121,11 +135,20 @@ async function executeOne(
         raw.data,
         tc.toolCallId,
       )
-      result =
-        typeof mapped.content === 'string'
-          ? mapped.content
-          : String(mapped.content ?? '')
       isError = mapped.is_error === true
+      if (Array.isArray(mapped.content)) {
+        // CC: the API rejects non-text blocks on error results.
+        const blocks = isError
+          ? stripImageBlocks(mapped.content)
+          : mapped.content
+        if (hasImageBlock(blocks)) resultBlocks = blocks
+        result = toolResultBlocksToText(blocks)
+      } else {
+        result =
+          typeof mapped.content === 'string'
+            ? mapped.content
+            : String(mapped.content ?? '')
+      }
 
       // CC: validate Out before UI sees it (transcript/wire may be untyped JSON).
       // Mapper still runs on raw.data so the model always gets text.
@@ -159,12 +182,16 @@ async function executeOne(
       result = JSON.stringify(raw)
     }
 
-    result = maybePersistAfterExecute(
-      sessionId,
-      tc.toolCallId,
-      tc.toolName,
-      result,
-    )
+    // CC: image results are never offloaded to disk — they must reach the
+    // model as-is, and the text projection is a placeholder anyway.
+    if (!resultBlocks) {
+      result = maybePersistAfterExecute(
+        sessionId,
+        tc.toolCallId,
+        tc.toolName,
+        result,
+      )
+    }
     wire.toolResult({
       tool_use_id: tc.toolCallId,
       result,
@@ -177,6 +204,7 @@ async function executeOne(
       toolCallId: tc.toolCallId,
       toolName: tc.toolName,
       result,
+      ...(resultBlocks ? { resultBlocks } : {}),
       toolUseResult,
       followUpMessages,
       ...(isError ? { isError: true } : {}),
@@ -298,7 +326,12 @@ export function buildToolMessage(
       type: 'tool-result' as const,
       toolCallId: tr.toolCallId,
       toolName: tr.toolName,
-      output: { type: 'text' as const, value: tr.result },
+      output: tr.resultBlocks
+        ? {
+            type: 'content' as const,
+            value: blocksToToolResultOutputParts(tr.resultBlocks),
+          }
+        : { type: 'text' as const, value: tr.result },
       ...(tr.toolUseResult !== undefined
         ? { toolUseResult: tr.toolUseResult }
         : {}),
