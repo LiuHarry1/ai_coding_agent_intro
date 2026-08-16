@@ -1,0 +1,215 @@
+/* Browser automation card (browser_* tools) */
+
+.browser-body {
+  margin: 4px 0 6px 18px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+}
+
+.browser-console-badge {
+  font-size: 11px;
+  color: var(--red);
+}
+
+.browser-error {
+  padding: 8px;
+  background: rgba(248, 81, 73, 0.08);
+  border-radius: 4px;
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Screenshot ──────────────────────────── */
+.browser-shot {
+  margin-bottom: 8px;
+}
+.browser-shot img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  object-position: top left;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  /* Pages are overwhelmingly light; a white shot on a dark card needs an edge. */
+  background: #fff;
+}
+.browser-shot-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 12px 0;
+}
+
+/* ── Console entries ─────────────────────── */
+.browser-console {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  max-height: 200px;
+  overflow: auto;
+}
+.browser-console li {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.browser-console li:last-child {
+  border-bottom: 0;
+}
+.browser-console-level {
+  flex: 0 0 auto;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding-top: 1px;
+  color: var(--text-muted);
+}
+.browser-console-error .browser-console-level {
+  color: var(--red);
+}
+.browser-console-warn .browser-console-level {
+  color: var(--orange);
+}
+.browser-console-text {
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Network ─────────────────────────────── */
+.browser-network {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  max-height: 220px;
+  overflow: auto;
+}
+.browser-network li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.browser-network li:last-child {
+  border-bottom: 0;
+}
+.browser-net-status {
+  flex: 0 0 auto;
+  min-width: 28px;
+  text-align: right;
+  color: var(--text-muted);
+}
+.browser-net-ok .browser-net-status {
+  color: var(--green);
+}
+.browser-net-bad .browser-net-status,
+.browser-net-failed .browser-net-status {
+  color: var(--red);
+}
+.browser-net-pending .browser-net-status {
+  color: var(--orange);
+}
+.browser-net-method {
+  flex: 0 0 auto;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.browser-net-url {
+  flex: 1 1 auto;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.browser-net-note {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+.browser-net-failed .browser-net-note {
+  color: var(--red);
+}
+
+/* ── Evaluate result ─────────────────────── */
+.browser-value {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+  margin: 0 0 8px;
+}
+
+/* ── Tabs ────────────────────────────────── */
+.browser-tabs {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.browser-tabs li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+.browser-tabs li.is-current .browser-tab-title {
+  color: var(--accent);
+  font-weight: 600;
+}
+.browser-tab-title {
+  color: var(--text-primary);
+}
+.browser-tab-url {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--green);
+  word-break: break-all;
+}
+
+/* ── Accessibility snapshot ──────────────── */
+.browser-snapshot-toggle {
+  display: inline-block;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.browser-snapshot-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.browser-snapshot-tree {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: pre;
+  overflow: auto;
+  max-height: 320px;
+  margin: 6px 0 4px;
+}
+
+[data-theme='light'] .browser-body {
+  background: rgba(0, 0, 0, 0.025);
+  border-left-color: var(--border);
+}
+[data-theme='light'] .browser-tab-url {
+  color: var(--green);
+}

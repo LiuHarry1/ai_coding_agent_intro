@@ -848,6 +848,8 @@ export interface AppConfig {
   lspServers: Record<string, LspServerConfig>
   /** Tool names to hide from the model (local or MCP, e.g. `web_fetch`, `someServer_fetch`) */
   disabledTools?: string[]
+  /** Browser automation (`browser_*` tools). See src/browser/types.ts. */
+  browser?: import('../browser/types.js').BrowserConfig
   /**
    * Extra SSH hosts for the execution EnvironmentRegistry (merged with ~/.ssh/config).
    */

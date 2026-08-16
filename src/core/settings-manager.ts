@@ -155,6 +155,7 @@ type PartialAppConfig = Partial<{
   autoMemory: Record<string, unknown>
   mcpServers: Record<string, MCPServerConfig>
   lspServers: Record<string, LspServerConfig>
+  browser: AppConfig['browser']
   disabledTools: unknown[]
   environments: {
     ssh?: Array<Record<string, unknown>>
@@ -321,6 +322,9 @@ function deepMergeSettingsLayer(
       ...((base.sessionMemory as object) ?? {}),
       ...((overlay.sessionMemory as object) ?? {}),
     } as PartialAppConfig['sessionMemory']
+  }
+  if (base.browser || overlay.browser) {
+    out.browser = { ...(base.browser ?? {}), ...(overlay.browser ?? {}) }
   }
   if (base.disabledTools || overlay.disabledTools) {
     out.disabledTools = [
@@ -535,6 +539,10 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
       ...config.lspServers,
       ...layer.lspServers,
     }
+  }
+
+  if (layer.browser && typeof layer.browser === 'object') {
+    config.browser = { ...(config.browser ?? {}), ...layer.browser }
   }
 
   if (Array.isArray(layer.disabledTools)) {

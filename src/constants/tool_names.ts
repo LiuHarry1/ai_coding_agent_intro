@@ -25,6 +25,46 @@ export const EXIT_PLAN_MODE_TOOL_NAME = 'ExitPlanMode'
 export const TASK_OUTPUT_TOOL_NAME = 'TaskOutput'
 export const TASK_STOP_TOOL_NAME = 'TaskStop'
 
+export const BROWSER_NAVIGATE_TOOL_NAME = 'browser_navigate'
+export const BROWSER_SNAPSHOT_TOOL_NAME = 'browser_snapshot'
+export const BROWSER_CLICK_TOOL_NAME = 'browser_click'
+export const BROWSER_TYPE_TOOL_NAME = 'browser_type'
+export const BROWSER_SELECT_OPTION_TOOL_NAME = 'browser_select_option'
+export const BROWSER_PRESS_KEY_TOOL_NAME = 'browser_press_key'
+export const BROWSER_WAIT_FOR_TOOL_NAME = 'browser_wait_for'
+export const BROWSER_HOVER_TOOL_NAME = 'browser_hover'
+export const BROWSER_SCROLL_TOOL_NAME = 'browser_scroll'
+export const BROWSER_SCREENSHOT_TOOL_NAME = 'browser_screenshot'
+export const BROWSER_CONSOLE_TOOL_NAME = 'browser_console'
+export const BROWSER_NETWORK_TOOL_NAME = 'browser_network'
+export const BROWSER_TABS_TOOL_NAME = 'browser_tabs'
+export const BROWSER_EVALUATE_TOOL_NAME = 'browser_evaluate'
+
+export const BROWSER_TOOL_NAMES: readonly string[] = [
+  BROWSER_NAVIGATE_TOOL_NAME,
+  BROWSER_SNAPSHOT_TOOL_NAME,
+  BROWSER_CLICK_TOOL_NAME,
+  BROWSER_TYPE_TOOL_NAME,
+  BROWSER_SELECT_OPTION_TOOL_NAME,
+  BROWSER_PRESS_KEY_TOOL_NAME,
+  BROWSER_WAIT_FOR_TOOL_NAME,
+  BROWSER_HOVER_TOOL_NAME,
+  BROWSER_SCROLL_TOOL_NAME,
+  BROWSER_SCREENSHOT_TOOL_NAME,
+  BROWSER_CONSOLE_TOOL_NAME,
+  BROWSER_TABS_TOOL_NAME,
+  BROWSER_EVALUATE_TOOL_NAME,
+]
+
+/** Browser tools that only observe — safe in Ask mode. */
+export const BROWSER_READ_ONLY_TOOL_NAMES: readonly string[] = [
+  BROWSER_SNAPSHOT_TOOL_NAME,
+  BROWSER_SCREENSHOT_TOOL_NAME,
+  BROWSER_CONSOLE_TOOL_NAME,
+  BROWSER_TABS_TOOL_NAME,
+  BROWSER_WAIT_FOR_TOOL_NAME,
+]
+
 export const MUTATING_TOOLS: readonly string[] = [
   WRITE_FILE_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
@@ -43,6 +83,7 @@ export const READ_ONLY_TOOLS: readonly string[] = [
   LSP_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
+  ...BROWSER_READ_ONLY_TOOL_NAMES,
 ]
 
 /** Tools denied in Plan mode (plan file writes allowed via guard). */
@@ -54,4 +95,9 @@ export const PLAN_MODE_DENIED_TOOLS: readonly string[] = [
   POWERSHELL_TOOL_NAME,
   TASK_OUTPUT_TOOL_NAME,
   TASK_STOP_TOOL_NAME,
+  // Looking at a page is research; clicking through it changes state on
+  // whatever the page talks to, which is exactly what plan mode withholds.
+  ...BROWSER_TOOL_NAMES.filter(
+    name => !BROWSER_READ_ONLY_TOOL_NAMES.includes(name),
+  ),
 ]

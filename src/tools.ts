@@ -14,6 +14,7 @@ import { definition as lspTool } from './tools/LSPTool/LSPTool.js'
 import { definition as askUserQuestion } from './tools/AskUserQuestionTool/AskUserQuestionTool.js'
 import { definition as taskOutput } from './tools/TaskOutputTool/TaskOutputTool.js'
 import { definition as taskStop } from './tools/TaskStopTool/TaskStopTool.js'
+import { browserToolDefinitions } from './tools/BrowserTool/BrowserTool.js'
 
 // Default: bash always; powershell additionally on Windows.
 const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])]
@@ -32,6 +33,7 @@ const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])]
   webSearch,
   webFetch,
   askUserQuestion,
+  ...browserToolDefinitions,
 ].forEach(def => defaultRegistry.register(def))
 
 export { defaultRegistry }

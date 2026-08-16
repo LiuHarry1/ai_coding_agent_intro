@@ -1,12 +1,13 @@
 /**
- * Bundle Agent Worker to dist/worker/{slug}-worker.cjs (CJS for Node LSP deps).
+ * Bundle the Agent Worker to dist/worker/{slug}-worker.cjs (CJS for Node LSP deps).
+ * Same artifact is spawned locally and scp'd for SSH remote execution.
  * slug comes from brand.json.
  */
 const esbuild = require('esbuild')
 const fs = require('fs')
 const path = require('path')
 
-const root = path.join(__dirname, '..')
+const root = path.join(__dirname, '../..')
 const brand = JSON.parse(
   fs.readFileSync(path.join(root, 'brand.json'), 'utf8'),
 )

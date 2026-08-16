@@ -26,6 +26,7 @@ import {
   ASK_USER_QUESTION,
   TASK_OUTPUT,
   TASK_STOP,
+  BROWSER_TOOLS,
 } from './tool-names.js'
 
 /** @typedef {'line' | 'card'} ToolChrome */
@@ -61,6 +62,10 @@ export const TOOL_META = {
   [SKILL]: { chrome: 'line' },
   [TODO_WRITE]: { chrome: 'line' },
   [ASK_USER_QUESTION]: { chrome: 'line' },
+
+  // Each browser step is a distinct thing the agent did to the page, so they
+  // stay individually visible rather than folding into an "Explored" group.
+  ...Object.fromEntries(BROWSER_TOOLS.map(name => [name, { chrome: 'line' }])),
 }
 
 /** Names that fold into Explored groups (derived from TOOL_META). */

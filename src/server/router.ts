@@ -34,6 +34,7 @@ import {
   initMcpLifecycle,
   invalidateMCPManagersForCwd,
 } from '../core/mcp-lifecycle.js'
+import { initBrowserLifecycle } from '../browser/manager.js'
 import { getLspStatusForCwd } from '../services/lsp/manager.js'
 import { getExecutionPlane } from '../execution/bootstrap.js'
 import { WorkerExecutionBackend } from '../execution/worker-execution-backend.js'
@@ -69,6 +70,7 @@ initCodePlugins(defaultRegistry).catch(err => {
   console.error(`[plugins] code plugin init failed: ${err.message}`)
 })
 initMcpLifecycle()
+initBrowserLifecycle()
 
 async function getMCPStatusForCwd(
   cwd: string,
@@ -221,6 +223,39 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
         return
       }
       sendJSON(res, 200, { messages: sessionJsonlToUIMessages(id) })
+      return
+    }
+
+    // Browser screenshots written by the browser_* tools. The filename pattern
+    // is the whole defence against traversal — it admits nothing but the
+    // `<toolCallId>.<ext>` names attachScreenshot writes.
+    const shotMatch = url?.match(/^\/sessions\/([^/]+)\/browser\/([^/]+)$/)
+    if (method === 'GET' && shotMatch) {
+      const id = decodeURIComponent(shotMatch[1]!)
+      const file = decodeURIComponent(shotMatch[2]!)
+      const session = getSession(id)
+      if (
+        !session ||
+        !canAccessSession(session, authed.user?.email, authed.user?.role) ||
+        !/^[A-Za-z0-9_-]+\.(png|jpeg)$/.test(file)
+      ) {
+        sendJSON(res, 404, { error: 'Not found' })
+        return
+      }
+      const { getSessionDataDir } = await import('../core/session-paths.js')
+      const fsp = await import('fs/promises')
+      try {
+        const buf = await fsp.readFile(
+          path.join(getSessionDataDir(id), 'browser', file),
+        )
+        res.writeHead(200, {
+          'content-type': file.endsWith('.png') ? 'image/png' : 'image/jpeg',
+          'cache-control': 'private, max-age=31536000, immutable',
+        })
+        res.end(buf)
+      } catch {
+        sendJSON(res, 404, { error: 'Not found' })
+      }
       return
     }
 

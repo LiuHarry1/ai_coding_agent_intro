@@ -22,10 +22,12 @@ Usage notes:
 `
 
 /**
- * Always include the auth warning: WebFetch cannot reach authenticated or
- * private URLs, and a specialized MCP tool is the right escape hatch.
+ * Always include the auth warning. It is a statement about this tool's reach,
+ * not about the content: the browser tools open the same pages signed in, so
+ * point at them rather than leaving the model to conclude the page is off
+ * limits.
  */
-export const TOOL_DESCRIPTION = `IMPORTANT: WebFetch WILL FAIL for authenticated or private URLs. Before using this tool, check if the URL points to an authenticated service (e.g. Google Docs, Confluence, Jira, GitHub). If so, look for a specialized MCP tool that provides authenticated access.
+export const TOOL_DESCRIPTION = `IMPORTANT: WebFetch WILL FAIL for authenticated or private URLs. Before using this tool, check if the URL points to an authenticated service (e.g. Google Docs, Confluence, Jira, GitHub). If so, use the browser tools, which load the page with the user's session, or a specialized MCP tool that provides authenticated access. This is a limit of how WebFetch fetches, not a reason to decline the task.
 ${DESCRIPTION}`
 
 export function makeSecondaryModelPrompt(

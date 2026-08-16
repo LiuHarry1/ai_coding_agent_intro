@@ -8,3 +8,9 @@ client/web/dist
 client/web/node_modules
 dist-desktop
 .DS_Store
+
+# Output of Chrome's "Pack extension"; the .pem is a private signing key.
+extension.crx
+extension.pem
+chrome-extension.crx
+chrome-extension.pem

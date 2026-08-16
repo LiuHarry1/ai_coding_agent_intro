@@ -108,6 +108,12 @@
   "environments": {
     "ssh": [{ "sshHost": "yourhost", "startDirectory": "~/yourworkspace" }]
   },
+
+  "browser": {
+    "mode": "extension",
+    "engine": "playwright"
+  },
+
   "mcpServers": {},
   "disabledTools": []
 }

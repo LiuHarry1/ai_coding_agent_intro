@@ -22,6 +22,38 @@ export const EXIT_PLAN_MODE = 'ExitPlanMode'
 export const TASK_OUTPUT = 'TaskOutput'
 export const TASK_STOP = 'TaskStop'
 
+export const BROWSER_NAVIGATE = 'browser_navigate'
+export const BROWSER_SNAPSHOT = 'browser_snapshot'
+export const BROWSER_CLICK = 'browser_click'
+export const BROWSER_TYPE = 'browser_type'
+export const BROWSER_SELECT_OPTION = 'browser_select_option'
+export const BROWSER_PRESS_KEY = 'browser_press_key'
+export const BROWSER_WAIT_FOR = 'browser_wait_for'
+export const BROWSER_HOVER = 'browser_hover'
+export const BROWSER_SCROLL = 'browser_scroll'
+export const BROWSER_SCREENSHOT = 'browser_screenshot'
+export const BROWSER_CONSOLE = 'browser_console'
+export const BROWSER_NETWORK = 'browser_network'
+export const BROWSER_TABS = 'browser_tabs'
+export const BROWSER_EVALUATE = 'browser_evaluate'
+
+export const BROWSER_TOOLS = [
+  BROWSER_NAVIGATE,
+  BROWSER_SNAPSHOT,
+  BROWSER_CLICK,
+  BROWSER_TYPE,
+  BROWSER_SELECT_OPTION,
+  BROWSER_PRESS_KEY,
+  BROWSER_WAIT_FOR,
+  BROWSER_HOVER,
+  BROWSER_SCROLL,
+  BROWSER_SCREENSHOT,
+  BROWSER_CONSOLE,
+  BROWSER_NETWORK,
+  BROWSER_TABS,
+  BROWSER_EVALUATE,
+]
+
 /** Shown elsewhere (TodoListCard) — hide duplicate tool_call rows. */
 export const SUPPRESSED_TOOL_CARDS = new Set([
   TODO_WRITE,

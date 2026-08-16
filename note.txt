@@ -37,3 +37,26 @@ docker build -f deploy/Dockerfile.agent-base -t ai-agent-base:latest .
 docker build -f deploy/Dockerfile.agent.example -t ai-agent-tenant:latest .
 docker build -f deploy/Dockerfile.web -t ai-agent-web:latest .
 docker compose -f deploy/docker-compose.admin.yml up -d
+
+
+
+browser automation use case：
+
+用我已登录的 Chrome（extension + playwright）。今天是 2026-08-16 周日。不要问确认、不要暂停、不要等我授权——这条消息就是发送授权。全过程自己做完，不要中途停下来让我继续。
+
+任务：打开猎聘，查看本周（8月10日–8月16日）能看到的沟通消息，按规则自动回复。
+
+操作：
+1. tool_search 一次加载：browser_tabs, browser_snapshot, browser_click, browser_type, browser_press_key, browser_wait_for。
+2. browser_tabs action=new url=https://www.liepin.com。不要 select 猜测的旧 tab，不要 select about:blank。
+3. snapshot 禁止 compact、禁止 selector=[role=dialog]。点「有新消息」或「我的沟通」（点带文字的父节点，不要点数字角标，不要点头像「你好，刘浩」）。
+4. 读列表。本周日期的会话都要打开处理。点开会话后 click 会等约 500ms 再返回整页快照。若当帧没有 textbox「请输入文字，按Enter键发送」，立刻再 snapshot（不要 compact、不要 selector），用新快照的 ref。
+5. 地点看会话正文/职位卡，不要用公司总部城市代替职位地点。
+6. 回复规则（已授权，直接发送）：
+   - 猎头 JD 明确不是上海（广州、西安、北京、深圳、杭州等）：在输入框 type「我只看上海的」，submit 或 press_key Enter 发送。
+   - 看不出是不是上海：type「请问这个职位是上海的吗？」然后 Enter 发送。
+   - 已是上海，或不是职位邀约、或只是寒暄、或这条已经回过：不要再发，只记在表里。
+7. 每发完一条：立刻 browser_wait_for，text 填你刚发的原文；再读返回的 snapshot，确认是发出去的气泡而不只是输入框里还留着字。不要点 Close 关掉整个沟通面板。
+8. 禁止发明 /im URL；禁止 browser_evaluate 去点；禁止点「同意」「暂不考虑」「发送简历」。
+
+最后交表：姓名、日期、地点判断（依据哪句正文）、是否已回复、发出去的原文。漏了哪条、为什么也写上。

@@ -206,8 +206,20 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 | `npm run typecheck` | TypeScript 类型检查（src + protocol + client-sdk） |
 | `npm run format` | 按项目 Prettier 规则格式化代码 |
 
+## 浏览器自动化
+
+让 agent 打开网页、点击填表、截图并读回页面内容。默认用它自己拉起的浏览器（零配置）；也可以让它驱动**你自己的 Chrome**，这样需要登录的站点无需任何登录脚本即可访问。
+
+```bash
+npm start                 # isolated 模式开箱即用，直接让 agent 打开网址
+npm run browser:pair      # 想用自己的 Chrome 时，取配对令牌
+```
+
+完整说明见 [`browser-guide.md`](browser-guide.md)。
+
 ## 更多文档
 
+- 浏览器自动化：[`browser-guide.md`](browser-guide.md)
 - Agent 能力详解：[`src/README.md`](src/README.md)
 - Docker 部署：[`deploy/README.md`](deploy/README.md)
 - 客户端 SDK：[`client-sdk/`](client-sdk/)
