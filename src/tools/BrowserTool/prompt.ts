@@ -23,11 +23,13 @@ export const SNAPSHOT_DESCRIPTION = `Capture an accessibility snapshot of the cu
 
 Prefer this over ${'`browser_screenshot`'} for understanding page structure and finding things to interact with — it is text, so it is cheaper and more precise than an image. Use a screenshot when you need to judge visual appearance (layout, spacing, color).
 
-The tree comes from Playwright's AI accessibility snapshot (ariaSnapshot mode "ai") when \`browser.engine\` is \`playwright\`, otherwise from the injected distiller. Either way, clickable nodes carry \`[ref=eN]\`. Click those refs; do not invent inbox/chat URLs because a label has no ref.
+The tree comes from Playwright's AI accessibility snapshot (ariaSnapshot mode "ai"), including iframe contents. Clickable nodes carry \`[ref=eN]\`. Click those refs; do not invent inbox/chat URLs because a label has no ref.
 
 Click the named control (the node whose accessible name matches the button/link), not a numeric badge sitting next to it. After a click, use the new snapshot's refs — never reuse a ref from before the click.
 
-Click, type, navigate and wait_for return an updated full-page snapshot. Pass \`selector\` only when you want one subtree (a unique panel). Do not assume an open dialog is the whole result — a page can have several. Pass \`compact: true\` to drop structural wrappers; compact does not clip a selected subtree. A truncated snapshot keeps open dialogs and end-of-tree widgets (chat docks); the long middle of the page is what gets dropped.
+A styled element with no ARIA role — typically an inline \`<span>\` that only looks clickable — is folded into its paragraph's text and gets no ref. That is a limit of the accessibility tree, not a missing snapshot: reach it with \`browser_evaluate\` instead of clicking a nearby ref and hoping.
+
+Click, type, navigate and wait_for return an updated full-page snapshot. Pass \`selector\` only when you want one subtree (a unique panel). Do not assume an open dialog is the whole result — a page can have several. Pass \`compact: true\` to clip tree depth for a cheaper look; nested content is dropped, so do not use it to inspect something deep. A truncated snapshot keeps open dialogs and end-of-tree widgets (chat docks); the long middle of the page is what gets dropped.
 
 ${SNAPSHOT_PRIMER}`
 

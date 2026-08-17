@@ -11,7 +11,15 @@
 import { randomUUID } from 'crypto'
 import { tool } from 'ai'
 import { z } from 'zod'
-import * as ops from '../../browser/page-ops.js'
+import * as inspect from '../../browser/page-inspect.js'
+import * as pw from '../../browser/playwright/index.js'
+import {
+  CALL_TIMEOUT_MS,
+  DEFAULT_MAX_NODES,
+  ERROR_SNAPSHOT_TIMEOUT_MS,
+  POST_ACTION_MAX_NODES,
+  POST_ACTION_SNAPSHOT_MS,
+} from '../../browser/limits.js'
 import {
   getBrowser,
   getCurrentTabId,
@@ -47,23 +55,12 @@ import {
   attachScreenshot,
   browserErrorText,
   BrowserOutputSchema,
-  DEFAULT_MAX_NODES,
-  POST_ACTION_MAX_NODES,
   mapBrowserOutput,
   observe,
   resetConsoleWatermark,
   toNetworkRow,
   type BrowserToolOutput,
 } from './shared.js'
-
-/** No browser call should outlive a stuck page; the model needs its turn back. */
-const CALL_TIMEOUT_MS = 60_000
-const ERROR_SNAPSHOT_TIMEOUT_MS = 8_000
-/**
- * The observation is bounded on its own so a slow tree cannot turn a click that
- * already landed into a failure the model will retry.
- */
-const POST_ACTION_SNAPSHOT_MS = 15_000
 
 interface RunContext {
   backend: BrowserBackend
@@ -131,7 +128,7 @@ async function freshSnapshotText(
 ): Promise<string | undefined> {
   try {
     const snap = await withTimeout(
-      ops.snapshot(backend, targetId, {
+      pw.snapshot(backend, targetId, {
         maxNodes: POST_ACTION_MAX_NODES,
         compact: true,
       }),
@@ -218,7 +215,7 @@ export const navigateTool = defineBrowserTool({
     // A fresh page means a fresh console; without this the first observation
     // would replay errors from whatever was loaded before.
     resetConsoleWatermark(ctx.targetId)
-    await ops.navigate(ctx.backend, ctx.targetId, url)
+    await pw.navigate(ctx.backend, ctx.targetId, url)
     return observe(ctx.backend, ctx.targetId, {
       action: 'navigate',
       message: `Navigated to ${url}`,
@@ -237,7 +234,9 @@ export const snapshotTool = defineBrowserTool({
       .int()
       .positive()
       .optional()
-      .describe(`Cap on snapshot nodes (default ${DEFAULT_MAX_NODES})`),
+      .describe(
+        `Cap on ref-bearing nodes; open dialogs and end-of-tree widgets are kept first (default ${DEFAULT_MAX_NODES})`,
+      ),
     selector: z
       .string()
       .optional()
@@ -248,7 +247,7 @@ export const snapshotTool = defineBrowserTool({
       .boolean()
       .optional()
       .describe(
-        'Drop structural wrappers (generic/group/list/…) that are not clickable',
+        'Clip tree depth for a cheaper look at the page; nested content is dropped',
       ),
   }),
   async run({ maxNodes, selector, compact }, ctx) {
@@ -279,7 +278,7 @@ export const clickTool = defineBrowserTool({
       .describe('Modifier keys held during the click'),
   }),
   async run(args, ctx) {
-    const el = await ops.click(ctx.backend, ctx.targetId, {
+    const el = await pw.click(ctx.backend, ctx.targetId, {
       ref: args.ref,
       doubleClick: args.doubleClick,
       button: args.button,
@@ -307,7 +306,7 @@ export const typeTool = defineBrowserTool({
       .describe('Send per-character key events for widgets that need keydown'),
   }),
   async run(args, ctx) {
-    const el = await ops.typeText(ctx.backend, ctx.targetId, {
+    const el = await pw.typeText(ctx.backend, ctx.targetId, {
       ref: args.ref,
       text: args.text,
       submit: args.submit,
@@ -356,7 +355,7 @@ export const fillFormTool = defineBrowserTool({
       .describe('Fields to fill, in the order they should be written'),
   }),
   async run(args, ctx) {
-    const filled = await ops.fillForm(ctx.backend, ctx.targetId, args.fields)
+    const filled = await pw.fillForm(ctx.backend, ctx.targetId, args.fields)
     const ok = filled.filter(f => f.status === 'filled').length
     // Per-field lines, because a batch that "succeeded" can still have dropped
     // half its values, and only the page knows which half.
@@ -385,7 +384,7 @@ export const selectOptionTool = defineBrowserTool({
       .describe('Option values or visible labels to select'),
   }),
   async run(args, ctx) {
-    const res = await ops.selectOption(
+    const res = await pw.selectOption(
       ctx.backend,
       ctx.targetId,
       args.ref,
@@ -411,7 +410,7 @@ export const pressKeyTool = defineBrowserTool({
       .describe('Modifier keys held down'),
   }),
   async run(args, ctx) {
-    await ops.pressKey(ctx.backend, ctx.targetId, args.key, args.modifiers)
+    await pw.pressKey(ctx.backend, ctx.targetId, args.key, args.modifiers)
     const combo = [...(args.modifiers ?? []), args.key].join('+')
     return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'press_key',
@@ -437,7 +436,7 @@ export const waitForTool = defineBrowserTool({
       .describe('Text to wait for to disappear'),
   }),
   async run(args, ctx) {
-    await ops.waitFor(ctx.backend, ctx.targetId, {
+    await pw.waitFor(ctx.backend, ctx.targetId, {
       time: args.time,
       text: args.text,
       textGone: args.textGone,
@@ -462,7 +461,7 @@ export const hoverTool = defineBrowserTool({
   description: prompt.HOVER_DESCRIPTION,
   inputSchema: z.object({ ref: refSchema }),
   async run(args, ctx) {
-    const el = await ops.hover(ctx.backend, ctx.targetId, { ref: args.ref })
+    const el = await pw.hover(ctx.backend, ctx.targetId, { ref: args.ref })
     return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'hover',
       message: `Hovered ${el.role} "${el.name}"`,
@@ -487,7 +486,7 @@ export const scrollTool = defineBrowserTool({
       .describe('Scroll over this element instead of the page center'),
   }),
   async run(args, ctx) {
-    await ops.scroll(ctx.backend, ctx.targetId, {
+    await pw.scroll(ctx.backend, ctx.targetId, {
       deltaX: args.deltaX,
       deltaY: args.deltaY ?? (args.deltaX ? 0 : 500),
       ref: args.ref,
@@ -519,7 +518,7 @@ export const screenshotTool = defineBrowserTool({
       .describe('Image format (default png)'),
   }),
   async run(args, ctx) {
-    const shot = await ops.screenshot(ctx.backend, ctx.targetId, {
+    const shot = await pw.screenshot(ctx.backend, ctx.targetId, {
       ref: args.ref,
       fullPage: args.fullPage,
       format: args.format,
@@ -557,7 +556,7 @@ export const consoleTool = defineBrowserTool({
       .describe('Max entries to return (default 100)'),
   }),
   async run(args, ctx) {
-    const logs = await ops.consoleLogs(ctx.backend, ctx.targetId, {
+    const logs = await inspect.consoleLogs(ctx.backend, ctx.targetId, {
       level: args.level,
       limit: args.limit,
     })
@@ -595,7 +594,7 @@ export const networkTool = defineBrowserTool({
       .describe('Max entries to return (default 50)'),
   }),
   async run(args, ctx) {
-    const net = await ops.networkRequests(ctx.backend, ctx.targetId, {
+    const net = await inspect.networkRequests(ctx.backend, ctx.targetId, {
       failedOnly: args.failedOnly,
       urlContains: args.urlContains,
       limit: args.limit,
@@ -682,7 +681,7 @@ export const evaluateTool = defineBrowserTool({
       .describe('JavaScript expression, e.g. `document.title` or `fetch("/api").then(r => r.status)`'),
   }),
   async run(args, ctx) {
-    const value = await ops.evaluateExpression(
+    const value = await inspect.evaluateExpression(
       ctx.backend,
       ctx.targetId,
       args.expression,

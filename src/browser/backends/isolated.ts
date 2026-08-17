@@ -7,7 +7,7 @@
  * Because we launch the process ourselves, `--remote-debugging-*` is our own
  * flag and Chrome 144's "Allow remote debugging?" modal never appears.
  *
- * Launching Chrome lives here. The Playwright engine in `src/browser/pw/`
+ * Launching Chrome lives here. The Playwright layer in `src/browser/playwright/`
  * reuses the Page objects this backend already owns.
  */
 

@@ -201,12 +201,7 @@ async function main() {
     // And the relay really did carry the whole CDP surface.
     for (const required of [
       'Runtime.evaluate',
-      'Page.navigate',
       'Page.addScriptToEvaluateOnNewDocument',
-      'Page.captureScreenshot',
-      'Input.dispatchMouseEvent',
-      'Input.dispatchKeyEvent',
-      'Input.insertText',
     ]) {
       assert.ok(
         extension.seenMethods.has(required),

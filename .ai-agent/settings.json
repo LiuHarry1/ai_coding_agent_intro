@@ -81,8 +81,7 @@
   "mcpServers": {},
 
   "browser": {
-    "mode": "extension",
-    "engine": "playwright"
+    "mode": "extension"
   },
 
   "disabledTools": []

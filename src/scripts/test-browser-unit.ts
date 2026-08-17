@@ -34,17 +34,18 @@ import {
   mapBrowserOutput,
   type BrowserToolOutput,
 } from '../tools/BrowserTool/shared.js'
-import { SNAPSHOT_SCRIPT, SNAPSHOT_SCRIPT_VERSION } from '../browser/snapshot-script.js'
+import { PAGE_SCRIPT, PAGE_SCRIPT_VERSION } from '../browser/page-script.js'
 import { BrowserError } from '../browser/types.js'
-import { normalizeRef } from '../browser/pw/ops.js'
+import { normalizeRef } from '../browser/playwright/index.js'
 import {
+  countRefs,
   groupBadgeLabels,
   prioritizeAriaSnapshot,
-} from '../browser/pw/prioritize-snapshot.js'
+} from '../browser/distill-snapshot.js'
 import {
   pickPageForTab,
   urlsRoughlyEqual,
-} from '../browser/pw/session.js'
+} from '../browser/playwright/page-match.js'
 import { initBrowserLifecycle } from '../browser/manager.js'
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -61,28 +62,44 @@ function eq<T>(actual: T, expected: T, msg: string): void {
 
 const ok = (msg: string) => console.log(`ok ${msg}`)
 
-// ── snapshot script version + distiller hooks ────────────
+// ── injected page script: console + network, nothing else ─
 
 {
-  eq(SNAPSHOT_SCRIPT_VERSION, 10, 'distiller bump')
+  eq(PAGE_SCRIPT_VERSION, 11, 'page script bump')
   assert(
-    SNAPSHOT_SCRIPT.includes(`var VERSION = ${SNAPSHOT_SCRIPT_VERSION}`),
-    'injected VERSION must match SNAPSHOT_SCRIPT_VERSION or pages keep the old script',
+    PAGE_SCRIPT.includes(`var VERSION = ${PAGE_SCRIPT_VERSION}`),
+    'injected VERSION must match PAGE_SCRIPT_VERSION or pages keep the old script',
   )
-  assert(SNAPSHOT_SCRIPT.includes('NAME_FROM_CONTENT'), 'name-from-content table')
-  assert(SNAPSHOT_SCRIPT.includes('WRAPPER_NAME_ROLES'), 'wrapper name distillation')
-  assert(SNAPSHOT_SCRIPT.includes('isPointerRoot'), 'pointer-root distillation')
-  assert(SNAPSHOT_SCRIPT.includes('isPointerLabelGroup'), 'pointer+label grouping')
-  assert(SNAPSHOT_SCRIPT.includes('isNamelessImage'), 'decorative icons are not pointer widgets')
-  assert(SNAPSHOT_SCRIPT.includes('isOverlayWidget'), 'fixed docks without pointer cursor')
-  assert(SNAPSHOT_SCRIPT.includes('collectOverlayClickables'), 'fixed chrome survives truncation')
-  assert(SNAPSHOT_SCRIPT.includes('isCollapsibleWrapper'), 'wrapper collapse')
+
+  for (const entry of ['consoleLogs', 'networkRequests', 'sinceReport']) {
+    assert(PAGE_SCRIPT.includes(entry), `page script must expose ${entry}`)
+  }
+  assert(PAGE_SCRIPT.includes('window.fetch'), 'fetch is patched')
+  assert(PAGE_SCRIPT.includes('XMLHttpRequest'), 'xhr is patched')
   assert(
-    SNAPSHOT_SCRIPT.includes('opts.selector'),
-    'selector option must reach the injected snapshot',
+    PAGE_SCRIPT.includes('unhandledrejection'),
+    'uncaught rejections reach the console buffer',
   )
-  assert(SNAPSHOT_SCRIPT.includes('opts.compact') || SNAPSHOT_SCRIPT.includes('compact'), 'compact option')
-  ok('snapshot script v10 ships the distiller hooks')
+
+  // Snapshot, ref resolution and input all live in Playwright now. Any of this
+  // reappearing in the page means we are back to two engines that disagree.
+  for (const gone of [
+    'resolveRef',
+    'setValue',
+    'setChecked',
+    'selectOption',
+    'waitStable',
+    'NAME_FROM_CONTENT',
+    'isPointerLabelGroup',
+    'collectOverlayClickables',
+    'elementFromPoint',
+  ]) {
+    assert(
+      !PAGE_SCRIPT.includes(gone),
+      `the injected script must not grow a second engine: found ${gone}`,
+    )
+  }
+  ok('injected script v11 is the console/network buffer and nothing more')
 }
 
 // ── protocol guards ──────────────────────────────────────
@@ -694,11 +711,11 @@ await withRelay(async relay => {
   )
   ok('playwright yaml groups numeric badges onto the labelled parent')
 
-  const small = prioritizeAriaSnapshot(yaml, yaml.length + 10)
+  const small = prioritizeAriaSnapshot(yaml, { maxChars: yaml.length + 10 })
   eq(small.truncated, false, 'under-budget snapshot is not truncated')
   eq(small.text, grouped, 'under-budget text is the grouped yaml')
 
-  const clipped = prioritizeAriaSnapshot(yaml, 2_400)
+  const clipped = prioritizeAriaSnapshot(yaml, { maxChars: 2_400 })
   assert(clipped.truncated, 'over-budget snapshot is marked truncated')
   assert(
     clipped.text.length <= 2_400,
@@ -717,6 +734,25 @@ await withRelay(async relay => {
     'the middle of a long job list is what the budget should drop',
   )
   ok('playwright snapshot keeps dialogs and end chrome when truncated')
+
+  // Regression: maxNodes was accepted and silently ignored, so browser_snapshot
+  // advertised a budget knob to the model that did nothing.
+  const capped = prioritizeAriaSnapshot(yaml, {
+    maxChars: 200_000,
+    maxNodes: 12,
+  })
+  assert(capped.truncated, 'a node cap below the tree marks the result truncated')
+  assert(
+    countRefs(capped.text) <= 12,
+    `node cap must bound ref-bearing nodes, got ${countRefs(capped.text)}`,
+  )
+  assert(
+    capped.text.includes('我的沟通'),
+    `a tight node cap must still spend itself on the dialog:\n${capped.text}`,
+  )
+  const uncapped = prioritizeAriaSnapshot(yaml, { maxChars: 200_000 })
+  eq(uncapped.truncated, false, 'no node cap, no truncation at a huge char budget')
+  ok('snapshot node cap bounds refs and keeps the dialog')
 }
 
 {
@@ -739,7 +775,7 @@ await withRelay(async relay => {
     '    - paragraph [ref=f3e74]: Copyright footer that must not steal the tail',
     '    - link "京公网安备" [ref=f3e75] [cursor=pointer]',
   ].join('\n')
-  const clipped = prioritizeAriaSnapshot(yaml, 2_400)
+  const clipped = prioritizeAriaSnapshot(yaml, { maxChars: 2_400 })
   assert(clipped.truncated, 'footer-iframe page is truncated')
   assert(
     clipped.text.includes('有新消息'),

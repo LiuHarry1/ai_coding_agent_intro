@@ -10,10 +10,12 @@
 import * as path from 'path'
 import { resolveSettings } from '../core/settings-manager.js'
 import { getUserAppDir } from '../utils/app-dir.js'
-import { createExtensionBackend } from './backends/extension.js'
+import { createExtensionBackend, getExtensionRelay } from './backends/extension.js'
 import { createIsolatedBackend } from './backends/isolated.js'
-import { setBrowserEngine, getBrowserEngine } from './engine.js'
-import { attachExtensionPlaywright, detachPlaywright } from './pw/session.js'
+import {
+  attachExtensionPlaywright,
+  detachPlaywright,
+} from './playwright/connect.js'
 import { startRelayServer, type RelayServer } from './relay/server.js'
 import { DEFAULT_RELAY_PORT } from './relay/protocol.js'
 import { BrowserError, type BrowserBackend, type BrowserTab } from './types.js'
@@ -98,21 +100,16 @@ async function createConfiguredBackend(cwd: string): Promise<BrowserBackend> {
 
 async function start(cwd: string): Promise<Live> {
   const config = resolveSettings(cwd).config.browser ?? {}
-  setBrowserEngine(config.engine === 'cdp' ? 'cdp' : 'playwright')
 
   const backend = backendFactory
     ? await backendFactory()
     : await createConfiguredBackend(cwd)
 
-  if (
-    !backendFactory &&
-    getBrowserEngine() === 'playwright' &&
-    backend.kind === 'extension'
-  ) {
-    await attachExtensionPlaywright(
-      backend,
-      await getRelay(config.relayPort ?? DEFAULT_RELAY_PORT),
-    )
+  if (backend.kind === 'extension') {
+    const relay =
+      getExtensionRelay(backend) ??
+      (await getRelay(config.relayPort ?? DEFAULT_RELAY_PORT))
+    await attachExtensionPlaywright(backend, relay)
   }
 
   const ttl = (config.idleTimeoutMinutes ?? 30) * 60 * 1000

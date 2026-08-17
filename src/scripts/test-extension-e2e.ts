@@ -17,7 +17,6 @@ import * as path from 'node:path'
 import { createExtensionBackend } from '../browser/backends/extension.js'
 import { startRelayServer } from '../browser/relay/server.js'
 import { setBrowserBackendFactory, closeBrowser } from '../browser/manager.js'
-import { setBrowserEngine, unlockBrowserEngine } from '../browser/engine.js'
 import {
   clickTool,
   navigateTool,
@@ -80,7 +79,6 @@ function refFor(snapshot: string, role: string, name: string): string {
 }
 
 async function main() {
-  setBrowserEngine('cdp', true)
   const fixture = await startFixtureServer()
   const relay = await startRelayServer({ port: RELAY_PORT })
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-ext-e2e-'))
@@ -316,7 +314,6 @@ async function main() {
 
     console.log('\nall real-extension end-to-end tests passed')
   } finally {
-    unlockBrowserEngine()
     setBrowserBackendFactory(null)
     await closeBrowser().catch(() => {})
     await chrome.close()

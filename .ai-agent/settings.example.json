@@ -110,8 +110,7 @@
   },
 
   "browser": {
-    "mode": "extension",
-    "engine": "playwright"
+    "mode": "extension"
   },
 
   "mcpServers": {},

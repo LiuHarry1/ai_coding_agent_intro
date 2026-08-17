@@ -1,14 +1,27 @@
 /**
- * Playwright's AI aria snapshot keeps every interactable, in document order.
- * Chat docks, cookie banners and `role=dialog` panels are usually last in that
- * tree. A head-only char clip — which is also what OpenClaw's AI snapshot path
- * does — drops them on any long homepage, which is exactly how a "messages"
- * task loses the inbox it just opened.
+ * Turning Playwright's raw aria snapshot into what the model actually reads.
  *
- * The injected CDP distiller already appends overlay chrome after the budget
- * runs out. This is the same policy for YAML we did not distill ourselves:
- * keep dialogs and the widgets around them first, then as much of the page
- * start as still fits.
+ * Three passes on the YAML, in the order `prioritizeAriaSnapshot` applies them:
+ *
+ * 1. `dropRedundantWrapperNames` — a card whose accessible name is just its
+ *    subtree read out pays for the same text twice.
+ * 2. `groupBadgeLabels` — a "1" badge beside a label is one widget to a human
+ *    and two ref-bearing nodes to the model; the ref belongs on the parent.
+ * 3. the budget itself — see below.
+ *
+ * Deliberately text-in, text-out with no imports: none of this needs a browser,
+ * so it is unit-tested directly and stays out of `playwright/`.
+ *
+ * On the budget: the AI snapshot keeps every interactable in document order, and
+ * chat docks, cookie banners and `role=dialog` panels are usually last. A
+ * head-only clip — what OpenClaw's AI snapshot path does — drops them on any long
+ * homepage, which is exactly how a "messages" task loses the inbox it just
+ * opened. So the budget is spent by priority rather than by position: dialogs and
+ * the widgets around them first, then as much of the page start as still fits.
+ *
+ * Two budgets follow that same policy. Characters bound what the model pays for;
+ * nodes bound how many refs it has to choose between, which is the number that
+ * decides whether it can find the control it wants.
  */
 
 const DIALOG_ITEM = /^(\s*)- (dialog|alertdialog)\b/
@@ -21,12 +34,99 @@ interface Range {
   end: number
 }
 
+/** Ref-bearing nodes: the units the model actually picks between. */
+export function countRefs(text: string): number {
+  return (text.match(/\[ref=/g) ?? []).length
+}
+
+/**
+ * Container roles whose accessible name is just their subtree read out. A card
+ * like `listitem "Staff Engineer Remote $200k <the whole preview>"` pays for the
+ * same text twice, once as the wrapper's name and again in the children — and on
+ * a list of them that is most of the budget.
+ *
+ * Playwright's AI mode drops names already covered by the children it emits, but
+ * not for these, so we finish the job on the YAML.
+ */
+const WRAPPER_NAME_ROLES = new Set([
+  'listitem',
+  'generic',
+  'group',
+  'row',
+  'cell',
+  'gridcell',
+  'article',
+  'region',
+  'section',
+  'list',
+  'table',
+  'rowgroup',
+  'figure',
+  'banner',
+  'main',
+  'navigation',
+  'complementary',
+  'contentinfo',
+  'form',
+])
+
+const NAMED_NODE = /^(\s*- )([a-z]+)(?: "((?:[^"\\]|\\.)*)")(.*)$/
+
+/** Only worth dropping when it is long enough to matter. */
+const REDUNDANT_NAME_MIN = 40
+
+function comparable(s: string): string {
+  return s.replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
+}
+
+/**
+ * The words a node contributes, without the markup. Comparing whole YAML lines
+ * fails because `[ref=e42]` and `/url:` sit between the very words we are trying
+ * to match against the wrapper's name.
+ */
+function nodeText(line: string): string {
+  const body = line.trim().replace(/^-\s*/, '')
+  // Property lines (`/url:`, `/placeholder:`) are not part of the name.
+  if (body.startsWith('/')) return ''
+  const quoted = /"((?:[^"\\]|\\.)*)"/.exec(body)?.[1] ?? ''
+  const inline = /:\s*(.+)$/.exec(body)?.[1] ?? ''
+  return `${quoted} ${inline}`
+}
+
+export function dropRedundantWrapperNames(yaml: string): string {
+  const lines = yaml.split('\n')
+  const out = lines.slice()
+  for (let i = 0; i < lines.length; i++) {
+    const m = NAMED_NODE.exec(lines[i])
+    if (!m) continue
+    const [, head, role, name, rest] = m
+    if (!WRAPPER_NAME_ROLES.has(role) || name.length < REDUNDANT_NAME_MIN) {
+      continue
+    }
+    const indent = /^\s*/.exec(lines[i])![0].length
+    let subtree = ''
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^\s*/.exec(lines[j])![0].length <= indent) break
+      subtree += ` ${nodeText(lines[j])}`
+    }
+    // Keep a real aria-label: only the name the children already spell out goes.
+    if (subtree && comparable(subtree).includes(comparable(name))) {
+      out[i] = `${head}${role}${rest}`
+    }
+  }
+  return out.join('\n')
+}
+
 export function prioritizeAriaSnapshot(
   raw: string,
-  maxChars: number,
+  opts: { maxChars: number; maxNodes?: number },
 ): { text: string; truncated: boolean } {
-  const grouped = groupBadgeLabels(raw)
-  if (grouped.length <= maxChars) return { text: grouped, truncated: false }
+  const { maxChars } = opts
+  const maxNodes = opts.maxNodes ?? Number.POSITIVE_INFINITY
+  const grouped = groupBadgeLabels(dropRedundantWrapperNames(raw))
+  if (grouped.length <= maxChars && countRefs(grouped) <= maxNodes) {
+    return { text: grouped, truncated: false }
+  }
 
   const lines = grouped.split('\n')
   const dialogs = findDialogRanges(lines)
@@ -46,9 +146,18 @@ export function prioritizeAriaSnapshot(
   }
 
   const reserved = joinRanges(lines, mergeRanges(keep))
+  // What survives when even the reserved block does not fit. The lines leading
+  // up to a dialog are context; the dialog is the thing the model opened.
+  const core = joinRanges(lines, mergeRanges(dialogs.length ? dialogs : keep))
   const overhead = OMITTED.length + 2
   const headRoom = Math.max(0, maxChars - reserved.length - overhead)
-  const headEnd = headLineCount(lines, keep[0]?.start ?? lines.length, headRoom)
+  const headNodes = Math.max(0, maxNodes - countRefs(reserved))
+  const headEnd = headLineCount(
+    lines,
+    keep[0]?.start ?? lines.length,
+    headRoom,
+    headNodes,
+  )
   const ranges = mergeRanges([{ start: 0, end: headEnd }, ...keep])
 
   const chunks: string[] = []
@@ -61,12 +170,17 @@ export function prioritizeAriaSnapshot(
   if (cursor < lines.length) chunks.push(OMITTED)
 
   let text = chunks.filter(Boolean).join('\n')
-  if (text.length > maxChars) {
-    // Budget is smaller than the dialogs themselves: keep the start of the
-    // reserved block (dialog title + first rows), not the page head.
+  if (text.length > maxChars || countRefs(text) > maxNodes) {
+    // Budget is smaller than the reserved block: keep its start (dialog title +
+    // first rows), not the page head.
     const prefix = headEnd > 0 ? `${lines.slice(0, headEnd).join('\n')}\n${OMITTED}\n` : ''
-    const room = maxChars - prefix.length
-    text = prefix + clipAtLine(reserved, Math.max(0, room))
+    text =
+      prefix +
+      clipToBudget(
+        core,
+        Math.max(0, maxChars - prefix.length),
+        Math.max(0, maxNodes - countRefs(prefix)),
+      )
   }
   return { text, truncated: true }
 }
@@ -151,23 +265,48 @@ function joinRanges(lines: string[], ranges: Range[]): string {
   return ranges.map(r => lines.slice(r.start, r.end).join('\n')).join('\n')
 }
 
-function headLineCount(lines: string[], stopBefore: number, budget: number): number {
-  if (budget <= 0 || stopBefore <= 0) return 0
+function headLineCount(
+  lines: string[],
+  stopBefore: number,
+  charBudget: number,
+  nodeBudget: number,
+): number {
+  if (charBudget <= 0 || stopBefore <= 0) return 0
   let chars = 0
+  let nodes = 0
   let i = 0
   while (i < stopBefore) {
     const extra = lines[i].length + (i === 0 ? 0 : 1)
-    if (chars + extra > budget) break
+    const refs = countRefs(lines[i])
+    if (chars + extra > charBudget) break
+    if (nodes + refs > nodeBudget) break
     chars += extra
+    nodes += refs
     i += 1
   }
   return i
 }
 
-function clipAtLine(text: string, budget: number): string {
-  if (text.length <= budget) return text
-  const cut = text.lastIndexOf('\n', budget)
-  return text.slice(0, cut > 0 ? cut : budget)
+/** Whole lines from the start, until either budget runs out. */
+function clipToBudget(
+  text: string,
+  charBudget: number,
+  nodeBudget: number,
+): string {
+  const lines = text.split('\n')
+  const out: string[] = []
+  let chars = 0
+  let nodes = 0
+  for (const line of lines) {
+    const extra = line.length + (out.length === 0 ? 0 : 1)
+    const refs = countRefs(line)
+    if (chars + extra > charBudget) break
+    if (nodes + refs > nodeBudget) break
+    chars += extra
+    nodes += refs
+    out.push(line)
+  }
+  return out.join('\n')
 }
 
 const BADGE_CHILD =

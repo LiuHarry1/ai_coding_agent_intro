@@ -1,8 +1,6 @@
 /**
- * OpenClaw-style Playwright engine against the isolated backend.
- *
- * The injected-distiller suites stay on `browser.engine: cdp`. This file is
- * the comparison: `page.ariaSnapshot({ mode: 'ai' })` plus `aria-ref` clicks.
+ * Playwright-engine checks that go beyond the shared dual-backend suite:
+ * fill_form readonly handling, wait_for vs click settle, iframe-adjacent refs.
  *
  * Run: npx tsx src/scripts/test-browser-playwright.ts
  * Add --headed to watch it happen.
@@ -12,10 +10,6 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { createIsolatedBackend } from '../browser/backends/isolated.js'
-import {
-  setBrowserEngine,
-  unlockBrowserEngine,
-} from '../browser/engine.js'
 import {
   closeBrowser,
   setBrowserBackendFactory,
@@ -89,7 +83,6 @@ function refNear(snapshot: string, needle: string): string {
 }
 
 async function main() {
-  setBrowserEngine('playwright', true)
   const server = await startFixtureServer()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-browser-pw-'))
 
@@ -304,7 +297,6 @@ async function main() {
     console.log('\nall playwright-engine tests passed')
   } finally {
     setBrowserBackendFactory(null)
-    unlockBrowserEngine()
     await closeBrowser()
     await server.close()
     fs.rmSync(profile, { recursive: true, force: true })

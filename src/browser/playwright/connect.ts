@@ -1,21 +1,21 @@
 /**
- * Resolve a Playwright Page for a tool-layer targetId.
+ * Getting a Playwright Page for a tool-layer targetId, and owning the
+ * connection that makes one available.
  *
- * Isolated: the backend already owns Page objects from launchPersistentContext.
- * Extension: connectOverCDP to the synthetic browser endpoint (OpenClaw's
- * pattern) so the same ariaSnapshot / aria-ref locators work against the
- * user's signed-in Chrome.
+ * Isolated: the backend already holds Page objects from launchPersistentContext,
+ * so there is nothing to connect.
+ * Extension: connectOverCDP against the synthetic browser endpoint the relay
+ * exposes (OpenClaw's pattern), so the same ariaSnapshot and aria-ref locators
+ * work against the user's signed-in Chrome.
  */
 
 import type { Browser, Page } from 'playwright-core'
 import { chromium } from 'playwright-core'
 import { getIsolatedPage } from '../backends/isolated.js'
-import { BrowserError, type BrowserBackend } from '../types.js'
-import {
-  startCdpEndpoint,
-  type CdpEndpoint,
-} from './cdp-endpoint.js'
+import { startCdpEndpoint, type CdpEndpoint } from '../relay/cdp-endpoint.js'
 import type { RelayServer } from '../relay/server.js'
+import { BrowserError, type BrowserBackend } from '../types.js'
+import { pickPageForTab } from './page-match.js'
 
 const browsers = new WeakMap<BrowserBackend, Promise<Browser>>()
 const endpoints = new WeakMap<BrowserBackend, CdpEndpoint>()
@@ -55,8 +55,7 @@ async function connectExtension(backend: BrowserBackend): Promise<Browser> {
   const endpoint = endpoints.get(backend)
   if (!endpoint) {
     throw new BrowserError(
-      'Playwright engine is not attached to the extension backend. ' +
-        'Set browser.engine to "playwright" and restart the agent.',
+      'Playwright is not attached to the extension backend. Restart the agent.',
     )
   }
 
@@ -77,48 +76,6 @@ async function connectExtension(backend: BrowserBackend): Promise<Browser> {
 
 function allPages(browser: Browser): Page[] {
   return browser.contexts().flatMap(ctx => ctx.pages().filter(p => !p.isClosed()))
-}
-
-export function isBlankUrl(url: string): boolean {
-  return !url || url === 'about:blank' || url.startsWith('chrome://newtab')
-}
-
-/** Same origin+path, ignoring hash and query (tracking params churn on SPAs). */
-export function urlsRoughlyEqual(a: string, b: string): boolean {
-  if (a === b) return true
-  try {
-    const left = new URL(a)
-    const right = new URL(b)
-    if (left.origin !== right.origin) return false
-    const pathA = left.pathname.replace(/\/+$/, '') || '/'
-    const pathB = right.pathname.replace(/\/+$/, '') || '/'
-    return pathA === pathB
-  } catch {
-    return false
-  }
-}
-
-export function pickPageForTab<T extends { url(): string }>(
-  pages: T[],
-  tabUrl: string,
-): T | undefined {
-  const live = pages.filter(p => {
-    try {
-      p.url()
-      return true
-    } catch {
-      return false
-    }
-  })
-  const exact = live.filter(p => urlsRoughlyEqual(p.url(), tabUrl))
-  if (exact.length === 1) return exact[0]
-  if (exact.length > 1) return exact[exact.length - 1]
-  if (isBlankUrl(tabUrl)) {
-    const blanks = live.filter(p => isBlankUrl(p.url()))
-    if (blanks.length === 1) return blanks[0]
-    if (blanks.length > 1) return blanks[blanks.length - 1]
-  }
-  return undefined
 }
 
 async function findPage(
@@ -167,6 +124,8 @@ export async function getPageForTarget(
   const endpoint = endpoints.get(backend)
   await endpoint?.syncTabs()
 
+  // The relay learns about a shared tab asynchronously, so a page the model just
+  // asked for may not be attached yet. Re-sync and retry rather than fail.
   const deadline = Date.now() + PAGE_ATTACH_MS
   let lastErr: Error | undefined
   while (Date.now() <= deadline) {

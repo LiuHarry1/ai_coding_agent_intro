@@ -12,8 +12,18 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { z } from 'zod'
-import * as ops from '../../browser/page-ops.js'
-import { BrowserError, type BrowserBackend } from '../../browser/types.js'
+import { sinceReport } from '../../browser/page-inspect.js'
+import {
+  DEFAULT_MAX_CHARS,
+  POST_ACTION_MAX_NODES,
+  SCREENSHOT_TOKEN_BUDGET,
+} from '../../browser/limits.js'
+import * as pw from '../../browser/playwright/index.js'
+import {
+  BrowserError,
+  type BrowserBackend,
+  type NetworkEntry,
+} from '../../browser/types.js'
 import { getSessionDataDir } from '../../core/session-paths.js'
 import type {
   ImageMediaType,
@@ -21,14 +31,6 @@ import type {
   ToolResultContentBlockParam,
 } from '../../core/types.js'
 import { toolResultImageBlockFromBuffer } from '../../utils/image/resize-buffer.js'
-
-/** Post-action snapshots are cheaper than explicit ones; the model can ask for more. */
-export const POST_ACTION_MAX_NODES = 800
-export const DEFAULT_MAX_NODES = 1500
-export const DEFAULT_MAX_CHARS = 20_000
-
-/** Screenshots compete with the snapshot for context; cap them hard. */
-const SCREENSHOT_TOKEN_BUDGET = 1500
 
 export interface NetworkRow {
   method: string
@@ -41,7 +43,7 @@ export interface NetworkRow {
   durationMs: number
 }
 
-export function toNetworkRow(e: ops.NetworkEntry): NetworkRow {
+export function toNetworkRow(e: NetworkEntry): NetworkRow {
   return {
     method: e.method,
     url: e.url,
@@ -150,7 +152,7 @@ export async function observe(
   }
 
   if (opts.withSnapshot !== false) {
-    const snap = await ops.snapshot(backend, targetId, {
+    const snap = await pw.snapshot(backend, targetId, {
       maxNodes: opts.maxNodes ?? POST_ACTION_MAX_NODES,
       maxChars: opts.maxChars ?? DEFAULT_MAX_CHARS,
       selector: opts.selector,
@@ -168,7 +170,7 @@ export async function observe(
   }
 
   const since = consoleWatermark.get(targetId)
-  const report = await ops.sinceReport(backend, targetId, since)
+  const report = await sinceReport(backend, targetId, since)
   consoleWatermark.set(targetId, report.now)
   if (report.logs.length) {
     out.consoleErrors = report.logs.map(e => ({ level: e.level, text: e.text }))

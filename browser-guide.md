@@ -163,7 +163,6 @@ agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `mode` | `isolated` | `isolated` 或 `extension` |
-| `engine` | `playwright` | `playwright`（OpenClaw 同款 `ariaSnapshot({ mode: "ai" })` + `aria-ref` 点击）；`cdp` 是旧注入式快照 |
 | `headless` | `true` | 仅 isolated 模式;设 `false` 可看见窗口 |
 | `relayPort` | `8766` | 仅 extension 模式;改了要在弹窗里同步改 |
 | `channel` | `chrome` | 仅 isolated 模式,指定 Chrome 渠道 |

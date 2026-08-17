@@ -493,15 +493,15 @@ ok [isolated] stale ref caught after DOM recycling  ok [extension] stale ref cau
 ...                                                  ...
 ```
 
-这就是「启示一」赌的东西：工具层写一遍，隔离浏览器和用户的 Chrome 只是两个不同的后端。Playwright API 现在允许出现在 `backends/isolated.ts`（拉起 Chrome）和 `src/browser/pw/`（OpenClaw 同款 `ariaSnapshot` / `aria-ref` 引擎）；守卫测试锁住其它文件不得直接 import `playwright-core`。
+这就是「启示一」赌的东西：工具层写一遍，隔离浏览器和用户的 Chrome 只是两个不同的后端。Playwright API 现在允许出现在 `backends/isolated.ts`（拉起 Chrome）和 `src/browser/playwright/`（OpenClaw 同款 `ariaSnapshot` / `aria-ref` 引擎）；守卫测试锁住其它文件不得直接 import `playwright-core`。
 
-`browser.engine` 在 `cdp`（注入式 distiller）和 `playwright`（`page.ariaSnapshot({ mode: "ai" })` + `locator('aria-ref=eN')`）之间切换。extension 模式下 Playwright 通过合成的 `/json/version` + `connectOverCDP` 接到中继上，和 OpenClaw 同一条路，所以登录态也能拿来对比。
+快照和点击走 Playwright 的 `page.ariaSnapshot({ mode: "ai" })` + `locator('aria-ref=eN')`，和 OpenClaw / Playwright MCP 同一条路。extension 模式下 Playwright 通过合成的 `/json/version` + `connectOverCDP` 接到中继上，所以登录态也能拿来对比。
 
 ### 架构落点
 
 ```mermaid
 flowchart LR
-  Tools["14 个 browser_* 工具<br/>page-ops + snapshot-script"]
+  Tools["14 个 browser_* 工具<br/>playwright/ (快照+操作) + page-inspect (console/network)"]
   Backend{"BrowserBackend<br/>接口"}
   Iso["isolated 后端<br/>playwright-core 拉起 Chrome"]
   Relay["relay server<br/>127.0.0.1:8766"]

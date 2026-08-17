@@ -18,10 +18,17 @@ import { BrowserError, type BrowserBackend, type BrowserTab } from '../types.js'
 import type { RelayServer } from '../relay/server.js'
 import type { RelayTab } from '../relay/protocol.js'
 
+const relays = new WeakMap<BrowserBackend, RelayServer>()
+
 export interface ExtensionBackendOptions {
   relay: RelayServer
   /** How long to wait for the extension to show up before giving up. */
   connectTimeoutMs?: number
+}
+
+/** The relay a given extension backend is speaking through, if any. */
+export function getExtensionRelay(backend: BrowserBackend): RelayServer | undefined {
+  return relays.get(backend)
 }
 
 export async function createExtensionBackend(
@@ -34,7 +41,7 @@ export async function createExtensionBackend(
     return { targetId: tab.targetId, url: tab.url, title: tab.title }
   }
 
-  return {
+  const backend: BrowserBackend = {
     kind: 'extension',
 
     async listTabs() {
@@ -66,6 +73,8 @@ export async function createExtensionBackend(
       // sessions when the socket drops, which is the only cleanup we own.
     },
   }
+  relays.set(backend, relay)
+  return backend
 }
 
 export { BrowserError }
