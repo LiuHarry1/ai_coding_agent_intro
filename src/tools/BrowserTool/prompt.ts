@@ -33,7 +33,9 @@ ${SNAPSHOT_PRIMER}`
 
 export const CLICK_DESCRIPTION = `Click an element identified by its ref from the latest snapshot.
 
-Dispatches a real trusted mouse event, so pages cannot tell it apart from a user click. After the click, waits ~500ms and drains in-flight XHR/fetch (same as Playwright MCP), then returns a full-page snapshot plus any console errors the click triggered.
+Dispatches a real trusted mouse event, so pages cannot tell it apart from a user click. After the click, waits briefly and drains in-flight XHR/fetch, then returns a **compact** snapshot plus any console errors the click triggered. It does not wait for a full page load, which heavy SPAs never report.
+
+If the result says the snapshot timed out, the click still happened — take a fresh snapshot rather than clicking again.
 
 Read that tree for new refs. Pass \`selector\` only to zoom into one subtree. For content that appears later than the settle, use \`browser_wait_for\`.
 
@@ -42,12 +44,27 @@ ${LOOP_GUARD}`
 
 export const TYPE_DESCRIPTION = `Type text into a text field identified by its ref.
 
-- Clicks the field first, then inserts the text
+- Clicks the field first, then **replaces** its contents. It does not append.
+- When the ref is a wrapper, the text goes to the input inside it
+- The result reports the value the field ended up with. A readonly or disabled field is reported as such and nothing is typed — find the control that unlocks it rather than writing the value with \`browser_evaluate\`, which sets the DOM without telling the app and is usually discarded on save
 - Set \`submit\` to press Enter afterwards (search boxes, login forms)
-- Set \`slowly\` to send per-character key events — needed by autocomplete and combobox widgets that react to keydown, but slower
-- After typing (and optional Enter), waits ~500ms and drains in-flight XHR/fetch, then returns a snapshot
+- Set \`slowly\` to send per-character key events — needed by autocompletes and comboboxes that react to keydown, but slower
+- After typing (and optional Enter), waits briefly and drains in-flight XHR/fetch, then returns a compact snapshot
 
-To replace existing content rather than append, use \`browser_evaluate\` to clear it first, or select-all with \`browser_press_key\`. After sending a message, call \`browser_wait_for\` with the exact text, then read the snapshot — the wait matches the string anywhere, including the field you just typed into.
+After sending a message, call \`browser_wait_for\` with the exact text, then read the snapshot — the wait matches the string anywhere, including the field you just typed into.
+
+${SNAPSHOT_PRIMER}`
+
+export const FILL_FORM_DESCRIPTION = `Fill several form controls in one call. Prefer this over one \`browser_type\` per field whenever you are filling a form: it writes the fields in order, then settles and snapshots once.
+
+- \`kind\` is inferred from the element's role. Set it when the role is ambiguous
+- \`textbox\` **replaces** the field's contents, same as \`browser_type\`
+- \`checkbox\` and \`radio\` take \`"true"\` or \`"false"\` and are set to that state — passing the state a control is already in is a no-op, not a toggle
+- \`combobox\` selects a \`<select>\` option by value or visible label. A custom (non-\`<select>\`) combobox is typed into instead, so its popup may still need a click
+- Every field reports its own outcome: \`filled\` with the value it ended up holding, \`skipped\` for a readonly or disabled field, or \`failed\` with the reason. A bad ref costs you that one field, not the batch
+- Read those per-field results. A field reported as skipped or failed did not take the value, however plausible the page looks afterwards
+
+Fields that only appear once an earlier field is set are not in your snapshot yet, so fill what exists, read the returned tree, then fill the rest.
 
 ${SNAPSHOT_PRIMER}`
 

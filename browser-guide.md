@@ -114,7 +114,7 @@ npm run browser:pair
 
 ---
 
-## 13 个工具
+## 14 个工具
 
 一般不用记,直接用自然语言描述目标就行。列出来是方便你看懂对话里的工具卡片:
 
@@ -124,6 +124,7 @@ npm run browser:pair
 | `browser_snapshot` | 抓页面结构(agent 靠这个"看见"页面) |
 | `browser_click` | 点击元素 |
 | `browser_type` | 输入文本,可选回车提交 |
+| `browser_fill_form` | 一次填多个字段(文本框、复选框、单选、下拉),逐个报结果 |
 | `browser_select_option` | 选下拉框 |
 | `browser_press_key` | 按键,支持组合键 |
 | `browser_hover` | 悬停 |
@@ -162,7 +163,7 @@ agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `mode` | `isolated` | `isolated` 或 `extension` |
-| `engine` | `cdp` | `cdp`（注入式快照）或 `playwright`（OpenClaw 同款 `ariaSnapshot({ mode: "ai" })` + `aria-ref` 点击） |
+| `engine` | `playwright` | `playwright`（OpenClaw 同款 `ariaSnapshot({ mode: "ai" })` + `aria-ref` 点击）；`cdp` 是旧注入式快照 |
 | `headless` | `true` | 仅 isolated 模式;设 `false` 可看见窗口 |
 | `relayPort` | `8766` | 仅 extension 模式;改了要在弹窗里同步改 |
 | `channel` | `chrome` | 仅 isolated 模式,指定 Chrome 渠道 |

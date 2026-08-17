@@ -55,9 +55,9 @@ export interface BrowserConfig {
   mode?: 'isolated' | 'extension'
   /**
    * Snapshot and interaction engine.
-   *   cdp         — injected accessibility distiller + CDP mouse/key events
    *   playwright  — OpenClaw-style `ariaSnapshot({ mode: 'ai' })` + `aria-ref` locators
-   * Default `cdp`. Set `playwright` to compare against Playwright's own tree.
+   *   cdp         — injected accessibility distiller + CDP mouse/key events
+   * Default `playwright`. `cdp` remains for the old distiller path and tests.
    */
   engine?: 'cdp' | 'playwright'
   /** Loopback port the extension connects back on. Default 8766. */

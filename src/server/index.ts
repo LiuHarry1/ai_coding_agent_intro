@@ -13,6 +13,7 @@ import * as os from 'os'
 import { resolveSettings } from '../core/settings-manager.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
 import { runWithRequestScope } from '../utils/request-scope.js'
+import { initBrowserLifecycle } from '../browser/manager.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -83,6 +84,7 @@ export function startServer({ runAgent }: ServerOptions): void {
         { agentHome: os.homedir(), cwd: bootCwd },
         async () => {
           const settings = resolveSettings(bootCwd)
+          initBrowserLifecycle(bootCwd)
           await bootstrapExecutionPlane({
             sshHosts: settings.config.environments?.ssh ?? [],
           })

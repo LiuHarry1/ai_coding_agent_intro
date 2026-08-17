@@ -7,6 +7,7 @@ import {
   BROWSER_CLICK,
   BROWSER_CONSOLE,
   BROWSER_EVALUATE,
+  BROWSER_FILL_FORM,
   BROWSER_HOVER,
   BROWSER_NAVIGATE,
   BROWSER_NETWORK,
@@ -35,6 +36,7 @@ const ICONS = {
   [BROWSER_CLICK]: '\u{1F5B1}',
   [BROWSER_HOVER]: '\u{1F5B1}',
   [BROWSER_TYPE]: '\u{2328}',
+  [BROWSER_FILL_FORM]: '\u{1F4DD}',
   [BROWSER_PRESS_KEY]: '\u{2328}',
   [BROWSER_WAIT_FOR]: '\u{23F3}',
   [BROWSER_SELECT_OPTION]: '\u{2328}',
@@ -52,6 +54,7 @@ const RUNNING_LABELS = {
   [BROWSER_CLICK]: 'Clicking',
   [BROWSER_HOVER]: 'Hovering',
   [BROWSER_TYPE]: 'Typing',
+  [BROWSER_FILL_FORM]: 'Filling form',
   [BROWSER_PRESS_KEY]: 'Pressing key',
   [BROWSER_WAIT_FOR]: 'Waiting',
   [BROWSER_SELECT_OPTION]: 'Selecting',
@@ -69,6 +72,7 @@ const DONE_LABELS = {
   [BROWSER_CLICK]: 'Clicked',
   [BROWSER_HOVER]: 'Hovered',
   [BROWSER_TYPE]: 'Typed',
+  [BROWSER_FILL_FORM]: 'Filled form',
   [BROWSER_PRESS_KEY]: 'Pressed key',
   [BROWSER_WAIT_FOR]: 'Waited',
   [BROWSER_SELECT_OPTION]: 'Selected',
@@ -172,7 +176,9 @@ export default function BrowserToolCard({ part, nested = false }) {
 
   const title = isError
     ? part.result.replace(/^Error:\s*/, '')
-    : tur?.message || args.url || args.ref || args.expression || ''
+    : String(tur?.message || args.url || args.ref || args.expression || '').split(
+        '\n',
+      )[0]
 
   return (
     <div className={`tool-row browser-card ${isError ? 'has-error' : ''}`}>

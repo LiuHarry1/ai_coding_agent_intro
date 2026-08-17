@@ -45,6 +45,7 @@ import {
   pickPageForTab,
   urlsRoughlyEqual,
 } from '../browser/pw/session.js'
+import { initBrowserLifecycle } from '../browser/manager.js'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`FAILED: ${msg}`)
@@ -63,7 +64,7 @@ const ok = (msg: string) => console.log(`ok ${msg}`)
 // ── snapshot script version + distiller hooks ────────────
 
 {
-  eq(SNAPSHOT_SCRIPT_VERSION, 9, 'distiller bump')
+  eq(SNAPSHOT_SCRIPT_VERSION, 10, 'distiller bump')
   assert(
     SNAPSHOT_SCRIPT.includes(`var VERSION = ${SNAPSHOT_SCRIPT_VERSION}`),
     'injected VERSION must match SNAPSHOT_SCRIPT_VERSION or pages keep the old script',
@@ -81,7 +82,7 @@ const ok = (msg: string) => console.log(`ok ${msg}`)
     'selector option must reach the injected snapshot',
   )
   assert(SNAPSHOT_SCRIPT.includes('opts.compact') || SNAPSHOT_SCRIPT.includes('compact'), 'compact option')
-  ok('snapshot script v9 ships the distiller hooks')
+  ok('snapshot script v10 ships the distiller hooks')
 }
 
 // ── protocol guards ──────────────────────────────────────
@@ -128,7 +129,8 @@ const ok = (msg: string) => console.log(`ok ${msg}`)
   assert(first.length >= 16, 'token must be long enough to not be guessable')
 
   const file = path.join(os.homedir(), '.ai-agent', 'browser', 'relay.json')
-  if (fs.existsSync(file)) {
+  // NTFS has no POSIX mode bits — Node reports 0666 there whatever we chmod.
+  if (fs.existsSync(file) && process.platform !== 'win32') {
     const mode = fs.statSync(file).mode & 0o777
     eq(mode, 0o600, 'the token file must not be readable by other users')
   }
@@ -785,6 +787,18 @@ await withRelay(async relay => {
     'blank leftover is not a match for a real URL',
   )
   ok('findPage matching ignores stale pages[0]')
+}
+
+{
+  const prev = process.env.AUTH_ENABLED
+  process.env.AUTH_ENABLED = 'true'
+  try {
+    initBrowserLifecycle()
+    ok('initBrowserLifecycle does not throw under AUTH without request scope')
+  } finally {
+    if (prev === undefined) delete process.env.AUTH_ENABLED
+    else process.env.AUTH_ENABLED = prev
+  }
 }
 
 console.log('\nall browser unit tests passed')

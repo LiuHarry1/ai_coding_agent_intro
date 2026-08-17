@@ -24,6 +24,7 @@ import {
   BROWSER_CLICK_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
   BROWSER_EVALUATE_TOOL_NAME,
+  BROWSER_FILL_FORM_TOOL_NAME,
   BROWSER_HOVER_TOOL_NAME,
   BROWSER_NAVIGATE_TOOL_NAME,
   BROWSER_NETWORK_TOOL_NAME,
@@ -47,6 +48,7 @@ import {
   browserErrorText,
   BrowserOutputSchema,
   DEFAULT_MAX_NODES,
+  POST_ACTION_MAX_NODES,
   mapBrowserOutput,
   observe,
   resetConsoleWatermark,
@@ -56,6 +58,12 @@ import {
 
 /** No browser call should outlive a stuck page; the model needs its turn back. */
 const CALL_TIMEOUT_MS = 60_000
+const ERROR_SNAPSHOT_TIMEOUT_MS = 8_000
+/**
+ * The observation is bounded on its own so a slow tree cannot turn a click that
+ * already landed into a failure the model will retry.
+ */
+const POST_ACTION_SNAPSHOT_MS = 15_000
 
 interface RunContext {
   backend: BrowserBackend
@@ -65,15 +73,40 @@ interface RunContext {
   toolCallId: string
 }
 
-function withTimeout<T>(promise: Promise<T>, action: string): Promise<T> {
+async function observeAfterAction(
+  backend: BrowserBackend,
+  targetId: string,
+  opts: Parameters<typeof observe>[2],
+): Promise<BrowserToolOutput> {
+  try {
+    return await withTimeout(
+      observe(backend, targetId, opts),
+      'snapshot',
+      POST_ACTION_SNAPSHOT_MS,
+    )
+  } catch {
+    return {
+      action: opts.action,
+      message: `${opts.message} (snapshot timed out; call browser_snapshot for a fresh tree)`,
+      url: '',
+      title: '',
+    }
+  }
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  action: string,
+  ms: number = CALL_TIMEOUT_MS,
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(
         new BrowserError(
-          `${action} timed out after ${CALL_TIMEOUT_MS / 1000}s. The page may be stuck loading; check the dev server or try browser_console.`,
+          `${action} timed out after ${ms / 1000}s. The page may be stuck loading; check the dev server or try browser_console.`,
         ),
       )
-    }, CALL_TIMEOUT_MS)
+    }, ms)
     promise.then(
       value => {
         clearTimeout(timer)
@@ -98,8 +131,12 @@ async function freshSnapshotText(
 ): Promise<string | undefined> {
   try {
     const snap = await withTimeout(
-      ops.snapshot(backend, targetId, { maxNodes: DEFAULT_MAX_NODES }),
+      ops.snapshot(backend, targetId, {
+        maxNodes: POST_ACTION_MAX_NODES,
+        compact: true,
+      }),
       'snapshot',
+      ERROR_SNAPSHOT_TIMEOUT_MS,
     )
     return snap.text
   } catch {
@@ -248,9 +285,10 @@ export const clickTool = defineBrowserTool({
       button: args.button,
       modifiers: args.modifiers,
     })
-    return observe(ctx.backend, ctx.targetId, {
+    return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'click',
       message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} ${el.role} "${el.name}"`,
+      compact: true,
     })
   },
 })
@@ -275,9 +313,62 @@ export const typeTool = defineBrowserTool({
       submit: args.submit,
       slowly: args.slowly,
     })
-    return observe(ctx.backend, ctx.targetId, {
+    // An action that returned is not an action that worked: report what the
+    // field actually holds so a silently rejected type is visible.
+    const valueNote = el.readOnly
+      ? ' — nothing typed: the field is readonly. Some apps compute it from other fields, or unlock it from another control.'
+      : el.disabled
+        ? ' — nothing typed: the field is disabled.'
+        : el.value == null
+          ? ''
+          : el.value !== ''
+            ? ` (value: ${JSON.stringify(el.value)})`
+            : ' (value still empty — the field did not accept the text)'
+    return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'type',
-      message: `Typed into ${el.role} "${el.name}"${args.submit ? ' and pressed Enter' : ''}`,
+      message: `Typed ${JSON.stringify(args.text)} into ${el.role} "${el.name}"${args.submit ? ' and pressed Enter' : ''}${valueNote}`,
+      compact: true,
+    })
+  },
+})
+
+export const fillFormTool = defineBrowserTool({
+  name: BROWSER_FILL_FORM_TOOL_NAME,
+  summary: 'Fill multiple form fields in one call',
+  description: prompt.FILL_FORM_DESCRIPTION,
+  inputSchema: z.object({
+    fields: z
+      .array(
+        z.object({
+          ref: refSchema,
+          value: z
+            .string()
+            .describe(
+              'Text, option label, or "true"/"false" for a checkbox or radio',
+            ),
+          kind: z
+            .enum(['textbox', 'checkbox', 'radio', 'combobox'])
+            .optional()
+            .describe('Control type (inferred from the element when omitted)'),
+        }),
+      )
+      .min(1)
+      .describe('Fields to fill, in the order they should be written'),
+  }),
+  async run(args, ctx) {
+    const filled = await ops.fillForm(ctx.backend, ctx.targetId, args.fields)
+    const ok = filled.filter(f => f.status === 'filled').length
+    // Per-field lines, because a batch that "succeeded" can still have dropped
+    // half its values, and only the page knows which half.
+    const lines = filled.map(f =>
+      f.status === 'filled'
+        ? `- ${f.ref} ${f.role} "${f.name}" = ${JSON.stringify(f.value ?? '')}`
+        : `- ${f.ref} ${f.role} "${f.name}" ${f.status}: ${f.reason ?? 'unknown reason'}`,
+    )
+    return observeAfterAction(ctx.backend, ctx.targetId, {
+      action: 'fill_form',
+      message: `Filled ${ok}/${filled.length} fields\n${lines.join('\n')}`,
+      compact: true,
     })
   },
 })
@@ -300,9 +391,10 @@ export const selectOptionTool = defineBrowserTool({
       args.ref,
       args.values,
     )
-    return observe(ctx.backend, ctx.targetId, {
+    return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'select_option',
       message: `Selected ${res.selected.map(s => `"${s}"`).join(', ')}`,
+      compact: true,
     })
   },
 })
@@ -321,9 +413,10 @@ export const pressKeyTool = defineBrowserTool({
   async run(args, ctx) {
     await ops.pressKey(ctx.backend, ctx.targetId, args.key, args.modifiers)
     const combo = [...(args.modifiers ?? []), args.key].join('+')
-    return observe(ctx.backend, ctx.targetId, {
+    return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'press_key',
       message: `Pressed ${combo}`,
+      compact: true,
     })
   },
 })
@@ -355,9 +448,10 @@ export const waitForTool = defineBrowserTool({
     if (args.textGone) {
       parts.push(`text ${JSON.stringify(args.textGone)} disappeared`)
     }
-    return observe(ctx.backend, ctx.targetId, {
+    return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'wait_for',
       message: parts.length ? parts.join('; ') : 'Waited',
+      compact: true,
     })
   },
 })
@@ -369,9 +463,10 @@ export const hoverTool = defineBrowserTool({
   inputSchema: z.object({ ref: refSchema }),
   async run(args, ctx) {
     const el = await ops.hover(ctx.backend, ctx.targetId, { ref: args.ref })
-    return observe(ctx.backend, ctx.targetId, {
+    return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'hover',
       message: `Hovered ${el.role} "${el.name}"`,
+      compact: true,
     })
   },
 })
@@ -397,9 +492,10 @@ export const scrollTool = defineBrowserTool({
       deltaY: args.deltaY ?? (args.deltaX ? 0 : 500),
       ref: args.ref,
     })
-    return observe(ctx.backend, ctx.targetId, {
+    return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'scroll',
       message: 'Scrolled',
+      compact: true,
     })
   },
 })
@@ -606,6 +702,7 @@ export const browserToolDefinitions: ToolDefinition[] = [
   snapshotTool,
   clickTool,
   typeTool,
+  fillFormTool,
   selectOptionTool,
   pressKeyTool,
   waitForTool,

@@ -6,12 +6,12 @@
  *                 locator('aria-ref=eN').click() via playwright-core
  *
  * Tests lock this so a developer settings.json cannot flip the conformance
- * suites onto a different engine mid-run.
+ * suites onto a different engine mid-run. Product default is playwright.
  */
 
 export type BrowserEngine = 'cdp' | 'playwright'
 
-let engine: BrowserEngine = 'cdp'
+let engine: BrowserEngine = 'playwright'
 let locked = false
 
 export function setBrowserEngine(next: BrowserEngine, lock = false): void {

@@ -18,6 +18,7 @@ import {
   networkTool,
   evaluateTool,
   hoverTool,
+  fillFormTool,
   navigateTool,
   pressKeyTool,
   screenshotTool,
@@ -336,6 +337,37 @@ const WAIT_TEXT_PAGE = `<!doctype html>
 </body>
 </html>`
 
+/** Every control kind browser_fill_form claims to handle, plus one it must refuse. */
+const FORM_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Form</title></head>
+<body>
+  <h1>Expense form</h1>
+  <form id="expense">
+    <label>Merchant <input id="merchant" name="merchant" type="text" value="old merchant"></label>
+    <label>Total <input id="total" name="total" type="text"></label>
+    <label>Computed tax <input id="tax" name="tax" type="text" value="0.00" readonly></label>
+    <label>Billable <input id="billable" name="billable" type="checkbox"></label>
+    <label>Personal <input id="personal" type="radio" name="kind" value="personal"></label>
+    <label>Currency
+      <select id="currency" name="currency">
+        <option value="cny">CNY</option>
+        <option value="usd">USD</option>
+      </select>
+    </label>
+  </form>
+  <p id="tax-state">tax untouched</p>
+  <script>
+    // Stands in for an app that computes a readonly field from the others.
+    document.getElementById('total').addEventListener('change', function (e) {
+      var n = parseFloat(e.target.value || '0');
+      document.getElementById('tax').value = (n * 0.06).toFixed(2);
+      document.getElementById('tax-state').textContent = 'tax computed';
+    });
+  </script>
+</body>
+</html>`
+
 export function startFixtureServer(): Promise<{
   url: string
   close: () => Promise<void>
@@ -376,6 +408,10 @@ export function startFixtureServer(): Promise<{
     }
     if (route === '/wait-text') {
       res.end(WAIT_TEXT_PAGE)
+      return
+    }
+    if (route === '/form') {
+      res.end(FORM_PAGE)
       return
     }
     res.end(PAGE)
@@ -444,6 +480,14 @@ function refFor(snapshot: string, role: string, name: string): string {
     line,
     `no ref found for ${role} "${name}" in snapshot:\n${snapshot}`,
   )
+  return /\[ref=([^\]]+)\]/.exec(line)![1]
+}
+
+function refNear(snapshot: string, needle: string): string {
+  const line = snapshot
+    .split('\n')
+    .find(l => l.includes(needle) && l.includes('[ref='))
+  assert.ok(line, `no ref near "${needle}" in snapshot:\n${snapshot}`)
   return /\[ref=([^\]]+)\]/.exec(line)![1]
 }
 
@@ -711,6 +755,54 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     assert.equal(env.value, 'prod')
     ok('select_option + evaluate')
+
+    // ── fill_form (Playwright MCP: browser_fill_form) ─────
+    const formNav = expectData(
+      await run(navigateTool, { url: `${baseUrl}form` }, sessionId),
+    )
+    const formSnap = String(formNav.snapshot)
+    const formFilled = expectData(
+      await run(
+        fillFormTool,
+        {
+          fields: [
+            { ref: refNear(formSnap, 'Merchant'), value: 'Suzhou Hotel' },
+            { ref: refNear(formSnap, 'Total'), value: '100.00' },
+            { ref: refNear(formSnap, 'Billable'), value: 'true', kind: 'checkbox' },
+            { ref: refNear(formSnap, 'Currency'), value: 'USD', kind: 'combobox' },
+          ],
+        },
+        sessionId,
+      ),
+    )
+    assert.ok(
+      String(formFilled.message).startsWith('Filled 4/4 fields'),
+      `fill_form must write every control kind in one call:\n${formFilled.message}`,
+    )
+    const formValues = expectData(
+      await run(
+        evaluateTool,
+        {
+          expression: `[document.getElementById('merchant').value, document.getElementById('total').value, document.getElementById('tax').value, String(document.getElementById('billable').checked), document.getElementById('currency').value].join('|')`,
+        },
+        sessionId,
+      ),
+    )
+    // The page's own change handler computed the readonly tax from the total.
+    assert.equal(formValues.value, 'Suzhou Hotel|100.00|6.00|true|usd')
+    const readonlyField = expectData(
+      await run(
+        fillFormTool,
+        { fields: [{ ref: refNear(formSnap, 'Computed tax'), value: '9.99' }] },
+        sessionId,
+      ),
+    )
+    assert.ok(
+      /failed|skipped/.test(String(readonlyField.message)),
+      `a readonly field must be reported, not silently dropped:\n${readonlyField.message}`,
+    )
+    ok('fill_form writes text, checkbox and select in one call')
+    await run(navigateTool, { url: baseUrl }, sessionId)
 
     // ── stale ref detection ───────────────────────────────
     const withRow = String(

@@ -34,7 +34,6 @@ import {
   initMcpLifecycle,
   invalidateMCPManagersForCwd,
 } from '../core/mcp-lifecycle.js'
-import { initBrowserLifecycle } from '../browser/manager.js'
 import { getLspStatusForCwd } from '../services/lsp/manager.js'
 import { getExecutionPlane } from '../execution/bootstrap.js'
 import { WorkerExecutionBackend } from '../execution/worker-execution-backend.js'
@@ -70,7 +69,6 @@ initCodePlugins(defaultRegistry).catch(err => {
   console.error(`[plugins] code plugin init failed: ${err.message}`)
 })
 initMcpLifecycle()
-initBrowserLifecycle()
 
 async function getMCPStatusForCwd(
   cwd: string,

@@ -13,7 +13,14 @@ import {
   StaleRefError,
   type BrowserBackend,
 } from '../types.js'
-import type { ResolvedRef, SnapshotOpts, SnapshotResult } from '../page-ops.js'
+import type {
+  FilledField,
+  FormField,
+  FormFieldKind,
+  ResolvedRef,
+  SnapshotOpts,
+  SnapshotResult,
+} from '../page-ops.js'
 import { prioritizeAriaSnapshot } from './prioritize-snapshot.js'
 import { getPageForTarget } from './session.js'
 
@@ -75,6 +82,74 @@ function refLocator(page: Page, ref: string): Locator {
   return page.locator(`aria-ref=${normalizeRef(ref)}`)
 }
 
+/** Aria-ref is often on a wrapper; fill/type must hit the real control. */
+async function resolveEditable(loc: Locator): Promise<Locator> {
+  const inner = loc.locator(
+    'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, [contenteditable="true"]',
+  )
+  const n = await inner.count().catch(() => 0)
+  for (let i = 0; i < n; i++) {
+    if (await inner.nth(i).isVisible().catch(() => false)) return inner.nth(i)
+  }
+  if (n > 0) return inner.first()
+  return loc
+}
+
+function valuesMatch(expected: string, actual: string): boolean {
+  const norm = (s: string) => s.replace(/,/g, '').replace(/\s/g, '')
+  return norm(actual) === norm(expected) || actual.includes(expected)
+}
+
+async function readFieldValue(field: Locator): Promise<string> {
+  return (await readFieldMeta(field)).value
+}
+
+async function readFieldMeta(field: Locator): Promise<{
+  value: string
+  readOnly: boolean
+  disabled: boolean
+  type: string
+  tag: string
+}> {
+  return field
+    .evaluate(el => {
+      const input =
+        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
+          ? el
+          : el.querySelector('input, textarea')
+      const target = (input ?? el) as HTMLInputElement
+      const editable = (target as unknown as HTMLElement).isContentEditable
+      return {
+        tag: (target as HTMLElement).tagName,
+        type: target.type || '',
+        readOnly: Boolean(target.readOnly),
+        disabled: Boolean(target.disabled),
+        value: editable
+          ? ((target as unknown as HTMLElement).innerText || '').trim()
+          : target.value || '',
+      }
+    })
+    .catch(async () => ({
+      tag: '',
+      type: '',
+      readOnly: false,
+      disabled: false,
+      value: await field.inputValue({ timeout: 800 }).catch(() => ''),
+    }))
+}
+
+/** Select-all then type, for widgets that ignore `fill`'s single input event. */
+async function typeViaKeyboard(
+  page: Page,
+  field: Locator,
+  text: string,
+): Promise<void> {
+  await field.click({ timeout: ACTION_TIMEOUT_MS, noWaitAfter: true })
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('Backspace')
+  await page.keyboard.type(text, { delay: 20 })
+}
+
 function mapPlaywrightError(err: unknown, ref?: string): never {
   const message = err instanceof Error ? err.message : String(err)
   if (
@@ -97,19 +172,30 @@ async function describeLocator(
 ): Promise<ResolvedRef> {
   const box = await loc.boundingBox().catch(() => null)
   const info = await loc
+    // No named inner functions here: the bundler rewrites them into `__name`
+    // calls that do not exist in the page.
     .evaluate(el => {
+      const input = el instanceof HTMLInputElement ? el : null
       const role =
         el.getAttribute('role') ||
-        (el instanceof HTMLInputElement
-          ? el.type === 'submit' || el.type === 'button'
+        (input
+          ? input.type === 'submit' || input.type === 'button'
             ? 'button'
-            : 'textbox'
+            : input.type === 'checkbox' || input.type === 'radio'
+              ? input.type
+              : 'textbox'
           : el.tagName.toLowerCase())
+      const labelled = el as HTMLInputElement
       const name = (
         el.getAttribute('aria-label') ||
+        // A form control's text lives in its <label>, not inside the element.
+        (labelled.labels?.[0]?.textContent ?? '') ||
         (el instanceof HTMLInputElement ? el.placeholder : '') ||
         (el.textContent || '').replace(/\s+/g, ' ').trim()
-      ).slice(0, 120)
+      )
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120)
       const tag = el.tagName.toLowerCase()
       const isEditable =
         el instanceof HTMLInputElement ||
@@ -281,12 +367,14 @@ export async function click(
       if (opts.doubleClick) {
         await loc.dblclick({
           timeout: ACTION_TIMEOUT_MS,
+          noWaitAfter: true,
           button: opts.button,
           modifiers,
         })
       } else {
         await loc.click({
           timeout: ACTION_TIMEOUT_MS,
+          noWaitAfter: true,
           button: opts.button,
           modifiers,
         })
@@ -330,16 +418,41 @@ export async function typeText(
   const loc = refLocator(page, opts.ref)
   try {
     await page.bringToFront().catch(() => {})
+    const field = await resolveEditable(loc)
+    const before = await readFieldMeta(field)
+    if (before.readOnly || before.disabled) {
+      const described = await describeLocator(loc, opts.ref).catch(() =>
+        fallbackRef(opts.ref),
+      )
+      described.value = before.value
+      described.readOnly = before.readOnly
+      described.disabled = before.disabled
+      return described
+    }
     await withActionWait(page, async () => {
-      await loc.click({ timeout: ACTION_TIMEOUT_MS })
       if (opts.slowly) {
-        await loc.pressSequentially(opts.text, { timeout: ACTION_TIMEOUT_MS })
+        await typeViaKeyboard(page, field, opts.text)
       } else {
-        await page.keyboard.insertText(opts.text)
+        try {
+          await field.fill(opts.text, {
+            timeout: ACTION_TIMEOUT_MS,
+            noWaitAfter: true,
+          })
+        } catch {
+          await typeViaKeyboard(page, field, opts.text)
+        }
+        const got = await readFieldValue(field)
+        if (!valuesMatch(opts.text, got)) {
+          await typeViaKeyboard(page, field, opts.text)
+        }
       }
       if (opts.submit) await page.keyboard.press('Enter')
     })
-    return await describeLocator(loc, opts.ref)
+    const described = await describeLocator(loc, opts.ref).catch(() =>
+      fallbackRef(opts.ref),
+    )
+    described.value = (await readFieldMeta(field)).value
+    return described
   } catch (err) {
     mapPlaywrightError(err, opts.ref)
   }
@@ -354,11 +467,113 @@ export async function fillField(
   const page = await getPageForTarget(backend, targetId)
   const loc = refLocator(page, ref)
   try {
-    await loc.fill(value, { timeout: ACTION_TIMEOUT_MS })
+    const field = await resolveEditable(loc)
+    await field.fill(value, { timeout: ACTION_TIMEOUT_MS })
     const el = await describeLocator(loc, ref)
     return { role: el.role, name: el.name }
   } catch (err) {
     mapPlaywrightError(err, ref)
+  }
+}
+
+/**
+ * Fill several controls in one call. One bad ref must not lose the fields that
+ * did land, so every field reports its own status instead of throwing, and the
+ * settle/drain runs once for the batch rather than once per field.
+ */
+export async function fillForm(
+  backend: BrowserBackend,
+  targetId: string,
+  fields: FormField[],
+): Promise<FilledField[]> {
+  const page = await getPageForTarget(backend, targetId)
+  await page.bringToFront().catch(() => {})
+  const results: FilledField[] = []
+  await withActionWait(page, async () => {
+    for (const field of fields) {
+      results.push(await fillOneField(page, field))
+    }
+  })
+  return results
+}
+
+function isTruthy(value: string): boolean {
+  return ['true', '1', 'yes', 'on', 'checked'].includes(value.trim().toLowerCase())
+}
+
+function inferKind(el: ResolvedRef): FormFieldKind {
+  if (el.role === 'checkbox' || el.role === 'switch') return 'checkbox'
+  if (el.role === 'radio') return 'radio'
+  if (el.tag === 'select') return 'combobox'
+  return 'textbox'
+}
+
+function fieldError(err: unknown, ref: string): string {
+  const message = err instanceof Error ? err.message : String(err)
+  if (
+    /Timeout|strict mode violation|waiting for locator|No node found for selector/i.test(
+      message,
+    )
+  ) {
+    return `no element for ref ${ref} — take a fresh snapshot`
+  }
+  return message.split('\n')[0] ?? message
+}
+
+async function fillOneField(page: Page, field: FormField): Promise<FilledField> {
+  const loc = refLocator(page, field.ref)
+  const el = await describeLocator(loc, field.ref).catch(() =>
+    fallbackRef(field.ref),
+  )
+  const base = { ref: field.ref, role: el.role, name: el.name }
+  try {
+    const kind = field.kind ?? inferKind(el)
+    if (kind === 'checkbox' || kind === 'radio') {
+      const on = isTruthy(field.value)
+      // force: the real input is routinely hidden behind a styled label.
+      await loc.setChecked(on, { timeout: ACTION_TIMEOUT_MS, force: true })
+      return { ...base, value: String(on), status: 'filled' }
+    }
+    if (kind === 'combobox' && el.tag === 'select') {
+      const selected = await loc.selectOption([field.value], {
+        timeout: ACTION_TIMEOUT_MS,
+      })
+      return { ...base, value: selected.join(', '), status: 'filled' }
+    }
+
+    const target = await resolveEditable(loc)
+    const meta = await readFieldMeta(target)
+    if (meta.readOnly || meta.disabled) {
+      return {
+        ...base,
+        value: meta.value,
+        status: 'skipped',
+        reason: meta.readOnly ? 'field is readonly' : 'field is disabled',
+      }
+    }
+    try {
+      await target.fill(field.value, {
+        timeout: ACTION_TIMEOUT_MS,
+        noWaitAfter: true,
+      })
+    } catch {
+      await typeViaKeyboard(page, target, field.value)
+    }
+    let got = await readFieldValue(target)
+    if (!valuesMatch(field.value, got)) {
+      await typeViaKeyboard(page, target, field.value)
+      got = await readFieldValue(target)
+    }
+    return valuesMatch(field.value, got)
+      ? { ...base, value: got, status: 'filled' }
+      : {
+          ...base,
+          value: got,
+          status: 'failed',
+          reason: 'the field did not keep the value',
+        }
+  } catch (err) {
+    return { ...base, status: 'failed', reason: fieldError(err, field.ref) }
   }
 }
 

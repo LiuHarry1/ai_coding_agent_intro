@@ -55,7 +55,7 @@ the extension.
 | Key                  | Default     | Meaning                                        |
 | -------------------- | ----------- | ---------------------------------------------- |
 | `browser.mode`       | `isolated`  | `extension` to drive this browser               |
-| `browser.engine`     | `cdp`       | `playwright` for OpenClaw-style aria snapshots  |
+| `browser.engine`     | `playwright` | `cdp` for the legacy injected distiller        |
 | `browser.relayPort`  | `8766`      | Loopback port the extension connects back on    |
 
 The port in the popup must match `browser.relayPort`.

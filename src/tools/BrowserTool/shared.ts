@@ -23,7 +23,7 @@ import type {
 import { toolResultImageBlockFromBuffer } from '../../utils/image/resize-buffer.js'
 
 /** Post-action snapshots are cheaper than explicit ones; the model can ask for more. */
-const POST_ACTION_MAX_NODES = 800
+export const POST_ACTION_MAX_NODES = 800
 export const DEFAULT_MAX_NODES = 1500
 export const DEFAULT_MAX_CHARS = 20_000
 

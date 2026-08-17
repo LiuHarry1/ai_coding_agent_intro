@@ -26,6 +26,7 @@ export const BROWSER_NAVIGATE = 'browser_navigate'
 export const BROWSER_SNAPSHOT = 'browser_snapshot'
 export const BROWSER_CLICK = 'browser_click'
 export const BROWSER_TYPE = 'browser_type'
+export const BROWSER_FILL_FORM = 'browser_fill_form'
 export const BROWSER_SELECT_OPTION = 'browser_select_option'
 export const BROWSER_PRESS_KEY = 'browser_press_key'
 export const BROWSER_WAIT_FOR = 'browser_wait_for'
@@ -42,6 +43,7 @@ export const BROWSER_TOOLS = [
   BROWSER_SNAPSHOT,
   BROWSER_CLICK,
   BROWSER_TYPE,
+  BROWSER_FILL_FORM,
   BROWSER_SELECT_OPTION,
   BROWSER_PRESS_KEY,
   BROWSER_WAIT_FOR,

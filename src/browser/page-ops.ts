@@ -1,11 +1,10 @@
 /**
  * Page operations against a `BrowserBackend`.
  *
- * Default engine (`cdp`): injected snapshot script + CDP Input.* events, so
- * the extension relay only has to forward request/response pairs.
+ * Default engine (`playwright`): OpenClaw's path — `ariaSnapshot({ mode: 'ai' })`
+ * and `locator('aria-ref=eN')`.
  *
- * Playwright engine: OpenClaw's path — `ariaSnapshot({ mode: 'ai' })` and
- * `locator('aria-ref=eN')` — used when `browser.engine` is `"playwright"`.
+ * Legacy engine (`cdp`): injected snapshot script + CDP Input.* events.
  * Console/network still go through the injected script in both engines.
  */
 
@@ -43,12 +42,37 @@ export interface ResolvedRef {
   height: number
   tag: string
   isEditable: boolean
+  /** Committed input value after browser_type, when readable. */
+  value?: string
+  /** Set when the field rejects input, so a no-op type is not reported as success. */
+  readOnly?: boolean
+  disabled?: boolean
   /** Set when the original ref was stale and the element was relocated by role+name. */
   recovered?: boolean
   recoveredFrom?: string
   /** Set when something is painted on top of the click point. */
   blockingType?: 'modal' | 'overlay' | 'iframe' | 'fixed-header' | 'sibling'
   interceptedBy?: string
+}
+
+export type FormFieldKind = 'textbox' | 'checkbox' | 'radio' | 'combobox'
+
+export interface FormField {
+  ref: string
+  /** For a checkbox or radio, "true"/"false"; otherwise the text or option label. */
+  value: string
+  /** Inferred from the element's role when omitted. */
+  kind?: FormFieldKind
+}
+
+export interface FilledField {
+  ref: string
+  role: string
+  name: string
+  /** What the control holds afterwards, when readable. */
+  value?: string
+  status: 'filled' | 'skipped' | 'failed'
+  reason?: string
 }
 
 export interface ConsoleEntry {
@@ -591,6 +615,19 @@ export async function typeText(
   } else {
     await waitStable(backend, targetId, 200, 3000, ACTION_SETTLE_MS)
   }
+
+  // Read the field back: keystrokes a control quietly refused look exactly like
+  // keystrokes it took, and only the committed value tells them apart.
+  const after = await evaluate<
+    | { ok: true; value: string; readOnly: boolean; disabled: boolean }
+    | { error: string; message: string }
+    | undefined
+  >(backend, targetId, callInPage('readValue', [opts.ref])).catch(() => undefined)
+  if (after && 'ok' in after) {
+    el.value = after.value
+    el.readOnly = after.readOnly
+    el.disabled = after.disabled
+  }
   return el
 }
 
@@ -611,6 +648,82 @@ export async function fillField(
   if ('error' in res) throw new StaleRefError(res.message)
   await waitStable(backend, targetId, 200, 3000)
   return res
+}
+
+/**
+ * Fill several controls in one call, reporting each field separately so one bad
+ * ref does not discard the fields that did land.
+ */
+export async function fillForm(
+  backend: BrowserBackend,
+  targetId: string,
+  fields: FormField[],
+): Promise<FilledField[]> {
+  if (getBrowserEngine() === 'playwright') {
+    return pw.fillForm(backend, targetId, fields)
+  }
+  await focusTarget(backend, targetId)
+  const results: FilledField[] = []
+  for (const field of fields) {
+    results.push(await fillOneField(backend, targetId, field))
+  }
+  await waitStable(backend, targetId, 200, 3000, ACTION_SETTLE_MS)
+  return results
+}
+
+async function fillOneField(
+  backend: BrowserBackend,
+  targetId: string,
+  field: FormField,
+): Promise<FilledField> {
+  let base = { ref: field.ref, role: 'generic', name: field.ref }
+  try {
+    const el = await resolveRef(backend, targetId, field.ref)
+    base = { ref: field.ref, role: el.role, name: el.name }
+    const kind =
+      field.kind ??
+      (el.role === 'checkbox' || el.role === 'switch'
+        ? 'checkbox'
+        : el.role === 'radio'
+          ? 'radio'
+          : el.tag === 'select'
+            ? 'combobox'
+            : 'textbox')
+    const on = ['true', '1', 'yes', 'on', 'checked'].includes(
+      field.value.trim().toLowerCase(),
+    )
+    const call =
+      kind === 'checkbox' || kind === 'radio'
+        ? callInPage('setChecked', [field.ref, on])
+        : kind === 'combobox'
+          ? callInPage('selectOption', [field.ref, [field.value]])
+          : callInPage('setValue', [field.ref, field.value])
+    const res = await evaluate<
+      | { ok: true; checked?: boolean; selected?: string[] }
+      | { error: string; message: string }
+    >(backend, targetId, call)
+    if ('error' in res) {
+      const rejected = res.error === 'readonly' || res.error === 'disabled'
+      return {
+        ...base,
+        status: rejected ? 'skipped' : 'failed',
+        reason: res.message,
+      }
+    }
+    const value =
+      res.checked != null
+        ? String(res.checked)
+        : res.selected != null
+          ? res.selected.join(', ')
+          : field.value
+    return { ...base, value, status: 'filled' }
+  } catch (err) {
+    return {
+      ...base,
+      status: 'failed',
+      reason: err instanceof Error ? err.message : String(err),
+    }
+  }
 }
 
 export async function selectOption(
@@ -699,20 +812,31 @@ export async function sinceReport(
   return evaluate(backend, targetId, callInPage('sinceReport', [since ?? null]))
 }
 
+/**
+ * `return (${expr})` is only valid for an expression. A statement body — one
+ * that opens with `const`, `if`, a loop — becomes `return (const x = …)` and
+ * dies with `Unexpected token`, so those get wrapped as a function body instead.
+ */
+export function wrapPageExpression(expression: string): string {
+  const trimmed = expression.trim()
+  try {
+    // eslint-disable-next-line no-new-func
+    new Function(`return (${trimmed})`)
+    return `(async () => { return (${trimmed}); })()`
+  } catch {
+    return `(async () => { ${trimmed} })()`
+  }
+}
+
 export async function evaluateExpression(
   backend: BrowserBackend,
   targetId: string,
   expression: string,
 ): Promise<unknown> {
   await ensureReady(backend, targetId)
-  // Wrapped so both `1 + 1` and `return foo()` style bodies work, and so a
-  // returned promise is awaited.
-  return evaluate(
-    backend,
-    targetId,
-    `(async () => { return (${expression}); })()`,
-    true,
-  )
+  // Wrapped so both `1 + 1` and statement bodies work, and so a returned
+  // promise is awaited.
+  return evaluate(backend, targetId, wrapPageExpression(expression), true)
 }
 
 export async function screenshot(

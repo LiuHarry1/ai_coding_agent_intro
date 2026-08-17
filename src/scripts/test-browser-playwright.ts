@@ -22,6 +22,8 @@ import {
 } from '../browser/manager.js'
 import {
   clickTool,
+  evaluateTool,
+  fillFormTool,
   navigateTool,
   snapshotTool,
   typeTool,
@@ -254,6 +256,50 @@ async function main() {
       `browser_wait_for must return once the text is visible:\n${waited.snapshot}`,
     )
     console.log('ok [playwright] browser_wait_for text')
+
+    const formNav = expectData(
+      await run(navigateTool, { url: `${server.url}form` }, sessionId),
+    )
+    const formSnap = String(formNav.snapshot)
+    const filled = expectData(
+      await run(
+        fillFormTool,
+        {
+          fields: [
+            { ref: refNear(formSnap, 'Merchant'), value: 'Suzhou Hotel' },
+            { ref: refNear(formSnap, 'Total'), value: '100.00' },
+            { ref: refNear(formSnap, 'Computed tax'), value: '9.99' },
+            { ref: refNear(formSnap, 'Billable'), value: 'true' },
+            { ref: refNear(formSnap, 'Currency'), value: 'USD' },
+          ],
+        },
+        sessionId,
+      ),
+    )
+    const message = String(filled.message)
+    assert.ok(
+      message.startsWith('Filled 4/5 fields'),
+      `the readonly field must be the only one skipped:\n${message}`,
+    )
+    assert.ok(
+      /Computed tax[^\n]*skipped: field is readonly/.test(message),
+      `a readonly field must be reported, not silently dropped:\n${message}`,
+    )
+    const values = await run(
+      evaluateTool,
+      {
+        expression: `[document.getElementById('merchant').value, document.getElementById('total').value, document.getElementById('tax').value, String(document.getElementById('billable').checked), document.getElementById('currency').value].join('|')`,
+      },
+      sessionId,
+    )
+    assert.equal(
+      String(expectData(values).value),
+      // The app's own change handler computed the tax, which is the point of
+      // leaving a readonly field alone rather than writing through it.
+      'Suzhou Hotel|100.00|6.00|true|usd',
+      `fill_form must replace text, check the box and select the option:\n${message}`,
+    )
+    console.log('ok [playwright] fill_form writes a whole form and skips readonly')
 
     console.log('\nall playwright-engine tests passed')
   } finally {

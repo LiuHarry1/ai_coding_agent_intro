@@ -98,7 +98,7 @@ async function createConfiguredBackend(cwd: string): Promise<BrowserBackend> {
 
 async function start(cwd: string): Promise<Live> {
   const config = resolveSettings(cwd).config.browser ?? {}
-  setBrowserEngine(config.engine === 'playwright' ? 'playwright' : 'cdp')
+  setBrowserEngine(config.engine === 'cdp' ? 'cdp' : 'playwright')
 
   const backend = backendFactory
     ? await backendFactory()
@@ -230,7 +230,19 @@ export function initBrowserLifecycle(cwd: string = process.cwd()): void {
   // In extension mode the relay comes up with the agent rather than on first
   // tool call: pairing is something the user checks in the popup before asking
   // for anything, and a relay that only exists mid-request reads as broken.
-  const config = resolveSettings(cwd).config.browser ?? {}
+  //
+  // AUTH_ENABLED boot has no request scope — resolveSettings → getAgentHome()
+  // throws. Skip eager relay; getBrowser() still starts the backend on first
+  // tool call (SSO does not use extension mode).
+  let config: { mode?: string; relayPort?: number } = {}
+  try {
+    config = resolveSettings(cwd).config.browser ?? {}
+  } catch (err) {
+    console.warn(
+      `[browser] skip eager relay start: ${err instanceof Error ? err.message : err}`,
+    )
+    return
+  }
   if (config.mode === 'extension') {
     const port = config.relayPort ?? DEFAULT_RELAY_PORT
     void getRelay(port)

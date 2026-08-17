@@ -321,7 +321,10 @@ async function main() {
   const typed = expectData(
     await run(typeTool, { ref: 'e2', text: 'a@b.com', submit: true }),
   )
-  assert.equal(typed.message, 'Typed into textbox "Email" and pressed Enter')
+  assert.equal(
+    typed.message,
+    'Typed "a@b.com" into textbox "Email" and pressed Enter',
+  )
   assert.ok(state.calls.some(c => c.method === 'Input.insertText'))
   assert.ok(
     state.calls.some(

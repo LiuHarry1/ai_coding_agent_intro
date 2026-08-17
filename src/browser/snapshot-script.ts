@@ -20,11 +20,11 @@
  * would interpolate `${`.
  */
 
-export const SNAPSHOT_SCRIPT_VERSION = 9
+export const SNAPSHOT_SCRIPT_VERSION = 10
 
 export const SNAPSHOT_SCRIPT = String.raw`
 (function () {
-  var VERSION = 9;
+  var VERSION = 10;
   if (window.__agentBrowser && window.__agentBrowser.version === VERSION) {
     return 'already-installed';
   }
@@ -1008,6 +1008,10 @@ export const SNAPSHOT_SCRIPT = String.raw`
     var r = resolveRef(ref);
     if (r.error) return r;
     var el = elementFor(ref);
+    // A field the app computes rejects the write on save, so report it here
+    // rather than let a value the page never accepted look like a success.
+    if (el.readOnly) return { error: 'readonly', message: 'Ref ' + ref + ' is readonly; the app computes it from other fields.' };
+    if (el.disabled) return { error: 'disabled', message: 'Ref ' + ref + ' is disabled.' };
     el.focus();
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
       // React and friends install a value setter on the instance; going through
@@ -1024,6 +1028,38 @@ export const SNAPSHOT_SCRIPT = String.raw`
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
     return { ok: true, role: r.role, name: r.name };
+  }
+
+  function readValue(ref) {
+    var r = resolveRef(ref);
+    if (r.error) return r;
+    var el = elementFor(ref);
+    var inner = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? el : el.querySelector('input, textarea');
+    var target = inner || el;
+    return {
+      ok: true,
+      value: target.isContentEditable ? (target.innerText || '').trim() : (target.value || ''),
+      readOnly: !!target.readOnly,
+      disabled: !!target.disabled
+    };
+  }
+
+  function setChecked(ref, checked) {
+    var r = resolveRef(ref);
+    if (r.error) return r;
+    var el = elementFor(ref);
+    var role = el.getAttribute('role');
+    var native = el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio');
+    if (!native && role !== 'checkbox' && role !== 'radio' && role !== 'switch') {
+      return { error: 'not-toggle', message: 'Ref ' + ref + ' is a ' + el.tagName.toLowerCase() + ', not a checkbox or radio.' };
+    }
+    var state = function () {
+      return native ? !!el.checked : el.getAttribute('aria-checked') === 'true';
+    };
+    // Click rather than assign .checked: a custom toggle keeps its state in the
+    // app, and a radio can only be cleared by checking a sibling.
+    if (state() !== checked) el.click();
+    return { ok: true, role: r.role, name: r.name, checked: state() };
   }
 
   function selectOption(ref, values) {
@@ -1240,6 +1276,8 @@ export const SNAPSHOT_SCRIPT = String.raw`
     snapshot: snapshot,
     resolveRef: resolveRef,
     setValue: setValue,
+    readValue: readValue,
+    setChecked: setChecked,
     selectOption: selectOption,
     consoleLogs: consoleLogs,
     networkRequests: networkRequests,
