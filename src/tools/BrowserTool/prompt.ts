@@ -1,126 +1,122 @@
 /**
- * Tool descriptions. These are the only place the model learns the ref
- * workflow, so they carry the loop-avoidance rules too — a tool that fails
- * without telling the model what to do instead is how agents end up clicking
- * the same dead element ten times.
+ * Tool descriptions. Aligned with Playwright MCP (short verbs, snapshot-first)
+ * and Cursor (do not act from screenshots; stop after repeated failures).
  */
 
-export const SNAPSHOT_PRIMER = `Elements are addressed by \`ref\` (e.g. \`e12\`) taken from the most recent snapshot. Refs stay valid while the element lives, and are re-checked against what the snapshot showed you — if the page rewrote that element you get a stale-ref error, and the fix is always to take a fresh snapshot rather than retry.`
+export const SNAPSHOT_PRIMER = `Elements are addressed by \`ref\` (e.g. \`e12\`) from the latest snapshot. After any action, use the new tree — do not reuse old refs.`
 
-export const LOOP_GUARD = `If the same action fails twice, stop and change approach: take a snapshot, read the console, or report what is blocking you. Do not retry a failing interaction more than once without new evidence.`
+export const LOOP_GUARD = `If the same action fails twice, stop and change approach. If a snapshot timed out, do not retry ${'`browser_snapshot`'} / ${'`browser_screenshot`'} / ${'`browser_wait_for`'} — ${'`browser_click`'} with \`role\` + \`name\`.`
 
-export const NAVIGATE_DESCRIPTION = `Navigate the browser to a URL and return a snapshot of the resulting page.
+export const NAVIGATE_DESCRIPTION = `Navigate to a URL, or go back / forward / reload.
 
-Use this to verify frontend work: start the dev server with a background Bash task, then navigate to it and inspect the result.
+Waits for the document and in-flight XHR/fetch, then snapshots. If a list is still empty, ${'`browser_wait_for`'} that text. Session cookies persist across calls.
 
-- Waits for the document to load and the DOM to settle before snapshotting
-- Reports any console errors produced during load
-- Reuses one browser instance across calls, so the session keeps cookies and localStorage between navigations
+http(s) only — no file: or javascript: URLs. If a modal is covering the current page, click it — do not navigate away to dismiss it.
 
 ${SNAPSHOT_PRIMER}`
 
-export const SNAPSHOT_DESCRIPTION = `Capture an accessibility snapshot of the current page: a structured tree of roles, names and refs.
+export const SNAPSHOT_DESCRIPTION = `Capture accessibility snapshot of the current page, this is better than screenshot.
 
-Prefer this over ${'`browser_screenshot`'} for understanding page structure and finding things to interact with — it is text, so it is cheaper and more precise than an image. Use a screenshot when you need to judge visual appearance (layout, spacing, color).
+The tree is Playwright's AI aria snapshot. Clickable nodes have \`[ref=eN]\`. Click those refs. A bare \`text:\` line is not clickable. Prefer this over ${'`browser_screenshot`'} for deciding what to click — you can't perform actions based on a screenshot.
 
-The tree comes from Playwright's AI accessibility snapshot (ariaSnapshot mode "ai"), including iframe contents. Clickable nodes carry \`[ref=eN]\`. Click those refs; do not invent inbox/chat URLs because a label has no ref.
+- \`selector\`: one subtree
+- \`compact\`: clip depth (Playwright MCP \`depth\`)
+- \`interactive\`: only ref-bearing controls
+- \`includeDiff\`: only lines that changed since the last snapshot
 
-Click the named control (the node whose accessible name matches the button/link), not a numeric badge sitting next to it. After a click, use the new snapshot's refs — never reuse a ref from before the click.
+If an in-page modal (\`alertdialog\` / Yes / No / OK) is open, the snapshot is that dialog. Click those refs. That is not ${'`browser_handle_dialog`'} (native \`alert\`/\`confirm\` only).
 
-A styled element with no ARIA role — typically an inline \`<span>\` that only looks clickable — is folded into its paragraph's text and gets no ref. That is a limit of the accessibility tree, not a missing snapshot: reach it with \`browser_evaluate\` instead of clicking a nearby ref and hoping.
-
-Click, type, navigate and wait_for return an updated full-page snapshot. Pass \`selector\` only when you want one subtree (a unique panel). Do not assume an open dialog is the whole result — a page can have several. Pass \`compact: true\` to clip tree depth for a cheaper look; nested content is dropped, so do not use it to inspect something deep. A truncated snapshot keeps open dialogs and end-of-tree widgets (chat docks); the long middle of the page is what gets dropped.
+If the snapshot times out, a PDF or iframe likely stalled the tree. Do not retry a full snapshot, screenshot, wait, or evaluate. Click with ${'`browser_click`'} \`role\` + \`name\` (Playwright \`getByRole\`).
 
 ${SNAPSHOT_PRIMER}`
 
-export const CLICK_DESCRIPTION = `Click an element identified by its ref from the latest snapshot.
+export const CLICK_DESCRIPTION = `Perform click on a web page.
 
-Dispatches a real trusted mouse event, so pages cannot tell it apart from a user click. After the click, waits briefly and drains in-flight XHR/fetch, then returns a **compact** snapshot plus any console errors the click triggered. It does not wait for a full page load, which heavy SPAs never report.
+Prefer \`ref\` from the latest snapshot. Optional \`element\` is checked against the live node (Cursor stale-ref). \`role\` + \`name\` is only allowed after a snapshot timeout. After a detached ref, the engine relocates by the last known role+name when it is unique. Coordinate \`x\`/\`y\` is for canvas widgets only.
 
-If the result says the snapshot timed out, the click still happened — take a fresh snapshot rather than clicking again.
-
-Read that tree for new refs. Pass \`selector\` only to zoom into one subtree. For content that appears later than the settle, use \`browser_wait_for\`.
+Do not ${'`browser_evaluate`'} a click, do not wait, do not navigate.
 
 ${SNAPSHOT_PRIMER}
 ${LOOP_GUARD}`
 
-export const TYPE_DESCRIPTION = `Type text into a text field identified by its ref.
+export const TYPE_DESCRIPTION = `Type text into editable element.
 
-- Clicks the field first, then **replaces** its contents. It does not append.
-- When the ref is a wrapper, the text goes to the input inside it
-- The result reports the value the field ended up with. A readonly or disabled field is reported as such and nothing is typed — find the control that unlocks it rather than writing the value with \`browser_evaluate\`, which sets the DOM without telling the app and is usually discarded on save
-- Set \`submit\` to press Enter afterwards (search boxes, login forms)
-- Set \`slowly\` to send per-character key events — needed by autocompletes and comboboxes that react to keydown, but slower
-- After typing (and optional Enter), waits briefly and drains in-flight XHR/fetch, then returns a compact snapshot
-
-After sending a message, call \`browser_wait_for\` with the exact text, then read the snapshot — the wait matches the string anywhere, including the field you just typed into.
+Clicks the field, then **replaces** its contents (Playwright \`fill\`). Reports the value that landed; a readonly or disabled field is reported as such. \`submit\` presses Enter. \`slowly\` clicks then types at 75ms per character.
 
 ${SNAPSHOT_PRIMER}`
 
-export const FILL_FORM_DESCRIPTION = `Fill several form controls in one call. Prefer this over one \`browser_type\` per field whenever you are filling a form: it writes the fields in order, then settles and snapshots once.
+export const FILL_FORM_DESCRIPTION = `Fill multiple form fields in one call (Playwright MCP \`browser_fill_form\`). Prefer this over one ${'`browser_type`'} per field.
 
-- \`kind\` is inferred from the element's role. Set it when the role is ambiguous
-- \`textbox\` **replaces** the field's contents, same as \`browser_type\`
-- \`checkbox\` and \`radio\` take \`"true"\` or \`"false"\` and are set to that state — passing the state a control is already in is a no-op, not a toggle
-- \`combobox\` selects a \`<select>\` option by value or visible label. A custom (non-\`<select>\`) combobox is typed into instead, so its popup may still need a click
-- Every field reports its own outcome: \`filled\` with the value it ended up holding, \`skipped\` for a readonly or disabled field, or \`failed\` with the reason. A bad ref costs you that one field, not the batch
-- Read those per-field results. A field reported as skipped or failed did not take the value, however plausible the page looks afterwards
-
-Fields that only appear once an earlier field is set are not in your snapshot yet, so fill what exists, read the returned tree, then fill the rest.
+Writes every listed field, then settles and snapshots once. Each field comes back as filled, skipped, or failed. Native \`<select>\` uses the visible label. Custom comboboxes: open them and ${'`browser_click`'} the option ref — do not ${'`browser_evaluate`'} the value.
 
 ${SNAPSHOT_PRIMER}`
 
-export const SELECT_OPTION_DESCRIPTION = `Choose one or more options in a \`<select>\` element. Match by option value or visible label. Lists the available options when nothing matches.`
+export const SELECT_OPTION_DESCRIPTION = `Select an option in a native \`<select>\` dropdown.
 
-export const PRESS_KEY_DESCRIPTION = `Press a key on the focused element. Accepts a single character, or one of: Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown, Space. Combine with modifiers (Control, Meta, Shift, Alt) for shortcuts.
+Pass the visible label (Playwright \`selectOption\`). Custom combobox / listbox / calendar widgets are not a select: open the popup and ${'`browser_click`'} the option's ref from a snapshot.`
 
-After the key, waits ~500ms and drains in-flight XHR/fetch, then returns a snapshot. For a specific string that appears later (a sent-message bubble, a toast), use \`browser_wait_for\`.`
+export const FILE_UPLOAD_DESCRIPTION = `Upload one or multiple files.
 
-export const WAIT_FOR_DESCRIPTION = `Wait for text to appear or disappear, or for a number of seconds to pass, then return a snapshot.
+Sets \`<input type=file>\` (including hidden inputs in frames). Do not click a visible Upload button — that opens a native OS dialog this tool cannot drive. Pass \`ref\` if you have the input. Empty \`paths\` cancels a pending chooser.
 
-Use this when click/type/press already returned but the thing you care about is not in that snapshot yet — a toast, a sent-message bubble, a list that loads after the request.
+Paths are workspace-relative or absolute.
 
-- \`text\`: wait until this string is visible on the page (substring match anywhere, including a still-filled composer)
-- \`textGone\`: wait until this string is no longer visible
-- \`time\`: wait this many seconds (capped at 10)
-- Provide at least one of the three
+Returns a snapshot after the files are set (same as Playwright MCP). Use that tree for the next click — old refs are stale. A PDF/iframe preview can stall a full snapshot; if it times out or says frames were omitted, ${'`browser_click`'} with \`role\` + \`name\`. Do not wait_for, screenshot, or evaluate to remove the preview.`
 
-Click, type and press already wait ~500ms and drain in-flight XHR/fetch. Do not call this just to "let the page settle" after those — only when you need a specific string or a longer pause.
+export const HANDLE_DIALOG_DESCRIPTION = `Handle a native \`window.alert\` / \`confirm\` / \`prompt\` only.
+
+In-page modals (\`role=alertdialog\`, Yes / No) are snapshot nodes — ${'`browser_click`'} them.
+
+Call this BEFORE the click that opens a native dialog. An unarmed confirm/prompt is dismissed and the click is reported as a failure — do not treat that action as successful.`
+
+export const PRESS_KEY_DESCRIPTION = `Press a key on the keyboard.
+
+A single character, or Enter, Tab, Escape, Backspace, Delete, arrows, Home, End, PageUp, PageDown, Space. Optional modifiers: Control, Meta, Shift, Alt.`
+
+export const WAIT_FOR_DESCRIPTION = `Wait for text to appear or disappear, a CSS selector to become visible, a URL, or a specified time to pass.
+
+Use when the last action's snapshot does not yet contain the result (toast, sent message, list). \`time\` is capped at 30s. Do not use this just to "let the page settle" after click/type — those already wait.
 
 ${SNAPSHOT_PRIMER}`
 
-export const HOVER_DESCRIPTION = `Hover the mouse over an element. Use to reveal menus, tooltips and other hover-only UI before interacting with it.`
+export const HOVER_DESCRIPTION = `Hover over element on page.`
 
-export const SCROLL_DESCRIPTION = `Scroll the page or a scrollable element with a real wheel event. Positive \`deltaY\` scrolls down.
+export const SCROLL_DESCRIPTION = `Scroll the page or bring an element into view.
 
-When \`ref\` is set, the target is scrolled into view and the wheel is applied to its nearest overflow container — not the window. Use that for lists inside a dialog or dock. Snapshots cover the whole document, so scroll mainly for lazy-loaded content and for positioning before a screenshot.`
+With \`ref\`, Playwright \`scrollIntoViewIfNeeded\` then optional wheel deltas. Without \`ref\`, \`page.mouse.wheel\`.`
 
-export const SCREENSHOT_DESCRIPTION = `Take a screenshot of the page or of a single element.
+export const SCREENSHOT_DESCRIPTION = `Take a screenshot of the current page. You can't perform actions based on the screenshot, use ${'`browser_snapshot`'} for actions.
 
-Use for visual judgement — layout, spacing, colors, whether something rendered correctly. For finding and interacting with elements, use \`browser_snapshot\` instead: it is text and far cheaper.
+Use for layout, spacing, and visual checks. The image is downscaled; the full copy is saved to disk. Do not screenshot after a file upload while a PDF/iframe viewer is open — it times out. Use the snapshot from ${'`browser_file_upload`'}, or ${'`browser_click`'} with \`role\` + \`name\`.`
 
-The image is downscaled before it reaches you; the full-resolution copy is written to disk and its path is reported.`
+export const CONSOLE_DESCRIPTION = `Returns console messages, including uncaught errors.
 
-export const CONSOLE_DESCRIPTION = `Read messages the page logged to the console, including uncaught errors and unhandled promise rejections.
+Capture starts when the page loads. Interaction tools already attach errors they caused.`
 
-Capture starts as soon as the page loads, so this reports errors that happened before you looked. Interaction tools already surface errors they caused — use this to review the full log or non-error levels.`
+export const NETWORK_DESCRIPTION = `Returns network requests since loading the page (fetch and XHR).
 
-export const NETWORK_DESCRIPTION = `List HTTP requests the page made with fetch or XMLHttpRequest, with method, URL, status and duration.
+Use to tell a 4xx/5xx that reached the server from a call that never left the browser (\`never sent\`). Pending means still in flight. Document navigation and static assets are not listed.`
 
-Use this to tell apart the two failures that look identical in the UI: a request that reached the server and came back 4xx/5xx, and one that never left the browser at all (reported as \`never sent\` — wrong URL, server down, CORS, or aborted). Requests still in flight show as pending, which is the signature of a hung call.
+export const TABS_DESCRIPTION = `Manage tabs.
 
-Capture starts when the page loads. Interaction tools already report failed requests they caused, so reach for this to see successful traffic too, to confirm a call fired at all, or to review what happened before you looked.
+- \`list\`: tabs this agent owns (opened here, or shared from the extension popup). Empty is normal in extension mode.
+- \`new\`: open a tab in the same Chrome profile
+- \`select\` / \`close\`: by tab id from list — do not guess \`"0"\`
+- If no tab is selected, ${'`browser_navigate`'} the start URL (opens a tab). Do not pick a leftover tab from a previous task.`
 
-Only fetch and XHR are visible — not document navigation, images, scripts or stylesheets.`
+export const EVALUATE_DESCRIPTION = `Evaluate JavaScript on the page (OpenClaw \`evaluate\`).
 
-export const TABS_DESCRIPTION = `List, select, open or close browser tabs.
+Awaited, so \`fetch(...)\` and DOM queries work. Optional \`ref\` runs the function on that snapshot node (\`el => el.textContent\`). Prefer ${'`browser_click`'} / ${'`browser_type`'} / ${'`browser_fill_form`'} for driving the page so the app's own handlers run.`
 
-- \`list\` shows tabs the agent owns (ones it opened, or that the user shared from the extension popup). An empty list is expected in extension mode — you cannot see the user's other tabs.
-- Do not \`select\` a guessed id such as \`"0"\` when the list is empty. That tab is not shared.
-- \`new\` opens a tab in the same Chrome profile (cookies and login apply) and selects it. Prefer this when the list is empty.
-- \`select\` switches which owned tab subsequent tools act on
-- \`close\` closes a tab`
+export const LOCK_DESCRIPTION = `Take or release control of the browser.
 
-export const EVALUATE_DESCRIPTION = `Evaluate a JavaScript expression in the page and return its value.
+- \`unlock\`: the user is taking over. Do not click, type, navigate, or fill until they finish.
+- \`lock\`: the user is done; resume driving the page.
 
-The expression is awaited, so \`fetch(...)\` and other promises work. Use for reading application state, clearing inputs, or assertions that a snapshot cannot express — not as a substitute for real clicks and typing, which exercise the code paths a user would.`
+While the user has control you may still snapshot, screenshot, read console/network, list tabs, wait, find, or evaluate.`
+
+export const FIND_DESCRIPTION = `Search the last accessibility snapshot for a substring (Claude Code find). Cheaper than a new full snapshot. Take a snapshot first if none exists.`
+
+export const DRAG_DESCRIPTION = `Drag one snapshot ref onto another (Playwright dragTo). Use for sliders, kanban cards, and sortable lists.`
+
+export const MOUSE_CLICK_XY_DESCRIPTION = `Click at viewport coordinates. Do not use this when a snapshot ref exists — it is for canvas / map widgets that have no accessibility node.`

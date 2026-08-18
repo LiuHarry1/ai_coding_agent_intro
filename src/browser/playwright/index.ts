@@ -13,14 +13,20 @@
 
 export {
   click,
+  drag,
+  handleNativeDialog,
   hover,
   navigate,
+  activateTab,
+  peekNativeDialog,
   pressKey,
   screenshot,
   scroll,
   selectOption,
   typeText,
+  uploadFilesToPage,
 } from './actions.js'
 export { fillForm } from './forms.js'
 export { normalizeRef } from './locator.js'
-export { snapshot, waitFor } from './snapshot.js'
+export { snapshot, waitFor, findInSnapshot } from './snapshot.js'
+export { evaluate } from './evaluate.js'

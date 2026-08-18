@@ -63,6 +63,10 @@ export interface SnapshotOpts {
   selector?: string
   /** Clip tree depth, for a cheaper post-action look at the page. */
   compact?: boolean
+  /** Only keep ref-bearing nodes (and their ancestors). Cheaper for driving actions. */
+  interactive?: boolean
+  /** Capture an in-page Error/Yes-No modal only — never walk the full tree. */
+  dialogOnly?: boolean
 }
 
 /**

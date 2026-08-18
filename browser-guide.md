@@ -114,26 +114,35 @@ npm run browser:pair
 
 ---
 
-## 14 个工具
+## 21 个工具
 
 一般不用记,直接用自然语言描述目标就行。列出来是方便你看懂对话里的工具卡片:
 
 | 工具 | 作用 |
 |---|---|
-| `browser_navigate` | 打开 URL |
-| `browser_snapshot` | 抓页面结构(agent 靠这个"看见"页面) |
-| `browser_click` | 点击元素 |
+| `browser_navigate` | 打开 http(s) URL,或后退 / 前进 / 刷新 |
+| `browser_snapshot` | 抓页面结构(agent 靠这个"看见"页面);可选 `includeDiff` |
+| `browser_click` | 按 snapshot ref 点击;旧 ref 会按上次的 role+name 重定位 |
+| `browser_find` | 在最近一次 snapshot 里搜文字,比再抓一整棵树便宜 |
+| `browser_drag` | 把一个 ref 拖到另一个 ref |
+| `browser_mouse_click_xy` | 按视口坐标点(画布/地图);有 ref 时不要用 |
 | `browser_type` | 输入文本,可选回车提交 |
 | `browser_fill_form` | 一次填多个字段(文本框、复选框、单选、下拉),逐个报结果 |
-| `browser_select_option` | 选下拉框 |
+| `browser_select_option` | 原生 `<select>` 按可见文案选；自定义下拉先 snapshot 再点选项 ref |
+| `browser_file_upload` | 拦截文件选择框并上传,不弹系统对话框 |
+| `browser_handle_dialog` | 接受或取消原生 alert/confirm/prompt |
 | `browser_press_key` | 按键,支持组合键 |
+| `browser_wait_for` | 等待文字出现/消失,或等一小段时间 |
 | `browser_hover` | 悬停 |
 | `browser_scroll` | 滚动页面或某个元素 |
 | `browser_screenshot` | 整页或单个元素截图 |
 | `browser_console` | 读控制台输出和未捕获异常 |
 | `browser_network` | 列出页面发的 fetch/XHR 请求,带状态码和耗时 |
-| `browser_evaluate` | 执行一段 JS 取值 |
+| `browser_evaluate` | 只读执行一段 JS 取值 |
 | `browser_tabs` | 列出/新建/切换/关闭标签页 |
+| `browser_lock` | 把控制权交给用户(`unlock`)或收回(`lock`) |
+
+浏览器一旦拉起,聊天区顶部会出现一条横幅:**Take control** 暂停 agent,你自己操作页面;**Resume agent** 交还。extension 模式的弹窗里有同样的按钮。
 
 工具卡片上的 **Show page structure** 按钮会展开当次快照,也就是 agent 当时"看到"的页面。排查它为什么点错元素时看这个。
 

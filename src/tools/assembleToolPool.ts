@@ -5,6 +5,7 @@
 import { filterToolsByEnablement } from '../core/tool-enablement.js'
 import { createToolSearchDefinition } from './ToolSearchTool/ToolSearchTool.js'
 import {
+  BROWSER_TOOL_NAMES,
   READ_ONLY_TOOLS,
   TOOL_SEARCH_TOOL_NAME,
 } from '../constants/tool_names.js'
@@ -85,6 +86,19 @@ export function assembleToolPool(
     console.log(
       `[server] agentType=${mainThreadProfile!.agentType} denied globs=[${denyGlobs.join(', ')}]`,
     )
+  }
+
+  // Browser specialist: these tools are the job, not a deferred lookup.
+  // Qwen (and others) call ToolSearch in parallel with browser_* and the
+  // sibling calls fail because activation only happens on the next step.
+  if (mainThreadProfile?.agentType === 'browser') {
+    for (const name of BROWSER_TOOL_NAMES) {
+      if (deferred[name]) {
+        active[name] = deferred[name]!
+        delete deferred[name]
+      }
+    }
+    deferredDefs = deferredDefs.filter(d => deferred[d.name])
   }
 
   const dynamicDefs: Record<string, ToolDefinition> = {}

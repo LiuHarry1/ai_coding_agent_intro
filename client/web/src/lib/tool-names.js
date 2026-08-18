@@ -28,6 +28,8 @@ export const BROWSER_CLICK = 'browser_click'
 export const BROWSER_TYPE = 'browser_type'
 export const BROWSER_FILL_FORM = 'browser_fill_form'
 export const BROWSER_SELECT_OPTION = 'browser_select_option'
+export const BROWSER_FILE_UPLOAD = 'browser_file_upload'
+export const BROWSER_HANDLE_DIALOG = 'browser_handle_dialog'
 export const BROWSER_PRESS_KEY = 'browser_press_key'
 export const BROWSER_WAIT_FOR = 'browser_wait_for'
 export const BROWSER_HOVER = 'browser_hover'
@@ -37,6 +39,10 @@ export const BROWSER_CONSOLE = 'browser_console'
 export const BROWSER_NETWORK = 'browser_network'
 export const BROWSER_TABS = 'browser_tabs'
 export const BROWSER_EVALUATE = 'browser_evaluate'
+export const BROWSER_LOCK = 'browser_lock'
+export const BROWSER_FIND = 'browser_find'
+export const BROWSER_DRAG = 'browser_drag'
+export const BROWSER_MOUSE_CLICK_XY = 'browser_mouse_click_xy'
 
 export const BROWSER_TOOLS = [
   BROWSER_NAVIGATE,
@@ -45,6 +51,8 @@ export const BROWSER_TOOLS = [
   BROWSER_TYPE,
   BROWSER_FILL_FORM,
   BROWSER_SELECT_OPTION,
+  BROWSER_FILE_UPLOAD,
+  BROWSER_HANDLE_DIALOG,
   BROWSER_PRESS_KEY,
   BROWSER_WAIT_FOR,
   BROWSER_HOVER,
@@ -54,6 +62,10 @@ export const BROWSER_TOOLS = [
   BROWSER_NETWORK,
   BROWSER_TABS,
   BROWSER_EVALUATE,
+  BROWSER_LOCK,
+  BROWSER_FIND,
+  BROWSER_DRAG,
+  BROWSER_MOUSE_CLICK_XY,
 ]
 
 /** Shown elsewhere (TodoListCard) — hide duplicate tool_call rows. */

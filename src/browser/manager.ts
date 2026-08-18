@@ -18,6 +18,7 @@ import {
 } from './playwright/connect.js'
 import { startRelayServer, type RelayServer } from './relay/server.js'
 import { DEFAULT_RELAY_PORT } from './relay/protocol.js'
+import { onUserControlChange, resetSessionFlags } from './session-flags.js'
 import { BrowserError, type BrowserBackend, type BrowserTab } from './types.js'
 
 const IDLE_TTL_MS = 30 * 60 * 1000
@@ -34,6 +35,10 @@ let idleTimer: NodeJS.Timeout | null = null
 
 /** Test seam: swap in a fake backend without launching Chrome. */
 let backendFactory: (() => Promise<BrowserBackend>) | null = null
+
+export function isBrowserLive(): boolean {
+  return live != null
+}
 
 export function setBrowserBackendFactory(
   factory: (() => Promise<BrowserBackend>) | null,
@@ -66,6 +71,10 @@ function scheduleIdleSweep(ttlMs: number): void {
  */
 let relay: RelayServer | null = null
 let relayStarting: Promise<RelayServer> | null = null
+
+onUserControlChange(hasControl => {
+  relay?.notifyLock(hasControl)
+})
 
 export async function getRelay(port: number): Promise<RelayServer> {
   if (relay) return relay
@@ -144,6 +153,7 @@ export async function closeBrowser(): Promise<void> {
     await detachPlaywright(current.backend).catch(() => {})
     await current.backend.dispose().catch(() => {})
   }
+  resetSessionFlags()
 }
 
 /**
@@ -194,9 +204,7 @@ export async function resolveTab(
   }
 
   throw new BrowserError(
-    `Several tabs are open and none is selected. Use browser_tabs to pick one:\n${tabs
-      .map(t => `  ${t.targetId}  ${t.title || '(untitled)'}  ${t.url}`)
-      .join('\n')}`,
+    'No current tab. Call browser_navigate to the start URL — it opens a fresh tab. Do not select a leftover tab from a previous task.',
   )
 }
 

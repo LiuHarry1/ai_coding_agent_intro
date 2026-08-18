@@ -16,8 +16,10 @@ import {
 } from '../browser/manager.js'
 import type { BrowserBackend } from '../browser/types.js'
 import {
+  clickTool,
   consoleTool,
   evaluateTool,
+  lockTool,
   networkTool,
   tabsTool,
 } from '../tools/BrowserTool/BrowserTool.js'
@@ -198,6 +200,18 @@ async function main() {
   assert.equal(evaluated.action, 'evaluate')
   console.log('ok evaluate')
 
+  const unlocked = expectData(await run(lockTool, { action: 'unlock' }))
+  assert.match(String(unlocked.message), /User has control/)
+  const clickBlocked = await run(clickTool, { ref: 'e1' })
+  assert.ok(
+    typeof clickBlocked === 'string' && /user has control/i.test(clickBlocked),
+    `click while user has control must fail:\n${clickBlocked}`,
+  )
+  expectData(await run(tabsTool, { action: 'list' }))
+  const relocked = expectData(await run(lockTool, { action: 'lock' }))
+  assert.match(String(relocked.message), /Agent has control/)
+  console.log('ok browser_lock handoff')
+
   const tabs = expectData(await run(tabsTool, { action: 'list' }))
   const tabList = tabs.tabs as Array<{ targetId: string; current: boolean }>
   assert.equal(tabList.length, 1)
@@ -251,7 +265,14 @@ async function main() {
    * of these are deliberately Playwright-free, and reaching for a Page in either
    * means the code belongs in `playwright/` instead.
    */
-  for (const rel of ['distill-snapshot.ts', path.join('relay', 'cdp-endpoint.ts')]) {
+  for (const rel of [
+    'distill-snapshot.ts',
+    'evaluate-source.ts',
+    'session-flags.ts',
+    'snapshot-index.ts',
+    'navigate-policy.ts',
+    path.join('relay', 'cdp-endpoint.ts'),
+  ]) {
     assert.ok(
       !importsPlaywright(path.join(browserDir, rel)),
       `${rel} must stay Playwright-free; move the code into playwright/ instead`,

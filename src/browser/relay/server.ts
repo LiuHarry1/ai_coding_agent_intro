@@ -22,10 +22,12 @@ import {
   isRelayCdpEvent,
   isRelayHello,
   isRelayResponse,
+  isRelayUserControl,
   RELAY_PROTOCOL_VERSION,
   type RelayCdpEvent,
   type RelayRequestBody,
 } from './protocol.js'
+import { getUserHasControl, setUserHasControl } from '../session-flags.js'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -39,6 +41,8 @@ export interface RelayServer {
   request<T>(req: RelayRequestBody): Promise<T>
   /** Subscribe to CDP events the extension forwards. Returns an unsubscribe. */
   onCdpEvent(handler: (event: RelayCdpEvent) => void): () => void
+  /** Tell the extension whether the user currently has control. */
+  notifyLock(userHasControl: boolean): void
   close(): Promise<void>
 }
 
@@ -161,12 +165,22 @@ export async function startRelayServer(
         socket.send(
           JSON.stringify({ type: 'welcome', version: RELAY_PROTOCOL_VERSION }),
         )
+        socket.send(
+          JSON.stringify({
+            type: 'lockState',
+            userHasControl: getUserHasControl(),
+          }),
+        )
         while (waiters.length) waiters.shift()!()
         return
       }
 
       if (isRelayCdpEvent(msg)) {
         for (const handler of eventHandlers) handler(msg)
+        return
+      }
+      if (isRelayUserControl(msg)) {
+        setUserHasControl(msg.hasControl)
         return
       }
       if (!isRelayResponse(msg)) return
@@ -249,6 +263,12 @@ export async function startRelayServer(
       eventHandlers.add(handler)
       return () => {
         eventHandlers.delete(handler)
+      }
+    },
+
+    notifyLock(userHasControl: boolean) {
+      if (peer && peer.readyState === peer.OPEN) {
+        peer.send(JSON.stringify({ type: 'lockState', userHasControl }))
       }
     },
 

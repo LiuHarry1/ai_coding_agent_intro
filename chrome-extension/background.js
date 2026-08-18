@@ -314,6 +314,12 @@ async function connect() {
       await setStatus('connected', `Agent on port ${port}`)
       return
     }
+    if (msg.type === 'lockState') {
+      await chrome.storage.local.set({
+        userHasControl: Boolean(msg.userHasControl),
+      })
+      return
+    }
     if (typeof msg.id !== 'number') return
 
     try {
@@ -375,12 +381,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   ;(async () => {
     switch (msg?.type) {
       case 'get-state': {
-        const { status, statusDetail, token, port } =
+        const { status, statusDetail, token, port, userHasControl } =
           await chrome.storage.local.get([
             'status',
             'statusDetail',
             'token',
             'port',
+            'userHasControl',
           ])
         sendResponse({
           status: status ?? 'disconnected',
@@ -388,6 +395,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           hasToken: Boolean(token),
           port: Number(port) || DEFAULT_PORT,
           tabs: await listTabs(),
+          userHasControl: Boolean(userHasControl),
         })
         return
       }
@@ -409,6 +417,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await detach(tabId)
         await dropOwned(tabId)
         sendResponse({ ok: true })
+        return
+      }
+      case 'set-user-control': {
+        const hasControl = Boolean(msg.hasControl)
+        await chrome.storage.local.set({ userHasControl: hasControl })
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'userControl', hasControl }))
+        }
+        sendResponse({ ok: true, userHasControl: hasControl })
         return
       }
       default:

@@ -91,3 +91,17 @@ export function isRelayCdpEvent(msg: unknown): msg is RelayCdpEvent {
     typeof (msg as { method?: unknown }).method === 'string'
   )
 }
+
+export interface RelayUserControl {
+  type: 'userControl'
+  hasControl: boolean
+}
+
+export function isRelayUserControl(msg: unknown): msg is RelayUserControl {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type?: unknown }).type === 'userControl' &&
+    typeof (msg as { hasControl?: unknown }).hasControl === 'boolean'
+  )
+}

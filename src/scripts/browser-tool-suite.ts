@@ -317,6 +317,25 @@ const DIALOG_LAZY_PAGE = `<!doctype html>
 </body>
 </html>`
 
+const ERROR_MODAL_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Error Modal</title></head>
+<body>
+  <h1>Expense form</h1>
+  <p>Merchant Name field</p>
+  <button type="button" id="save">Save Expense</button>
+  <script>
+    document.getElementById('save').addEventListener('click', function () {
+      var d = document.createElement('div');
+      d.setAttribute('role', 'alertdialog');
+      d.setAttribute('aria-modal', 'true');
+      d.innerHTML = '<h2>Error</h2><p>This expense has been saved, but it is missing required information. Would you like to make corrections now?</p><button type="button">Yes</button><button type="button">No</button>';
+      document.body.appendChild(d);
+    });
+  </script>
+</body>
+</html>`
+
 const WAIT_TEXT_PAGE = `<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Wait Text</title></head>
@@ -367,6 +386,73 @@ const FORM_PAGE = `<!doctype html>
 </body>
 </html>`
 
+const COMBOBOX_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Combobox</title></head>
+<body>
+  <h1>Pickers</h1>
+  <label>Fruit
+    <div id="fruit-combo" role="combobox" aria-label="Fruit" aria-expanded="false">
+      <input id="fruit" type="text" aria-label="Fruit">
+    </div>
+  </label>
+  <ul id="fruit-list" role="listbox" hidden></ul>
+  <p id="fruit-state">none</p>
+  <button id="ask" type="button">Confirm me</button>
+  <p id="dialog-state">waiting</p>
+  <input id="receipt" type="file" aria-label="Receipt upload">
+  <p id="file-state">none</p>
+  <script>
+    var fruits = ['Apple', 'Banana', 'Cherry'];
+    var combo = document.getElementById('fruit-combo');
+    var input = document.getElementById('fruit');
+    var list = document.getElementById('fruit-list');
+    function render(filter) {
+      list.innerHTML = '';
+      var q = (filter || '').toLowerCase();
+      fruits.filter(function (r) { return !q || r.toLowerCase().indexOf(q) !== -1; }).forEach(function (r) {
+        var li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.textContent = r;
+        li.addEventListener('click', function () {
+          input.value = r;
+          document.getElementById('fruit-state').textContent = r;
+          list.hidden = true;
+          combo.setAttribute('aria-expanded', 'false');
+        });
+        list.appendChild(li);
+      });
+    }
+    function open() {
+      combo.setAttribute('aria-expanded', 'true');
+      list.hidden = false;
+      render(input.value);
+    }
+    combo.addEventListener('click', open);
+    input.addEventListener('focus', open);
+    input.addEventListener('input', function () { render(input.value); });
+    document.getElementById('ask').addEventListener('click', function () {
+      var ok = window.confirm('Delete this expense?');
+      document.getElementById('dialog-state').textContent = ok ? 'accepted' : 'dismissed';
+    });
+    document.getElementById('receipt').addEventListener('change', function () {
+      document.getElementById('file-state').textContent = this.files[0] ? this.files[0].name : 'none';
+    });
+  </script>
+</body>
+</html>`
+
+const PDF_PREVIEW_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>PDF Preview</title></head>
+<body>
+  <h1>Expense form</h1>
+  <button type="button" id="save">Save</button>
+  <input id="receipt" type="file" aria-label="Receipt upload">
+  <iframe src="/hang-frame" title="Document preview" width="400" height="300"></iframe>
+</body>
+</html>`
+
 export function startFixtureServer(): Promise<{
   url: string
   close: () => Promise<void>
@@ -409,8 +495,23 @@ export function startFixtureServer(): Promise<{
       res.end(WAIT_TEXT_PAGE)
       return
     }
+    if (route === '/error-modal') {
+      res.end(ERROR_MODAL_PAGE)
+      return
+    }
     if (route === '/form') {
       res.end(FORM_PAGE)
+      return
+    }
+    if (route === '/widgets') {
+      res.end(COMBOBOX_PAGE)
+      return
+    }
+    if (route === '/pdf-preview') {
+      res.end(PDF_PREVIEW_PAGE)
+      return
+    }
+    if (route === '/hang-frame') {
       return
     }
     res.end(PAGE)
@@ -641,7 +742,6 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         `clicking an inline pointer span must fire its handler:\n${openedInline.snapshot}`,
       )
     } else {
-      // The escape hatch has to actually work, or the boundary is a dead end.
       const viaEvaluate = expectData(
         await run(
           evaluateTool,
@@ -652,10 +752,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
           sessionId,
         ),
       )
-      assert.equal(
-        viaEvaluate.value,
-        'inline opened',
-        `a ref-less inline pointer must still be reachable through browser_evaluate:\n${JSON.stringify(viaEvaluate)}`,
+      assert.ok(
+        String(viaEvaluate.value).includes('inline opened'),
+        `evaluate may run page JS (OpenClaw): ${viaEvaluate.value}`,
       )
     }
     ok('role-less clickable generic gets a ref and is clickable')
@@ -862,34 +961,25 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.ok(expectData(await run(clickTool, { ref: bobRef }, sessionId)))
     ok('re-snapshot recovers the ref')
 
-    // Playwright's aria-ref dies with the node. A rebuilt identical button is a
-    // new ref — take a fresh snapshot rather than hoping the old one relocates.
+    // Playwright's aria-ref dies with the node. Same role+name still unique:
+    // relocate by the last snapshot's name (Cursor stale-ref).
     const applyHost = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
     await run(clickTool, { ref: refFor(applyHost, 'button', 'Rebuild apply') }, sessionId)
-    const staleApply = await run(
-      clickTool,
-      { ref: refFor(applyHost, 'button', 'Apply changes') },
-      sessionId,
-    )
-    assert.ok(
-      typeof staleApply === 'string',
-      `a rebuilt node must not keep the old aria-ref, got: ${staleApply}`,
-    )
-    const afterRebuild = String(
-      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
-    )
-    assert.ok(
-      expectData(
-        await run(
-          clickTool,
-          { ref: refFor(afterRebuild, 'button', 'Apply changes') },
-          sessionId,
-        ),
+    const relocatedApply = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(applyHost, 'button', 'Apply changes') },
+        sessionId,
       ),
     )
-    ok('rebuilt node needs a fresh snapshot')
+    assert.ok(
+      /applied/i.test(String(relocatedApply.snapshot)) ||
+        /relocated/i.test(String(relocatedApply.message)),
+      `identical rebuilt button should relocate, got: ${relocatedApply.message}\n${relocatedApply.snapshot}`,
+    )
+    ok('rebuilt node relocates by last known role+name')
 
     // ── occlusion: a click under a modal is refused, not lost ──
     const afterApply = String(
@@ -902,7 +992,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       'a click blocked by a modal must come back as a recoverable error',
     )
     assert.ok(
-      /modal|intercept|timeout|not visible|obscur/i.test(covered),
+      /modal|intercept|timeout|not visible|obscur|interactable|covered/i.test(covered),
       `blocker must be visible in the error:\n${covered}`,
     )
     ok('occluded click is refused with the blocker named')

@@ -66,8 +66,13 @@ import {
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type { AnyTool } from './types.js'
 
-/** Default per-step output cap when the provider SDK cannot infer model limits. */
-const DEFAULT_MAX_OUTPUT_TOKENS = 128_000
+/**
+ * Default per-step output cap. 128k used to be sent as `max_tokens`, which
+ * LiteLLM counts against the context window (input + max_tokens). A 134k
+ * prompt + 128k reservation overflows a 262k model even though the prompt
+ * itself still fits.
+ */
+const DEFAULT_MAX_OUTPUT_TOKENS = 16_384
 
 /** Default / resolve console tag: `[agent:main]` or `[agent:session_memory]`. */
 function agentLogTag(logLabel?: string): string {
@@ -79,6 +84,17 @@ function getMaxOutputTokens(): number {
   return Number.isFinite(parsed) && parsed > 0
     ? parsed
     : DEFAULT_MAX_OUTPUT_TOKENS
+}
+
+/** Providers reject when prompt tokens + max_tokens exceed the model window. */
+function capMaxOutputTokens(
+  promptTokens: number,
+  contextWindow?: number,
+): number {
+  const wanted = getMaxOutputTokens()
+  const window = contextWindow && contextWindow > 0 ? contextWindow : 200_000
+  const remaining = window - promptTokens - 1_024
+  return Math.max(1_024, Math.min(wanted, remaining))
 }
 
 // ── User-message helpers ────────────────────────────
@@ -181,12 +197,17 @@ function activateDeferredTools(
     const trimmed = query.trim()
     let names: string[] = []
 
-    if (trimmed.toLowerCase().startsWith('select:')) {
-      names = trimmed
-        .slice(7)
-        .split(',')
-        .map(n => n.trim())
-        .filter(Boolean)
+    const prefixed = trimmed.toLowerCase().startsWith('select:')
+    const rest = prefixed ? trimmed.slice(7) : trimmed
+    const commaParts = rest
+      .split(',')
+      .map(n => n.trim())
+      .filter(Boolean)
+    if (
+      prefixed ||
+      (commaParts.length > 1 && commaParts.some(n => n in pool))
+    ) {
+      names = commaParts
     } else {
       // For keyword queries, we can't know exact matches until the result.
       // Activate all pool tools whose name partially matches the keywords.
@@ -822,7 +843,10 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         // we can batch concurrency-safe reads in parallel.
         tools: apiTools,
         ...(toolChoice !== undefined ? { toolChoice } : {}),
-        maxOutputTokens: getMaxOutputTokens(),
+        maxOutputTokens: capMaxOutputTokens(
+          tokenCountWithEstimation(messages).total,
+          compaction?.contextWindow,
+        ),
         maxRetries: 3,
         ...(abortSignal ? { abortSignal } : {}),
         ...provider.streamTextExtras(),

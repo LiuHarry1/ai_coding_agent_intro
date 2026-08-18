@@ -1,11 +1,9 @@
 /**
- * Matching a tool-layer tab to a Playwright page.
+ * Cold-cache fallback: match a tool-layer tab URL to a Playwright Page.
  *
- * The two sides identify tabs differently — the backend has CDP target ids,
- * Playwright has Page objects — and the only thing they share is a URL. So this
- * is a judgement call, not a lookup, which is why it lives apart from the
- * connection state and is tested on its own: picking `pages[0]` was how the
- * tools used to drive whichever tab happened to be first.
+ * The live identity is the Page already stored for that targetId in connect.ts.
+ * This file only runs when that cache missed (first attach, or the Page closed).
+ * Match origin+path (ignore hash/query). Do not guess across SPA path changes.
  */
 
 /** No dependencies on purpose: this is decision logic, not plumbing. */

@@ -213,3 +213,44 @@
 [data-theme='light'] .browser-tab-url {
   color: var(--green);
 }
+
+/* ── Live lock banner ────────────────────── */
+.browser-lock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.browser-lock-bar.is-agent {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--text-primary);
+}
+.browser-lock-bar.is-user {
+  background: rgba(234, 179, 8, 0.14);
+  color: var(--text-primary);
+}
+.browser-lock-bar-text {
+  min-width: 0;
+}
+.browser-lock-bar-btn {
+  flex: 0 0 auto;
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.browser-lock-bar-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.browser-lock-bar-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

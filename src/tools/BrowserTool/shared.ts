@@ -18,6 +18,8 @@ import {
   POST_ACTION_MAX_NODES,
   SCREENSHOT_TOKEN_BUDGET,
 } from '../../browser/limits.js'
+import { getLastSnapshot, isSnapshotDegraded } from '../../browser/session-flags.js'
+import { snapshotDiff } from '../../browser/snapshot-index.js'
 import * as pw from '../../browser/playwright/index.js'
 import {
   BrowserError,
@@ -142,6 +144,9 @@ export async function observe(
     maxChars?: number
     selector?: string
     compact?: boolean
+    interactive?: boolean
+    includeDiff?: boolean
+    skipIfDegraded?: boolean
   },
 ): Promise<BrowserToolOutput> {
   const out: BrowserToolOutput = {
@@ -151,34 +156,68 @@ export async function observe(
     title: '',
   }
 
-  if (opts.withSnapshot !== false) {
+  const dialog = await pw
+    .peekNativeDialog(backend, targetId)
+    .catch(() => undefined)
+  const pageFrozen = Boolean(dialog?.pending)
+  const skipSnap =
+    opts.withSnapshot === false ||
+    pageFrozen ||
+    (opts.skipIfDegraded && isSnapshotDegraded(targetId))
+
+  if (!skipSnap) {
+    const previous = opts.includeDiff ? getLastSnapshot(targetId) : undefined
     const snap = await pw.snapshot(backend, targetId, {
       maxNodes: opts.maxNodes ?? POST_ACTION_MAX_NODES,
       maxChars: opts.maxChars ?? DEFAULT_MAX_CHARS,
       selector: opts.selector,
       compact: opts.compact,
+      interactive: opts.interactive,
     })
     out.url = snap.url
     out.title = snap.title
-    out.snapshot = snap.text
+    out.snapshot =
+      opts.includeDiff && previous
+        ? snapshotDiff(previous, snap.text)
+        : snap.text
     out.snapshotTruncated = snap.truncated
   } else {
     const tabs = await backend.listTabs()
     const tab = tabs.find(t => t.targetId === targetId)
     out.url = tab?.url ?? ''
     out.title = tab?.title ?? ''
+    if (opts.skipIfDegraded && isSnapshotDegraded(targetId)) {
+      out.message = `${out.message} (snapshot skipped — page still degraded; click with role + name)`
+    }
   }
 
-  const since = consoleWatermark.get(targetId)
-  const report = await sinceReport(backend, targetId, since)
-  consoleWatermark.set(targetId, report.now)
-  if (report.logs.length) {
-    out.consoleErrors = report.logs.map(e => ({ level: e.level, text: e.text }))
+  if (!pageFrozen) {
+    const since = consoleWatermark.get(targetId)
+    const report = await Promise.race([
+      sinceReport(backend, targetId, since),
+      new Promise<null>(r => setTimeout(() => r(null), 2_000)),
+    ])
+    if (report) {
+      consoleWatermark.set(targetId, report.now)
+      if (report.logs.length) {
+        out.consoleErrors = report.logs.map(e => ({
+          level: e.level,
+          text: e.text,
+        }))
+      }
+      if (report.network.length) {
+        out.network = report.network.map(toNetworkRow)
+      }
+    }
   }
-  // Only failures land here. A successful request is noise for most actions;
-  // browser_network is there when the model wants the full picture.
-  if (report.network.length) {
-    out.network = report.network.map(toNetworkRow)
+
+  if (dialog) {
+    const fate = dialog.pending
+      ? 'still open — call browser_handle_dialog'
+      : dialog.accepted
+        ? 'accepted'
+        : 'dismissed (call browser_handle_dialog before the next such click to accept)'
+    out.message = `${out.message} (native ${dialog.type} dialog: ${JSON.stringify(dialog.message)} — ${fate})`
   }
 
   return out
@@ -219,7 +258,12 @@ function renderNetworkRow(r: NetworkRow): string {
   const status = r.pending ? '...' : r.failed ? 'ERR' : String(r.status)
   const head = `${status.padStart(3)}  ${r.method.padEnd(6)}${r.url}`
   if (r.pending) return `${head}  (still pending)`
-  if (r.failed) return `${head}  (${r.durationMs}ms) — never sent: ${r.error}`
+  if (r.failed) {
+    const aborted = /abort|signal/i.test(r.error)
+    return aborted
+      ? `${head}  (${r.durationMs}ms) — aborted: ${r.error}`
+      : `${head}  (${r.durationMs}ms) — never sent: ${r.error}`
+  }
   return `${head}  (${r.durationMs}ms)`
 }
 

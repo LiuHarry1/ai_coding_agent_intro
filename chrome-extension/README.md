@@ -47,6 +47,10 @@ Its tabs are collected into an orange **Agent** tab group so they are easy to
 spot, and Chrome shows its own "is debugging this browser" banner on any tab
 that is attached. Closing that banner detaches the agent from that tab.
 
+While the agent is driving a tab, **Take control** in the popup (and the same
+button in the chat banner) pauses it so you can type, pass a captcha, or finish
+a payment. **Resume agent** hands the page back.
+
 To revoke everything, either hit **Stop** next to a tab in the popup, or disable
 the extension.
 

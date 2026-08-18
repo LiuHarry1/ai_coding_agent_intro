@@ -46,6 +46,26 @@ function matchKeyword(entry: DeferredEntry, keywords: string[]): boolean {
   return keywords.every(kw => haystack.includes(kw))
 }
 
+/**
+ * `select:a,b` or a bare comma list of known tool names (`browser_click,browser_type`).
+ * Keyword search ANDs tokens, so a comma list would otherwise match nothing.
+ */
+function parseSelectNames(
+  trimmed: string,
+  index: Map<string, DeferredEntry>,
+): string[] | null {
+  const prefixed = trimmed.toLowerCase().startsWith('select:')
+  const rest = prefixed ? trimmed.slice(7) : trimmed
+  if (!prefixed && !rest.includes(',')) return null
+  const names = rest
+    .split(',')
+    .map(n => n.trim())
+    .filter(Boolean)
+  if (names.length === 0) return null
+  if (!prefixed && !names.some(n => index.has(n))) return null
+  return names
+}
+
 const MAX_KEYWORD_RESULTS = 5
 
 export function createToolSearchDefinition(
@@ -58,8 +78,10 @@ export function createToolSearchDefinition(
 
 Deferred tools are available by name only — call this tool to load their full description and parameters so you can invoke them.
 
+Do not call this for tools already in your available tools list (including browser_* on the browser agent).
+
 Query modes:
-- \`select:name1,name2\` — exact name lookup (comma-separated). Use when you know the tool name.
+- \`select:name1,name2\` or \`name1,name2\` — exact name lookup (comma-separated). Use when you know the tool names.
 - keywords (e.g. "web search") — fuzzy match against name + description. Max ${MAX_KEYWORD_RESULTS} results.
 
 Available deferred tools: ${nameList}`
@@ -94,13 +116,10 @@ Available deferred tools: ${nameList}`
             data: { text, query, matches } satisfies ToolSearchOutput,
           })
           const trimmed = query.trim()
+          const selectNames = parseSelectNames(trimmed, index)
 
-          if (trimmed.toLowerCase().startsWith('select:')) {
-            const names = trimmed
-              .slice(7)
-              .split(',')
-              .map(n => n.trim())
-              .filter(Boolean)
+          if (selectNames) {
+            const names = selectNames
             const found: string[] = []
             const notFound: string[] = []
             const details: string[] = []

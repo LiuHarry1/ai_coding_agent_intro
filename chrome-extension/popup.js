@@ -21,6 +21,14 @@ async function render() {
       ? 'none'
       : 'block'
 
+  const connected = state.status === 'connected'
+  $('control').style.display = connected ? 'block' : 'none'
+  $('take-control').disabled = !connected || state.userHasControl
+  $('resume-agent').disabled = !connected || !state.userHasControl
+  $('control-label').textContent = state.userHasControl
+    ? 'You have control. The agent will not click or type.'
+    : 'The agent is driving the page.'
+
   const list = $('tabs')
   list.innerHTML = ''
   if (!state.tabs.length) {
@@ -61,6 +69,16 @@ $('pair').addEventListener('click', async () => {
 
 $('share').addEventListener('click', async () => {
   await send({ type: 'share-active-tab' })
+  render()
+})
+
+$('take-control').addEventListener('click', async () => {
+  await send({ type: 'set-user-control', hasControl: true })
+  render()
+})
+
+$('resume-agent').addEventListener('click', async () => {
+  await send({ type: 'set-user-control', hasControl: false })
   render()
 })
 

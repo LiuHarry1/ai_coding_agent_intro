@@ -5,7 +5,21 @@
  * Kept in its own module to avoid circular imports with request-scope /
  * workspace.ts (those import each other via getAgentHome / expandTilde).
  */
+import * as fs from 'fs'
 import * as path from 'path'
+
+function existingWindowsDir(p: string): string | undefined {
+  if (process.platform !== 'win32') return undefined
+  try {
+    const resolved = path.resolve(p)
+    if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+      return resolved
+    }
+  } catch {
+    // ignore
+  }
+  return undefined
+}
 
 /**
  * Normalize a workspace cwd without Win32-resolving remote POSIX paths.
@@ -16,6 +30,9 @@ import * as path from 'path'
  *
  * Also recovers already-corrupted forms (`C:\home\…`, `/c/home/…`) back to
  * `/home/…` so existing sessions keep working after the fix.
+ *
+ * Do not apply that healing to a real local directory: `C:\Users\…` is a
+ * normal Windows profile path, not a mangled macOS `/Users/…`.
  */
 export function normalizeWorkspacePath(cwd: string): string {
   const trimmed = (cwd || '').trim()
@@ -27,11 +44,21 @@ export function normalizeWorkspacePath(cwd: string): string {
   const driveHome = slash.match(
     /^[A-Za-z]:\/((?:home|Users|tmp|var|opt|usr|etc)\/.*)$/,
   )
-  if (driveHome) return path.posix.normalize('/' + driveHome[1])
+  if (driveHome) {
+    const local = existingWindowsDir(trimmed)
+    if (local) return local
+    return path.posix.normalize('/' + driveHome[1])
+  }
   const msysHome = slash.match(
     /^\/[A-Za-z]\/((?:home|Users|tmp|var|opt|usr|etc)\/.*)$/,
   )
-  if (msysHome) return path.posix.normalize('/' + msysHome[1])
+  if (msysHome) {
+    const letter = slash.charAt(1)
+    const win = `${letter.toUpperCase()}:\\${msysHome[1].replace(/\//g, '\\')}`
+    const local = existingWindowsDir(win)
+    if (local) return local
+    return path.posix.normalize('/' + msysHome[1])
+  }
 
   if (
     slash === '~' ||

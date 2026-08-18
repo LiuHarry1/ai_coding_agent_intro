@@ -9,6 +9,7 @@
  */
 
 import { randomUUID } from 'crypto'
+import * as path from 'path'
 import { tool } from 'ai'
 import { z } from 'zod'
 import * as inspect from '../../browser/page-inspect.js'
@@ -20,6 +21,7 @@ import {
   POST_ACTION_MAX_NODES,
   POST_ACTION_SNAPSHOT_MS,
 } from '../../browser/limits.js'
+import { SNAPSHOT_STALL_NEXT } from '../../browser/heavy-media.js'
 import {
   getBrowser,
   getCurrentTabId,
@@ -28,12 +30,19 @@ import {
   setCurrentTab,
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
+import { getUserHasControl, setUserHasControl } from '../../browser/session-flags.js'
 import {
   BROWSER_CLICK_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
   BROWSER_EVALUATE_TOOL_NAME,
+  BROWSER_FILE_UPLOAD_TOOL_NAME,
   BROWSER_FILL_FORM_TOOL_NAME,
+  BROWSER_HANDLE_DIALOG_TOOL_NAME,
   BROWSER_HOVER_TOOL_NAME,
+  BROWSER_LOCK_TOOL_NAME,
+  BROWSER_DRAG_TOOL_NAME,
+  BROWSER_FIND_TOOL_NAME,
+  BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
   BROWSER_NAVIGATE_TOOL_NAME,
   BROWSER_NETWORK_TOOL_NAME,
   BROWSER_PRESS_KEY_TOOL_NAME,
@@ -73,20 +82,51 @@ interface RunContext {
 async function observeAfterAction(
   backend: BrowserBackend,
   targetId: string,
-  opts: Parameters<typeof observe>[2],
+  opts: Parameters<typeof observe>[2] & { screenshotAfterwards?: boolean },
+  ctx?: Pick<RunContext, 'sessionId' | 'toolCallId'>,
 ): Promise<BrowserToolOutput> {
+  const skipIfDegraded = opts.skipIfDegraded !== false
   try {
-    return await withTimeout(
-      observe(backend, targetId, opts),
+    const out = await withTimeout(
+      observe(backend, targetId, { ...opts, skipIfDegraded }),
       'snapshot',
       POST_ACTION_SNAPSHOT_MS,
     )
+    if (opts.screenshotAfterwards && ctx) {
+      try {
+        const shot = await pw.screenshot(backend, targetId, { format: 'jpeg' })
+        await attachScreenshot(out, shot, ctx.sessionId, ctx.toolCallId)
+      } catch {
+        out.message = `${out.message} (screenshot afterwards failed)`
+      }
+    }
+    return out
   } catch {
+    try {
+      const snap = await withTimeout(
+        pw.snapshot(backend, targetId, { dialogOnly: true, maxNodes: 60 }),
+        'dialog-snapshot',
+        5_000,
+      )
+      if (snap.nodes > 0 || (snap.text && !/^No blocking in-page dialog/.test(snap.text))) {
+        return {
+          action: opts.action,
+          message: `${opts.message} (full snapshot timed out; showing the open dialog — click it, do not wait or navigate)`,
+          url: snap.url,
+          title: snap.title,
+          snapshot: snap.text,
+          snapshotTruncated: snap.truncated,
+        }
+      }
+    } catch {
+      /* dialog-only look failed too */
+    }
     return {
       action: opts.action,
-      message: `${opts.message} (snapshot timed out; call browser_snapshot for a fresh tree)`,
+      message: `${opts.message} (snapshot timed out. ${SNAPSHOT_STALL_NEXT})`,
       url: '',
       title: '',
+      snapshot: SNAPSHOT_STALL_NEXT,
     }
   }
 }
@@ -141,6 +181,33 @@ async function freshSnapshotText(
   }
 }
 
+const USER_CONTROL_ALLOWED = new Set([
+  BROWSER_LOCK_TOOL_NAME,
+  BROWSER_SNAPSHOT_TOOL_NAME,
+  BROWSER_SCREENSHOT_TOOL_NAME,
+  BROWSER_CONSOLE_TOOL_NAME,
+  BROWSER_NETWORK_TOOL_NAME,
+  BROWSER_TABS_TOOL_NAME,
+  BROWSER_EVALUATE_TOOL_NAME,
+  BROWSER_WAIT_FOR_TOOL_NAME,
+  BROWSER_FIND_TOOL_NAME,
+])
+
+function assertAgentMayAct(toolName: string, args: unknown): void {
+  if (!getUserHasControl()) return
+  if (toolName === BROWSER_TABS_TOOL_NAME) {
+    const action = (args as { action?: string } | undefined)?.action
+    if (!action || action === 'list') return
+    throw new BrowserError(
+      'The user has control of the browser. Only browser_tabs action "list" is allowed until you call browser_lock with action "lock".',
+    )
+  }
+  if (USER_CONTROL_ALLOWED.has(toolName)) return
+  throw new BrowserError(
+    'The user has control of the browser. Call browser_lock with action "lock" after they finish, then continue. Do not click or type while they are using it.',
+  )
+}
+
 function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
   name: string
   summary: string
@@ -174,6 +241,7 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
             } else {
               resolved = await withTimeout(resolveTab(cwdNow), cfg.name)
             }
+            assertAgentMayAct(cfg.name, args)
             const data = await withTimeout(
               cfg.run(args, {
                 backend: resolved.backend,
@@ -186,12 +254,12 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
             )
             return { data }
           } catch (err) {
-            // A failed action leaves the model's snapshot one render stale, which
-            // is what makes it retry the same doomed ref. Hand back the current
-            // tree with the error so its next move is grounded in reality.
-            const fresh = resolved
-              ? await freshSnapshotText(resolved.backend, resolved.targetId)
-              : undefined
+            const msg = err instanceof Error ? err.message : String(err)
+            const skipTree = /timed out|Snapshot skipped|PDF\/media/i.test(msg)
+            const fresh =
+              resolved && !skipTree
+                ? await freshSnapshotText(resolved.backend, resolved.targetId)
+                : undefined
             return browserErrorText(err, cfg.name, fresh)
           }
         },
@@ -206,19 +274,35 @@ const refSchema = z
 
 export const navigateTool = defineBrowserTool({
   name: BROWSER_NAVIGATE_TOOL_NAME,
-  summary: 'Open a URL in the browser and return a snapshot of the page',
+  summary: 'Open a URL, or go back / forward / reload',
   description: prompt.NAVIGATE_DESCRIPTION,
+  requireTab: false,
   inputSchema: z.object({
-    url: z.string().describe('Absolute URL to open, e.g. http://localhost:3000'),
+    url: z
+      .string()
+      .optional()
+      .describe('Absolute http(s) URL, e.g. http://localhost:3000'),
+    action: z
+      .enum(['back', 'forward', 'reload'])
+      .optional()
+      .describe('History action when url is omitted'),
   }),
-  async run({ url }, ctx) {
-    // A fresh page means a fresh console; without this the first observation
-    // would replay errors from whatever was loaded before.
-    resetConsoleWatermark(ctx.targetId)
-    await pw.navigate(ctx.backend, ctx.targetId, url)
-    return observe(ctx.backend, ctx.targetId, {
+  async run({ url, action }, ctx) {
+    let targetId = ctx.targetId
+    if (!targetId) {
+      const tab = await openTab(ctx.cwd)
+      targetId = tab.targetId
+    }
+    resetConsoleWatermark(targetId)
+    await pw.navigate(ctx.backend, targetId, { url, action })
+    const message = action
+      ? action === 'reload'
+        ? 'Reloaded the page'
+        : `Navigated ${action}`
+      : `Navigated to ${url}`
+    return observe(ctx.backend, targetId, {
       action: 'navigate',
-      message: `Navigated to ${url}`,
+      message,
       maxNodes: DEFAULT_MAX_NODES,
     })
   },
@@ -249,24 +333,57 @@ export const snapshotTool = defineBrowserTool({
       .describe(
         'Clip tree depth for a cheaper look at the page; nested content is dropped',
       ),
+    interactive: z
+      .boolean()
+      .optional()
+      .describe(
+        'Keep only ref-bearing controls and their ancestors; cheaper for driving a form',
+      ),
+    includeDiff: z
+      .boolean()
+      .optional()
+      .describe(
+        'Return only added/removed lines since the last snapshot',
+      ),
   }),
-  async run({ maxNodes, selector, compact }, ctx) {
+  async run({ maxNodes, selector, compact, interactive, includeDiff }, ctx) {
     return observe(ctx.backend, ctx.targetId, {
       action: 'snapshot',
-      message: 'Page snapshot',
+      message: includeDiff ? 'Page snapshot (diff)' : 'Page snapshot',
       maxNodes: maxNodes ?? DEFAULT_MAX_NODES,
       selector,
       compact,
+      interactive,
+      includeDiff,
+      skipIfDegraded: false,
     })
   },
 })
 
 export const clickTool = defineBrowserTool({
   name: BROWSER_CLICK_TOOL_NAME,
-  summary: 'Click an element by ref',
+  summary: 'Click an element by ref, or by role and name',
   description: prompt.CLICK_DESCRIPTION,
   inputSchema: z.object({
-    ref: refSchema,
+    ref: refSchema
+      .optional()
+      .describe('Exact target element reference from the page snapshot'),
+    element: z
+      .string()
+      .optional()
+      .describe(
+        'Human-readable element description used to obtain permission to interact with the element',
+      ),
+    role: z
+      .string()
+      .optional()
+      .describe(
+        'ARIA role for Playwright getByRole when ref is missing (default button)',
+      ),
+    name: z
+      .string()
+      .optional()
+      .describe('Accessible name for Playwright getByRole when ref is missing'),
     doubleClick: z.boolean().optional().describe('Send a double click'),
     button: z
       .enum(['left', 'right', 'middle'])
@@ -276,19 +393,48 @@ export const clickTool = defineBrowserTool({
       .array(z.enum(['Alt', 'Control', 'Meta', 'Shift']))
       .optional()
       .describe('Modifier keys held during the click'),
+    x: z
+      .number()
+      .optional()
+      .describe('Viewport X for a coordinate click (canvas / no ref)'),
+    y: z
+      .number()
+      .optional()
+      .describe('Viewport Y for a coordinate click'),
+    screenshotAfterwards: z
+      .boolean()
+      .optional()
+      .describe('Also capture a screenshot after the click'),
+    force: z
+      .boolean()
+      .optional()
+      .describe('Skip Playwright actionability checks (OpenClaw click force)'),
   }),
   async run(args, ctx) {
     const el = await pw.click(ctx.backend, ctx.targetId, {
       ref: args.ref,
+      role: args.role,
+      name: args.name,
+      element: args.element,
       doubleClick: args.doubleClick,
       button: args.button,
       modifiers: args.modifiers,
+      x: args.x,
+      y: args.y,
+      force: args.force,
     })
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'click',
-      message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} ${el.role} "${el.name}"`,
-      compact: true,
-    })
+    const label = args.element ? ` (${args.element})` : ''
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'click',
+        message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} ${el.role} "${el.name}"${label}`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -374,14 +520,19 @@ export const fillFormTool = defineBrowserTool({
 
 export const selectOptionTool = defineBrowserTool({
   name: BROWSER_SELECT_OPTION_TOOL_NAME,
-  summary: 'Select options in a <select> element',
+  summary: 'Select an option in a native <select>',
   description: prompt.SELECT_OPTION_DESCRIPTION,
   inputSchema: z.object({
     ref: refSchema,
     values: z
-      .array(z.string())
-      .min(1)
-      .describe('Option values or visible labels to select'),
+      .union([z.array(z.string()).min(1), z.string().min(1)])
+      .transform(v =>
+        (Array.isArray(v) ? v : [v])
+          .map(s => s.replace(/\s+/g, ' ').trim())
+          .filter(Boolean),
+      )
+      .pipe(z.array(z.string()).min(1))
+      .describe('Visible labels (or native option values) to select'),
   }),
   async run(args, ctx) {
     const res = await pw.selectOption(
@@ -393,6 +544,66 @@ export const selectOptionTool = defineBrowserTool({
     return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'select_option',
       message: `Selected ${res.selected.map(s => `"${s}"`).join(', ')}`,
+      compact: true,
+    })
+  },
+})
+
+export const fileUploadTool = defineBrowserTool({
+  name: BROWSER_FILE_UPLOAD_TOOL_NAME,
+  summary: 'Upload files through the page file chooser',
+  description: prompt.FILE_UPLOAD_DESCRIPTION,
+  inputSchema: z.object({
+    paths: z
+      .array(z.string())
+      .describe(
+        'File paths to upload (workspace-relative or absolute). Empty list cancels the chooser',
+      ),
+    ref: refSchema.optional().describe('<input type=file> ref, if you have one'),
+  }),
+  async run(args, ctx) {
+    const paths = args.paths.map(p =>
+      path.isAbsolute(p) ? p : path.resolve(ctx.cwd, p),
+    )
+    const res = await pw.uploadFilesToPage(ctx.backend, ctx.targetId, {
+      paths,
+      ref: args.ref,
+    })
+    const n = res.files.length
+    return observeAfterAction(ctx.backend, ctx.targetId, {
+      action: 'file_upload',
+      message: res.cancelled
+        ? 'Cancelled the file chooser'
+        : `Uploaded ${n} file${n === 1 ? '' : 's'}`,
+      compact: true,
+    })
+  },
+})
+
+export const handleDialogTool = defineBrowserTool({
+  name: BROWSER_HANDLE_DIALOG_TOOL_NAME,
+  summary: 'Accept or dismiss a native alert/confirm/prompt',
+  description: prompt.HANDLE_DIALOG_DESCRIPTION,
+  inputSchema: z.object({
+    accept: z
+      .boolean()
+      .describe('true to accept / OK, false to dismiss / Cancel'),
+    promptText: z
+      .string()
+      .optional()
+      .describe('Text to type into a prompt before accepting'),
+  }),
+  async run(args, ctx) {
+    const res = await pw.handleNativeDialog(ctx.backend, ctx.targetId, {
+      accept: args.accept,
+      promptText: args.promptText,
+    })
+    const message = res.armed
+      ? `Next native dialog will be ${res.accepted ? 'accepted' : 'dismissed'}`
+      : `${res.accepted ? 'Accepted' : 'Dismissed'} ${res.type} ${JSON.stringify(res.message)}`
+    return observeAfterAction(ctx.backend, ctx.targetId, {
+      action: 'handle_dialog',
+      message,
       compact: true,
     })
   },
@@ -428,18 +639,28 @@ export const waitForTool = defineBrowserTool({
     time: z
       .number()
       .optional()
-      .describe('Time to wait in seconds (capped at 10)'),
+      .describe('Time to wait in seconds (capped at 30)'),
     text: z.string().optional().describe('Text to wait for to appear'),
     textGone: z
       .string()
       .optional()
       .describe('Text to wait for to disappear'),
+    selector: z
+      .string()
+      .optional()
+      .describe('CSS selector to wait until visible (OpenClaw wait --selector)'),
+    url: z
+      .string()
+      .optional()
+      .describe('URL glob to wait for (Playwright waitForURL)'),
   }),
   async run(args, ctx) {
     await pw.waitFor(ctx.backend, ctx.targetId, {
       time: args.time,
       text: args.text,
       textGone: args.textGone,
+      selector: args.selector,
+      url: args.url,
     })
     const parts: string[] = []
     if (args.time != null) parts.push(`waited ${args.time}s`)
@@ -447,6 +668,8 @@ export const waitForTool = defineBrowserTool({
     if (args.textGone) {
       parts.push(`text ${JSON.stringify(args.textGone)} disappeared`)
     }
+    if (args.selector) parts.push(`selector ${JSON.stringify(args.selector)} visible`)
+    if (args.url) parts.push(`url ${JSON.stringify(args.url)}`)
     return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'wait_for',
       message: parts.length ? parts.join('; ') : 'Waited',
@@ -645,6 +868,7 @@ export const tabsTool = defineBrowserTool({
           )
         }
         setCurrentTab(args.tabId)
+        await pw.activateTab(ctx.backend, args.tabId)
         message = `Selected tab ${args.tabId}`
         break
       }
@@ -678,14 +902,16 @@ export const evaluateTool = defineBrowserTool({
   inputSchema: z.object({
     expression: z
       .string()
-      .describe('JavaScript expression, e.g. `document.title` or `fetch("/api").then(r => r.status)`'),
+      .describe('JavaScript expression or function, e.g. `document.title` or `el => el.textContent`'),
+    ref: z
+      .string()
+      .optional()
+      .describe('If set, the function runs on this snapshot element (OpenClaw evaluate --ref)'),
   }),
   async run(args, ctx) {
-    const value = await inspect.evaluateExpression(
-      ctx.backend,
-      ctx.targetId,
-      args.expression,
-    )
+    const value = await pw.evaluate(ctx.backend, ctx.targetId, args.expression, {
+      ref: args.ref,
+    })
     const out = await observe(ctx.backend, ctx.targetId, {
       action: 'evaluate',
       message: 'Evaluated expression',
@@ -696,6 +922,103 @@ export const evaluateTool = defineBrowserTool({
   },
 })
 
+export const findTool = defineBrowserTool({
+  name: BROWSER_FIND_TOOL_NAME,
+  summary: 'Search the last page snapshot for text',
+  description: prompt.FIND_DESCRIPTION,
+  inputSchema: z.object({
+    query: z.string().describe('Case-insensitive substring to match in the snapshot'),
+  }),
+  async run({ query }, ctx) {
+    const found = await pw.findInSnapshot(ctx.backend, ctx.targetId, query)
+    const out = await observe(ctx.backend, ctx.targetId, {
+      action: 'find',
+      message: found.fromCache
+        ? `Matches in the last snapshot for ${JSON.stringify(query)}`
+        : `Matches for ${JSON.stringify(query)}`,
+      withSnapshot: false,
+    })
+    out.snapshot = found.text
+    return out
+  },
+})
+
+export const dragTool = defineBrowserTool({
+  name: BROWSER_DRAG_TOOL_NAME,
+  summary: 'Drag from one element to another',
+  description: prompt.DRAG_DESCRIPTION,
+  inputSchema: z.object({
+    startRef: refSchema.describe('Element to drag'),
+    endRef: refSchema.describe('Drop target'),
+  }),
+  async run(args, ctx) {
+    await pw.drag(ctx.backend, ctx.targetId, {
+      startRef: args.startRef,
+      endRef: args.endRef,
+    })
+    return observeAfterAction(ctx.backend, ctx.targetId, {
+      action: 'drag',
+      message: `Dragged ${args.startRef} to ${args.endRef}`,
+      compact: true,
+    })
+  },
+})
+
+export const mouseClickXyTool = defineBrowserTool({
+  name: BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
+  summary: 'Click at viewport coordinates',
+  description: prompt.MOUSE_CLICK_XY_DESCRIPTION,
+  inputSchema: z.object({
+    x: z.number().describe('Viewport X'),
+    y: z.number().describe('Viewport Y'),
+  }),
+  async run({ x, y }, ctx) {
+    const el = await pw.click(ctx.backend, ctx.targetId, { x, y })
+    return observeAfterAction(ctx.backend, ctx.targetId, {
+      action: 'click',
+      message: `Clicked at ${el.name}`,
+      compact: true,
+    })
+  },
+})
+
+export const lockTool = defineBrowserTool({
+  name: BROWSER_LOCK_TOOL_NAME,
+  summary: 'Take or release control of the browser',
+  description: prompt.LOCK_DESCRIPTION,
+  requireTab: false,
+  inputSchema: z.object({
+    action: z
+      .enum(['lock', 'unlock'])
+      .describe(
+        'lock: agent resumes driving the page; unlock: user takes over',
+      ),
+  }),
+  async run({ action }, ctx) {
+    if (action === 'unlock') {
+      setUserHasControl(true)
+      return {
+        action: 'lock',
+        message:
+          'User has control. Do not click, type, navigate, or fill. Call browser_lock with action "lock" when they are done.',
+        url: '',
+        title: '',
+      }
+    }
+    setUserHasControl(false)
+    const tabs = ctx.targetId
+      ? await ctx.backend.listTabs().catch(() => [])
+      : []
+    const current = tabs.find(t => t.targetId === ctx.targetId)
+    return {
+      action: 'lock',
+      message: 'Agent has control of the browser.',
+      url: current?.url ?? '',
+      title: current?.title ?? '',
+    }
+  },
+})
+
 export const browserToolDefinitions: ToolDefinition[] = [
   navigateTool,
   snapshotTool,
@@ -703,6 +1026,8 @@ export const browserToolDefinitions: ToolDefinition[] = [
   typeTool,
   fillFormTool,
   selectOptionTool,
+  fileUploadTool,
+  handleDialogTool,
   pressKeyTool,
   waitForTool,
   hoverTool,
@@ -712,4 +1037,8 @@ export const browserToolDefinitions: ToolDefinition[] = [
   networkTool,
   tabsTool,
   evaluateTool,
+  findTool,
+  dragTool,
+  mouseClickXyTool,
+  lockTool,
 ]

@@ -16,11 +16,13 @@ import { startCdpEndpoint, type CdpEndpoint } from '../relay/cdp-endpoint.js'
 import type { RelayServer } from '../relay/server.js'
 import { BrowserError, type BrowserBackend } from '../types.js'
 import { pickPageForTab } from './page-match.js'
+import { watchPage } from './overlays.js'
 
 const browsers = new WeakMap<BrowserBackend, Promise<Browser>>()
 const endpoints = new WeakMap<BrowserBackend, CdpEndpoint>()
 
 const PAGE_ATTACH_MS = 3_000
+const pagesByTarget = new Map<string, Page>()
 
 export async function attachExtensionPlaywright(
   backend: BrowserBackend,
@@ -42,6 +44,7 @@ export async function detachPlaywright(backend: BrowserBackend): Promise<void> {
   const endpoint = endpoints.get(backend)
   endpoints.delete(backend)
   await endpoint?.close().catch(() => {})
+  pagesByTarget.clear()
 }
 
 async function connectExtension(backend: BrowserBackend): Promise<Browser> {
@@ -92,8 +95,18 @@ async function findPage(
   }
 
   const pages = allPages(browser)
+  // Cached Page for this targetId is the identity. An SPA can change path
+  // without a new Page; URL matching below is only the cold-cache fallback.
+  const cached = pagesByTarget.get(targetId)
+  if (cached && !cached.isClosed() && pages.includes(cached)) {
+    pagesByTarget.set(targetId, cached)
+    return cached
+  }
   const matched = pickPageForTab(pages, tab.url)
-  if (matched) return matched
+  if (matched) {
+    pagesByTarget.set(targetId, matched)
+    return matched
+  }
 
   if (pages.length === 0) {
     throw new BrowserError(
@@ -117,7 +130,7 @@ export async function getPageForTarget(
         `Unknown tab "${targetId}". It was closed or belongs to another browser session; list tabs again.`,
       )
     }
-    return page
+    return watchPage(page)
   }
 
   const browser = await connectExtension(backend)
@@ -130,7 +143,7 @@ export async function getPageForTarget(
   let lastErr: Error | undefined
   while (Date.now() <= deadline) {
     try {
-      return await findPage(backend, browser, targetId)
+      return watchPage(await findPage(backend, browser, targetId))
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err))
       await new Promise(r => setTimeout(r, 120))

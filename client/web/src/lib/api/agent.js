@@ -94,4 +94,12 @@ export const agentApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+
+  getBrowserLock: () => fetchJSON('/browser/lock'),
+  setBrowserLock: userHasControl =>
+    fetchJSON('/browser/lock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userHasControl }),
+    }),
 }

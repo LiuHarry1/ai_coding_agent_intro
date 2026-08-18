@@ -7,7 +7,9 @@ import {
   BROWSER_CLICK,
   BROWSER_CONSOLE,
   BROWSER_EVALUATE,
+  BROWSER_FILE_UPLOAD,
   BROWSER_FILL_FORM,
+  BROWSER_HANDLE_DIALOG,
   BROWSER_HOVER,
   BROWSER_NAVIGATE,
   BROWSER_NETWORK,
@@ -19,6 +21,10 @@ import {
   BROWSER_TABS,
   BROWSER_TYPE,
   BROWSER_WAIT_FOR,
+  BROWSER_LOCK,
+  BROWSER_FIND,
+  BROWSER_DRAG,
+  BROWSER_MOUSE_CLICK_XY,
 } from '../lib/tool-names.js'
 
 /**
@@ -37,6 +43,8 @@ const ICONS = {
   [BROWSER_HOVER]: '\u{1F5B1}',
   [BROWSER_TYPE]: '\u{2328}',
   [BROWSER_FILL_FORM]: '\u{1F4DD}',
+  [BROWSER_FILE_UPLOAD]: '\u{1F4C2}',
+  [BROWSER_HANDLE_DIALOG]: '\u{1F4AC}',
   [BROWSER_PRESS_KEY]: '\u{2328}',
   [BROWSER_WAIT_FOR]: '\u{23F3}',
   [BROWSER_SELECT_OPTION]: '\u{2328}',
@@ -46,6 +54,10 @@ const ICONS = {
   [BROWSER_NETWORK]: '\u{1F4E1}',
   [BROWSER_TABS]: '\u{1F5C2}',
   [BROWSER_EVALUATE]: '\u{0192}',
+  [BROWSER_LOCK]: '\u{1F512}',
+  [BROWSER_FIND]: '\u{1F50E}',
+  [BROWSER_DRAG]: '\u{2194}',
+  [BROWSER_MOUSE_CLICK_XY]: '\u{1F5B1}',
 }
 
 const RUNNING_LABELS = {
@@ -55,6 +67,8 @@ const RUNNING_LABELS = {
   [BROWSER_HOVER]: 'Hovering',
   [BROWSER_TYPE]: 'Typing',
   [BROWSER_FILL_FORM]: 'Filling form',
+  [BROWSER_FILE_UPLOAD]: 'Uploading file',
+  [BROWSER_HANDLE_DIALOG]: 'Handling dialog',
   [BROWSER_PRESS_KEY]: 'Pressing key',
   [BROWSER_WAIT_FOR]: 'Waiting',
   [BROWSER_SELECT_OPTION]: 'Selecting',
@@ -64,6 +78,10 @@ const RUNNING_LABELS = {
   [BROWSER_NETWORK]: 'Reading network',
   [BROWSER_TABS]: 'Managing tabs',
   [BROWSER_EVALUATE]: 'Evaluating',
+  [BROWSER_LOCK]: 'Locking browser',
+  [BROWSER_FIND]: 'Searching page',
+  [BROWSER_DRAG]: 'Dragging',
+  [BROWSER_MOUSE_CLICK_XY]: 'Clicking at point',
 }
 
 const DONE_LABELS = {
@@ -73,6 +91,8 @@ const DONE_LABELS = {
   [BROWSER_HOVER]: 'Hovered',
   [BROWSER_TYPE]: 'Typed',
   [BROWSER_FILL_FORM]: 'Filled form',
+  [BROWSER_FILE_UPLOAD]: 'Uploaded file',
+  [BROWSER_HANDLE_DIALOG]: 'Handled dialog',
   [BROWSER_PRESS_KEY]: 'Pressed key',
   [BROWSER_WAIT_FOR]: 'Waited',
   [BROWSER_SELECT_OPTION]: 'Selected',
@@ -82,6 +102,10 @@ const DONE_LABELS = {
   [BROWSER_NETWORK]: 'Network',
   [BROWSER_TABS]: 'Tabs',
   [BROWSER_EVALUATE]: 'Evaluated',
+  [BROWSER_LOCK]: 'Browser lock',
+  [BROWSER_FIND]: 'Found on page',
+  [BROWSER_DRAG]: 'Dragged',
+  [BROWSER_MOUSE_CLICK_XY]: 'Clicked at point',
 }
 
 function compactUrl(url) {

@@ -26,6 +26,21 @@
 
 const DIALOG_ITEM = /^(\s*)- (dialog|alertdialog)\b/
 
+/**
+ * In-page blocking message box (`role=alertdialog`), not a nav panel or
+ * cookie sheet. A small `dialog` that only has Yes/No is the ARIA-poor
+ * fallback. Do not key off site copy like heading "Error".
+ */
+export function isBlockingMessageBox(yaml: string): boolean {
+  if (!yaml) return false
+  if (countRefs(yaml) > 48) return false
+  if (/\balertdialog\b/i.test(yaml)) return true
+  if (!/\bdialog\b/i.test(yaml)) return false
+  const yes = /button "Yes"/i.test(yaml)
+  const no = /button "No"/i.test(yaml)
+  return yes && no
+}
+
 const OMITTED =
   '# … middle omitted; open dialogs and end-of-tree widgets were kept. Pass selector to snapshot a subtree.'
 
@@ -117,18 +132,37 @@ export function dropRedundantWrapperNames(yaml: string): string {
   return out.join('\n')
 }
 
+export function keepInteractive(yaml: string): string {
+  const lines = yaml.split('\n')
+  const keep = new Set<number>()
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes('[ref=')) continue
+    keep.add(i)
+    let need = leadingSpaces(lines[i])
+    for (let j = i - 1; j >= 0 && need > 0; j--) {
+      const indent = leadingSpaces(lines[j])
+      if (indent < need && /^\s*- /.test(lines[j])) {
+        keep.add(j)
+        need = indent
+      }
+    }
+  }
+  return lines.filter((_, i) => keep.has(i)).join('\n')
+}
+
 export function prioritizeAriaSnapshot(
   raw: string,
-  opts: { maxChars: number; maxNodes?: number },
+  opts: { maxChars: number; maxNodes?: number; interactive?: boolean },
 ): { text: string; truncated: boolean } {
   const { maxChars } = opts
   const maxNodes = opts.maxNodes ?? Number.POSITIVE_INFINITY
   const grouped = groupBadgeLabels(dropRedundantWrapperNames(raw))
-  if (grouped.length <= maxChars && countRefs(grouped) <= maxNodes) {
-    return { text: grouped, truncated: false }
+  const scoped = opts.interactive ? keepInteractive(grouped) : grouped
+  if (scoped.length <= maxChars && countRefs(scoped) <= maxNodes) {
+    return { text: scoped, truncated: false }
   }
 
-  const lines = grouped.split('\n')
+  const lines = scoped.split('\n')
   const dialogs = findDialogRanges(lines)
   const keep: Range[] = []
 

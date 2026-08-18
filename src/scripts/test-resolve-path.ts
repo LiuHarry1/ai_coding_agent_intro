@@ -2,6 +2,7 @@
  * Unit checks for tools/utils resolvePath (Windows abs / join antipattern).
  */
 import * as path from 'path'
+import { normalizeWorkspacePath } from '../core/workspace-path.js'
 import {
   isWindowsAbsolute,
   resolvePath,
@@ -67,6 +68,15 @@ assert(!isWindowsAbsolute('memory/file.md'), 'relative not abs')
   const r = resolvePath(cwd, '~/Documents/x.md')
   assert('abs' in r && r.abs, 'tilde expands')
   assert(r.abs!.includes('Documents'), 'tilde home')
+}
+
+{
+  const local = process.cwd()
+  const n = normalizeWorkspacePath(local)
+  assert(
+    n.replace(/\//g, '\\').toLowerCase() === path.resolve(local).toLowerCase(),
+    `C:\\Users\\... must stay a Windows path, got ${n}`,
+  )
 }
 
 console.log('resolvePath tests OK')

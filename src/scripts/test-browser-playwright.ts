@@ -17,8 +17,12 @@ import {
 import {
   clickTool,
   evaluateTool,
+  fileUploadTool,
   fillFormTool,
+  findTool,
+  handleDialogTool,
   navigateTool,
+  selectOptionTool,
   snapshotTool,
   typeTool,
   waitForTool,
@@ -121,6 +125,51 @@ async function main() {
       `aria-ref click must fire the handler:\n${clicked.snapshot}`,
     )
     console.log('ok [playwright] locator(aria-ref).click() mutates the page')
+
+    const blockedFile = await run(
+      navigateTool,
+      { url: 'file:///C:/Windows/notepad.exe' },
+      sessionId,
+    )
+    assert.ok(
+      typeof blockedFile === 'string' && /file:/i.test(blockedFile),
+      `file: navigate must be refused:\n${blockedFile}`,
+    )
+    console.log('ok [playwright] navigate refuses file: URLs')
+
+    const found = expectData(
+      await run(findTool, { query: 'Clicked' }, sessionId),
+    )
+    assert.ok(
+      String(found.snapshot).includes('Clicked'),
+      `browser_find must search the last snapshot:\n${found.snapshot}`,
+    )
+    console.log('ok [playwright] browser_find searches last snapshot')
+
+    const applyRef = refFor(snapshot, 'button', 'Apply changes')
+    await run(
+      clickTool,
+      { ref: refFor(snapshot, 'button', 'Rebuild apply') },
+      sessionId,
+    )
+    const relocated = expectData(
+      await run(clickTool, { ref: applyRef }, sessionId),
+    )
+    assert.ok(
+      /applied/i.test(String(relocated.snapshot)) ||
+        /relocated/i.test(String(relocated.message)),
+      `rebuilt Apply changes should relocate:\n${relocated.message}\n${relocated.snapshot}`,
+    )
+    console.log('ok [playwright] stale aria-ref relocates by last known name')
+
+    const diff = expectData(
+      await run(snapshotTool, { includeDiff: true }, sessionId),
+    )
+    assert.ok(
+      typeof diff.snapshot === 'string' && String(diff.snapshot).length > 0,
+      `includeDiff must return a diff or an empty-change note:\n${diff.snapshot}`,
+    )
+    console.log('ok [playwright] snapshot includeDiff')
 
     const after = expectData(await run(snapshotTool, {}, sessionId))
     const emailRef = refFor(String(after.snapshot), 'textbox', 'Email address')
@@ -230,6 +279,26 @@ async function main() {
     )
     console.log('ok [playwright] nested dialog click returns full page with composer')
 
+    const errorNav = expectData(
+      await run(navigateTool, { url: `${server.url}error-modal` }, sessionId),
+    )
+    const saveRef = refFor(String(errorNav.snapshot), 'button', 'Save Expense')
+    const afterSave = expectData(
+      await run(clickTool, { ref: saveRef }, sessionId),
+    )
+    const errorSnap = String(afterSave.snapshot)
+    assert.ok(
+      /alertdialog/.test(errorSnap) &&
+        errorSnap.includes('button "Yes"') &&
+        errorSnap.includes('make corrections'),
+      `Save must return the in-page Error Yes/No box, not a native dialog:\n${errorSnap}`,
+    )
+    assert.ok(
+      /modal dialog is covering the page/i.test(errorSnap),
+      `blocking alertdialog should replace the full-page tree:\n${errorSnap.slice(0, 400)}`,
+    )
+    console.log('ok [playwright] in-page Error modal is snapshotted as alertdialog')
+
     const waitNav = expectData(
       await run(navigateTool, { url: `${server.url}wait-text` }, sessionId),
     )
@@ -293,6 +362,148 @@ async function main() {
       `fill_form must replace text, check the box and select the option:\n${message}`,
     )
     console.log('ok [playwright] fill_form writes a whole form and skips readonly')
+
+    const widgets = expectData(
+      await run(navigateTool, { url: `${server.url}widgets` }, sessionId),
+    )
+    const widgetSnap = String(widgets.snapshot)
+    const unarmed = await run(
+      clickTool,
+      { ref: refFor(widgetSnap, 'button', 'Confirm me') },
+      sessionId,
+    )
+    assert.ok(
+      typeof unarmed === 'string' && /handle_dialog|not armed/i.test(unarmed),
+      `unarmed confirm must fail the click:\n${unarmed}`,
+    )
+    console.log('ok [playwright] unarmed confirm fails the click')
+    const notASelect = await run(
+      selectOptionTool,
+      { ref: refNear(widgetSnap, 'Fruit'), values: ['Banana'] },
+      sessionId,
+    )
+    assert.ok(
+      typeof notASelect === 'string',
+      `select_option is native <select> only:\n${notASelect}`,
+    )
+    await run(
+      clickTool,
+      { ref: refNear(widgetSnap, 'Fruit') },
+      sessionId,
+    )
+    const openSnap = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const banana = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(openSnap, 'option', 'Banana') },
+        sessionId,
+      ),
+    )
+    assert.ok(
+      String(banana.snapshot).includes('Banana') ||
+        String(banana.message).includes('Banana'),
+      `ARIA listbox options are clicked by ref:\n${banana.message}\n${banana.snapshot}`,
+    )
+    const fruitState = expectData(
+      await run(
+        evaluateTool,
+        {
+          expression: 'document.getElementById("fruit-state").textContent',
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(fruitState.value), /Banana/)
+    console.log('ok [playwright] custom dropdown is snapshot + click, not select_option')
+
+    const armed = expectData(
+      await run(handleDialogTool, { accept: true }, sessionId),
+    )
+    assert.match(
+      String(armed.message),
+      /Next native dialog will be accepted/,
+      `handle_dialog must arm the next confirm:\n${armed.message}`,
+    )
+    const afterFruit = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const asked = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(afterFruit, 'button', 'Confirm me') },
+        sessionId,
+      ),
+    )
+    assert.match(
+      String(asked.message),
+      /native confirm dialog/,
+      `click that opened confirm must mention the dialog:\n${asked.message}`,
+    )
+    assert.match(
+      String(asked.message),
+      /accepted/,
+      `armed confirm must be accepted:\n${asked.message}`,
+    )
+    const dialogState = expectData(
+      await run(
+        evaluateTool,
+        { expression: 'document.getElementById("dialog-state").textContent' },
+        sessionId,
+      ),
+    )
+    assert.equal(String(dialogState.value), 'accepted')
+    console.log('ok [playwright] handle_dialog accepts a native confirm')
+
+    const uploadFile = path.join(profile, 'receipt.txt')
+    fs.writeFileSync(uploadFile, 'invoice')
+    const afterDialog = expectData(await run(snapshotTool, {}, sessionId))
+    const uploaded = expectData(
+      await run(
+        fileUploadTool,
+        {
+          ref: refNear(String(afterDialog.snapshot), 'Receipt upload'),
+          paths: [uploadFile],
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(uploaded.message), /Uploaded 1 file/)
+    assert.ok(
+      String(uploaded.snapshot).includes('Receipt upload'),
+      `file_upload must return a snapshot like Playwright MCP:\n${uploaded.snapshot}`,
+    )
+    const fileState = expectData(
+      await run(
+        evaluateTool,
+        { expression: 'document.getElementById("file-state").textContent' },
+        sessionId,
+      ),
+    )
+    assert.equal(String(fileState.value), 'receipt.txt')
+    console.log('ok [playwright] file_upload sets an input type=file')
+
+    const pdfNav = expectData(
+      await run(navigateTool, { url: `${server.url}pdf-preview` }, sessionId),
+    )
+    const pdfSnap = String(pdfNav.snapshot)
+    assert.ok(
+      pdfSnap.includes('button "Save"') || pdfSnap.includes('Embedded frames omitted'),
+      `a hung viewer iframe must not eat the host-page Save button:\n${pdfSnap.slice(0, 500)}`,
+    )
+    console.log('ok [playwright] hung iframe snapshot still returns the host page')
+
+    expectData(await run(navigateTool, { url: `${server.url}widgets` }, sessionId))
+    const interactive = expectData(
+      await run(snapshotTool, { interactive: true }, sessionId),
+    )
+    const interactiveSnap = String(interactive.snapshot)
+    assert.ok(
+      interactiveSnap.includes('Confirm me') && interactiveSnap.includes('[ref='),
+      `interactive snapshot must keep the controls:\n${interactiveSnap}`,
+    )
+    console.log('ok [playwright] snapshot interactive keeps refs only')
 
     console.log('\nall playwright-engine tests passed')
   } finally {

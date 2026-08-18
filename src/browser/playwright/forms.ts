@@ -16,12 +16,9 @@ import type {
   ResolvedElement,
 } from '../types.js'
 import { valuesMatch, writeText } from './fields.js'
-import {
-  briefError,
-  describeElement,
-  editableTarget,
-  refLocator,
-} from './locator.js'
+import { briefError, describeElement, refLocator } from './locator.js'
+import { pickValue } from './pick.js'
+import { throwIfUnarmedDestructiveDialog } from './overlays.js'
 import { withActionWait } from './settle.js'
 import { getPageForTarget } from './connect.js'
 
@@ -38,6 +35,7 @@ export async function fillForm(
       results.push(await fillOneField(page, field))
     }
   })
+  throwIfUnarmedDestructiveDialog(page)
   return results
 }
 
@@ -50,7 +48,13 @@ function isTruthy(value: string): boolean {
 function inferKind(el: ResolvedElement): FormFieldKind {
   if (el.role === 'checkbox' || el.role === 'switch') return 'checkbox'
   if (el.role === 'radio') return 'radio'
-  if (el.tag === 'select') return 'combobox'
+  if (
+    el.tag === 'select' ||
+    el.role === 'combobox' ||
+    el.role === 'listbox'
+  ) {
+    return 'combobox'
+  }
   return 'textbox'
 }
 
@@ -66,15 +70,12 @@ async function fillOneField(
 
     if (kind === 'checkbox' || kind === 'radio') {
       const on = isTruthy(field.value)
-      // force: the real input is routinely hidden behind a styled label.
-      await loc.setChecked(on, { timeout: ACTION_TIMEOUT_MS, force: true })
+      await loc.setChecked(on, { timeout: ACTION_TIMEOUT_MS })
       return { ...base, value: String(on), status: 'filled' }
     }
 
     if (kind === 'combobox' && el.tag === 'select') {
-      const selected = await loc.selectOption([field.value], {
-        timeout: ACTION_TIMEOUT_MS,
-      })
+      const { selected } = await pickValue(loc, [field.value])
       return { ...base, value: selected.join(', '), status: 'filled' }
     }
 
@@ -87,7 +88,7 @@ async function fillOneField(
       }
     }
 
-    const got = await writeText(page, editableTarget(loc, el), field.value)
+    const got = await writeText(loc, field.value)
     return valuesMatch(field.value, got)
       ? { ...base, value: got, status: 'filled' }
       : {

@@ -4,6 +4,7 @@ import { useWorkspaceIdeStore } from './stores/workspace-ide-store.js'
 import { agentApi } from './lib/api/agent.js'
 import { setKnownMcpServers } from './lib/tool-kind.js'
 import Header from './components/Header.jsx'
+import BrowserLockBar from './components/BrowserLockBar.jsx'
 import ChatView from './components/ChatView.jsx'
 import BackgroundTerminals from './components/BackgroundTerminals.jsx'
 import InputArea from './components/InputArea.jsx'
@@ -76,6 +77,7 @@ export default function App() {
       <WorkspaceIDE />
       <div className={`main-panel ${workspaceIdeOpen ? 'with-ide' : ''}`}>
         <Header />
+        <BrowserLockBar />
         <ChatView />
         <BackgroundTerminals />
         <InputArea />

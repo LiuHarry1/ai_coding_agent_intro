@@ -17,6 +17,7 @@ import {
   isRelayCdpEvent,
   isRelayHello,
   isRelayResponse,
+  isRelayUserControl,
   type RelayRequestBody,
 } from '../browser/relay/protocol.js'
 import {
@@ -38,8 +39,10 @@ import { PAGE_SCRIPT, PAGE_SCRIPT_VERSION } from '../browser/page-script.js'
 import { BrowserError } from '../browser/types.js'
 import { normalizeRef } from '../browser/playwright/index.js'
 import {
+  keepInteractive,
   countRefs,
   groupBadgeLabels,
+  isBlockingMessageBox,
   prioritizeAriaSnapshot,
 } from '../browser/distill-snapshot.js'
 import {
@@ -47,6 +50,25 @@ import {
   urlsRoughlyEqual,
 } from '../browser/playwright/page-match.js'
 import { initBrowserLifecycle } from '../browser/manager.js'
+import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../browser/heavy-media.js'
+import { normalizeBrowserEvaluateFunctionSource } from '../browser/evaluate-source.js'
+import { assertNavigateUrl } from '../browser/navigate-policy.js'
+import {
+  elementMatchesHint,
+  namesOverlap,
+  parseRefMeta,
+  snapshotDiff,
+} from '../browser/snapshot-index.js'
+import {
+  getLastSnapshot,
+  getRefMeta,
+  getUserHasControl,
+  isSnapshotDegraded,
+  rememberSnapshot,
+  resetSessionFlags,
+  setSnapshotDegraded,
+  setUserHasControl,
+} from '../browser/session-flags.js'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`FAILED: ${msg}`)
@@ -133,6 +155,14 @@ const ok = (msg: string) => console.log(`ok ${msg}`)
   assert(
     !isRelayCdpEvent({ type: 'cdpEvent', method: 'x' }),
     'cdpEvent requires targetId',
+  )
+  assert(
+    isRelayUserControl({ type: 'userControl', hasControl: true }),
+    'userControl is an unsolicited frame',
+  )
+  assert(
+    !isRelayUserControl({ type: 'userControl' }),
+    'userControl requires hasControl',
   )
   ok('protocol guards reject malformed frames')
 }
@@ -460,6 +490,7 @@ await withRelay(async relay => {
       return { ok: 1 } as T
     },
     onCdpEvent: () => () => {},
+    notifyLock: () => {},
     close: async () => {},
   }
 
@@ -735,6 +766,60 @@ await withRelay(async relay => {
   )
   ok('playwright snapshot keeps dialogs and end chrome when truncated')
 
+  const saveErrors = [
+    '- alertdialog [active] [ref=e83]:',
+    '  - heading "Error" [level=2] [ref=e90]',
+    '  - generic [ref=e91]: Would you like to make corrections now?',
+    '  - button "Yes" [ref=e97] [cursor=pointer]',
+    '  - button "No" [ref=e98] [cursor=pointer]',
+  ].join('\n')
+  assert(
+    isBlockingMessageBox(saveErrors),
+    'an alertdialog with Yes/No is a blocking message box',
+  )
+  const inboxSheet = [
+    '- dialog [ref=e10]:',
+    '  - heading "我的沟通" [ref=e11]',
+    '  - button "Close" [ref=e12]',
+    ...Array.from({ length: 50 }, (_, i) => `  - button "Person ${i}" [ref=e${100 + i}]`),
+  ].join('\n')
+  assert(
+    !isBlockingMessageBox(inboxSheet),
+    'a large inbox dialog is not a blocking message box',
+  )
+  const waitOverlay = '- dialog [ref=e1]: Please wait…'
+  assert(
+    !isBlockingMessageBox(waitOverlay),
+    'a Please wait overlay is not a blocking message box',
+  )
+  ok('blocking message box heuristic keeps Error/Yes-No, drops sheets')
+
+  const errorHeadingOnly = [
+    '- heading "Error" [level=2] [ref=e90]',
+    '- button "OK" [ref=e91]',
+  ].join('\n')
+  assert(
+    !isBlockingMessageBox(errorHeadingOnly),
+    'an Error heading without alertdialog/dialog is not a blocking message box',
+  )
+  const yesNoLoose = ['- button "Yes" [ref=e1]', '- button "No" [ref=e2]'].join(
+    '\n',
+  )
+  assert(
+    !isBlockingMessageBox(yesNoLoose),
+    'Yes/No buttons without a dialog role are not a blocking message box',
+  )
+  const yesNoDialog = [
+    '- dialog [ref=e1]:',
+    '  - button "Yes" [ref=e2]',
+    '  - button "No" [ref=e3]',
+  ].join('\n')
+  assert(
+    isBlockingMessageBox(yesNoDialog),
+    'a small dialog that only has Yes/No is a blocking message box',
+  )
+  ok('blocking message box does not key off Error heading copy')
+
   // Regression: maxNodes was accepted and silently ignored, so browser_snapshot
   // advertised a budget knob to the model that did nothing.
   const capped = prioritizeAriaSnapshot(yaml, {
@@ -753,6 +838,17 @@ await withRelay(async relay => {
   const uncapped = prioritizeAriaSnapshot(yaml, { maxChars: 200_000 })
   eq(uncapped.truncated, false, 'no node cap, no truncation at a huge char budget')
   ok('snapshot node cap bounds refs and keeps the dialog')
+
+  const interactive = keepInteractive(yaml)
+  assert(
+    interactive.includes('[ref=e11]') && interactive.includes('我的沟通'),
+    `interactive keeps ref-bearing controls:\n${interactive}`,
+  )
+  assert(
+    !interactive.includes('驻场广州汇丰') || interactive.includes('[ref=e1595]'),
+    'text-only descendants without their own ref are dropped unless they are the named node',
+  )
+  ok('interactive snapshot keeps refs and their ancestors')
 }
 
 {
@@ -823,6 +919,146 @@ await withRelay(async relay => {
     'blank leftover is not a match for a real URL',
   )
   ok('findPage matching ignores stale pages[0]')
+
+  const spaA = {
+    url: () => 'https://app.example.com/app/reports/AAA/items/new',
+  }
+  const spaB = {
+    url: () => 'https://app.example.com/app/reports/BBB',
+  }
+  const spaHome = { url: () => 'https://app.example.com/home' }
+  eq(
+    pickPageForTab(
+      [spaA],
+      'https://app.example.com/app/reports/AAA/items/xyz/edit',
+    ),
+    undefined,
+    'SPA path changes are not guessed from a URL prefix',
+  )
+  eq(
+    pickPageForTab([spaHome, spaB], 'https://app.example.com/home'),
+    spaHome,
+    'home is an exact path match',
+  )
+  ok('findPage matches origin+path and does not guess SPA routes')
+}
+
+{
+  assert(isHeavyMediaFrame('https://cdn.example/invoice.pdf'), 'pdf url is heavy')
+  assert(isHeavyMediaFrame('blob:https://app.example/uuid'), 'blob preview is heavy')
+  assert(isHeavyMediaFrame('', 'application/pdf'), 'pdf mime is heavy')
+  assert(
+    isHeavyMediaFrame(
+      'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html',
+    ),
+    'chrome pdf viewer is heavy',
+  )
+  assert(!isHeavyMediaFrame('https://app.example/nui/expense'), 'app frame is not heavy')
+  assert(
+    SNAPSHOT_STALL_NEXT.includes('getByRole') &&
+      SNAPSHOT_STALL_NEXT.includes('evaluate'),
+    'stall hint tells the model to click via Playwright getByRole',
+  )
+  ok('heavy media frames are detected from src/type')
+}
+
+{
+  const expr = normalizeBrowserEvaluateFunctionSource('document.title')
+  assert(expr.includes('document.title'), expr)
+  const fn = normalizeBrowserEvaluateFunctionSource('() => 1')
+  eq(fn, '() => 1', 'function source is kept')
+  const withEl = normalizeBrowserEvaluateFunctionSource('el.textContent', {
+    argumentName: 'el',
+  })
+  assert(withEl.includes('el.textContent') && withEl.includes('(el)'), withEl)
+  ok('evaluate source wraps expressions like OpenClaw')
+}
+
+{
+  resetSessionFlags()
+  assert(!isSnapshotDegraded('t1'), 'degraded starts false')
+  setSnapshotDegraded('t1', true)
+  assert(isSnapshotDegraded('t1'), 'degraded can be set')
+  setSnapshotDegraded('t1', false)
+  assert(!isSnapshotDegraded('t1'), 'degraded can be cleared')
+  setUserHasControl(true)
+  assert(getUserHasControl(), 'user can take control')
+  rememberSnapshot(
+    't1',
+    '- button "Delete Alice" [ref=e12]\n- button "Apply changes" [ref=e20]',
+  )
+  eq(getRefMeta('t1', 'e12')?.name, 'Delete Alice', 'sticky ref meta')
+  rememberSnapshot('t1', '- button "Delete Bob" [ref=e12]')
+  eq(
+    getRefMeta('t1', 'e12')?.name,
+    'Delete Alice',
+    'first-seen name is not overwritten when the same ref is recycled',
+  )
+  assert(getLastSnapshot('t1')?.includes('Delete Bob'), 'last snapshot yaml updates')
+  resetSessionFlags()
+  assert(!getUserHasControl(), 'close/reset returns control to the agent')
+  assert(!getRefMeta('t1', 'e12'), 'reset clears ref memory')
+  ok('session flags for snapshot health and user control')
+}
+
+{
+  const meta = parseRefMeta(
+    '- heading "Dashboard" [level=1] [ref=e1]\n- button "Apply changes" [ref=e2]\n- generic [ref=e3]',
+  )
+  eq(meta.length, 3, 'parse three refs')
+  eq(meta[1].role, 'button', 'role')
+  eq(meta[1].name, 'Apply changes', 'name')
+  assert(namesOverlap('Delete Alice', 'delete alice'), 'names overlap')
+  assert(!namesOverlap('Delete Alice', 'Delete Bob'), 'Alice is not Bob')
+  assert(
+    elementMatchesHint({ role: 'button', name: 'Apply changes' }, 'Apply changes'),
+    'hint matches name',
+  )
+  assert(
+    !elementMatchesHint({ role: 'button', name: 'Delete Bob' }, 'Delete Alice'),
+    'hint rejects recycled name',
+  )
+  const diff = snapshotDiff(
+    '- button "Save" [ref=e1]',
+    '- button "Save" [ref=e1]\n- button "Cancel" [ref=e2]',
+  )
+  assert(diff.includes('Added') && diff.includes('Cancel'), diff)
+  ok('snapshot index parse / hint / diff')
+}
+
+{
+  eq(
+    assertNavigateUrl('https://example.com/a'),
+    'https://example.com/a',
+    'https ok',
+  )
+  eq(
+    assertNavigateUrl('http://localhost:5173/'),
+    'http://localhost:5173/',
+    'localhost ok',
+  )
+  let blocked = ''
+  try {
+    assertNavigateUrl('file:///C:/secret.txt')
+  } catch (err) {
+    blocked = err instanceof Error ? err.message : String(err)
+  }
+  assert(/file:/.test(blocked), blocked)
+  blocked = ''
+  try {
+    assertNavigateUrl('javascript:alert(1)')
+  } catch (err) {
+    blocked = err instanceof Error ? err.message : String(err)
+  }
+  assert(/javascript:/.test(blocked), blocked)
+  blocked = ''
+  try {
+    assertNavigateUrl('https://user:pass@example.com')
+  } catch (err) {
+    blocked = err instanceof Error ? err.message : String(err)
+  }
+  assert(/credentials/.test(blocked), blocked)
+  ok('navigate policy allows http(s) and localhost, blocks file/js/credentials')
 }
 
 {

@@ -4,7 +4,7 @@
  */
 
 import type { Locator, Page } from 'playwright-core'
-import { BrowserError, StaleRefError, type ResolvedElement } from '../types.js'
+import { BrowserError, type ResolvedElement } from '../types.js'
 
 export function normalizeRef(ref: string): string {
   const trimmed = ref.trim()
@@ -17,62 +17,54 @@ export function refLocator(page: Page, ref: string): Locator {
   return page.locator(`aria-ref=${normalizeRef(ref)}`)
 }
 
-const STALE =
-  /No node found for selector|strict mode violation|element was detached/i
 /**
- * Playwright logs this line once the selector matched something. Its presence in
- * a timeout is the difference between the two failures the model must tell
- * apart: a ref that points at nothing any more, and an element that is right
- * there but refusing the action because something covers it.
+ * OpenClaw `toAIFriendlyError`. Playwright's locator failures become the next
+ * snapshot/click the model should take.
  */
-const RESOLVED = /locator resolved to/i
-const TIMED_OUT = /Timeout|waiting for locator/i
+export function toAIFriendlyMessage(error: unknown, selector: string): string {
+  const message = error instanceof Error ? error.message : String(error)
 
-function staleText(ref?: string): string {
-  return ref
-    ? `No element for ref ${ref}. The page changed; take a fresh snapshot.`
-    : 'Playwright could not find the target. Take a fresh snapshot.'
-}
-
-/**
- * Why an element that exists refused the action. Playwright's call log already
- * names the overlay that swallowed the click; flattening it to a timeout threw
- * away the one detail that tells the model what to do next.
- */
-function notActionableText(message: string, ref?: string): string {
-  const lines = message.split('\n').map(l => l.trim().replace(/^-\s*/, ''))
-  const what = ref ? `ref ${ref}` : 'the element'
-  const blocker = lines.find(l => l.includes('intercepts pointer events'))
-  if (blocker) {
-    return `Action on ${what} was blocked: ${blocker}. Dismiss the overlay or act on it instead.`
+  if (message.includes('strict mode violation')) {
+    const countMatch = message.match(/resolved to (\d+) elements/)
+    const count = countMatch ? countMatch[1] : 'multiple'
+    return (
+      `Selector "${selector}" matched ${count} elements. ` +
+      `Run a new snapshot to get updated refs, or use a different ref.`
+    )
   }
-  const why = lines.find(l => /element is not (visible|enabled|stable)/i.test(l))
-  if (why) return `${what} never became actionable: ${why}.`
-  return `${what} did not accept the action in time. Take a fresh snapshot to see the current state.`
+
+  if (
+    (message.includes('Timeout') || message.includes('waiting for')) &&
+    (message.includes('to be visible') ||
+      message.includes('not visible') ||
+      message.includes('waiting for locator('))
+  ) {
+    return (
+      `Element "${selector}" not found or not visible. ` +
+      `Run a new snapshot to see current page elements.`
+    )
+  }
+
+  if (
+    message.includes('intercepts pointer events') ||
+    message.includes('not visible') ||
+    message.includes('not receive pointer events')
+  ) {
+    return (
+      `Element "${selector}" is not interactable (hidden or covered). ` +
+      `Try scrolling it into view, closing overlays, or re-snapshotting.`
+    )
+  }
+
+  return message
 }
 
 export function mapPlaywrightError(err: unknown, ref?: string): never {
-  const message = err instanceof Error ? err.message : String(err)
-  if (STALE.test(message)) throw new StaleRefError(staleText(ref))
-  if (RESOLVED.test(message)) {
-    throw new BrowserError(notActionableText(message, ref))
-  }
-  if (TIMED_OUT.test(message)) throw new StaleRefError(staleText(ref))
-  throw new BrowserError(message)
+  throw new BrowserError(toAIFriendlyMessage(err, ref || 'element'))
 }
 
-/**
- * The same classification as one line, for a failure that belongs to a single
- * field of a batch and must not throw away the fields that did land.
- */
 export function briefError(err: unknown, ref: string): string {
-  const message = err instanceof Error ? err.message : String(err)
-  if (STALE.test(message)) return `no element for ref ${ref} — take a fresh snapshot`
-  if (RESOLVED.test(message)) return notActionableText(message, ref)
-  if (TIMED_OUT.test(message)) {
-    return `no element for ref ${ref} — take a fresh snapshot`
-  }
-  return message.split('\n')[0] ?? message
+  return toAIFriendlyMessage(err, ref).split('\n')[0] ?? toAIFriendlyMessage(err, ref)
 }
 
 const EDITABLE_PARTS = [

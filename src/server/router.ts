@@ -13,6 +13,11 @@ import { answerQuestion } from '../core/brokers/question-broker.js'
 import { answerPlanApproval } from '../core/brokers/plan-approval-broker.js'
 import { getPlanFilePath } from '../utils/plans.js'
 import { readBody, sendJSON, setCORS } from './http.js'
+import { isBrowserLive } from '../browser/manager.js'
+import {
+  getUserHasControl,
+  setUserHasControl,
+} from '../browser/session-flags.js'
 import { loadWorkspaceContributions } from '../core/workspace-load.js'
 import { findPrimaryAgent } from '../tools/AgentTool/mergeAgents.js'
 import {
@@ -159,6 +164,28 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
       } catch (e) {
         sendJSON(res, 500, { error: (e as Error).message })
       }
+      return
+    }
+
+    if (method === 'GET' && url === '/browser/lock') {
+      sendJSON(res, 200, {
+        live: isBrowserLive(),
+        userHasControl: getUserHasControl(),
+      })
+      return
+    }
+
+    if (method === 'POST' && url === '/browser/lock') {
+      const body = await readBody(req)
+      if (typeof body.userHasControl !== 'boolean') {
+        sendJSON(res, 400, { error: 'userHasControl must be a boolean' })
+        return
+      }
+      setUserHasControl(body.userHasControl)
+      sendJSON(res, 200, {
+        live: isBrowserLive(),
+        userHasControl: getUserHasControl(),
+      })
       return
     }
 

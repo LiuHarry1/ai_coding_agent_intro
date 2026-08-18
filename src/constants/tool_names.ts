@@ -31,6 +31,8 @@ export const BROWSER_CLICK_TOOL_NAME = 'browser_click'
 export const BROWSER_TYPE_TOOL_NAME = 'browser_type'
 export const BROWSER_FILL_FORM_TOOL_NAME = 'browser_fill_form'
 export const BROWSER_SELECT_OPTION_TOOL_NAME = 'browser_select_option'
+export const BROWSER_FILE_UPLOAD_TOOL_NAME = 'browser_file_upload'
+export const BROWSER_HANDLE_DIALOG_TOOL_NAME = 'browser_handle_dialog'
 export const BROWSER_PRESS_KEY_TOOL_NAME = 'browser_press_key'
 export const BROWSER_WAIT_FOR_TOOL_NAME = 'browser_wait_for'
 export const BROWSER_HOVER_TOOL_NAME = 'browser_hover'
@@ -40,6 +42,10 @@ export const BROWSER_CONSOLE_TOOL_NAME = 'browser_console'
 export const BROWSER_NETWORK_TOOL_NAME = 'browser_network'
 export const BROWSER_TABS_TOOL_NAME = 'browser_tabs'
 export const BROWSER_EVALUATE_TOOL_NAME = 'browser_evaluate'
+export const BROWSER_LOCK_TOOL_NAME = 'browser_lock'
+export const BROWSER_FIND_TOOL_NAME = 'browser_find'
+export const BROWSER_DRAG_TOOL_NAME = 'browser_drag'
+export const BROWSER_MOUSE_CLICK_XY_TOOL_NAME = 'browser_mouse_click_xy'
 
 export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_NAVIGATE_TOOL_NAME,
@@ -48,14 +54,21 @@ export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_TYPE_TOOL_NAME,
   BROWSER_FILL_FORM_TOOL_NAME,
   BROWSER_SELECT_OPTION_TOOL_NAME,
+  BROWSER_FILE_UPLOAD_TOOL_NAME,
+  BROWSER_HANDLE_DIALOG_TOOL_NAME,
   BROWSER_PRESS_KEY_TOOL_NAME,
   BROWSER_WAIT_FOR_TOOL_NAME,
   BROWSER_HOVER_TOOL_NAME,
   BROWSER_SCROLL_TOOL_NAME,
   BROWSER_SCREENSHOT_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
+  BROWSER_NETWORK_TOOL_NAME,
   BROWSER_TABS_TOOL_NAME,
   BROWSER_EVALUATE_TOOL_NAME,
+  BROWSER_LOCK_TOOL_NAME,
+  BROWSER_FIND_TOOL_NAME,
+  BROWSER_DRAG_TOOL_NAME,
+  BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
 ]
 
 /** Browser tools that only observe — safe in Ask mode. */
@@ -63,8 +76,11 @@ export const BROWSER_READ_ONLY_TOOL_NAMES: readonly string[] = [
   BROWSER_SNAPSHOT_TOOL_NAME,
   BROWSER_SCREENSHOT_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
+  BROWSER_NETWORK_TOOL_NAME,
   BROWSER_TABS_TOOL_NAME,
   BROWSER_WAIT_FOR_TOOL_NAME,
+  BROWSER_LOCK_TOOL_NAME,
+  BROWSER_FIND_TOOL_NAME,
 ]
 
 export const MUTATING_TOOLS: readonly string[] = [
