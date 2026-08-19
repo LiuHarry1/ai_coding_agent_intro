@@ -30,6 +30,7 @@ import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
 import { getSystemPromptForMode } from '../prompts/mode.js'
 import { getSystemPromptForAgentProfile } from '../prompts/agent-profile.js'
 import { applyModeRestrictions } from '../core/mode-restrictions.js'
+import { filterToolsRecordByDisallowedGlobs } from '../tools/AgentTool/toolGlob.js'
 import { planExists } from '../utils/plans.js'
 import { createMemoryLifecycleHooks } from './memory-lifecycle.js'
 import {
@@ -108,7 +109,12 @@ async function resolveTurnSystemPrompt(
   planOpts: { planFilePath: string; planExists: boolean },
 ): Promise<string> {
   if (session.permissionMode.mode === 'agent' && profile) {
-    return getSystemPromptForAgentProfile(profile, cwd, projectRules)
+    return getSystemPromptForAgentProfile(
+      profile,
+      cwd,
+      projectRules,
+      session.id,
+    )
   }
   return getSystemPromptForMode(
     session.permissionMode.mode,
@@ -455,12 +461,14 @@ export async function runChatTurn(
     },
   )
 
-  const refreshTools = () =>
-    applyModeRestrictions(
+  const refreshTools = () => {
+    const next = applyModeRestrictions(
       session.permissionMode.mode,
       prepared.baseTools,
       prepared.modeTools,
     )
+    return filterToolsRecordByDisallowedGlobs(next, prepared.denyGlobs)
+  }
 
   const refreshSystemPrompt = () =>
     resolveTurnSystemPrompt(

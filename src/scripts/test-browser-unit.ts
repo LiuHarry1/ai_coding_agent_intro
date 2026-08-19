@@ -49,10 +49,25 @@ import {
   pickPageForTab,
   urlsRoughlyEqual,
 } from '../browser/playwright/page-match.js'
-import { initBrowserLifecycle } from '../browser/manager.js'
+import {
+  closeBrowser,
+  getCurrentTabId,
+  initBrowserLifecycle,
+  isBrowserLive,
+  resolveTab,
+  setBrowserBackendFactory,
+  setCurrentTab,
+} from '../browser/manager.js'
 import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../browser/heavy-media.js'
 import { normalizeBrowserEvaluateFunctionSource } from '../browser/evaluate-source.js'
 import { assertNavigateUrl } from '../browser/navigate-policy.js'
+import {
+  planAnnotations,
+  scaleAnnotations,
+} from '../browser/screenshot-annotate.js'
+import { appendSnapshotUrls } from '../browser/snapshot-urls.js'
+import { sanitizeUntrustedFileName } from '../browser/fs-safe/filename.js'
+import { writeExternalFileWithinOutputRoot } from '../browser/output-files.js'
 import {
   elementMatchesHint,
   namesOverlap,
@@ -666,7 +681,7 @@ await withRelay(async relay => {
 
 {
   eq(normalizeRef('e12'), 'e12', 'bare ref')
-  eq(normalizeRef('@e12'), 'e12', 'openclaw @ prefix')
+  eq(normalizeRef('@e12'), 'e12', '@ prefix')
   eq(normalizeRef('ref=e12'), 'e12', 'ref= prefix')
   ok('playwright ref locator accepts eN / @eN / ref=eN')
 }
@@ -971,7 +986,7 @@ await withRelay(async relay => {
     argumentName: 'el',
   })
   assert(withEl.includes('el.textContent') && withEl.includes('(el)'), withEl)
-  ok('evaluate source wraps expressions like OpenClaw')
+  ok('evaluate source wraps expressions')
 }
 
 {
@@ -983,6 +998,10 @@ await withRelay(async relay => {
   assert(!isSnapshotDegraded('t1'), 'degraded can be cleared')
   setUserHasControl(true)
   assert(getUserHasControl(), 'user can take control')
+  setUserHasControl(true, 'chat-a')
+  setUserHasControl(false, 'chat-b')
+  assert(getUserHasControl('chat-a'), 'lock is per session')
+  assert(!getUserHasControl('chat-b'), 'other session stays with the agent')
   rememberSnapshot(
     't1',
     '- button "Delete Alice" [ref=e12]\n- button "Apply changes" [ref=e20]',
@@ -1071,6 +1090,139 @@ await withRelay(async relay => {
     if (prev === undefined) delete process.env.AUTH_ENABLED
     else process.env.AUTH_ENABLED = prev
   }
+}
+
+{
+  // planAnnotations / scaleAnnotations
+  const sampleInputs = [
+    {
+      ref: 'e1',
+      role: 'button',
+      name: 'Submit',
+      doc: { x: 100, y: 200, width: 50, height: 20 },
+    },
+    {
+      ref: 'e2',
+      role: 'link',
+      doc: { x: 300, y: 1500, width: 80, height: 18 },
+    },
+  ]
+  const plan = planAnnotations({
+    inputs: sampleInputs,
+    space: 'viewport',
+    scroll: { x: 0, y: 1000 },
+  })
+  eq(plan.annotations.length, 2, 'two annotations')
+  eq(plan.annotations[0].box.y, -800, 'viewport subtracts scroll')
+  eq(plan.skipped, 0, 'none skipped without viewport size')
+  const off = planAnnotations({
+    inputs: [
+      { ref: 'e1', role: 'button', doc: { x: 10, y: 50, width: 40, height: 20 } },
+      { ref: 'e2', role: 'link', doc: { x: 10, y: 5000, width: 40, height: 20 } },
+    ],
+    space: 'viewport',
+    scroll: { x: 0, y: 0 },
+    viewport: { width: 1280, height: 720 },
+  })
+  eq(off.overlayItems.length, 1, 'only in-viewport overlay')
+  eq(off.skipped, 1, 'off-viewport counted skipped')
+  const scaled = scaleAnnotations(plan.annotations, 2, 2)
+  eq(scaled[0].box.width, 100, 'scaleAnnotations doubles width')
+  const withLinks = appendSnapshotUrls('- button "Go" [ref=e1]', [
+    { text: 'Go', url: 'https://example.com' },
+  ])
+  assert(withLinks.includes('Links:'), withLinks)
+  assert(withLinks.includes('https://example.com'), withLinks)
+  ok('planAnnotations / appendSnapshotUrls')
+}
+
+{
+  eq(
+    sanitizeUntrustedFileName('../evil.txt', 'download.bin'),
+    'evil.txt',
+    'basename only',
+  )
+  eq(
+    sanitizeUntrustedFileName('CON.txt', 'download.bin'),
+    'CON_.txt',
+    'Windows reserved CON',
+  )
+  eq(
+    sanitizeUntrustedFileName('', 'download.bin'),
+    'download.bin',
+    'empty fallback',
+  )
+  eq(
+    sanitizeUntrustedFileName('a<>:"|?*.bin', 'download.bin'),
+    'a.bin',
+    'strips invalid chars',
+  )
+  ok('copied sanitizeUntrustedFileName')
+}
+
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-agent-dl-'))
+  const saved = await writeExternalFileWithinOutputRoot({
+    rootDir: dir,
+    path: path.join(dir, 'ok.bin'),
+    write: async filePath => {
+      fs.writeFileSync(filePath, 'hello')
+    },
+  })
+  eq(fs.readFileSync(saved, 'utf8'), 'hello', 'sibling write contents')
+  let escaped = false
+  try {
+    await writeExternalFileWithinOutputRoot({
+      rootDir: dir,
+      path: path.join(dir, '..', 'escape.bin'),
+      write: async filePath => {
+        fs.writeFileSync(filePath, 'nope')
+      },
+    })
+  } catch {
+    escaped = true
+  }
+  assert(escaped, 'path escape rejected')
+  fs.rmSync(dir, { recursive: true, force: true })
+  ok('copied writeExternalFileWithinOutputRoot')
+}
+
+{
+  await closeBrowser()
+  let n = 0
+  setBrowserBackendFactory(async () => {
+    const id = `tab-${++n}`
+    return {
+      kind: 'isolated' as const,
+      async listTabs() {
+        return [{ targetId: id, url: `http://x.test/${id}`, title: id }]
+      },
+      async createTab() {
+        return { targetId: id, url: `http://x.test/${id}`, title: id }
+      },
+      async closeTab() {},
+      async send() {
+        return {} as never
+      },
+      async dispose() {},
+    }
+  })
+  const a = await resolveTab(process.cwd(), undefined, 'sess-a')
+  const b = await resolveTab(process.cwd(), undefined, 'sess-b')
+  eq(a.targetId, 'tab-1', 'session a has its own backend tab')
+  eq(b.targetId, 'tab-2', 'session b has its own backend tab')
+  eq(getCurrentTabId('sess-a'), 'tab-1', 'current tab is per session')
+  eq(getCurrentTabId('sess-b'), 'tab-2', 'other session current tab unchanged')
+  setCurrentTab('tab-1', 'sess-b')
+  eq(getCurrentTabId('sess-a'), 'tab-1', 'setting b does not steal a')
+  eq(getCurrentTabId('sess-b'), 'tab-1', 'b can retarget independently')
+  await closeBrowser('sess-a')
+  assert(!isBrowserLive('sess-a'), 'closed session a')
+  assert(isBrowserLive('sess-b'), 'session b still live')
+  await closeBrowser()
+  setBrowserBackendFactory(null)
+  assert(!isBrowserLive(), 'all sessions closed')
+  ok('isolated chrome is per chat session')
 }
 
 console.log('\nall browser unit tests passed')

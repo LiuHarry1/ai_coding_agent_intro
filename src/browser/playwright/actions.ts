@@ -12,6 +12,7 @@ import type { Frame, Locator, Page } from 'playwright-core'
 import { ensureScript } from '../page-inspect.js'
 import {
   ACTION_TIMEOUT_MS,
+  ACT_MAX_VIEWPORT_DIMENSION,
   NAVIGATE_NETWORK_DRAIN_MS,
   NAVIGATE_SETTLE_MS,
   NAVIGATE_TIMEOUT_MS,
@@ -99,9 +100,8 @@ function escapeRegExp(s: string): string {
 }
 
 /**
- * Playwright MCP compiles clicks to `page.getByRole(role, { name }).click()`
- * when it has a snapshot. After a stalled snapshot we skip the ref and use
- * the same locator API.
+ * After a stalled snapshot, click with `page.getByRole(role, { name })`
+ * instead of a ref.
  */
 async function locateByRoleName(
   page: Page,
@@ -414,18 +414,76 @@ export async function pressKey(
   }
 }
 
+function resolveViewportDimension(value: unknown, label: 'width' | 'height'): number {
+  const dimension = Math.floor(Number(value))
+  if (!Number.isFinite(dimension) || dimension < 1) {
+    throw new BrowserError(`viewport ${label} must be >= 1`)
+  }
+  if (dimension > ACT_MAX_VIEWPORT_DIMENSION) {
+    throw new BrowserError(
+      `viewport ${label} exceeds maximum of ${ACT_MAX_VIEWPORT_DIMENSION}`,
+    )
+  }
+  return dimension
+}
+
+export async function resizeViewport(
+  backend: BrowserBackend,
+  targetId: string,
+  width: number,
+  height: number,
+): Promise<void> {
+  const page = await getPageForTarget(backend, targetId)
+  await page.setViewportSize({
+    width: resolveViewportDimension(width, 'width'),
+    height: resolveViewportDimension(height, 'height'),
+  })
+}
+
+export async function scrollIntoView(
+  backend: BrowserBackend,
+  targetId: string,
+  ref: string,
+): Promise<void> {
+  const page = await getPageForTarget(backend, targetId)
+  try {
+    await page.bringToFront().catch(() => {})
+    await refLocator(page, ref).scrollIntoViewIfNeeded({
+      timeout: ACTION_TIMEOUT_MS,
+    })
+  } catch (err) {
+    mapPlaywrightError(err, ref)
+  }
+}
+
 export async function scroll(
   backend: BrowserBackend,
   targetId: string,
-  opts: { deltaX?: number; deltaY?: number; ref?: string },
+  opts: {
+    deltaX?: number
+    deltaY?: number
+    ref?: string
+    scrollIntoView?: boolean
+    direction?: 'up' | 'down' | 'left' | 'right'
+    amount?: number
+  },
 ): Promise<void> {
   const page = await getPageForTarget(backend, targetId)
-  const deltaX = opts.deltaX ?? 0
-  const deltaY = opts.deltaY ?? 0
+  const amount = opts.amount ?? 300
+  let deltaX = opts.deltaX ?? 0
+  let deltaY = opts.deltaY ?? 0
+  if (opts.direction === 'up') deltaY = -amount
+  if (opts.direction === 'down') deltaY = amount
+  if (opts.direction === 'left') deltaX = -amount
+  if (opts.direction === 'right') deltaX = amount
   try {
     await page.bringToFront().catch(() => {})
+    if (opts.scrollIntoView && opts.ref) {
+      await scrollIntoView(backend, targetId, opts.ref)
+      return
+    }
     if (!opts.ref) {
-      await page.mouse.wheel(deltaX, deltaY)
+      await page.mouse.wheel(deltaX, deltaY || (deltaX ? 0 : 500))
       return
     }
     const loc = refLocator(page, opts.ref)

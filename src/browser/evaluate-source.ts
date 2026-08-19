@@ -1,5 +1,4 @@
 /**
- * OpenClaw `normalizeBrowserEvaluateFunctionSource`.
  * Turns an expression, statement body, or function source into something
  * `page.evaluate` can run. Playwright-free.
  */

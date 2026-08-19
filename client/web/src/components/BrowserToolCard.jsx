@@ -22,9 +22,10 @@ import {
   BROWSER_TYPE,
   BROWSER_WAIT_FOR,
   BROWSER_LOCK,
-  BROWSER_FIND,
   BROWSER_DRAG,
-  BROWSER_MOUSE_CLICK_XY,
+  BROWSER_RESIZE,
+  BROWSER_WAIT_FOR_DOWNLOAD,
+  BROWSER_BATCH,
 } from '../lib/tool-names.js'
 
 /**
@@ -55,9 +56,10 @@ const ICONS = {
   [BROWSER_TABS]: '\u{1F5C2}',
   [BROWSER_EVALUATE]: '\u{0192}',
   [BROWSER_LOCK]: '\u{1F512}',
-  [BROWSER_FIND]: '\u{1F50E}',
   [BROWSER_DRAG]: '\u{2194}',
-  [BROWSER_MOUSE_CLICK_XY]: '\u{1F5B1}',
+  [BROWSER_RESIZE]: '\u{2922}',
+  [BROWSER_WAIT_FOR_DOWNLOAD]: '\u{1F4E5}',
+  [BROWSER_BATCH]: '\u{2261}',
 }
 
 const RUNNING_LABELS = {
@@ -79,9 +81,10 @@ const RUNNING_LABELS = {
   [BROWSER_TABS]: 'Managing tabs',
   [BROWSER_EVALUATE]: 'Evaluating',
   [BROWSER_LOCK]: 'Locking browser',
-  [BROWSER_FIND]: 'Searching page',
   [BROWSER_DRAG]: 'Dragging',
-  [BROWSER_MOUSE_CLICK_XY]: 'Clicking at point',
+  [BROWSER_RESIZE]: 'Resizing viewport',
+  [BROWSER_WAIT_FOR_DOWNLOAD]: 'Waiting for download',
+  [BROWSER_BATCH]: 'Running batch',
 }
 
 const DONE_LABELS = {
@@ -103,9 +106,10 @@ const DONE_LABELS = {
   [BROWSER_TABS]: 'Tabs',
   [BROWSER_EVALUATE]: 'Evaluated',
   [BROWSER_LOCK]: 'Browser lock',
-  [BROWSER_FIND]: 'Found on page',
   [BROWSER_DRAG]: 'Dragged',
-  [BROWSER_MOUSE_CLICK_XY]: 'Clicked at point',
+  [BROWSER_RESIZE]: 'Resized viewport',
+  [BROWSER_WAIT_FOR_DOWNLOAD]: 'Download saved',
+  [BROWSER_BATCH]: 'Batch done',
 }
 
 function compactUrl(url) {

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useChatStore } from '../stores/chat-store.js'
 import { agentApi } from '../lib/api/agent.js'
 
 /**
@@ -6,19 +7,20 @@ import { agentApi } from '../lib/api/agent.js'
  * (Cursor Take Control) without waiting for the model to call browser_lock.
  */
 export default function BrowserLockBar() {
+  const currentSessionId = useChatStore(s => s.currentSessionId)
   const [live, setLive] = useState(false)
   const [userHasControl, setUserHasControl] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
-      const data = await agentApi.getBrowserLock()
+      const data = await agentApi.getBrowserLock(currentSessionId)
       setLive(Boolean(data?.live))
       setUserHasControl(Boolean(data?.userHasControl))
     } catch {
       setLive(false)
     }
-  }, [])
+  }, [currentSessionId])
 
   useEffect(() => {
     refresh()
@@ -29,7 +31,7 @@ export default function BrowserLockBar() {
   const handoff = async next => {
     setBusy(true)
     try {
-      const data = await agentApi.setBrowserLock(next)
+      const data = await agentApi.setBrowserLock(next, currentSessionId)
       setLive(Boolean(data?.live))
       setUserHasControl(Boolean(data?.userHasControl))
     } catch {

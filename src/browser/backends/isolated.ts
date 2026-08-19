@@ -46,7 +46,7 @@ export async function createIsolatedBackend(
   try {
     context = await chromium.launchPersistentContext(opts.userDataDir, {
       channel: opts.channel ?? 'chrome',
-      headless: opts.headless ?? true,
+      headless: opts.headless ?? false,
       viewport,
       args: [
         '--no-first-run',

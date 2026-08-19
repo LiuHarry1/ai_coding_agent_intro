@@ -26,11 +26,13 @@ import {
   getBrowser,
   getCurrentTabId,
   openTab,
+  recordHandoff,
   resolveTab,
   setCurrentTab,
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
 import { getUserHasControl, setUserHasControl } from '../../browser/session-flags.js'
+import { resolveSettings } from '../../core/settings-manager.js'
 import {
   BROWSER_CLICK_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
@@ -41,11 +43,10 @@ import {
   BROWSER_HOVER_TOOL_NAME,
   BROWSER_LOCK_TOOL_NAME,
   BROWSER_DRAG_TOOL_NAME,
-  BROWSER_FIND_TOOL_NAME,
-  BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
   BROWSER_NAVIGATE_TOOL_NAME,
   BROWSER_NETWORK_TOOL_NAME,
   BROWSER_PRESS_KEY_TOOL_NAME,
+  BROWSER_RESIZE_TOOL_NAME,
   BROWSER_SCREENSHOT_TOOL_NAME,
   BROWSER_SCROLL_TOOL_NAME,
   BROWSER_SELECT_OPTION_TOOL_NAME,
@@ -53,6 +54,8 @@ import {
   BROWSER_TABS_TOOL_NAME,
   BROWSER_TYPE_TOOL_NAME,
   BROWSER_WAIT_FOR_TOOL_NAME,
+  BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME,
+  BROWSER_BATCH_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import type {
   DualChannelToolResult,
@@ -190,11 +193,14 @@ const USER_CONTROL_ALLOWED = new Set([
   BROWSER_TABS_TOOL_NAME,
   BROWSER_EVALUATE_TOOL_NAME,
   BROWSER_WAIT_FOR_TOOL_NAME,
-  BROWSER_FIND_TOOL_NAME,
 ])
 
-function assertAgentMayAct(toolName: string, args: unknown): void {
-  if (!getUserHasControl()) return
+function assertAgentMayAct(
+  toolName: string,
+  args: unknown,
+  sessionId?: string,
+): void {
+  if (!getUserHasControl(sessionId)) return
   if (toolName === BROWSER_TABS_TOOL_NAME) {
     const action = (args as { action?: string } | undefined)?.action
     if (!action || action === 'list') return
@@ -235,23 +241,40 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
           let resolved: { backend: BrowserBackend; targetId: string } | undefined
           try {
             const cwdNow = context.cwd ?? cwd
+            const sessionId = context.sessionId
             if (cfg.requireTab === false) {
-              const backend = await withTimeout(getBrowser(cwdNow), cfg.name)
-              resolved = { backend, targetId: getCurrentTabId() ?? '' }
+              const backend = await withTimeout(
+                getBrowser(cwdNow, sessionId),
+                cfg.name,
+              )
+              resolved = {
+                backend,
+                targetId: getCurrentTabId(sessionId) ?? '',
+              }
             } else {
-              resolved = await withTimeout(resolveTab(cwdNow), cfg.name)
+              resolved = await withTimeout(
+                resolveTab(cwdNow, undefined, sessionId),
+                cfg.name,
+              )
             }
-            assertAgentMayAct(cfg.name, args)
+            assertAgentMayAct(cfg.name, args, sessionId)
             const data = await withTimeout(
               cfg.run(args, {
                 backend: resolved.backend,
                 targetId: resolved.targetId,
                 cwd: cwdNow,
-                sessionId: context.sessionId,
+                sessionId,
                 toolCallId,
               }),
               cfg.name,
             )
+            if (data.url || data.title) {
+              recordHandoff(sessionId, {
+                targetId: resolved.targetId || undefined,
+                url: data.url,
+                title: data.title,
+              })
+            }
             return { data }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -290,7 +313,7 @@ export const navigateTool = defineBrowserTool({
   async run({ url, action }, ctx) {
     let targetId = ctx.targetId
     if (!targetId) {
-      const tab = await openTab(ctx.cwd)
+      const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
       targetId = tab.targetId
     }
     resetConsoleWatermark(targetId)
@@ -345,8 +368,14 @@ export const snapshotTool = defineBrowserTool({
       .describe(
         'Return only added/removed lines since the last snapshot',
       ),
+    urls: z
+      .boolean()
+      .optional()
+      .describe(
+        'Append discovered link hrefs',
+      ),
   }),
-  async run({ maxNodes, selector, compact, interactive, includeDiff }, ctx) {
+  async run({ maxNodes, selector, compact, interactive, includeDiff, urls }, ctx) {
     return observe(ctx.backend, ctx.targetId, {
       action: 'snapshot',
       message: includeDiff ? 'Page snapshot (diff)' : 'Page snapshot',
@@ -355,6 +384,7 @@ export const snapshotTool = defineBrowserTool({
       compact,
       interactive,
       includeDiff,
+      urls,
       skipIfDegraded: false,
     })
   },
@@ -408,7 +438,7 @@ export const clickTool = defineBrowserTool({
     force: z
       .boolean()
       .optional()
-      .describe('Skip Playwright actionability checks (OpenClaw click force)'),
+      .describe('Skip Playwright actionability checks'),
   }),
   async run(args, ctx) {
     const el = await pw.click(ctx.backend, ctx.targetId, {
@@ -450,6 +480,10 @@ export const typeTool = defineBrowserTool({
       .boolean()
       .optional()
       .describe('Send per-character key events for widgets that need keydown'),
+    screenshotAfterwards: z
+      .boolean()
+      .optional()
+      .describe('Also capture a screenshot after typing'),
   }),
   async run(args, ctx) {
     const el = await pw.typeText(ctx.backend, ctx.targetId, {
@@ -469,11 +503,17 @@ export const typeTool = defineBrowserTool({
           : el.value !== ''
             ? ` (value: ${JSON.stringify(el.value)})`
             : ' (value still empty — the field did not accept the text)'
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'type',
-      message: `Typed ${JSON.stringify(args.text)} into ${el.role} "${el.name}"${args.submit ? ' and pressed Enter' : ''}${valueNote}`,
-      compact: true,
-    })
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'type',
+        message: `Typed ${JSON.stringify(args.text)} into ${el.role} "${el.name}"${args.submit ? ' and pressed Enter' : ''}${valueNote}`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -648,7 +688,7 @@ export const waitForTool = defineBrowserTool({
     selector: z
       .string()
       .optional()
-      .describe('CSS selector to wait until visible (OpenClaw wait --selector)'),
+      .describe('CSS selector to wait until visible'),
     url: z
       .string()
       .optional()
@@ -707,12 +747,27 @@ export const scrollTool = defineBrowserTool({
       .string()
       .optional()
       .describe('Scroll over this element instead of the page center'),
+    scrollIntoView: z
+      .boolean()
+      .optional()
+      .describe('Bring the ref into view'),
+    direction: z
+      .enum(['up', 'down', 'left', 'right'])
+      .optional()
+      .describe('Scroll direction'),
+    amount: z
+      .number()
+      .optional()
+      .describe('Pixels for direction (default 300)'),
   }),
   async run(args, ctx) {
     await pw.scroll(ctx.backend, ctx.targetId, {
       deltaX: args.deltaX,
-      deltaY: args.deltaY ?? (args.deltaX ? 0 : 500),
+      deltaY: args.deltaY,
       ref: args.ref,
+      scrollIntoView: args.scrollIntoView,
+      direction: args.direction,
+      amount: args.amount,
     })
     return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'scroll',
@@ -739,13 +794,26 @@ export const screenshotTool = defineBrowserTool({
       .enum(['png', 'jpeg'])
       .optional()
       .describe('Image format (default png)'),
+    labels: z
+      .boolean()
+      .optional()
+      .describe(
+        'Overlay snapshot refs on the screenshot and return their boxes',
+      ),
   }),
   async run(args, ctx) {
-    const shot = await pw.screenshot(ctx.backend, ctx.targetId, {
-      ref: args.ref,
-      fullPage: args.fullPage,
-      format: args.format,
-    })
+    const format = args.format ?? 'png'
+    const shot = args.labels
+      ? await pw.screenshotWithLabels(ctx.backend, ctx.targetId, {
+          ref: args.ref,
+          fullPage: args.fullPage,
+          type: format,
+        })
+      : await pw.screenshot(ctx.backend, ctx.targetId, {
+          ref: args.ref,
+          fullPage: args.fullPage,
+          format,
+        })
     const scope = args.ref
       ? `element ${args.ref}`
       : args.fullPage
@@ -753,11 +821,15 @@ export const screenshotTool = defineBrowserTool({
         : 'viewport'
     const out = await observe(ctx.backend, ctx.targetId, {
       action: 'screenshot',
-      message: `Screenshot of ${scope}`,
-      // The image is the answer here; a snapshot alongside it is noise.
+      message: args.labels
+        ? `Screenshot of ${scope} with ${shot.labels} labels (${shot.skipped} skipped)`
+        : `Screenshot of ${scope}`,
       withSnapshot: false,
     })
-    await attachScreenshot(out, shot, ctx.sessionId, ctx.toolCallId)
+    if (args.labels && 'annotations' in shot) {
+      out.annotations = shot.annotations
+    }
+    await attachScreenshot(out, { buffer: shot.buffer, format }, ctx.sessionId, ctx.toolCallId)
     return out
   },
 })
@@ -854,9 +926,9 @@ export const tabsTool = defineBrowserTool({
 
     switch (args.action) {
       case 'new': {
-        const tab = await openTab(ctx.cwd, args.url)
+        const tab = await openTab(ctx.cwd, args.url, ctx.sessionId)
         message = args.url ? `Opened ${args.url} in a new tab` : 'Opened a new tab'
-        setCurrentTab(tab.targetId)
+        setCurrentTab(tab.targetId, ctx.sessionId)
         break
       }
       case 'select': {
@@ -867,7 +939,7 @@ export const tabsTool = defineBrowserTool({
             `No open tab with id "${args.tabId}". Run browser_tabs with action "list".`,
           )
         }
-        setCurrentTab(args.tabId)
+        setCurrentTab(args.tabId, ctx.sessionId)
         await pw.activateTab(ctx.backend, args.tabId)
         message = `Selected tab ${args.tabId}`
         break
@@ -883,7 +955,7 @@ export const tabsTool = defineBrowserTool({
     }
 
     const tabs = await ctx.backend.listTabs()
-    const current = getCurrentTabId()
+    const current = getCurrentTabId(ctx.sessionId)
     const out: BrowserToolOutput = {
       action: 'tabs',
       message,
@@ -906,9 +978,12 @@ export const evaluateTool = defineBrowserTool({
     ref: z
       .string()
       .optional()
-      .describe('If set, the function runs on this snapshot element (OpenClaw evaluate --ref)'),
+      .describe('If set, the function runs on this snapshot element'),
   }),
   async run(args, ctx) {
+    const enabled =
+      resolveSettings(ctx.cwd).config.browser?.evaluateEnabled !== false
+    pw.assertEvaluateEnabled(enabled)
     const value = await pw.evaluate(ctx.backend, ctx.targetId, args.expression, {
       ref: args.ref,
     })
@@ -918,27 +993,6 @@ export const evaluateTool = defineBrowserTool({
       withSnapshot: false,
     })
     out.value = value ?? null
-    return out
-  },
-})
-
-export const findTool = defineBrowserTool({
-  name: BROWSER_FIND_TOOL_NAME,
-  summary: 'Search the last page snapshot for text',
-  description: prompt.FIND_DESCRIPTION,
-  inputSchema: z.object({
-    query: z.string().describe('Case-insensitive substring to match in the snapshot'),
-  }),
-  async run({ query }, ctx) {
-    const found = await pw.findInSnapshot(ctx.backend, ctx.targetId, query)
-    const out = await observe(ctx.backend, ctx.targetId, {
-      action: 'find',
-      message: found.fromCache
-        ? `Matches in the last snapshot for ${JSON.stringify(query)}`
-        : `Matches for ${JSON.stringify(query)}`,
-      withSnapshot: false,
-    })
-    out.snapshot = found.text
     return out
   },
 })
@@ -964,21 +1018,98 @@ export const dragTool = defineBrowserTool({
   },
 })
 
-export const mouseClickXyTool = defineBrowserTool({
-  name: BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
-  summary: 'Click at viewport coordinates',
-  description: prompt.MOUSE_CLICK_XY_DESCRIPTION,
+export const resizeTool = defineBrowserTool({
+  name: BROWSER_RESIZE_TOOL_NAME,
+  summary: 'Resize the browser viewport',
+  description: prompt.RESIZE_DESCRIPTION,
   inputSchema: z.object({
-    x: z.number().describe('Viewport X'),
-    y: z.number().describe('Viewport Y'),
+    width: z.number().int().positive().describe('Viewport width in CSS pixels'),
+    height: z
+      .number()
+      .int()
+      .positive()
+      .describe('Viewport height in CSS pixels'),
   }),
-  async run({ x, y }, ctx) {
-    const el = await pw.click(ctx.backend, ctx.targetId, { x, y })
+  async run(args, ctx) {
+    await pw.resizeViewport(ctx.backend, ctx.targetId, args.width, args.height)
     return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'click',
-      message: `Clicked at ${el.name}`,
+      action: 'resize',
+      message: `Resized viewport to ${args.width}x${args.height}`,
       compact: true,
     })
+  },
+})
+
+export const waitForDownloadTool = defineBrowserTool({
+  name: BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME,
+  summary: 'Wait for the next browser download and save it',
+  description: prompt.WAIT_FOR_DOWNLOAD_DESCRIPTION,
+  inputSchema: z.object({
+    path: z
+      .string()
+      .optional()
+      .describe('Optional destination path under the agent downloads directory'),
+    ref: z
+      .string()
+      .optional()
+      .describe('If set, click this ref then wait for the download'),
+  }),
+  async run(args, ctx) {
+    const dest = args.path
+      ? path.isAbsolute(args.path)
+        ? args.path
+        : path.resolve(ctx.cwd, args.path)
+      : undefined
+    const result = args.ref
+      ? await pw.downloadByRef(ctx.backend, ctx.targetId, {
+          ref: args.ref,
+          path: dest,
+        })
+      : await pw.waitForDownload(ctx.backend, ctx.targetId, { path: dest })
+    const out = await observeAfterAction(ctx.backend, ctx.targetId, {
+      action: 'wait_for_download',
+      message: `Saved download ${JSON.stringify(result.suggestedFilename)}`,
+      compact: true,
+    })
+    out.downloadPath = result.path
+    return out
+  },
+})
+
+export const batchTool = defineBrowserTool({
+  name: BROWSER_BATCH_TOOL_NAME,
+  summary: 'Run several page actions in one call',
+  description: prompt.BATCH_DESCRIPTION,
+  inputSchema: z.object({
+    actions: z
+      .array(z.object({}).passthrough())
+      .min(1)
+      .describe(
+        'Batch list: click, clickCoords, type, press, hover, scrollIntoView, drag, select, fill, resize, wait, evaluate, batch',
+      ),
+    stopOnError: z
+      .boolean()
+      .optional()
+      .describe('Stop on first failure (default true)'),
+  }),
+  async run(args, ctx) {
+    const evaluateEnabled =
+      resolveSettings(ctx.cwd).config.browser?.evaluateEnabled !== false
+    const batch = await pw.batchActions(ctx.backend, ctx.targetId, {
+      actions: args.actions as Parameters<typeof pw.batchActions>[2]['actions'],
+      stopOnError: args.stopOnError,
+      evaluateEnabled,
+    })
+    const ok = batch.results.filter(r => r.ok).length
+    const out = await observeAfterAction(ctx.backend, ctx.targetId, {
+      action: 'batch',
+      message: `Batch ${ok}/${batch.results.length} ok${
+        batch.aborted ? ` (aborted: ${batch.aborted.reason})` : ''
+      }`,
+      compact: true,
+    })
+    out.batchResults = batch.results
+    return out
   },
 })
 
@@ -996,7 +1127,7 @@ export const lockTool = defineBrowserTool({
   }),
   async run({ action }, ctx) {
     if (action === 'unlock') {
-      setUserHasControl(true)
+      setUserHasControl(true, ctx.sessionId)
       return {
         action: 'lock',
         message:
@@ -1005,7 +1136,7 @@ export const lockTool = defineBrowserTool({
         title: '',
       }
     }
-    setUserHasControl(false)
+    setUserHasControl(false, ctx.sessionId)
     const tabs = ctx.targetId
       ? await ctx.backend.listTabs().catch(() => [])
       : []
@@ -1037,8 +1168,9 @@ export const browserToolDefinitions: ToolDefinition[] = [
   networkTool,
   tabsTool,
   evaluateTool,
-  findTool,
   dragTool,
-  mouseClickXyTool,
+  resizeTool,
+  waitForDownloadTool,
+  batchTool,
   lockTool,
 ]

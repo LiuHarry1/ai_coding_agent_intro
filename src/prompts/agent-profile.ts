@@ -7,6 +7,19 @@ import type { AgentDefinition } from '../core/types.js'
 import { computeSimpleEnvInfo } from '../constants/prompts.js'
 import { setCwd } from '../utils/cwd.js'
 import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
+import { resolveSettings } from '../core/settings-manager.js'
+import { getBrowserHandoff } from '../browser/manager.js'
+import { browserAgentSessionSection } from './browser-agent-session.js'
+
+function resolveBrowserMode(cwd: string): 'isolated' | 'extension' {
+  try {
+    return resolveSettings(cwd).config.browser?.mode === 'extension'
+      ? 'extension'
+      : 'isolated'
+  } catch {
+    return 'isolated'
+  }
+}
 
 /**
  * Build the effective system prompt for a primary agent profile.
@@ -17,6 +30,7 @@ export async function getSystemPromptForAgentProfile(
   profile: AgentDefinition,
   cwd: string,
   projectRules?: string,
+  sessionId?: string,
   modelId = '',
 ): Promise<string> {
   setCwd(cwd)
@@ -24,8 +38,16 @@ export async function getSystemPromptForAgentProfile(
     (await computeSimpleEnvInfo(modelId)) +
     workspaceBoundaryPromptSection(cwd)
 
+  const session =
+    profile.agentType === 'browser'
+      ? `\n\n${browserAgentSessionSection(
+          resolveBrowserMode(cwd),
+          getBrowserHandoff(sessionId) ?? undefined,
+        )}`
+      : ''
+
   const rulesAppend =
     !profile.omitProjectRules && projectRules ? `\n\n${projectRules}` : ''
 
-  return `${profile.systemPrompt}\n\n${env}${rulesAppend}`
+  return `${profile.systemPrompt}${session}\n\n${env}${rulesAppend}`
 }

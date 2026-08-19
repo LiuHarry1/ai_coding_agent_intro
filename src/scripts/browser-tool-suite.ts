@@ -674,8 +674,8 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     /**
      * Known boundary: an inline `<span style="cursor:pointer">` has no ARIA
      * role, so Playwright folds it into the paragraph's text and never mints a
-     * ref for it. OpenClaw and Playwright MCP read the same tree and cannot
-     * reach it either; browser_evaluate is the way in.
+     * ref for it. That tree cannot click the span as its own control;
+     * browser_evaluate is the way in.
      *
      * Written as a branch rather than skipped, so that if a future Playwright
      * starts surfacing these, the ref still has to be clickable.
@@ -754,7 +754,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       )
       assert.ok(
         String(viaEvaluate.value).includes('inline opened'),
-        `evaluate may run page JS (OpenClaw): ${viaEvaluate.value}`,
+        `evaluate may run page JS: ${viaEvaluate.value}`,
       )
     }
     ok('role-less clickable generic gets a ref and is clickable')
@@ -889,7 +889,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.equal(env.value, 'prod')
     ok('select_option + evaluate')
 
-    // ── fill_form (Playwright MCP: browser_fill_form) ─────
+    // ── fill_form ─────
     const formNav = expectData(
       await run(navigateTool, { url: `${baseUrl}form` }, sessionId),
     )
@@ -962,7 +962,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('re-snapshot recovers the ref')
 
     // Playwright's aria-ref dies with the node. Same role+name still unique:
-    // relocate by the last snapshot's name (Cursor stale-ref).
+    // relocate by the last snapshot's name.
     const applyHost = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
@@ -1294,7 +1294,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('input reaches a backgrounded tab')
 
-    // ── wait_for (Playwright MCP: time / text / textGone) ──
+    // ── wait_for (time / text / textGone) ──
     const waitNav = expectData(
       await run(navigateTool, { url: `${baseUrl}wait-text` }, sessionId),
     )

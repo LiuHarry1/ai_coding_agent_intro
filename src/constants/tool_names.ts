@@ -43,9 +43,10 @@ export const BROWSER_NETWORK_TOOL_NAME = 'browser_network'
 export const BROWSER_TABS_TOOL_NAME = 'browser_tabs'
 export const BROWSER_EVALUATE_TOOL_NAME = 'browser_evaluate'
 export const BROWSER_LOCK_TOOL_NAME = 'browser_lock'
-export const BROWSER_FIND_TOOL_NAME = 'browser_find'
 export const BROWSER_DRAG_TOOL_NAME = 'browser_drag'
-export const BROWSER_MOUSE_CLICK_XY_TOOL_NAME = 'browser_mouse_click_xy'
+export const BROWSER_RESIZE_TOOL_NAME = 'browser_resize'
+export const BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME = 'browser_wait_for_download'
+export const BROWSER_BATCH_TOOL_NAME = 'browser_batch'
 
 export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_NAVIGATE_TOOL_NAME,
@@ -66,9 +67,10 @@ export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_TABS_TOOL_NAME,
   BROWSER_EVALUATE_TOOL_NAME,
   BROWSER_LOCK_TOOL_NAME,
-  BROWSER_FIND_TOOL_NAME,
   BROWSER_DRAG_TOOL_NAME,
-  BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
+  BROWSER_RESIZE_TOOL_NAME,
+  BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME,
+  BROWSER_BATCH_TOOL_NAME,
 ]
 
 /** Browser tools that only observe — safe in Ask mode. */
@@ -80,7 +82,6 @@ export const BROWSER_READ_ONLY_TOOL_NAMES: readonly string[] = [
   BROWSER_TABS_TOOL_NAME,
   BROWSER_WAIT_FOR_TOOL_NAME,
   BROWSER_LOCK_TOOL_NAME,
-  BROWSER_FIND_TOOL_NAME,
 ]
 
 export const MUTATING_TOOLS: readonly string[] = [

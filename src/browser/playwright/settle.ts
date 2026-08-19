@@ -47,10 +47,9 @@ export async function drainTrackedRequests(
 }
 
 /**
- * Playwright MCP's waitForNetwork: listen for XHR/fetch started by the action,
- * wait a short settle, then drain those requests. Deliberately does not wait
- * for an ARIA dialog to look "rich" — that heuristic stalls on pages that keep
- * polling.
+ * Listen for XHR/fetch started by the action, wait a short settle, then drain
+ * those requests. Deliberately does not wait for an ARIA dialog to look "rich"
+ * — that heuristic stalls on pages that keep polling.
  */
 export async function withActionWait<T>(
   page: Page,

@@ -1,6 +1,6 @@
 /**
- * OpenClaw `typeViaPlaywright` / fill: `locator.fill`, or click + `locator.type`
- * at 75ms when `slowly` is set. No select-all retry loop.
+ * Fill an editable locator: `locator.fill`, or click + `locator.type` at 75ms
+ * when `slowly` is set.
  */
 
 import type { Locator } from 'playwright-core'

@@ -33,7 +33,7 @@ export function namesOverlap(a: string, b: string): boolean {
   return left === right || left.includes(right) || right.includes(left)
 }
 
-/** Cursor-style element hint: the description must overlap role or name. */
+/** The description must overlap role or name. */
 export function elementMatchesHint(
   described: { role: string; name: string },
   hint: string,

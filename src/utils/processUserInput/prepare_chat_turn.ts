@@ -138,6 +138,7 @@ export interface PreparedChatTurn {
   permissionMode: Session['permissionMode']['mode']
   /** Resolved primary profile for this turn, if any. */
   mainThreadProfile: AgentDefinition | null
+  denyGlobs?: string[]
   planFilePath: string
   modeChanged?: boolean
   toolContext: ToolContext
@@ -346,6 +347,7 @@ export async function prepareChatTurn(
     concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(pool.tools)),
     permissionMode: session.permissionMode.mode,
     mainThreadProfile: pool.mainThreadProfile,
+    denyGlobs: pool.denyGlobs,
     planFilePath,
     modeChanged: slash.modeChanged,
     toolContext,

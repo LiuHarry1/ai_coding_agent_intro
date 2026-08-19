@@ -12,14 +12,16 @@ import * as path from 'node:path'
 import { createIsolatedBackend } from '../browser/backends/isolated.js'
 import {
   closeBrowser,
+  getBrowser,
+  getCurrentTabId,
   setBrowserBackendFactory,
 } from '../browser/manager.js'
+import { findInSnapshot } from '../browser/playwright/index.js'
 import {
   clickTool,
   evaluateTool,
   fileUploadTool,
   fillFormTool,
-  findTool,
   handleDialogTool,
   navigateTool,
   selectOptionTool,
@@ -137,14 +139,16 @@ async function main() {
     )
     console.log('ok [playwright] navigate refuses file: URLs')
 
-    const found = expectData(
-      await run(findTool, { query: 'Clicked' }, sessionId),
+    const found = await findInSnapshot(
+      await getBrowser(process.cwd(), sessionId),
+      getCurrentTabId(sessionId)!,
+      'Clicked',
     )
     assert.ok(
-      String(found.snapshot).includes('Clicked'),
-      `browser_find must search the last snapshot:\n${found.snapshot}`,
+      found.text.includes('Clicked'),
+      `findInSnapshot must search the last snapshot:\n${found.text}`,
     )
-    console.log('ok [playwright] browser_find searches last snapshot')
+    console.log('ok [playwright] findInSnapshot searches last snapshot')
 
     const applyRef = refFor(snapshot, 'button', 'Apply changes')
     await run(
@@ -472,7 +476,7 @@ async function main() {
     assert.match(String(uploaded.message), /Uploaded 1 file/)
     assert.ok(
       String(uploaded.snapshot).includes('Receipt upload'),
-      `file_upload must return a snapshot like Playwright MCP:\n${uploaded.snapshot}`,
+      `file_upload must return a snapshot:\n${uploaded.snapshot}`,
     )
     const fileState = expectData(
       await run(

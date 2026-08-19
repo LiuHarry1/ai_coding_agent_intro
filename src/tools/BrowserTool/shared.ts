@@ -74,6 +74,16 @@ export interface BrowserToolOutput {
   screenshotPath?: string
   /** Server-relative URL the UI can load the on-disk screenshot from. */
   screenshotUrl?: string
+  /** Labeled-screenshot bounding boxes. */
+  annotations?: Array<{
+    ref: string
+    number: number
+    role: string
+    name?: string
+    box: { x: number; y: number; width: number; height: number }
+  }>
+  downloadPath?: string
+  batchResults?: Array<{ ok: boolean; error?: string; url?: string }>
   /**
    * Intentionally absent from BrowserOutputSchema: the mapper reads it to build
    * the model's image block, then zod drops it before the UI ever sees it.
@@ -120,6 +130,32 @@ export const BrowserOutputSchema = z.object({
   value: z.unknown().optional(),
   screenshotPath: z.string().optional(),
   screenshotUrl: z.string().optional(),
+  annotations: z
+    .array(
+      z.object({
+        ref: z.string(),
+        number: z.number(),
+        role: z.string(),
+        name: z.string().optional(),
+        box: z.object({
+          x: z.number(),
+          y: z.number(),
+          width: z.number(),
+          height: z.number(),
+        }),
+      }),
+    )
+    .optional(),
+  downloadPath: z.string().optional(),
+  batchResults: z
+    .array(
+      z.object({
+        ok: z.boolean(),
+        error: z.string().optional(),
+        url: z.string().optional(),
+      }),
+    )
+    .optional(),
 })
 
 /** Per-tab watermark so each action reports only the console output it caused. */
@@ -146,6 +182,7 @@ export async function observe(
     compact?: boolean
     interactive?: boolean
     includeDiff?: boolean
+    urls?: boolean
     skipIfDegraded?: boolean
   },
 ): Promise<BrowserToolOutput> {
@@ -173,6 +210,7 @@ export async function observe(
       selector: opts.selector,
       compact: opts.compact,
       interactive: opts.interactive,
+      urls: opts.urls,
     })
     out.url = snap.url
     out.title = snap.title
@@ -304,6 +342,29 @@ function renderText(out: BrowserToolOutput): string {
         : `Failed requests during this action (${shown}):`,
     )
     for (const r of out.network) lines.push(`  ${renderNetworkRow(r)}`)
+  }
+
+  if (out.downloadPath) {
+    lines.push('')
+    lines.push(`Download saved to ${out.downloadPath}`)
+  }
+
+  if (out.batchResults?.length) {
+    lines.push('')
+    lines.push(`Batch results (${out.batchResults.length}):`)
+    for (const row of out.batchResults) {
+      lines.push(row.ok ? '  ok' : `  fail: ${row.error ?? 'unknown'}`)
+    }
+  }
+
+  if (out.annotations?.length) {
+    lines.push('')
+    lines.push(`Label annotations (${out.annotations.length}):`)
+    for (const a of out.annotations.slice(0, 40)) {
+      lines.push(
+        `  ${a.ref} ${a.role}${a.name ? ` "${a.name}"` : ''} box=${a.box.x},${a.box.y} ${a.box.width}x${a.box.height}`,
+      )
+    }
   }
 
   if (out.screenshotPath) {

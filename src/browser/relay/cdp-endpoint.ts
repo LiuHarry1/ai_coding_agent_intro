@@ -1,6 +1,6 @@
 /**
  * Synthetic CDP browser endpoint so Playwright can `connectOverCDP` to the
- * extension backend — the same pattern OpenClaw and Playwright MCP use.
+ * extension backend.
  *
  * Chrome's debugger API is tab-scoped and has no `/json/version`. This server
  * pretends to be one: HTTP discovery plus a WebSocket that synthesizes

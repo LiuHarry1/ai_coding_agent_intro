@@ -1,9 +1,6 @@
 /**
  * How the model sees the page: Playwright's own AI aria snapshot, with `eN`
  * refs stamped on the live DOM, then spent against a budget by priority.
- *
- * Same mechanism OpenClaw and Playwright MCP use, so a ref here means what it
- * means there.
  */
 
 import type { Frame, Page } from 'playwright-core'
@@ -33,6 +30,7 @@ import {
 } from '../session-flags.js'
 import { filterSnapshotLines } from '../snapshot-index.js'
 import { getPageForTarget } from './connect.js'
+import { appendSnapshotUrls, type SnapshotUrlEntry } from '../snapshot-urls.js'
 
 const DIALOG_SNAPSHOT_MS = 2_000
 const DIALOG_SEARCH_MS = 3_500
@@ -283,6 +281,39 @@ async function snapshotBlockingDialog(page: Page): Promise<string | null> {
   )
 }
 
+async function collectSnapshotUrls(page: Page): Promise<SnapshotUrlEntry[]> {
+  // collectSnapshotUrls
+  const urls = await page
+    .evaluate(() => {
+      const seen = new Set<string>()
+      const out: SnapshotUrlEntry[] = []
+      for (const anchor of Array.from(document.querySelectorAll('a[href]'))) {
+        const href = anchor instanceof HTMLAnchorElement ? anchor.href : ''
+        if (!href || seen.has(href)) {
+          continue
+        }
+        const text =
+          (anchor.textContent || anchor.getAttribute('aria-label') || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 121) || href
+        seen.add(href)
+        out.push({ text, url: href })
+        if (out.length >= 100) {
+          break
+        }
+      }
+      return out
+    })
+    .catch(() => [])
+  return Array.isArray(urls)
+    ? urls.map(entry => {
+        entry.text = entry.text.slice(0, 120) || entry.url
+        return entry
+      })
+    : []
+}
+
 function recordSnapshotHealth(targetId: string, text: string): void {
   const degraded =
     text.includes(SNAPSHOT_STALL_NEXT) ||
@@ -314,10 +345,14 @@ export async function snapshot(
       maxNodes: opts.maxNodes,
       interactive: opts.interactive,
     })
+    let body = prefix + text
+    if (opts.urls) {
+      body = appendSnapshotUrls(body, await collectSnapshotUrls(page))
+    }
     return {
       url: page.url(),
       title: await page.title().catch(() => ''),
-      text: prefix + text,
+      text: body,
       nodes: countRefs(text),
       truncated,
     }
@@ -365,7 +400,7 @@ export async function snapshot(
         )
     let omittedFrames = false
     if (!raw && !opts.selector) {
-      // Playwright MCP stitches iframes into one tree; a hung PDF/viewer
+      // A hung PDF/viewer iframe can stall the whole tree.
       // frame never returns. Omit embeds and snapshot the host page.
       omittedFrames = true
       raw = await raceMs(

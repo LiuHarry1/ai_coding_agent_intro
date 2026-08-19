@@ -22,6 +22,8 @@ export {
   pressKey,
   screenshot,
   scroll,
+  scrollIntoView,
+  resizeViewport,
   selectOption,
   typeText,
   uploadFilesToPage,
@@ -30,3 +32,6 @@ export { fillForm } from './forms.js'
 export { normalizeRef } from './locator.js'
 export { snapshot, waitFor, findInSnapshot } from './snapshot.js'
 export { evaluate } from './evaluate.js'
+export { screenshotWithLabels } from './screenshot-labels.js'
+export { waitForDownload, downloadByRef } from './downloads.js'
+export { batchActions, assertEvaluateEnabled } from './batch.js'

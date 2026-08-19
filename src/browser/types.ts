@@ -67,6 +67,8 @@ export interface SnapshotOpts {
   interactive?: boolean
   /** Capture an in-page Error/Yes-No modal only — never walk the full tree. */
   dialogOnly?: boolean
+  /** Append discovered link hrefs. */
+  urls?: boolean
 }
 
 /**
@@ -141,7 +143,13 @@ export interface BrowserConfig {
   mode?: 'isolated' | 'extension'
   /** Loopback port the extension connects back on. Default 8766. */
   relayPort?: number
-  /** Run without a visible window. Default true so automation never steals focus. */
+  /**
+   * Isolated Chrome userDataDir.
+   *   fresh   — temp dir, deleted when this chat's browser closes (default)
+   *   persist — keep cookies under the agent home, per chat session
+   */
+  profile?: 'fresh' | 'persist'
+  /** Run without a visible window. Default false so the user can watch. */
   headless?: boolean
   /** Chrome channel for the isolated backend. Default `chrome` (system install). */
   channel?: string
@@ -149,4 +157,6 @@ export interface BrowserConfig {
   viewportHeight?: number
   /** Idle minutes before the browser is torn down. Default 30. */
   idleTimeoutMinutes?: number
+  /** When false, browser_evaluate and batch evaluate are rejected. Default true. */
+  evaluateEnabled?: boolean
 }

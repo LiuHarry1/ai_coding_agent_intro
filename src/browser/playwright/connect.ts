@@ -5,8 +5,8 @@
  * Isolated: the backend already holds Page objects from launchPersistentContext,
  * so there is nothing to connect.
  * Extension: connectOverCDP against the synthetic browser endpoint the relay
- * exposes (OpenClaw's pattern), so the same ariaSnapshot and aria-ref locators
- * work against the user's signed-in Chrome.
+ * exposes, so the same ariaSnapshot and aria-ref locators work against the
+ * user's signed-in Chrome.
  */
 
 import type { Browser, Page } from 'playwright-core'
@@ -44,7 +44,9 @@ export async function detachPlaywright(backend: BrowserBackend): Promise<void> {
   const endpoint = endpoints.get(backend)
   endpoints.delete(backend)
   await endpoint?.close().catch(() => {})
-  pagesByTarget.clear()
+  if (backend.kind === 'extension') {
+    pagesByTarget.clear()
+  }
 }
 
 async function connectExtension(backend: BrowserBackend): Promise<Browser> {
@@ -119,6 +121,77 @@ async function findPage(
   )
 }
 
+export function isRecoverablePlaywrightDisconnectError(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  return (
+    message.includes('target page, context or browser has been closed') ||
+    message.includes('browser has been closed') ||
+    message.includes('browser disconnected') ||
+    message.includes('target closed') ||
+    message.includes('connection closed') ||
+    message.includes('websocket closed') ||
+    message.includes('cdp socket closed')
+  )
+}
+
+function isRecoverableStalePageSelectionError(
+  err: unknown,
+  reusedCachedBrowser: boolean,
+): boolean {
+  if (!reusedCachedBrowser) {
+    return false
+  }
+  if (
+    err instanceof Error &&
+    err.message.includes('Playwright connected but sees no pages')
+  ) {
+    return true
+  }
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  return (
+    message.includes('tab not found') ||
+    message.includes('no open tab with id') ||
+    message.includes('could not match tab') ||
+    isRecoverablePlaywrightDisconnectError(err)
+  )
+}
+
+async function retireExtensionBrowser(backend: BrowserBackend): Promise<void> {
+  const browserP = browsers.get(backend)
+  browsers.delete(backend)
+  if (browserP) {
+    const browser = await browserP.catch(() => null)
+    await browser?.close().catch(() => {})
+  }
+}
+
+async function getPageForTargetOnce(
+  backend: BrowserBackend,
+  targetId: string,
+): Promise<Page> {
+  const browser = await connectExtension(backend)
+  const endpoint = endpoints.get(backend)
+  await endpoint?.syncTabs()
+
+  const deadline = Date.now() + PAGE_ATTACH_MS
+  let lastErr: Error | undefined
+  while (Date.now() <= deadline) {
+    try {
+      return watchPage(await findPage(backend, browser, targetId))
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err))
+      await new Promise(r => setTimeout(r, 120))
+      await endpoint?.syncTabs()
+    }
+  }
+  throw lastErr ?? new BrowserError('Playwright could not attach to the tab.')
+}
+
+/**
+ * Resolve a Playwright page by target id. Isolated uses the launched Page;
+ * extension uses connectOverCDP + pagesByTarget. If a cached CDP connection
+ * is stale, drop it and reconnect once.
+ */
 export async function getPageForTarget(
   backend: BrowserBackend,
   targetId: string,
@@ -133,22 +206,14 @@ export async function getPageForTarget(
     return watchPage(page)
   }
 
-  const browser = await connectExtension(backend)
-  const endpoint = endpoints.get(backend)
-  await endpoint?.syncTabs()
-
-  // The relay learns about a shared tab asynchronously, so a page the model just
-  // asked for may not be attached yet. Re-sync and retry rather than fail.
-  const deadline = Date.now() + PAGE_ATTACH_MS
-  let lastErr: Error | undefined
-  while (Date.now() <= deadline) {
-    try {
-      return watchPage(await findPage(backend, browser, targetId))
-    } catch (err) {
-      lastErr = err instanceof Error ? err : new Error(String(err))
-      await new Promise(r => setTimeout(r, 120))
-      await endpoint?.syncTabs()
+  const reusedCachedBrowser = browsers.has(backend)
+  try {
+    return await getPageForTargetOnce(backend, targetId)
+  } catch (err) {
+    if (!isRecoverableStalePageSelectionError(err, reusedCachedBrowser)) {
+      throw err
     }
+    await retireExtensionBrowser(backend)
+    return await getPageForTargetOnce(backend, targetId)
   }
-  throw lastErr ?? new BrowserError('Playwright could not attach to the tab.')
 }

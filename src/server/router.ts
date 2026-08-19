@@ -15,8 +15,10 @@ import { getPlanFilePath } from '../utils/plans.js'
 import { readBody, sendJSON, setCORS } from './http.js'
 import { isBrowserLive } from '../browser/manager.js'
 import {
+  anyUserHasControl,
   getUserHasControl,
   setUserHasControl,
+  setUserHasControlEverywhere,
 } from '../browser/session-flags.js'
 import { loadWorkspaceContributions } from '../core/workspace-load.js'
 import { findPrimaryAgent } from '../tools/AgentTool/mergeAgents.js'
@@ -167,24 +169,35 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
       return
     }
 
-    if (method === 'GET' && url === '/browser/lock') {
+    if (method === 'GET' && (url === '/browser/lock' || url?.startsWith('/browser/lock?'))) {
+      const query = new URLSearchParams((url ?? '').split('?')[1] ?? '')
+      const sessionId = query.get('session_id') ?? undefined
       sendJSON(res, 200, {
-        live: isBrowserLive(),
-        userHasControl: getUserHasControl(),
+        live: isBrowserLive(sessionId),
+        userHasControl: sessionId
+          ? getUserHasControl(sessionId)
+          : anyUserHasControl(),
       })
       return
     }
 
-    if (method === 'POST' && url === '/browser/lock') {
+    if (method === 'POST' && (url === '/browser/lock' || url?.startsWith('/browser/lock?'))) {
       const body = await readBody(req)
       if (typeof body.userHasControl !== 'boolean') {
         sendJSON(res, 400, { error: 'userHasControl must be a boolean' })
         return
       }
-      setUserHasControl(body.userHasControl)
+      const sessionId =
+        (typeof body.session_id === 'string' && body.session_id) ||
+        new URLSearchParams((url ?? '').split('?')[1] ?? '').get('session_id') ||
+        undefined
+      if (sessionId) setUserHasControl(body.userHasControl, sessionId)
+      else setUserHasControlEverywhere(body.userHasControl)
       sendJSON(res, 200, {
-        live: isBrowserLive(),
-        userHasControl: getUserHasControl(),
+        live: isBrowserLive(sessionId),
+        userHasControl: sessionId
+          ? getUserHasControl(sessionId)
+          : anyUserHasControl(),
       })
       return
     }

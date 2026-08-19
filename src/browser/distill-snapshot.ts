@@ -14,7 +14,7 @@
  *
  * On the budget: the AI snapshot keeps every interactable in document order, and
  * chat docks, cookie banners and `role=dialog` panels are usually last. A
- * head-only clip — what OpenClaw's AI snapshot path does — drops them on any long
+ * head-only clip drops them on any long
  * homepage, which is exactly how a "messages" task loses the inbox it just
  * opened. So the budget is spent by priority rather than by position: dialogs and
  * the widgets around them first, then as much of the page start as still fits.

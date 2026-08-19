@@ -25,7 +25,7 @@ export const ERROR_SNAPSHOT_TIMEOUT_MS = 8_000
 export const ACTION_TIMEOUT_MS = 8_000
 export const SNAPSHOT_TIMEOUT_MS = 8_000
 
-/** Playwright MCP waits ~500ms after an action so late XHR/DOM can land. */
+/** Wait after an action so late XHR/DOM can land. */
 export const ACTION_SETTLE_MS = 500
 export const NETWORK_DRAIN_MS = 3_000
 
@@ -52,3 +52,7 @@ export const COMPACT_DEPTH = 16
 
 /** Screenshots compete with the snapshot for context; cap them hard. */
 export const SCREENSHOT_TOKEN_BUDGET = 1500
+
+export const ACT_MAX_BATCH_ACTIONS = 100
+export const ACT_MAX_BATCH_DEPTH = 5
+export const ACT_MAX_VIEWPORT_DIMENSION = 8192

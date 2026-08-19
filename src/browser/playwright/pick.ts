@@ -1,5 +1,5 @@
 /**
- * Native `<select>` — OpenClaw `selectOptionViaPlaywright`.
+ * Native `<select>`.
  *
  * Custom combobox widgets are not a select: snapshot the open popup and
  * `browser_click` the option's ref.

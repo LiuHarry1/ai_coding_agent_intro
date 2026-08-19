@@ -18,8 +18,8 @@ export function refLocator(page: Page, ref: string): Locator {
 }
 
 /**
- * OpenClaw `toAIFriendlyError`. Playwright's locator failures become the next
- * snapshot/click the model should take.
+ * Playwright's locator failures become the next snapshot/click the model
+ * should take.
  */
 export function toAIFriendlyMessage(error: unknown, selector: string): string {
   const message = error instanceof Error ? error.message : String(error)

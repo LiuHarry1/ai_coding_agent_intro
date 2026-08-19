@@ -1,7 +1,7 @@
 /**
- * OpenClaw `evaluateViaPlaywright`: run JS in the page (or on a ref's node)
- * through Playwright `page.evaluate` / `locator.evaluate`, with an in-page
- * timeout so a hung promise cannot stall the command queue.
+ * Run JS in the page (or on a ref's node) through Playwright `page.evaluate`
+ * / `locator.evaluate`, with an in-page timeout so a hung promise cannot stall
+ * the command queue.
  */
 
 import type { Page } from 'playwright-core'

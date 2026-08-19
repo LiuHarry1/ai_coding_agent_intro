@@ -95,11 +95,19 @@ export const agentApi = {
       body: JSON.stringify(body),
     }),
 
-  getBrowserLock: () => fetchJSON('/browser/lock'),
-  setBrowserLock: userHasControl =>
+  getBrowserLock: sessionId =>
+    fetchJSON(
+      sessionId
+        ? `/browser/lock?session_id=${encodeURIComponent(sessionId)}`
+        : '/browser/lock',
+    ),
+  setBrowserLock: (userHasControl, sessionId) =>
     fetchJSON('/browser/lock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userHasControl }),
+      body: JSON.stringify({
+        userHasControl,
+        ...(sessionId ? { session_id: sessionId } : {}),
+      }),
     }),
 }

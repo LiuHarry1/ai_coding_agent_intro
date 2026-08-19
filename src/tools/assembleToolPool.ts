@@ -51,6 +51,8 @@ export interface AssembleToolPoolResult {
    */
   dynamicDefs: Record<string, ToolDefinition>
   mainThreadProfile: AgentDefinition | null
+  /** Re-applied after mid-turn mode refresh so ExitPlanMode cannot sneak back. */
+  denyGlobs: string[] | undefined
 }
 
 export function assembleToolPool(
@@ -73,11 +75,9 @@ export function assembleToolPool(
     session.discoveredTools,
   )
 
-  // Primary-profile disallowedTools (globs ok) on the main thread only.
-  const mainThreadProfile =
-    session.permissionMode.mode === 'agent'
-      ? findPrimaryAgent(activeAgents, session.agentType)
-      : null
+  // Primary-profile disallowedTools (globs ok) on the main thread.
+  // Applied in every permission mode so plan/ask cannot revive Edit/Write.
+  const mainThreadProfile = findPrimaryAgent(activeAgents, session.agentType)
   const denyGlobs = mainThreadProfile?.disallowedTools
   if (denyGlobs && denyGlobs.length > 0) {
     active = filterToolsRecordByDisallowedGlobs(active, denyGlobs)
@@ -134,11 +134,14 @@ export function assembleToolPool(
     // No ToolSearch in ask — mutating deferred tools stay withheld.
   }
 
-  const tools = applyModeRestrictions(
+  let tools = applyModeRestrictions(
     session.permissionMode.mode,
     enablementFiltered,
     modeTools,
   )
+  if (denyGlobs && denyGlobs.length > 0) {
+    tools = filterToolsRecordByDisallowedGlobs(tools, denyGlobs)
+  }
 
   const askMode = session.permissionMode.mode === 'ask'
   const deferredForTurn = askMode ? {} : deferred
@@ -155,5 +158,6 @@ export function assembleToolPool(
     deferredDefs: deferredDefsForTurn,
     dynamicDefs,
     mainThreadProfile,
+    denyGlobs,
   }
 }

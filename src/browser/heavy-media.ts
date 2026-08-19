@@ -1,7 +1,6 @@
 /**
  * Frames that stall Playwright's accessibility snapshot (PDF viewers, blob
- * previews). Same class of targets Playwright MCP times out on rather than
- * walking. Pure URL/type check so the snapshot path can hide them first.
+ * previews). Pure URL/type check so the snapshot path can hide them first.
  */
 
 export function isHeavyMediaFrame(src: string, type = ''): boolean {

@@ -27,7 +27,10 @@ import {
   type RelayCdpEvent,
   type RelayRequestBody,
 } from './protocol.js'
-import { getUserHasControl, setUserHasControl } from '../session-flags.js'
+import {
+  anyUserHasControl,
+  setUserHasControlEverywhere,
+} from '../session-flags.js'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -168,7 +171,7 @@ export async function startRelayServer(
         socket.send(
           JSON.stringify({
             type: 'lockState',
-            userHasControl: getUserHasControl(),
+            userHasControl: anyUserHasControl(),
           }),
         )
         while (waiters.length) waiters.shift()!()
@@ -180,7 +183,7 @@ export async function startRelayServer(
         return
       }
       if (isRelayUserControl(msg)) {
-        setUserHasControl(msg.hasControl)
+        setUserHasControlEverywhere(msg.hasControl)
         return
       }
       if (!isRelayResponse(msg)) return
