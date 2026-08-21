@@ -7,6 +7,11 @@ import { SESSION_DIR } from '../session/index.js'
 import { getSubagentNames } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools.js'
 import { isSystemReminderContent } from '../utils/system-reminder.js'
+import {
+  INTERRUPT_MESSAGE,
+  INTERRUPT_MESSAGE_FOR_TOOL_USE,
+  isInterruptMessage,
+} from '../utils/interrupt.js'
 import { toolResultOutputToText } from '../utils/tool-result-content.js'
 
 const COMPACT_SUMMARY_PREFIX =
@@ -124,6 +129,15 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
       currentAssistant = null
       const content = userMessageText(msg)
       if (isSystemReminderContent(content)) continue
+      if (isInterruptMessage(msg)) {
+        uiMessages.push({
+          type: 'interrupted',
+          id: randomUUID(),
+          toolUse: content === INTERRUPT_MESSAGE_FOR_TOOL_USE,
+          text: content || INTERRUPT_MESSAGE,
+        })
+        continue
+      }
       if (isCompactSummaryMessage(msg)) {
         const summary = extractCompactSummaryBody(content)
         uiMessages.push({

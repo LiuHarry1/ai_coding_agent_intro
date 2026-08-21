@@ -218,6 +218,15 @@ export const ToolTimingMessageSchema = z.object({
   ...envelopeFields,
 })
 
+/** User stopped the turn (CC Esc) — transcript also has the interrupt user msg. */
+export const InterruptedMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('interrupted'),
+  tool_use: z.boolean().optional(),
+  text: z.string().optional(),
+  ...envelopeFields,
+})
+
 /** Live shell/process output (`tool_progress`). */
 export const ToolProgressMessageSchema = z.object({
   type: z.literal('tool_progress'),
@@ -259,6 +268,7 @@ export const ServerMessageSchema = z.union([
   CompactionStartMessageSchema,
   CompactionDoneMessageSchema,
   ToolTimingMessageSchema,
+  InterruptedMessageSchema,
   ToolProgressMessageSchema,
   // The engine can also reach back to the client (permission, plan, …).
   ControlRequestSchema,

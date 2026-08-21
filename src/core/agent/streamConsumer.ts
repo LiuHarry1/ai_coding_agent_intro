@@ -18,6 +18,8 @@ export interface StreamResult {
     input: Record<string, unknown>
   }>
   toolResults: ExecutedToolResult[]
+  /** True when the upstream stream was aborted mid-turn (CC salvage path). */
+  aborted?: boolean
 }
 
 const CONTENT_EVENT_TYPES = new Set([
@@ -95,133 +97,158 @@ export async function consumeStream(
     startedInputs.delete(id)
   }
 
-  for await (const event of stream.fullStream) {
-    if (timing && !timing.firstEventMs && CONTENT_EVENT_TYPES.has(event.type)) {
-      timing.firstEventMs = Date.now()
-    }
-    switch (event.type) {
-      case 'reasoning-start':
-        reasoningStarted = true
-        wire.reasoningStart()
-        break
-
-      case 'reasoning-delta': {
-        if (!reasoningStarted) {
+  try {
+    for await (const event of stream.fullStream) {
+      if (timing && !timing.firstEventMs && CONTENT_EVENT_TYPES.has(event.type)) {
+        timing.firstEventMs = Date.now()
+      }
+      switch (event.type) {
+        case 'reasoning-start':
           reasoningStarted = true
           wire.reasoningStart()
-        }
-        const delta = streamPartText(event)
-        if (delta) wire.reasoningDelta(delta)
-        break
-      }
+          break
 
-      case 'reasoning-end':
-        flushReasoning()
-        break
-
-      case 'text-delta': {
-        flushReasoning()
-        const delta = streamPartText(event)
-        if (delta) {
-          text += delta
-          wire.textDelta(delta)
-        }
-        break
-      }
-
-      case 'tool-input-start': {
-        flushReasoning()
-        const e = event as {
-          id?: string
-          toolCallId?: string
-          toolName?: string
-        }
-        const id = e.id ?? e.toolCallId
-        if (!id) break
-        startedInputs.set(id, e.toolName)
-        wire.toolInputStart({
-          tool_use_id: id,
-          name: e.toolName ?? 'unknown',
-          is_subagent: isSubagentName(e.toolName),
-        })
-        const preview = maybeStartPreview(e.toolName)
-        if (preview) previewStates.set(id, preview)
-        break
-      }
-
-      case 'tool-input-delta': {
-        const { id, delta } = readInputDelta(event)
-        if (!id || !delta) break
-
-        wire.toolInputDelta(id, delta.length)
-
-        const state = previewStates.get(id)
-        if (state) {
-          const newlyDecoded = appendPreviewDelta(state, delta)
-          if (newlyDecoded) {
-            wire.toolInputPreviewDelta(id, newlyDecoded)
+        case 'reasoning-delta': {
+          if (!reasoningStarted) {
+            reasoningStarted = true
+            wire.reasoningStart()
           }
+          const delta = streamPartText(event)
+          if (delta) wire.reasoningDelta(delta)
+          break
         }
-        break
-      }
 
-      case 'tool-call':
-        flushReasoning()
-        wire.toolCall({
-          tool_use_id: event.toolCallId,
-          name: event.toolName,
-          args: event.input,
-          is_subagent: isSubagentName(event.toolName),
-        })
-        toolCalls.push({
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          input: event.input as Record<string, unknown>,
-        })
-        previewStates.delete(event.toolCallId)
-        startedInputs.delete(event.toolCallId)
-        break
+        case 'reasoning-end':
+          flushReasoning()
+          break
 
-      case 'tool-error': {
-        const e = event as {
-          toolCallId: string
-          toolName: string
-          error?: unknown
-          input?: unknown
+        case 'text-delta': {
+          flushReasoning()
+          const delta = streamPartText(event)
+          if (delta) {
+            text += delta
+            wire.textDelta(delta)
+          }
+          break
         }
-        synthesizePair(
-          e.toolCallId,
-          e.toolName,
-          (e.input ?? {}) as Record<string, unknown>,
-          `Error: ${formatToolError(e.toolName, e.error)}`,
-        )
-        break
-      }
 
-      case 'tool-result': {
-        // With manualToolExecution, runToolCalls owns wire.toolResult (incl.
-        // tool_use_result). Ignore SDK tool-result events so we don't paint
-        // a TUR-less result that Grep/Glob cards treat as broken.
-        if (options?.manualToolExecution) {
+        case 'tool-input-start': {
+          flushReasoning()
+          const e = event as {
+            id?: string
+            toolCallId?: string
+            toolName?: string
+          }
+          const id = e.id ?? e.toolCallId
+          if (!id) break
+          startedInputs.set(id, e.toolName)
+          wire.toolInputStart({
+            tool_use_id: id,
+            name: e.toolName ?? 'unknown',
+            is_subagent: isSubagentName(e.toolName),
+          })
+          const preview = maybeStartPreview(e.toolName)
+          if (preview) previewStates.set(id, preview)
+          break
+        }
+
+        case 'tool-input-delta': {
+          const { id, delta } = readInputDelta(event)
+          if (!id || !delta) break
+
+          wire.toolInputDelta(id, delta.length)
+
+          const state = previewStates.get(id)
+          if (state) {
+            const newlyDecoded = appendPreviewDelta(state, delta)
+            if (newlyDecoded) {
+              wire.toolInputPreviewDelta(id, newlyDecoded)
+            }
+          }
+          break
+        }
+
+        case 'tool-call':
+          flushReasoning()
+          wire.toolCall({
+            tool_use_id: event.toolCallId,
+            name: event.toolName,
+            args: event.input,
+            is_subagent: isSubagentName(event.toolName),
+          })
+          toolCalls.push({
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            input: event.input as Record<string, unknown>,
+          })
+          previewStates.delete(event.toolCallId)
+          startedInputs.delete(event.toolCallId)
+          break
+
+        case 'tool-error': {
+          const e = event as {
+            toolCallId: string
+            toolName: string
+            error?: unknown
+            input?: unknown
+          }
+          synthesizePair(
+            e.toolCallId,
+            e.toolName,
+            (e.input ?? {}) as Record<string, unknown>,
+            `Error: ${formatToolError(e.toolName, e.error)}`,
+          )
+          break
+        }
+
+        case 'tool-result': {
+          // With manualToolExecution, runToolCalls owns wire.toolResult (incl.
+          // tool_use_result). Ignore SDK tool-result events so we don't paint
+          // a TUR-less result that Grep/Glob cards treat as broken.
+          if (options?.manualToolExecution) {
+            startedInputs.delete(event.toolCallId)
+            break
+          }
+          const raw = event.output
+          const result = typeof raw === 'string' ? raw : JSON.stringify(raw)
+          wire.toolResult({ tool_use_id: event.toolCallId, result })
+          toolResults.push({
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            result,
+          })
           startedInputs.delete(event.toolCallId)
           break
         }
-        const raw = event.output
-        const result = typeof raw === 'string' ? raw : JSON.stringify(raw)
-        wire.toolResult({ tool_use_id: event.toolCallId, result })
-        toolResults.push({
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          result,
-        })
-        startedInputs.delete(event.toolCallId)
-        break
-      }
 
-      case 'error':
-        wire.error(String(event.error))
-        break
+        case 'error':
+          wire.error(String(event.error))
+          break
+      }
     }
+  } catch (err) {
+    const aborted =
+      (err instanceof Error && err.name === 'AbortError') ||
+      (typeof err === 'object' &&
+        err !== null &&
+        'name' in err &&
+        (err as { name?: string }).name === 'AbortError')
+    if (!aborted) throw err
+
+    flushReasoning()
+    // Incomplete tool-input streams: close with interrupt results (CC).
+    for (const [id, toolName] of startedInputs.entries()) {
+      synthesizePair(
+        id,
+        toolName ?? 'unknown',
+        {},
+        'Interrupted by user',
+      )
+    }
+    if (!options?.manualToolExecution) {
+      backfillMissingResults(toolCalls, toolResults, wire)
+    }
+    return { text, toolCalls, toolResults, aborted: true }
   }
 
   flushReasoning()

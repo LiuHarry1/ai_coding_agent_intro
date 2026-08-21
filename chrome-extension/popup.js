@@ -26,8 +26,9 @@ async function render() {
   $('take-control').disabled = !connected || state.userHasControl
   $('resume-agent').disabled = !connected || !state.userHasControl
   $('control-label').textContent = state.userHasControl
-    ? 'You have control. The agent will not click or type.'
-    : 'The agent is driving the page.'
+    ? 'Agent actions paused — use the page freely.'
+    : 'Agent is operating this page (pause to avoid conflicts).'
+  $('take-control').textContent = 'Pause agent'
 
   const list = $('tabs')
   list.innerHTML = ''

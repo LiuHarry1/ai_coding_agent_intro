@@ -184,3 +184,16 @@ export function approvePlanRequest(input: {
     },
   }
 }
+
+export function interruptedMessage(
+  input: { tool_use?: boolean; text?: string },
+  env: WireEnvelope,
+): ServerMessage {
+  return {
+    type: 'system',
+    subtype: 'interrupted',
+    tool_use: input.tool_use,
+    text: input.text,
+    ...env,
+  }
+}

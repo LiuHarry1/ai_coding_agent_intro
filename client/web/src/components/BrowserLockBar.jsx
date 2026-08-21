@@ -50,8 +50,8 @@ export default function BrowserLockBar() {
     >
       <span className="browser-lock-bar-text">
         {userHasControl
-          ? 'You have control of the browser. The agent will not click or type.'
-          : 'The agent is driving the browser.'}
+          ? 'Agent actions paused — you can use the page freely.'
+          : 'Agent is operating the browser (you can still interact; pause to avoid conflicts).'}
       </span>
       <button
         type="button"
@@ -59,7 +59,7 @@ export default function BrowserLockBar() {
         disabled={busy}
         onClick={() => handoff(!userHasControl)}
       >
-        {userHasControl ? 'Resume agent' : 'Take control'}
+        {userHasControl ? 'Resume agent' : 'Pause agent'}
       </button>
     </div>
   )

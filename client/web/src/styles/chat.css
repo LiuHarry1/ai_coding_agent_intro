@@ -444,6 +444,16 @@
   margin: 0.5rem 0;
 }
 
+.msg-interrupted {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #8b949e);
+}
+
+.msg-interrupted-hint {
+  opacity: 0.85;
+}
+
 /* ── Todo List Card (Cursor-style) ───────── */
 .todo-card {
   margin: 8px 0;

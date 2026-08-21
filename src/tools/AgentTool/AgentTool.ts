@@ -168,7 +168,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             description: string
             prompt: string
           },
-          options?: { toolCallId?: string },
+          options?: { toolCallId?: string; abortSignal?: AbortSignal },
         ) => {
           const def = byType.get(subagent_type)
           if (!def) {
@@ -262,9 +262,11 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           ).join('\n\n')
 
           const sessionId = context.sessionId ?? ''
-          const abortSignal = sessionId
-            ? registerToolAbort(sessionId, resolvedParentId)
-            : undefined
+          const abortSignal =
+            options?.abortSignal ??
+            (sessionId
+              ? registerToolAbort(sessionId, resolvedParentId)
+              : undefined)
 
           try {
             const result = await runAgent(prompt, {
@@ -304,7 +306,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             }
             throw err
           } finally {
-            if (sessionId) clearToolAbort(sessionId, resolvedParentId)
+            if (sessionId && !options?.abortSignal) {
+              clearToolAbort(sessionId, resolvedParentId)
+            }
           }
         },
       })

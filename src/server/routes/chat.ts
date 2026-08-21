@@ -297,9 +297,13 @@ async function handleChatLocked(
       eventBus,
       http: { res, wantsStream, sseHeaders },
       onClientDisconnect: cleanup => {
-        req.on('close', () => {
-          console.log('[server] client disconnected')
-          cleanup()
+        res.on('close', () => {
+          // Normal end also fires close; only abort when the client dropped
+          // the stream before we finished writing.
+          if (!res.writableEnded) {
+            console.log('[server] client disconnected')
+            cleanup()
+          }
         })
       },
     })

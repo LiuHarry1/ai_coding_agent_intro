@@ -1,7 +1,12 @@
 /**
  * Per-tool AbortController registry so the UI can stop a single subagent
- * without aborting the whole chat turn.
+ * without aborting the whole chat turn, and so turn Stop can kill in-flight
+ * tools via abortAllToolsForSession.
  */
+import {
+  createAbortController,
+  createChildAbortController,
+} from '../utils/abortController.js'
 
 const controllers = new Map<string, AbortController>()
 
@@ -13,11 +18,14 @@ function key(sessionId: string, toolUseId: string): string {
 export function registerToolAbort(
   sessionId: string,
   toolUseId: string,
+  parent?: AbortSignal,
 ): AbortSignal {
   const k = key(sessionId, toolUseId)
   const existing = controllers.get(k)
   if (existing) existing.abort()
-  const ac = new AbortController()
+  const ac = parent
+    ? createChildAbortController(parent)
+    : createAbortController()
   controllers.set(k, ac)
   return ac.signal
 }
@@ -36,4 +44,12 @@ export function clearToolAbort(sessionId: string, toolUseId: string): void {
 
 export function isToolAborted(sessionId: string, toolUseId: string): boolean {
   return controllers.get(key(sessionId, toolUseId))?.signal.aborted === true
+}
+
+/** Abort every registered tool for a session (turn Stop). */
+export function abortAllToolsForSession(sessionId: string): void {
+  const prefix = `${sessionId}:`
+  for (const [k, ac] of controllers) {
+    if (k.startsWith(prefix)) ac.abort()
+  }
 }

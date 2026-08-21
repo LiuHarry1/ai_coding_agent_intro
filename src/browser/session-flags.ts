@@ -7,6 +7,10 @@ import {
   parseRefMeta,
   type RefMeta,
 } from './snapshot-index.js'
+import {
+  abortBlockedBrowserTools,
+  abortBlockedBrowserToolsEverywhere,
+} from './active-browser-tools.js'
 
 export const DEFAULT_BROWSER_SESSION_KEY = 'default'
 
@@ -90,12 +94,15 @@ export function setUserHasControl(
   if (prev === value) return
   if (value) controlBySession.set(key, true)
   else controlBySession.delete(key)
+  if (value) abortBlockedBrowserTools(key)
   notifyLockListeners()
 }
 
 export function setUserHasControlEverywhere(value: boolean): void {
+  const was = anyUserHasControl()
   globalControl = value
   if (!value) controlBySession.clear()
+  if (value && !was) abortBlockedBrowserToolsEverywhere()
   notifyLockListeners()
 }
 

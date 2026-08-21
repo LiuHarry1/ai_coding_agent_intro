@@ -95,6 +95,14 @@ export const agentApi = {
       body: JSON.stringify(body),
     }),
 
+  /** Stop the in-flight chat turn; SSE stays open until the server ends it. */
+  cancelChat: sessionId =>
+    fetchJSON('/chat/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    }),
+
   getBrowserLock: sessionId =>
     fetchJSON(
       sessionId

@@ -124,9 +124,16 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             run_in_background?: boolean
             stdin?: string
           },
-          options?: { toolCallId?: string },
+          options?: { toolCallId?: string; abortSignal?: AbortSignal },
         ): Promise<DualChannelToolResult<ShellToolOutput> | string> => {
           const toolUseId = options?.toolCallId ?? ''
+          const abortSignal = options?.abortSignal
+          if (abortSignal?.aborted) {
+            return shellOk({
+              text: truncate('[interrupted by user]'),
+              interrupted: true,
+            })
+          }
           const {
             command,
             run_in_background = false,
@@ -307,12 +314,20 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               interrupted = true
               killChild(child)
             }, timeout)
+            const onAbort = () => {
+              interrupted = true
+              killChild(child)
+            }
+            abortSignal?.addEventListener('abort', onAbort, { once: true })
+            if (abortSignal?.aborted) onAbort()
             child.on('close', code => {
               clearTimeout(timer)
+              abortSignal?.removeEventListener('abort', onAbort)
               resolve(code)
             })
             child.on('error', () => {
               clearTimeout(timer)
+              abortSignal?.removeEventListener('abort', onAbort)
               interrupted = true
               resolve(1)
             })

@@ -104,6 +104,7 @@ export function startServer({ runAgent }: ServerOptions): void {
       console.log(`[server]   GET  /sessions     -- list sessions`)
       console.log(`[server]   DELETE /sessions/id -- delete session`)
       console.log(`[server]   POST /chat         -- chat (SSE stream)`)
+      console.log(`[server]   POST /chat/cancel  -- stop in-flight turn`)
       console.log(`[server]   POST /tool/abort   -- abort one tool/subagent`)
       console.log(`[server]   GET  /environments -- list execution environments`)
       if (staticDir) {

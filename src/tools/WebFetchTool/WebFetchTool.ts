@@ -99,7 +99,7 @@ export const definition: ToolDefinition = {
       }),
       execute: async (
         args: { url: string; prompt: string },
-        options?: { toolCallId?: string },
+        options?: { toolCallId?: string; abortSignal?: AbortSignal },
       ): Promise<DualChannelToolResult<WebFetchOutput> | string> => {
         const { url, prompt } = args
         const start = Date.now()
@@ -112,9 +112,9 @@ export const definition: ToolDefinition = {
 
         const sessionId = context.sessionId ?? ''
         const toolUseId = options?.toolCallId ?? randomUUID()
-        const signal = sessionId
-          ? registerToolAbort(sessionId, toolUseId)
-          : undefined
+        const signal =
+          options?.abortSignal ??
+          (sessionId ? registerToolAbort(sessionId, toolUseId) : undefined)
         const abortController = controllerFromSignal(signal)
 
         try {
@@ -213,7 +213,9 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
           const message = err instanceof Error ? err.message : String(err)
           return `Error: web fetch failed: ${message}. URL: ${url}`
         } finally {
-          if (sessionId) clearToolAbort(sessionId, toolUseId)
+          if (sessionId && !options?.abortSignal) {
+            clearToolAbort(sessionId, toolUseId)
+          }
         }
       },
     })

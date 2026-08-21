@@ -4,6 +4,7 @@ import type { ProtocolSink } from './protocol-sink.js'
 import {
   approvePlanRequest,
   askUserQuestionRequest,
+  interruptedMessage,
   modeChangedMessage,
   reasoningDeltaMessage,
   resultErrorMessage,
@@ -17,7 +18,7 @@ import {
 } from './protocol-messages.js'
 
 /**
- * Typed wire emitter ‚Ä?
+ * Typed wire emitter ù?
  * boundary instead of stringly eventBus pairs translated at transport time.
  */
 export class WireEmitter {
@@ -245,6 +246,11 @@ export class WireEmitter {
 
   error(message: string): void {
     this.emit(resultErrorMessage(message, this.#env))
+  }
+
+  /** CC Esc/Stop ó UI shows Interrupted; transcript has the user marker. */
+  interrupted(input: { tool_use?: boolean; text?: string }): void {
+    this.emit(interruptedMessage(input, this.#env))
   }
 }
 

@@ -47,6 +47,7 @@ import { WorkerExecutionBackend } from '../execution/worker-execution-backend.js
 import { initCodePlugins } from '../core/plugins/index.js'
 import { handleChat } from './routes/chat.js'
 import { abortTool } from '../core/tool-abort-registry.js'
+import { abortTurn } from '../core/turn-abort-registry.js'
 import {
   getSafeSettings,
   parseWritableScope,
@@ -731,6 +732,35 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
             ? { ok: true }
             : { error: 'No running tool with that id' },
         )
+      } catch {
+        sendJSON(res, 400, { error: 'Invalid JSON' })
+      }
+      return
+    }
+
+    if (method === 'POST' && url === '/chat/cancel') {
+      try {
+        const body = await readBody(req)
+        const sessionId = body.session_id as string
+        if (!sessionId) {
+          sendJSON(res, 400, { error: "Missing 'session_id'" })
+          return
+        }
+        const session = getSession(sessionId)
+        const requesterEmail = (req as AuthedRequest).user?.email
+        if (
+          !session ||
+          !canAccessSession(
+            session,
+            requesterEmail,
+            (req as AuthedRequest).user?.role,
+          )
+        ) {
+          sendJSON(res, 404, { error: `Session not found: ${sessionId}` })
+          return
+        }
+        const ok = abortTurn(sessionId, 'user-cancel')
+        sendJSON(res, 200, { ok, session_id: sessionId })
       } catch {
         sendJSON(res, 400, { error: 'Invalid JSON' })
       }

@@ -86,6 +86,7 @@ export async function runAcpPromptTurn(input: {
       transport,
       images,
       emitHandshake: false,
+      abortSignal: abortController.signal,
     })
 
     if (signal.aborted || abortController.signal.aborted) {

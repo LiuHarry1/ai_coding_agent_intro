@@ -42,6 +42,18 @@ export default function MessageBubble({ message }) {
     )
   }
 
+  if (message.type === 'interrupted') {
+    return (
+      <div className='msg msg-interrupted' role='status'>
+        Interrupted
+        <span className='msg-interrupted-hint'>
+          {' '}
+          · What should I do instead?
+        </span>
+      </div>
+    )
+  }
+
   if (message.type === 'user') {
     return (
       <div className='msg msg-user'>

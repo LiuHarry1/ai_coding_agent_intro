@@ -249,10 +249,35 @@ export const useChatStore = create((set, get) => ({
     set({ currentSessionId: null, messages: [], todos: [] })
   },
 
-  stopStreaming: () => {
-    const { abortController } = get()
-    if (abortController) abortController.abort()
-    set({ isStreaming: false, abortController: null })
+  stopStreaming: async () => {
+    const { abortController, currentSessionId } = get()
+    // Prefer server cancel so SSE can still deliver pairing repairs / done.
+    // Fall back to aborting the fetch if cancel is unavailable.
+    let cancelled = false
+    if (currentSessionId) {
+      try {
+        const data = await agentApi.cancelChat(currentSessionId)
+        cancelled = data?.ok === true
+      } catch (err) {
+        console.warn('[chat] cancelChat failed', err)
+      }
+    }
+    if (!cancelled && abortController) {
+      abortController.abort()
+      set({ isStreaming: false, abortController: null })
+      get()._finalizeAssistant()
+      return
+    }
+    // Safety net: if the server never ends the stream after cancel, drop it.
+    if (cancelled && abortController) {
+      const ac = abortController
+      setTimeout(() => {
+        if (get().abortController !== ac) return
+        ac.abort()
+        set({ isStreaming: false, abortController: null })
+        get()._finalizeAssistant()
+      }, 15_000)
+    }
   },
 
   /**
@@ -612,6 +637,9 @@ export const useChatStore = create((set, get) => ({
           case 'tool_timing':
             store._updateLastToolTiming(data)
             break
+          case 'interrupted':
+            store._onInterrupted(data)
+            break
         }
         break
       case 'stream_event':
@@ -724,6 +752,23 @@ export const useChatStore = create((set, get) => ({
       const last = msgs[msgs.length - 1]
       if (last?.type !== 'assistant') return s
       const parts = last.parts.filter(p => p.type !== 'thinking')
+      // Dedup: a repeated tool_input_start for the same id must not leave a
+      // second card spinning after tool_result only updates one of them.
+      if (part.toolCallId) {
+        const idx = parts.findIndex(
+          p => p.type === 'tool_call' && p.toolCallId === part.toolCallId,
+        )
+        if (idx >= 0) {
+          const existing = parts[idx]
+          if (existing.status === 'done') {
+            msgs[msgs.length - 1] = { ...last, parts }
+            return { messages: msgs }
+          }
+          parts[idx] = { ...existing, ...part }
+          msgs[msgs.length - 1] = { ...last, parts }
+          return { messages: msgs }
+        }
+      }
       parts.push(part)
       msgs[msgs.length - 1] = { ...last, parts }
       return { messages: msgs }
@@ -1001,20 +1046,31 @@ export const useChatStore = create((set, get) => ({
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i]
         if (p.type === 'tool_call' && p.toolCallId === data.toolCallId) {
-          parts[i] = {
-            ...p,
-            name: data.name,
-            args: data.args,
-            status: 'running',
-            // Re-affirm isSubagent on the upsert. The placeholder created by
-            // tool_input_start already set it, but if the SDK skipped that
-            // event (some providers don't emit tool-input-start) and we land
-            // here directly, this is the only place the flag gets recorded.
-            // Coalesce instead of overwrite: don't lose `true` if the
-            // tool_call payload happens to omit the field.
-            isSubagent: data.isSubagent === true || p.isSubagent === true,
-            liveInputBytes: undefined,
-            liveInputStart: undefined,
+          // Never demote a finished card back to running — a late/duplicate
+          // tool_call after tool_result left Pause→Resume rows spinning forever.
+          if (p.status === 'done') {
+            parts[i] = {
+              ...p,
+              name: data.name ?? p.name,
+              args: data.args ?? p.args,
+              isSubagent: data.isSubagent === true || p.isSubagent === true,
+            }
+          } else {
+            parts[i] = {
+              ...p,
+              name: data.name,
+              args: data.args,
+              status: 'running',
+              // Re-affirm isSubagent on the upsert. The placeholder created by
+              // tool_input_start already set it, but if the SDK skipped that
+              // event (some providers don't emit tool-input-start) and we land
+              // here directly, this is the only place the flag gets recorded.
+              // Coalesce instead of overwrite: don't lose `true` if the
+              // tool_call payload happens to omit the field.
+              isSubagent: data.isSubagent === true || p.isSubagent === true,
+              liveInputBytes: undefined,
+              liveInputStart: undefined,
+            }
           }
           msgs[msgs.length - 1] = { ...last, parts }
           return { messages: msgs }
@@ -1116,7 +1172,7 @@ export const useChatStore = create((set, get) => ({
             ...sub[idx],
             name: ev.name,
             args: ev.args,
-            status: 'running',
+            ...(sub[idx].status === 'done' ? {} : { status: 'running' }),
           }
         } else {
           sub.push({
@@ -1183,27 +1239,36 @@ export const useChatStore = create((set, get) => ({
       const lastMsg = msgs[msgs.length - 1]
       if (lastMsg?.type !== 'assistant') return { messages: msgs }
 
-      const parts = [...lastMsg.parts]
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (
-          parts[i].type === 'tool_call' &&
-          parts[i].toolCallId === toolCallId
-        ) {
-          parts[i] = {
-            ...parts[i],
-            result: data.result,
-            ...(data.toolUseResult !== undefined
-              ? { toolUseResult: data.toolUseResult }
-              : {}),
-            ...(data.isError ? { isError: true } : {}),
-            status: 'done',
-            endTime: Date.now(),
-            stopping: false,
-            liveTask: undefined,
-          }
-          break
+      const patch = p => ({
+        ...p,
+        result: data.result,
+        ...(data.toolUseResult !== undefined
+          ? { toolUseResult: data.toolUseResult }
+          : {}),
+        ...(data.isError ? { isError: true } : {}),
+        status: 'done',
+        endTime: Date.now(),
+        stopping: false,
+        liveTask: undefined,
+      })
+
+      const parts = lastMsg.parts.map(p => {
+        if (p.type === 'tool_call' && p.toolCallId === toolCallId) {
+          return patch(p)
         }
-      }
+        if (p.type === 'tool_call' && Array.isArray(p.subagentParts)) {
+          let changed = false
+          const sub = p.subagentParts.map(sp => {
+            if (sp.type === 'tool_call' && sp.toolCallId === toolCallId) {
+              changed = true
+              return patch(sp)
+            }
+            return sp
+          })
+          return changed ? { ...p, subagentParts: sub } : p
+        }
+        return p
+      })
       msgs[msgs.length - 1] = { ...lastMsg, parts }
       return { messages: msgs }
     })
@@ -1296,8 +1361,46 @@ export const useChatStore = create((set, get) => ({
       const msgs = [...s.messages]
       const last = msgs[msgs.length - 1]
       if (last?.type === 'assistant') {
-        msgs[msgs.length - 1] = { ...last, status: 'done' }
+        const settle = p => {
+          if (p.type !== 'tool_call') return p
+          let next = p
+          if (Array.isArray(p.subagentParts)) {
+            next = {
+              ...next,
+              subagentParts: p.subagentParts.map(settle),
+            }
+          }
+          if (next.status === 'done') return next
+          return {
+            ...next,
+            status: 'done',
+            isError: true,
+            result: next.result ?? 'Interrupted by user',
+            stopping: false,
+            liveTask: undefined,
+            endTime: Date.now(),
+          }
+        }
+        const parts = last.parts.map(settle)
+        msgs[msgs.length - 1] = { ...last, parts, status: 'done' }
       }
+      return { messages: msgs }
+    })
+  },
+
+  /** CC Esc/Stop — settle the assistant turn and show Interrupted. */
+  _onInterrupted: data => {
+    get()._finalizeAssistant()
+    set(s => {
+      const msgs = [...s.messages]
+      const last = msgs[msgs.length - 1]
+      if (last?.type === 'interrupted') return s
+      msgs.push({
+        id: newId(),
+        type: 'interrupted',
+        toolUse: data?.tool_use === true,
+        text: data?.text,
+      })
       return { messages: msgs }
     })
   },

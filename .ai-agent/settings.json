@@ -30,7 +30,7 @@
     "timeBasedMicroGapMinutes": 5
   },
   "sessionMemory": {
-    "enabled": true,
+    "enabled": false,
     "minimumTokensToInit": 10000,
     "minimumTokensBetweenUpdate": 5000,
     "toolCallsBetweenUpdates": 3,
@@ -41,7 +41,7 @@
     "compactMinTextMessages": 5
   },
   "autoMemory": {
-    "enabled": true,
+    "enabled": false,
     "prefetchEnabled": true,
     "cacheSafe": true,
     "modelTier": "small",

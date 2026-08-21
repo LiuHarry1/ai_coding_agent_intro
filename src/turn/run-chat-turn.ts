@@ -63,6 +63,12 @@ import {
 } from '../core/permission-mode.js'
 import type { SSETransport } from '../core/types.js'
 import { respondSkillFork } from '../skills/respond-fork.js'
+import {
+  abortTurn,
+  clearTurnAbort,
+  registerTurnAbort,
+  type TurnAbortReason,
+} from '../core/turn-abort-registry.js'
 
 export interface RunChatTurnInput {
   message: string
@@ -81,8 +87,13 @@ export interface RunChatTurnInput {
     wantsStream: boolean
     sseHeaders?: Record<string, string>
   }
-  /** e.g. req.on('close', cleanup) for SSE disconnect. */
+  /** e.g. res.on('close', cleanup) for premature SSE disconnect. */
   onClientDisconnect?: (cleanup: () => void) => void
+  /**
+   * External cancel (ACP / POST /chat/cancel). Combined with disconnect into
+   * one turn AbortSignal passed to runAgent.
+   */
+  abortSignal?: AbortSignal
   /** When set, caller owns telemetry/quota subscriptions on this bus. */
   eventBus?: IEventBus
 }
@@ -175,6 +186,7 @@ export async function runChatTurn(
     http,
     eventBus: externalBus,
     onClientDisconnect,
+    abortSignal: externalAbort,
   } = input
 
   const settingsCwd = isRemoteWorkspace(session.workspace)
@@ -211,7 +223,23 @@ export async function runChatTurn(
   }
 
   const eventBus = externalBus ?? new EventBus()
-  onClientDisconnect?.(() => eventBus.removeAllListeners())
+  const turnAbort = registerTurnAbort(session.id)
+  const abortNow = (reason: TurnAbortReason) => {
+    abortTurn(session.id, reason)
+  }
+  if (externalAbort) {
+    if (externalAbort.aborted) abortNow('external')
+    else
+      externalAbort.addEventListener('abort', () => abortNow('external'), {
+        once: true,
+      })
+  }
+  onClientDisconnect?.(() => abortNow('disconnect'))
+
+  const finish = <T extends RunChatTurnResult>(result: T): T => {
+    clearTurnAbort(session.id, turnAbort)
+    return result
+  }
 
   let unsubTelemetry: (() => void) | undefined
   if (!externalBus) {
@@ -265,7 +293,7 @@ export async function runChatTurn(
     unsubTelemetry?.()
     void flushUsage()
     if (http?.wantsStream) transport.end()
-    return { finalText: '', error: null, reason: 'skill_fork' }
+    return finish({ finalText: '', error: null, reason: 'skill_fork' })
   }
 
   if (emitHandshake && transport !== noopTransport) {
@@ -355,7 +383,7 @@ export async function runChatTurn(
     unsubTelemetry?.()
     void flushUsage()
     if (transport !== noopTransport) transport.end()
-    return { finalText: replyText, error: null, reason: 'compact' }
+    return finish({ finalText: replyText, error: null, reason: 'compact' })
   }
 
   if (prepared.forceSummary) {
@@ -413,11 +441,11 @@ export async function runChatTurn(
     unsubTelemetry?.()
     void flushUsage()
     if (transport !== noopTransport) transport.end()
-    return {
+    return finish({
       finalText: replyText,
       error: null,
       reason: 'slash_command',
-    }
+    })
   }
 
   if (prepared.immediateReply !== null) {
@@ -427,11 +455,11 @@ export async function runChatTurn(
     unsubTelemetry?.()
     void flushUsage()
     if (transport !== noopTransport) transport.end()
-    return {
+    return finish({
       finalText: prepared.immediateReply,
       error: null,
       reason: 'slash_command',
-    }
+    })
   }
 
   const unsubDiscover = eventBus.on('tools_discovered', data => {
@@ -566,6 +594,7 @@ export async function runChatTurn(
         refreshTools,
         refreshSystemPrompt,
         memoryPrefetch,
+        abortSignal: turnAbort.signal,
         onAfterStep: memoryHooks.onAfterStep,
         onTurnEnd: memoryHooks.onTurnEnd,
         onFullCompaction: compactedMessages => {
@@ -598,5 +627,5 @@ export async function runChatTurn(
   wire.done()
   if (transport !== noopTransport) transport.end()
 
-  return { finalText, error: runError }
+  return finish({ finalText, error: runError })
 }

@@ -50,6 +50,12 @@ import {
   runToolCalls,
 } from '../services/tools/tool_execution.js'
 import {
+  appendUserInterruption,
+  commitPartialStreamToHistory,
+  finalizeInterruptedTurn,
+} from '../utils/interrupt.js'
+import { abortReasonFromSignal } from './turn-abort-registry.js'
+import {
   createDumpPromptsRecorder,
   createNoopDumpPromptsRecorder,
   isDumpPromptsEnabled,
@@ -376,7 +382,11 @@ export async function runAgent(
   try {
     for (let step = 0; step < stepLimit; step++) {
       if (abortSignal?.aborted) {
-        return finalText || '(Subagent stopped by user.)'
+        return finalizeInterruptedTurn(messages, wire, {
+          toolUse: false,
+          finalText,
+          signal: abortSignal,
+        })
       }
       wire.stepStart(step)
       const stepStart = Date.now()
@@ -398,6 +408,14 @@ export async function runAgent(
         logLabel,
         toolUseContext?.readFileState,
       )
+
+      if (abortSignal?.aborted) {
+        return finalizeInterruptedTurn(messages, wire, {
+          toolUse: false,
+          finalText,
+          signal: abortSignal,
+        })
+      }
 
       const stepResult = await runOneStep({
         messages,
@@ -427,14 +445,24 @@ export async function runAgent(
 
       if (stepResult === null) {
         if (abortSignal?.aborted) {
-          return (
-            (extractPartialResult(messages) ?? finalText) ||
-            '(Subagent stopped by user.)'
-          )
+          return finalizeInterruptedTurn(messages, wire, {
+            toolUse: false,
+            finalText,
+            signal: abortSignal,
+          })
         }
         // Prefer text from history if the step failed
         // after partial assistant output was already appended.
         return extractPartialResult(messages) ?? finalText
+      }
+
+      // Stream aborted mid-turn: partial already committed + interrupt appended
+      // inside runOneStep (CC aborted_streaming).
+      if (stepResult.aborted) {
+        return (
+          extractPartialResult(messages) ??
+          (finalText || stepResult.text || '')
+        )
       }
 
       // CC post-tools consume: only if settled — never block first API call.
@@ -863,6 +891,19 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         },
       )
 
+      // CC aborted_streaming: salvage partial text/tool_use, fill missing
+      // tool_results, append [Request interrupted by user], stop the turn.
+      if (stepResult.aborted) {
+        commitPartialStreamToHistory(messages, stepResult, wire)
+        // Streaming-abort interrupt uses the non-tool-use marker (CC), even
+        // when some tool_use blocks were already emitted.
+        appendUserInterruption(messages, wire, {
+          toolUse: false,
+          signal: abortSignal,
+        })
+        return { ...stepResult, aborted: true, toolCalls: [], toolResults: [] }
+      }
+
       if (stepResult.toolCalls.length > 0) {
         const executed = await runToolCalls({
           toolCalls: stepResult.toolCalls,
@@ -872,6 +913,7 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
           sessionId,
           logLabel,
           getDefinition: getToolDefinition,
+          abortSignal,
         })
         stepResult.toolResults.push(...executed)
       }
@@ -910,6 +952,16 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
             }
           }
         }
+      }
+
+      // CC aborted_tools: tools finished (or were cancelled with synthetic
+      // results); append the tool-use interrupt marker and stop.
+      if (abortSignal?.aborted) {
+        appendUserInterruption(messages, wire, {
+          toolUse: true,
+          signal: abortSignal,
+        })
+        return { ...stepResult, aborted: true }
       }
 
       // AI SDK exposes usage as a settled-after-stream promise. Stateless
@@ -966,7 +1018,17 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         abortSignal?.aborted ||
         (err instanceof Error && err.name === 'AbortError')
       ) {
-        return null
+        appendUserInterruption(messages, wire, {
+          toolUse: false,
+          signal: abortSignal,
+          reason: abortReasonFromSignal(abortSignal),
+        })
+        return {
+          text: '',
+          toolCalls: [],
+          toolResults: [],
+          aborted: true,
+        }
       }
       if (ctxLengthAttempt === 0 && isContextLengthError(err)) {
         const errMsg = err instanceof Error ? err.message : String(err)

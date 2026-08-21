@@ -18,6 +18,10 @@ import type { ConcurrencyPolicyFn } from '../../core/concurrency-policy.js'
 import type { WireEmitter } from '../../core/wire-emitter.js'
 import { formatToolError } from '../../core/agent/toolErrors.js'
 import { defaultRegistry } from '../../core/tool-registry.js'
+import {
+  clearToolAbort,
+  registerToolAbort,
+} from '../../core/tool-abort-registry.js'
 import { maybePersistAfterExecute } from '../tool-storage/index.js'
 import {
   blocksToToolResultOutputParts,
@@ -25,6 +29,7 @@ import {
   stripImageBlocks,
   toolResultBlocksToText,
 } from '../../utils/tool-result-content.js'
+import { TOOL_INTERRUPT_RESULT } from '../../utils/interrupt.js'
 
 export interface ToolCallRef {
   toolCallId: string
@@ -97,6 +102,7 @@ async function executeOne(
   wire: WireEmitter,
   sessionId?: string,
   getDefinition?: (name: string) => ToolDefinition | undefined,
+  parentAbort?: AbortSignal,
 ): Promise<ExecutedToolResult> {
   const tool = tools[tc.toolName] as AnyTool & {
     execute?: (input: unknown, options?: unknown) => Promise<unknown>
@@ -113,11 +119,24 @@ async function executeOne(
     return { toolCallId: tc.toolCallId, toolName: tc.toolName, result: errResult }
   }
 
+  const toolSignal =
+    sessionId != null
+      ? registerToolAbort(sessionId, tc.toolCallId, parentAbort)
+      : parentAbort
+
+  if (toolSignal?.aborted) {
+    return cancelledToolResult(tc, wire)
+  }
+
   try {
     const raw = await tool.execute(tc.input, {
       toolCallId: tc.toolCallId,
       messages: [],
+      abortSignal: toolSignal,
     })
+
+    // If the tool finished successfully, keep its result even if the turn
+    // abort raced in afterward (CC: completed tools stay in transcript).
 
     const def = lookup(tc.toolName)
     let result: string
@@ -137,7 +156,6 @@ async function executeOne(
       )
       isError = mapped.is_error === true
       if (Array.isArray(mapped.content)) {
-        // CC: the API rejects non-text blocks on error results.
         const blocks = isError
           ? stripImageBlocks(mapped.content)
           : mapped.content
@@ -150,8 +168,6 @@ async function executeOne(
             : String(mapped.content ?? '')
       }
 
-      // CC: validate Out before UI sees it (transcript/wire may be untyped JSON).
-      // Mapper still runs on raw.data so the model always gets text.
       if (def.outputSchema) {
         const parsed = def.outputSchema.safeParse(raw.data)
         if (parsed.success) {
@@ -182,8 +198,6 @@ async function executeOne(
       result = JSON.stringify(raw)
     }
 
-    // CC: image results are never offloaded to disk — they must reach the
-    // model as-is, and the text projection is a placeholder anyway.
     if (!resultBlocks) {
       result = maybePersistAfterExecute(
         sessionId,
@@ -210,6 +224,10 @@ async function executeOne(
       ...(isError ? { isError: true } : {}),
     }
   } catch (err) {
+    const aborted =
+      toolSignal?.aborted ||
+      (err instanceof Error && err.name === 'AbortError')
+    if (aborted) return cancelledToolResult(tc, wire)
     const result = `Error: ${formatToolError(tc.toolName, err)}`
     wire.toolResult({
       tool_use_id: tc.toolCallId,
@@ -222,6 +240,8 @@ async function executeOne(
       result,
       isError: true,
     }
+  } finally {
+    if (sessionId) clearToolAbort(sessionId, tc.toolCallId)
   }
 }
 
@@ -232,6 +252,7 @@ async function executeBatchParallel(
   maxConcurrency: number,
   sessionId?: string,
   getDefinition?: (name: string) => ToolDefinition | undefined,
+  parentAbort?: AbortSignal,
 ): Promise<ExecutedToolResult[]> {
   const results: ExecutedToolResult[] = new Array(calls.length)
   let nextIndex = 0
@@ -246,6 +267,7 @@ async function executeBatchParallel(
         wire,
         sessionId,
         getDefinition,
+        parentAbort,
       )
     }
   }
@@ -265,6 +287,23 @@ export interface RunToolCallsOptions {
   logLabel?: string
   /** Override tool definition lookup (defaults to defaultRegistry). */
   getDefinition?: (name: string) => ToolDefinition | undefined
+  /** When aborted, remaining tools get a synthetic interrupted error result. */
+  abortSignal?: AbortSignal
+}
+
+function cancelledToolResult(tc: ToolCallRef, wire: WireEmitter): ExecutedToolResult {
+  const errResult = TOOL_INTERRUPT_RESULT
+  wire.toolResult({
+    tool_use_id: tc.toolCallId,
+    result: errResult,
+    is_error: true,
+  })
+  return {
+    toolCallId: tc.toolCallId,
+    toolName: tc.toolName,
+    result: errResult,
+    isError: true,
+  }
 }
 
 export async function runToolCalls(
@@ -273,8 +312,19 @@ export async function runToolCalls(
   const batches = partitionToolCalls(opts.toolCalls, opts.concurrencyPolicy)
   const allResults: ExecutedToolResult[] = []
   const tag = `agent:${opts.logLabel ?? 'main'}`
+  const signal = opts.abortSignal
 
-  for (const batch of batches) {
+  for (let bi = 0; bi < batches.length; bi++) {
+    if (signal?.aborted) {
+      for (let bj = bi; bj < batches.length; bj++) {
+        for (const tc of batches[bj]!.calls) {
+          allResults.push(cancelledToolResult(tc, opts.wire))
+        }
+      }
+      break
+    }
+
+    const batch = batches[bi]!
     if (batch.isConcurrencySafe && batch.calls.length > 1) {
       console.log(
         `[${tag}] tool batch: parallel x${batch.calls.length} (${batch.calls.map(c => c.toolName).join(', ')})`,
@@ -287,6 +337,7 @@ export async function runToolCalls(
           getMaxToolUseConcurrency(),
           opts.sessionId,
           opts.getDefinition,
+          signal,
         )),
       )
     } else if (batch.isConcurrencySafe) {
@@ -297,17 +348,30 @@ export async function runToolCalls(
           opts.wire,
           opts.sessionId,
           opts.getDefinition,
+          signal,
         ),
       )
     } else {
-      for (const tc of batch.calls) {
+      for (let ci = 0; ci < batch.calls.length; ci++) {
+        if (signal?.aborted) {
+          for (let cj = ci; cj < batch.calls.length; cj++) {
+            allResults.push(cancelledToolResult(batch.calls[cj]!, opts.wire))
+          }
+          for (let bj = bi + 1; bj < batches.length; bj++) {
+            for (const tc of batches[bj]!.calls) {
+              allResults.push(cancelledToolResult(tc, opts.wire))
+            }
+          }
+          return allResults
+        }
         allResults.push(
           await executeOne(
-            tc,
+            batch.calls[ci]!,
             opts.tools,
             opts.wire,
             opts.sessionId,
             opts.getDefinition,
+            signal,
           ),
         )
       }

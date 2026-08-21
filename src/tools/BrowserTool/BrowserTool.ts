@@ -32,6 +32,10 @@ import {
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
 import { getUserHasControl, setUserHasControl } from '../../browser/session-flags.js'
+import {
+  trackActiveBrowserTool,
+  untrackActiveBrowserTool,
+} from '../../browser/active-browser-tools.js'
 import { resolveSettings } from '../../core/settings-manager.js'
 import {
   BROWSER_CLICK_TOOL_NAME,
@@ -138,8 +142,13 @@ function withTimeout<T>(
   promise: Promise<T>,
   action: string,
   ms: number = CALL_TIMEOUT_MS,
+  signal?: AbortSignal,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new BrowserError(`${action} interrupted by user`))
+      return
+    }
     const timer = setTimeout(() => {
       reject(
         new BrowserError(
@@ -147,13 +156,20 @@ function withTimeout<T>(
         ),
       )
     }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new BrowserError(`${action} interrupted by user`))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
     promise.then(
       value => {
         clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
         resolve(value)
       },
       err => {
         clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
         reject(err)
       },
     )
@@ -235,55 +251,73 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
         inputSchema: cfg.inputSchema,
         execute: async (
           args: z.infer<S>,
-          options?: { toolCallId?: string },
+          options?: { toolCallId?: string; abortSignal?: AbortSignal },
         ): Promise<DualChannelToolResult<BrowserToolOutput> | string> => {
           const toolCallId = options?.toolCallId ?? randomUUID()
-          let resolved: { backend: BrowserBackend; targetId: string } | undefined
+          const abortSignal = options?.abortSignal
+          const sessionId = context.sessionId
+          trackActiveBrowserTool(sessionId, toolCallId, cfg.name, args)
           try {
-            const cwdNow = context.cwd ?? cwd
-            const sessionId = context.sessionId
-            if (cfg.requireTab === false) {
-              const backend = await withTimeout(
-                getBrowser(cwdNow, sessionId),
+            if (abortSignal?.aborted) {
+              return browserErrorText(
+                new BrowserError('interrupted by user'),
                 cfg.name,
               )
-              resolved = {
-                backend,
-                targetId: getCurrentTabId(sessionId) ?? '',
+            }
+            let resolved: { backend: BrowserBackend; targetId: string } | undefined
+            try {
+              const cwdNow = context.cwd ?? cwd
+              if (cfg.requireTab === false) {
+                const backend = await withTimeout(
+                  getBrowser(cwdNow, sessionId),
+                  cfg.name,
+                  CALL_TIMEOUT_MS,
+                  abortSignal,
+                )
+                resolved = {
+                  backend,
+                  targetId: getCurrentTabId(sessionId) ?? '',
+                }
+              } else {
+                resolved = await withTimeout(
+                  resolveTab(cwdNow, undefined, sessionId),
+                  cfg.name,
+                  CALL_TIMEOUT_MS,
+                  abortSignal,
+                )
               }
-            } else {
-              resolved = await withTimeout(
-                resolveTab(cwdNow, undefined, sessionId),
+              assertAgentMayAct(cfg.name, args, sessionId)
+              const data = await withTimeout(
+                cfg.run(args, {
+                  backend: resolved.backend,
+                  targetId: resolved.targetId,
+                  cwd: cwdNow,
+                  sessionId,
+                  toolCallId,
+                }),
                 cfg.name,
+                CALL_TIMEOUT_MS,
+                abortSignal,
               )
+              if (data.url || data.title) {
+                recordHandoff(sessionId, {
+                  targetId: resolved.targetId || undefined,
+                  url: data.url,
+                  title: data.title,
+                })
+              }
+              return { data }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              const skipTree = /timed out|Snapshot skipped|PDF\/media/i.test(msg)
+              const fresh =
+                resolved && !skipTree
+                  ? await freshSnapshotText(resolved.backend, resolved.targetId)
+                  : undefined
+              return browserErrorText(err, cfg.name, fresh)
             }
-            assertAgentMayAct(cfg.name, args, sessionId)
-            const data = await withTimeout(
-              cfg.run(args, {
-                backend: resolved.backend,
-                targetId: resolved.targetId,
-                cwd: cwdNow,
-                sessionId,
-                toolCallId,
-              }),
-              cfg.name,
-            )
-            if (data.url || data.title) {
-              recordHandoff(sessionId, {
-                targetId: resolved.targetId || undefined,
-                url: data.url,
-                title: data.title,
-              })
-            }
-            return { data }
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            const skipTree = /timed out|Snapshot skipped|PDF\/media/i.test(msg)
-            const fresh =
-              resolved && !skipTree
-                ? await freshSnapshotText(resolved.backend, resolved.targetId)
-                : undefined
-            return browserErrorText(err, cfg.name, fresh)
+          } finally {
+            untrackActiveBrowserTool(sessionId, toolCallId)
           }
         },
       })
