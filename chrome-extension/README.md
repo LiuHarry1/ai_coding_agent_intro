@@ -54,6 +54,32 @@ a payment. **Resume agent** hands the page back.
 To revoke everything, either hit **Stop** next to a tab in the popup, or disable
 the extension.
 
+## Hide the debugging banner
+
+When the extension attaches to a tab, Chrome shows a top infobar: *"Baize Agent
+Browser Bridge has started debugging this browser"*. The extension cannot
+suppress it — it is a browser security notice. Other tools that use
+`chrome.debugger` (OpenClaw, Codex, etc.) show the same banner; they only avoid
+Chrome's separate blocking **Allow remote debugging?** modal.
+
+To hide the infobar, launch Chrome with Chromium's
+`--silent-debugger-extension-api` flag:
+
+1. Quit Chrome completely (on Windows, check Task Manager for stray
+   `chrome.exe` processes).
+2. Edit your Chrome shortcut's **Target** field and append the flag (note the
+   leading space):
+
+   ```text
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --silent-debugger-extension-api
+   ```
+
+3. Open Chrome only through that shortcut from now on. Launches from the
+   taskbar, Start menu, or another shortcut will not include the flag and the
+   banner will return.
+
+Clicking **Cancel** on the banner still detaches the agent from that tab.
+
 ## Settings
 
 | Key                  | Default     | Meaning                                        |
