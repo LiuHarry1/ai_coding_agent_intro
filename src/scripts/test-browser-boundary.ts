@@ -110,6 +110,11 @@ function createFakeBackend(state: FakeState): BrowserBackend {
       }
       return {} as never
     },
+    async getActiveUserTabId() {
+      return null
+    },
+    async focusTab() {},
+    async restoreTab() {},
     async dispose() {},
   }
 }

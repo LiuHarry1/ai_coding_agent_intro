@@ -110,7 +110,7 @@ npm run browser:pair
 
 关掉扩展或者点撤销,agent 立刻失去访问权。
 
-**要输入就得切到那个标签页。** 读页面(打开、抓快照、截图、看网络)都在后台悄悄进行,不打扰你;但点击、输入、按键、滚动这类操作会先把目标标签页切到前台。这不是设计取舍,是 Chrome 的硬性行为:发给隐藏标签页的输入事件会被直接丢掉,命令还照样返回成功——真点了个寂寞。所以宁可抢一下焦点,也不能让点击悄悄失效。窗口最小化时输入同样送不到,这种情况 agent 会明确报错让你还原窗口,而不是假装点过了。
+**不抢你的窗口焦点。** extension 模式不会调用 `Page.bringToFront`，也不会 `windows.focus` 把你的 Chrome 窗口拉到最前。读页面（打开、抓快照、截图）全程在后台 agent 标签上跑，**不会切你的标签条**。只有点击、输入等写操作才会用 `tabs.update({ active: true })` 把 agent 标签切到标签条上（L1），且**默认不会**在操作后再切回你原来的标签。若你希望连续操作结束后自动回到之前的标签，可在 settings 里设 `restoreTabAfterInput: true`。若连标签条都不想被碰，请用 **isolated** 模式（独立 Chrome 窗口，你看不到就不会被打扰）。
 
 ---
 
@@ -180,6 +180,7 @@ agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现
 | `viewportWidth` | `1280` | 仅 isolated 模式 |
 | `viewportHeight` | `800` | 仅 isolated 模式 |
 | `idleTimeoutMinutes` | `30` | 闲置多久后关掉浏览器 |
+| `restoreTabAfterInput` | `false` | 仅 extension：点击/输入后是否切回你之前的标签 |
 
 改任何一项都要重启 agent。
 
@@ -194,8 +195,8 @@ agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现
 | 弹窗里点 Pair 没反应 | agent 没起来或不在 extension 模式,中继没在监听 |
 | 百度/Google 弹验证码 | isolated 模式的空白 profile 像机器人。换 extension 模式用你的真实会话 |
 | `Ref e3 is stale` | 页面变了,快照过期。让它重新抓一次快照即可,通常它会自己处理 |
-| 「它一操作就把我的标签页切过去」 | 预期行为,输入类操作必须在可见标签页上才生效,见上文 |
-| `The page is still hidden after being brought to front` | Chrome 窗口被最小化了,还原窗口再让它重试 |
+| 「它一操作就把我的标签页切过去」 | extension 写操作需要 L1 激活 agent 标签才能输入；读操作不会切标签。默认不会切回；设 `restoreTabAfterInput: true` 可在约 0.6s 无操作后切回。要零打扰请用 isolated 模式 |
+| `The page is still hidden after being brought to front` | 旧版行为；当前 extension 不再 bringToFront。若仍出现，重启 agent 并 reload 扩展 |
 | 端口 8766 被占 | 另一个 agent 实例在跑,或改 `relayPort`(弹窗里也要同步改) |
 | 重装扩展后连不上 | 令牌不变,重新在弹窗粘一次即可 |
 

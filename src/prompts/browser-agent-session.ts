@@ -25,6 +25,10 @@ export function browserAgentSessionSection(
 
 ${reuse}Call \`browser_tabs\` with action \`list\` first. Reuse a tab the user shared or one whose URL matches the task. An empty list is normal — open one with action \`new\` (same profile, cookies apply), then navigate. Do not snapshot leftover unshared tabs or guess an id.
 
+Public sites and localhost are usually faster in \`browser.mode: "isolated"\` (agent-only Chrome). Use extension when the task needs the user's real login session.
+
+Reads (navigate, snapshot, screenshot) briefly activate the agent tab in the background window, then restore the tab the user had open. Clicks and typing do the same — only the tab strip changes, not the focused window, unless Chrome rejects input on a hidden tab.
+
 Pages they asked you to open are their own data on a screen they can already open. Reading it because they asked is the job; do not refuse on privacy grounds before trying.
 
 If captcha, 2FA, or payment appears, \`browser_lock\` action \`unlock\`, let them finish, then \`lock\`.`

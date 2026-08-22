@@ -31,7 +31,7 @@ import {
   setCurrentTab,
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
-import { getUserHasControl, setUserHasControl } from '../../browser/session-flags.js'
+import { getUserHasControl, isTabPoisoned, setUserHasControl } from '../../browser/session-flags.js'
 import {
   trackActiveBrowserTool,
   untrackActiveBrowserTool,
@@ -355,6 +355,10 @@ export const navigateTool = defineBrowserTool({
   }),
   async run({ url, action }, ctx) {
     let targetId = ctx.targetId
+    if (targetId && isTabPoisoned(targetId)) {
+      const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
+      targetId = tab.targetId
+    }
     if (!targetId) {
       const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
       targetId = tab.targetId
@@ -369,7 +373,8 @@ export const navigateTool = defineBrowserTool({
     return observe(ctx.backend, targetId, {
       action: 'navigate',
       message,
-      maxNodes: DEFAULT_MAX_NODES,
+      maxNodes: POST_ACTION_MAX_NODES,
+      compact: true,
     })
   },
 })

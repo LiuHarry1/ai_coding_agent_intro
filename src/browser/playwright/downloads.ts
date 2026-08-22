@@ -4,6 +4,7 @@ import { BrowserError } from '../types.js'
 import { ACTION_TIMEOUT_MS } from '../limits.js'
 import { getPageForTarget } from './connect.js'
 import { mapPlaywrightError, refLocator } from './locator.js'
+import { withInputFocus } from './focus.js'
 import {
   createDownloadCaptureForPage,
   DEFAULT_DOWNLOAD_DIR,
@@ -52,8 +53,9 @@ export async function downloadByRef(
   })
   void capture.promise.catch(() => {})
   try {
-    await page.bringToFront().catch(() => {})
-    await refLocator(page, ref).click({ timeout: timeout || ACTION_TIMEOUT_MS })
+    await withInputFocus(backend, targetId, async () => {
+      await refLocator(page, ref).click({ timeout: timeout || ACTION_TIMEOUT_MS })
+    })
   } catch (err) {
     capture.cancel()
     mapPlaywrightError(err, ref)

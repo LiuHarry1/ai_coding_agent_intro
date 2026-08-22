@@ -21,6 +21,7 @@ import {
   attachExtensionPlaywright,
   detachPlaywright,
 } from './playwright/connect.js'
+import { applyFocusConfig, flushTabRestore } from './playwright/focus.js'
 import { startRelayServer, type RelayServer } from './relay/server.js'
 import { DEFAULT_RELAY_PORT } from './relay/protocol.js'
 import {
@@ -242,10 +243,15 @@ export async function getBrowser(
   const live = await pending
   lives.set(key, live)
   scheduleIdleSweep(live)
+  const config = resolveSettings(cwd).config.browser ?? {}
+  applyFocusConfig({
+    restoreTabAfterInput: config.restoreTabAfterInput === true,
+  })
   return live.backend
 }
 
 async function disposeLive(live: Live): Promise<void> {
+  await flushTabRestore().catch(() => {})
   if (live.idleTimer) {
     clearTimeout(live.idleTimer)
     live.idleTimer = null

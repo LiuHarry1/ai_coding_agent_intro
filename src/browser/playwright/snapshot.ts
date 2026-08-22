@@ -32,6 +32,7 @@ import {
 } from '../session-flags.js'
 import { filterSnapshotLines } from '../snapshot-index.js'
 import { getPageForTarget } from './connect.js'
+import { withReadBoost } from './focus.js'
 import { appendSnapshotUrls, type SnapshotUrlEntry } from '../snapshot-urls.js'
 
 const DIALOG_SNAPSHOT_MS = 2_000
@@ -332,6 +333,16 @@ function recordSnapshotHealth(targetId: string, text: string): void {
 }
 
 export async function snapshot(
+  backend: BrowserBackend,
+  targetId: string,
+  opts: SnapshotOpts = {},
+): Promise<SnapshotResult> {
+  return withReadBoost(backend, targetId, () =>
+    snapshotInner(backend, targetId, opts),
+  )
+}
+
+async function snapshotInner(
   backend: BrowserBackend,
   targetId: string,
   opts: SnapshotOpts = {},

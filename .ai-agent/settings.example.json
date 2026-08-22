@@ -110,8 +110,9 @@
   },
 
   "browser": {
-    "mode": "extension",
-    "enabled": false
+    "mode": "isolated",
+    "enabled": false,
+    "restoreTabAfterInput": false
   },
 
   "mcpServers": {},

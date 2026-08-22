@@ -139,6 +139,19 @@ export async function createIsolatedBackend(
       return session.send(method as never, params as never) as never
     },
 
+    async getActiveUserTabId() {
+      return null
+    },
+
+    async focusTab(targetId) {
+      const { page } = entryOf(targetId)
+      await page.bringToFront().catch(() => {})
+    },
+
+    async restoreTab() {
+      // Isolated Chrome is a dedicated window; nothing to restore.
+    },
+
     async dispose() {
       tabs.clear()
       pagesByBackend.delete(backend)

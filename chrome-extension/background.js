@@ -193,6 +193,34 @@ async function closeTab(targetId) {
   return true
 }
 
+async function getActiveUserTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) return null
+  return describe(tab)
+}
+
+async function focusTab(targetId, level) {
+  const tabId = Number(targetId)
+  assertOwned(tabId)
+  await chrome.tabs.update(tabId, { active: true })
+  if (level === 'window') {
+    const tab = await chrome.tabs.get(tabId)
+    if (tab.windowId != null) {
+      await chrome.windows.update(tab.windowId, { focused: true })
+    }
+  }
+}
+
+async function restoreTab(targetId) {
+  const tabId = Number(targetId)
+  try {
+    await chrome.tabs.get(tabId)
+  } catch {
+    return
+  }
+  await chrome.tabs.update(tabId, { active: true })
+}
+
 async function cdp(targetId, cdpMethod, params, sessionId) {
   const tabId = Number(targetId)
   assertOwned(tabId)
@@ -229,6 +257,12 @@ async function handle(req) {
       return createTab(req.url)
     case 'tabs.close':
       return closeTab(req.targetId)
+    case 'tabs.getActiveUserTab':
+      return getActiveUserTab()
+    case 'tabs.focus':
+      return focusTab(req.targetId, req.level)
+    case 'tabs.restore':
+      return restoreTab(req.targetId)
     case 'cdp':
       return cdp(req.targetId, req.cdpMethod, req.params, req.sessionId)
     default:

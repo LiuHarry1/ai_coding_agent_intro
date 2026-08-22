@@ -12,16 +12,17 @@ import {
 } from './locator.js'
 import { ensureInView } from './robust-click.js'
 import { getPageForTarget } from './connect.js'
+import { withReadBoost } from './focus.js'
 
 export async function highlightElement(
   backend: BrowserBackend,
   targetId: string,
   opts: { ref: string; element?: string; durationMs?: number },
 ): Promise<{ role: string; name: string }> {
+  return withReadBoost(backend, targetId, async () => {
   const page = await getPageForTarget(backend, targetId)
   const duration = opts.durationMs ?? 2_000
   try {
-    await page.bringToFront().catch(() => {})
     const loc = await targetLocator(page, {
       ref: opts.ref,
       element: opts.element,
@@ -47,6 +48,7 @@ export async function highlightElement(
   } catch (err) {
     mapPlaywrightError(err, opts.ref)
   }
+  })
 }
 
 export async function getElementBoundingBox(
@@ -54,9 +56,9 @@ export async function getElementBoundingBox(
   targetId: string,
   opts: { ref: string; element?: string },
 ): Promise<{ x: number; y: number; width: number; height: number }> {
+  return withReadBoost(backend, targetId, async () => {
   const page = await getPageForTarget(backend, targetId)
   try {
-    await page.bringToFront().catch(() => {})
     const loc = await targetLocator(page, {
       ref: opts.ref,
       element: opts.element,
@@ -74,4 +76,5 @@ export async function getElementBoundingBox(
   } catch (err) {
     mapPlaywrightError(err, opts.ref)
   }
+  })
 }

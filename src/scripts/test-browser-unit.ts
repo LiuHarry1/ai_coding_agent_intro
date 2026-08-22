@@ -545,6 +545,56 @@ await withRelay(async relay => {
   ok('extension backend maps every operation onto the documented wire shape')
 }
 
+// ── extension backend: legacy focus relay fallback ───────
+
+{
+  const calls: RelayRequestBody[] = []
+  const fakeRelay: RelayServer = {
+    port: 1234,
+    token: 'tok',
+    isConnected: () => true,
+    peerName: () => 'FakeChrome',
+    waitForExtension: async () => {},
+    request: async <T>(req: RelayRequestBody): Promise<T> => {
+      calls.push(req)
+      if (
+        req.method === 'tabs.getActiveUserTab' ||
+        req.method === 'tabs.focus' ||
+        req.method === 'tabs.restore'
+      ) {
+        throw new Error(`Unknown relay method: ${req.method}`)
+      }
+      if (req.method === 'cdp') return {} as T
+      return {} as T
+    },
+    onCdpEvent: () => () => {},
+    notifyLock: () => {},
+    close: async () => {},
+  }
+
+  const backend = await createExtensionBackend({ relay: fakeRelay })
+  eq(await backend.getActiveUserTabId(), null, 'legacy getActiveUserTab returns null')
+  await backend.focusTab('7', 'tab')
+  await backend.focusTab('7', 'window')
+  await backend.restoreTab('3')
+  eq(
+    calls.filter(c => c.method === 'cdp').length,
+    0,
+    'legacy focus is silent (no Page.bringToFront)',
+  )
+  eq(
+    calls.filter(c => c.method === 'tabs.getActiveUserTab').length,
+    1,
+    'legacy mode detected on first getActiveUserTab probe',
+  )
+  eq(
+    calls.filter(c => c.method === 'tabs.focus').length,
+    0,
+    'focusTab is a no-op once legacy mode is active',
+  )
+  ok('extension backend stays silent when focus relay methods are missing')
+}
+
 // ── screenshot dual channel ──────────────────────────────
 
 {
@@ -1190,6 +1240,11 @@ await withRelay(async relay => {
       async send() {
         return {} as never
       },
+      async getActiveUserTabId() {
+        return null
+      },
+      async focusTab() {},
+      async restoreTab() {},
       async dispose() {},
     }
   })

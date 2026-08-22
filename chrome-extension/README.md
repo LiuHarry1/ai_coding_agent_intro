@@ -84,6 +84,11 @@ are in scope, and forwards everything else to `chrome.debugger`. All the
 snapshot, ref and staleness logic lives in the agent and arrives as ordinary CDP
 commands, so this folder should rarely need to change.
 
+After pulling agent changes that touch `chrome-extension/`, open
+`chrome://extensions` and click **Reload** on this extension. Until you do, the
+agent may log `Unknown relay method: tabs.getActiveUserTab` and extension
+click/type may fail on background tabs (no `Page.bringToFront` fallback).
+
 ```bash
 npx tsx src/scripts/test-browser-relay.ts   # protocol + tools, simulated extension
 npx tsx src/scripts/test-extension-e2e.ts   # this extension, in a real Chrome

@@ -20,6 +20,11 @@ import type { RelayTab } from '../relay/protocol.js'
 
 const relays = new WeakMap<BrowserBackend, RelayServer>()
 
+function isUnknownRelayMethod(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /Unknown relay method/i.test(msg)
+}
+
 export interface ExtensionBackendOptions {
   relay: RelayServer
   /** How long to wait for the extension to show up before giving up. */
@@ -36,6 +41,20 @@ export async function createExtensionBackend(
 ): Promise<BrowserBackend> {
   const { relay } = opts
   await relay.waitForExtension(opts.connectTimeoutMs ?? 20_000)
+
+  /** Old extension builds lack tabs.focus / tabs.restore / tabs.getActiveUserTab. */
+  let legacyFocusRelay = false
+  let legacyFocusWarned = false
+
+  function warnLegacyFocusOnce(): void {
+    if (legacyFocusWarned) return
+    legacyFocusWarned = true
+    console.warn(
+      '[browser] Extension is missing focus relay methods (tabs.getActiveUserTab / tabs.focus). ' +
+        'Reload the unpacked extension from chrome://extensions. ' +
+        'Until then extension clicks may fail silently on background tabs.',
+    )
+  }
 
   function toTab(tab: RelayTab): BrowserTab {
     return { targetId: tab.targetId, url: tab.url, title: tab.title }
@@ -65,6 +84,50 @@ export async function createExtensionBackend(
         cdpMethod: method,
         params,
       })
+    },
+
+    async getActiveUserTabId() {
+      if (legacyFocusRelay) return null
+      try {
+        const tab = await relay.request<RelayTab | null>({
+          method: 'tabs.getActiveUserTab',
+        })
+        return tab?.targetId ?? null
+      } catch (err) {
+        if (!isUnknownRelayMethod(err)) throw err
+        legacyFocusRelay = true
+        warnLegacyFocusOnce()
+        return null
+      }
+    },
+
+    async focusTab(targetId, level) {
+      if (legacyFocusRelay) {
+        warnLegacyFocusOnce()
+        return
+      }
+      try {
+        await relay.request({
+          method: 'tabs.focus',
+          targetId,
+          level: level === 'window' ? 'tab' : level,
+        })
+      } catch (err) {
+        if (!isUnknownRelayMethod(err)) throw err
+        legacyFocusRelay = true
+        warnLegacyFocusOnce()
+      }
+    },
+
+    async restoreTab(targetId) {
+      if (legacyFocusRelay) return
+      try {
+        await relay.request({ method: 'tabs.restore', targetId })
+      } catch (err) {
+        if (!isUnknownRelayMethod(err)) throw err
+        legacyFocusRelay = true
+        warnLegacyFocusOnce()
+      }
     },
 
     async dispose() {

@@ -21,14 +21,15 @@ import { pickValue } from './pick.js'
 import { throwIfUnarmedDestructiveDialog } from './overlays.js'
 import { withActionWait } from './settle.js'
 import { getPageForTarget } from './connect.js'
+import { withInputFocus } from './focus.js'
 
 export async function fillForm(
   backend: BrowserBackend,
   targetId: string,
   fields: FormField[],
 ): Promise<FilledField[]> {
+  return withInputFocus(backend, targetId, async () => {
   const page = await getPageForTarget(backend, targetId)
-  await page.bringToFront().catch(() => {})
   const results: FilledField[] = []
   await withActionWait(page, async () => {
     for (const field of fields) {
@@ -37,6 +38,7 @@ export async function fillForm(
   })
   throwIfUnarmedDestructiveDialog(page)
   return results
+  })
 }
 
 function isTruthy(value: string): boolean {

@@ -16,6 +16,7 @@ import {
 export const DEFAULT_BROWSER_SESSION_KEY = 'default'
 
 const snapshotDegraded = new Map<string, boolean>()
+const poisonedTabs = new Set<string>()
 const lastSnapshot = new Map<string, string>()
 const lastSnapshotAt = new Map<string, number>()
 const refMetaByTarget = new Map<string, Map<string, RefMeta>>()
@@ -85,8 +86,17 @@ export function listRefMeta(
   return out
 }
 
+export function setTabPoisoned(targetId: string): void {
+  if (targetId) poisonedTabs.add(targetId)
+}
+
+export function isTabPoisoned(targetId: string): boolean {
+  return poisonedTabs.has(targetId)
+}
+
 export function clearTabMemory(targetId: string): void {
   snapshotDegraded.delete(targetId)
+  poisonedTabs.delete(targetId)
   lastSnapshot.delete(targetId)
   lastSnapshotAt.delete(targetId)
   refMetaByTarget.delete(targetId)

@@ -34,8 +34,8 @@ export const WAIT_FOR_TIME_CAP_S = 30
 
 export const NAVIGATE_TIMEOUT_MS = 30_000
 /** SPAs paint chrome before the main tree; give widgets a beat to mount. */
-export const NAVIGATE_SETTLE_MS = 800
-/** Extra XHR/fetch drain after goto. Keep short — this is every navigation. */
+export const NAVIGATE_SETTLE_MS = 300
+/** Legacy drain constant; navigate no longer waits on network idle. */
 export const NAVIGATE_NETWORK_DRAIN_MS = 2_000
 
 /** Ref-bearing nodes in a snapshot the model asked for. */

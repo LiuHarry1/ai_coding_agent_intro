@@ -27,6 +27,12 @@ export interface BrowserBackend {
     method: string,
     params?: Record<string, unknown>,
   ): Promise<T>
+  /** Active tab in the user's current window before an agent operation. */
+  getActiveUserTabId(): Promise<string | null>
+  /** L1 activates the tab only; L2 also focuses the window. */
+  focusTab(targetId: string, level: 'tab' | 'window'): Promise<void>
+  /** Switch back to a tab the user had open (tab level only). */
+  restoreTab(targetId: string): Promise<void>
   dispose(): Promise<void>
 }
 
@@ -163,4 +169,14 @@ export interface BrowserConfig {
   viewportHeight?: number
   /** Idle minutes before the browser is torn down. Default 30. */
   idleTimeoutMinutes?: number
+  /**
+   * Extension mode: after click/type, switch back to the tab the user had open.
+   * Default false — the agent does not bounce your tab strip after each action.
+   */
+  restoreTabAfterInput?: boolean
+  /**
+   * Extension mode: how long to wait on a slow background load before L1 tab
+   * focus during reads. Reserved for future tuning; reads stay L0 (background).
+   */
+  readBoostTimeoutMs?: number
 }

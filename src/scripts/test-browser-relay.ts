@@ -98,6 +98,13 @@ async function startFakeExtension(
         await chrome.closeTab(id)
         return true
       }
+      case 'tabs.getActiveUserTab': {
+        const tabs = await chrome.listTabs()
+        return tabs[0] ?? null
+      }
+      case 'tabs.focus':
+      case 'tabs.restore':
+        return true
       case 'cdp': {
         const id = msg.targetId as string
         assertOwned(id)

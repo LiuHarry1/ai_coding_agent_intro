@@ -358,7 +358,7 @@ export async function startCdpEndpoint(opts: {
             )
           : undefined
         if (found) {
-          await backend.send(found.targetId, 'Page.bringToFront').catch(() => {})
+          await backend.focusTab(found.targetId, 'tab')
         }
         respond(socket, request, {})
         return

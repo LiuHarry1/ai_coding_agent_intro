@@ -21,6 +21,14 @@ export type RelayRequest =
   | { id: number; method: 'tabs.list' }
   | { id: number; method: 'tabs.create'; url?: string }
   | { id: number; method: 'tabs.close'; targetId: string }
+  | { id: number; method: 'tabs.getActiveUserTab' }
+  | {
+      id: number
+      method: 'tabs.focus'
+      targetId: string
+      level: 'tab' | 'window'
+    }
+  | { id: number; method: 'tabs.restore'; targetId: string }
   | {
       id: number
       method: 'cdp'
