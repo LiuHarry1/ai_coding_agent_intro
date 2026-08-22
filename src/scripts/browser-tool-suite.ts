@@ -15,7 +15,6 @@ import {
   clickTool,
   consoleTool,
   networkTool,
-  evaluateTool,
   hoverTool,
   fillFormTool,
   navigateTool,
@@ -68,7 +67,7 @@ const PAGE = `<!doctype html>
   <button id="recycle">Recycle row</button>
 
   <!-- Replaced wholesale by an identical node: the old ref detaches, but the
-       thing it meant still exists, so ref recovery should relocate it. -->
+       thing it meant still exists, so a fresh snapshot should recover it. -->
   <div id="apply-host"><button class="apply">Apply changes</button></div>
   <button id="rebuild-apply">Rebuild apply</button>
   <p id="applied">not applied</p>
@@ -674,8 +673,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     /**
      * Known boundary: an inline `<span style="cursor:pointer">` has no ARIA
      * role, so Playwright folds it into the paragraph's text and never mints a
-     * ref for it. That tree cannot click the span as its own control;
-     * browser_evaluate is the way in.
+     * ref for it. That tree cannot click the span as its own control.
      *
      * Written as a branch rather than skipped, so that if a future Playwright
      * starts surfacing these, the ref still has to be clickable.
@@ -742,19 +740,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         `clicking an inline pointer span must fire its handler:\n${openedInline.snapshot}`,
       )
     } else {
-      const viaEvaluate = expectData(
-        await run(
-          evaluateTool,
-          {
-            expression:
-              "document.getElementById('fab-inline').click(); return document.getElementById('fab-state').textContent",
-          },
-          sessionId,
-        ),
-      )
       assert.ok(
-        String(viaEvaluate.value).includes('inline opened'),
-        `evaluate may run page JS: ${viaEvaluate.value}`,
+        snapshot.includes('打开消息'),
+        `inline pointer span has no ref; label must still appear in snapshot:\n${snapshot}`,
       )
     }
     ok('role-less clickable generic gets a ref and is clickable')
@@ -879,15 +867,12 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       ),
     )
     assert.equal(selected.message, 'Selected "Production"')
-    const env = expectData(
-      await run(
-        evaluateTool,
-        { expression: 'document.getElementById("env").value' },
-        sessionId,
-      ),
+    assert.match(
+      String(selected.snapshot),
+      /Production/,
+      `select_option must update page state:\n${selected.snapshot}`,
     )
-    assert.equal(env.value, 'prod')
-    ok('select_option + evaluate')
+    ok('select_option')
 
     // ── fill_form ─────
     const formNav = expectData(
@@ -912,17 +897,15 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       String(formFilled.message).startsWith('Filled 4/4 fields'),
       `fill_form must write every control kind in one call:\n${formFilled.message}`,
     )
-    const formValues = expectData(
-      await run(
-        evaluateTool,
-        {
-          expression: `[document.getElementById('merchant').value, document.getElementById('total').value, document.getElementById('tax').value, String(document.getElementById('billable').checked), document.getElementById('currency').value].join('|')`,
-        },
-        sessionId,
-      ),
+    assert.ok(
+      String(formFilled.message).includes('Suzhou Hotel') &&
+        String(formFilled.message).includes('100.00'),
+      `fill_form must report written values:\n${formFilled.message}`,
     )
-    // The page's own change handler computed the readonly tax from the total.
-    assert.equal(formValues.value, 'Suzhou Hotel|100.00|6.00|true|usd')
+    assert.ok(
+      String(formFilled.snapshot).includes('6.00'),
+      `readonly tax must still update from the app handler:\n${formFilled.snapshot}`,
+    )
     const readonlyField = expectData(
       await run(
         fillFormTool,
@@ -951,7 +934,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       'clicking a recycled row must fail rather than delete the wrong record',
     )
     assert.ok(staleClick.includes('Delete Bob'), staleClick)
-    assert.ok(staleClick.includes('fresh snapshot'), staleClick)
+    assert.ok(/new snapshot/i.test(staleClick), staleClick)
     ok('stale ref caught after DOM recycling')
 
     const rebuilt = String(
@@ -961,25 +944,37 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.ok(expectData(await run(clickTool, { ref: bobRef }, sessionId)))
     ok('re-snapshot recovers the ref')
 
-    // Playwright's aria-ref dies with the node. Same role+name still unique:
-    // relocate by the last snapshot's name.
+    // Playwright MCP: stale ref fails fast; model re-snapshots for a new ref.
     const applyHost = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
     await run(clickTool, { ref: refFor(applyHost, 'button', 'Rebuild apply') }, sessionId)
-    const relocatedApply = expectData(
-      await run(
-        clickTool,
-        { ref: refFor(applyHost, 'button', 'Apply changes') },
-        sessionId,
-      ),
+    const staleApply = await run(
+      clickTool,
+      { ref: refFor(applyHost, 'button', 'Apply changes') },
+      sessionId,
     )
     assert.ok(
-      /applied/i.test(String(relocatedApply.snapshot)) ||
-        /relocated/i.test(String(relocatedApply.message)),
-      `identical rebuilt button should relocate, got: ${relocatedApply.message}\n${relocatedApply.snapshot}`,
+      typeof staleApply === 'string',
+      'stale ref after DOM rebuild must fail rather than click the wrong node',
     )
-    ok('rebuilt node relocates by last known role+name')
+    assert.ok(
+      /snapshot|not found/i.test(staleApply),
+      `stale ref error should point at a new snapshot:\n${staleApply}`,
+    )
+    const afterRebuild = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const newApplyRef = refFor(afterRebuild, 'button', 'Apply changes')
+    const applied = expectData(
+      await run(clickTool, { ref: newApplyRef }, sessionId),
+    )
+    assert.ok(
+      /applied/i.test(String(applied.snapshot)) ||
+        /applied/i.test(String(applied.message)),
+      `fresh ref should click rebuilt Apply:\n${applied.message}\n${applied.snapshot}`,
+    )
+    ok('stale ref fails then fresh snapshot recovers')
 
     // ── occlusion: a click under a modal is refused, not lost ──
     const afterApply = String(
@@ -1032,13 +1027,17 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('press_key, with and without modifiers')
 
     // ── scroll ────────────────────────────────────────────
-    await run(scrollTool, { deltaY: 1200 }, sessionId)
-    const scrolled = expectData(
-      await run(evaluateTool, { expression: 'window.scrollY' }, sessionId),
+    const beforeScroll = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const bottomRef = refNear(beforeScroll, 'Bottom marker')
+    await run(scrollTool, { ref: bottomRef, scrollIntoView: true }, sessionId)
+    const afterScroll = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
     assert.ok(
-      Number(scrolled.value) > 0,
-      `page did not scroll, scrollY=${scrolled.value}`,
+      afterScroll.includes('Bottom marker'),
+      `scrollIntoView must bring the bottom marker into the tree:\n${afterScroll}`,
     )
     await run(scrollTool, { deltaY: -2000 }, sessionId)
     ok('scroll')

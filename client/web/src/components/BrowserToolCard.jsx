@@ -6,7 +6,6 @@ import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 import {
   BROWSER_CLICK,
   BROWSER_CONSOLE,
-  BROWSER_EVALUATE,
   BROWSER_FILE_UPLOAD,
   BROWSER_FILL_FORM,
   BROWSER_HANDLE_DIALOG,
@@ -25,7 +24,8 @@ import {
   BROWSER_DRAG,
   BROWSER_RESIZE,
   BROWSER_WAIT_FOR_DOWNLOAD,
-  BROWSER_BATCH,
+  BROWSER_HIGHLIGHT,
+  BROWSER_GET_BOUNDING_BOX,
 } from '../lib/tool-names.js'
 
 /**
@@ -54,12 +54,12 @@ const ICONS = {
   [BROWSER_CONSOLE]: '\u{1F41E}',
   [BROWSER_NETWORK]: '\u{1F4E1}',
   [BROWSER_TABS]: '\u{1F5C2}',
-  [BROWSER_EVALUATE]: '\u{0192}',
   [BROWSER_LOCK]: '\u{1F512}',
   [BROWSER_DRAG]: '\u{2194}',
   [BROWSER_RESIZE]: '\u{2922}',
   [BROWSER_WAIT_FOR_DOWNLOAD]: '\u{1F4E5}',
-  [BROWSER_BATCH]: '\u{2261}',
+  [BROWSER_HIGHLIGHT]: '\u{2728}',
+  [BROWSER_GET_BOUNDING_BOX]: '\u{25A3}',
 }
 
 const RUNNING_LABELS = {
@@ -79,12 +79,12 @@ const RUNNING_LABELS = {
   [BROWSER_CONSOLE]: 'Reading console',
   [BROWSER_NETWORK]: 'Reading network',
   [BROWSER_TABS]: 'Managing tabs',
-  [BROWSER_EVALUATE]: 'Evaluating',
   [BROWSER_LOCK]: 'Locking browser',
   [BROWSER_DRAG]: 'Dragging',
   [BROWSER_RESIZE]: 'Resizing viewport',
   [BROWSER_WAIT_FOR_DOWNLOAD]: 'Waiting for download',
-  [BROWSER_BATCH]: 'Running batch',
+  [BROWSER_HIGHLIGHT]: 'Highlighting',
+  [BROWSER_GET_BOUNDING_BOX]: 'Measuring element',
 }
 
 const DONE_LABELS = {
@@ -104,12 +104,12 @@ const DONE_LABELS = {
   [BROWSER_CONSOLE]: 'Console',
   [BROWSER_NETWORK]: 'Network',
   [BROWSER_TABS]: 'Tabs',
-  [BROWSER_EVALUATE]: 'Evaluated',
   [BROWSER_LOCK]: 'Browser lock',
   [BROWSER_DRAG]: 'Dragged',
   [BROWSER_RESIZE]: 'Resized viewport',
   [BROWSER_WAIT_FOR_DOWNLOAD]: 'Download saved',
-  [BROWSER_BATCH]: 'Batch done',
+  [BROWSER_HIGHLIGHT]: 'Highlighted',
+  [BROWSER_GET_BOUNDING_BOX]: 'Bounding box',
 }
 
 function compactUrl(url) {

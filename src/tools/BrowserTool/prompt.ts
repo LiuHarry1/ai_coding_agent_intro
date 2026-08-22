@@ -4,7 +4,7 @@
 
 export const SNAPSHOT_PRIMER = `Elements are addressed by \`ref\` (e.g. \`e12\`) from the latest snapshot. After any action, use the new tree — do not reuse old refs.`
 
-export const LOOP_GUARD = `If the same action fails twice, stop and change approach. If a snapshot timed out, do not retry ${'`browser_snapshot`'} / ${'`browser_screenshot`'} / ${'`browser_wait_for`'} — ${'`browser_click`'} with \`role\` + \`name\`.`
+export const LOOP_GUARD = `If the same action fails twice, stop and change approach. If a ref is stale, capture a new snapshot and use the updated refs.`
 
 export const NAVIGATE_DESCRIPTION = `Navigate to a URL, or go back / forward / reload.
 
@@ -26,28 +26,28 @@ The tree is Playwright's AI aria snapshot. Clickable nodes have \`[ref=eN]\`. Cl
 
 If an in-page modal (\`alertdialog\` / Yes / No / OK) is open, the snapshot is that dialog. Click those refs. That is not ${'`browser_handle_dialog`'} (native \`alert\`/\`confirm\` only).
 
-If the snapshot times out, a PDF or iframe likely stalled the tree. Do not retry a full snapshot, screenshot, wait, or evaluate. Click with ${'`browser_click`'} \`role\` + \`name\` (Playwright \`getByRole\`).
+If the snapshot times out, a PDF or iframe likely stalled the tree. Do not retry a full snapshot, screenshot, or wait in a loop — close the viewer or work from whatever partial tree you have, then capture a new snapshot when the page is usable.
 
 ${SNAPSHOT_PRIMER}`
 
 export const CLICK_DESCRIPTION = `Perform click on a web page.
 
-Prefer \`ref\` from the latest snapshot. Optional \`element\` is checked against the live node to catch a stale ref. \`role\` + \`name\` is only allowed after a snapshot timeout. After a detached ref, the engine relocates by the last known role+name when it is unique. Coordinate \`x\`/\`y\` is for canvas widgets only.
+Use \`ref\` from the latest snapshot. Pass \`element\` with a human-readable description (role or name overlap); if it does not match the resolved ref, the call fails. Stale refs are recovered by role/name when possible. The click scrolls into view, dismisses blocking dropdowns, and retries with offset when a non-interactive layer blocks the target. Coordinate \`x\`/\`y\` is for canvas widgets only.
 
-Do not ${'`browser_evaluate`'} a click, do not wait, do not navigate.
+Do not wait or navigate instead of clicking.
 
 ${SNAPSHOT_PRIMER}
 ${LOOP_GUARD}`
 
-export const TYPE_DESCRIPTION = `Type text into editable element.
+export const TYPE_DESCRIPTION = `Type text into editable element (input, textarea, or contenteditable).
 
-Clicks the field, then **replaces** its contents (Playwright \`fill\`). Reports the value that landed; a readonly or disabled field is reported as such. \`submit\` presses Enter. \`slowly\` clicks then types at 75ms per character.
+Clicks the field, then **replaces** its contents (Playwright \`fill\`). Reports the value that landed; a readonly or disabled field is reported as such. Optional \`element\` must match the resolved ref (same rule as click). \`submit\` presses Enter. \`slowly\` clicks then types at 75ms per character. If the ref points at a non-editable wrapper, capture a new snapshot and use the inner textbox ref.
 
 ${SNAPSHOT_PRIMER}`
 
 export const FILL_FORM_DESCRIPTION = `Fill multiple form fields in one call. Prefer this over one ${'`browser_type`'} per field.
 
-Writes every listed field, then settles and snapshots once. Each field comes back as filled, skipped, or failed. Native \`<select>\` uses the visible label. Custom comboboxes: open them and ${'`browser_click`'} the option ref — do not ${'`browser_evaluate`'} the value.
+Writes every listed field, then settles and snapshots once. Each field comes back as filled, skipped, or failed. Native \`<select>\` uses the visible label. Custom comboboxes: open them and ${'`browser_click`'} the option ref.
 
 ${SNAPSHOT_PRIMER}`
 
@@ -61,7 +61,7 @@ Sets \`<input type=file>\` (including hidden inputs in frames). Do not click a v
 
 Paths are workspace-relative or absolute.
 
-Returns a snapshot after the files are set. Use that tree for the next click — old refs are stale. A PDF/iframe preview can stall a full snapshot; if it times out or says frames were omitted, ${'`browser_click`'} with \`role\` + \`name\`. Do not wait_for, screenshot, or evaluate to remove the preview.`
+Returns a snapshot after the files are set. Use that tree for the next click — old refs are stale. A PDF/iframe preview can stall a full snapshot; if it times out, close the viewer and capture a new snapshot. Do not wait_for or screenshot in a loop to remove the preview.`
 
 export const HANDLE_DIALOG_DESCRIPTION = `Handle a native \`window.alert\` / \`confirm\` / \`prompt\` only.
 
@@ -79,46 +79,41 @@ Avoid wait by default; use only when no reliable UI state exists. Do not use thi
 
 ${SNAPSHOT_PRIMER}`
 
-export const HOVER_DESCRIPTION = `Hover over element on page.`
+export const HOVER_DESCRIPTION = `Hover over element on page. Returns a compact snapshot after the hover (useful for menus).`
+
+export const HIGHLIGHT_DESCRIPTION = `Highlight an element by ref on the page for visual grounding.`
+
+export const GET_BOUNDING_BOX_DESCRIPTION = `Get the viewport bounding box (x, y, width, height) for a snapshot ref.`
 
 export const SCROLL_DESCRIPTION = `Scroll the page or bring an element into view.
 
 Pass ref + \`scrollIntoView\` to bring an element into view. Pass \`direction\` + \`amount\` to wheel. Without ref, scrolls the page.`
 
-export const SCREENSHOT_DESCRIPTION = `Take a screenshot of the current page. You can't perform actions based on the screenshot, use ${'`browser_snapshot`'} for actions.
+export const SCREENSHOT_DESCRIPTION = `Take a screenshot of the page or an element.
 
-Use for layout, spacing, and visual checks. Pass \`labels: true\` to overlay snapshot refs on the image and return their boxes. The image is downscaled; the full copy is saved to disk. Do not screenshot after a file upload while a PDF/iframe viewer is open — it times out. Use the snapshot from ${'`browser_file_upload`'}, or ${'`browser_click`'} with \`role\` + \`name\`.`
+Use for layout, spacing, and visual checks. Pass \`labels: true\` to overlay snapshot refs on the image and return their boxes. The image is downscaled; the full copy is saved to disk. Do not screenshot after a file upload while a PDF/iframe viewer is open — it times out. Use the snapshot from ${'`browser_file_upload`'}, or close the viewer and capture a new snapshot.`
 
-export const CONSOLE_DESCRIPTION = `Returns console messages, including uncaught errors.
+export const CONSOLE_DESCRIPTION = `Read console messages from the page.
 
-Capture starts when the page loads. Interaction tools already attach errors they caused.`
+Returns errors, warnings, and logs since the last browser action (or since \`clear\`).`
 
-export const NETWORK_DESCRIPTION = `Returns network requests since loading the page (fetch and XHR).
+export const NETWORK_DESCRIPTION = `Read network requests from the page.
 
-Use to tell a 4xx/5xx that reached the server from a call that never left the browser (\`never sent\`). Pending means still in flight. Document navigation and static assets are not listed.`
+Returns fetch/XHR metadata since the last browser action (or since \`clear\`). Document navigations and static assets are not included.`
 
-export const TABS_DESCRIPTION = `Manage tabs.
+export const TABS_DESCRIPTION = `List, create, close, or select browser tabs.
 
 - \`list\`: tabs this agent owns (opened here, or shared from the extension popup). Empty is normal in extension mode.
-- \`new\`: open a tab in the same Chrome profile
-- \`select\` / \`close\`: by tab id from list — do not guess \`"0"\`
-- If no tab is selected, ${'`browser_navigate`'} the start URL (opens a tab). Do not pick a leftover tab from a previous task.`
+- \`new\`: open a tab (optional url)
+- \`close\`: close a tab by targetId
+- \`select\`: make a tab current`
 
-export const EVALUATE_DESCRIPTION = `Evaluate JavaScript on the page.
+export const DRAG_DESCRIPTION = `Drag from one element to another by ref.`
 
-Disabled when \`browser.evaluateEnabled\` is false. Awaited, so \`fetch(...)\` and DOM queries work. Optional \`ref\` runs the function on that snapshot node (\`el => el.textContent\`). Prefer ${'`browser_click`'} / ${'`browser_type`'} / ${'`browser_fill_form`'} for driving the page so the app's own handlers run.`
+export const RESIZE_DESCRIPTION = `Resize the browser viewport.`
 
-export const LOCK_DESCRIPTION = `Take or release control of the browser.
+export const WAIT_FOR_DOWNLOAD_DESCRIPTION = `Wait for a file download to finish and save it to disk.`
 
-- \`unlock\`: the user is taking over. Do not click, type, navigate, or fill until they finish.
-- \`lock\`: the user is done; resume driving the page.
+export const LOCK_DESCRIPTION = `Pause or resume the agent on the current browser tab.
 
-While the user has control you may still snapshot, screenshot, read console/network, list tabs, wait, or evaluate.`
-
-export const DRAG_DESCRIPTION = `Drag one snapshot ref onto another (Playwright dragTo). Use for sliders, kanban cards, and sortable lists.`
-
-export const RESIZE_DESCRIPTION = `Resize the page viewport. Width and height are CSS pixels, max 8192.`
-
-export const WAIT_FOR_DOWNLOAD_DESCRIPTION = `Wait for the next download and save it. Pass ref to click a download control first. Files land under the agent temp downloads directory (not the project), unless path is set.`
-
-export const BATCH_DESCRIPTION = `Run several in-page actions in one round trip. Closed kinds: click, clickCoords, type, press, hover, scrollIntoView, drag, select, fill, resize, wait, evaluate, nested batch. A main-frame navigation aborts the rest of the batch. Prefer this over a chain of click/type calls when refs are still valid.`
+When paused, the user can interact with the page freely (captcha, payment, etc.). Resume hands control back to the agent.`

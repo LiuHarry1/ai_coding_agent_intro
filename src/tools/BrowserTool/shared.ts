@@ -225,7 +225,7 @@ export async function observe(
     out.url = tab?.url ?? ''
     out.title = tab?.title ?? ''
     if (opts.skipIfDegraded && isSnapshotDegraded(targetId)) {
-      out.message = `${out.message} (snapshot skipped — page still degraded; click with role + name)`
+      out.message = `${out.message} (snapshot skipped — page still degraded; capture a new snapshot when the viewer closes)`
     }
   }
 

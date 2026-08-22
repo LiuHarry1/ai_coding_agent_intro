@@ -18,7 +18,6 @@ import type { BrowserBackend } from '../browser/types.js'
 import {
   clickTool,
   consoleTool,
-  evaluateTool,
   lockTool,
   networkTool,
   tabsTool,
@@ -196,10 +195,6 @@ async function main() {
   )
   console.log('ok network tool adds no new CDP methods')
 
-  const evaluated = expectData(await run(evaluateTool, { expression: '1 + 1' }))
-  assert.equal(evaluated.action, 'evaluate')
-  console.log('ok evaluate')
-
   const unlocked = expectData(await run(lockTool, { action: 'unlock' }))
   assert.match(String(unlocked.message), /User has control/)
   const clickBlocked = await run(clickTool, { ref: 'e1' })
@@ -267,7 +262,6 @@ async function main() {
    */
   for (const rel of [
     'distill-snapshot.ts',
-    'evaluate-source.ts',
     'session-flags.ts',
     'snapshot-index.ts',
     'navigate-policy.ts',

@@ -10,6 +10,7 @@ import {
   NAVIGATE_SETTLE_MS,
   NETWORK_DRAIN_MS,
 } from '../limits.js'
+import { clearTabMemory } from '../session-flags.js'
 
 function isTrackedRequest(req: Request): boolean {
   const type = req.resourceType()
@@ -88,12 +89,14 @@ export async function withActionWait<T>(
 export async function settleIfUrlChanged(
   page: Page,
   urlBefore: string,
+  targetId?: string,
 ): Promise<void> {
   const deadline = Date.now() + 1_200
   while (Date.now() < deadline && page.url() === urlBefore) {
     await new Promise<void>(r => setTimeout(r, 100))
   }
   if (page.url() === urlBefore) return
+  if (targetId) clearTabMemory(targetId)
   await new Promise<void>(r => setTimeout(r, NAVIGATE_SETTLE_MS))
   await drainTrackedRequests(page, NAVIGATE_NETWORK_DRAIN_MS)
 }

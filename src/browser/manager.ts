@@ -403,14 +403,18 @@ export function initBrowserLifecycle(cwd: string = process.cwd()): void {
     void relay?.close()
   })
 
-  // In extension mode the relay comes up with the agent rather than on first
-  // tool call: pairing is something the user checks in the popup before asking
-  // for anything, and a relay that only exists mid-request reads as broken.
-  //
-  // AUTH_ENABLED boot has no request scope — resolveSettings → getAgentHome()
-  // throws. Skip eager relay; getBrowser() still starts the backend on first
-  // tool call (SSO does not use extension mode).
-  let config: { mode?: string; relayPort?: number } = {}
+  // Extension relay at boot only when browser is globally opted in (CC-style).
+  // The `browser` primary agent still warms the relay per turn; first tool call
+  // also lazy-starts via getRelay().
+  warmExtensionRelay(cwd, { requireEnabled: true })
+}
+
+/** Start the extension relay if extension mode is configured. */
+export function warmExtensionRelay(
+  cwd: string,
+  opts?: { requireEnabled?: boolean },
+): void {
+  let config: { mode?: string; relayPort?: number; enabled?: boolean } = {}
   try {
     config = resolveSettings(cwd).config.browser ?? {}
   } catch (err) {
@@ -419,14 +423,14 @@ export function initBrowserLifecycle(cwd: string = process.cwd()): void {
     )
     return
   }
-  if (config.mode === 'extension') {
-    const port = config.relayPort ?? DEFAULT_RELAY_PORT
-    void getRelay(port)
-      .then(() => {
-        console.log(`[browser] extension relay listening on 127.0.0.1:${port}`)
-      })
-      .catch((err: Error) => {
-        console.error(`[browser] ${err.message}`)
-      })
-  }
+  if (config.mode !== 'extension') return
+  if (opts?.requireEnabled && config.enabled !== true) return
+  const port = config.relayPort ?? DEFAULT_RELAY_PORT
+  void getRelay(port)
+    .then(() => {
+      console.log(`[browser] extension relay listening on 127.0.0.1:${port}`)
+    })
+    .catch((err: Error) => {
+      console.error(`[browser] ${err.message}`)
+    })
 }

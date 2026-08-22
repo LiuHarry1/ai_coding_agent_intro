@@ -16,7 +16,7 @@ import type {
   ResolvedElement,
 } from '../types.js'
 import { valuesMatch, writeText } from './fields.js'
-import { briefError, describeElement, refLocator } from './locator.js'
+import { briefError, describeElement, targetLocator } from './locator.js'
 import { pickValue } from './pick.js'
 import { throwIfUnarmedDestructiveDialog } from './overlays.js'
 import { withActionWait } from './settle.js'
@@ -62,7 +62,7 @@ async function fillOneField(
   page: Page,
   field: FormField,
 ): Promise<FilledField> {
-  const loc = refLocator(page, field.ref)
+  const loc = await targetLocator(page, { ref: field.ref })
   const el = await describeElement(loc, field.ref)
   const base = { ref: field.ref, role: el.role, name: el.name }
   try {

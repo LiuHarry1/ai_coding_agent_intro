@@ -59,7 +59,6 @@ import {
   setCurrentTab,
 } from '../browser/manager.js'
 import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../browser/heavy-media.js'
-import { normalizeBrowserEvaluateFunctionSource } from '../browser/evaluate-source.js'
 import { assertNavigateUrl } from '../browser/navigate-policy.js'
 import {
   planAnnotations,
@@ -970,23 +969,10 @@ await withRelay(async relay => {
   )
   assert(!isHeavyMediaFrame('https://app.example/nui/expense'), 'app frame is not heavy')
   assert(
-    SNAPSHOT_STALL_NEXT.includes('getByRole') &&
-      SNAPSHOT_STALL_NEXT.includes('evaluate'),
-    'stall hint tells the model to click via Playwright getByRole',
+    SNAPSHOT_STALL_NEXT.includes('snapshot'),
+    'stall hint tells the model to capture a new snapshot',
   )
   ok('heavy media frames are detected from src/type')
-}
-
-{
-  const expr = normalizeBrowserEvaluateFunctionSource('document.title')
-  assert(expr.includes('document.title'), expr)
-  const fn = normalizeBrowserEvaluateFunctionSource('() => 1')
-  eq(fn, '() => 1', 'function source is kept')
-  const withEl = normalizeBrowserEvaluateFunctionSource('el.textContent', {
-    argumentName: 'el',
-  })
-  assert(withEl.includes('el.textContent') && withEl.includes('(el)'), withEl)
-  ok('evaluate source wraps expressions')
 }
 
 {
@@ -1010,8 +996,8 @@ await withRelay(async relay => {
   rememberSnapshot('t1', '- button "Delete Bob" [ref=e12]')
   eq(
     getRefMeta('t1', 'e12')?.name,
-    'Delete Alice',
-    'first-seen name is not overwritten when the same ref is recycled',
+    'Delete Bob',
+    'ref meta tracks the latest snapshot',
   )
   assert(getLastSnapshot('t1')?.includes('Delete Bob'), 'last snapshot yaml updates')
   resetSessionFlags()

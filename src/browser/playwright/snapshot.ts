@@ -7,6 +7,7 @@ import type { Frame, Page } from 'playwright-core'
 import {
   COMPACT_DEPTH,
   DEFAULT_MAX_CHARS,
+  POST_ACTION_MAX_NODES,
   SNAPSHOT_TIMEOUT_MS,
   WAIT_FOR_TIMEOUT_MS,
   WAIT_FOR_TIME_CAP_S,
@@ -25,6 +26,7 @@ import {
 import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
 import {
   getLastSnapshot,
+  isSnapshotStale,
   rememberSnapshot,
   setSnapshotDegraded,
 } from '../session-flags.js'
@@ -94,7 +96,7 @@ function raceMs<T>(ms: number, work: Promise<T>, fallback: T): Promise<T> {
 const EMBEDDED_FRAME_OMIT_MS = 4_000
 const HIDE_EVAL_MS = 1_500
 const FRAMES_OMITTED_PREFIX =
-  'Embedded frames omitted (they stalled the accessibility tree). Click controls on this page with role + name.\n\n'
+  'Embedded frames omitted (they stalled the accessibility tree). Capture a new snapshot when the page is usable.\n\n'
 
 async function hideByAttr(page: Page, attr: string, all: boolean): Promise<void> {
   await raceMs(
@@ -537,4 +539,16 @@ export async function findInSnapshot(
     }
   }
   return { text: hits, fromCache }
+}
+
+/** Refresh the cached snapshot when it is older than SNAPSHOT_TTL_MS. */
+export async function ensureSnapshotFresh(
+  backend: BrowserBackend,
+  targetId: string,
+): Promise<void> {
+  if (!isSnapshotStale(targetId)) return
+  await snapshot(backend, targetId, {
+    compact: true,
+    maxNodes: POST_ACTION_MAX_NODES,
+  })
 }

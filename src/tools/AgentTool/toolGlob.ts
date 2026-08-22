@@ -40,3 +40,26 @@ export function filterDeferredDefsByDisallowedGlobs<
   if (!patterns || patterns.length === 0) return [...defs]
   return defs.filter(d => !isToolNameDisallowed(d.name, patterns))
 }
+
+/** Keep only tool names on an allow-list (exact names; no globs). */
+export function filterToolsRecordByAllowList<T>(
+  tools: Record<string, T>,
+  allowed: readonly string[] | undefined,
+): Record<string, T> {
+  if (!allowed || allowed.length === 0) return tools
+  const set = new Set(allowed)
+  const out: Record<string, T> = {}
+  for (const [name, tool] of Object.entries(tools)) {
+    if (set.has(name)) out[name] = tool
+  }
+  return out
+}
+
+export function filterDeferredDefsByAllowList<T extends { name: string }>(
+  defs: readonly T[],
+  allowed: readonly string[] | undefined,
+): T[] {
+  if (!allowed || allowed.length === 0) return [...defs]
+  const set = new Set(allowed)
+  return defs.filter(d => set.has(d.name))
+}

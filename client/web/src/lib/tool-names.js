@@ -38,12 +38,12 @@ export const BROWSER_SCREENSHOT = 'browser_screenshot'
 export const BROWSER_CONSOLE = 'browser_console'
 export const BROWSER_NETWORK = 'browser_network'
 export const BROWSER_TABS = 'browser_tabs'
-export const BROWSER_EVALUATE = 'browser_evaluate'
 export const BROWSER_LOCK = 'browser_lock'
 export const BROWSER_DRAG = 'browser_drag'
 export const BROWSER_RESIZE = 'browser_resize'
 export const BROWSER_WAIT_FOR_DOWNLOAD = 'browser_wait_for_download'
-export const BROWSER_BATCH = 'browser_batch'
+export const BROWSER_HIGHLIGHT = 'browser_highlight'
+export const BROWSER_GET_BOUNDING_BOX = 'browser_get_bounding_box'
 
 export const BROWSER_TOOLS = [
   BROWSER_NAVIGATE,
@@ -62,12 +62,12 @@ export const BROWSER_TOOLS = [
   BROWSER_CONSOLE,
   BROWSER_NETWORK,
   BROWSER_TABS,
-  BROWSER_EVALUATE,
   BROWSER_LOCK,
   BROWSER_DRAG,
   BROWSER_RESIZE,
   BROWSER_WAIT_FOR_DOWNLOAD,
-  BROWSER_BATCH,
+  BROWSER_HIGHLIGHT,
+  BROWSER_GET_BOUNDING_BOX,
 ]
 
 /** Shown elsewhere (TodoListCard) — hide duplicate tool_call rows. */

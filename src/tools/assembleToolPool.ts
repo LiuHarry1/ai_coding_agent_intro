@@ -3,6 +3,11 @@
  * Built-ins + MCP live on the registry; Agent/Skill must be registered first.
  */
 import { filterToolsByEnablement } from '../core/tool-enablement.js'
+import {
+  BROWSER_AGENT_TYPE,
+  browserDenyGlobsForMainThread,
+  isBrowserEnabledForMainThread,
+} from '../browser/enablement.js'
 import { createToolSearchDefinition } from './ToolSearchTool/ToolSearchTool.js'
 import {
   BROWSER_TOOL_NAMES,
@@ -14,7 +19,9 @@ import { definition as enterPlanModeDef } from './EnterPlanModeTool/EnterPlanMod
 import { definition as exitPlanModeDef } from './ExitPlanModeTool/ExitPlanModeTool.js'
 import { findPrimaryAgent } from './AgentTool/mergeAgents.js'
 import {
+  filterDeferredDefsByAllowList,
   filterDeferredDefsByDisallowedGlobs,
+  filterToolsRecordByAllowList,
   filterToolsRecordByDisallowedGlobs,
 } from './AgentTool/toolGlob.js'
 import type {
@@ -26,6 +33,7 @@ import type {
 } from '../core/types.js'
 import type { ToolRegistry } from '../core/tool-registry.js'
 import type { ToolEnablementSource } from '../core/tool-enablement.js'
+import type { BrowserConfig } from '../browser/types.js'
 
 export interface AssembleToolPoolInput {
   registry: ToolRegistry
@@ -35,6 +43,7 @@ export interface AssembleToolPoolInput {
   mcpTools: Record<string, AnyTool>
   activeAgents: AgentDefinition[]
   toolEnablement: ToolEnablementSource
+  browserConfig?: BrowserConfig
 }
 
 export interface AssembleToolPoolResult {
@@ -66,6 +75,7 @@ export function assembleToolPool(
     mcpTools,
     activeAgents,
     toolEnablement,
+    browserConfig,
   } = input
 
   let { active, deferred, deferredDefs } = registry.createSplit(
@@ -75,29 +85,49 @@ export function assembleToolPool(
     session.discoveredTools,
   )
 
-  // Primary-profile disallowedTools (globs ok) on the main thread.
-  // Applied in every permission mode so plan/ask cannot revive Edit/Write.
   const mainThreadProfile = findPrimaryAgent(activeAgents, session.agentType)
-  const denyGlobs = mainThreadProfile?.disallowedTools
-  if (denyGlobs && denyGlobs.length > 0) {
+  const mainAgentType = mainThreadProfile?.agentType ?? session.agentType ?? null
+  const denyGlobs = [
+    ...browserDenyGlobsForMainThread(mainAgentType, browserConfig),
+    ...(mainThreadProfile?.disallowedTools ?? []),
+  ]
+  if (denyGlobs.length > 0) {
     active = filterToolsRecordByDisallowedGlobs(active, denyGlobs)
     deferred = filterToolsRecordByDisallowedGlobs(deferred, denyGlobs)
     deferredDefs = filterDeferredDefsByDisallowedGlobs(deferredDefs, denyGlobs)
+    if (mainThreadProfile || !isBrowserEnabledForMainThread(mainAgentType, browserConfig)) {
+      console.log(
+        `[server] agentType=${mainAgentType ?? 'default'} denied globs=[${denyGlobs.join(', ')}]`,
+      )
+    }
+  }
+
+  const allowList = mainThreadProfile?.tools
+  if (allowList && allowList.length > 0) {
+    active = filterToolsRecordByAllowList(active, allowList)
+    deferred = filterToolsRecordByAllowList(deferred, allowList)
+    deferredDefs = filterDeferredDefsByAllowList(deferredDefs, allowList)
     console.log(
-      `[server] agentType=${mainThreadProfile!.agentType} denied globs=[${denyGlobs.join(', ')}]`,
+      `[server] agentType=${mainThreadProfile!.agentType} allowed tools=[${allowList.join(', ')}]`,
     )
   }
 
   // Browser specialist: these tools are the job, not a deferred lookup.
   // Qwen (and others) call ToolSearch in parallel with browser_* and the
   // sibling calls fail because activation only happens on the next step.
-  if (mainThreadProfile?.agentType === 'browser') {
-    for (const name of BROWSER_TOOL_NAMES) {
+  if (mainThreadProfile?.agentType === BROWSER_AGENT_TYPE) {
+    const promote =
+      allowList && allowList.length > 0
+        ? allowList
+        : [...BROWSER_TOOL_NAMES]
+    for (const name of promote) {
       if (deferred[name]) {
         active[name] = deferred[name]!
         delete deferred[name]
       }
     }
+    deferredDefs = deferredDefs.filter(d => deferred[d.name])
+  } else {
     deferredDefs = deferredDefs.filter(d => deferred[d.name])
   }
 
@@ -139,15 +169,13 @@ export function assembleToolPool(
     enablementFiltered,
     modeTools,
   )
-  if (denyGlobs && denyGlobs.length > 0) {
+  if (denyGlobs.length > 0) {
     tools = filterToolsRecordByDisallowedGlobs(tools, denyGlobs)
   }
 
   const askMode = session.permissionMode.mode === 'ask'
   const deferredForTurn = askMode ? {} : deferred
-  const deferredDefsForTurn = askMode
-    ? []
-    : deferredDefs.filter(d => deferred[d.name])
+  const deferredDefsForTurn = askMode ? [] : deferredDefs
 
   return {
     tools,
@@ -158,6 +186,6 @@ export function assembleToolPool(
     deferredDefs: deferredDefsForTurn,
     dynamicDefs,
     mainThreadProfile,
-    denyGlobs,
+    denyGlobs: denyGlobs.length > 0 ? denyGlobs : undefined,
   }
 }

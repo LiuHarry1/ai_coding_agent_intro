@@ -20,6 +20,6 @@ export function isHeavyMediaFrame(src: string, type = ''): boolean {
   return false
 }
 
-/** Recovery when ariaSnapshot times out — Playwright getByRole, not evaluate. */
+/** Recovery when ariaSnapshot times out. */
 export const SNAPSHOT_STALL_NEXT =
-  'A full accessibility snapshot timed out (often a PDF/iframe). Do not retry a full snapshot, screenshot, wait_for, or evaluate. Click with browser_click role + name (Playwright getByRole), e.g. role: "button", name: "OK".'
+  'A full accessibility snapshot timed out (often a PDF/iframe). Do not retry a full snapshot, screenshot, or wait_for in a loop. Close the viewer or work from partial state, then capture a new snapshot when the page is usable.'

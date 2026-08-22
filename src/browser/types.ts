@@ -135,6 +135,12 @@ export interface NetworkEntry {
 
 export interface BrowserConfig {
   /**
+   * When false (default), the default coding agent has no browser_* tools.
+   * Set true to restore deferred browser tools on non-browser profiles (CC-style opt-in).
+   * The `browser` primary agent always has browser tools regardless of this flag.
+   */
+  enabled?: boolean
+  /**
    * Which browser the tools drive.
    *   isolated  — a Chrome the agent launches, with its own profile (default)
    *   extension — the user's own Chrome via the paired MV3 extension, so pages
@@ -157,6 +163,4 @@ export interface BrowserConfig {
   viewportHeight?: number
   /** Idle minutes before the browser is torn down. Default 30. */
   idleTimeoutMinutes?: number
-  /** When false, browser_evaluate and batch evaluate are rejected. Default true. */
-  evaluateEnabled?: boolean
 }

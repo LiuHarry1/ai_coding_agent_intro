@@ -3,6 +3,7 @@
  * session so two conversations cannot steal each other's Take Control state.
  */
 
+import { SNAPSHOT_TTL_MS } from './limits.js'
 import {
   parseRefMeta,
   type RefMeta,
@@ -16,6 +17,7 @@ export const DEFAULT_BROWSER_SESSION_KEY = 'default'
 
 const snapshotDegraded = new Map<string, boolean>()
 const lastSnapshot = new Map<string, string>()
+const lastSnapshotAt = new Map<string, number>()
 const refMetaByTarget = new Map<string, Map<string, RefMeta>>()
 const controlBySession = new Map<string, boolean>()
 let globalControl = false
@@ -45,18 +47,22 @@ export function isSnapshotDegraded(targetId: string): boolean {
 export function rememberSnapshot(targetId: string, yaml: string): void {
   if (!targetId || !yaml) return
   lastSnapshot.set(targetId, yaml)
-  let map = refMetaByTarget.get(targetId)
-  if (!map) {
-    map = new Map()
-    refMetaByTarget.set(targetId, map)
-  }
+  lastSnapshotAt.set(targetId, Date.now())
+  const map = new Map<string, RefMeta>()
   for (const meta of parseRefMeta(yaml)) {
-    if (!map.has(meta.ref)) map.set(meta.ref, meta)
+    map.set(meta.ref, meta)
   }
+  refMetaByTarget.set(targetId, map)
 }
 
 export function getLastSnapshot(targetId: string): string | undefined {
   return lastSnapshot.get(targetId)
+}
+
+export function isSnapshotStale(targetId: string): boolean {
+  const at = lastSnapshotAt.get(targetId)
+  if (!at) return true
+  return Date.now() - at > SNAPSHOT_TTL_MS
 }
 
 export function getRefMeta(
@@ -82,6 +88,7 @@ export function listRefMeta(
 export function clearTabMemory(targetId: string): void {
   snapshotDegraded.delete(targetId)
   lastSnapshot.delete(targetId)
+  lastSnapshotAt.delete(targetId)
   refMetaByTarget.delete(targetId)
 }
 
@@ -134,6 +141,7 @@ export function resetSessionFlags(sessionId?: string): void {
   }
   snapshotDegraded.clear()
   lastSnapshot.clear()
+  lastSnapshotAt.clear()
   refMetaByTarget.clear()
   controlBySession.clear()
   globalControl = false

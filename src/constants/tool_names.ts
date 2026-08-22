@@ -41,12 +41,12 @@ export const BROWSER_SCREENSHOT_TOOL_NAME = 'browser_screenshot'
 export const BROWSER_CONSOLE_TOOL_NAME = 'browser_console'
 export const BROWSER_NETWORK_TOOL_NAME = 'browser_network'
 export const BROWSER_TABS_TOOL_NAME = 'browser_tabs'
-export const BROWSER_EVALUATE_TOOL_NAME = 'browser_evaluate'
 export const BROWSER_LOCK_TOOL_NAME = 'browser_lock'
 export const BROWSER_DRAG_TOOL_NAME = 'browser_drag'
 export const BROWSER_RESIZE_TOOL_NAME = 'browser_resize'
 export const BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME = 'browser_wait_for_download'
-export const BROWSER_BATCH_TOOL_NAME = 'browser_batch'
+export const BROWSER_HIGHLIGHT_TOOL_NAME = 'browser_highlight'
+export const BROWSER_GET_BOUNDING_BOX_TOOL_NAME = 'browser_get_bounding_box'
 
 export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_NAVIGATE_TOOL_NAME,
@@ -65,12 +65,12 @@ export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_CONSOLE_TOOL_NAME,
   BROWSER_NETWORK_TOOL_NAME,
   BROWSER_TABS_TOOL_NAME,
-  BROWSER_EVALUATE_TOOL_NAME,
   BROWSER_LOCK_TOOL_NAME,
   BROWSER_DRAG_TOOL_NAME,
   BROWSER_RESIZE_TOOL_NAME,
   BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME,
-  BROWSER_BATCH_TOOL_NAME,
+  BROWSER_HIGHLIGHT_TOOL_NAME,
+  BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
 ]
 
 /** Browser tools that only observe — safe in Ask mode. */

@@ -19,7 +19,6 @@ import {
 import { findInSnapshot } from '../browser/playwright/index.js'
 import {
   clickTool,
-  evaluateTool,
   fileUploadTool,
   fillFormTool,
   handleDialogTool,
@@ -128,6 +127,17 @@ async function main() {
     )
     console.log('ok [playwright] locator(aria-ref).click() mutates the page')
 
+    const wrongHint = await run(
+      clickTool,
+      { ref: counterRef, element: 'Delete Alice' },
+      sessionId,
+    )
+    assert.ok(
+      typeof wrongHint === 'string' && /does not match|snapshot/i.test(wrongHint),
+      `element hint mismatch must fail:\n${wrongHint}`,
+    )
+    console.log('ok [playwright] element hint mismatch fails before click')
+
     const blockedFile = await run(
       navigateTool,
       { url: 'file:///C:/Windows/notepad.exe' },
@@ -156,15 +166,25 @@ async function main() {
       { ref: refFor(snapshot, 'button', 'Rebuild apply') },
       sessionId,
     )
-    const relocated = expectData(
-      await run(clickTool, { ref: applyRef }, sessionId),
+    const staleApply = await run(clickTool, { ref: applyRef }, sessionId)
+    assert.ok(
+      typeof staleApply === 'string',
+      'stale ref after DOM rebuild must fail',
+    )
+    assert.ok(/snapshot|not found/i.test(staleApply), staleApply)
+    const afterRebuild = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const newApplyRef = refFor(afterRebuild, 'button', 'Apply changes')
+    const applied = expectData(
+      await run(clickTool, { ref: newApplyRef }, sessionId),
     )
     assert.ok(
-      /applied/i.test(String(relocated.snapshot)) ||
-        /relocated/i.test(String(relocated.message)),
-      `rebuilt Apply changes should relocate:\n${relocated.message}\n${relocated.snapshot}`,
+      /applied/i.test(String(applied.snapshot)) ||
+        /applied/i.test(String(applied.message)),
+      `fresh ref should click rebuilt Apply:\n${applied.message}\n${applied.snapshot}`,
     )
-    console.log('ok [playwright] stale aria-ref relocates by last known name')
+    console.log('ok [playwright] stale ref fails then fresh snapshot recovers')
 
     const diff = expectData(
       await run(snapshotTool, { includeDiff: true }, sessionId),
@@ -351,19 +371,13 @@ async function main() {
       /Computed tax[^\n]*skipped: field is readonly/.test(message),
       `a readonly field must be reported, not silently dropped:\n${message}`,
     )
-    const values = await run(
-      evaluateTool,
-      {
-        expression: `[document.getElementById('merchant').value, document.getElementById('total').value, document.getElementById('tax').value, String(document.getElementById('billable').checked), document.getElementById('currency').value].join('|')`,
-      },
-      sessionId,
+    assert.ok(
+      message.includes('Suzhou Hotel') && message.includes('100.00'),
+      `fill_form must report written values:\n${message}`,
     )
-    assert.equal(
-      String(expectData(values).value),
-      // The app's own change handler computed the tax, which is the point of
-      // leaving a readonly field alone rather than writing through it.
-      'Suzhou Hotel|100.00|6.00|true|usd',
-      `fill_form must replace text, check the box and select the option:\n${message}`,
+    assert.ok(
+      String(filled.snapshot).includes('6.00'),
+      `readonly tax must still update from the app handler:\n${filled.snapshot}`,
     )
     console.log('ok [playwright] fill_form writes a whole form and skips readonly')
 
@@ -410,16 +424,11 @@ async function main() {
         String(banana.message).includes('Banana'),
       `ARIA listbox options are clicked by ref:\n${banana.message}\n${banana.snapshot}`,
     )
-    const fruitState = expectData(
-      await run(
-        evaluateTool,
-        {
-          expression: 'document.getElementById("fruit-state").textContent',
-        },
-        sessionId,
-      ),
+    assert.match(
+      String(banana.snapshot),
+      /Banana/,
+      `custom dropdown selection must update page state:\n${banana.snapshot}`,
     )
-    assert.match(String(fruitState.value), /Banana/)
     console.log('ok [playwright] custom dropdown is snapshot + click, not select_option')
 
     const armed = expectData(
@@ -450,14 +459,11 @@ async function main() {
       /accepted/,
       `armed confirm must be accepted:\n${asked.message}`,
     )
-    const dialogState = expectData(
-      await run(
-        evaluateTool,
-        { expression: 'document.getElementById("dialog-state").textContent' },
-        sessionId,
-      ),
+    assert.match(
+      String(asked.snapshot),
+      /accepted/,
+      `native confirm must update page state:\n${asked.snapshot}`,
     )
-    assert.equal(String(dialogState.value), 'accepted')
     console.log('ok [playwright] handle_dialog accepts a native confirm')
 
     const uploadFile = path.join(profile, 'receipt.txt')
@@ -478,14 +484,11 @@ async function main() {
       String(uploaded.snapshot).includes('Receipt upload'),
       `file_upload must return a snapshot:\n${uploaded.snapshot}`,
     )
-    const fileState = expectData(
-      await run(
-        evaluateTool,
-        { expression: 'document.getElementById("file-state").textContent' },
-        sessionId,
-      ),
+    assert.match(
+      String(uploaded.snapshot),
+      /receipt\.txt/,
+      `uploaded file name must appear in page state:\n${uploaded.snapshot}`,
     )
-    assert.equal(String(fileState.value), 'receipt.txt')
     console.log('ok [playwright] file_upload sets an input type=file')
 
     const pdfNav = expectData(

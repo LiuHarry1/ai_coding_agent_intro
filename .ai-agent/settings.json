@@ -81,7 +81,8 @@
   "mcpServers": {},
 
   "browser": {
-    "mode": "extension"
+    "mode": "isolated",
+    "enabled": false
   },
 
   "disabledTools": []

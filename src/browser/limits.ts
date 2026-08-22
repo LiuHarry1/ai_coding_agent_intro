@@ -53,6 +53,7 @@ export const COMPACT_DEPTH = 16
 /** Screenshots compete with the snapshot for context; cap them hard. */
 export const SCREENSHOT_TOKEN_BUDGET = 1500
 
-export const ACT_MAX_BATCH_ACTIONS = 100
-export const ACT_MAX_BATCH_DEPTH = 5
 export const ACT_MAX_VIEWPORT_DIMENSION = 8192
+
+/** Auto-refresh snapshot before ref actions when older than this (Cursor-style). */
+export const SNAPSHOT_TTL_MS = 10_000

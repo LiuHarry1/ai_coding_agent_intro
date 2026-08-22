@@ -546,9 +546,9 @@ flowchart LR
 
 1. ~~**读网络请求**（CC 有 `read_network_requests`）~~ — **已补，见下一节。**
 2. **iframe**。只有 Playwright 正经做了（`f1e5` 前缀 + `aria-ref` 跨 frame 解析），Cursor 明确不支持。嵌第三方组件的页面会卡住。
-3. **点击鲁棒性**。Cursor 有 `maxScrollAttempts`、`retryOnStaleRef`、`retryWithOffset`、模态框遮挡检测。白泽现在补上了其中两条最要命的——**stale ref 按 role+name 找回**和**点击前遮挡分类**，见下面第三则补记；剩下的是 `resolveRef` 里已有的滚动到可视区之外的偏移重试。
-4. **省往返的开关**：`includeDiff` 增量快照、`take_screenshot_afterwards`。纯 token 效率，但浏览器任务轮次多。
-5. ~~**快照 TTL 自动重拍**（Cursor 10 秒）~~ — 在我们的请求/响应模型里不对症（模型早把 ref 发来了，服务端默默重拍改变不了它选的 ref）。改成两条更贴合的：stale 时按 role+name 找回，找不到再**把当前快照塞进错误一起返回**，模型下一步直接用新 ref，不必空跑一轮 `browser_snapshot`。见第三则补记。
+3. **点击鲁棒性**。已与 Playwright MCP 对齐：stale ref 直接失败并附当前快照，不做静默 `role+name` 找回。仍缺 Cursor 侧的 `maxScrollAttempts`、`retryOnStaleRef`、`retryWithOffset` 等偏移重试；遮挡依赖 Playwright 的 actionability，没有单独的 `classifyBlocker`。
+4. **省往返的开关**：`includeDiff` 增量快照（已支持）、`take_screenshot_afterwards`。纯 token 效率，但浏览器任务轮次多。
+5. **快照策略**。服务端 TTL 自动重拍对我们的请求/响应模型不对症（模型早把 ref 发来了）。当前做法是 stale 时**把当前快照塞进错误**（或让模型 `browser_snapshot`），与 Playwright MCP 一致。
 6. **批量预授权**（CC 的 `update_plan`）。现在是逐次确认，长任务下偏碎。
 7. **扩展分发**。CC 和 Codex 都上了商店，白泽还需开发者模式加载。
 
@@ -574,17 +574,18 @@ CDP 的 `Network.*` 是事件流，而 `BrowserBackend` 只有 `send(targetId, m
 
 失败请求还会自动挂到引发它的那个动作上，和控制台报错一样，不用专门再问一次。为了不多一次往返，页面侧提供了一个 `sinceReport` 把「上次动作以来的报错 + 失败请求」一起返回。
 
-### 补记：Liepin 那次失败暴露的两个坑，怎么修的
+### 补记：Liepin 那次失败与 Playwright MCP 对齐后的修法
 
-那次会话卡在两件事上：一是页面动态重渲染后，模型手里的 ref 指向的节点已经被换掉（`e141` detached）；二是要点的按钮其实被一层东西盖住，`Input.*` 打上去没反应。对照 Cursor / browser-use 的做法，补了三条，都不引入新的 CDP 面（依旧只是 `Runtime.evaluate` 里的页面逻辑）：
+那次会话卡在两件事上：一是页面动态重渲染后 ref 指向的节点已被换掉；二是要点的按钮被一层东西盖住，`Input.*` 打上去没反应。
 
-1. **stale ref 按 role+name 找回**（`findByRoleName`）。ref 的元素 detached 或语义变了时，不直接让模型重拍，而是拿这个 ref 当初「是什么」（角色 + 名字，存在 `refMeta` 里）去当前 DOM 里找回同义元素，找到就地重编号继续。刻意保守：角色必须一致、名字要重叠打分过阈值，绝不会把一个被框架回收去装别的记录的行悄悄当成原来那个。一致性套件里 `ref recovery relocates a rebuilt element by role+name` 验证「整块 `innerHTML` 换成同名新节点后，旧 ref 仍能点中」。
+对照 Playwright MCP / `playwright-core` 的 `targetLocator` 流程，工具层改为：
 
-2. **点击前遮挡检测 + 分类**（`occlusionAt` / `classifyBlocker`）。派发鼠标事件前，在元素自己的文档里对中心点做 `elementFromPoint`；若命中的不是目标也不是其父子，就往上走认出盖着它的是什么——`modal`（role=dialog / aria-modal）、`overlay`/`fixed-header`（fixed/sticky 定位）、`iframe`。命中这几类就抛一个点名了遮挡物的错误让模型先去关掉它，而不是把点击派发进虚空。`sibling`（多半是透明 label 转发点击）故意放行，避免误伤。套件里 `occluded click is refused with the blocker named` 用一个盖在真实按钮上的 `role=dialog` 覆盖层验证。
+1. **`aria-ref` 唯一解析**。ref detached 或语义变了时直接 `StaleRefError`，提示重新 `browser_snapshot`，不做静默 DOM 找回。
+2. **可选 `element` 校验**。模型若带了 `element` 描述，解析后必须与 role/name 重叠，否则同样 stale 失败，避免 ref 编号漂移后点到别的控件。
+3. **抛错即回传当前快照**。任何 `browser_*` 失败时，`BrowserTool` 会尽力抓一张当前快照塞进错误文本。
+4. **后台标签输入**。extension 模式下输入类操作先 `bringToFront`（见上一则补记）；读取类操作仍在后台。
 
-3. **抛错即回传当前快照**。任何 `browser_*` 失败时，`BrowserTool` 会尽力抓一张当前快照塞进错误文本（「用这些 ref，旧的已失效」），模型下一步直接落在真实页面上，不用空跑一轮 `browser_snapshot`。
-
-配套还收了两处页面侧噪声：`waitStable` 的 MutationObserver 不再监听属性变更（CSS 动画库每帧改 style/class，会让页面永远「静不下来」，每次导航后快照白等满超时）；`browser.md` 加了原生 `alert`/`confirm`/文件选择框会冻结自动化、要避开触发它们的提示，并把「遮挡报错点名了盖着的东西，去关它而不是重复点」写进了工作流。
+页面侧仍保留 `waitStable` 不调属性 MutationObserver（避免 CSS 动画让页面永远静不下来），以及 `browser.md` 里原生 dialog / 遮挡工作流提示。
 
 ### 补记：无 ARIA 角色的可点节点，跟 Playwright 对齐
 

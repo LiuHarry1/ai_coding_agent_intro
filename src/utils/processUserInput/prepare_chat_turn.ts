@@ -49,6 +49,10 @@ import {
   getAutoMemPath,
 } from '../../services/auto-memory/index.js'
 import { assembleToolPool } from '../../tools/assembleToolPool.js'
+import {
+  isBrowserEnabledForMainThread,
+} from '../../browser/enablement.js'
+import { warmExtensionRelay } from '../../browser/manager.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -287,7 +291,18 @@ export async function prepareChatTurn(
     mcpTools: mcpManager.getAllTools(),
     activeAgents,
     toolEnablement,
+    browserConfig: config.browser,
   })
+
+  if (
+    isBrowserEnabledForMainThread(
+      pool.mainThreadProfile?.agentType ?? session.agentType,
+      config.browser,
+    ) &&
+    config.browser?.mode === 'extension'
+  ) {
+    warmExtensionRelay(cwd)
+  }
 
   const reminderParts: string[] = []
   if (activeSkills.length > 0) {

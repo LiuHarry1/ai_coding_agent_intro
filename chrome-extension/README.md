@@ -72,9 +72,7 @@ The port in the popup must match `browser.relayPort`.
 keeps it in `~/.ai-agent/browser/relay.json`; re-run `browser-pair.ts` and paste
 again. The extension deliberately stops retrying on a rejection.
 
-**Popup says `disconnected`** — the agent is not running, or is listening on a
-different port. The relay only starts once `browser.mode` is `extension` and the
-agent first uses a browser tool.
+**Popup says `disconnected`** — the agent is not running, you are not on the Browser Automation specialist (and `browser.enabled` is not `true`), or it is listening on a different port. Set `browser.mode` to `extension`, switch to the browser agent or set `browser.enabled: true`, then restart the agent.
 
 **The agent says a tab "is not shared"** — it is trying to reach a tab it does
 not own. Let it open its own tab, or share the one you mean from the popup.

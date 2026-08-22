@@ -36,14 +36,14 @@ import {
   trackActiveBrowserTool,
   untrackActiveBrowserTool,
 } from '../../browser/active-browser-tools.js'
-import { resolveSettings } from '../../core/settings-manager.js'
 import {
   BROWSER_CLICK_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
-  BROWSER_EVALUATE_TOOL_NAME,
   BROWSER_FILE_UPLOAD_TOOL_NAME,
   BROWSER_FILL_FORM_TOOL_NAME,
+  BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
   BROWSER_HANDLE_DIALOG_TOOL_NAME,
+  BROWSER_HIGHLIGHT_TOOL_NAME,
   BROWSER_HOVER_TOOL_NAME,
   BROWSER_LOCK_TOOL_NAME,
   BROWSER_DRAG_TOOL_NAME,
@@ -59,7 +59,6 @@ import {
   BROWSER_TYPE_TOOL_NAME,
   BROWSER_WAIT_FOR_TOOL_NAME,
   BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME,
-  BROWSER_BATCH_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import type {
   DualChannelToolResult,
@@ -93,11 +92,13 @@ async function observeAfterAction(
   ctx?: Pick<RunContext, 'sessionId' | 'toolCallId'>,
 ): Promise<BrowserToolOutput> {
   const skipIfDegraded = opts.skipIfDegraded !== false
+  const snapshotMs =
+    opts.withSnapshot === false ? 5_000 : POST_ACTION_SNAPSHOT_MS
   try {
     const out = await withTimeout(
       observe(backend, targetId, { ...opts, skipIfDegraded }),
       'snapshot',
-      POST_ACTION_SNAPSHOT_MS,
+      snapshotMs,
     )
     if (opts.screenshotAfterwards && ctx) {
       try {
@@ -207,9 +208,15 @@ const USER_CONTROL_ALLOWED = new Set([
   BROWSER_CONSOLE_TOOL_NAME,
   BROWSER_NETWORK_TOOL_NAME,
   BROWSER_TABS_TOOL_NAME,
-  BROWSER_EVALUATE_TOOL_NAME,
   BROWSER_WAIT_FOR_TOOL_NAME,
+  BROWSER_HIGHLIGHT_TOOL_NAME,
+  BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
 ])
+
+const screenshotAfterwardsSchema = z
+  .boolean()
+  .optional()
+  .describe('When true, capture a screenshot after the action completes')
 
 function assertAgentMayAct(
   toolName: string,
@@ -301,7 +308,9 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
               )
               if (data.url || data.title) {
                 recordHandoff(sessionId, {
-                  targetId: resolved.targetId || undefined,
+                  targetId:
+                    (getCurrentTabId(sessionId) ?? resolved.targetId) ||
+                    undefined,
                   url: data.url,
                   title: data.title,
                 })
@@ -426,7 +435,7 @@ export const snapshotTool = defineBrowserTool({
 
 export const clickTool = defineBrowserTool({
   name: BROWSER_CLICK_TOOL_NAME,
-  summary: 'Click an element by ref, or by role and name',
+  summary: 'Click an element by ref',
   description: prompt.CLICK_DESCRIPTION,
   inputSchema: z.object({
     ref: refSchema
@@ -436,18 +445,8 @@ export const clickTool = defineBrowserTool({
       .string()
       .optional()
       .describe(
-        'Human-readable element description used to obtain permission to interact with the element',
+        'Human-readable element description used to obtain permission to interact with the element; must match the resolved ref',
       ),
-    role: z
-      .string()
-      .optional()
-      .describe(
-        'ARIA role for Playwright getByRole when ref is missing (default button)',
-      ),
-    name: z
-      .string()
-      .optional()
-      .describe('Accessible name for Playwright getByRole when ref is missing'),
     doubleClick: z.boolean().optional().describe('Send a double click'),
     button: z
       .enum(['left', 'right', 'middle'])
@@ -465,10 +464,15 @@ export const clickTool = defineBrowserTool({
       .number()
       .optional()
       .describe('Viewport Y for a coordinate click'),
-    screenshotAfterwards: z
-      .boolean()
+    offsetX: z
+      .number()
       .optional()
-      .describe('Also capture a screenshot after the click'),
+      .describe('Click offset from the element left edge (pixels)'),
+    offsetY: z
+      .number()
+      .optional()
+      .describe('Click offset from the element top edge (pixels)'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
     force: z
       .boolean()
       .optional()
@@ -477,8 +481,6 @@ export const clickTool = defineBrowserTool({
   async run(args, ctx) {
     const el = await pw.click(ctx.backend, ctx.targetId, {
       ref: args.ref,
-      role: args.role,
-      name: args.name,
       element: args.element,
       doubleClick: args.doubleClick,
       button: args.button,
@@ -486,6 +488,8 @@ export const clickTool = defineBrowserTool({
       x: args.x,
       y: args.y,
       force: args.force,
+      offsetX: args.offsetX,
+      offsetY: args.offsetY,
     })
     const label = args.element ? ` (${args.element})` : ''
     return observeAfterAction(
@@ -509,20 +513,24 @@ export const typeTool = defineBrowserTool({
   inputSchema: z.object({
     ref: refSchema,
     text: z.string().describe('Text to type'),
+    element: z
+      .string()
+      .optional()
+      .describe(
+        'Human-readable element description; must match the resolved ref',
+      ),
     submit: z.boolean().optional().describe('Press Enter after typing'),
     slowly: z
       .boolean()
       .optional()
       .describe('Send per-character key events for widgets that need keydown'),
-    screenshotAfterwards: z
-      .boolean()
-      .optional()
-      .describe('Also capture a screenshot after typing'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
     const el = await pw.typeText(ctx.backend, ctx.targetId, {
       ref: args.ref,
       text: args.text,
+      element: args.element,
       submit: args.submit,
       slowly: args.slowly,
     })
@@ -573,6 +581,7 @@ export const fillFormTool = defineBrowserTool({
       )
       .min(1)
       .describe('Fields to fill, in the order they should be written'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
     const filled = await pw.fillForm(ctx.backend, ctx.targetId, args.fields)
@@ -584,11 +593,17 @@ export const fillFormTool = defineBrowserTool({
         ? `- ${f.ref} ${f.role} "${f.name}" = ${JSON.stringify(f.value ?? '')}`
         : `- ${f.ref} ${f.role} "${f.name}" ${f.status}: ${f.reason ?? 'unknown reason'}`,
     )
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'fill_form',
-      message: `Filled ${ok}/${filled.length} fields\n${lines.join('\n')}`,
-      compact: true,
-    })
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'fill_form',
+        message: `Filled ${ok}/${filled.length} fields\n${lines.join('\n')}`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -607,6 +622,11 @@ export const selectOptionTool = defineBrowserTool({
       )
       .pipe(z.array(z.string()).min(1))
       .describe('Visible labels (or native option values) to select'),
+    element: z
+      .string()
+      .optional()
+      .describe('Human-readable element description; must match the resolved ref'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
     const res = await pw.selectOption(
@@ -614,12 +634,19 @@ export const selectOptionTool = defineBrowserTool({
       ctx.targetId,
       args.ref,
       args.values,
+      args.element,
     )
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'select_option',
-      message: `Selected ${res.selected.map(s => `"${s}"`).join(', ')}`,
-      compact: true,
-    })
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'select_option',
+        message: `Selected ${res.selected.map(s => `"${s}"`).join(', ')}`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -693,15 +720,22 @@ export const pressKeyTool = defineBrowserTool({
       .array(z.enum(['Alt', 'Control', 'Meta', 'Shift']))
       .optional()
       .describe('Modifier keys held down'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
     await pw.pressKey(ctx.backend, ctx.targetId, args.key, args.modifiers)
     const combo = [...(args.modifiers ?? []), args.key].join('+')
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'press_key',
-      message: `Pressed ${combo}`,
-      compact: true,
-    })
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'press_key',
+        message: `Pressed ${combo}`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -756,14 +790,32 @@ export const hoverTool = defineBrowserTool({
   name: BROWSER_HOVER_TOOL_NAME,
   summary: 'Hover the mouse over an element by ref',
   description: prompt.HOVER_DESCRIPTION,
-  inputSchema: z.object({ ref: refSchema }),
+  inputSchema: z.object({
+    ref: refSchema,
+    element: z
+      .string()
+      .optional()
+      .describe(
+        'Human-readable element description; must match the resolved ref',
+      ),
+    screenshotAfterwards: screenshotAfterwardsSchema,
+  }),
   async run(args, ctx) {
-    const el = await pw.hover(ctx.backend, ctx.targetId, { ref: args.ref })
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'hover',
-      message: `Hovered ${el.role} "${el.name}"`,
-      compact: true,
+    const el = await pw.hover(ctx.backend, ctx.targetId, {
+      ref: args.ref,
+      element: args.element,
     })
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'hover',
+        message: `Hovered ${el.role} "${el.name}"`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -781,6 +833,10 @@ export const scrollTool = defineBrowserTool({
       .string()
       .optional()
       .describe('Scroll over this element instead of the page center'),
+    element: z
+      .string()
+      .optional()
+      .describe('Human-readable element description; must match the resolved ref'),
     scrollIntoView: z
       .boolean()
       .optional()
@@ -793,21 +849,29 @@ export const scrollTool = defineBrowserTool({
       .number()
       .optional()
       .describe('Pixels for direction (default 300)'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
     await pw.scroll(ctx.backend, ctx.targetId, {
       deltaX: args.deltaX,
       deltaY: args.deltaY,
       ref: args.ref,
+      element: args.element,
       scrollIntoView: args.scrollIntoView,
       direction: args.direction,
       amount: args.amount,
     })
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'scroll',
-      message: 'Scrolled',
-      compact: true,
-    })
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'scroll',
+        message: 'Scrolled',
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -1001,36 +1065,6 @@ export const tabsTool = defineBrowserTool({
   },
 })
 
-export const evaluateTool = defineBrowserTool({
-  name: BROWSER_EVALUATE_TOOL_NAME,
-  summary: 'Evaluate a JavaScript expression in the page',
-  description: prompt.EVALUATE_DESCRIPTION,
-  inputSchema: z.object({
-    expression: z
-      .string()
-      .describe('JavaScript expression or function, e.g. `document.title` or `el => el.textContent`'),
-    ref: z
-      .string()
-      .optional()
-      .describe('If set, the function runs on this snapshot element'),
-  }),
-  async run(args, ctx) {
-    const enabled =
-      resolveSettings(ctx.cwd).config.browser?.evaluateEnabled !== false
-    pw.assertEvaluateEnabled(enabled)
-    const value = await pw.evaluate(ctx.backend, ctx.targetId, args.expression, {
-      ref: args.ref,
-    })
-    const out = await observe(ctx.backend, ctx.targetId, {
-      action: 'evaluate',
-      message: 'Evaluated expression',
-      withSnapshot: false,
-    })
-    out.value = value ?? null
-    return out
-  },
-})
-
 export const dragTool = defineBrowserTool({
   name: BROWSER_DRAG_TOOL_NAME,
   summary: 'Drag from one element to another',
@@ -1063,14 +1097,21 @@ export const resizeTool = defineBrowserTool({
       .int()
       .positive()
       .describe('Viewport height in CSS pixels'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
     await pw.resizeViewport(ctx.backend, ctx.targetId, args.width, args.height)
-    return observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'resize',
-      message: `Resized viewport to ${args.width}x${args.height}`,
-      compact: true,
-    })
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'resize',
+        message: `Resized viewport to ${args.width}x${args.height}`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -1110,39 +1151,59 @@ export const waitForDownloadTool = defineBrowserTool({
   },
 })
 
-export const batchTool = defineBrowserTool({
-  name: BROWSER_BATCH_TOOL_NAME,
-  summary: 'Run several page actions in one call',
-  description: prompt.BATCH_DESCRIPTION,
+export const highlightTool = defineBrowserTool({
+  name: BROWSER_HIGHLIGHT_TOOL_NAME,
+  summary: 'Highlight an element on the page for visual grounding',
+  description: prompt.HIGHLIGHT_DESCRIPTION,
   inputSchema: z.object({
-    actions: z
-      .array(z.object({}).passthrough())
-      .min(1)
-      .describe(
-        'Batch list: click, clickCoords, type, press, hover, scrollIntoView, drag, select, fill, resize, wait, evaluate, batch',
-      ),
-    stopOnError: z
-      .boolean()
+    ref: refSchema,
+    element: z
+      .string()
       .optional()
-      .describe('Stop on first failure (default true)'),
+      .describe('Human-readable element description; must match the resolved ref'),
+    durationMs: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Highlight duration in milliseconds (default 2000)'),
   }),
   async run(args, ctx) {
-    const evaluateEnabled =
-      resolveSettings(ctx.cwd).config.browser?.evaluateEnabled !== false
-    const batch = await pw.batchActions(ctx.backend, ctx.targetId, {
-      actions: args.actions as Parameters<typeof pw.batchActions>[2]['actions'],
-      stopOnError: args.stopOnError,
-      evaluateEnabled,
+    const el = await pw.highlightElement(ctx.backend, ctx.targetId, {
+      ref: args.ref,
+      element: args.element,
+      durationMs: args.durationMs,
     })
-    const ok = batch.results.filter(r => r.ok).length
-    const out = await observeAfterAction(ctx.backend, ctx.targetId, {
-      action: 'batch',
-      message: `Batch ${ok}/${batch.results.length} ok${
-        batch.aborted ? ` (aborted: ${batch.aborted.reason})` : ''
-      }`,
+    return observe(ctx.backend, ctx.targetId, {
+      action: 'highlight',
+      message: `Highlighted ${el.role} "${el.name}"`,
       compact: true,
     })
-    out.batchResults = batch.results
+  },
+})
+
+export const getBoundingBoxTool = defineBrowserTool({
+  name: BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
+  summary: 'Get the viewport bounding box for a snapshot ref',
+  description: prompt.GET_BOUNDING_BOX_DESCRIPTION,
+  inputSchema: z.object({
+    ref: refSchema,
+    element: z
+      .string()
+      .optional()
+      .describe('Human-readable element description; must match the resolved ref'),
+  }),
+  async run(args, ctx) {
+    const box = await pw.getElementBoundingBox(ctx.backend, ctx.targetId, {
+      ref: args.ref,
+      element: args.element,
+    })
+    const out = await observe(ctx.backend, ctx.targetId, {
+      action: 'get_bounding_box',
+      message: `Bounding box for ${args.ref}: x=${Math.round(box.x)}, y=${Math.round(box.y)}, width=${Math.round(box.width)}, height=${Math.round(box.height)}`,
+      withSnapshot: false,
+    })
+    out.value = box
     return out
   },
 })
@@ -1201,10 +1262,10 @@ export const browserToolDefinitions: ToolDefinition[] = [
   consoleTool,
   networkTool,
   tabsTool,
-  evaluateTool,
   dragTool,
   resizeTool,
   waitForDownloadTool,
-  batchTool,
+  highlightTool,
+  getBoundingBoxTool,
   lockTool,
 ]

@@ -4,7 +4,10 @@
  */
 
 import type { Locator, Page } from 'playwright-core'
-import { BrowserError, type ResolvedElement } from '../types.js'
+import { elementMatchesHint } from '../snapshot-index.js'
+import { BrowserError, StaleRefError, type ResolvedElement } from '../types.js'
+
+const SNAPSHOT_REF = /^(f\d+)?e\d+$/
 
 export function normalizeRef(ref: string): string {
   const trimmed = ref.trim()
@@ -15,6 +18,46 @@ export function normalizeRef(ref: string): string {
 
 export function refLocator(page: Page, ref: string): Locator {
   return page.locator(`aria-ref=${normalizeRef(ref)}`)
+}
+
+/**
+ * Resolve a snapshot ref to a live locator, matching Playwright MCP's
+ * `tab.targetLocator`: aria-ref only, fail fast when the ref is missing.
+ */
+export async function targetLocator(
+  page: Page,
+  params: { ref: string; element?: string },
+): Promise<Locator> {
+  const ref = normalizeRef(params.ref)
+  if (!SNAPSHOT_REF.test(ref)) {
+    throw new BrowserError(
+      `"${params.ref}" does not match a snapshot ref (expected e.g. e12).`,
+    )
+  }
+  let locator = page.locator(`aria-ref=${ref}`)
+  if (params.element) locator = locator.describe(params.element)
+  try {
+    await locator.normalize()
+  } catch {
+    throw new StaleRefError(
+      `Ref ${ref} not found in the current page snapshot. Try capturing new snapshot.`,
+    )
+  }
+  return locator
+}
+
+/** When the model passes `element`, refuse a ref that no longer matches. */
+export function assertElementHint(
+  described: { role: string; name: string },
+  hint: string | undefined,
+  ref: string,
+): void {
+  if (!hint?.trim()) return
+  if (!elementMatchesHint(described, hint)) {
+    throw new BrowserError(
+      `Ref ${ref} resolved to ${described.role} "${described.name}", which does not match ${JSON.stringify(hint)}. Capture a new snapshot.`,
+    )
+  }
 }
 
 /**
@@ -34,6 +77,14 @@ export function toAIFriendlyMessage(error: unknown, selector: string): string {
   }
 
   if (
+    message.includes('not found in the current page snapshot') ||
+    message.includes('Stale aria-ref') ||
+    /aria-ref=e\d+.*not found/i.test(message)
+  ) {
+    return `Ref ${selector} not found in the current page snapshot. Try capturing new snapshot.`
+  }
+
+  if (
     (message.includes('Timeout') || message.includes('waiting for')) &&
     (message.includes('to be visible') ||
       message.includes('not visible') ||
@@ -41,7 +92,7 @@ export function toAIFriendlyMessage(error: unknown, selector: string): string {
   ) {
     return (
       `Element "${selector}" not found or not visible. ` +
-      `Run a new snapshot to see current page elements.`
+      `Try capturing new snapshot.`
     )
   }
 
@@ -171,21 +222,3 @@ export async function describeElement(
   return { ref, ...info }
 }
 
-/**
- * The control to write into. Aria-refs often land on a wrapper, and `fill` has
- * to hit the real input — which `describeElement` already located, so this
- * needs no round trip of its own.
- */
-export function editableTarget(
-  loc: Locator,
-  described: DescribedElement,
-): Locator {
-  if (described.field === 'self') return loc
-  return loc
-    .locator(
-      described.field === 'nested-visible'
-        ? VISIBLE_EDITABLE_SELECTOR
-        : EDITABLE_SELECTOR,
-    )
-    .first()
-}

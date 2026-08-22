@@ -67,7 +67,7 @@ npm start
 npm start
 ```
 
-**这一步不能省。** 中继服务只在 extension 模式下随 agent 启动;不重启的话扩展没有可连的地址,配对会一直失败。启动日志里应该出现:
+**这一步不能省。** 中继服务在 **Browser Automation 专家**（或 `browser.enabled: true`）且 `mode: extension` 时才会监听；默认 coding agent 不会拉起中继。启动日志里应该出现:
 
 ```
 [browser] extension relay listening on 127.0.0.1:8766
@@ -114,7 +114,7 @@ npm run browser:pair
 
 ---
 
-## 21 个工具
+## 22 个工具
 
 一般不用记,直接用自然语言描述目标就行。列出来是方便你看懂对话里的工具卡片:
 
@@ -136,14 +136,14 @@ npm run browser:pair
 | `browser_screenshot` | 整页或单个元素截图; `labels` 叠 ref 标注 |
 | `browser_resize` | 改视口尺寸 |
 | `browser_wait_for_download` | 等下一次下载并保存 |
-| `browser_batch` | 一次执行多步 click/type |
 | `browser_console` | 读控制台输出和未捕获异常 |
 | `browser_network` | 列出页面发的 fetch/XHR 请求,带状态码和耗时 |
-| `browser_evaluate` | 只读执行一段 JS 取值 |
+| `browser_highlight` | 在页面上高亮一个 ref（视觉对齐） |
+| `browser_get_bounding_box` | 读取 ref 的视口坐标框 |
 | `browser_tabs` | 列出/新建/切换/关闭标签页 |
 | `browser_lock` | 把控制权交给用户(`unlock`)或收回(`lock`) |
 
-浏览器一旦拉起,聊天区顶部会出现一条横幅:**Take control** 暂停 agent,你自己操作页面;**Resume agent** 交还。extension 模式的弹窗里有同样的按钮。
+浏览器一旦拉起,聊天区顶部会出现一条横幅:**Take control** 暂停 agent,你自己操作页面;**Resume agent** 交还。暂停期间只能读（快照、截图、控制台、网络、列标签页），不能点击、输入。extension 模式的弹窗里有同样的按钮。
 
 工具卡片上的 **Show page structure** 按钮会展开当次快照,也就是 agent 当时"看到"的页面。排查它为什么点错元素时看这个。
 
@@ -173,6 +173,7 @@ agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `mode` | `isolated` | `isolated` 或 `extension` |
+| `enabled` | `false` | 默认 coding / 其它 primary 无 `browser_*`；`true` 时恢复 deferred；**Browser Automation 专家始终有 browser 工具** |
 | `headless` | `true` | 仅 isolated 模式;设 `false` 可看见窗口 |
 | `relayPort` | `8766` | 仅 extension 模式;改了要在弹窗里同步改 |
 | `channel` | `chrome` | 仅 isolated 模式,指定 Chrome 渠道 |

@@ -1,6 +1,6 @@
 /**
  * Acting on a ref: `page.locator('aria-ref=eN')` plus Playwright's actionability
- * checks and trusted input.
+ * checks and trusted input — aligned with Playwright MCP's `targetLocator` flow.
  *
  * Elements are described *before* the action, not after. A button that says
  * "Clicked 0 times" says "Clicked 1 times" once you press it, and reporting the
@@ -8,7 +8,7 @@
  * navigates away leaves nothing to describe at all.
  */
 
-import type { Frame, Locator, Page } from 'playwright-core'
+import type { Page } from 'playwright-core'
 import { ensureScript } from '../page-inspect.js'
 import {
   ACTION_TIMEOUT_MS,
@@ -17,20 +17,27 @@ import {
   NAVIGATE_SETTLE_MS,
   NAVIGATE_TIMEOUT_MS,
 } from '../limits.js'
-import { BrowserError, StaleRefError, type BrowserBackend, type ResolvedElement } from '../types.js'
+import { BrowserError, type BrowserBackend, type ResolvedElement } from '../types.js'
 import {
+  assertElementHint,
   describeElement,
   mapPlaywrightError,
-  refLocator,
+  targetLocator,
 } from './locator.js'
 import { pickValue } from './pick.js'
 import { handleDialog, peekDialog, throwIfUnarmedDestructiveDialog, uploadFiles } from './overlays.js'
 import { drainTrackedRequests, settleIfUrlChanged, withActionWait } from './settle.js'
 import { getPageForTarget } from './connect.js'
-import { isSnapshotDegraded, getRefMeta, clearTabMemory } from '../session-flags.js'
+import { clearTabMemory } from '../session-flags.js'
 import { assertNavigateUrl } from '../navigate-policy.js'
-import { elementMatchesHint, namesOverlap } from '../snapshot-index.js'
-import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
+import { SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
+import { ensureSnapshotFresh } from './snapshot.js'
+import {
+  clickLocatorRobust,
+  ensureInView,
+  resolveClickTarget,
+  type RobustClickOpts,
+} from './robust-click.js'
 
 export async function navigate(
   backend: BrowserBackend,
@@ -95,68 +102,12 @@ export async function activateTab(
   await new Promise(r => setTimeout(r, NAVIGATE_SETTLE_MS))
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/**
- * After a stalled snapshot, click with `page.getByRole(role, { name })`
- * instead of a ref.
- */
-async function locateByRoleName(
+async function afterNavigationLikeAction(
   page: Page,
-  role: string,
-  name: string,
-): Promise<Locator> {
-  const frames: Frame[] = []
-  const seen = new Set<Frame>()
-  const consider = (frame: Frame) => {
-    if (seen.has(frame) || isHeavyMediaFrame(frame.url())) return
-    seen.add(frame)
-    frames.push(frame)
-  }
-  consider(page.mainFrame())
-  for (const frame of page.frames()) consider(frame)
-
-  const pattern = new RegExp(`^${escapeRegExp(name)}$`, 'i')
-  for (const frame of frames) {
-    const loc = frame.getByRole(
-      role as Parameters<Frame['getByRole']>[0],
-      { name: pattern },
-    )
-    const count = await loc.count().catch(() => 0)
-    const visible: Locator[] = []
-    for (let i = 0; i < count; i++) {
-      const item = loc.nth(i)
-      if (await item.isVisible().catch(() => false)) visible.push(item)
-    }
-    if (visible.length === 1) return visible[0]
-    if (visible.length > 1) {
-      throw new BrowserError(
-        `Multiple visible ${role} named ${JSON.stringify(name)}. Take a snapshot and click the ref.`,
-      )
-    }
-  }
-  throw new BrowserError(
-    `No visible ${role} named ${JSON.stringify(name)}. Take a snapshot, or pass a ref from the last tree.`,
-  )
-}
-
-function assertClickSemantics(
-  described: { role: string; name: string },
-  expected?: { role: string; name: string },
-  elementHint?: string,
-): void {
-  if (elementHint && !elementMatchesHint(described, elementHint)) {
-    throw new StaleRefError(
-      `Stale element reference: expected ${JSON.stringify(elementHint)} but found ${described.role} "${described.name}". The page may have changed. Take a new snapshot.`,
-    )
-  }
-  if (expected?.name && described.name && !namesOverlap(described.name, expected.name)) {
-    throw new StaleRefError(
-      `Ref now points at ${described.role} "${described.name}" (was "${expected.name}"). Take a fresh snapshot.`,
-    )
-  }
+  targetId: string,
+  urlBefore: string,
+): Promise<void> {
+  await settleIfUrlChanged(page, urlBefore, targetId)
 }
 
 export async function click(
@@ -164,8 +115,6 @@ export async function click(
   targetId: string,
   opts: {
     ref?: string
-    role?: string
-    name?: string
     element?: string
     button?: 'left' | 'right' | 'middle'
     doubleClick?: boolean
@@ -173,12 +122,30 @@ export async function click(
     x?: number
     y?: number
     force?: boolean
+    offsetX?: number
+    offsetY?: number
+    maxScrollAttempts?: number
+    retryOnStaleRef?: boolean
+    autoCloseDropdowns?: boolean
+    retryWithOffset?: boolean
   },
 ): Promise<ResolvedElement> {
   const page = await getPageForTarget(backend, targetId)
   const modifiers = opts.modifiers as
     | Array<'Alt' | 'Control' | 'Meta' | 'Shift'>
     | undefined
+  const robust: RobustClickOpts = {
+    button: opts.button,
+    doubleClick: opts.doubleClick,
+    modifiers,
+    offsetX: opts.offsetX,
+    offsetY: opts.offsetY,
+    force: opts.force,
+    maxScrollAttempts: opts.maxScrollAttempts,
+    retryOnStaleRef: opts.retryOnStaleRef,
+    autoCloseDropdowns: opts.autoCloseDropdowns,
+    retryWithOffset: opts.retryWithOffset,
+  }
   try {
     await page.bringToFront().catch(() => {})
     if (opts.x != null && opts.y != null && !opts.ref) {
@@ -190,7 +157,7 @@ export async function click(
         })
       })
       throwIfUnarmedDestructiveDialog(page)
-      await settleIfUrlChanged(page, urlBefore)
+      await afterNavigationLikeAction(page, targetId, urlBefore)
       return {
         ref: '',
         role: 'generic',
@@ -198,58 +165,25 @@ export async function click(
         tag: 'div',
       }
     }
-    if (!opts.ref && !opts.name) {
+    if (!opts.ref) {
       throw new BrowserError(
-        'Provide ref from the snapshot, or role + name (Playwright getByRole).',
+        'Provide ref from the latest snapshot, or x/y for a coordinate click.',
       )
     }
-    if (!opts.ref) {
-      if (!isSnapshotDegraded(targetId)) {
-        throw new BrowserError(
-          'browser_click with role + name is only allowed after a snapshot timeout. Take a snapshot and click the ref.',
-        )
-      }
-    }
-    const expected = opts.ref ? getRefMeta(targetId, opts.ref) : undefined
-    let loc = opts.ref
-      ? refLocator(page, opts.ref)
-      : await locateByRoleName(page, opts.role ?? 'button', opts.name!)
-    let relocated = false
-    if (opts.ref && (await loc.count().catch(() => 0)) === 0) {
-      const role = opts.role ?? expected?.role ?? 'button'
-      const name = opts.name ?? expected?.name
-      if (!name) {
-        throw new StaleRefError(
-          `No element for ref ${opts.ref}. The page changed; take a fresh snapshot.`,
-        )
-      }
-      try {
-        loc = await locateByRoleName(page, role, name)
-        relocated = true
-      } catch {
-        throw new StaleRefError(
-          `No element for ref ${opts.ref} (was ${role} "${name}"). The page changed; take a fresh snapshot.`,
-        )
-      }
-    }
-    const described = await describeElement(loc, opts.ref ?? opts.name ?? 'target')
-    assertClickSemantics(described, expected, opts.element)
+    await ensureSnapshotFresh(backend, targetId)
+    const { loc, ref, described } = await resolveClickTarget(
+      page,
+      targetId,
+      opts.ref,
+      opts.element,
+    )
     const urlBefore = page.url()
     await withActionWait(page, async () => {
-      const args = {
-        timeout: ACTION_TIMEOUT_MS,
-        button: opts.button,
-        modifiers,
-        force: opts.force,
-      }
-      if (opts.doubleClick) await loc.dblclick(args)
-      else await loc.click(args)
+      await clickLocatorRobust(page, loc, robust)
     })
     throwIfUnarmedDestructiveDialog(page)
-    await settleIfUrlChanged(page, urlBefore)
-    return relocated
-      ? { ...described, name: `${described.name} (relocated after stale ref)` }
-      : described
+    await afterNavigationLikeAction(page, targetId, urlBefore)
+    return { ...described, ref }
   } catch (err) {
     mapPlaywrightError(err, opts.ref)
   }
@@ -263,9 +197,17 @@ export async function drag(
   const page = await getPageForTarget(backend, targetId)
   try {
     await page.bringToFront().catch(() => {})
-    const start = refLocator(page, opts.startRef)
-    const end = refLocator(page, opts.endRef)
-    await start.dragTo(end, { timeout: ACTION_TIMEOUT_MS })
+    await ensureSnapshotFresh(backend, targetId)
+    const start = await targetLocator(page, { ref: opts.startRef })
+    const end = await targetLocator(page, { ref: opts.endRef })
+    await ensureInView(start, page)
+    await ensureInView(end, page)
+    const urlBefore = page.url()
+    await withActionWait(page, async () => {
+      await start.dragTo(end, { timeout: ACTION_TIMEOUT_MS })
+    })
+    throwIfUnarmedDestructiveDialog(page)
+    await afterNavigationLikeAction(page, targetId, urlBefore)
   } catch (err) {
     mapPlaywrightError(err, opts.startRef)
   }
@@ -274,15 +216,23 @@ export async function drag(
 export async function hover(
   backend: BrowserBackend,
   targetId: string,
-  opts: { ref: string },
+  opts: { ref: string; element?: string },
 ): Promise<ResolvedElement> {
   const page = await getPageForTarget(backend, targetId)
-  const loc = refLocator(page, opts.ref)
   try {
     await page.bringToFront().catch(() => {})
-    const described = await describeElement(loc, opts.ref)
-    await loc.hover({ timeout: ACTION_TIMEOUT_MS })
-    return described
+    await ensureSnapshotFresh(backend, targetId)
+    const { loc, ref, described } = await resolveClickTarget(
+      page,
+      targetId,
+      opts.ref,
+      opts.element,
+    )
+    await withActionWait(page, async () => {
+      await ensureInView(loc, page)
+      await loc.hover({ timeout: ACTION_TIMEOUT_MS })
+    })
+    return { ...described, ref }
   } catch (err) {
     mapPlaywrightError(err, opts.ref)
   }
@@ -296,16 +246,22 @@ export async function typeText(
     text: string
     slowly?: boolean
     submit?: boolean
+    element?: string
   },
 ): Promise<ResolvedElement> {
   const page = await getPageForTarget(backend, targetId)
-  const loc = refLocator(page, opts.ref)
   try {
     await page.bringToFront().catch(() => {})
-    const described = await describeElement(loc, opts.ref)
+    await ensureSnapshotFresh(backend, targetId)
+    const { loc, ref, described } = await resolveClickTarget(
+      page,
+      targetId,
+      opts.ref,
+      opts.element,
+    )
     // A field the app computes rejects the write anyway. Returning its current
     // value makes the refusal visible instead of looking like a silent no-op.
-    if (described.readOnly || described.disabled) return described
+    if (described.readOnly || described.disabled) return { ...described, ref }
 
     const value = await withActionWait(page, async () => {
       const timeout = ACTION_TIMEOUT_MS
@@ -326,7 +282,7 @@ export async function typeText(
         .catch(() => opts.text)
     })
     throwIfUnarmedDestructiveDialog(page)
-    return { ...described, value }
+    return { ...described, ref, value }
   } catch (err) {
     mapPlaywrightError(err, opts.ref)
   }
@@ -337,11 +293,13 @@ export async function selectOption(
   targetId: string,
   ref: string,
   values: string[],
+  element?: string,
 ): Promise<{ selected: string[] }> {
   const page = await getPageForTarget(backend, targetId)
-  const loc = refLocator(page, ref)
   try {
     await page.bringToFront().catch(() => {})
+    await ensureSnapshotFresh(backend, targetId)
+    const { loc } = await resolveClickTarget(page, targetId, ref, element)
     const selected = await withActionWait(page, () => pickValue(loc, values))
     throwIfUnarmedDestructiveDialog(page)
     return selected
@@ -444,11 +402,13 @@ export async function scrollIntoView(
   backend: BrowserBackend,
   targetId: string,
   ref: string,
+  element?: string,
 ): Promise<void> {
   const page = await getPageForTarget(backend, targetId)
   try {
     await page.bringToFront().catch(() => {})
-    await refLocator(page, ref).scrollIntoViewIfNeeded({
+    const loc = await targetLocator(page, { ref, element })
+    await loc.scrollIntoViewIfNeeded({
       timeout: ACTION_TIMEOUT_MS,
     })
   } catch (err) {
@@ -466,6 +426,7 @@ export async function scroll(
     scrollIntoView?: boolean
     direction?: 'up' | 'down' | 'left' | 'right'
     amount?: number
+    element?: string
   },
 ): Promise<void> {
   const page = await getPageForTarget(backend, targetId)
@@ -479,14 +440,14 @@ export async function scroll(
   try {
     await page.bringToFront().catch(() => {})
     if (opts.scrollIntoView && opts.ref) {
-      await scrollIntoView(backend, targetId, opts.ref)
+      await scrollIntoView(backend, targetId, opts.ref, opts.element)
       return
     }
     if (!opts.ref) {
       await page.mouse.wheel(deltaX, deltaY || (deltaX ? 0 : 500))
       return
     }
-    const loc = refLocator(page, opts.ref)
+    const loc = await targetLocator(page, { ref: opts.ref, element: opts.element })
     await loc.scrollIntoViewIfNeeded({ timeout: ACTION_TIMEOUT_MS })
     if (deltaX || deltaY) await page.mouse.wheel(deltaX, deltaY)
   } catch (err) {
@@ -502,6 +463,7 @@ export async function screenshot(
     fullPage?: boolean
     format?: 'png' | 'jpeg'
     quality?: number
+    element?: string
   } = {},
 ): Promise<{ buffer: Buffer; format: 'png' | 'jpeg' }> {
   const page: Page = await getPageForTarget(backend, targetId)
@@ -513,7 +475,9 @@ export async function screenshot(
     }
     const take = async () =>
       opts.ref
-        ? await refLocator(page, opts.ref).screenshot({
+        ? await (
+            await targetLocator(page, { ref: opts.ref, element: opts.element })
+          ).screenshot({
             type: format,
             timeout: ACTION_TIMEOUT_MS,
             ...quality,
