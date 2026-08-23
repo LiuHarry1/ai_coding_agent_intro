@@ -7,7 +7,7 @@ export const DEFAULT_PROFILE: LlmProfile = {
   name: 'copilot-proxy',
   baseURL: 'http://localhost:4141/v1',
   apiKey: 'not-needed',
-  model: 'gpt-5.2',
+  model: 'gpt-5.4',
   thinking: { mode: 'off' },
 }
 
