@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coding Agent — 高层架构</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap");
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+      background: linear-gradient(160deg, #f0f4ff 0%, #e8eef8 40%, #f5f7fa 100%);
+      color: #1e293b;
+      min-height: 100vh;
+      padding: 40px 24px 64px;
+    }
+    header {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto 36px;
+    }
+    header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+    header p {
+      font-size: 15px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .canvas {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+      padding: 32px 20px 28px;
+      overflow-x: auto;
+    }
+    .canvas svg { display: block; margin: 0 auto; }
+    .legend {
+      max-width: 1100px;
+      margin: 28px auto 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 28px;
+      justify-content: center;
+      font-size: 13px;
+      color: #64748b;
+    }
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .legend i {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    footer {
+      text-align: center;
+      margin-top: 32px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    footer a { color: #4f46e5; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Coding Agent 高层架构</h1>
+  <p>面向其它团队的概念视图 — 不含实现细节与代码路径</p>
+</header>
+
+<div class="canvas">
+  <img src="assets/architecture-diagram.svg" alt="Coding Agent 高层架构图" style="width:100%;max-width:1040px;display:block;margin:0 auto" />
+</div>
+
+<div class="legend">
+  <span><i style="background:#e0f2fe;border:1px solid #0284c7"></i> 接入层</span>
+  <span><i style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"></i> Agent 核心</span>
+  <span><i style="background:#fef3c7;border:1px solid #d97706"></i> 大语言模型</span>
+  <span><i style="background:#d1fae5;border:1px solid #059669"></i> 执行环境</span>
+  <span><i style="background:#f8fafc;border:1px solid #cbd5e1"></i> 能力一览</span>
+</div>
+
+<footer>
+  <a href="index.html">幻灯片演示</a>
+  &nbsp;·&nbsp;
+  <a href="architecture.md">详细架构文档</a>
+</footer>
+
+</body>
+</html>
