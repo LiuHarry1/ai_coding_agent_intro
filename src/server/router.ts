@@ -46,6 +46,7 @@ import { getExecutionPlane } from '../execution/bootstrap.js'
 import { WorkerExecutionBackend } from '../execution/worker-execution-backend.js'
 import { initCodePlugins } from '../core/plugins/index.js'
 import { handleChat } from './routes/chat.js'
+import { getRunAgent } from '../agent-lazy.js'
 import { abortTool } from '../core/tool-abort-registry.js'
 import { abortTurn } from '../core/turn-abort-registry.js'
 import {
@@ -70,6 +71,7 @@ import type {
   RouterOptions,
   MCPServerConfig,
   AppConfig,
+  RunAgentFn,
 } from '../core/types.js'
 
 registerBuiltinSubagents(defaultRegistry)
@@ -87,9 +89,13 @@ async function getMCPStatusForCwd(
 }
 
 
-export function createRouter({ runAgent, staticDir }: RouterOptions) {
+export function createRouter({ staticDir }: RouterOptions) {
   const workspaceRouter = createWorkspaceRouter({ root: getDefaultWorkspace() })
-  const skillsApi = createSkillsApi({ runAgent })
+  const lazyRunAgent: RunAgentFn = async (...args) => {
+    const runAgent = await getRunAgent()
+    return runAgent(...args)
+  }
+  const skillsApi = createSkillsApi({ runAgent: lazyRunAgent })
   const executionRouter = createExecutionRouter()
 
   return async (req: IncomingMessage, res: ServerResponse) => {
@@ -368,6 +374,7 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
         ...getSafeSettings(effective),
         cwd,
         sources,
+        validationErrors: effective.validationErrors,
         userDir: effective.userDir,
         projectDir: effective.projectDir,
         managedDir: ssoMode ? undefined : effective.managedDir,
@@ -768,7 +775,7 @@ export function createRouter({ runAgent, staticDir }: RouterOptions) {
     }
 
     if (method === 'POST' && url?.split('?')[0] === '/chat') {
-      await handleChat(req, res, runAgent)
+      await handleChat(req, res, lazyRunAgent)
       return
     }
 

@@ -8,7 +8,8 @@ import {
 } from './previewStream.js'
 import { formatToolError } from './toolErrors.js'
 
-import type { ExecutedToolResult } from '../../services/tools/tool_execution.js'
+import type { ExecutedToolResult, ToolCallRef } from '../../services/tools/tool_execution.js'
+import type { StreamingToolExecutor } from '../../services/tools/StreamingToolExecutor.js'
 
 export interface StreamResult {
   text: string
@@ -51,6 +52,18 @@ function readInputDelta(event: unknown): { id?: string; delta?: string } {
 
 export interface ConsumeStreamOptions {
   manualToolExecution?: boolean
+  /** CC streaming tool execution — start tools as tool_use blocks arrive. */
+  streamingExecutor?: StreamingToolExecutor
+}
+
+function drainStreamingResults(
+  executor: StreamingToolExecutor | undefined,
+  toolResults: ExecutedToolResult[],
+): void {
+  if (!executor) return
+  for (const result of executor.getCompletedResults()) {
+    toolResults.push(result)
+  }
 }
 
 export async function consumeStream(
@@ -65,6 +78,7 @@ export async function consumeStream(
 
   const toolCalls: StreamResult['toolCalls'] = []
   const toolResults: StreamResult['toolResults'] = []
+  const streamingExecutor = options?.streamingExecutor
   let text = ''
   let reasoningStarted = false
 
@@ -176,11 +190,15 @@ export async function consumeStream(
             args: event.input,
             is_subagent: isSubagentName(event.toolName),
           })
-          toolCalls.push({
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            input: event.input as Record<string, unknown>,
-          })
+          {
+            const ref: ToolCallRef = {
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              input: event.input as Record<string, unknown>,
+            }
+            toolCalls.push(ref)
+            streamingExecutor?.addTool(ref)
+          }
           previewStates.delete(event.toolCallId)
           startedInputs.delete(event.toolCallId)
           break
@@ -225,6 +243,9 @@ export async function consumeStream(
           wire.error(String(event.error))
           break
       }
+      // CC query.ts: drain completed tool results after every stream event so
+      // the UI sees tool_result while the model is still generating.
+      drainStreamingResults(streamingExecutor, toolResults)
     }
   } catch (err) {
     const aborted =
@@ -252,6 +273,7 @@ export async function consumeStream(
   }
 
   flushReasoning()
+  drainStreamingResults(streamingExecutor, toolResults)
 
   for (const [id, toolName] of startedInputs.entries()) {
     synthesizePair(

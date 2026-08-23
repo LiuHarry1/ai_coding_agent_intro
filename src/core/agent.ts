@@ -47,8 +47,12 @@ import { stripToolExecute } from './agent/prepareTools.js'
 import { extractPartialResult } from '../tools/AgentTool/finalizeAgentTool.js'
 import {
   buildToolMessage,
-  runToolCalls,
 } from '../services/tools/tool_execution.js'
+import { StreamingToolExecutor } from '../services/tools/StreamingToolExecutor.js'
+import { allowAllTools } from './can-use-tool.js'
+import { buildQueryConfig } from './agent/query-config.js'
+import type { ToolUseContext } from './agent/tool-use-context.js'
+import { createAbortController } from '../utils/abortController.js'
 import {
   appendUserInterruption,
   commitPartialStreamToHistory,
@@ -812,6 +816,36 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
   let reactiveCompacted = false
   let requestStart = Date.now()
 
+  const queryConfig = buildQueryConfig()
+  const toolAbortController = createAbortController()
+  if (abortSignal) {
+    if (abortSignal.aborted) {
+      toolAbortController.abort(abortSignal.reason)
+    } else {
+      abortSignal.addEventListener(
+        'abort',
+        () => toolAbortController.abort(abortSignal.reason),
+        { once: true },
+      )
+    }
+  }
+
+  let streamingExecutor: StreamingToolExecutor | null = null
+  const createStreamingExecutor = (): StreamingToolExecutor | null => {
+    if (!queryConfig.gates.streamingToolExecution) return null
+    const toolUseContext: ToolUseContext = {
+      tools: executors,
+      wire,
+      sessionId,
+      logLabel,
+      getDefinition: getToolDefinition,
+      abortController: toolAbortController,
+      concurrencyPolicy,
+    }
+    return new StreamingToolExecutor(allowAllTools, toolUseContext)
+  }
+  streamingExecutor = createStreamingExecutor()
+
   while (true) {
     try {
       // Final API-bound messages (same array streamText receives).
@@ -888,15 +922,19 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         subagentNames,
         {
           manualToolExecution: true,
+          streamingExecutor: streamingExecutor ?? undefined,
         },
       )
 
       // CC aborted_streaming: salvage partial text/tool_use, fill missing
       // tool_results, append [Request interrupted by user], stop the turn.
       if (stepResult.aborted) {
+        if (streamingExecutor) {
+          for await (const result of streamingExecutor.getRemainingResults()) {
+            stepResult.toolResults.push(result)
+          }
+        }
         commitPartialStreamToHistory(messages, stepResult, wire)
-        // Streaming-abort interrupt uses the non-tool-use marker (CC), even
-        // when some tool_use blocks were already emitted.
         appendUserInterruption(messages, wire, {
           toolUse: false,
           signal: abortSignal,
@@ -904,18 +942,11 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         return { ...stepResult, aborted: true, toolCalls: [], toolResults: [] }
       }
 
-      if (stepResult.toolCalls.length > 0) {
-        const executed = await runToolCalls({
-          toolCalls: stepResult.toolCalls,
-          tools: executors,
-          wire,
-          concurrencyPolicy,
-          sessionId,
-          logLabel,
-          getDefinition: getToolDefinition,
-          abortSignal,
-        })
-        stepResult.toolResults.push(...executed)
+      if (streamingExecutor) {
+        for await (const result of streamingExecutor.getRemainingResults()) {
+          stepResult.toolResults.push(result)
+        }
+        stepResult.toolCalls = streamingExecutor.getAllToolCalls()
       }
 
       // Append the SDK's assistant message(s) as-is, then the tool results.
@@ -1065,6 +1096,8 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         ctxLengthAttempt++
         reactiveCompacted = true
         requestStart = Date.now()
+        streamingExecutor?.discard()
+        streamingExecutor = createStreamingExecutor()
         continue
       }
       if (
@@ -1086,6 +1119,8 @@ async function runOneStep(args: RunOneStepArgs): Promise<StreamResult | null> {
         })
         await new Promise(r => setTimeout(r, backoffMs))
         requestStart = Date.now()
+        streamingExecutor?.discard()
+        streamingExecutor = createStreamingExecutor()
         continue
       }
       // Terminal failure: surface to UI, end the agent loop gracefully so

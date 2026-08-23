@@ -76,6 +76,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
     name,
     description: briefDescription,
     isConcurrencySafe: isShellInputConcurrencySafe,
+    interruptBehavior: () => 'block' as const,
     // Mode C — model may get wrappers in `text`; UI uses stdout/stderr
     outputSchema: ShellToolOutputSchema,
     mapToolResultToToolResultBlockParam(output, toolUseID) {

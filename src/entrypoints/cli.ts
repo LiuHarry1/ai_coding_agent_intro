@@ -14,11 +14,13 @@ async function main(): Promise<void> {
   const mode = detectMode(process.argv.slice(2))
   await init(mode)
 
-  bootLog(`[start] Loading agent for mode=${mode}`)
-  const { runAgent } = await import('../agent.js')
+  bootLog(`[start] mode=${mode}`)
 
   if (mode === 'stdio') {
-    const { startStdioAgent } = await import('../cli.js')
+    const [{ startStdioAgent }, { runAgent }] = await Promise.all([
+      import('../cli.js'),
+      import('../agent.js'),
+    ])
     await startStdioAgent(runAgent)
     return
   }
@@ -27,13 +29,16 @@ async function main(): Promise<void> {
     process.on('unhandledRejection', (reason, promise) => {
       console.error('Unhandled Rejection at:', promise, 'reason:', reason)
     })
-    const { startAcpAgent } = await import('../acp.js')
+    const [{ startAcpAgent }, { runAgent }] = await Promise.all([
+      import('../acp.js'),
+      import('../agent.js'),
+    ])
     await startAcpAgent(runAgent)
     return
   }
 
   const { startServer } = await import('../server.js')
-  startServer({ runAgent })
+  startServer()
 }
 
 function bootLog(message: string): void {

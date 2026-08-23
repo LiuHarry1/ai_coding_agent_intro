@@ -161,6 +161,11 @@ export interface ToolDefinition {
    */
   isConcurrencySafe?: (input: unknown) => boolean
   /**
+   * CC: whether ESC/interrupt cancels an in-flight tool ('cancel') or blocks
+   * until it finishes ('block'). Mutating tools default to block.
+   */
+  interruptBehavior?: () => 'cancel' | 'block'
+  /**
    * CC-style: map structured `data` → model-facing tool_result text.
    * Required on built-in dual-channel tools; framework calls after execute.
    * Projection modes (document per tool):
@@ -584,11 +589,11 @@ export interface SessionInfo {
 // ── Server ──────────────────────────────────────
 
 export interface ServerOptions {
-  runAgent: RunAgentFn
+  runAgent?: RunAgentFn
 }
 
 export interface RouterOptions {
-  runAgent: RunAgentFn
+  runAgent?: RunAgentFn
   staticDir: string | null
 }
 

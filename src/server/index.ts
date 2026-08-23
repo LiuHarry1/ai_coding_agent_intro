@@ -17,7 +17,7 @@ import { initBrowserLifecycle } from '../browser/manager.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export function startServer({ runAgent }: ServerOptions): void {
+export function startServer(_opts: ServerOptions = {}): void {
   const PORT = parseInt(process.env.PORT || '4567', 10)
 
   // Last-line defense against flaky upstreams (e.g. copilot-api dropping the
@@ -54,7 +54,7 @@ export function startServer({ runAgent }: ServerOptions): void {
     console.log(`[server] Or use dev mode: cd client/web && npm run dev`)
   }
 
-  const handler = createRouter({ runAgent, staticDir })
+  const handler = createRouter({ staticDir })
 
   const server = http.createServer(handler)
   let shuttingDown = false

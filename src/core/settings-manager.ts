@@ -26,6 +26,11 @@ import {
   getManagedSettingsDropInDir,
   getManagedSettingsPath,
 } from '../utils/managed-path.js'
+import type { SettingsFileJson } from './settings-schema.js'
+import {
+  validateSettingsFile,
+  type ValidationError,
+} from './settings-validation.js'
 
 function defaultModels(): ModelProfiles {
   const large = { ...DEFAULT_PROFILE }
@@ -129,6 +134,7 @@ export interface SettingsSource {
 export interface ResolvedSettings {
   config: AppConfig
   sources: SettingsSource[]
+  validationErrors: ValidationError[]
   userDir: string
   projectDir: string
   userPath: string
@@ -143,28 +149,12 @@ export interface EffectiveSettings extends ResolvedSettings {
   effectiveMcpServers: Record<string, MCPServerConfig>
 }
 
-type PartialAppConfig = Partial<{
-  models: Record<string, unknown>
-  compaction: Record<string, unknown>
-  sessionMemory: Record<string, unknown>
-  autoMemoryEnabled: boolean
-  autoMemoryDirectory: string
-  autoMemoryCacheSafe: boolean
-  autoMemoryModelTier: string
-  /** Nested shape — migrated in applyLayer (enabled/directory/cacheSafe/modelTier). */
-  autoMemory: Record<string, unknown>
-  mcpServers: Record<string, MCPServerConfig>
-  lspServers: Record<string, LspServerConfig>
-  browser: AppConfig['browser']
-  disabledTools: unknown[]
-  environments: {
-    ssh?: Array<Record<string, unknown>>
-  }
-}>
+type PartialAppConfig = SettingsFileJson
 
 type ParsedSettingsFile = {
   settings: PartialAppConfig | null
   error?: string
+  validationErrors?: ValidationError[]
 }
 
 /** path-keyed parse cache invalidated by resetSettingsCache(). */
@@ -247,19 +237,29 @@ export function listManagedSettingsFiles(): string[] {
 export function loadManagedFileSettings(): {
   settings: PartialAppConfig | null
   errors: string[]
+  validationErrors: ValidationError[]
   /** Files that contributed (for diagnostics / mtime). */
   files: string[]
 } {
   const errors: string[] = []
+  const validationErrors: ValidationError[] = []
   const files: string[] = []
   let merged: PartialAppConfig = {}
   let found = false
 
   for (const filePath of listManagedSettingsFiles()) {
-    const { settings, error } = readSettingsFile(filePath)
+    const { settings, error, validationErrors: fileErrors } =
+      readSettingsFile(filePath)
     if (error) {
       errors.push(`${filePath}: ${error}`)
       console.warn(`[settings] Failed to parse ${filePath}: ${error}`)
+      continue
+    }
+    if (fileErrors?.length) {
+      validationErrors.push(...fileErrors)
+      console.warn(
+        `[settings] Validation failed for ${filePath}: ${fileErrors.map(e => `${e.path}: ${e.message}`).join('; ')}`,
+      )
       continue
     }
     if (!settings || Object.keys(settings).length === 0) continue
@@ -268,7 +268,7 @@ export function loadManagedFileSettings(): {
     found = true
   }
 
-  return { settings: found ? merged : null, errors, files }
+  return { settings: found ? merged : null, errors, validationErrors, files }
 }
 
 /** Merge two partial settings objects (drop-in over base). */
@@ -403,7 +403,15 @@ function readSettingsFile(filePath: string): ParsedSettingsFile {
             error: 'settings file must contain a JSON object',
           }
         } else {
-          parsed = { settings: json as PartialAppConfig }
+          const validated = validateSettingsFile(json, filePath)
+          if (validated.errors.length > 0) {
+            parsed = {
+              settings: null,
+              validationErrors: validated.errors,
+            }
+          } else {
+            parsed = { settings: validated.settings ?? {} }
+          }
         }
       }
     } catch (err) {
@@ -566,12 +574,22 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
 function applySettingsSource(
   config: AppConfig,
   source: SettingsSource,
+  validationErrors: ValidationError[],
 ): void {
   source.exists = fileMtimeMs(source.path) > 0
-  const { settings, error } = readSettingsFile(source.path)
+  const { settings, error, validationErrors: fileErrors } =
+    readSettingsFile(source.path)
   if (error) {
     source.error = error
     console.warn(`[settings] Failed to parse ${source.path}: ${error}`)
+    return
+  }
+  if (fileErrors?.length) {
+    validationErrors.push(...fileErrors)
+    source.error = fileErrors.map(e => `${e.path}: ${e.message}`).join('; ')
+    console.warn(
+      `[settings] Validation failed for ${source.path}: ${source.error}`,
+    )
     return
   }
   if (!settings) return
@@ -588,6 +606,7 @@ function applySettingsSource(
 function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   const paths = resolveSettingsPaths(cwd)
   const config = cloneDefaults()
+  const validationErrors: ValidationError[] = []
   // CC order: user → project → local → flag → policy(managed last).
   // We have no flag layer; managed is policySettings.
   // SSO: cwd === agent home → userPath === projectPath; apply once as user
@@ -616,11 +635,12 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   })
 
   for (const source of sources) {
-    applySettingsSource(config, source)
+    applySettingsSource(config, source, validationErrors)
   }
 
   // Managed / policySettings — CC loadManagedFileSettings then one apply.
   const managed = loadManagedFileSettings()
+  validationErrors.push(...managed.validationErrors)
   const managedSource: SettingsSource = {
     scope: 'managed',
     path: paths.managedPath,
@@ -642,6 +662,7 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   return {
     config,
     sources,
+    validationErrors,
     ...paths,
   }
 }

@@ -96,7 +96,7 @@ function isDualChannelReturn(raw: unknown): raw is DualChannelToolResult {
   )
 }
 
-async function executeOne(
+export async function executeOneTool(
   tc: ToolCallRef,
   tools: Record<string, AnyTool>,
   wire: WireEmitter,
@@ -261,7 +261,7 @@ async function executeBatchParallel(
     while (true) {
       const i = nextIndex++
       if (i >= calls.length) return
-      results[i] = await executeOne(
+      results[i] = await executeOneTool(
         calls[i]!,
         tools,
         wire,
@@ -342,7 +342,7 @@ export async function runToolCalls(
       )
     } else if (batch.isConcurrencySafe) {
       allResults.push(
-        await executeOne(
+        await executeOneTool(
           batch.calls[0]!,
           opts.tools,
           opts.wire,
@@ -365,7 +365,7 @@ export async function runToolCalls(
           return allResults
         }
         allResults.push(
-          await executeOne(
+          await executeOneTool(
             batch.calls[ci]!,
             opts.tools,
             opts.wire,
