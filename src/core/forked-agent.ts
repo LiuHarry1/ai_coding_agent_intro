@@ -20,34 +20,12 @@ import type {
   RunAgentFn,
   ToolContext,
 } from './types.js'
+import type { CanUseToolFn } from './can-use-tool.js'
+export type { CanUseToolFn, PermissionDecision } from './can-use-tool.js'
 import { EventBus } from './event-bus.js'
 import { noopWireEmitter, type WireEmitter } from './wire-emitter.js'
 import { DEFAULTS } from './settings-manager.js'
 import * as path from 'path'
-
-// ── canUseTool ─────────────────────────────────────
-
-export type CanUseToolAllow = {
-  behavior: 'allow'
-  /** Optional rewritten tool input. */
-  updatedInput?: unknown
-}
-
-export type CanUseToolDeny = {
-  behavior: 'deny'
-  message: string
-}
-
-export type CanUseToolResult = CanUseToolAllow | CanUseToolDeny
-
-/**
- * Per-call tool gate. Prefer keeping the full tool *schema* in the request
- * (for prompt-cache stability) and denying at execute time.
- */
-export type CanUseToolFn = (
-  toolName: string,
-  input: unknown,
-) => CanUseToolResult | Promise<CanUseToolResult>
 
 // ── Cache-safe params ───────────────────────────
 
@@ -65,14 +43,6 @@ export type CacheSafeParams = {
   forkContextMessages: Message[]
   /** Optional parent ToolContext to isolate from. */
   toolUseContext?: ToolContext
-}
-
-// Slot removed: callers pass CacheSafeParams explicitly into extract/fork.
-// Kept as no-ops so older scripts that import these symbols still typecheck.
-export function saveCacheSafeParams(_params: CacheSafeParams | null): void {}
-
-export function getLastCacheSafeParams(): CacheSafeParams | null {
-  return null
 }
 
 /** Build cache-safe params from a main-agent turn snapshot. */

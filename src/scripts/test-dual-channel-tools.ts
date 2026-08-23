@@ -18,7 +18,7 @@ import {
 import { ShellToolOutputSchema } from '../tools/shell-runner.js'
 import {
   buildToolMessage,
-  runToolCalls,
+  executeOneTool,
 } from '../services/tools/tool_execution.js'
 import { projectMessagesForApi } from '../core/agent/messageSanitize.js'
 import { createToolSearchDefinition } from '../tools/ToolSearchTool/ToolSearchTool.js'
@@ -136,29 +136,24 @@ async function testToolSearchDynamicDef() {
     },
   ]
 
-  const [withDef] = await runToolCalls({
-    toolCalls,
+  const withDef = await executeOneTool(
+    toolCalls[0]!,
     tools,
-    wire: noopWireEmitter,
-    concurrencyPolicy: () => true,
-    getDefinition: name => (name === TOOL_SEARCH_TOOL_NAME ? def : undefined),
-  })
+    noopWireEmitter,
+    undefined,
+    name => (name === TOOL_SEARCH_TOOL_NAME ? def : undefined),
+  )
   assert.equal(
-    withDef!.result,
+    withDef.result,
     'Loaded 1 tool(s). You can now use them:\n- WebFetch: Fetch a URL',
   )
-  assert.deepEqual((withDef!.toolUseResult as { matches: unknown }).matches, [
+  assert.deepEqual((withDef.toolUseResult as { matches: unknown }).matches, [
     { name: 'WebFetch', description: 'Fetch a URL' },
   ])
 
-  const [withoutDef] = await runToolCalls({
-    toolCalls,
-    tools,
-    wire: noopWireEmitter,
-    concurrencyPolicy: () => true,
-  })
+  const withoutDef = await executeOneTool(toolCalls[0]!, tools, noopWireEmitter)
   assert.ok(
-    withoutDef!.result.startsWith('{"data"'),
+    withoutDef.result.startsWith('{"data"'),
     'registry-only lookup leaks raw JSON — keep getDefinition wired through',
   )
   console.log('ok ToolSearch dynamic def routing')

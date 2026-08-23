@@ -3,13 +3,13 @@
  * Phase 2 will wire settings rules + interactive prompts.
  */
 export type PermissionDecision =
-  | { behavior: 'allow'; updatedInput?: Record<string, unknown> }
+  | { behavior: 'allow'; updatedInput?: unknown }
   | { behavior: 'deny'; message: string }
 
 export type CanUseToolFn = (
   toolName: string,
-  input: Record<string, unknown>,
-) => Promise<PermissionDecision>
+  input: unknown,
+) => Promise<PermissionDecision> | PermissionDecision
 
 /** Default gate — all tools allowed. */
 export const allowAllTools: CanUseToolFn = async () => ({ behavior: 'allow' })

@@ -4,7 +4,8 @@ import {
   extractAtMentionedFiles,
   parseAtMentionedFileLines,
 } from './extract-mentions.js'
-import type { Attachment, ReadFileState } from './types.js'
+import type { Attachment } from './types.js'
+import type { ReadFileState } from '../read/types.js'
 import {
   readFileCore,
   resolveFileInCwd,

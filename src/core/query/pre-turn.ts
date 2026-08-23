@@ -39,7 +39,7 @@ export async function preTurn(input: {
   onFullCompaction?: AgentOptions['onFullCompaction']
   compactEnrichment?: CompactEnrichment
   logLabel?: string
-  readFileState?: import('../../utils/attachments/types.js').ReadFileState
+  readFileState?: import('../../utils/read/types.js').ReadFileState
 }): Promise<void> {
   const compactStart = Date.now()
   const managed = await compactIfNeeded(

@@ -51,7 +51,6 @@ function readInputDelta(event: unknown): { id?: string; delta?: string } {
 }
 
 export interface ConsumeStreamOptions {
-  manualToolExecution?: boolean
   /** CC streaming tool execution — start tools as tool_use blocks arrive. */
   streamingExecutor?: StreamingToolExecutor
 }
@@ -220,21 +219,9 @@ export async function consumeStream(
         }
 
         case 'tool-result': {
-          // With manualToolExecution, runToolCalls owns wire.toolResult (incl.
+          // StreamingToolExecutor + executeOneTool own wire.toolResult (incl.
           // tool_use_result). Ignore SDK tool-result events so we don't paint
           // a TUR-less result that Grep/Glob cards treat as broken.
-          if (options?.manualToolExecution) {
-            startedInputs.delete(event.toolCallId)
-            break
-          }
-          const raw = event.output
-          const result = typeof raw === 'string' ? raw : JSON.stringify(raw)
-          wire.toolResult({ tool_use_id: event.toolCallId, result })
-          toolResults.push({
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            result,
-          })
           startedInputs.delete(event.toolCallId)
           break
         }
@@ -266,9 +253,6 @@ export async function consumeStream(
         'Interrupted by user',
       )
     }
-    if (!options?.manualToolExecution) {
-      backfillMissingResults(toolCalls, toolResults, wire)
-    }
     return { text, toolCalls, toolResults, aborted: true }
   }
 
@@ -286,35 +270,5 @@ export async function consumeStream(
     )
   }
 
-  if (!options?.manualToolExecution) {
-    backfillMissingResults(toolCalls, toolResults, wire)
-  }
   return { text, toolCalls, toolResults }
-}
-
-function backfillMissingResults(
-  toolCalls: StreamResult['toolCalls'],
-  toolResults: StreamResult['toolResults'],
-  wire: WireEmitter,
-): void {
-  const seen = new Set(toolResults.map(tr => tr.toolCallId))
-  for (const tc of toolCalls) {
-    if (seen.has(tc.toolCallId)) continue
-    const result =
-      `Error: Internal — tool-call for ${tc.toolName} (id ${tc.toolCallId}) ` +
-      `was received but neither tool-result nor tool-error followed. ` +
-      `This indicates a bug in the AI SDK runtime, not a problem with ` +
-      `the tool's arguments. Please retry.`
-    console.error(`[agent] ${result}`)
-    wire.toolResult({
-      tool_use_id: tc.toolCallId,
-      result,
-      is_error: true,
-    })
-    toolResults.push({
-      toolCallId: tc.toolCallId,
-      toolName: tc.toolName,
-      result,
-    })
-  }
 }

@@ -9,7 +9,8 @@ import type {
 import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
 import type { IProvider } from '../../core/llm/types.js'
 import type { AutoMemoryConfig } from '../../core/types.js'
-import type { Attachment, ReadFileState } from '../../utils/attachments/types.js'
+import type { Attachment } from '../../utils/attachments/types.js'
+import type { ReadFileState } from '../../utils/read/types.js'
 import { createAttachmentMessage } from '../../utils/attachments.js'
 import {
   findRelevantMemories,

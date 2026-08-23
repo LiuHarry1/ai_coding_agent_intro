@@ -7,7 +7,7 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import {
   buildToolMessage,
-  runToolCalls,
+  executeOneTool,
   type ExecutedToolResult,
 } from '../services/tools/tool_execution.js'
 import type {
@@ -55,13 +55,14 @@ function makeScreenshotDef(isError: boolean): ToolDefinition {
 }
 
 async function execute(def: ToolDefinition): Promise<ExecutedToolResult[]> {
-  return runToolCalls({
-    toolCalls: [{ toolCallId: 'c1', toolName: 'Screenshot', input: {} }],
-    tools: { Screenshot: def.create('/tmp', {} as unknown as ToolContext) },
-    wire: { toolResult: () => {} } as never,
-    concurrencyPolicy: () => false,
-    getDefinition: name => (name === 'Screenshot' ? def : undefined),
-  })
+  const result = await executeOneTool(
+    { toolCallId: 'c1', toolName: 'Screenshot', input: {} },
+    { Screenshot: def.create('/tmp', {} as unknown as ToolContext) },
+    { toolResult: () => {} } as never,
+    undefined,
+    name => (name === 'Screenshot' ? def : undefined),
+  )
+  return [result]
 }
 
 async function testImageResultReachesModel() {

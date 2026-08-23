@@ -141,7 +141,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     provider: forkProvider,
     cwd,
     compaction,
-    concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(subTools)),
+    concurrencyPolicy: buildConcurrencyPolicy(registry),
     sessionId,
   })
 

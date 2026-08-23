@@ -16,7 +16,7 @@ import type {
   ToolMessage,
 } from '../../core/types.js'
 import { isRoleMessage } from '../../core/types.js'
-import type { ReadFileState } from '../../utils/attachments/types.js'
+import type { ReadFileState } from '../../utils/read/types.js'
 import { invalidateReadPaths } from '../../utils/read/read-file-state.js'
 import { resolveFileInCwd } from '../../utils/read/index.js'
 import {

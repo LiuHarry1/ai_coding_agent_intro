@@ -6,8 +6,6 @@ import {
   applyCanUseTool,
   createPathScopedEditCanUseTool,
   createSubagentContext,
-  saveCacheSafeParams,
-  getLastCacheSafeParams,
   createCacheSafeParams,
 } from '../core/forked-agent.js'
 import { EventBus } from '../core/event-bus.js'
@@ -78,10 +76,6 @@ async function main(): Promise<void> {
   })
   assert(params.systemPrompt === 'sys', 'cache-safe params shape')
   assert(params.model === 'm', 'cache-safe model')
-  // Global slot retired — explicit pass-through only.
-  saveCacheSafeParams(params)
-  assert(getLastCacheSafeParams() === null, 'cache-safe global slot is retired')
-  saveCacheSafeParams(null)
 
   // Stale inFlight must be cleared by wait
   const {

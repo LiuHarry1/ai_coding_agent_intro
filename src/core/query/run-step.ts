@@ -37,7 +37,6 @@ import { stripToolExecute } from '../agent/prepareTools.js'
 import { buildToolMessage } from '../../services/tools/tool_execution.js'
 import { StreamingToolExecutor } from '../../services/tools/StreamingToolExecutor.js'
 import { allowAllTools } from '../can-use-tool.js'
-import { buildQueryConfig } from './config.js'
 import type { ToolUseContext } from '../agent/tool-use-context.js'
 import { createAbortController } from '../../utils/abortController.js'
 import {
@@ -85,7 +84,7 @@ export interface RunStepArgs {
   compactEnrichment?: CompactEnrichment
   logLabel?: string
   abortSignal?: AbortSignal
-  readFileState?: import('../../utils/attachments/types.js').ReadFileState
+  readFileState?: import('../../utils/read/types.js').ReadFileState
   dumpPrompts?: DumpPromptsRecorder
 }
 
@@ -124,7 +123,6 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
   let reactiveCompacted = false
   let requestStart = Date.now()
 
-  const queryConfig = buildQueryConfig()
   const toolAbortController = createAbortController()
   if (abortSignal) {
     if (abortSignal.aborted) {
@@ -139,8 +137,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
   }
 
   let streamingExecutor: StreamingToolExecutor | null = null
-  const createStreamingExecutor = (): StreamingToolExecutor | null => {
-    if (!queryConfig.gates.streamingToolExecution) return null
+  const createStreamingExecutor = (): StreamingToolExecutor => {
     const toolUseContext: ToolUseContext = {
       tools: executors,
       wire,
@@ -207,7 +204,6 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
         timing,
         subagentNames,
         {
-          manualToolExecution: true,
           streamingExecutor: streamingExecutor ?? undefined,
         },
       )

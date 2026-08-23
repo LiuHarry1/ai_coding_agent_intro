@@ -281,7 +281,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
               cwd,
               compaction,
               concurrencyPolicy: registry
-                ? buildConcurrencyPolicy(registry, Object.keys(subTools))
+                ? buildConcurrencyPolicy(registry)
                 : undefined,
               sessionId: context.sessionId,
               abortSignal,

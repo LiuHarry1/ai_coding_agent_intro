@@ -15,7 +15,7 @@ import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnost
 import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 import { recordWriteInState } from '../../utils/read/read-file-state.js'
-import type { ReadFileState } from '../../utils/attachments/types.js'
+import type { ReadFileState } from '../../utils/read/types.js'
 
 /** Mode B: model gets `message` ACK; UI gets before/after for Cursor-style diff. */
 export const EditFileOutputSchema = z.object({

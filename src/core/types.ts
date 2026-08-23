@@ -8,8 +8,8 @@ import type {
   Attachment,
   Diagnostic,
   DiagnosticFile,
-  ReadFileState,
 } from '../utils/attachments/types.js'
+import type { ReadFileState } from '../utils/read/types.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>
@@ -555,7 +555,7 @@ export interface Session {
   /** Tool names discovered via `tool_search` �?activated in subsequent turns. */
   discoveredTools?: Set<string>
   /** Tracks files read for @-mention dedup + Read tool_unchanged (mtime-based). */
-  readFileState?: import('../utils/attachments/types.js').ReadFileState
+  readFileState?: import('../utils/read/types.js').ReadFileState
   /** Session-level Agent / Ask / Plan mode. */
   permissionMode: PermissionModeContext
   /**

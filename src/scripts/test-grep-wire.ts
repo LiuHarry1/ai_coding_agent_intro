@@ -1,12 +1,12 @@
 /**
- * Smoke: Grep execute → runToolCalls → wire carries tool_use_result.
+ * Smoke: Grep execute → executeOneTool → wire carries tool_use_result.
  * Run: npx tsx src/scripts/test-grep-wire.ts
  */
 import assert from 'node:assert/strict'
 import { definition as grepDef } from '../tools/GrepTool/GrepTool.js'
 import '../tools.js'
 import { defaultRegistry } from '../core/tool-registry.js'
-import { runToolCalls } from '../services/tools/tool_execution.js'
+import { executeOneTool } from '../services/tools/tool_execution.js'
 import type { WireEmitter } from '../core/wire-emitter.js'
 
 const def = defaultRegistry.get('Grep')
@@ -30,29 +30,26 @@ const wire = {
   processOutput() {},
 } as unknown as WireEmitter
 
-const results = await runToolCalls({
-  toolCalls: [
-    {
-      toolCallId: 't1',
-      toolName: 'Grep',
-      input: {
-        pattern: 'toolUseResult',
-        glob: '**/GrepCard.jsx',
-        output_mode: 'files_with_matches',
-      },
+const result = await executeOneTool(
+  {
+    toolCallId: 't1',
+    toolName: 'Grep',
+    input: {
+      pattern: 'toolUseResult',
+      glob: '**/GrepCard.jsx',
+      output_mode: 'files_with_matches',
     },
-  ],
+  },
   tools,
   wire,
-  concurrencyPolicy: () => true,
-})
+)
 
-assert.ok(results[0]?.toolUseResult, 'executed toolUseResult set')
+assert.ok(result?.toolUseResult, 'executed toolUseResult set')
 assert.ok(emitted[0]?.tool_use_result, 'wire tool_use_result set')
 const tur = emitted[0]!.tool_use_result as { mode?: string; files?: unknown[] }
 assert.equal(tur.mode, 'files_with_matches')
 assert.ok(Array.isArray(tur.files))
 console.log('ok grep wire tool_use_result', {
   files: tur.files?.length,
-  resultPreview: String(results[0]?.result).slice(0, 80),
+  resultPreview: String(result?.result).slice(0, 80),
 })

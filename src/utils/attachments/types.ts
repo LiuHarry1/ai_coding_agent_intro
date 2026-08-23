@@ -120,9 +120,3 @@ export type Attachment =
   | AgentListingDeltaAttachment
   | TaskNotificationAttachment
   | RelevantMemoriesAttachment
-
-/** @deprecated Import from `utils/read/types` — re-exported for compatibility. */
-export type {
-  ReadFileState,
-  ReadFileStateEntry,
-} from '../read/types.js'

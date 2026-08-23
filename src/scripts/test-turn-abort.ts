@@ -25,7 +25,7 @@ import {
   registerToolAbort,
 } from '../core/tool-abort-registry.js'
 import { createChildAbortController } from '../utils/abortController.js'
-import { runToolCalls } from '../services/tools/tool_execution.js'
+import { executeOneTool } from '../services/tools/tool_execution.js'
 import type { WireEmitter } from '../core/wire-emitter.js'
 import type { Message } from '../core/types.js'
 
@@ -175,17 +175,37 @@ async function testCancelledRemainingTools() {
       execute: async () => 'should-not-run',
     },
   }
-  const results = await runToolCalls({
-    toolCalls: [
-      { toolCallId: 'a', toolName: 'slow', input: {} },
-      { toolCallId: 'b', toolName: 'later', input: {} },
-    ],
-    tools: tools as never,
-    wire,
-    concurrencyPolicy: () => false,
-    abortSignal: ac.signal,
-    sessionId: 'sess-run-tools',
-  })
+  const toolCalls = [
+    { toolCallId: 'a', toolName: 'slow', input: {} },
+    { toolCallId: 'b', toolName: 'later', input: {} },
+  ]
+  const results = []
+  for (const tc of toolCalls) {
+    if (ac.signal.aborted) {
+      wire.toolResult({
+        tool_use_id: tc.toolCallId,
+        result: TOOL_INTERRUPT_RESULT,
+        is_error: true,
+      })
+      results.push({
+        toolCallId: tc.toolCallId,
+        toolName: tc.toolName,
+        result: TOOL_INTERRUPT_RESULT,
+        isError: true,
+      })
+      continue
+    }
+    results.push(
+      await executeOneTool(
+        tc,
+        tools as never,
+        wire,
+        'sess-run-tools',
+        undefined,
+        ac.signal,
+      ),
+    )
+  }
   assert.equal(results.length, 2)
   assert.equal(results[0]!.result, 'ok-1')
   assert.equal(results[1]!.result, TOOL_INTERRUPT_RESULT)

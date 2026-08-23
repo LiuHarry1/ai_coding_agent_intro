@@ -19,7 +19,7 @@ import { loadAllAgentRules } from '../rules-loader.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { TOOL_SEARCH_TOOL_NAME } from '../../constants/tool_names.js'
 import { getPlanFilePath } from '../plans.js'
-import type { ReadFileState } from '../attachments/types.js'
+import type { ReadFileState } from '../read/types.js'
 import { getDefaultWorkspace } from '../../core/workspace.js'
 import {
   isRemoteWorkspace,
@@ -359,7 +359,7 @@ export async function prepareChatTurn(
     projectRules,
     toolUseContext,
     subagentNames: getSubagentNames(registry),
-    concurrencyPolicy: buildConcurrencyPolicy(registry, Object.keys(pool.tools)),
+    concurrencyPolicy: buildConcurrencyPolicy(registry),
     permissionMode: session.permissionMode.mode,
     mainThreadProfile: pool.mainThreadProfile,
     denyGlobs: pool.denyGlobs,

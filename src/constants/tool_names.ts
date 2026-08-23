@@ -5,8 +5,6 @@
 export const BASH_TOOL_NAME = 'Bash'
 export const POWERSHELL_TOOL_NAME = 'PowerShell'
 export const FILE_READ_TOOL_NAME = 'Read'
-/** @deprecated Prefer FILE_READ_TOOL_NAME */
-export const READ_FILE_TOOL_NAME = FILE_READ_TOOL_NAME
 export const WRITE_FILE_TOOL_NAME = 'Write'
 export const EDIT_FILE_TOOL_NAME = 'Edit'
 export const LIST_DIR_TOOL_NAME = 'list_dir'

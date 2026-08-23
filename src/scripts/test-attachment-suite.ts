@@ -14,7 +14,7 @@ import {
 } from '../utils/messages.js'
 import { isAttachmentMessage } from '../core/types.js'
 import type { Message } from '../core/types.js'
-import type { ReadFileState } from '../utils/attachments/types.js'
+import type { ReadFileState } from '../utils/read/types.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
