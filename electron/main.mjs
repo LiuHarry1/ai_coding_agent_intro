@@ -31,9 +31,37 @@ function getAgentUrl() {
   return `http://127.0.0.1:${agentPort}`
 }
 
+function getAgentLogPath() {
+  try {
+    return path.join(app.getPath('userData'), 'agent-stderr.log')
+  } catch {
+    return path.join(REPO_ROOT, 'agent-stderr.log')
+  }
+}
+
 function pipeAgentLogs(proc) {
-  proc.stdout?.on('data', chunk => process.stdout.write(`[agent] ${chunk}`))
-  proc.stderr?.on('data', chunk => process.stderr.write(`[agent] ${chunk}`))
+  const logPath = getAgentLogPath()
+  let logStream = null
+  try {
+    logStream = fs.createWriteStream(logPath, { flags: 'a' })
+    logStream.write(`\n---- agent start ${new Date().toISOString()} ----\n`)
+  } catch {
+    logStream = null
+  }
+
+  const write = (label, chunk) => {
+    const text = String(chunk)
+    process.stderr.write(`[agent:${label}] ${text}`)
+    logStream?.write(`[${label}] ${text}`)
+  }
+
+  proc.stdout?.on('data', chunk => write('out', chunk))
+  proc.stderr?.on('data', chunk => write('err', chunk))
+  proc.on('close', () => logStream?.end())
+}
+
+function resolveTsxCli(appRoot) {
+  return path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 }
 
 function startAgent() {
@@ -43,39 +71,36 @@ function startAgent() {
     PORT: String(agentPort),
   }
 
-  if (app.isPackaged) {
-    const tsxCli = path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
-    const startScript = path.join(appRoot, 'start.js')
-    agentProc = spawn(process.execPath, [tsxCli, startScript], {
-      cwd: appRoot,
-      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: 'pipe',
-      windowsHide: true,
-    })
-  } else {
-    const tsxCli = path.join(
-      REPO_ROOT,
-      'node_modules',
-      'tsx',
-      'dist',
-      'cli.mjs',
+  const tsxCli = resolveTsxCli(appRoot)
+  const startScript = path.join(appRoot, 'start.js')
+
+  if (!fs.existsSync(tsxCli)) {
+    dialog.showErrorBox(
+      'Agent failed to start',
+      `Missing runtime dependency:\n${tsxCli}\n\n` +
+        '`tsx` must be a production dependency and included in the desktop package.\n' +
+        'Rebuild with: npm install && npm run desktop:pack:win',
     )
-    const startScript = path.join(REPO_ROOT, 'start.js')
-    agentProc = spawn(process.execPath, [tsxCli, startScript], {
-      cwd: REPO_ROOT,
-      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: 'pipe',
-      windowsHide: true,
-    })
+    app.quit()
+    return
   }
+
+  agentProc = spawn(process.execPath, [tsxCli, startScript], {
+    cwd: appRoot,
+    env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+    stdio: 'pipe',
+    windowsHide: true,
+  })
 
   pipeAgentLogs(agentProc)
 
   agentProc.on('exit', (code, signal) => {
     if (!app.isQuitting && code !== 0 && code !== null) {
+      const logPath = getAgentLogPath()
       dialog.showErrorBox(
         'Agent stopped',
-        `The coding agent server exited unexpectedly (code ${code ?? signal}).`,
+        `The coding agent server exited unexpectedly (code ${code ?? signal}).\n\n` +
+          `See log:\n${logPath}`,
       )
       app.quit()
     }
@@ -123,10 +148,10 @@ function waitForHealth(timeoutMs = 45_000) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    minWidth: 900,
-    minHeight: 600,
+    width: 1080,
+    height: 800,
+    minWidth: 500,
+    minHeight: 560,
     title: APP_NAME,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),

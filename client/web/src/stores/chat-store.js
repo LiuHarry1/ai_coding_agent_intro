@@ -670,10 +670,16 @@ export const useChatStore = create((set, get) => ({
         break
       case 'control_request':
         if (data.request?.subtype === 'ask_user_question') {
+          const raw = data.request.questions
+          const questions = Array.isArray(raw)
+            ? raw
+            : raw && typeof raw === 'object'
+              ? [raw]
+              : []
           store._appendPart({
             type: 'ask_user_question',
             id: data.request.question_id,
-            questions: data.request.questions,
+            questions,
             status: 'pending',
           })
           set({ isAwaitingInteraction: true })

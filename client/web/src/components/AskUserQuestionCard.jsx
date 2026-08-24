@@ -2,8 +2,20 @@ import React, { useState, useMemo } from 'react'
 import { useChatStore } from '../stores/chat-store.js'
 import { getTur } from '../lib/tool-result.js'
 
+function normalizeQuestions(raw) {
+  if (Array.isArray(raw)) return raw.filter(q => q && typeof q === 'object')
+  if (raw && typeof raw === 'object') return [raw]
+  return []
+}
+
+function normalizeOptions(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.filter(opt => opt && typeof opt.label === 'string')
+}
+
 function QuestionBlock({ question, answers, onChange }) {
   const { question: text, header, options, multiSelect } = question
+  const opts = normalizeOptions(options)
   const selected = answers[text] ?? (multiSelect ? [] : '')
 
   const toggle = label => {
@@ -32,7 +44,7 @@ function QuestionBlock({ question, answers, onChange }) {
       {header && <div className='ask-question__chip'>{header}</div>}
       <p className='ask-question__text'>{text}</p>
       <div className='ask-question__options'>
-        {options.map(opt => (
+        {opts.map(opt => (
           <button
             key={opt.label}
             type='button'
@@ -62,9 +74,14 @@ export default function AskUserQuestionCard({ part }) {
       tur?.answered === true,
   )
 
-  const questions = part.questions ?? []
+  const questions = useMemo(
+    () => normalizeQuestions(part.questions),
+    [part.questions],
+  )
   const allAnswered = useMemo(
-    () => questions.every(q => answers[q.question]?.trim()),
+    () =>
+      questions.length > 0 &&
+      questions.every(q => answers[q.question]?.trim()),
     [questions, answers],
   )
 
@@ -116,14 +133,18 @@ export default function AskUserQuestionCard({ part }) {
         <span className='ask-card__title'>Clarifying questions</span>
         <span className='ask-card__hint'>Select options to continue</span>
       </div>
-      {questions.map(q => (
-        <QuestionBlock
-          key={q.question}
-          question={q}
-          answers={answers}
-          onChange={handleChange}
-        />
-      ))}
+      {questions.length === 0 ? (
+        <p className='ask-card__hint'>No valid questions in this request.</p>
+      ) : (
+        questions.map(q => (
+          <QuestionBlock
+            key={q.question}
+            question={q}
+            answers={answers}
+            onChange={handleChange}
+          />
+        ))
+      )}
       <textarea
         className='ask-card__notes'
         placeholder='Additional notes (optional)'
