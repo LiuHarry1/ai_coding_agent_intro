@@ -1,0 +1,26 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">④</span><h2>上下文与记忆 — 脑容量管理</h2></div>
+  <p class="subtitle">长任务会爆 context window；「注入规则 + 压缩历史 + 侧路记忆」三层配合。</p>
+  <div class="cols">
+    <div>
+      <h3>四层分工</h3>
+      <div class="card-grid" style="grid-template-columns:1fr">
+        <div class="card card-indigo"><strong>Project Rules</strong><code>AGENTS.md</code> 每 turn 注入 system prompt</div>
+        <div class="card card-green"><strong>Auto Memory</strong>跨会话；turn 结束抽取 + prefetch</div>
+        <div class="card card-sky"><strong>Session Memory</strong>单会话笔记；compact 时消费</div>
+        <div class="card card-amber"><strong>Compaction</strong>每 step 前 <code>compactIfNeeded</code></div>
+      </div>
+    </div>
+    <div>
+      <h3>三档模型（静态绑定）</h3>
+      <table>
+        <tr><th>档位</th><th>典型用途</th></tr>
+        <tr><td><code>large</code></td><td>主 <code>query()</code> · Plan · Compact</td></tr>
+        <tr><td><code>medium</code></td><td>Memory 抽取</td></tr>
+        <tr><td><code>small</code></td><td>Explore · 标题 · prefetch</td></tr>
+      </table>
+      <div class="callout">压缩触发：<code>preTurn</code> · <code>/compact</code> · turn 结束 hooks · 超长 reactive retry</div>
+      <span class="path-tag">services/compact/ · turn/memory-lifecycle.ts</span>
+    </div>
+  </div>
+</section>

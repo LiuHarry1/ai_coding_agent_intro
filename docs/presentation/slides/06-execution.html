@@ -1,0 +1,30 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑥</span><h2>执行环境 — 工具在哪跑</h2></div>
+  <p class="subtitle">控制面与执行面分离；本地与 SSH 远程同构。</p>
+  <div class="cols">
+    <div>
+      <h3>Execution Plane</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><strong>EnvironmentRegistry</strong>local / SSH Provider</div>
+        <div class="card card-indigo"><strong>RuntimeBroker</strong>按 workspace 管理 Worker</div>
+        <div class="card card-green"><strong>Worker</strong>FS · Shell · LSP · rg</div>
+        <div class="card card-green"><strong>CredentialBroker</strong>运行时认证</div>
+      </div>
+    </div>
+    <div>
+      <h3>Session 绑定工作区</h3>
+      <pre class="flow">session.workspace = {
+  environmentId: 'local' | 'ssh:host',
+  cwd: '/path/to/project'
+}
+
+resolveExecutionBackend(session)
+  → Bash/Read/Grep 在 Worker 执行
+
+远程：plugins 控制机加载
+      文件/命令在远程 Worker</pre>
+      <div class="callout">统一走 <code>ExecutionBackend</code>，加远程不用改遍所有 Tool。</div>
+      <span class="path-tag">execution/bootstrap.ts · worker/main.ts</span>
+    </div>
+  </div>
+</section>

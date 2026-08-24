@@ -41,7 +41,7 @@ for await (const ev of agent.chat({ message: "find TODOs" })) {
 
 Or pass a ready-made token: `{ baseURL, token: "eyJ..." }`.
 
-IntelliJ / ACP integration: [`docs/guide/integrations/intellij-acp.md`](../docs/guide/integrations/intellij-acp.md). VS Code: [`docs/guide/integrations/vscode-acp.md`](../docs/guide/integrations/vscode-acp.md).
+IntelliJ / ACP integration: [`docs/readme/integrations/intellij-acp.md`](../docs/readme/integrations/intellij-acp.md). VS Code: [`docs/readme/integrations/vscode-acp.md`](../docs/readme/integrations/vscode-acp.md).
 
 ## API overview
 

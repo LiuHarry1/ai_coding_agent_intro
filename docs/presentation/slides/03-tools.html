@@ -1,0 +1,29 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">③</span><h2>工具体系 — Agent 的「手」</h2></div>
+  <p class="subtitle">LLM 只选工具；真正读写文件、跑命令、开浏览器，靠 <code>ToolDefinition</code> + 执行器。</p>
+  <div class="cols">
+    <div>
+      <h3>注册与组装（每 Turn）</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><strong>defaultRegistry</strong><code>tools.ts</code> 内置工具</div>
+        <div class="card card-indigo"><strong>prepareChatTurn</strong>加载 MCP / Skill</div>
+        <div class="card card-sky"><strong>assembleToolPool</strong>active / deferred 分组</div>
+        <div class="card card-sky"><strong>ToolSearch</strong>deferred 按需激活</div>
+      </div>
+      <pre class="flow" style="margin-top:0.35em">tools/BashTool/
+  BashTool.ts   → definition
+  prompt.ts     → LLM schema</pre>
+    </div>
+    <div>
+      <h3>执行与双路结果</h3>
+      <table>
+        <tr><th>组件</th><th>职责</th></tr>
+        <tr><td><code>StreamingToolExecutor</code></td><td>并发执行 tool calls</td></tr>
+        <tr><td><code>result</code></td><td>给 LLM 的精简字符串</td></tr>
+        <tr><td><code>resultBlocks</code></td><td>含图片时给模型；UI 走 wire</td></tr>
+      </table>
+      <div class="callout">新增工具 = <code>ToolDefinition</code> + 注册；不必改 <code>query()</code> 主循环。</div>
+      <span class="path-tag">src/tools.ts · assembleToolPool.ts</span>
+    </div>
+  </div>
+</section>

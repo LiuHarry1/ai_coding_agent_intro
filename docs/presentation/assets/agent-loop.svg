@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 520 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Agent 8ê�">
+  <defs>
+    <marker id="al-arr" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#6366f1"/></marker>
+    <linearGradient id="al-g" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
+    <filter id="al-sh"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.1"/></filter>
+  </defs>
+  <rect x="180" y="8" width="160" height="36" rx="18" fill="#0f172a" filter="url(#al-sh)"/>
+  <text x="260" y="31" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">(7 Turn</text>
+  <path d="M260 44 L260 58" stroke="#6366f1" stroke-width="2" marker-end="url(#al-arr)"/>
+  <rect x="20" y="62" width="480" height="52" rx="12" fill="url(#al-g)" filter="url(#al-sh)"/>
+  <text x="260" y="84" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">query()  for (step&) ��</text>
+  <text x="260" y="100" text-anchor="middle" font-size="9" fill="#c7d2fe">preTurn � runStep � postTurn</text>
+  <path d="M260 114 L260 128" stroke="#6366f1" stroke-width="2" marker-end="url(#al-arr)"/>
+  <g font-size="9" font-weight="600">
+    <rect x="30" y="132" width="88" height="40" rx="8" fill="#fff" stroke="#a5b4fc"/><text x="74" y="150" text-anchor="middle" fill="#4338ca">sanitize</text><text x="74" y="163" text-anchor="middle" fill="#64748b" font-size="8">�ot</text>
+    <path d="M118 152 L132 152" stroke="#6366f1" stroke-width="1.5" marker-end="url(#al-arr)"/>
+    <rect x="132" y="132" width="88" height="40" rx="8" fill="#fff" stroke="#a5b4fc"/><text x="176" y="150" text-anchor="middle" fill="#4338ca">streamText</text><text x="176" y="163" text-anchor="middle" fill="#64748b" font-size="8"> LLM</text>
+    <path d="M220 152 L234 152" stroke="#6366f1" stroke-width="1.5" marker-end="url(#al-arr)"/>
+    <rect x="234" y="132" width="88" height="40" rx="8" fill="#fff" stroke="#a5b4fc"/><text x="278" y="150" text-anchor="middle" fill="#4338ca">tool_call?</text><text x="278" y="163" text-anchor="middle" fill="#64748b" font-size="8">	�w(</text>
+    <path d="M322 152 L336 152" stroke="#6366f1" stroke-width="1.5" marker-end="url(#al-arr)"/>
+    <rect x="336" y="132" width="88" height="40" rx="8" fill="#fff" stroke="#a5b4fc"/><text x="380" y="150" text-anchor="middle" fill="#4338ca">execute</text><text x="380" y="163" text-anchor="middle" fill="#64748b" font-size="8">��w</text>
+    <path d="M424 152 L438 152" stroke="#6366f1" stroke-width="1.5" marker-end="url(#al-arr)"/>
+    <rect x="438" y="132" width="52" height="40" rx="8" fill="#fff" stroke="#a5b4fc"/><text x="464" y="156" text-anchor="middle" fill="#4338ca">append</text>
+  </g>
+  <path d="M464 172 L464 196 L500 196 L500 90 L464 90" stroke="#6366f1" stroke-width="1.5" fill="none" stroke-dasharray="4 3" marker-end="url(#al-arr)"/>
+  <text x="488" y="188" font-size="8" fill="#6366f1">loop</text>
+  <rect x="140" y="210" width="240" height="56" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <text x="260" y="232" text-anchor="middle" font-size="11" font-weight="700" fill="#047857">\ba�</text>
+  <text x="260" y="250" text-anchor="middle" font-size="9" fill="#059669">toolCalls.length === 0 � completed</text>
+  <path d="M380 152 L420 152 L420 238 L400 238" stroke="#059669" stroke-width="1.5" marker-end="url(#al-arr)"/>
+</svg>

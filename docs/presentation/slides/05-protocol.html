@@ -1,0 +1,32 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑤</span><h2>协议与多入口 — 引擎与 UI 解耦</h2></div>
+  <p class="subtitle">先定 wire 消息形状，再写 HTTP / stdio / ACP 适配器。</p>
+  <div class="cols">
+    <div>
+      <h3>三种启动模式</h3>
+      <div class="card-grid" style="grid-template-columns:1fr">
+        <div class="card card-indigo"><strong>HTTP + SSE</strong><code>npm start</code> · Web 聊天</div>
+        <div class="card card-sky"><strong>stdio NDJSON</strong><code>npm run cli</code> · 脚本集成</div>
+        <div class="card card-green"><strong>ACP</strong><code>npm run acp</code> · IDE 插件</div>
+      </div>
+      <h3 style="margin-top:0.4em">protocol/ 单一真相源</h3>
+      <ul>
+        <li><code>OutgoingMessage</code> — stream_event · tool_call · tool_result</li>
+        <li><code>WireEmitter</code> — transport 只序列化</li>
+      </ul>
+    </div>
+    <div>
+      <h3>统一 Turn 宿主</h3>
+      <pre class="flow">runChatTurn({
+  transport,  // SSE | ACP | noop
+  runAgent,   // → query()
+  session, cwd
+})
+
+Session: JSONL · tryBeginTurn()
+  同 session 禁止并发 turn</pre>
+      <div class="callout"><strong>建造顺序：</strong>query + stdio → HTTP SSE → ACP 薄适配</div>
+      <span class="path-tag">protocol/ · turn/run-chat-turn.ts</span>
+    </div>
+  </div>
+</section>

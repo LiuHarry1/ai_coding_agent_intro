@@ -7,520 +7,735 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" />
   <style>
-    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
-    :root {
-      --r-main-font: "Noto Sans SC", "Segoe UI", sans-serif;
-      --r-heading-font: "Noto Sans SC", "Segoe UI", sans-serif;
-      --r-background-color: #f4f6fb;
-      --r-main-font-size: 28px;
-      --r-heading-color: #0f172a;
-      --r-link-color: #4f46e5;
-    }
+:root {
+  --r-main-font: "Noto Sans SC", "Segoe UI", sans-serif;
+  --r-heading-font: "Noto Sans SC", "Segoe UI", sans-serif;
+  --r-background-color: #f4f6fb;
+  --r-main-font-size: 28px;
+  --r-heading-color: #0f172a;
+  --r-link-color: #4f46e5;
+  --c-indigo: #4f46e5;
+  --c-violet: #7c3aed;
+  --c-slate: #64748b;
+  --c-green: #059669;
+  --c-red: #dc2626;
+  --c-amber: #d97706;
+  --c-sky: #0284c7;
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 8px 30px rgba(79, 70, 229, 0.12);
+}
 
-    .reveal .slides { text-align: left; }
-    .reveal .slides > section { height: 100%; }
+.reveal .slides { text-align: left; }
+.reveal .slides > section { height: 100%; }
 
-    /* ── Slide 1: architecture（全屏铺图，无重复标题） ── */
-    .reveal .slides > section.slide-arch {
-      padding: 0 !important;
-      box-sizing: border-box;
-      display: block !important;
-      height: 100% !important;
-      position: relative;
-    }
-    .slide-arch .diagram-wrap {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: stretch;
-      justify-content: center;
-      padding: 10px 14px 14px;
-      box-sizing: border-box;
-    }
-    .slide-arch .diagram-wrap svg {
-      width: 100%;
-      height: 100%;
-      max-width: none;
-      max-height: none;
-      display: block;
-    }
+/* ── Full-bleed diagram slides ── */
+.reveal .slides > section.slide-arch {
+  padding: 0 !important;
+  box-sizing: border-box;
+  display: block !important;
+  height: 100% !important;
+  position: relative;
+  background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 45%, #f4f6fb 100%) !important;
+}
+.slide-arch .diagram-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 16px;
+  box-sizing: border-box;
+}
+.slide-arch .slide-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-indigo);
+  background: rgba(255,255,255,0.85);
+  border: 1px solid #c7d2fe;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+  backdrop-filter: blur(4px);
+}
+.slide-arch .diagram-wrap svg,
+.slide-arch .diagram-wrap img.diagram-img {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  display: block;
+  object-fit: contain;
+}
 
-    /* ── Content slides ── */
-    .slide-content {
-      padding: 0.35em 0.5em !important;
-      box-sizing: border-box;
-    }
-    .slide-content h2 {
-      font-size: 1.15em;
-      font-weight: 700;
-      color: #0f172a;
-      margin: 0 0 0.35em;
-      text-transform: none;
-      letter-spacing: 0;
-      border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 0.25em;
-    }
-    .slide-content .subtitle {
-      font-size: 0.42em;
-      color: #64748b;
-      margin: 0 0 0.65em;
-      line-height: 1.5;
-    }
-    .slide-content .cols {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.65em 1em;
-      align-items: start;
-    }
-    .slide-content .cols-3 {
-      grid-template-columns: 1fr 1fr 1fr;
-    }
-    .slide-content h3 {
-      font-size: 0.52em;
-      font-weight: 700;
-      color: #4338ca;
-      margin: 0 0 0.3em;
-      text-transform: none;
-    }
-    .slide-content ul, .slide-content ol {
-      font-size: 0.44em;
-      line-height: 1.55;
-      color: #334155;
-      margin: 0;
-      padding-left: 1.2em;
-    }
-    .slide-content li { margin: 0.15em 0; }
-    .slide-content li strong { color: #0f172a; }
-    .slide-content table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.4em;
-      margin: 0.2em 0;
-    }
-    .slide-content th, .slide-content td {
-      border: 1px solid #e2e8f0;
-      padding: 0.35em 0.5em;
-      text-align: left;
-      vertical-align: top;
-    }
-    .slide-content th {
-      background: #f1f5f9;
-      color: #0f172a;
-      font-weight: 600;
-    }
-    .slide-content code {
-      font-family: "Cascadia Code", Consolas, monospace;
-      font-size: 0.92em;
-      background: #f1f5f9;
-      color: #4338ca;
-      padding: 0.05em 0.25em;
-      border-radius: 3px;
-    }
-    .slide-content .path-tag {
-      display: block;
-      margin-top: 0.5em;
-      font-size: 0.36em;
-      color: #94a3b8;
-      font-family: Consolas, monospace;
-    }
-    .slide-content .callout {
-      font-size: 0.4em;
-      background: #eef2ff;
-      border-left: 3px solid #4f46e5;
-      padding: 0.45em 0.6em;
-      margin-top: 0.45em;
-      color: #334155;
-      line-height: 1.5;
-    }
-    .slide-content .flow {
-      font-size: 0.38em;
-      font-family: Consolas, "Cascadia Code", monospace;
-      background: #0f172a;
-      color: #e2e8f0;
-      padding: 0.55em 0.65em;
-      border-radius: 8px;
-      line-height: 1.55;
-      white-space: pre;
-      margin: 0;
-    }
-    .slide-content .vs-table td:first-child { color: #64748b; width: 38%; }
-    .slide-loop .loop-svg { width: 100%; height: auto; display: block; margin-top: 0.15em; }
+/* ── Content slides ── */
+.slide-content {
+  padding: 0.35em 0.5em !important;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+}
+.slide-content .slide-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 0.3em;
+  padding-bottom: 0.25em;
+  border-bottom: 2px solid #e2e8f0;
+}
+.slide-content .slide-num {
+  flex-shrink: 0;
+  width: 1.65em;
+  height: 1.65em;
+  line-height: 1.65em;
+  text-align: center;
+  font-size: 0.55em;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--c-indigo), var(--c-violet));
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+}
+.slide-content h2 {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  border: none;
+  padding: 0;
+  flex: 1;
+}
+.slide-content .subtitle {
+  font-size: 0.42em;
+  color: var(--c-slate);
+  margin: 0 0 0.55em;
+  line-height: 1.5;
+}
+.slide-content .cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55em 0.85em;
+  align-items: start;
+}
+.slide-content .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.slide-content h3 {
+  font-size: 0.5em;
+  font-weight: 700;
+  color: var(--c-indigo);
+  margin: 0 0 0.28em;
+  text-transform: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.slide-content h3::before {
+  content: "";
+  width: 3px;
+  height: 0.9em;
+  background: linear-gradient(180deg, var(--c-indigo), var(--c-violet));
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.slide-content ul, .slide-content ol {
+  font-size: 0.42em;
+  line-height: 1.52;
+  color: #334155;
+  margin: 0;
+  padding-left: 1.15em;
+}
+.slide-content li { margin: 0.12em 0; }
+.slide-content li strong { color: #0f172a; }
+.slide-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.38em;
+  margin: 0.15em 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.slide-content th, .slide-content td {
+  border: 1px solid #e2e8f0;
+  padding: 0.32em 0.45em;
+  text-align: left;
+  vertical-align: top;
+}
+.slide-content th {
+  background: linear-gradient(180deg, #f1f5f9, #e2e8f0);
+  color: #0f172a;
+  font-weight: 600;
+}
+.slide-content tr:nth-child(even) td { background: #fafbfc; }
+.slide-content code {
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 0.9em;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 0.06em 0.28em;
+  border-radius: 4px;
+  border: 1px solid #e0e7ff;
+}
+.slide-content .path-tag {
+  display: block;
+  margin-top: 0.4em;
+  font-size: 0.34em;
+  color: #94a3b8;
+  font-family: "JetBrains Mono", Consolas, monospace;
+}
+.slide-content .callout {
+  font-size: 0.38em;
+  background: linear-gradient(90deg, #eef2ff, #f5f3ff);
+  border-left: 4px solid var(--c-indigo);
+  padding: 0.42em 0.55em;
+  margin-top: 0.38em;
+  color: #334155;
+  line-height: 1.48;
+  border-radius: 0 8px 8px 0;
+  box-shadow: var(--shadow-sm);
+}
+.slide-content .flow {
+  font-size: 0.36em;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  background: linear-gradient(145deg, #0f172a, #1e293b);
+  color: #e2e8f0;
+  padding: 0.5em 0.6em;
+  border-radius: 10px;
+  line-height: 1.52;
+  white-space: pre;
+  margin: 0;
+  box-shadow: var(--shadow-md);
+  border: 1px solid #334155;
+}
+.slide-content .vs-table td:first-child { color: var(--c-slate); width: 36%; font-weight: 600; }
 
-    /* ── Placeholder / end ── */
-    .slide-end {
-      text-align: center !important;
-      display: flex !important;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-    .slide-end h2 { font-size: 1.6em; text-transform: none; }
-    .slide-end p { font-size: 0.55em; color: #64748b; margin-top: 0.5em; }
-    .slide-end a { color: #4f46e5; text-decoration: none; font-size: 0.48em; }
-    .slide-end a:hover { text-decoration: underline; }
+/* Cards */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4em;
+  margin-top: 0.2em;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.45em 0.5em;
+  box-shadow: var(--shadow-sm);
+  font-size: 0.38em;
+  line-height: 1.45;
+  color: #334155;
+}
+.card .card-icon {
+  font-size: 1.4em;
+  margin-bottom: 0.15em;
+  display: block;
+}
+.card strong { color: #0f172a; display: block; margin-bottom: 0.1em; }
+.card-indigo { border-top: 3px solid var(--c-indigo); }
+.card-green { border-top: 3px solid var(--c-green); }
+.card-sky { border-top: 3px solid var(--c-sky); }
+.card-amber { border-top: 3px solid var(--c-amber); }
 
-    .reveal .progress { color: #4f46e5; }
-    .reveal .controls { color: #4f46e5; }
+/* Mini diagram in content slides */
+.mini-diagram {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  margin: 0.15em 0;
+}
+
+/* ── Browser demo slide ── */
+.slide-browser-demo .chat-bubble {
+  font-size: 0.4em;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px 12px 12px 4px;
+  padding: 0.55em 0.65em;
+  margin: 0;
+  color: #334155;
+  line-height: 1.5;
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+.slide-browser-demo .chat-bubble::before {
+  content: "👤 用户";
+  display: block;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--c-indigo);
+  margin-bottom: 0.35em;
+}
+.slide-browser-demo .timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  margin: 0.2em 0;
+}
+.slide-browser-demo .tl-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45em;
+  font-size: 0.38em;
+  line-height: 1.45;
+  color: #334155;
+}
+.slide-browser-demo .tl-num {
+  flex-shrink: 0;
+  width: 1.5em;
+  height: 1.5em;
+  line-height: 1.5em;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--c-indigo), var(--c-violet));
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(79,70,229,0.35);
+}
+.slide-browser-demo .tl-body {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.35em 0.45em;
+  box-shadow: var(--shadow-sm);
+}
+.slide-browser-demo .tl-tool {
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 0.92em;
+  color: #4338ca;
+  font-weight: 500;
+}
+.slide-browser-demo .mock-browser {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  font-size: 0.36em;
+}
+.slide-browser-demo .mock-bar {
+  background: linear-gradient(180deg, #e2e8f0, #cbd5e1);
+  padding: 0.35em 0.5em;
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.slide-browser-demo .mock-dot {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+}
+.slide-browser-demo .mock-dot.r { background: #ef4444; }
+.slide-browser-demo .mock-dot.y { background: #eab308; }
+.slide-browser-demo .mock-dot.g { background: #22c55e; }
+.slide-browser-demo .mock-url {
+  flex: 1;
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 0.9em;
+  color: #64748b;
+}
+.slide-browser-demo .mock-page {
+  padding: 0.55em 0.65em;
+  background: #fafbfc;
+}
+.slide-browser-demo .mock-field {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.3em 0.4em;
+  margin: 0.25em 0;
+  color: #94a3b8;
+  position: relative;
+}
+.slide-browser-demo .mock-field .ref-tag {
+  position: absolute;
+  right: 0.3em;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 0.85em;
+  color: #fff;
+  background: var(--c-indigo);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.slide-browser-demo .mock-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--c-indigo), var(--c-violet));
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.3em 0.7em;
+  margin-top: 0.3em;
+  font-weight: 600;
+  position: relative;
+}
+.slide-browser-demo .mock-btn .ref-tag {
+  position: absolute;
+  right: -0.5em;
+  top: -0.5em;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 0.75em;
+  background: #0f172a;
+  color: #fff;
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+.slide-browser-demo .outcome-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35em;
+  margin-top: 0.25em;
+}
+.slide-browser-demo .outcome {
+  font-size: 0.34em;
+  border-radius: 8px;
+  padding: 0.4em 0.45em;
+  line-height: 1.4;
+  text-align: center;
+}
+.slide-browser-demo .outcome.ok {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #047857;
+}
+.slide-browser-demo .outcome.err {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+}
+.slide-browser-demo .outcome.warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+.slide-browser-demo .outcome strong { display: block; font-size: 1.1em; margin-bottom: 0.15em; }
+
+/* ── End slide ── */
+.slide-end {
+  text-align: center !important;
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(160deg, #eef2ff 0%, #f4f6fb 50%, #faf5ff 100%) !important;
+}
+.slide-end h2 {
+  font-size: 1.6em;
+  text-transform: none;
+  background: linear-gradient(135deg, var(--c-indigo), var(--c-violet));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.slide-end p { font-size: 0.55em; color: var(--c-slate); margin-top: 0.5em; }
+.slide-end a { color: var(--c-indigo); text-decoration: none; font-size: 0.48em; }
+.slide-end a:hover { text-decoration: underline; }
+
+.reveal .progress { color: var(--c-indigo); height: 4px; }
+.reveal .controls { color: var(--c-indigo); }
+
   </style>
 </head>
 <body>
   <div class="reveal">
     <div class="slides">
 
-      <!-- ═══ 第 1 页：高层架构 ═══ -->
-      <section class="slide-arch" data-background-color="#f4f6fb">
-        <div class="diagram-wrap">
-          <svg viewBox="0 0 1040 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Coding Agent 高层架构图">
-            <defs>
-              <marker id="arch-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#94a3b8"/></marker>
-              <marker id="arch-arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#2563eb"/></marker>
-              <filter id="arch-shadow" x="-4%" y="-4%" width="108%" height="108%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.07"/></filter>
-              <linearGradient id="arch-hero" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
-            </defs>
-            <text x="520" y="22" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Coding Agent 高层架构</text>
-            <text x="520" y="40" text-anchor="middle" font-size="11" fill="#64748b" font-weight="500">一套引擎 · 多种入口 · 可扩展 · 可自托管</text>
-            <rect x="420" y="50" width="200" height="44" rx="22" fill="#0f172a" filter="url(#arch-shadow)"/>
-            <text x="520" y="78" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">开发者 / 团队</text>
-            <path d="M520 94 L520 114" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arch-arrow)"/>
-            <rect x="40" y="118" width="960" height="88" rx="14" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5" filter="url(#arch-shadow)"/>
-            <text x="56" y="140" font-size="12" font-weight="700" fill="#0369a1">接入层 — 用户如何与 Agent 交互</text>
-            <g font-size="11" font-weight="600">
-              <rect x="56" y="150" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="140" y="170" text-anchor="middle" fill="#0369a1">Web 聊天界面</text><text x="140" y="184" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">团队协作 · 工作区 IDE</text>
-              <rect x="240" y="150" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="324" y="170" text-anchor="middle" fill="#0369a1">桌面应用</text><text x="324" y="184" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">本地一键启动</text>
-              <rect x="424" y="150" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="508" y="170" text-anchor="middle" fill="#0369a1">IDE 插件</text><text x="508" y="184" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">VS Code · Cursor · IDEA</text>
-              <rect x="608" y="150" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="692" y="170" text-anchor="middle" fill="#0369a1">开放 API / SDK</text><text x="692" y="184" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">CI · 内部平台集成</text>
-              <rect x="792" y="150" width="192" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="888" y="170" text-anchor="middle" fill="#0369a1">企业部署</text><text x="888" y="184" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Docker · SSO · 多租户</text>
-            </g>
-            <path d="M520 206 L520 230" stroke="#2563eb" stroke-width="2" marker-end="url(#arch-arrow-blue)"/>
-            <rect x="120" y="228" width="800" height="148" rx="16" fill="url(#arch-hero)" filter="url(#arch-shadow)"/>
-            <text x="140" y="252" font-size="13" font-weight="700" fill="#fff">Agent 核心引擎</text>
-            <text x="140" y="268" font-size="10" fill="#c7d2fe">理解意图 → 规划步骤 → 调用工具 → 汇总结果 → 流式反馈</text>
-            <g font-size="10" font-weight="600">
-              <rect x="140" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="214" y="304" text-anchor="middle" fill="#4338ca">对话与会话</text><text x="214" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">多轮上下文</text><text x="214" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">权限模式</text><text x="214" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">人机确认</text>
-              <rect x="304" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="378" y="304" text-anchor="middle" fill="#4338ca">工具编排</text><text x="378" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">读改代码 · 跑命令</text><text x="378" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">搜索 · 浏览器</text><text x="378" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">子任务分派</text>
-              <rect x="468" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="542" y="304" text-anchor="middle" fill="#4338ca">上下文与记忆</text><text x="542" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">项目规则</text><text x="542" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">跨会话记忆</text><text x="542" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">长对话压缩</text>
-              <rect x="632" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="706" y="304" text-anchor="middle" fill="#4338ca">安全与治理</text><text x="706" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">沙箱策略</text><text x="706" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">审批与配额</text><text x="706" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">平台统一下发</text>
-              <rect x="796" y="282" width="108" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="850" y="304" text-anchor="middle" fill="#4338ca">统一协议</text><text x="850" y="324" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">各入口</text><text x="850" y="338" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">同一套</text><text x="850" y="352" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">消息语义</text>
-            </g>
-            <path d="M320 376 L320 408" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arch-arrow-blue)"/>
-            <path d="M720 376 L720 408" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arch-arrow-blue)"/>
-            <rect x="40" y="412" width="440" height="100" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="1.5" filter="url(#arch-shadow)"/>
-            <text x="56" y="434" font-size="12" font-weight="700" fill="#92400e">大语言模型</text>
-            <text x="56" y="450" font-size="10" fill="#a16207">推理与决策 — 理解需求、选择工具、生成回答</text>
-            <g font-size="10" font-weight="600">
-              <rect x="56" y="462" width="120" height="36" rx="8" fill="#fff" stroke="#fcd34d"/><text x="116" y="484" text-anchor="middle" fill="#92400e">主模型</text>
-              <rect x="188" y="462" width="120" height="36" rx="8" fill="#fff" stroke="#fcd34d"/><text x="248" y="484" text-anchor="middle" fill="#92400e">辅助模型</text>
-              <rect x="320" y="462" width="144" height="36" rx="8" fill="#fff" stroke="#fcd34d"/><text x="392" y="484" text-anchor="middle" fill="#92400e">轻量模型</text>
-            </g>
-            <text x="260" y="506" text-anchor="middle" font-size="9" fill="#a16207">按任务类型选用，成本与效果可预期</text>
-            <rect x="560" y="412" width="440" height="100" rx="14" fill="#d1fae5" stroke="#059669" stroke-width="1.5" filter="url(#arch-shadow)"/>
-            <text x="576" y="434" font-size="12" font-weight="700" fill="#047857">执行环境</text>
-            <text x="576" y="450" font-size="10" fill="#059669">工具真正落地的地方 — 文件、命令、语言服务</text>
-            <g font-size="10" font-weight="600">
-              <rect x="576" y="462" width="180" height="36" rx="8" fill="#fff" stroke="#6ee7b7"/><text x="666" y="484" text-anchor="middle" fill="#047857">本地工作区</text>
-              <rect x="772" y="462" width="212" height="36" rx="8" fill="#fff" stroke="#6ee7b7"/><text x="878" y="484" text-anchor="middle" fill="#047857">远程开发机（SSH）</text>
-            </g>
-            <text x="780" y="506" text-anchor="middle" font-size="9" fill="#059669">同一套能力，本地与远程一致</text>
-            <path d="M260 412 L260 376" stroke="#d97706" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arch-arrow)"/>
-            <path d="M780 412 L780 376" stroke="#059669" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arch-arrow)"/>
-            <rect x="40" y="536" width="960" height="88" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
-            <text x="56" y="558" font-size="12" font-weight="700" fill="#475569">Agent 能做什么（能力一览）</text>
-            <g font-size="10" font-weight="600" fill="#334155">
-              <rect x="56" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="110" y="588" text-anchor="middle">读写代码</text><text x="110" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">理解项目结构</text>
-              <rect x="176" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="230" y="588" text-anchor="middle">运行命令</text><text x="230" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">构建 · 测试 · 部署</text>
-              <rect x="296" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="350" y="588" text-anchor="middle">智能搜索</text><text x="350" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">语义 + 语言服务</text>
-              <rect x="416" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="470" y="588" text-anchor="middle">浏览器操作</text><text x="470" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">验证 UI · 登录站点</text>
-              <rect x="536" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="590" y="588" text-anchor="middle">子任务协作</text><text x="590" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">探索 · 规划 · 专精</text>
-              <rect x="656" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="710" y="588" text-anchor="middle">联网检索</text><text x="710" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">文档 · 网页</text>
-              <rect x="776" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="830" y="588" text-anchor="middle">外部工具</text><text x="830" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">MCP 生态接入</text>
-              <rect x="896" y="568" width="88" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="940" y="588" text-anchor="middle">领域技能</text><text x="940" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">可定制流程</text>
-            </g>
-            <path d="M520 512 L520 536" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arch-arrow)"/>
-            <rect x="40" y="644" width="460" height="56" rx="12" fill="#fce7f3" stroke="#db2777" stroke-width="1"/>
-            <text x="56" y="666" font-size="11" font-weight="700" fill="#9d174d">可扩展 — 不改核心即可定制</text>
-            <text x="56" y="684" font-size="10" fill="#be185d">自定义 Agent · 领域 Skill · 项目规则 · 插件 · MCP 服务</text>
-            <rect x="540" y="644" width="460" height="56" rx="12" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
-            <text x="556" y="666" font-size="11" font-weight="700" fill="#5b21b6">可运营 — 企业级管控</text>
-            <text x="556" y="684" font-size="10" fill="#6d28d9">统一策略下发 · 身份认证 · 工作区隔离 · 用量与成本观测</text>
-            <rect x="40" y="50" width="200" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-dasharray="5 3"/>
-            <text x="140" y="72" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">一次请求怎么走</text>
-            <text x="140" y="88" text-anchor="middle" font-size="9" fill="#64748b">提问 → 理解 → 用工具 → 反馈</text>
-            <text x="140" y="100" text-anchor="middle" font-size="9" fill="#64748b">（可循环多轮）</text>
-            <rect x="800" y="50" width="200" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-dasharray="5 3"/>
-            <text x="900" y="72" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">给团队的价值</text>
-            <text x="900" y="88" text-anchor="middle" font-size="9" fill="#64748b">自托管 · 可集成 · 可定制</text>
-            <text x="900" y="100" text-anchor="middle" font-size="9" fill="#64748b">长任务编程自动化</text>
-          </svg>
-        </div>
-      </section>
+<section class="slide-arch" data-background-color="#f4f6fb">
+  <div class="diagram-wrap">
+    <span class="slide-badge">① 高层架构</span>
+    <img class="diagram-img" src="assets/architecture-diagram.svg" alt="Coding Agent 高层架构图" />
+  </div>
+</section>
 
-      <!-- ═══ 第 2 页：Agent Loop ═══ -->
-      <!-- 讲稿：强调不是 Chat；一次用户 turn 里 query() 多 step；toolCalls 为空才停 -->
-      <section class="slide-content slide-loop" data-background-color="#ffffff">
-        <h2>② Agent 核心循环 — 不是 Chat，是 Loop</h2>
-        <p class="subtitle">Coding Agent 的本质：<strong>你写的循环</strong>驱动 LLM 多步决策，直到无 tool call 或达上限。</p>
-        <div class="cols">
-          <div>
-            <h3>Chat vs Agent（代码里的差别）</h3>
-            <table class="vs-table">
-              <tr><td>普通 Chat</td><td>一问一答，结束</td></tr>
-              <tr><td>Coding Agent</td><td><code>query()</code> 内 <code>for (step…)</code> 循环，每步可能调工具</td></tr>
-              <tr><td>停止条件</td><td><code>toolCalls.length === 0</code> → <code>reason: 'completed'</code></td></tr>
-            </table>
-            <h3 style="margin-top:0.5em">一次用户 Turn 的调用链</h3>
-            <pre class="flow">POST /chat | stdio | ACP
-  → runChatTurn()          turn/run-chat-turn.ts
-  → prepareChatTurn()      注入 rules/skills/tools
-  → runAgent() → query()   core/query.ts
-       loop: preTurn → runStep → postTurn
-  → runStep()              core/query/run-step.ts
-       streamText + StreamingToolExecutor</pre>
-          </div>
-          <div>
-            <h3>单步 runStep 做什么</h3>
-            <ol>
-              <li>消息 sanitize → <code>projectMessagesForApi</code></li>
-              <li><code>streamText()</code> 调 LLM（<code>ai</code> SDK + Provider）</li>
-              <li>有 <code>tool_call</code> → <code>StreamingToolExecutor</code> 执行</li>
-              <li><code>buildToolMessage()</code> 把结果 append 到 <code>messages</code></li>
-              <li>经 <code>wire</code> 发 <code>tool_call</code> / <code>tool_result</code> 给 UI</li>
-            </ol>
-            <div class="callout">
-              <strong>建造要点：</strong>循环在 <code>query()</code>，不在模型里。Transport（HTTP/ACP）只调 <code>runChatTurn()</code>，不重复实现 loop。
-            </div>
-            <span class="path-tag">src/core/query.ts · run-step.ts · turn/run-chat-turn.ts</span>
-          </div>
-        </div>
-      </section>
+<section class="slide-content slide-loop" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">②</span><h2>Agent 核心循环 — 不是 Chat，是 Loop</h2></div>
+  <p class="subtitle">Coding Agent 的本质：<strong>你写的循环</strong>驱动 LLM 多步决策，直到无 tool call 或达上限。</p>
+  <div class="cols">
+    <div>
+      <h3>Chat vs Agent</h3>
+      <table class="vs-table">
+        <tr><td>普通 Chat</td><td>一问一答，结束</td></tr>
+        <tr><td>Coding Agent</td><td><code>query()</code> 内 <code>for (step…)</code> 循环</td></tr>
+        <tr><td>停止条件</td><td><code>toolCalls.length === 0</code></td></tr>
+      </table>
+      <img class="mini-diagram" src="assets/agent-loop.svg" alt="Agent 循环流程图" />
+    </div>
+    <div>
+      <h3>单步 runStep</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><span class="card-icon">📝</span><strong>sanitize</strong>消息整理 → API 格式</div>
+        <div class="card card-indigo"><span class="card-icon">🤖</span><strong>streamText</strong>调 LLM（ai SDK）</div>
+        <div class="card card-green"><span class="card-icon">🔧</span><strong>execute</strong>StreamingToolExecutor</div>
+        <div class="card card-green"><span class="card-icon">📡</span><strong>wire</strong>tool_call / tool_result → UI</div>
+      </div>
+      <div class="callout"><strong>建造要点：</strong>循环在 <code>query()</code>，不在模型里。Transport 只调 <code>runChatTurn()</code>。</div>
+      <span class="path-tag">src/core/query.ts · run-step.ts · turn/run-chat-turn.ts</span>
+    </div>
+  </div>
+</section>
 
-      <!-- ═══ 第 3 页：工具体系 ═══ -->
-      <section class="slide-content" data-background-color="#ffffff">
-        <h2>③ 工具体系 — Agent 的「手」</h2>
-        <p class="subtitle">LLM 只选工具；真正读写文件、跑命令、开浏览器，靠你注册的 <code>ToolDefinition</code> + 执行器。</p>
-        <div class="cols">
-          <div>
-            <h3>注册与组装（每 Turn）</h3>
-            <ol>
-              <li>内置工具在 <code>tools.ts</code> → <code>defaultRegistry</code></li>
-              <li><code>prepareChatTurn</code> 加载 MCP、子 Agent、Skill</li>
-              <li><code>assembleToolPool()</code> 分出 active / deferred</li>
-              <li>deferred 过多时注入 <code>ToolSearch</code> 按需激活</li>
-              <li><code>applyModeRestrictions</code> 按 agent/ask/plan 过滤</li>
-            </ol>
-            <h3 style="margin-top:0.45em">约定：一工具一目录</h3>
-            <pre class="flow">tools/BashTool/
-  BashTool.ts   → export definition
-  prompt.ts     → 描述给 LLM 的 schema</pre>
-          </div>
-          <div>
-            <h3>执行与双路结果</h3>
-            <table>
-              <tr><th>组件</th><th>职责</th></tr>
-              <tr><td><code>StreamingToolExecutor</code></td><td>并发执行 tool calls</td></tr>
-              <tr><td><code>tool_execution.ts</code></td><td>单工具 execute + 组装 ToolMessage</td></tr>
-              <tr><td><code>result</code> 字符串</td><td>给 LLM / 持久化 / compaction（精简投影）</td></tr>
-              <tr><td><code>resultBlocks</code></td><td>含图片等时给模型的 blocks；UI 走 wire 完整内容</td></tr>
-            </table>
-            <div class="callout">新增工具 = 实现 <code>ToolDefinition</code> + <code>tools.ts</code> 注册；不必改 <code>query()</code> 主循环。</div>
-            <span class="path-tag">src/tools.ts · assembleToolPool.ts · services/tools/</span>
-          </div>
-        </div>
-      </section>
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">③</span><h2>工具体系 — Agent 的「手」</h2></div>
+  <p class="subtitle">LLM 只选工具；真正读写文件、跑命令、开浏览器，靠 <code>ToolDefinition</code> + 执行器。</p>
+  <div class="cols">
+    <div>
+      <h3>注册与组装（每 Turn）</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><strong>defaultRegistry</strong><code>tools.ts</code> 内置工具</div>
+        <div class="card card-indigo"><strong>prepareChatTurn</strong>加载 MCP / Skill</div>
+        <div class="card card-sky"><strong>assembleToolPool</strong>active / deferred 分组</div>
+        <div class="card card-sky"><strong>ToolSearch</strong>deferred 按需激活</div>
+      </div>
+      <pre class="flow" style="margin-top:0.35em">tools/BashTool/
+  BashTool.ts   → definition
+  prompt.ts     → LLM schema</pre>
+    </div>
+    <div>
+      <h3>执行与双路结果</h3>
+      <table>
+        <tr><th>组件</th><th>职责</th></tr>
+        <tr><td><code>StreamingToolExecutor</code></td><td>并发执行 tool calls</td></tr>
+        <tr><td><code>result</code></td><td>给 LLM 的精简字符串</td></tr>
+        <tr><td><code>resultBlocks</code></td><td>含图片时给模型；UI 走 wire</td></tr>
+      </table>
+      <div class="callout">新增工具 = <code>ToolDefinition</code> + 注册；不必改 <code>query()</code> 主循环。</div>
+      <span class="path-tag">src/tools.ts · assembleToolPool.ts</span>
+    </div>
+  </div>
+</section>
 
-      <!-- ═══ 第 4 页：上下文与记忆 ═══ -->
-      <section class="slide-content" data-background-color="#ffffff">
-        <h2>④ 上下文与记忆 — 脑容量管理</h2>
-        <p class="subtitle">长任务会爆 context window；需要「注入规则 + 压缩历史 + 侧路记忆」三层配合。</p>
-        <div class="cols">
-          <div>
-            <h3>四层分工（本仓库实现）</h3>
-            <table>
-              <tr><th>层</th><th>机制</th><th>何时生效</th></tr>
-              <tr><td>Project Rules</td><td><code>AGENTS.md</code> 向上合并</td><td>每 turn 注入 system prompt</td></tr>
-              <tr><td>Auto Memory</td><td><code>services/auto-memory/</code></td><td>跨会话；turn 结束抽取 + prefetch</td></tr>
-              <tr><td>Session Memory</td><td><code>services/session-memory/</code></td><td>单会话笔记；compact 时消费</td></tr>
-              <tr><td>Compaction</td><td><code>services/compact/</code></td><td>每 step 前 <code>preTurn → compactIfNeeded</code></td></tr>
-            </table>
-          </div>
-          <div>
-            <h3>压缩触发点（代码路径）</h3>
-            <ol>
-              <li>每 step 前：<code>preTurn()</code> 调 <code>compactIfNeeded</code></li>
-              <li>用户 <code>/compact</code>：<code>runChatTurn</code> 强制 compact 后返回</li>
-              <li>Turn 结束：<code>memory-lifecycle</code> hooks 更新 session/auto memory</li>
-              <li>上下文超长：<code>runStep</code> 内 reactive compact + 重试</li>
-            </ol>
-            <h3 style="margin-top:0.45em">三档模型（静态绑定，非智能路由）</h3>
-            <table>
-              <tr><th>档位</th><th>典型用途</th></tr>
-              <tr><td><code>large</code></td><td>主 <code>query()</code> 循环、Plan、Compact</td></tr>
-              <tr><td><code>medium</code></td><td>Session memory 抽取、Auto memory</td></tr>
-              <tr><td><code>small</code></td><td>Explore 子 agent、session 标题、prefetch</td></tr>
-            </table>
-            <span class="path-tag">core/llm/model-registry.ts · services/compact/ · turn/memory-lifecycle.ts</span>
-          </div>
-        </div>
-      </section>
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">④</span><h2>上下文与记忆 — 脑容量管理</h2></div>
+  <p class="subtitle">长任务会爆 context window；「注入规则 + 压缩历史 + 侧路记忆」三层配合。</p>
+  <div class="cols">
+    <div>
+      <h3>四层分工</h3>
+      <div class="card-grid" style="grid-template-columns:1fr">
+        <div class="card card-indigo"><strong>Project Rules</strong><code>AGENTS.md</code> 每 turn 注入 system prompt</div>
+        <div class="card card-green"><strong>Auto Memory</strong>跨会话；turn 结束抽取 + prefetch</div>
+        <div class="card card-sky"><strong>Session Memory</strong>单会话笔记；compact 时消费</div>
+        <div class="card card-amber"><strong>Compaction</strong>每 step 前 <code>compactIfNeeded</code></div>
+      </div>
+    </div>
+    <div>
+      <h3>三档模型（静态绑定）</h3>
+      <table>
+        <tr><th>档位</th><th>典型用途</th></tr>
+        <tr><td><code>large</code></td><td>主 <code>query()</code> · Plan · Compact</td></tr>
+        <tr><td><code>medium</code></td><td>Memory 抽取</td></tr>
+        <tr><td><code>small</code></td><td>Explore · 标题 · prefetch</td></tr>
+      </table>
+      <div class="callout">压缩触发：<code>preTurn</code> · <code>/compact</code> · turn 结束 hooks · 超长 reactive retry</div>
+      <span class="path-tag">services/compact/ · turn/memory-lifecycle.ts</span>
+    </div>
+  </div>
+</section>
 
-      <!-- ═══ 第 5 页：协议与多入口 ═══ -->
-      <section class="slide-content" data-background-color="#ffffff">
-        <h2>⑤ 协议与多入口 — 引擎与 UI 解耦</h2>
-        <p class="subtitle">先定 wire 消息形状，再写 HTTP / stdio / ACP 适配器；避免每个入口重写 Agent 逻辑。</p>
-        <div class="cols">
-          <div>
-            <h3>protocol/ 单一真相源</h3>
-            <ul>
-              <li><code>OutgoingMessage</code>：引擎 → 客户端（<code>stream_event</code>、<code>tool_call</code>、<code>tool_result</code>…）</li>
-              <li><code>IncomingMessage</code>：客户端 → 引擎（<code>user</code>、<code>control_response</code>）</li>
-              <li>握手：<code>system/init</code> + <code>PROTOCOL_VERSION</code></li>
-              <li>引擎边界：<code>WireEmitter</code> 发类型化消息，transport 只序列化</li>
-            </ul>
-            <h3 style="margin-top:0.45em">三种启动模式</h3>
-            <table>
-              <tr><th>模式</th><th>入口</th><th>Transport</th></tr>
-              <tr><td>默认</td><td><code>npm start</code></td><td>HTTP + SSE（<code>/chat</code>）</td></tr>
-              <tr><td>stdio</td><td><code>npm run cli</code></td><td>NDJSON 行协议</td></tr>
-              <tr><td>ACP</td><td><code>npm run acp</code></td><td>JSON-RPC over stdio（IDE）</td></tr>
-            </table>
-          </div>
-          <div>
-            <h3>统一 Turn 宿主</h3>
-            <pre class="flow">无论哪种 Transport：
-  都调用 runChatTurn({
-    transport,   // SSE | noop | ACP 桥接
-    runAgent,    // → query()
-    session, cwd
-  })
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑤</span><h2>协议与多入口 — 引擎与 UI 解耦</h2></div>
+  <p class="subtitle">先定 wire 消息形状，再写 HTTP / stdio / ACP 适配器。</p>
+  <div class="cols">
+    <div>
+      <h3>三种启动模式</h3>
+      <div class="card-grid" style="grid-template-columns:1fr">
+        <div class="card card-indigo"><strong>HTTP + SSE</strong><code>npm start</code> · Web 聊天</div>
+        <div class="card card-sky"><strong>stdio NDJSON</strong><code>npm run cli</code> · 脚本集成</div>
+        <div class="card card-green"><strong>ACP</strong><code>npm run acp</code> · IDE 插件</div>
+      </div>
+      <h3 style="margin-top:0.4em">protocol/ 单一真相源</h3>
+      <ul>
+        <li><code>OutgoingMessage</code> — stream_event · tool_call · tool_result</li>
+        <li><code>WireEmitter</code> — transport 只序列化</li>
+      </ul>
+    </div>
+    <div>
+      <h3>统一 Turn 宿主</h3>
+      <pre class="flow">runChatTurn({
+  transport,  // SSE | ACP | noop
+  runAgent,   // → query()
+  session, cwd
+})
 
-Session 持久化：JSONL
-  src/session/store.ts
-  tryBeginTurn() 同 session 禁止并发 turn</pre>
-            <div class="callout"><strong>建造顺序建议：</strong>先实现 <code>query()</code> + <code>WireEmitter</code> + stdio；再加 HTTP SSE；最后做 ACP 薄适配。</div>
-            <span class="path-tag">protocol/ · core/wire-emitter.ts · turn/run-chat-turn.ts · entrypoints/cli.ts</span>
-          </div>
-        </div>
-      </section>
+Session: JSONL · tryBeginTurn()
+  同 session 禁止并发 turn</pre>
+      <div class="callout"><strong>建造顺序：</strong>query + stdio → HTTP SSE → ACP 薄适配</div>
+      <span class="path-tag">protocol/ · turn/run-chat-turn.ts</span>
+    </div>
+  </div>
+</section>
 
-      <!-- ═══ 第 6 页：执行环境 ═══ -->
-      <section class="slide-content" data-background-color="#ffffff">
-        <h2>⑥ 执行环境 — 工具在哪跑</h2>
-        <p class="subtitle">控制面（HTTP Server / Agent 循环）与执行面（文件、Shell、LSP）分离；本地与 SSH 远程同构。</p>
-        <div class="cols">
-          <div>
-            <h3>Execution Plane（控制面）</h3>
-            <p style="font-size:0.42em;color:#334155;margin:0 0 0.4em"><code>bootstrapExecutionPlane()</code> 在 server 启动时初始化：</p>
-            <table>
-              <tr><th>组件</th><th>职责</th></tr>
-              <tr><td><code>EnvironmentRegistry</code></td><td>注册 local / SSH Provider</td></tr>
-              <tr><td><code>RuntimeBroker</code></td><td>按 workspace 管理 Worker 连接</td></tr>
-              <tr><td><code>CredentialBroker</code></td><td>运行时认证</td></tr>
-            </table>
-            <h3 style="margin-top:0.45em">Worker 进程</h3>
-            <ul>
-              <li><code>src/worker/main.ts</code> — stdio NDJSON RPC</li>
-              <li>能力：FS 读写、Shell（前后台）、LSP、<code>rg</code></li>
-              <li>工具经 <code>WorkerExecutionBackend</code> 发 <code>fs_op</code> / <code>lsp_op</code></li>
-            </ul>
-          </div>
-          <div>
-            <h3>Session 绑定工作区</h3>
-            <pre class="flow">session.workspace = {
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑥</span><h2>执行环境 — 工具在哪跑</h2></div>
+  <p class="subtitle">控制面与执行面分离；本地与 SSH 远程同构。</p>
+  <div class="cols">
+    <div>
+      <h3>Execution Plane</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><strong>EnvironmentRegistry</strong>local / SSH Provider</div>
+        <div class="card card-indigo"><strong>RuntimeBroker</strong>按 workspace 管理 Worker</div>
+        <div class="card card-green"><strong>Worker</strong>FS · Shell · LSP · rg</div>
+        <div class="card card-green"><strong>CredentialBroker</strong>运行时认证</div>
+      </div>
+    </div>
+    <div>
+      <h3>Session 绑定工作区</h3>
+      <pre class="flow">session.workspace = {
   environmentId: 'local' | 'ssh:host',
   cwd: '/path/to/project'
 }
 
-prepareChatTurn → resolveExecutionBackend(session)
-  → RuntimeBroker.getOrCreate()
-  → Bash/Read/Grep 在对应 Worker 执行
+resolveExecutionBackend(session)
+  → Bash/Read/Grep 在 Worker 执行
 
-远程时：plugins/skills 从控制机加载，
-  文件/命令在远程 Worker 执行</pre>
-            <div class="callout">建造要点：不要把 <code>fs.readFile</code> 散落在工具里；统一走 <code>ExecutionBackend</code>，日后加远程才不用改遍所有 Tool。</div>
-            <span class="path-tag">execution/bootstrap.ts · worker/main.ts · execution/resolve-backend.ts</span>
-          </div>
+远程：plugins 控制机加载
+      文件/命令在远程 Worker</pre>
+      <div class="callout">统一走 <code>ExecutionBackend</code>，加远程不用改遍所有 Tool。</div>
+      <span class="path-tag">execution/bootstrap.ts · worker/main.ts</span>
+    </div>
+  </div>
+</section>
+
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑦</span><h2>扩展机制 — 不改核心也能定制</h2></div>
+  <p class="subtitle">子 Agent 分工 · Skill 注入领域知识 · MCP 接外部服务。</p>
+  <div class="cols cols-3">
+    <div>
+      <h3>子 Agent</h3>
+      <div class="card card-indigo" style="font-size:0.38em">
+        <span class="card-icon">🤖</span>
+        <strong>Agent 工具</strong>
+        <code>subagent_type</code> 分发 · Explore / Plan / general-purpose<br/>
+        磁盘：<code>.ai-agent/agents/*.md</code>
+      </div>
+    </div>
+    <div>
+      <h3>Skill / Commands</h3>
+      <div class="card card-green" style="font-size:0.38em">
+        <span class="card-icon">📚</span>
+        <strong>领域流程</strong>
+        <code>.ai-agent/skills/</code> 按需加载<br/>
+        <code>.ai-agent/commands/</code> slash 展开
+      </div>
+    </div>
+    <div>
+      <h3>MCP / Plugins</h3>
+      <div class="card card-sky" style="font-size:0.38em">
+        <span class="card-icon">🔌</span>
+        <strong>外部生态</strong>
+        <code>settings.json → mcpServers</code><br/>
+        deferred 经 ToolSearch 激活
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:0.45em">权限 <code>agent | ask | plan</code> + specialist <code>agentType</code> 限制工具 allowList。</div>
+  <span class="path-tag">tools/AgentTool/ · assembleToolPool.ts</span>
+</section>
+
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑧</span><h2>工程化 — 上线前要想清楚的事</h2></div>
+  <p class="subtitle">能跑通 loop 只是第一步；生产还需要安全、并发、可观测、可部署。</p>
+  <div class="cols">
+    <div>
+      <h3>安全与治理</h3>
+      <div class="card-grid">
+        <div class="card card-amber"><strong>permission-mode</strong>ask 只读 · plan 禁 mutating</div>
+        <div class="card card-amber"><strong>HITL</strong>AskUserQuestion · Plan 审批</div>
+        <div class="card card-indigo"><strong>并发</strong>tryBeginTurn 互斥 · abort</div>
+        <div class="card card-indigo"><strong>沙箱</strong>sandbox · can-use-tool</div>
+      </div>
+    </div>
+    <div>
+      <h3>可观测 & 部署</h3>
+      <ul>
+        <li><code>DUMP_PROMPTS=1</code> — prompt 轨迹调试</li>
+        <li>telemetry / analytics — 用量与成本</li>
+        <li>Docker — Web 与 Agent 分离</li>
+        <li>SSO — JWT + workspace 锁定</li>
+        <li><code>client-sdk</code> — 对外 HTTP API</li>
+      </ul>
+      <div class="callout"><strong>落地顺序：</strong>① query+tools → ② HTTP+session → ③ compact+权限 → ④ Worker → ⑤ MCP → ⑥ 部署</div>
+      <span class="path-tag">deploy/README.md · client-sdk/</span>
+    </div>
+  </div>
+</section>
+
+<section class="slide-arch" data-background-color="#f4f6fb">
+  <div class="diagram-wrap">
+    <span class="slide-badge">⑨ Browser Automation — 架构</span>
+    <img class="diagram-img" src="assets/browser-architecture.svg" alt="Browser Automation Agent 架构图" />
+  </div>
+</section>
+
+<section class="slide-content slide-browser-demo" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑩</span><h2>Browser Automation — 实操 Demo</h2></div>
+  <p class="subtitle">一句话驱动 · <strong>navigate → snapshot → fill → click → 验证</strong></p>
+  <div class="cols">
+    <div>
+      <div class="chat-bubble">打开 http://localhost:5173/login，用 test@example.com / password123 登录，看是否成功</div>
+      <h3 style="margin-top:0.45em">Agent 执行流程</h3>
+      <div class="timeline">
+        <div class="tl-step">
+          <span class="tl-num">1</span>
+          <div class="tl-body"><span class="tl-tool">browser_navigate</span> 打开 /login → 返回 snapshot</div>
         </div>
-      </section>
-
-      <!-- ═══ 第 7 页：扩展机制 ═══ -->
-      <section class="slide-content" data-background-color="#ffffff">
-        <h2>⑦ 扩展机制 — 不改核心也能定制</h2>
-        <p class="subtitle">子 Agent 分工、Skill 注入领域知识、MCP 接外部服务、磁盘配置热扩展。</p>
-        <div class="cols cols-3">
-          <div>
-            <h3>子 Agent（Agent 工具）</h3>
-            <ul>
-              <li>单一 <code>Agent</code> 工具，<code>subagent_type</code> 分发</li>
-              <li>内置：<code>Explore</code>（只读·small）、<code>Plan</code>、<code>general-purpose</code></li>
-              <li>磁盘：<code>.ai-agent/agents/*.md</code></li>
-              <li>子循环：<code>forked-agent</code> 内再调 <code>query()</code></li>
-            </ul>
-          </div>
-          <div>
-            <h3>Skill / Commands</h3>
-            <ul>
-              <li><code>.ai-agent/skills/</code> → <code>Skill</code> 工具按需加载</li>
-              <li><code>.ai-agent/commands/</code> → slash 展开或 fork</li>
-              <li><code>prepareChatTurn</code> 里 <code>registerSkills</code></li>
-              <li>条件激活：匹配用户消息中的文件路径等</li>
-            </ul>
-          </div>
-          <div>
-            <h3>MCP / Plugins</h3>
-            <ul>
-              <li><code>settings.json</code> → <code>mcpServers</code></li>
-              <li><code>mcp-lifecycle</code> 并入 registry</li>
-              <li><code>.ai-agent/plugins/</code> 可带 agents/skills/MCP</li>
-              <li>deferred MCP 工具经 <code>ToolSearch</code> 激活</li>
-            </ul>
-          </div>
+        <div class="tl-step">
+          <span class="tl-num">2</span>
+          <div class="tl-body"><span class="tl-tool">browser_fill_form</span> 填 e3 邮箱 · e5 密码</div>
         </div>
-        <div class="callout" style="margin-top:0.5em">权限模式 <code>agent | ask | plan</code>（<code>permission-mode.ts</code>）+ 主线程 <code>agentType</code> specialist 可限制工具 allowList / denyGlobs。</div>
-        <span class="path-tag">tools/AgentTool/ · skills/ · commands/ · core/mcp-lifecycle.ts · assembleToolPool.ts</span>
-      </section>
-
-      <!-- ═══ 第 8 页：工程化 ═══ -->
-      <section class="slide-content" data-background-color="#ffffff">
-        <h2>⑧ 工程化 — 上线前要想清楚的事</h2>
-        <p class="subtitle">能跑通 loop 只是第一步；生产环境还需要安全、并发、可观测、可部署。</p>
-        <div class="cols">
-          <div>
-            <h3>安全与治理</h3>
-            <ul>
-              <li><code>permission-mode</code>：ask 只读、plan 禁 mutating</li>
-              <li><code>AskUserQuestion</code> + <code>questions</code> API（HITL）</li>
-              <li><code>Plan</code> 审批：<code>plan-approval-broker</code></li>
-              <li><code>sandbox.ts</code> + <code>can-use-tool</code> 策略</li>
-              <li>Settings 分层：user / project / local / <code>managed</code></li>
-            </ul>
-            <h3 style="margin-top:0.45em">并发与取消</h3>
-            <ul>
-              <li><code>tryBeginTurn</code>：同 session 单 turn 互斥</li>
-              <li><code>/chat/cancel</code>、<code>/tool/abort</code></li>
-              <li><code>turn-abort-registry</code> + <code>abortSignal</code> 传入 <code>query()</code></li>
-            </ul>
-          </div>
-          <div>
-            <h3>可观测 & 部署</h3>
-            <ul>
-              <li><code>DUMP_PROMPTS=1</code> → JSONL prompt 轨迹（调试用）</li>
-              <li><code>telemetry</code> / <code>analytics/</code> 用量与成本</li>
-              <li>Docker：Web 与 Agent 分离（<code>deploy/</code>）</li>
-              <li>SSO：<code>AUTH_ENABLED</code> + JWT + workspace 锁定</li>
-              <li>对外集成：<code>client-sdk</code> HTTP API</li>
-            </ul>
-            <div class="callout"><strong>推荐落地顺序：</strong>① query + tools + stdio → ② HTTP/SSE + session → ③ compaction + 权限 → ④ Worker/远程 → ⑤ MCP/子 Agent → ⑥ 部署/SSO。</div>
-            <span class="path-tag">server/session.ts · deploy/README.md · client-sdk/</span>
-          </div>
+        <div class="tl-step">
+          <span class="tl-num">3</span>
+          <div class="tl-body"><span class="tl-tool">browser_click(e7)</span> 点「登录」→ 页面跳转</div>
         </div>
-      </section>
+        <div class="tl-step">
+          <span class="tl-num">4</span>
+          <div class="tl-body">读新 snapshot → <code>heading "欢迎回来"</code> ✓</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>Agent 看到的页面（snapshot）</h3>
+      <div class="mock-browser">
+        <div class="mock-bar">
+          <span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span>
+          <span class="mock-url">localhost:5173/login</span>
+        </div>
+        <div class="mock-page">
+          <div style="font-weight:700;margin-bottom:0.4em;color:#0f172a">登录</div>
+          <div class="mock-field">邮箱<span class="ref-tag">e3</span></div>
+          <div class="mock-field">密码<span class="ref-tag">e5</span></div>
+          <div class="mock-btn">登录<span class="ref-tag">e7</span></div>
+        </div>
+      </div>
+      <h3 style="margin-top:0.4em">可能的结果</h3>
+      <div class="outcome-row">
+        <div class="outcome ok"><strong>✓ 成功</strong>snapshot 出现「欢迎回来」</div>
+        <div class="outcome err"><strong>✗ 500</strong>network: POST /api/login</div>
+        <div class="outcome warn"><strong>⚠ 吞错</strong>500 但 UI 无提示</div>
+      </div>
+      <div class="callout" style="margin-top:0.35em"><strong>localhost → isolated 零配置</strong> · 已登录后台 → extension + 配对扩展</div>
+    </div>
+  </div>
+  <span class="path-tag">docs/readme/browser.md · .ai-agent/skills/verify-in-browser/SKILL.md</span>
+</section>
 
-      <!-- ═══ 尾页 ═══ -->
-      <section class="slide-end" data-background-color="#f4f6fb">
-        <h2>谢谢</h2>
-        <p>Q &amp; A · 怎么做一个 Coding Agent</p>
-        <a href="architecture.md">详细架构文档（含源码索引）</a>
-      </section>
+<section class="slide-end" data-background-color="#f4f6fb">
+  <h2>谢谢</h2>
+  <p>Q &amp; A · 怎么做一个 Coding Agent</p>
+  <a href="architecture.md">详细架构文档（含源码索引）</a>
+</section>
 
     </div>
   </div>

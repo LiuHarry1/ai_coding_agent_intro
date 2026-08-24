@@ -21,7 +21,9 @@
     "test:browser:unit": "tsx src/scripts/test-browser-unit.ts",
     "test:browser:pw": "tsx src/scripts/test-browser-playwright.ts",
     "test:browser": "tsx src/scripts/test-browser-unit.ts && tsx src/scripts/test-browser-boundary.ts && tsx src/scripts/test-browser-live.ts && tsx src/scripts/test-browser-playwright.ts && tsx src/scripts/test-browser-relay.ts && tsx src/scripts/test-extension-e2e.ts",
-    "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\""
+    "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\"",
+    "presentation:build": "node docs/presentation/build.mjs",
+    "presentation": "npx --yes serve docs/presentation -p 3456"
   },
   "keywords": [],
   "author": "",

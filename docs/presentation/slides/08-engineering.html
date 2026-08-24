@@ -1,0 +1,27 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑧</span><h2>工程化 — 上线前要想清楚的事</h2></div>
+  <p class="subtitle">能跑通 loop 只是第一步；生产还需要安全、并发、可观测、可部署。</p>
+  <div class="cols">
+    <div>
+      <h3>安全与治理</h3>
+      <div class="card-grid">
+        <div class="card card-amber"><strong>permission-mode</strong>ask 只读 · plan 禁 mutating</div>
+        <div class="card card-amber"><strong>HITL</strong>AskUserQuestion · Plan 审批</div>
+        <div class="card card-indigo"><strong>并发</strong>tryBeginTurn 互斥 · abort</div>
+        <div class="card card-indigo"><strong>沙箱</strong>sandbox · can-use-tool</div>
+      </div>
+    </div>
+    <div>
+      <h3>可观测 & 部署</h3>
+      <ul>
+        <li><code>DUMP_PROMPTS=1</code> — prompt 轨迹调试</li>
+        <li>telemetry / analytics — 用量与成本</li>
+        <li>Docker — Web 与 Agent 分离</li>
+        <li>SSO — JWT + workspace 锁定</li>
+        <li><code>client-sdk</code> — 对外 HTTP API</li>
+      </ul>
+      <div class="callout"><strong>落地顺序：</strong>① query+tools → ② HTTP+session → ③ compact+权限 → ④ Worker → ⑤ MCP → ⑥ 部署</div>
+      <span class="path-tag">deploy/README.md · client-sdk/</span>
+    </div>
+  </div>
+</section>

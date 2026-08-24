@@ -1,6 +1,6 @@
 # Baize（白泽）— AI Coding Agent
 
-> **第一次使用？** 请先看 [快速开始](docs/guide/getting-started.md)（下载代码 → 安装环境 → 运行桌面版 → 配对浏览器）。
+> **第一次使用？** 请先看 [快速开始](docs/readme/getting-started.md)（下载代码 → 安装环境 → 运行桌面版 → 配对浏览器）。
 
 可本地运行的 AI 编程助手：聊天、读写代码、调用工具、浏览器自动化。支持 **桌面版**、**Web UI**、**VS Code / Cursor / IntelliJ** 集成。
 
@@ -10,10 +10,10 @@
 
 | 我是… | 从这里开始 |
 |--------|------------|
-| 新用户，只想跑起来试试浏览器自动化 | [快速开始](docs/guide/getting-started.md) |
-| 开发者，本地改前端 / 调试 agent | [本地开发](docs/guide/development.md) |
-| 想在 VS Code / Cursor 里用 | [VS Code 集成](docs/guide/integrations/vscode-acp.md) |
-| 想在 IntelliJ 里用 | [IntelliJ 集成](docs/guide/integrations/intellij-acp.md) |
+| 新用户，只想跑起来试试浏览器自动化 | [快速开始](docs/readme/getting-started.md) |
+| 开发者，本地改前端 / 调试 agent | [本地开发](docs/readme/development.md) |
+| 想在 VS Code / Cursor 里用 | [VS Code 集成](docs/readme/integrations/vscode-acp.md) |
+| 想在 IntelliJ 里用 | [IntelliJ 集成](docs/readme/integrations/intellij-acp.md) |
 | 运维，部署到公司内网 | [Docker 部署](deploy/README.md) |
 | 二次开发 / 加工具 | [Agent 源码说明](src/README.md) |
 
@@ -45,7 +45,7 @@ npm run desktop:dev
 
 > 打开 https://example.com ，告诉我页面标题
 
-需要登录的网站？见 [浏览器自动化指南](docs/guide/browser.md) 中的 extension 模式与 Pair。
+需要登录的网站？见 [浏览器自动化指南](docs/readme/browser.md) 中的 extension 模式与 Pair。
 
 ---
 
@@ -86,7 +86,7 @@ npm start                 # isolated 模式开箱即用
 npm run browser:pair      # 想用自己的 Chrome 时，取配对令牌
 ```
 
-完整说明见 [docs/guide/browser.md](docs/guide/browser.md)。
+完整说明见 [docs/readme/browser.md](docs/readme/browser.md)。
 
 ---
 
@@ -122,11 +122,11 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 
 | 主题 | 文档 |
 |------|------|
-| 零基础安装运行 | [docs/guide/getting-started.md](docs/guide/getting-started.md) |
-| 浏览器自动化 | [docs/guide/browser.md](docs/guide/browser.md) |
-| 本地 Web 开发 | [docs/guide/development.md](docs/guide/development.md) |
-| VS Code / Cursor | [docs/guide/integrations/vscode-acp.md](docs/guide/integrations/vscode-acp.md) |
-| IntelliJ IDEA | [docs/guide/integrations/intellij-acp.md](docs/guide/integrations/intellij-acp.md) |
+| 零基础安装运行 | [docs/readme/getting-started.md](docs/readme/getting-started.md) |
+| 浏览器自动化 | [docs/readme/browser.md](docs/readme/browser.md) |
+| 本地 Web 开发 | [docs/readme/development.md](docs/readme/development.md) |
+| VS Code / Cursor | [docs/readme/integrations/vscode-acp.md](docs/readme/integrations/vscode-acp.md) |
+| IntelliJ IDEA | [docs/readme/integrations/intellij-acp.md](docs/readme/integrations/intellij-acp.md) |
 | Docker 部署 | [deploy/README.md](deploy/README.md) |
 | 客户端 SDK | [client-sdk/](client-sdk/) |
 

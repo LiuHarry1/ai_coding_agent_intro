@@ -1,0 +1,51 @@
+<section class="slide-content slide-browser-demo" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑩</span><h2>Browser Automation — 实操 Demo</h2></div>
+  <p class="subtitle">一句话驱动 · <strong>navigate → snapshot → fill → click → 验证</strong></p>
+  <div class="cols">
+    <div>
+      <div class="chat-bubble">打开 http://localhost:5173/login，用 test@example.com / password123 登录，看是否成功</div>
+      <h3 style="margin-top:0.45em">Agent 执行流程</h3>
+      <div class="timeline">
+        <div class="tl-step">
+          <span class="tl-num">1</span>
+          <div class="tl-body"><span class="tl-tool">browser_navigate</span> 打开 /login → 返回 snapshot</div>
+        </div>
+        <div class="tl-step">
+          <span class="tl-num">2</span>
+          <div class="tl-body"><span class="tl-tool">browser_fill_form</span> 填 e3 邮箱 · e5 密码</div>
+        </div>
+        <div class="tl-step">
+          <span class="tl-num">3</span>
+          <div class="tl-body"><span class="tl-tool">browser_click(e7)</span> 点「登录」→ 页面跳转</div>
+        </div>
+        <div class="tl-step">
+          <span class="tl-num">4</span>
+          <div class="tl-body">读新 snapshot → <code>heading "欢迎回来"</code> ✓</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>Agent 看到的页面（snapshot）</h3>
+      <div class="mock-browser">
+        <div class="mock-bar">
+          <span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span>
+          <span class="mock-url">localhost:5173/login</span>
+        </div>
+        <div class="mock-page">
+          <div style="font-weight:700;margin-bottom:0.4em;color:#0f172a">登录</div>
+          <div class="mock-field">邮箱<span class="ref-tag">e3</span></div>
+          <div class="mock-field">密码<span class="ref-tag">e5</span></div>
+          <div class="mock-btn">登录<span class="ref-tag">e7</span></div>
+        </div>
+      </div>
+      <h3 style="margin-top:0.4em">可能的结果</h3>
+      <div class="outcome-row">
+        <div class="outcome ok"><strong>✓ 成功</strong>snapshot 出现「欢迎回来」</div>
+        <div class="outcome err"><strong>✗ 500</strong>network: POST /api/login</div>
+        <div class="outcome warn"><strong>⚠ 吞错</strong>500 但 UI 无提示</div>
+      </div>
+      <div class="callout" style="margin-top:0.35em"><strong>localhost → isolated 零配置</strong> · 已登录后台 → extension + 配对扩展</div>
+    </div>
+  </div>
+  <span class="path-tag">docs/readme/browser.md · .ai-agent/skills/verify-in-browser/SKILL.md</span>
+</section>

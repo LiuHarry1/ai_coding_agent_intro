@@ -1,0 +1,26 @@
+<section class="slide-content slide-loop" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">②</span><h2>Agent 核心循环 — 不是 Chat，是 Loop</h2></div>
+  <p class="subtitle">Coding Agent 的本质：<strong>你写的循环</strong>驱动 LLM 多步决策，直到无 tool call 或达上限。</p>
+  <div class="cols">
+    <div>
+      <h3>Chat vs Agent</h3>
+      <table class="vs-table">
+        <tr><td>普通 Chat</td><td>一问一答，结束</td></tr>
+        <tr><td>Coding Agent</td><td><code>query()</code> 内 <code>for (step…)</code> 循环</td></tr>
+        <tr><td>停止条件</td><td><code>toolCalls.length === 0</code></td></tr>
+      </table>
+      <img class="mini-diagram" src="assets/agent-loop.svg" alt="Agent 循环流程图" />
+    </div>
+    <div>
+      <h3>单步 runStep</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><span class="card-icon">📝</span><strong>sanitize</strong>消息整理 → API 格式</div>
+        <div class="card card-indigo"><span class="card-icon">🤖</span><strong>streamText</strong>调 LLM（ai SDK）</div>
+        <div class="card card-green"><span class="card-icon">🔧</span><strong>execute</strong>StreamingToolExecutor</div>
+        <div class="card card-green"><span class="card-icon">📡</span><strong>wire</strong>tool_call / tool_result → UI</div>
+      </div>
+      <div class="callout"><strong>建造要点：</strong>循环在 <code>query()</code>，不在模型里。Transport 只调 <code>runChatTurn()</code>。</div>
+      <span class="path-tag">src/core/query.ts · run-step.ts · turn/run-chat-turn.ts</span>
+    </div>
+  </div>
+</section>

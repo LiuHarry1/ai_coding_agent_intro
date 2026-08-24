@@ -1,0 +1,35 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑦</span><h2>扩展机制 — 不改核心也能定制</h2></div>
+  <p class="subtitle">子 Agent 分工 · Skill 注入领域知识 · MCP 接外部服务。</p>
+  <div class="cols cols-3">
+    <div>
+      <h3>子 Agent</h3>
+      <div class="card card-indigo" style="font-size:0.38em">
+        <span class="card-icon">🤖</span>
+        <strong>Agent 工具</strong>
+        <code>subagent_type</code> 分发 · Explore / Plan / general-purpose<br/>
+        磁盘：<code>.ai-agent/agents/*.md</code>
+      </div>
+    </div>
+    <div>
+      <h3>Skill / Commands</h3>
+      <div class="card card-green" style="font-size:0.38em">
+        <span class="card-icon">📚</span>
+        <strong>领域流程</strong>
+        <code>.ai-agent/skills/</code> 按需加载<br/>
+        <code>.ai-agent/commands/</code> slash 展开
+      </div>
+    </div>
+    <div>
+      <h3>MCP / Plugins</h3>
+      <div class="card card-sky" style="font-size:0.38em">
+        <span class="card-icon">🔌</span>
+        <strong>外部生态</strong>
+        <code>settings.json → mcpServers</code><br/>
+        deferred 经 ToolSearch 激活
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:0.45em">权限 <code>agent | ask | plan</code> + specialist <code>agentType</code> 限制工具 allowList。</div>
+  <span class="path-tag">tools/AgentTool/ · assembleToolPool.ts</span>
+</section>
