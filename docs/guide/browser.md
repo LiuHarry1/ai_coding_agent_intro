@@ -1,5 +1,7 @@
 # 浏览器自动化使用指南
 
+> 第一次安装和 Pair？先看 [快速开始](getting-started.md)。
+
 让 coding agent 打开网页、点击、填表、截图,并把页面上看到的东西读回来。典型用途是改完前端后让它自己验证效果,或者去某个后台页面把数据捞出来。
 
 ## 两种模式,先选一个
@@ -162,7 +164,7 @@ npm run browser:pair
 
 agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现 `catch(() => {})` 把错误吞了。
 
-只能看见 fetch 和 XMLHttpRequest,看不到文档导航本身和图片/脚本/样式表这些子资源——那需要 CDP 的事件通道,当前架构刻意没有(见[对比文档](docs/browser-automation-comparison.md)的落地复盘)。
+只能看见 fetch 和 XMLHttpRequest,看不到文档导航本身和图片/脚本/样式表这些子资源——那需要 CDP 的事件通道,当前架构刻意没有(见[对比文档](../dev/browser/automation-comparison.md)的落地复盘)。
 
 ---
 
@@ -213,6 +215,6 @@ agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现
 
 ## 延伸阅读
 
-- 扩展本身的说明:[`chrome-extension/README.md`](chrome-extension/README.md)
-- 各家方案的架构对比:[`browser-automation-comparison.md`](docs/browser-automation-comparison.md)
-- 让 agent 自己做前端验证的技能:`.ai-agent/skills/verify-in-browser/SKILL.md`
+- 扩展本身的说明:[`chrome-extension/README.md`](../../chrome-extension/README.md)
+- 各家方案的架构对比:[`automation-comparison.md`](../dev/browser/automation-comparison.md)
+- 让 agent 自己做前端验证的技能:[`../../.ai-agent/skills/verify-in-browser/SKILL.md`](../../.ai-agent/skills/verify-in-browser/SKILL.md)

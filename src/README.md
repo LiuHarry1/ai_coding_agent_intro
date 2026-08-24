@@ -71,4 +71,4 @@ tools/FooTool/
 
 ## 更多
 
-历史演进与能力说明见仓库 [`docs/`](../docs/)。集成测试：`npx tsx src/scripts/test-*.ts`。
+历史演进与能力说明见 [`docs/`](../docs/README.md)。集成测试：`npx tsx src/scripts/test-*.ts`。

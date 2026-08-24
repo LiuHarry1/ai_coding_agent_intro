@@ -57,7 +57,7 @@ Tenant 镜像打到 **`/etc/ai-agent/`**（可用 `AI_AGENT_MANAGED_DIR` 覆盖�
 | macOS | `/Library/Application Support/AiAgent` |
 | Windows | `C:\Program Files\AiAgent` |
 
-Agent base 镜像通过 `requirements.txt` 安装 **`mcp-server-fetch`**（venv: `/opt/venv`）。SSO seed 里 `mcp_server` 使用 `/opt/venv/bin/python -m mcp_server_fetch`。已有用户目录需手动改 settings 或删目录让 seed 重建。
+Agent base 镜像通过 `deploy/requirements.txt` 安装 **`mcp-server-fetch`**（venv: `/opt/venv`）。SSO seed 里 `mcp_server` 使用 `/opt/venv/bin/python -m mcp_server_fetch`。已有用户目录需手动改 settings 或删目录让 seed 重建。
 
 ---
 

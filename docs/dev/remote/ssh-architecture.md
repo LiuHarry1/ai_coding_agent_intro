@@ -27,7 +27,7 @@ Connect to Host… → 选 atsrws0049（或 user@host）
 | Agent 进程 | 与 HTTP API **同机** Node 进程；工具直接碰本地盘 |
 | 客户端 | Web SPA、Electron（本地起 agent）、CLI/ACP |
 | 多用户 | SSO 钉死 `/USERS_ROOT/<email>`，不是多机 |
-| Remote-SSH | **无运行时**；仅有 `cc_docs` 对 CC 的逆向笔记 |
+| Remote-SSH | **无运行时**；仅有 `reference/claude-code` 对 CC 的逆向笔记 |
 
 ### 1.3 设计原则（对齐 CC，而不是照搬完整 VS Code IDE）
 

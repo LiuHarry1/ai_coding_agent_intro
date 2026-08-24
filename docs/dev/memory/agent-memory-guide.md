@@ -324,12 +324,12 @@ A：当前实现里 remote 不会加载本地 Project Rules / Auto Memory 注入
 |------|-----------------|
 | 生命周期钩子 | `src/turn/memory-lifecycle.ts` |
 | Project Rules | `src/utils/rules-loader.ts` |
-| Auto Memory | `src/services/auto-memory/`，设计稿 `docs/cc_docs/auto-memory-design.md` |
-| Session Memory | `src/services/session-memory/`，设计稿 `docs/cc_docs/session-memory-design.md` |
+| Auto Memory | `src/services/auto-memory/`，设计稿 `docs/reference/claude-code/auto-memory-design.md` |
+| Session Memory | `src/services/session-memory/`，设计稿 `docs/reference/claude-code/session-memory-design.md` |
 | Compaction 编排 | `src/services/compact/autoCompact.ts` |
 | Micro-compaction | `src/services/compact/microCompact.ts` |
 | 配置类型 | `src/core/types.ts` 里的 `CompactionConfig` / `SessionMemoryConfig` / `AutoMemoryConfig` |
-| Claude Code 对照长文 | `docs/cc_docs/claude-code-memory-systems.md`（上游概念，不完全等于本仓库） |
+| Claude Code 对照长文 | `docs/reference/claude-code/claude-code-memory-systems.md`（上游概念，不完全等于本仓库） |
 
 ---
 

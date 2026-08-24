@@ -619,4 +619,4 @@ src/components/messages/CompactBoundaryMessage.tsx
 - `compact.ts` / `autoCompact.ts` / `microCompact.ts` — 核心逻辑子集
 - 不含 Session Memory、Reactive、Cached MC、Snip 等实验/内部特性
 
-更完整的图文说明见：`docs/session-compacting-guide.html`（面向 src 实现）。
+更完整的图文说明见：`docs/dev/html/session-compacting-guide.html`（面向 src 实现）。

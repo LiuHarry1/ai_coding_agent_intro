@@ -532,15 +532,15 @@ Managed 策略层：`/etc/ai-agent/`（skills、agents、settings），优先级
 
 ## 22. 相关文档
 
-仓库 `docs/` 下有更细的专题指南（多数含 HTML 版图解）：
+仓库 `docs/` 下有更细的专题指南（多数含 HTML 版图解），索引见 [docs/dev/README.md](../dev/README.md)：
 
-- [coding-agent-architecture-guide.html](../coding-agent-architecture-guide.html) — SVG 架构图集
-- [three-tier-model-architecture.html](../three-tier-model-architecture.html) — 三档模型
-- [deferred-mcp-tools-skills-guide.html](../deferred-mcp-tools-skills-guide.html) — Deferred / ToolSearch
-- [session-compacting-guide.html](../session-compacting-guide.html) — Compaction
-- [skill-loading-guide.html](../skill-loading-guide.html) — Skill 加载
-- [agent-memory-guide.md](../agent-memory-guide.md) — 记忆体系入门
-- [agent-remote-execution-architecture.html](../agent-remote-execution-architecture.html) — 远程执行
+- [coding-agent-architecture-guide.html](../dev/html/coding-agent-architecture-guide.html) — SVG 架构图集
+- [three-tier-model-architecture.html](../dev/html/three-tier-model-architecture.html) — 三档模型
+- [deferred-mcp-tools-skills-guide.html](../dev/html/deferred-mcp-tools-skills-guide.html) — Deferred / ToolSearch
+- [session-compacting-guide.html](../dev/html/session-compacting-guide.html) — Compaction
+- [skill-loading-guide.html](../dev/html/skill-loading-guide.html) — Skill 加载
+- [agent-memory-guide.md](../dev/memory/agent-memory-guide.md) — 记忆体系入门
+- [agent-remote-execution-architecture.html](../dev/html/agent-remote-execution-architecture.html) — 远程执行
 - [deploy/README.md](../../deploy/README.md) — Docker 部署
 
 ---

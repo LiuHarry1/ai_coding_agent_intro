@@ -259,5 +259,5 @@ npx tsx src/scripts/test-bash-tasks-live.ts   # 需后端在跑
 
 ## 10. 相关文档
 
-- LLM 标签（含 `task-notification`）：[`docs/cc_docs/llm-prompt-xml-tags.md`](./cc_docs/llm-prompt-xml-tags.md)
-- HTML 版：[`docs/bash-task-system.html`](./bash-task-system.html)
+- LLM 标签（含 `task-notification`）：[`llm-prompt-xml-tags.md`](../../reference/claude-code/llm-prompt-xml-tags.md)
+- HTML 版：[`bash-task-system.html`](../html/bash-task-system.html)
