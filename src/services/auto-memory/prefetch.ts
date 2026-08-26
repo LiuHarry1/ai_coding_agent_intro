@@ -163,7 +163,12 @@ export function startRelevantMemoryPrefetch(
     }
   }
 
-  if (!input || !/\s/.test(input.trim())) {
+  if (!input?.trim()) {
+    return undefined
+  }
+  const trimmed = input.trim()
+  // CC skips single-word prompts; CJK often has no spaces — use length threshold.
+  if (!/\s/.test(trimmed) && trimmed.length < 10) {
     return undefined
   }
 

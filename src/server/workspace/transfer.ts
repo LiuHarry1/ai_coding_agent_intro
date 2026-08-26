@@ -48,6 +48,8 @@ const MIME_BY_EXT: Record<string, string> = {
   '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
   '.pdf': 'application/pdf',
   '.txt': 'text/plain; charset=utf-8',
   '.json': 'application/json',

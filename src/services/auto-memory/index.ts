@@ -63,7 +63,12 @@ export {
 } from './prefetch.js'
 export type { MemoryPrefetch, StartPrefetchOpts } from './prefetch.js'
 
-export { sideQueryJson, parseJsonFromModelText } from './sideQuery.js'
+export {
+  sideQueryJson,
+  parseJsonFromModelText,
+  selectedMemoriesJsonSchema,
+} from './sideQuery.js'
+export type { SelectedMemoriesResult } from './sideQuery.js'
 
 export {
   loadAutoMemoryPrompt,

@@ -4,6 +4,7 @@ import ToolCallLine from './ToolCallLine.jsx'
 import { fileName } from '../lib/utils.js'
 import { liveToolSubtitle } from '../lib/tool-density.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
+import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
 
 /**
  * Read card — CC dual-channel UI path:
@@ -18,6 +19,13 @@ function stripDecorations(content) {
   const lines = content.split('\n')
   const body = lines[0]?.includes('(lines ') ? lines.slice(1) : lines
   return body.map(l => l.replace(/^\s*\d+│/, '')).join('\n')
+}
+
+function formatBytes(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return null
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function fromToolUseResult(tur) {
@@ -40,9 +48,17 @@ function fromToolUseResult(tur) {
     }
   }
   if (tur.type === 'image') {
+    const file = tur.file || {}
+    const mediaType = file.mediaType || 'image/png'
+    const base64 = typeof file.base64 === 'string' ? file.base64 : ''
+    const src =
+      base64.length > 0 ? `data:${mediaType};base64,${base64}` : null
     return {
       kind: 'image',
-      label: `[Image: ${tur.file?.filePath}, ${tur.file?.mediaType}]`,
+      label: `[Image: ${file.filePath || ''}, ${mediaType}]`,
+      src,
+      mediaType,
+      sizeLabel: formatBytes(file.originalSize),
     }
   }
   if (tur.type === 'pdf' || tur.type === 'pdf_pages') {
@@ -65,7 +81,7 @@ function fromToolUseResult(tur) {
 }
 
 export default function ReadFileCard({ part }) {
-  const [expanded, setExpanded] = useState(false)
+  const [lightbox, setLightbox] = useState(null)
   const args = part.args || {}
   const result = part.result
   const isDone = part.status === 'done'
@@ -81,6 +97,11 @@ export default function ReadFileCard({ part }) {
     [part.toolUseResult],
   )
 
+  const hasImage = Boolean(header?.kind === 'image' && header.src)
+  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone, {
+    expandOnceWhen: isDone && !isError && hasImage,
+  })
+
   let rangeLabel = ''
   if (header?.kind === 'text') {
     if (header.total === 0) {
@@ -94,7 +115,9 @@ export default function ReadFileCard({ part }) {
       }
     }
   } else if (header?.kind === 'image') {
-    rangeLabel = 'image'
+    rangeLabel = header.sizeLabel
+      ? `image · ${header.sizeLabel}`
+      : 'image'
   } else if (header?.kind === 'unchanged') {
     rangeLabel = 'unchanged'
   } else if (header?.kind === 'pdf') {
@@ -118,20 +141,31 @@ export default function ReadFileCard({ part }) {
         ? 'File exists but is empty.'
         : `Offset ${header.start} is past end of file (${header.total} lines).`
       : ''
+  // Images render as <img>; keep text summary only when bytes are missing.
   const summaryBody =
-    isDone && !isError && header && header.kind !== 'text'
+    isDone && !isError && header && header.kind !== 'text' && header.kind !== 'image'
       ? header.content || header.label || ''
       : emptyTextNote
+  const imageFallbackLabel =
+    isDone && !isError && header?.kind === 'image' && !header.src
+      ? header.label
+      : ''
 
   const liveSub = !isDone ? liveToolSubtitle(part) : null
   const action = toolActionLabel('read', { loading: !isDone, hasError: isError })
   const title = isError ? toolErrorDetails(fName, true) : fName
+  const hasBody =
+    Boolean(codeBody) ||
+    Boolean(summaryBody) ||
+    Boolean(imageFallbackLabel) ||
+    hasImage ||
+    isError
 
   return (
     <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
       <ToolCallLine
         expanded={expanded}
-        onToggle={() => setExpanded(v => !v)}
+        onToggle={hasBody ? toggleExpanded : undefined}
         label={action}
         title={title}
         titleTooltip={filePath || ''}
@@ -153,8 +187,25 @@ export default function ReadFileCard({ part }) {
       {expanded && isDone && !isError && summaryBody && (
         <pre className='tool-row-body'>{summaryBody}</pre>
       )}
+      {expanded && isDone && !isError && hasImage && (
+        <div className='read-file-shot'>
+          <img
+            src={header.src}
+            alt={fName}
+            onClick={() => setLightbox(header.src)}
+          />
+        </div>
+      )}
+      {expanded && isDone && !isError && imageFallbackLabel && (
+        <pre className='tool-row-body'>{imageFallbackLabel}</pre>
+      )}
       {expanded && isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
+      )}
+      {lightbox && (
+        <div className='lightbox' onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt={fName} />
+        </div>
       )}
     </div>
   )

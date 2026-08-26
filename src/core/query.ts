@@ -1,5 +1,6 @@
 import type { CompactEnrichment } from '../services/compact/index.js'
 import { ensureMessageUuid, ensureMessageUuids } from '../services/session-memory/index.js'
+import { consumeMemoryPrefetchIfReady } from '../services/auto-memory/prefetch.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
 import { extractPartialResult } from '../tools/AgentTool/finalizeAgentTool.js'
 import { finalizeInterruptedTurn } from '../utils/interrupt.js'
@@ -140,6 +141,23 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
       }
       wire.stepStart(step)
       const stepStart = Date.now()
+
+      if (memoryPrefetch && memoryPrefetch.consumedOnIteration === -1) {
+        await memoryPrefetch.promise
+        const memAtts = await consumeMemoryPrefetchIfReady(
+          memoryPrefetch,
+          toolUseContext?.readFileState,
+          step,
+        )
+        for (const att of memAtts) {
+          messages.push(ensureMessageUuid(att))
+        }
+        if (memAtts.length > 0) {
+          console.log(
+            `[${agentLogTag(logLabel)}] relevant_memories attached count=${memAtts.length} step=${step}`,
+          )
+        }
+      }
 
       await preTurn({
         messages,

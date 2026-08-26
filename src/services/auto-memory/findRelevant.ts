@@ -10,7 +10,7 @@ import {
   scanMemoryFiles,
   type MemoryFileMeta,
 } from './scan.js'
-import { sideQueryJson } from './sideQuery.js'
+import { selectedMemoriesJsonSchema, sideQueryJson } from './sideQuery.js'
 
 export type RelevantMemory = {
   path: string
@@ -35,9 +35,7 @@ Return a list of filenames for the memories that will clearly be useful as the a
 - If you are unsure if a memory will be useful in processing the user's query, then do not include it in your list. Be selective and discerning.
 - If there are no memories in the list that would clearly be useful, feel free to return an empty list.
 - If a list of recently-used tools is provided, do not select memories that are usage reference or API documentation for those tools (the agent is already exercising them). DO still select memories containing warnings, gotchas, or known issues about those tools — active use is exactly when those matter.
-
-Respond with a single JSON object only — no prose, no markdown fences.
-Format: {"selected_memories":["file.md",...]}`
+`
 
 export type SelectRelevantFn = (
   query: string,
@@ -100,20 +98,17 @@ export function createSelectRelevantMemories(opts: {
       recentTools.length > 0
         ? `\n\nRecently used tools: ${recentTools.join(', ')}`
         : ''
-    const parsed = await sideQueryJson<{ selected_memories?: string[] }>({
+    const parsed = await sideQueryJson({
       provider: opts.provider,
       modelId: opts.modelId,
       system: SELECT_MEMORIES_SYSTEM_PROMPT,
       user: `Query: ${query}\n\nAvailable memories:\n${manifest}${toolsSection}`,
+      schema: selectedMemoriesJsonSchema,
       maxOutputTokens: 256,
       signal,
     })
-    if (!parsed?.selected_memories || !Array.isArray(parsed.selected_memories)) {
-      return []
-    }
-    return parsed.selected_memories.filter(
-      (f): f is string => typeof f === 'string' && validFilenames.has(f),
-    )
+    if (!parsed) return []
+    return parsed.selected_memories.filter(f => validFilenames.has(f))
   }
 }
 

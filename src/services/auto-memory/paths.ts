@@ -99,11 +99,42 @@ export function isAutoMemPath(absPath: string, memPath: string): boolean {
   return isPathInWorkspace(path.resolve(absPath), path.resolve(memPath))
 }
 
+/** Memory dirs are group-readable (755) so Glob/rg and multi-process deploys can traverse them. */
+const AUTO_MEM_DIR_MODE = 0o755
+const AUTO_MEM_FILE_MODE = 0o644
+
+function chmodDirBestEffort(dir: string): void {
+  try {
+    fs.chmodSync(dir, AUTO_MEM_DIR_MODE)
+  } catch {
+    // Best-effort: repair legacy 0700 dirs on next session inject.
+  }
+}
+
+/** Repair traverse perms on memory dir and its .ai-agent/projects/* ancestors. */
+function repairMemoryDirTreePermissions(memPath: string): void {
+  let dir = path.resolve(memPath)
+  for (let i = 0; i < 4 && dir; i++) {
+    chmodDirBestEffort(dir)
+    const base = path.basename(dir)
+    if (base === getAppDirName() || base === 'projects') {
+      break
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+}
+
 export function ensureAutoMemDir(memPath: string): void {
-  fs.mkdirSync(memPath, { recursive: true, mode: 0o700 })
+  fs.mkdirSync(memPath, { recursive: true, mode: AUTO_MEM_DIR_MODE })
+  repairMemoryDirTreePermissions(memPath)
   const entry = getAutoMemEntrypoint(memPath)
   if (!fs.existsSync(entry)) {
-    fs.writeFileSync(entry, '', { encoding: 'utf-8', mode: 0o600 })
+    fs.writeFileSync(entry, '', {
+      encoding: 'utf-8',
+      mode: AUTO_MEM_FILE_MODE,
+    })
   }
 }
 

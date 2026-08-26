@@ -7,8 +7,9 @@
 
 import { tool } from 'ai'
 import { z } from 'zod'
+import * as fs from 'fs'
 import * as path from 'path'
-import { glob as runGlob } from '../../utils/glob.js'
+import { buildGlobRgArgs, glob as runGlob } from '../../utils/glob.js'
 import { resolvePath } from '../utils.js'
 import type {
   DualChannelToolResult,
@@ -22,11 +23,7 @@ import {
 import { GLOB_TOOL_NAME } from '../../constants/tool_names.js'
 import { AGENT_TOOL_NAME } from '../../constants/tool_names.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
-import {
-  envBool,
-  hasDotSegment,
-  isInsideExcludedDir,
-} from '../../constants/file_filters.js'
+import { isInsideExcludedDir } from '../../constants/file_filters.js'
 
 const DESCRIPTION = `- Fast file pattern matching tool that works with any codebase size
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
@@ -48,6 +45,53 @@ export type GlobOutput = z.infer<typeof GlobOutputSchema>
 
 let diagnosticsLogged = false
 
+const HAS_GLOB_METACHAR = /[*?[{]/
+
+type DirProbe = {
+  resolveAbs: (rel: string) => { abs: string } | { error: string }
+  isDirectory: (abs: string) => Promise<boolean>
+}
+
+function localDirProbe(cwd: string): DirProbe {
+  return {
+    resolveAbs: rel => resolvePath(cwd, rel),
+    async isDirectory(abs) {
+      try {
+        return fs.statSync(abs).isDirectory()
+      } catch {
+        return false
+      }
+    },
+  }
+}
+
+/**
+ * Models often pass a directory path as "pattern" (e.g. .ai-agent/.../memory)
+ * with no wildcards. Ripgrep treats that as a literal file name and returns
+ * nothing. Rewrite to path + recursive glob when the pattern resolves to a dir.
+ *
+ * `probe` must stat on the same machine that will run rg (local fs vs SSH Worker).
+ */
+async function normalizeDirectoryPattern(
+  pattern: string,
+  searchPath: string | undefined,
+  probe: DirProbe,
+): Promise<{ pattern: string; searchPath?: string }> {
+  if (searchPath || HAS_GLOB_METACHAR.test(pattern)) {
+    return { pattern, searchPath }
+  }
+  const resolved = probe.resolveAbs(pattern)
+  if ('error' in resolved) return { pattern, searchPath }
+  try {
+    if (await probe.isDirectory(resolved.abs)) {
+      return { pattern: '**/*', searchPath: pattern }
+    }
+  } catch {
+    // Not a readable dir — keep original pattern for rg error/empty handling.
+  }
+  return { pattern, searchPath }
+}
+
 function mapGlobOutput(
   output: GlobOutput,
   toolUseID: string,
@@ -55,7 +99,7 @@ function mapGlobOutput(
   if (output.filenames.length === 0) {
     const msg =
       (output.filteredCount ?? 0) > 0
-        ? `No files found (filtered ${output.filteredCount} matches in excluded dirs like .git/node_modules; if you really want those, search inside that directory directly via the \`path\` arg).`
+        ? `No files found (filtered ${output.filteredCount} matches in excluded dirs like .git/node_modules; if you really want those, search inside that directory directly via the 'path' arg).`
         : 'No files found'
     return { tool_use_id: toolUseID, type: 'tool_result', content: msg }
   }
@@ -98,8 +142,8 @@ export const definition: ToolDefinition = {
           ),
       }),
       execute: async ({
-        pattern,
-        path: searchPath,
+        pattern: rawPattern,
+        path: rawSearchPath,
       }: {
         pattern: string
         path?: string
@@ -114,13 +158,36 @@ export const definition: ToolDefinition = {
             isWorkerExecutionBackend(execution) &&
             execution.environmentId === 'local'
           )
+        let probe: DirProbe = localDirProbe(cwd)
+        if (useRemoteRg && execution) {
+          const remote = execution
+          probe = {
+            resolveAbs: rel => {
+              try {
+                const abs = remote.resolve(cwd, rel)
+                remote.assertInWorkspace(cwd, abs, 'read')
+                return { abs }
+              } catch (err) {
+                return {
+                  error: err instanceof Error ? err.message : String(err),
+                }
+              }
+            },
+            isDirectory: abs => remote.isDirectory(abs),
+          }
+        }
+        const { pattern, searchPath } = await normalizeDirectoryPattern(
+          rawPattern,
+          rawSearchPath,
+          probe,
+        )
         if (useRemoteRg && execution) {
           try {
             const baseRel = searchPath ?? '.'
             const searchDir = execution.resolve(cwd, baseRel)
             execution.assertInWorkspace(cwd, searchDir, 'read')
             const lines = await execution.rg(
-              ['--files', '-g', pattern],
+              buildGlobRgArgs(pattern),
               searchDir,
               { timeoutMs: 60_000 },
             )
@@ -197,10 +264,10 @@ export const definition: ToolDefinition = {
           )
         }
 
-        const skipHidden = !envBool(process.env.GLOB_HIDDEN, true)
-        const allKept = allFilenames.filter(
-          p => !isInsideExcludedDir(p) && !(skipHidden && hasDotSegment(p)),
-        )
+        // Hidden paths (.ai-agent, etc.) are included via rg --hidden in
+        // utils/glob.ts (GLOB_HIDDEN defaults true). No extra dot-segment
+        // post-filter — matches Claude Code GlobTool behavior.
+        const allKept = allFilenames.filter(p => !isInsideExcludedDir(p))
         const filteredCount = allFilenames.length - allKept.length
         const filenames = allKept.slice(0, DEFAULT_LIMIT)
         const truncatedAfterFilter =

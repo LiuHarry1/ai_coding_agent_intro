@@ -13,8 +13,12 @@ module.exports = {
     'src/**/*',
     'protocol/**/*',
     'client/web/dist/**/*',
+    // Bundled execution-plane worker (built by `npm run build:worker`)
+    'dist/worker/**/*',
     'brand.json',
     'package.json',
+    // Production deps only by default; `tsx` must be in dependencies
+    // because the packaged app boots the agent via `tsx start.js`.
     'node_modules/**/*',
   ],
   asar: false,

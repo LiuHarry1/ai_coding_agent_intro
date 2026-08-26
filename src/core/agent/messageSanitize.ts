@@ -8,6 +8,7 @@ import type {
 import { isAttachmentMessage, isRoleMessage } from '../types.js'
 import type { IProvider } from '../llm/types.js'
 import { toolResultOutputToText } from '../../utils/tool-result-content.js'
+import { reviveBuffersInMessages } from '../../session/json-serialize.js'
 
 /**
  * Move images out of `tool_result` content and into a meta user message that
@@ -76,7 +77,7 @@ export function projectMessagesForApi(
   messages: Message[],
   provider?: IProvider,
 ): RoleMessage[] {
-  const projected = messages
+  const projected = reviveBuffersInMessages(messages)
     .filter(isRoleMessage)
     .map(m => {
       if (m.role !== 'tool' || !Array.isArray(m.content)) return m

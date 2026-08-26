@@ -11,6 +11,13 @@ import {
   getToolResultFilePath,
 } from '../core/session-paths.js'
 import { normalizeWorkspacePath } from '../core/workspace-path.js'
+import {
+  parseSessionJsonLine,
+  reviveBuffersInMessages,
+  sessionJsonReplacer,
+  sessionJsonReviver,
+  stringifySessionJsonLine,
+} from './json-serialize.js'
 
 const sessions = new Map<string, Session>()
 
@@ -194,7 +201,10 @@ export function appendMessage(sessionId: string, message: Message): void {
 export function appendCompaction(sessionId: string, messages: Message[]): void {
   // Snapshot so later in-memory mutations (new assistant/tool msgs) don't
   // alter the on-disk checkpoint.
-  const snapshot = JSON.parse(JSON.stringify(messages)) as Message[]
+  const snapshot = JSON.parse(
+    JSON.stringify(messages, sessionJsonReplacer),
+    sessionJsonReviver,
+  ) as Message[]
   appendLine(sessionId, {
     type: 'compacted',
     messages: snapshot,
@@ -225,12 +235,12 @@ export function appendAgentChange(sessionId: string, session: Session): void {
 
 function appendLine(sessionId: string, data: Record<string, unknown>): void {
   fs.mkdirSync(SESSION_DIR, { recursive: true })
-  fs.appendFileSync(sessionPath(sessionId), JSON.stringify(data) + '\n')
+  fs.appendFileSync(sessionPath(sessionId), stringifySessionJsonLine(data) + '\n')
 }
 
 function restoreFromDisk(id: string): Session {
   const raw = fs.readFileSync(sessionPath(id), 'utf-8').trim()
-  const lines = raw.split('\n').map((l: string) => JSON.parse(l))
+  const lines = raw.split('\n').map((l: string) => parseSessionJsonLine(l))
 
   const session: Session = {
     id,
@@ -298,11 +308,13 @@ function restoreFromDisk(id: string): Session {
       // Checkpoint: discard everything accumulated so far and adopt the
       // post-compaction snapshot. Subsequent `message` lines append normally.
       session.messages = Array.isArray(line.messages)
-        ? (line.messages as Message[])
+        ? reviveBuffersInMessages(line.messages as Message[])
         : []
     } else if (line.type === 'message') {
       const { type: _, timestamp: __, ...msg } = line
-      session.messages.push(msg as Message)
+      session.messages.push(
+        ...reviveBuffersInMessages([msg as Message]),
+      )
     } else if (line.type === 'attachment') {
       const { timestamp: _, ...msg } = line
       session.messages.push(msg as Message)

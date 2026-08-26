@@ -57,7 +57,7 @@ Tenant 镜像打到 **`/etc/ai-agent/`**（可用 `AI_AGENT_MANAGED_DIR` 覆盖�
 | macOS | `/Library/Application Support/AiAgent` |
 | Windows | `C:\Program Files\AiAgent` |
 
-Agent base 镜像通过 `deploy/requirements.txt` 安装 **`mcp-server-fetch`**（venv: `/opt/venv`）。SSO seed 里 `mcp_server` 使用 `/opt/venv/bin/python -m mcp_server_fetch`。已有用户目录需手动改 settings 或删目录让 seed 重建。
+Agent base 镜像通过 `deploy/requirements.txt` 安装 **`mcp-server-fetch`** 与 **`matplotlib`**（venv: `/opt/venv`）。SSO seed 里 `mcp_server` 使用 `/opt/venv/bin/python -m mcp_server_fetch`。已有用户目录需手动改 settings 或删目录让 seed 重建。matplotlib 用于 bash 出图后由 Read 工具在聊天里直接展示 PNG。
 
 ---
 
@@ -166,6 +166,27 @@ docker compose -f deploy/docker-compose.admin.yml down            # 停止
 ```
 
 (sso 模式把文件名换成 `docker-compose.sso.yml`。)
+
+## 图表预览（ECharts）
+
+设计参考 [search2chart-mcp](https://github.com/iqingyoung/search2chart-mcp) 的「写 HTML 文件 + HTTP 预览链接」交付方式；Skill 工作流参考 [echarts-chartpage](https://github.com/RiverThrimp/echarts-chartpage)。
+
+Agent 通过 `echarts-chart` skill 将交互图表写入 workspace 的 `charts/` 目录，并在回复里给出 preview 链接：
+
+```
+{AGENT_PUBLIC_URL}/workspace/preview?path={encodeURIComponent(absPath)}
+```
+
+- `GET /workspace` 返回 `previewBaseUrl`（来自 agent 容器环境变量 `AGENT_PUBLIC_URL`）
+- 图表 HTML 为单文件，ECharts 5 CDN；浏览器需能访问 CDN（内网可改 skill 模板中的 CDN URL）
+- **admin 模式**：agent 无应用层鉴权，preview 链接可直接在新标签打开
+- **sso 模式**：`GET /workspace/preview` 在 auth gate 之前放行（仅 `.html` + workspace 路径校验），markdown 预览链接可在新标签直接打开；agent 容器需设置 `AGENT_PUBLIC_URL`（如 `http://10.150.115.69:4567`）
+
+本地开发可在启动 agent 前设置：
+
+```bash
+export AGENT_PUBLIC_URL=http://localhost:4567
+```
 
 ## 排错
 

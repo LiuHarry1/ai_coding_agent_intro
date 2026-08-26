@@ -456,3 +456,19 @@
 [data-theme="light"] .file-change-live { background: var(--bg-secondary); }
 [data-theme="light"] .file-change-live-meta { background: var(--bg-tertiary); color: var(--text-secondary); }
 [data-theme="light"] .file-change-live-code { color: var(--text-primary); }
+
+/* ── Read image (matplotlib PNG / screenshots via Read tool) ── */
+.read-file-shot {
+  margin: 4px 0 6px 18px;
+}
+.read-file-shot img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  object-position: top left;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  cursor: zoom-in;
+}

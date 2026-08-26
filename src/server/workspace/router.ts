@@ -13,6 +13,7 @@ import {
 } from './fs-ops.js'
 import { gitStatus, gitDiff } from './git.js'
 import { handleUpload, handleDownload } from './transfer.js'
+import { getPreviewBaseUrl, handlePreview } from './preview.js'
 import { isPathInWorkspace } from '../../core/workspace.js'
 import {
   assertAccessibleResolved,
@@ -129,7 +130,12 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
     try {
       // GET /workspace
       if (method === 'GET' && url === '/workspace') {
-        sendJSON(res, 200, { workspace: root })
+        const meta: { workspace: string; previewBaseUrl?: string } = {
+          workspace: root,
+        }
+        const previewBaseUrl = getPreviewBaseUrl()
+        if (previewBaseUrl) meta.previewBaseUrl = previewBaseUrl
+        sendJSON(res, 200, meta)
         return true
       }
 
@@ -183,6 +189,14 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
           return true
         }
         sendJSON(res, 200, readFile(safe(p)))
+        return true
+      }
+
+      // GET /workspace/preview?path=  — search2chart-style HTTP HTML preview
+      if (method === 'GET' && url.startsWith('/workspace/preview')) {
+        const params = new URL(url, `http://${req.headers.host}`).searchParams
+        const p = params.get('path')
+        await handlePreview(res, p, safe)
         return true
       }
 

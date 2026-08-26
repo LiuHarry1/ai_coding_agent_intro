@@ -1,4 +1,3 @@
-import * as path from 'path'
 import { createHash } from 'crypto'
 import type { LspServerConfig } from '../../core/types.js'
 import {
@@ -7,6 +6,7 @@ import {
 } from './server-manager.js'
 import type { LspServerState } from './types.js'
 import { resetAllLSPDiagnosticState } from './LSPDiagnosticRegistry.js'
+import { normalizeWorkspacePath } from '../../core/workspace-path.js'
 
 const managers = new Map<string, LspServerManager>()
 
@@ -27,13 +27,9 @@ export function hasLspServers(
   return Boolean(servers && Object.keys(servers).length > 0)
 }
 
-/** Normalize workspace cwd without Win32-resolving remote POSIX paths. */
+/** @deprecated Prefer normalizeWorkspacePath from core/workspace.js */
 export function normalizeWorkspaceCwd(cwd: string): string {
-  const normalized = cwd.replace(/\\/g, '/')
-  if (normalized.startsWith('/') && !/^[a-zA-Z]:/.test(cwd)) {
-    return path.posix.normalize(normalized)
-  }
-  return path.resolve(cwd)
+  return normalizeWorkspacePath(cwd)
 }
 
 export function getLspWorkspaceKey(

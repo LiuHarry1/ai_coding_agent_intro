@@ -1,43 +1,60 @@
 /**
  * Single-shot side query for memory relevance selection (no tool loop).
+ * sideQuery + json_schema output_format in findRelevantMemories.
  */
-import { generateText } from 'ai'
+import { generateText, Output } from 'ai'
+import { jsonSchema, type FlexibleSchema } from '@ai-sdk/provider-utils'
 import type { IProvider } from '../../core/llm/types.js'
 
-export type SideQueryJsonOpts = {
+/** CC findRelevantMemories output_format.schema */
+export const selectedMemoriesJsonSchema = jsonSchema<{
+  selected_memories: string[]
+}>({
+  type: 'object',
+  properties: {
+    selected_memories: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['selected_memories'],
+  additionalProperties: false,
+})
+
+export type SelectedMemoriesResult = {
+  selected_memories: string[]
+}
+
+export type SideQueryJsonOpts<T> = {
   provider: IProvider
   modelId: string
   system: string
   user: string
+  schema: FlexibleSchema<T>
   maxOutputTokens?: number
   signal?: AbortSignal
 }
 
 /**
- * Run a small completion and parse JSON from the response text.
- * Strips optional ```json fences. Returns null on failure/abort.
+ * CC-style side query: system + user messages, strict json_schema via Output.object.
+ * Does not use streamTextExtras — scoped to side queries only.
  */
 export async function sideQueryJson<T>(
-  opts: SideQueryJsonOpts,
+  opts: SideQueryJsonOpts<T>,
 ): Promise<T | null> {
   try {
     const result = await generateText({
       model: opts.provider.chatModel(opts.modelId),
       system: opts.system,
-      prompt: opts.user,
+      messages: [{ role: 'user', content: opts.user }],
       maxOutputTokens: opts.maxOutputTokens ?? 256,
       abortSignal: opts.signal,
-      ...opts.provider.streamTextExtras(),
+      output: Output.object({ schema: opts.schema }),
     })
-    const text = result.text?.trim() ?? ''
-    if (!text) return null
-    const parsed = parseJsonFromModelText<T>(text)
-    if (parsed === null) {
+    if (result.output == null) {
       console.warn(
-        `[auto-memory] sideQueryJson failed: no JSON object in response`,
+        `[auto-memory] sideQueryJson failed: no structured output in response`,
       )
+      return null
     }
-    return parsed
+    return result.output
   } catch (e) {
     if (opts.signal?.aborted) return null
     const msg = e instanceof Error ? e.message : String(e)

@@ -60,6 +60,8 @@ services:
       SERVE_STATIC: "0"
       # ── CORS allowlist: the browser calls this API from the web origin ────
       ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://localhost:9999}"
+      # ── Public URL for ECharts preview links (GET /workspace/preview) ───
+      AGENT_PUBLIC_URL: "${AGENT_PUBLIC_URL:-http://localhost:4567}"
       # ── Provider secrets (pass via host env or deploy/.env) ──────────────
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"

@@ -113,6 +113,13 @@ export function createRouter({ staticDir }: RouterOptions) {
       return
     }
 
+    // ECharts / HTML chart preview — allow unauthenticated GET so SSO users can
+    // open markdown preview links in a new tab (Bearer JWT lives in SPA storage).
+    // Still .html-only + workspace path checks inside workspaceRouter.
+    if (method === 'GET' && url?.startsWith('/workspace/preview')) {
+      if (await workspaceRouter(req, res)) return
+    }
+
     // ── Auth gate (only when AUTH_ENABLED=true) ──────────────────────────
     // Verifies the bearer token and pins `req.userWorkspace`. Everything
     // below this line is protected; `/health` and OPTIONS above are not.

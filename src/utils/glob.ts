@@ -70,6 +70,21 @@ export function extractGlobBaseDirectory(pattern: string): {
   return { baseDir, relativePattern }
 }
 
+/** Ripgrep argv for file-listing glob (shared by utils/glob + remote Worker rg). */
+export function buildGlobRgArgs(searchPattern: string): string[] {
+  const noIgnore = envBool(process.env.GLOB_NO_IGNORE, true)
+  const hidden = envBool(process.env.GLOB_HIDDEN, true)
+  return [
+    '--files',
+    '--glob',
+    searchPattern,
+    '--sort=modified',
+    ...(noIgnore ? ['--no-ignore'] : []),
+    ...(hidden ? ['--hidden'] : []),
+    ...buildRgExcludeGlobs('vcs+deps'),
+  ]
+}
+
 export async function glob(
   filePattern: string,
   cwd: string,
@@ -101,19 +116,7 @@ export async function glob(
   // env defaults (true) match the historical behavior — see comment block
   // above. Use `envBool` (not naive equality) so `GLOB_NO_IGNORE=false`
   // works even when tsx leaves a trailing inline `# comment` in the value.
-  const noIgnore = envBool(process.env.GLOB_NO_IGNORE, true)
-  const hidden = envBool(process.env.GLOB_HIDDEN, true)
-  const args = [
-    '--files',
-    '--glob',
-    searchPattern,
-    '--sort=modified',
-    ...(noIgnore ? ['--no-ignore'] : []),
-    ...(hidden ? ['--hidden'] : []),
-    // Even with `--no-ignore`, we want VCS + dependency dirs out of glob
-    // results — they're never the source the agent is hunting for.
-    ...buildRgExcludeGlobs('vcs+deps'),
-  ]
+  const args = buildGlobRgArgs(searchPattern)
 
   const allPaths = await ripGrep(args, searchDir, abortSignal)
 

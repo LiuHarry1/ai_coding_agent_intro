@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chart</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;padding:12px;background:#fafaf7;color:#222}
+  #controls{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:13px;color:#444}
+  #controls label{display:flex;gap:4px;align-items:center}
+  #controls select,#controls input{font-size:13px;padding:3px 6px;border:1px solid #d9d9d9;border-radius:6px}
+  #chart{width:720px;height:420px;max-width:100%}
+</style>
+</head>
+<body>
+<div id="controls">
+  <label>类型
+    <select id="type">
+      <option value="bar">柱状图</option>
+      <option value="line">折线图</option>
+      <option value="pie">饼图</option>
+    </select>
+  </label>
+  <label>配色
+    <select id="palette">
+      <option value="default">默认</option>
+      <option value="warm">暖色</option>
+      <option value="cool">冷色</option>
+      <option value="business">商务</option>
+    </select>
+  </label>
+  <label>宽 <input id="w" type="number" min="320" max="1600" step="10" /></label>
+  <label>高 <input id="h" type="number" min="240" max="1200" step="10" /></label>
+</div>
+<div id="chart"></div>
+<script>
+// Agent: replace the D object below (search2chart-mcp lib/html.js payload shape).
+const D={
+  "title":"示例图表",
+  "categories":["北京","上海","广州"],
+  "seriesList":[{"name":"销量","data":[120,200,150]}],
+  "palettes":{
+    "default":["#5470c6","#91cc75","#fac858","#ee6666","#73c0de","#3ba272","#fc8452","#9a60b4"],
+    "warm":["#ee6666","#fac858","#fc8452","#ff9f7f","#ffd666","#e86f3a"],
+    "cool":["#5470c6","#73c0de","#3ba272","#9ad0ec","#5b8ff9","#2ca9b9"],
+    "business":["#1f4e79","#2e75b6","#9dc3e6","#c55a11","#ed7d31","#a5a5a5"]
+  },
+  "defaultType":"bar",
+  "defaultPalette":"default",
+  "width":720,
+  "height":420
+};
+const PAL=D.palettes;
+let chart=null;
+function buildOption(type,palette){
+  const colors=PAL[palette]||PAL.default;
+  const cats=D.categories, sl=D.seriesList;
+  if(type==='pie'){
+    const s=sl[0];
+    return { backgroundColor:'transparent', title:{text:D.title,left:'center'},
+      tooltip:{trigger:'item'}, legend:{bottom:0},
+      series:[{ type:'pie', radius:['35%','65%'], data:cats.map((c,i)=>({name:c,value:s.data[i]})),
+        itemStyle:{borderColor:'#fff',borderWidth:1}, color:colors }] };
+  }
+  const series=sl.map((s,i)=>({ name:s.name, type:type, data:s.data,
+    itemStyle: colors?{color:colors[i%colors.length]}:undefined,
+    areaStyle: type==='line'?{opacity:0.12}:undefined, smooth: type==='line' }));
+  return { backgroundColor:'transparent', title:{text:D.title,left:'center'},
+    tooltip:{trigger:'axis'}, legend:{bottom:0},
+    grid:{left:48,right:24,top:48,bottom:48},
+    xAxis:{type:'category',data:cats,axisLabel:{interval:0,rotate:cats.length>8?30:0}},
+    yAxis:{type:'value'}, series:series };
+}
+function render(){
+  const t=document.getElementById('type').value;
+  const p=document.getElementById('palette').value;
+  chart.setOption(buildOption(t,p),true);
+  chart.resize({width:+document.getElementById('w').value,height:+document.getElementById('h').value});
+}
+window.addEventListener('DOMContentLoaded',function(){
+  chart=echarts.init(document.getElementById('chart'));
+  document.getElementById('type').value=D.defaultType;
+  document.getElementById('palette').value=D.defaultPalette;
+  document.getElementById('w').value=D.width;
+  document.getElementById('h').value=D.height;
+  ['type','palette','w','h'].forEach(function(id){
+    document.getElementById(id).addEventListener('change',render);
+  });
+  render();
+  window.addEventListener('resize',function(){ chart.resize(); });
+});
+</script>
+</body>
+</html>

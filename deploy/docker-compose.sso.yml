@@ -90,6 +90,8 @@ services:
       # ── CORS allowlist: the browser calls this API from the web origin ────
       # Must list every frontend origin that talks to this agent.
       ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://localhost:8090}"
+      # ── Public URL for ECharts preview links (GET /workspace/preview) ───
+      AGENT_PUBLIC_URL: "${AGENT_PUBLIC_URL:-http://localhost:4567}"
       # ── Auth + per-user workspace pinning ────────────────────────────────
       AUTH_ENABLED: "true"
       # MUST match the external auth-service's secret. Required.
