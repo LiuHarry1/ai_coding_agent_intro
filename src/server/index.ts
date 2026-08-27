@@ -1,8 +1,8 @@
 import * as http from 'http'
 import * as path from 'path'
 import * as fs from 'fs'
-import { fileURLToPath } from 'url'
 import { createRouter } from './router.js'
+import { getRepoRoot } from '../execution/worker-paths.js'
 import type { ServerOptions } from '../core/types.js'
 import { shutdownAllLspManagers } from '../services/lsp/manager.js'
 import {
@@ -14,8 +14,6 @@ import { resolveSettings } from '../core/settings-manager.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
 import { runWithRequestScope } from '../utils/request-scope.js'
 import { initBrowserLifecycle } from '../browser/manager.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export function startServer(_opts: ServerOptions = {}): void {
   const PORT = parseInt(process.env.PORT || '4567', 10)
@@ -43,7 +41,7 @@ export function startServer(_opts: ServerOptions = {}): void {
   const serveStatic = !['0', 'false', 'no'].includes(
     (process.env.SERVE_STATIC ?? '').toLowerCase(),
   )
-  const distDir = path.resolve(__dirname, '../../client/web/dist')
+  const distDir = path.join(getRepoRoot(), 'client', 'web', 'dist')
   const staticDir = serveStatic && fs.existsSync(distDir) ? distDir : null
 
   if (!serveStatic) {

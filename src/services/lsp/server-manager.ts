@@ -1,6 +1,7 @@
 import * as path from 'path'
-import { fileURLToPath, pathToFileURL } from 'url'
+import { pathToFileURL } from 'url'
 import type { LspServerConfig } from '../../core/types.js'
+import { getRepoRoot } from '../../execution/worker-paths.js'
 import {
   createLspServerInstance,
   type LspServerInstance,
@@ -16,18 +17,7 @@ export type CreateLspServerManagerOptions = {
   onDiagnostics?: DiagnosticsSink
 }
 
-function resolveAgentPackageRoot(): string {
-  if (process.env.AGENT_ROOT) {
-    return path.resolve(process.env.AGENT_ROOT)
-  }
-  // Control-plane / tsx path (not used inside bundled worker — Worker always sets AGENT_ROOT)
-  return path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '../../..',
-  )
-}
-
-const AGENT_PACKAGE_ROOT = resolveAgentPackageRoot()
+const AGENT_PACKAGE_ROOT = () => getRepoRoot()
 
 export interface LspServerManager {
   readonly workspaceKey: string
@@ -295,5 +285,5 @@ function resolveAgentRelativePath(value: string): string {
   ) {
     return value
   }
-  return path.resolve(AGENT_PACKAGE_ROOT, value)
+  return path.resolve(AGENT_PACKAGE_ROOT(), value)
 }

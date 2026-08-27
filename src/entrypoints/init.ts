@@ -4,7 +4,7 @@
  */
 import { resolveDefaultWorkspace } from '../core/workspace.js'
 
-export type BootMode = 'http' | 'stdio' | 'acp'
+export type BootMode = 'http' | 'stdio' | 'acp' | 'worker-stdio'
 
 let initPromise: Promise<void> | null = null
 
@@ -13,6 +13,9 @@ function bootLog(message: string): void {
 }
 
 function loadEnvFile(): void {
+  if (typeof process.loadEnvFile !== 'function') {
+    return
+  }
   try {
     process.loadEnvFile('.env')
     bootLog('[start] Loaded .env')

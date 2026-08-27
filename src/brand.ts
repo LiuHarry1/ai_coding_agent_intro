@@ -11,6 +11,14 @@ export const APP_SLUG: string = brand.slug
 /** Bundled worker filename, e.g. baize-worker.cjs */
 export const WORKER_BUNDLE_NAME = `${APP_SLUG}-worker.cjs`
 
+/** Bundled desktop agent filename, e.g. baize-agent.cjs */
+export const AGENT_BUNDLE_NAME = `${APP_SLUG}-agent.cjs`
+
+/** Native compiled agent (Bun --compile), e.g. baize-agent.exe on Windows */
+export function agentNativeFileName(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? `${APP_SLUG}-agent.exe` : `${APP_SLUG}-agent`
+}
+
 /** Remote/local worker install dir under $HOME, e.g. .baize-agent-worker */
 export const WORKER_HOME_DIRNAME = `.${APP_SLUG}-agent-worker`
 

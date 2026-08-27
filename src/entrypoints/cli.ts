@@ -5,6 +5,7 @@
 import { init, type BootMode } from './init.js'
 
 function detectMode(argv: string[]): BootMode {
+  if (argv.includes('--worker-stdio')) return 'worker-stdio'
   if (argv.includes('--acp')) return 'acp'
   if (argv.includes('--stdio')) return 'stdio'
   return 'http'
@@ -15,6 +16,12 @@ async function main(): Promise<void> {
   await init(mode)
 
   bootLog(`[start] mode=${mode}`)
+
+  if (mode === 'worker-stdio') {
+    const { runWorkerStdio } = await import('../worker/main.js')
+    runWorkerStdio()
+    return
+  }
 
   if (mode === 'stdio') {
     const [{ startStdioAgent }, { runAgent }] = await Promise.all([

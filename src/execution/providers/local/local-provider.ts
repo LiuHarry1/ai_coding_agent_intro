@@ -20,6 +20,7 @@ import {
   resolveWorkerLaunch,
   readWorkerVersion,
   getRepoRoot,
+  buildAgentSpawnEnv,
 } from '../../worker-paths.js'
 import {
   StdioRuntimePort,
@@ -129,19 +130,21 @@ class LocalConnection implements EnvironmentConnection {
     }
     const child = spawn(launch.command, launch.args, {
       cwd: launch.cwd,
-      env: {
-        ...process.env,
-        ...(agentHome
-          ? {
-              HOME: agentHome,
-              ...(process.platform === 'win32'
-                ? { USERPROFILE: agentHome }
-                : {}),
-            }
-          : {}),
-        WORKER_VERSION: launch.version,
-        AGENT_ROOT: getRepoRoot(),
-      },
+      env: buildAgentSpawnEnv(
+        {
+          ...process.env,
+          ...(agentHome
+            ? {
+                HOME: agentHome,
+                ...(process.platform === 'win32'
+                  ? { USERPROFILE: agentHome }
+                  : {}),
+              }
+            : {}),
+          WORKER_VERSION: launch.version,
+        },
+        getRepoRoot(),
+      ),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     })

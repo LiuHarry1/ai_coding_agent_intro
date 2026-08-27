@@ -27,7 +27,6 @@ import { runRg } from './run-rg.js'
 import {
   APP_SLUG,
   WORKER_BG_CWD_FILE_PREFIX,
-  WORKER_BUNDLE_NAME,
   WORKER_CWD_FILE_PREFIX,
 } from '../brand.js'
 
@@ -271,12 +270,7 @@ async function handle(msg: RuntimeClientMessage): Promise<void> {
   }
 }
 
-function main(): void {
-  if (!process.argv.includes('--stdio')) {
-    process.stderr.write(`Usage: ${WORKER_BUNDLE_NAME.replace(/\.cjs$/, '')} --stdio\n`)
-    process.exit(2)
-  }
-
+export function runWorkerStdio(): void {
   const rl = createInterface({ input: process.stdin, crlfDelay: Infinity })
   rl.on('line', line => {
     if (shuttingDown) return
@@ -299,5 +293,3 @@ function main(): void {
     `started version=${WORKER_VERSION} pid=${process.pid} agentRoot=${process.env.AGENT_ROOT || '(default)'}`,
   )
 }
-
-main()

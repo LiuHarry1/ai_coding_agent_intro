@@ -22,7 +22,7 @@ const pkg = JSON.parse(
 async function main() {
   fs.mkdirSync(path.dirname(outfile), { recursive: true })
   await esbuild.build({
-    entryPoints: [path.join(root, 'src', 'worker', 'main.ts')],
+    entryPoints: [path.join(root, 'src', 'worker', 'entry.ts')],
     bundle: true,
     platform: 'node',
     format: 'cjs',

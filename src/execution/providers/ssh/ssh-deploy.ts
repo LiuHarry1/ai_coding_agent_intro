@@ -1,5 +1,5 @@
 /**
- * Deploy agent worker + integrations (stpl-lsp-bridge) to remote.
+ * Deploy slim worker + integrations (stpl-lsp-bridge) to remote.
  */
 import { spawn } from 'child_process'
 import * as fs from 'fs'
@@ -8,15 +8,13 @@ import type { ParsedSshHost } from './ssh-config.js'
 import { shQuote, sshExecOk } from './ssh-exec.js'
 import {
   getRepoRoot,
-  getWorkerBundlePath,
   readWorkerVersion,
-  resolveWorkerLaunch,
+  remoteWorkerBundleFileName,
+  resolveRemoteWorkerLaunch,
+  workerStdioArgs,
 } from '../../worker-paths.js'
 import type { WorkerInstallInfo } from '../../types.js'
-import {
-  WORKER_BUNDLE_NAME,
-  WORKER_HOME_DIRNAME,
-} from '../../../brand.js'
+import { WORKER_HOME_DIRNAME } from '../../../brand.js'
 
 function buildScpArgs(host: ParsedSshHost): string[] {
   const args: string[] = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15']
@@ -83,10 +81,6 @@ function localBridgeSrc(): string | null {
   return fs.existsSync(path.join(src, 'index.js')) ? src : null
 }
 
-/**
- * Ship STPL bridge so relative lspServers args resolve on remote.
- * Runs even when the worker version stamp already matches (repair path).
- */
 async function ensureRemoteBridge(
   host: ParsedSshHost,
   homeDir: string,
@@ -107,8 +101,6 @@ async function ensureRemoteBridge(
     `rm -rf "$HOME/${homeDir}/${version}/integrations/stpl-lsp-bridge" && mkdir -p "$HOME/${homeDir}/${version}/integrations"`,
     { timeoutMs: 15_000 },
   )
-  // Upload into integrations/ so the local folder name becomes stpl-lsp-bridge/
-  // (scp -r to .../stpl-lsp-bridge nests when that path already exists).
   await scpUploadRecursive(
     host,
     bridgeSrc,
@@ -130,19 +122,11 @@ export async function ensureRemoteWorker(
   desiredVersion?: string,
 ): Promise<WorkerInstallInfo> {
   const version = desiredVersion ?? readWorkerVersion()
-  const launch = resolveWorkerLaunch()
-  if (launch.mode !== 'bundle') {
-    throw new Error(
-      'Remote Worker deploy requires a bundled artifact. Run: npm run build:worker',
-    )
-  }
-  const localBundle = getWorkerBundlePath()
-  if (!fs.existsSync(localBundle)) {
-    throw new Error(`Missing worker bundle at ${localBundle}`)
-  }
+  const launch = resolveRemoteWorkerLaunch()
+  const localBundle = launch.artifactPath
+  const bundleName = remoteWorkerBundleFileName(launch)
 
   const homeDir = WORKER_HOME_DIRNAME
-  const bundleName = WORKER_BUNDLE_NAME
 
   const probe = await sshExecOk(
     host,
@@ -179,8 +163,6 @@ export async function ensureRemoteWorker(
     )
   }
 
-  // Bridge is independent of worker version stamp: older installs / Electron
-  // packs without integrations/ left AGENT_ROOT with no index.js.
   const bridgeUploaded = await ensureRemoteBridge(host, homeDir, version)
 
   await sshExecOk(
@@ -198,7 +180,11 @@ export async function ensureRemoteWorker(
 
 /** Remote command that starts worker on stdio with AGENT_ROOT set. */
 export function remoteWorkerStdioCommand(version: string): string {
+  const launch = resolveRemoteWorkerLaunch()
   const homeDir = WORKER_HOME_DIRNAME
-  const bundleName = WORKER_BUNDLE_NAME
-  return `export AGENT_ROOT="$HOME/${homeDir}/${version}"; export WORKER_VERSION=${shQuote(version)}; node "$AGENT_ROOT/${bundleName}" --stdio`
+  const bundleName = remoteWorkerBundleFileName(launch)
+  const args = workerStdioArgs(launch)
+    .filter(arg => arg.startsWith('--'))
+    .join(' ')
+  return `export AGENT_ROOT="$HOME/${homeDir}/${version}"; export WORKER_VERSION=${shQuote(version)}; node "$AGENT_ROOT/${bundleName}" ${args}`
 }

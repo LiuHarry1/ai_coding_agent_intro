@@ -10,10 +10,15 @@ import * as http from 'node:http'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import brand from '../brand.json' with { type: 'json' }
+import {
+  buildAgentSpawnEnv,
+  resolveAgentLaunch,
+} from './agent-launch.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 const APP_NAME = brand.name
+const SLUG = brand.slug || 'baize'
 const DEFAULT_PORT = 4567
 let agentProc = null
 let mainWindow = null
@@ -60,37 +65,41 @@ function pipeAgentLogs(proc) {
   proc.on('close', () => logStream?.end())
 }
 
-function resolveTsxCli(appRoot) {
-  return path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
-}
-
 function startAgent() {
   const appRoot = getAppRoot()
-  const env = {
-    ...process.env,
-    PORT: String(agentPort),
-  }
+  const env = buildAgentSpawnEnv(appRoot, agentPort)
 
-  const tsxCli = resolveTsxCli(appRoot)
-  const startScript = path.join(appRoot, 'start.js')
-
-  if (!fs.existsSync(tsxCli)) {
-    dialog.showErrorBox(
-      'Agent failed to start',
-      `Missing runtime dependency:\n${tsxCli}\n\n` +
-        '`tsx` must be a production dependency and included in the desktop package.\n' +
-        'Rebuild with: npm install && npm run desktop:pack:win',
-    )
+  const launch = resolveAgentLaunch(appRoot, SLUG, {
+    packaged: app.isPackaged,
+  })
+  if (launch.kind === 'error') {
+    dialog.showErrorBox('Agent failed to start', launch.message)
     app.quit()
     return
   }
 
-  agentProc = spawn(process.execPath, [tsxCli, startScript], {
-    cwd: appRoot,
-    env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-    stdio: 'pipe',
-    windowsHide: true,
-  })
+  if (launch.kind === 'native') {
+    agentProc = spawn(launch.entry, [], {
+      cwd: appRoot,
+      env,
+      stdio: 'pipe',
+      windowsHide: true,
+    })
+  } else if (launch.kind === 'bundle') {
+    agentProc = spawn(process.execPath, [launch.entry], {
+      cwd: appRoot,
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: 'pipe',
+      windowsHide: true,
+    })
+  } else {
+    agentProc = spawn(process.execPath, [launch.tsxCli, launch.startScript], {
+      cwd: appRoot,
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: 'pipe',
+      windowsHide: true,
+    })
+  }
 
   pipeAgentLogs(agentProc)
 
