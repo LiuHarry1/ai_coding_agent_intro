@@ -48,6 +48,7 @@ export const useChatStore = create((set, get) => ({
   // ── Sessions ────────────────────────────────
   sessions: [],
   currentSessionId: localStorage.getItem('coding_agent_session_id') || null,
+  sessionLoading: Boolean(localStorage.getItem('coding_agent_session_id')),
   /** Display label e.g. `atsrws0049:/home/...` when using execution environments. */
   workspaceLabel: null,
   /** Bound WorkspaceHandle from execution plane. */
@@ -222,16 +223,21 @@ export const useChatStore = create((set, get) => ({
   setSessions: sessions => set({ sessions }),
 
   switchSession: async id => {
+    if (!id) {
+      get().clearSession()
+      return
+    }
     localStorage.setItem('coding_agent_session_id', id)
-    set({ currentSessionId: id, messages: [] })
-    if (!id) return
+    set({ currentSessionId: id, messages: [], sessionLoading: true })
     try {
       const data = await agentApi.getSessionMessages(id)
+      if (get().currentSessionId !== id) return
       const msgs = (data.messages || []).map(m =>
         m.id ? m : { ...m, id: newId() },
       )
-      set({ messages: msgs })
+      set({ messages: msgs, sessionLoading: false })
     } catch (err) {
+      if (get().currentSessionId !== id) return
       // Agent restart drops in-memory sessions; drop stale localStorage id.
       if (
         err.status === 404 ||
@@ -240,13 +246,19 @@ export const useChatStore = create((set, get) => ({
         get().clearSession()
       } else {
         console.warn('[chat] failed to load session messages', id, err)
+        set({ sessionLoading: false })
       }
     }
   },
 
   clearSession: () => {
     localStorage.removeItem('coding_agent_session_id')
-    set({ currentSessionId: null, messages: [], todos: [] })
+    set({
+      currentSessionId: null,
+      messages: [],
+      todos: [],
+      sessionLoading: false,
+    })
   },
 
   stopStreaming: async () => {
@@ -930,6 +942,7 @@ export const useChatStore = create((set, get) => ({
 
     try {
       const data = await agentApi.getSessionMessages(id)
+      if (get().currentSessionId !== id) return
       let msgs = data.messages ?? []
       if (streamingAssistant?.status === 'streaming') {
         const tail = msgs[msgs.length - 1]

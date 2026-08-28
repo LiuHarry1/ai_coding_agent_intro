@@ -1,6 +1,7 @@
 import React, {
   useRef,
   useEffect,
+  useLayoutEffect,
   useState,
   useCallback,
   Suspense,
@@ -11,58 +12,116 @@ import WelcomeScreen from './WelcomeScreen.jsx'
 
 const MessageBubble = lazy(() => import('./MessageBubble.jsx'))
 
+const PIN_THRESHOLD_PX = 140
+const SHOW_BUTTON_PX = 120
+
+function distanceFromBottom(el) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight
+}
+
 export default function ChatView() {
   const messages = useChatStore(s => s.messages)
+  const currentSessionId = useChatStore(s => s.currentSessionId)
+  const sessionLoading = useChatStore(s => s.sessionLoading)
   const scrollRef = useRef(null)
+  const messagesRef = useRef(null)
+  const pinToBottomRef = useRef(true)
+  const programmaticScrollRef = useRef(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const hasMessages = messages.length > 0
 
-  const scrollToBottom = useCallback(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: 'smooth',
-      })
-    }
+  const stickToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || !pinToBottomRef.current) return
+    programmaticScrollRef.current = true
+    el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false
+    })
   }, [])
 
-  // Only stick to bottom when the user is already near it — otherwise stream
-  // updates yank the viewport closed while they read an expanded Worked group
-  // (Cursor transcript keeps scroll position on disclosure).
+  // Opening a session (including history) should land on the latest turn.
+  useLayoutEffect(() => {
+    pinToBottomRef.current = true
+    setShowScrollBtn(false)
+    stickToBottom()
+  }, [currentSessionId, stickToBottom])
+
+  // Follow stream updates only while pinned. Expanding a Worked group after
+  // scrolling up must not yank the viewport (Cursor transcript behavior).
+  useLayoutEffect(() => {
+    stickToBottom()
+  }, [messages, stickToBottom])
+
+  // Images / lazy bubbles can grow after `messages` settles.
   useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-    if (dist < 140) scrollToBottom()
-  }, [messages, scrollToBottom])
+    const root = scrollRef.current
+    const inner = messagesRef.current
+    if (!root || !inner || !hasMessages) return
+    const ro = new ResizeObserver(() => {
+      if (pinToBottomRef.current) stickToBottom()
+    })
+    ro.observe(inner)
+    return () => ro.disconnect()
+  }, [currentSessionId, hasMessages, stickToBottom])
 
   const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
-    setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 120)
+    const el = scrollRef.current
+    if (!el) return
+    const dist = distanceFromBottom(el)
+    if (programmaticScrollRef.current) {
+      if (dist < PIN_THRESHOLD_PX) programmaticScrollRef.current = false
+    } else {
+      pinToBottomRef.current = dist < PIN_THRESHOLD_PX
+    }
+    setShowScrollBtn(dist > SHOW_BUTTON_PX)
+  }, [])
+
+  const releaseProgrammatic = useCallback(() => {
+    programmaticScrollRef.current = false
+  }, [])
+
+  const scrollToBottomSmooth = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    pinToBottomRef.current = true
+    programmaticScrollRef.current = true
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [])
 
   return (
-    <div className='chat-view' ref={scrollRef} onScroll={handleScroll}>
-      {messages.length === 0 ? (
-        <WelcomeScreen />
-      ) : (
-        <Suspense fallback={<div className='messages' aria-busy='true' />}>
-          <div className='messages'>
-            {messages.map((msg, i) => (
-              <MessageBubble
-                key={msg.id ?? `msg-${i}-${msg.type}`}
-                message={msg}
-                isLast={i === messages.length - 1}
-              />
-            ))}
+    <div className='chat-view-wrap'>
+      <div
+        className='chat-view'
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onWheel={releaseProgrammatic}
+        onPointerDown={releaseProgrammatic}
+      >
+        {sessionLoading ? (
+          <div className='messages' ref={messagesRef} aria-busy='true' />
+        ) : !hasMessages ? (
+          <WelcomeScreen />
+        ) : (
+          <div className='messages' ref={messagesRef}>
+            <Suspense fallback={null}>
+              {messages.map((msg, i) => (
+                <MessageBubble
+                  key={msg.id ?? `msg-${i}-${msg.type}`}
+                  message={msg}
+                  isLast={i === messages.length - 1}
+                />
+              ))}
+            </Suspense>
           </div>
-        </Suspense>
-      )}
+        )}
+      </div>
       {showScrollBtn && (
         <button
           className='scroll-to-bottom'
-          onClick={scrollToBottom}
+          onClick={scrollToBottomSmooth}
           title='Scroll to bottom'
+          aria-label='Scroll to bottom'
         >
           <svg
             width='16'
