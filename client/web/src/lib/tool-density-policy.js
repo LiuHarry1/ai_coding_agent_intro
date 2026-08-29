@@ -1,0 +1,150 @@
+/**
+ * Single source of truth for Cursor-style transcript density.
+ *
+ * Cards should call `useToolDensityExpand(kind, ctx)` + `resolveChevron(kind, ctx)`
+ * instead of inventing per-file showChevron / expandOnceWhen ternaries.
+ *
+ * Kinds:
+ *   explore-group — Explored N files (always chevron; open while running)
+ *   subagent      — Explorer / Plan / Task (chevron if hasBody; open while running)
+ *   explore-line  — Grep / Glob / ListDir / Web* under explore density
+ *                   (collapsed by default; expand on error or user; chevron if hasBody)
+ *   read          — success text = header-only (open file); images/errors expand
+ *   shell         — Bash: open while live output; done collapses unless error
+ *                   (success output stays user-expandable, not auto-open)
+ *   interactive   — Ask / Plan approval style (not used via ToolChrome often)
+ *   default       — MCP / unknown: open while running; collapse when done
+ */
+
+/** @typedef {'explore-group'|'subagent'|'explore-line'|'read'|'shell'|'default'} DensityKind */
+
+/**
+ * @typedef {object} DensityContext
+ * @property {boolean} [isDone]
+ * @property {boolean} [isError]
+ * @property {boolean} [nested]
+ * @property {boolean} [hasBody]
+ * @property {boolean} [isRunning] - explicit running (overrides !isDone)
+ * @property {boolean} [hasLiveOutput] - shell streaming
+ * @property {boolean} [isBackgrounded]
+ * @property {boolean} [headerOnly] - read success text
+ * @property {boolean} [forceExpandOnce] - e.g. image ready
+ */
+
+/**
+ * @param {DensityKind} kind
+ * @param {DensityContext} ctx
+ * @returns {{ isRunning: boolean, expandOnceWhen: boolean }}
+ */
+export function resolveExpandArgs(kind, ctx = {}) {
+  const isDone = Boolean(ctx.isDone)
+  const isError = Boolean(ctx.isError)
+  const nested = Boolean(ctx.nested)
+  const isRunning =
+    ctx.isRunning != null ? Boolean(ctx.isRunning) : !isDone
+  const hasBody = ctx.hasBody !== false
+
+  switch (kind) {
+    case 'explore-group':
+      return {
+        isRunning: isRunning && hasBody,
+        expandOnceWhen: isError,
+      }
+    case 'subagent':
+      return {
+        isRunning: isRunning && hasBody,
+        expandOnceWhen: isError,
+      }
+    case 'read':
+      return {
+        isRunning: false,
+        expandOnceWhen: Boolean(ctx.forceExpandOnce) || isError,
+      }
+    case 'explore-line':
+      return {
+        isRunning: false,
+        expandOnceWhen:
+          (isDone && isError) || Boolean(ctx.forceExpandOnce),
+      }
+    case 'shell':
+      return {
+        isRunning:
+          isRunning &&
+          Boolean(ctx.hasLiveOutput) &&
+          !ctx.isBackgrounded,
+        expandOnceWhen: isDone && !ctx.isBackgrounded && isError,
+      }
+    case 'default':
+    default:
+      return {
+        isRunning: !nested && isRunning,
+        expandOnceWhen:
+          (isDone && isError) || Boolean(ctx.forceExpandOnce),
+      }
+  }
+}
+
+/**
+ * @param {DensityKind} kind
+ * @param {DensityContext} ctx
+ * @returns {{ showChevron: boolean, chevronSlot: boolean }}
+ */
+export function resolveChevron(kind, ctx = {}) {
+  const nested = Boolean(ctx.nested)
+  const hasBody = Boolean(ctx.hasBody)
+  const headerOnly = Boolean(ctx.headerOnly)
+  const isBackgrounded = Boolean(ctx.isBackgrounded)
+
+  switch (kind) {
+    case 'explore-group':
+      return { showChevron: true, chevronSlot: false }
+    case 'subagent':
+      return { showChevron: hasBody, chevronSlot: false }
+    case 'read':
+      if (headerOnly) {
+        return { showChevron: false, chevronSlot: nested }
+      }
+      return {
+        showChevron: hasBody,
+        chevronSlot: nested && !hasBody,
+      }
+    case 'explore-line':
+      return {
+        showChevron: hasBody,
+        chevronSlot: nested,
+      }
+    case 'shell':
+      return {
+        showChevron: !isBackgrounded && hasBody,
+        chevronSlot: false,
+      }
+    case 'default':
+    default:
+      return {
+        showChevron: hasBody,
+        chevronSlot: nested,
+      }
+  }
+}
+
+/** Map tool name → density kind (overridden by TOOL_META.density when set). */
+export const DEFAULT_DENSITY_BY_TOOL = {
+  read: 'read',
+  Read: 'read',
+  grep: 'explore-line',
+  Grep: 'explore-line',
+  glob: 'explore-line',
+  Glob: 'explore-line',
+  list_dir: 'explore-line',
+  list_directory: 'explore-line',
+  web_search: 'explore-line',
+  WebSearch: 'explore-line',
+  search: 'explore-line',
+  web_fetch: 'explore-line',
+  WebFetch: 'explore-line',
+  fetch: 'explore-line',
+  bash: 'shell',
+  Bash: 'shell',
+  powershell: 'shell',
+  PowerShell: 'shell',
+}

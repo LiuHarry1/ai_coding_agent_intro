@@ -1,7 +1,7 @@
 import React from 'react'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { detectError } from '../lib/utils.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
@@ -27,9 +27,12 @@ export default function TaskStopCard({ part }) {
       detectError(part.name || 'TaskStop', message) ||
       (typeof message === 'string' && message.startsWith('Error:')))
   const hasOutput = typeof message === 'string' && message.length > 0
+  const hasBody = Boolean(isDone && (hasOutput || isError))
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(false, {
-    expandOnceWhen: isDone && isError,
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('default', {
+    isDone,
+    isError,
+    hasBody,
   })
 
   const action = toolActionLabel('stop', {
@@ -41,27 +44,29 @@ export default function TaskStopCard({ part }) {
     : taskId || '…'
 
   return (
-    <div className={`tool-row task-stop-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={hasOutput || isError ? toggleExpanded : undefined}
-        showChevron={Boolean(isDone && (hasOutput || isError))}
-        label={action}
-        title={title}
-        titlePlain
-        titleTooltip={taskId}
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-      />
-      {expanded && hasOutput && (
+    <ToolChrome
+      variant='task-stop-card'
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasBody ? toggleExpanded : undefined}
+      hasBody={hasBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label={action}
+      title={title}
+      titlePlain
+      titleTooltip={taskId}
+      duration={undefined}
+      showSuccess={false}
+    >
+      {hasOutput && (
         <pre
           className={`tool-row-body ${isError ? 'tool-row-body--error' : ''}`}
         >
           {message}
         </pre>
       )}
-    </div>
+    </ToolChrome>
   )
 }

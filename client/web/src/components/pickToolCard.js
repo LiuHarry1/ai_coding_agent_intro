@@ -140,7 +140,7 @@ export function resolveToolEntry(item, options = {}) {
   }
   return {
     component: ToolCallCard,
-    chrome: getToolChrome(name) || 'card',
+    chrome: getToolChrome(name) || 'line',
     exploreGroupable: false,
   }
 }

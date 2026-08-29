@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { detectError, fileName, formatBytes } from '../lib/utils.js'
 
 /** One-line title for unknown nested tools — never inline JSON in the header. */
@@ -45,38 +45,37 @@ export default function SubagentStepFallback({ part }) {
     isDone && !isError && hasBody ? formatBytes(result.length) : null
 
   return (
-    <div
-      className={`tool-row subagent-step-fallback tool-row--nested ${isError ? 'has-error' : ''}`}
+    <ToolChrome
+      variant='subagent-step-fallback'
+      nested
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={() => setExpanded(v => !v)}
+      hasBody={Boolean(isDone && hasBody)}
+      showChevron={Boolean(isDone && hasBody)}
+      label={name}
+      title={title || '\u2026'}
+      titleTooltip={title || undefined}
+      meta={
+        sizeLabel ? (
+          <span className='tool-row-meta-badge' title='Result size'>
+            {sizeLabel}
+          </span>
+        ) : null
+      }
     >
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={() => setExpanded(v => !v)}
-        showChevron={Boolean(isDone && hasBody)}
-        label={name}
-        title={title || '\u2026'}
-        titleTooltip={title || undefined}
-        meta={
-          sizeLabel ? (
-            <span className='tool-row-meta-badge' title='Result size'>
-              {sizeLabel}
-            </span>
-          ) : null
-        }
-        isDone={isDone}
-        isError={isError}
-      />
-
-      {expanded && isDone && !isError && hasBody && (
+      {isDone && !isError && hasBody && (
         <pre className='tool-row-body'>{result}</pre>
       )}
-      {expanded && isError && (
+      {isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
-      {expanded && isDone && !isError && hasBody && (
+      {isDone && !isError && hasBody && (
         <div className='tool-row-actions-bar'>
           <CopyButton text={result} label='Copy result' inline />
         </div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

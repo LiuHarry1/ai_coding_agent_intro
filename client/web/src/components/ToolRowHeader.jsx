@@ -18,6 +18,8 @@ export default function ToolRowHeader({
   expanded,
   onToggle,
   showChevron = true,
+  /** Reserve chevron column width even when no arrow (align sibling rows). */
+  chevronSlot = false,
   icon,
   label,
   title,
@@ -35,6 +37,7 @@ export default function ToolRowHeader({
 }) {
   const stop = e => e.stopPropagation()
   const dur = typeof duration === 'string' ? duration : formatDuration(duration)
+  const showSlot = showChevron || chevronSlot
 
   return (
     <button
@@ -44,12 +47,12 @@ export default function ToolRowHeader({
       aria-expanded={expanded}
       aria-disabled={!onToggle || undefined}
     >
-      {showChevron && (
+      {showSlot && (
         <span
-          className={`tool-row-chevron ${expanded ? 'open' : ''}`}
+          className={`tool-row-chevron ${expanded && showChevron ? 'open' : ''} ${showChevron ? '' : 'tool-row-chevron--slot'}`}
           aria-hidden='true'
         >
-          {'\u25B6'}
+          {showChevron ? '\u25B6' : ''}
         </span>
       )}
       {icon != null && (

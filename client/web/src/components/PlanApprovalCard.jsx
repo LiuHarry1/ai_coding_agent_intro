@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useChatStore } from '../stores/chat-store.js'
+import { useChatActions } from '../lib/chat-actions.jsx'
 import { getMdComponents } from '../lib/markdown-components.jsx'
 import { formatPlanDisplayPath } from '../lib/plan-utils.js'
 
 const COLLAPSED_MAX_HEIGHT = 280
 
-export default function PlanApprovalCard({ part }) {
-  const approvePlan = useChatStore(s => s.approvePlan)
+export default function PlanApprovalCard({ part, onApprove }) {
+  const { approvePlan } = useChatActions()
+  const submitPlan = onApprove ?? approvePlan
   const [editing, setEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const [content, setContent] = useState(part.plan ?? '')
@@ -34,7 +35,7 @@ export default function PlanApprovalCard({ part }) {
     if (submitting || done || !part.requestId) return
     setSubmitting(true)
     try {
-      await approvePlan(part.requestId, {
+      await submitPlan(part.requestId, {
         approved,
         editedPlan: editing && approved ? content : undefined,
         targetMode: approved ? 'agent' : undefined,

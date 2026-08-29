@@ -122,6 +122,24 @@ function ContentPreview({ text }) {
   return <pre className='file-change-collapsed-preview'>{lines.join('\n')}</pre>
 }
 
+/** Prefer the changed region for collapsed teasers (Cursor-style). */
+function collapsedTeaserText({ isWrite, args, beforeContent, afterContent, previewSource }) {
+  if (!isWrite && typeof args?.new_string === 'string') return args.new_string
+  if (
+    typeof beforeContent === 'string' &&
+    typeof afterContent === 'string' &&
+    beforeContent !== afterContent
+  ) {
+    const a = beforeContent.split('\n')
+    const b = afterContent.split('\n')
+    let i = 0
+    while (i < a.length && i < b.length && a[i] === b[i]) i++
+    const slice = b.slice(i, i + COLLAPSED_PREVIEW_LINES)
+    if (slice.length > 0) return slice.join('\n')
+  }
+  return previewSource
+}
+
 function FileChangeStub({
   name,
   isDone,
@@ -421,7 +439,15 @@ export default function FileChangeCard({ part, nested = false }) {
           className='file-change-body file-change-body--truncated'
           onClick={toggle}
         >
-          <ContentPreview text={previewSource} />
+          <ContentPreview
+            text={collapsedTeaserText({
+              isWrite,
+              args,
+              beforeContent,
+              afterContent,
+              previewSource,
+            })}
+          />
         </div>
       )}
 

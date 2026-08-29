@@ -4,10 +4,10 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { mdComponents } from '../lib/markdown-components.jsx'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import NestedToolRuns from './NestedToolRuns.jsx'
 import { detectError, formatBytes } from '../lib/utils.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import {
   liveToolSubtitle,
   pickLiveMember,
@@ -50,9 +50,15 @@ export default function SkillCard({ part, nested = false }) {
   }, [part.subagentParts])
   const isFork = steps.length > 0
 
-  const [expanded, toggleExpanded, setExpanded] = useStreamingExpanded(false, {
-    expandOnceWhen: isError,
-  })
+  const [expanded, toggleExpanded, chevron, setExpanded] = useToolDensityExpand(
+    'subagent',
+    {
+      isDone,
+      isError,
+      nested,
+      hasBody: isFork ? true : Boolean(isDone && hasBody),
+    },
+  )
   const [stepsOpen, setStepsOpen] = useState(false)
   const [showAllSteps, setShowAllSteps] = useState(false)
 
@@ -97,9 +103,7 @@ export default function SkillCard({ part, nested = false }) {
       </button>
     ) : null
 
-  const showChevron = isFork
-    ? hasReport || steps.length > 0
-    : Boolean(isDone && hasBody)
+  const showChevron = chevron.showChevron
 
   const action = toolActionLabel('skill', {
     loading: !isDone,
@@ -110,39 +114,38 @@ export default function SkillCard({ part, nested = false }) {
     : skillName || '\u2026'
 
   return (
-    <div
-      className={`tool-row skill-card ${nested ? 'tool-row--nested' : ''} ${isError ? 'has-error' : ''}`}
+    <ToolChrome
+      variant='skill-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={handleHeaderToggle}
+      hasBody={showChevron}
+      showChevron={showChevron}
+      chevronSlot={chevron.chevronSlot}
+      icon={'\u2699'}
+      label={action}
+      title={title}
+      titleTooltip={[skillName, hint].filter(Boolean).join('\n') || undefined}
+      subtitle={subtitle || undefined}
+      meta={
+        stepsToggle ||
+        (sizeLabel ? (
+          <span className='tool-row-meta-badge' title='Result size'>
+            {sizeLabel}
+          </span>
+        ) : null)
+      }
+      duration={nested ? undefined : part.duration}
+      showSuccess={isDone && !isError}
+      actions={
+        isDone && !isError && hasBody && !isFork ? (
+          <CopyButton text={result} label='Copy' inline />
+        ) : null
+      }
     >
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={handleHeaderToggle}
-        showChevron={showChevron}
-        icon={'\u2699'}
-        label={action}
-        title={title}
-        titleTooltip={[skillName, hint].filter(Boolean).join('\n') || undefined}
-        subtitle={subtitle || undefined}
-        meta={
-          stepsToggle ||
-          (sizeLabel ? (
-            <span className='tool-row-meta-badge' title='Result size'>
-              {sizeLabel}
-            </span>
-          ) : null)
-        }
-        duration={nested ? undefined : part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-        actions={
-          isDone && !isError && hasBody && !isFork ? (
-            <CopyButton text={result} label='Copy' inline />
-          ) : null
-        }
-      />
-
-      {expanded && (
-        <div className='subagent-expanded'>
+      <div className='subagent-expanded'>
           {steps.length > 0 && stepsOpen && (
             <NestedToolRuns
               steps={steps}
@@ -169,7 +172,6 @@ export default function SkillCard({ part, nested = false }) {
             <pre className='tool-row-body'>{result}</pre>
           )}
         </div>
-      )}
-    </div>
+    </ToolChrome>
   )
 }

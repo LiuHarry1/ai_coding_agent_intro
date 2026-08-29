@@ -70,11 +70,13 @@ export const BROWSER_TOOLS = [
   BROWSER_GET_BOUNDING_BOX,
 ]
 
-/** Shown elsewhere (TodoListCard) — hide duplicate tool_call rows. */
+/** Shown elsewhere / plumbing — keep in sync with TOOL_META.suppress* flags. */
 export const SUPPRESSED_TOOL_CARDS = new Set([
   TODO_WRITE,
+  ASK_USER_QUESTION,
   ENTER_PLAN_MODE,
   EXIT_PLAN_MODE,
+  TOOL_SEARCH,
 ])
 
 /** Meta tools hidden inside subagent step lists. */

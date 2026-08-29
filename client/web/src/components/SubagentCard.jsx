@@ -4,8 +4,9 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { mdComponents } from '../lib/markdown-components.jsx'
 import NestedToolRuns from './NestedToolRuns.jsx'
-import { useChatStore } from '../stores/chat-store.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import ToolCallLine from './ToolCallLine.jsx'
+import { useChatActions } from '../lib/chat-actions.jsx'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import {
   liveToolSubtitle,
   pickLiveMember,
@@ -17,10 +18,8 @@ import {
 } from './pickToolCard.js'
 
 /**
- * Cursor-style Task row in the parent timeline:
- *   title + type badge (Task / Explorer / Plan)
- *     live status
- * Expand for nested tools + final report. Stop cancels this tool only.
+ * Cursor-style Task / Explorer row: one typography line when collapsed.
+ * Nested steps stay collapsed after the task finishes (flat Worked timeline).
  */
 
 const TYPE_BADGES = {
@@ -57,15 +56,15 @@ function rowSubtitle(part, steps) {
   const liveText = live && live.status !== 'done' ? liveToolSubtitle(live) : ''
   if (liveText) return liveText
   if (part.liveTask) return part.liveTask
-  // Tools finished (or none yet) but report still generating.
   if (steps.length > 0 && steps.every(s => s.status === 'done')) {
     return 'Writing report…'
   }
   return 'Starting…'
 }
 
-export default function SubagentCard({ part }) {
-  const stopSubagent = useChatStore(s => s.stopSubagent)
+export default function SubagentCard({ part, onStopTool }) {
+  const { stopTool } = useChatActions()
+  const stop = onStopTool ?? stopTool
   const args = part.args || {}
   const subagentType = args.subagent_type || part.name || 'subagent'
   const headline =
@@ -83,56 +82,41 @@ export default function SubagentCard({ part }) {
 
   const steps = useMemo(() => visibleSteps(part), [part.subagentParts])
   const subtitle = rowSubtitle(part, steps)
-  // Auto-open nested steps while the task is live (Cursor task chrome).
-  const [expanded, toggleExpanded] = useStreamingExpanded(
-    !isDone && steps.length > 0,
-  )
-  const [showAllSteps, setShowAllSteps] = useState(false)
   const hasReport =
     isDone && typeof part.result === 'string' && part.result.length > 0
+  const hasBody = steps.length > 0 || hasReport
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('subagent', {
+    isDone,
+    isError,
+    hasBody,
+  })
+  const [showAllSteps, setShowAllSteps] = useState(false)
 
   const onStop = e => {
     e.stopPropagation()
     if (isDone || part.stopping || !part.toolCallId) return
-    void stopSubagent(part.toolCallId)
+    void stop(part.toolCallId)
   }
 
   return (
     <div
-      className={`subagent-timeline-row ${isError ? 'has-error' : ''} ${expanded ? 'open' : ''}`}
+      className={`tool-row subagent-timeline-row ${isError ? 'has-error' : ''} ${expanded ? 'open' : ''}`}
     >
-      <button
-        type='button'
-        className='subagent-timeline-header'
-        onClick={toggleExpanded}
-        aria-expanded={expanded}
-      >
-        <span className='subagent-timeline-icon' aria-hidden='true'>
-          {!isDone ? (
-            <span className='spinner spinner-sm' />
-          ) : (
-            <span className='subagent-timeline-dot' />
-          )}
-        </span>
-        <span className='subagent-timeline-body'>
-          <span className='subagent-timeline-title-line'>
-            <span
-              className='subagent-timeline-title'
-              title={fullPrompt || headline}
-            >
-              {headline}
-            </span>
-            <span className='subagent-timeline-badge'>{badge}</span>
-          </span>
-          {subtitle && (
-            <span className='subagent-timeline-subtitle'>{subtitle}</span>
-          )}
-        </span>
-        {!isDone && part.toolCallId && (
-          <span
-            className='subagent-timeline-actions'
-            onClick={e => e.stopPropagation()}
-          >
+      <ToolCallLine
+        expanded={expanded}
+        onToggle={hasBody ? toggleExpanded : undefined}
+        showChevron={chevron.showChevron}
+        chevronSlot={chevron.chevronSlot}
+        label={badge}
+        title={headline}
+        titleTooltip={fullPrompt || headline}
+        titlePlain
+        subtitle={subtitle || undefined}
+        isDone={isDone}
+        isError={isError}
+        showSuccess={false}
+        actions={
+          !isDone && part.toolCallId ? (
             <button
               type='button'
               className='subagent-stop-btn'
@@ -141,11 +125,11 @@ export default function SubagentCard({ part }) {
             >
               Stop
             </button>
-          </span>
-        )}
-      </button>
+          ) : null
+        }
+      />
 
-      {expanded && (steps.length > 0 || hasReport) && (
+      {expanded && hasBody && (
         <div className='subagent-timeline-expanded'>
           {steps.length > 0 && (
             <NestedToolRuns

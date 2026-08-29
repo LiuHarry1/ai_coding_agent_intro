@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import CopyButton from './CopyButton.jsx'
 import { apiUrl, withAuth } from '../lib/api/_http.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import {
   BROWSER_CLICK,
   BROWSER_CONSOLE,
@@ -191,8 +191,12 @@ export default function BrowserToolCard({ part, nested = false }) {
     Array.isArray(tur?.tabs) ||
     tur?.value !== undefined
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
-    expandOnceWhen:
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('default', {
+    isDone,
+    isError,
+    nested,
+    hasBody,
+    forceExpandOnce:
       isDone &&
       (Boolean(tur?.screenshotUrl) || errorCount > 0 || badRequests > 0),
   })
@@ -209,30 +213,32 @@ export default function BrowserToolCard({ part, nested = false }) {
       )[0]
 
   return (
-    <div className={`tool-row browser-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={hasBody ? toggleExpanded : undefined}
-        icon={ICONS[toolName] || '\u{1F310}'}
-        label={label}
-        title={title}
-        titleTooltip={tur?.url || args.url || ''}
-        subtitle={tur?.url ? compactUrl(tur.url) : null}
-        meta={
-          errorCount > 0 ? (
-            <span className='browser-console-badge'>
-              {errorCount} console error{errorCount === 1 ? '' : 's'}
-            </span>
-          ) : null
-        }
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-      />
-
-      {expanded && hasBody && (
-        <div className='browser-body'>
+    <ToolChrome
+      variant='browser-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasBody ? toggleExpanded : undefined}
+      hasBody={hasBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      icon={ICONS[toolName] || '\u{1F310}'}
+      label={label}
+      title={title}
+      titleTooltip={tur?.url || args.url || ''}
+      subtitle={tur?.url ? compactUrl(tur.url) : null}
+      meta={
+        errorCount > 0 ? (
+          <span className='browser-console-badge'>
+            {errorCount} console error{errorCount === 1 ? '' : 's'}
+          </span>
+        ) : null
+      }
+      duration={undefined}
+      showSuccess={false}
+    >
+      <div className='browser-body'>
           {isError && <div className='browser-error'>{part.result}</div>}
 
           {tur?.screenshotUrl && !shotFailed && (
@@ -334,7 +340,6 @@ export default function BrowserToolCard({ part, nested = false }) {
             </div>
           )}
         </div>
-      )}
-    </div>
+    </ToolChrome>
   )
 }

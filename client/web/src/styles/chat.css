@@ -26,6 +26,28 @@
   gap: 4px;
 }
 
+/* Long-transcript: let the browser skip layout/paint for older bubbles. */
+.msg-slot--contain {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
+}
+
+.load-earlier-msgs {
+  align-self: center;
+  margin: 4px 0 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.load-earlier-msgs:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
 /* ── Welcome ───────────────────────────────── */
 .welcome {
   display: flex;
@@ -339,20 +361,23 @@
 .reasoning-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 2px;
+  gap: 4px;
+  padding: 1px 0;
   background: none;
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 13px;
-  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  line-height: 1.5;
   transition: color 0.15s;
 }
 .reasoning-toggle:hover { color: var(--text-secondary); }
 
 .reasoning-arrow {
   flex-shrink: 0;
+  font-size: 7px;
+  opacity: 0.35;
   transition: transform 0.2s ease;
 }
 .reasoning-arrow.open { transform: rotate(90deg); }

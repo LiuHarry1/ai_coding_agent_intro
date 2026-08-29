@@ -4,6 +4,7 @@ import React, {
   useLayoutEffect,
   useState,
   useCallback,
+  useMemo,
   Suspense,
   lazy,
 } from 'react'
@@ -14,6 +15,11 @@ const MessageBubble = lazy(() => import('./MessageBubble.jsx'))
 
 const PIN_THRESHOLD_PX = 140
 const SHOW_BUTTON_PX = 120
+/** Mount at most this many recent bubbles; older ones load on demand. */
+const INITIAL_VISIBLE = 40
+const LOAD_MORE_STEP = 40
+/** Skip content-visibility on the newest N (streaming / expand-heavy). */
+const LIVE_TAIL = 4
 
 function distanceFromBottom(el) {
   return el.scrollHeight - el.scrollTop - el.clientHeight
@@ -28,7 +34,20 @@ export default function ChatView() {
   const pinToBottomRef = useRef(true)
   const programmaticScrollRef = useRef(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
   const hasMessages = messages.length > 0
+
+  // Reset window when switching sessions.
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE)
+  }, [currentSessionId])
+
+  const startIndex = Math.max(0, messages.length - visibleCount)
+  const visibleMessages = useMemo(
+    () => messages.slice(startIndex),
+    [messages, startIndex],
+  )
+  const hiddenCount = startIndex
 
   const stickToBottom = useCallback(() => {
     const el = scrollRef.current
@@ -40,20 +59,16 @@ export default function ChatView() {
     })
   }, [])
 
-  // Opening a session (including history) should land on the latest turn.
   useLayoutEffect(() => {
     pinToBottomRef.current = true
     setShowScrollBtn(false)
     stickToBottom()
   }, [currentSessionId, stickToBottom])
 
-  // Follow stream updates only while pinned. Expanding a Worked group after
-  // scrolling up must not yank the viewport (Cursor transcript behavior).
   useLayoutEffect(() => {
     stickToBottom()
-  }, [messages, stickToBottom])
+  }, [messages, visibleCount, stickToBottom])
 
-  // Images / lazy bubbles can grow after `messages` settles.
   useEffect(() => {
     const root = scrollRef.current
     const inner = messagesRef.current
@@ -89,6 +104,24 @@ export default function ChatView() {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [])
 
+  const loadEarlier = useCallback(() => {
+    const el = scrollRef.current
+    const prevHeight = el?.scrollHeight ?? 0
+    const prevTop = el?.scrollTop ?? 0
+    pinToBottomRef.current = false
+    setVisibleCount(c => Math.min(messages.length, c + LOAD_MORE_STEP))
+    // Preserve viewport anchor after prepending older bubbles.
+    requestAnimationFrame(() => {
+      if (!el) return
+      const delta = el.scrollHeight - prevHeight
+      programmaticScrollRef.current = true
+      el.scrollTop = prevTop + delta
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false
+      })
+    })
+  }, [messages.length])
+
   return (
     <div className='chat-view-wrap'>
       <div
@@ -104,14 +137,36 @@ export default function ChatView() {
           <WelcomeScreen />
         ) : (
           <div className='messages' ref={messagesRef}>
+            {hiddenCount > 0 && (
+              <button
+                type='button'
+                className='load-earlier-msgs'
+                onClick={loadEarlier}
+              >
+                Show {Math.min(LOAD_MORE_STEP, hiddenCount)} earlier
+                {hiddenCount > LOAD_MORE_STEP
+                  ? ` (${hiddenCount} hidden)`
+                  : ''}
+              </button>
+            )}
             <Suspense fallback={null}>
-              {messages.map((msg, i) => (
-                <MessageBubble
-                  key={msg.id ?? `msg-${i}-${msg.type}`}
-                  message={msg}
-                  isLast={i === messages.length - 1}
-                />
-              ))}
+              {visibleMessages.map((msg, i) => {
+                const absIndex = startIndex + i
+                const fromEnd = messages.length - 1 - absIndex
+                const skipContain = fromEnd < LIVE_TAIL
+                return (
+                  <div
+                    key={msg.id ?? `msg-${absIndex}-${msg.type}`}
+                    className={
+                      skipContain
+                        ? 'msg-slot msg-slot--live'
+                        : 'msg-slot msg-slot--contain'
+                    }
+                  >
+                    <MessageBubble message={msg} />
+                  </div>
+                )
+              })}
             </Suspense>
           </div>
         )}

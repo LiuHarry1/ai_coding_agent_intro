@@ -1,7 +1,7 @@
 /**
- * Dense single-row tool chrome (≈ Cursor `ui-tool-call-line`).
+ * Dense single-row tool header (≈ Cursor `ui-tool-call-line`).
  *
- * Implementation lives in ToolRowHeader; this name is the canonical
- * primitive for new code and Cursor-style architecture docs.
+ * Prefer wrapping with `ToolChrome` in card components — it owns `.tool-row`
+ * + expand gating. This export remains the header primitive.
  */
 export { default } from './ToolRowHeader.jsx'

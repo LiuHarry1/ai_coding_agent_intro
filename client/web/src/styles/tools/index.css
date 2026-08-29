@@ -1,11 +1,14 @@
 /* Chat tool UI styles.
  *
  * Layering (aligned with Cursor Composer conversation output):
- *   shared   ≈ ui-tool-call-line
- *   card     ≈ composer-tool-call / ui-tool-call-card shell
+ *   shared    ≈ ui-tool-call-line
+ *   work-group / explored ≈ turn + explore density
+ *   card      ≈ composer-tool-call / ui-tool-call-card shell
  *   file/web/search/subagent ≈ specialized tool bodies
  */
 @import './shared.css';
+@import './work-group.css';
+@import './explored.css';
 @import './card.css';
 @import './file.css';
 @import './web.css';

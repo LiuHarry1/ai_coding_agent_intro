@@ -86,6 +86,7 @@
   width: 100%;
   background: transparent;
   border: 0;
+  outline: none;
   text-align: left;
   font-family: var(--font-mono);
   /* ≈ Cursor ui-tool-call-line: conversation font size, dense gap */
@@ -95,7 +96,11 @@
   cursor: pointer;
   border-radius: 4px;
 }
-.tool-row-header:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.tool-row-header:focus-visible {
+  outline: 1px solid var(--border);
+  outline-offset: 1px;
+}
+.tool-row-header:hover { background: transparent; color: var(--text-primary); }
 
 .tool-row-chevron {
   display: inline-block;
@@ -108,16 +113,20 @@
   color: var(--text-muted);
 }
 .tool-row-chevron.open { transform: rotate(90deg); }
+.tool-row-chevron--slot {
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .tool-row-icon { font-size: 12px; opacity: 0.85; flex-shrink: 0; }
 .tool-row-label {
-  /* ≈ Cursor ui-tool-call-line-action */
-  color: var(--text-secondary);
-  font-weight: 400;
+  /* Cursor: bold action verb */
+  color: var(--text-primary);
+  font-weight: 600;
   flex-shrink: 0;
 }
 .tool-row-title {
-  /* ≈ Cursor ui-tool-call-line-details — quieter than a loud accent link */
+  /* Cursor: quieter details after the verb */
   color: var(--text-muted);
   font-weight: 400;
   white-space: nowrap;
@@ -125,10 +134,8 @@
   text-overflow: ellipsis;
   min-width: 0;
   flex: 0 1 auto;
-  max-width: 48%;
+  max-width: 56%;
   font-variant-numeric: tabular-nums;
-  /* For bash, the "title" is the full command which is plain mono text,
-     not a filename — components can override color via a modifier class. */
 }
 .tool-row-header:hover .tool-row-title:not(.tool-row-title--plain) {
   color: var(--text-secondary);
@@ -136,16 +143,19 @@
   text-decoration-color: var(--border-light);
   text-underline-offset: 2px;
 }
-.tool-row-title--plain { color: var(--text-secondary); font-weight: normal; }
+.tool-row-title--plain {
+  color: var(--text-muted);
+  font-weight: 400;
+}
 .tool-row-subtitle {
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 32%;
+  max-width: 36%;
 }
 .grep-count-label {
   font-size: 11px;
@@ -184,14 +194,28 @@
   flex-shrink: 0;
 }
 
-/* Nested rows inside subagent step lists — slightly tighter than top-level. */
+/* Nested rows inside Explored / subagent — same type scale as Cursor flat list. */
 .tool-row--nested .tool-row-header {
-  padding: 2px 6px;
+  padding: 1px 4px;
+  font-size: 12.5px;
+}
+.tool-row--nested .tool-row-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tool-row--nested .tool-row-subtitle {
+  font-size: 12px;
+  max-width: 40%;
+}
+.tool-row--nested .tool-row-body {
+  margin-left: 14px;
   font-size: 11.5px;
 }
-.tool-row--nested .tool-row-label { font-size: 11.5px; }
-.tool-row--nested .tool-row-subtitle { font-size: 10.5px; }
-.tool-row--nested .tool-row-body { margin-left: 14px; font-size: 11px; }
+.tool-row--nested .tool-row-duration,
+.tool-row--nested .tool-row-status--ok {
+  display: none;
+}
 
 .tool-row-actions-bar {
   margin: 4px 0 0 14px;
@@ -239,8 +263,14 @@
 /* Light theme */
 
 
-/* Light theme (restored) */
-[data-theme="light"] .copy-btn { background: #fff; color: var(--text-secondary); border-color: var(--border); }
-[data-theme="light"] .tool-row-header:hover { background: var(--bg-secondary); color: var(--text-primary); }
-[data-theme="light"] .tool-row-header { color: var(--text-secondary); }
-[data-theme="light"] .tool-row-title--plain { color: var(--text-primary); }
+[data-theme="light"] .tool-row-header:hover { background: transparent; }
+[data-theme="light"] .tool-row-label { color: var(--text-primary); }
+[data-theme="light"] .tool-row-title,
+[data-theme="light"] .tool-row-title--plain {
+  color: var(--text-muted);
+}
+[data-theme="light"] .explored-group .tool-row-label,
+[data-theme="light"] .explored-group .tool-row-title,
+[data-theme="light"] .work-group-body .read-file-card .tool-row-label {
+  color: var(--text-muted);
+}

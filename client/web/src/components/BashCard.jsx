@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import LiveTerminal from './LiveTerminal.jsx'
 import { detectError } from '../lib/utils.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
-import { useChatStore } from '../stores/chat-store.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
+import { useChatActions } from '../lib/chat-actions.jsx'
 import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
@@ -94,8 +94,9 @@ function StopIcon() {
   )
 }
 
-export default function BashCard({ part }) {
-  const stopTool = useChatStore(s => s.stopSubagent)
+export default function BashCard({ part, onStopTool }) {
+  const { stopTool } = useChatActions()
+  const stop = onStopTool ?? stopTool
   const args = part.args || {}
   const tur = getTur(part)
   const display = shellDisplayParts(part)
@@ -152,12 +153,13 @@ export default function BashCard({ part }) {
         .join('\n')
     : display.textFallback || ''
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(
-    isRunning && hasLiveOutput && !wantsBackground,
-    {
-      expandOnceWhen: isDone && !isBackgrounded && (isError || hasOutput),
-    },
-  )
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('shell', {
+    isDone,
+    isError,
+    hasBody: hasOutput || hasLiveOutput || isError,
+    hasLiveOutput,
+    isBackgrounded: isBackgrounded || wantsBackground,
+  })
   const [showFullOutput, setShowFullOutput] = useState(false)
   const [showBgNudge, setShowBgNudge] = useState(false)
 
@@ -195,7 +197,7 @@ export default function BashCard({ part }) {
   const onStop = e => {
     e.stopPropagation()
     if (isDone || part.stopping || !part.toolCallId) return
-    void stopTool(part.toolCallId)
+    void stop(part.toolCallId)
   }
 
   const exitBadge =
@@ -218,12 +220,10 @@ export default function BashCard({ part }) {
     ) : null
 
   return (
-    <div
+    <ToolChrome
+      variant='bash-card'
       className={[
-        'tool-row',
-        'bash-card',
         'ui-shell-tool-call',
-        isError ? 'has-error' : '',
         isRunning ? 'ui-shell-tool-call--pending' : '',
         isRunning ? 'ui-shell-tool-call--with-stop' : '',
         !isBackgrounded && (hasOutput || hasLiveOutput)
@@ -233,56 +233,56 @@ export default function BashCard({ part }) {
       ]
         .filter(Boolean)
         .join(' ')}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={isBackgrounded ? undefined : toggleExpanded}
+      hasBody={!isBackgrounded}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      bodyOpen={showLive || showFinal}
+      label={action}
+      title={details}
+      titlePlain
+      titleTooltip={titleTooltip}
+      subtitle={
+        !isDone && part.liveElapsed != null ? `${part.liveElapsed}s` : null
+      }
+      meta={
+        <>
+          {nudgeBadge}
+          {exitBadge}
+        </>
+      }
+      duration={isBackgrounded ? undefined : part.duration}
+      showSuccess={isDone && !isError && !isBackgrounded}
+      actions={
+        <>
+          {!isDone && part.toolCallId && (
+            <button
+              type='button'
+              className='subagent-stop-btn ui-shell-tool-call__glass-stop'
+              onClick={onStop}
+              disabled={!!part.stopping}
+              aria-label='Stop command'
+              title={part.stopping ? 'Stopping…' : 'Stop'}
+            >
+              {part.stopping ? (
+                <span className='ui-shell-tool-call__stop-label'>…</span>
+              ) : (
+                <StopIcon />
+              )}
+            </button>
+          )}
+          {isDone && !isError && hasOutput && !isBackgrounded ? (
+            <CopyButton text={copyText} label='Copy output' inline />
+          ) : null}
+          {isDone && !isError && command ? (
+            <CopyButton text={command} label='Copy command' inline />
+          ) : null}
+        </>
+      }
     >
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={isBackgrounded ? undefined : toggleExpanded}
-        showChevron={!isBackgrounded}
-        label={action}
-        title={details}
-        titlePlain
-        titleTooltip={titleTooltip}
-        subtitle={
-          !isDone && part.liveElapsed != null ? `${part.liveElapsed}s` : null
-        }
-        meta={
-          <>
-            {nudgeBadge}
-            {exitBadge}
-          </>
-        }
-        duration={isBackgrounded ? undefined : part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError && !isBackgrounded}
-        actions={
-          <>
-            {!isDone && part.toolCallId && (
-              <button
-                type='button'
-                className='subagent-stop-btn ui-shell-tool-call__glass-stop'
-                onClick={onStop}
-                disabled={!!part.stopping}
-                aria-label='Stop command'
-                title={part.stopping ? 'Stopping…' : 'Stop'}
-              >
-                {part.stopping ? (
-                  <span className='ui-shell-tool-call__stop-label'>…</span>
-                ) : (
-                  <StopIcon />
-                )}
-              </button>
-            )}
-            {isDone && !isError && hasOutput && !isBackgrounded ? (
-              <CopyButton text={copyText} label='Copy output' inline />
-            ) : null}
-            {isDone && !isError && command ? (
-              <CopyButton text={command} label='Copy command' inline />
-            ) : null}
-          </>
-        }
-      />
-
       {showLive && (
         <LiveTerminal
           output={part.liveOutput}
@@ -349,6 +349,6 @@ export default function BashCard({ part }) {
       {showFinal && !hasOutput && (
         <div className='tool-row-empty'>(no output)</div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

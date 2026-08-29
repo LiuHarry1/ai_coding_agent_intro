@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { detectError } from '../lib/utils.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
@@ -68,8 +68,11 @@ export default function TaskOutputCard({ part }) {
   const retrieval = tur?.retrieval_status ?? null
   const taskStatus = tur?.task_status ?? null
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone, {
-    expandOnceWhen: isDone && (isError || shortSuccess),
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('default', {
+    isDone,
+    isError,
+    hasBody: true,
+    forceExpandOnce: isDone && (isError || shortSuccess),
   })
 
   const action = toolActionLabel('await', {
@@ -88,29 +91,32 @@ export default function TaskOutputCard({ part }) {
     .join('\n')
 
   return (
-    <div className={`tool-row task-output-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={toggleExpanded}
-        label={action}
-        title={details || '…'}
-        titlePlain
-        titleTooltip={titleTooltip || details}
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-      />
-      {expanded && hasOutput && (
+    <ToolChrome
+      variant='task-output-card'
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={toggleExpanded}
+      hasBody
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label={action}
+      title={details || '…'}
+      titlePlain
+      titleTooltip={titleTooltip || details}
+      duration={undefined}
+      showSuccess={false}
+    >
+      {hasOutput && (
         <pre
           className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''}`}
         >
           {displayBody}
         </pre>
       )}
-      {expanded && isDone && !hasOutput && (
+      {isDone && !hasOutput && (
         <div className='tool-row-empty'>(no output)</div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

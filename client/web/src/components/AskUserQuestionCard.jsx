@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { useChatStore } from '../stores/chat-store.js'
+import { useChatActions } from '../lib/chat-actions.jsx'
 import { getTur } from '../lib/tool-result.js'
 
 function normalizeQuestions(raw) {
@@ -62,8 +62,9 @@ function QuestionBlock({ question, answers, onChange }) {
   )
 }
 
-export default function AskUserQuestionCard({ part }) {
-  const answerQuestion = useChatStore(s => s.answerQuestion)
+export default function AskUserQuestionCard({ part, onAnswer }) {
+  const { answerQuestion } = useChatActions()
+  const submitAnswer = onAnswer ?? answerQuestion
   const tur = getTur(part)
   const [answers, setAnswers] = useState({})
   const [notes, setNotes] = useState('')
@@ -93,7 +94,7 @@ export default function AskUserQuestionCard({ part }) {
     if (!allAnswered || submitting || done) return
     setSubmitting(true)
     try {
-      await answerQuestion(
+      await submitAnswer(
         part.id,
         answers,
         notes.trim() ? { notes } : undefined,

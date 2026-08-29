@@ -1,25 +1,17 @@
 import React, { useMemo, useState } from 'react'
-import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { fileName } from '../lib/utils.js'
 import { liveToolSubtitle } from '../lib/tool-density.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
+import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 
 /**
- * Read card — CC dual-channel UI path:
- * body only from `part.toolUseResult`. Missing TUR → header-only (silent).
- *
- * Out stores raw file lines; line numbers exist only on the model map path.
- * `stripDecorations` remains for older sessions that still baked numbers into Out.
+ * Read row — Cursor default-chat density:
+ * success text reads are header-only ("Read package.json L1–76").
+ * Click opens the file in the workspace IDE; no in-chat file dump.
+ * Errors / images still expand inline.
  */
-
-function stripDecorations(content) {
-  if (typeof content !== 'string') return ''
-  const lines = content.split('\n')
-  const body = lines[0]?.includes('(lines ') ? lines.slice(1) : lines
-  return body.map(l => l.replace(/^\s*\d+│/, '')).join('\n')
-}
 
 function formatBytes(n) {
   if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return null
@@ -80,8 +72,9 @@ function fromToolUseResult(tur) {
   return null
 }
 
-export default function ReadFileCard({ part }) {
+export default function ReadFileCard({ part, nested = false }) {
   const [lightbox, setLightbox] = useState(null)
+  const openFile = useWorkspaceIdeStore(s => s.openFile)
   const args = part.args || {}
   const result = part.result
   const isDone = part.status === 'done'
@@ -98,9 +91,13 @@ export default function ReadFileCard({ part }) {
   )
 
   const hasImage = Boolean(header?.kind === 'image' && header.src)
-  const [expanded, toggleExpanded] = useStreamingExpanded(!isDone, {
-    expandOnceWhen: isDone && !isError && hasImage,
-  })
+  // Success text/unchanged: header-only. Body only for error / image / misc.
+  const headerOnly =
+    isDone &&
+    !isError &&
+    (header?.kind === 'text' ||
+      header?.kind === 'unchanged' ||
+      !header)
 
   let rangeLabel = ''
   if (header?.kind === 'text') {
@@ -130,22 +127,14 @@ export default function ReadFileCard({ part }) {
     rangeLabel = `L${start}-${end}`
   }
 
-  const codeBody =
-    isDone && !isError && header?.kind === 'text' && header.content
-      ? stripDecorations(header.content)
-      : ''
-  // Empty / OOB text: no raw lines — show a short note instead of a blank expand.
-  const emptyTextNote =
-    isDone && !isError && header?.kind === 'text' && !header.content
-      ? header.total === 0
-        ? 'File exists but is empty.'
-        : `Offset ${header.start} is past end of file (${header.total} lines).`
-      : ''
-  // Images render as <img>; keep text summary only when bytes are missing.
   const summaryBody =
-    isDone && !isError && header && header.kind !== 'text' && header.kind !== 'image'
+    isDone &&
+    !isError &&
+    header &&
+    header.kind !== 'text' &&
+    header.kind !== 'image'
       ? header.content || header.label || ''
-      : emptyTextNote
+      : ''
   const imageFallbackLabel =
     isDone && !isError && header?.kind === 'image' && !header.src
       ? header.label
@@ -154,40 +143,61 @@ export default function ReadFileCard({ part }) {
   const liveSub = !isDone ? liveToolSubtitle(part) : null
   const action = toolActionLabel('read', { loading: !isDone, hasError: isError })
   const title = isError ? toolErrorDetails(fName, true) : fName
+
   const hasBody =
-    Boolean(codeBody) ||
-    Boolean(summaryBody) ||
-    Boolean(imageFallbackLabel) ||
-    hasImage ||
-    isError
+    !headerOnly &&
+    (Boolean(summaryBody) ||
+      Boolean(imageFallbackLabel) ||
+      hasImage ||
+      isError)
+
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('read', {
+    isDone,
+    isError,
+    nested,
+    hasBody,
+    headerOnly,
+    forceExpandOnce: isDone && !isError && hasImage,
+  })
+
+  const handleOpen = () => {
+    if (!filePath || typeof openFile !== 'function') return
+    void openFile(filePath)
+  }
+
+  const onToggle = headerOnly
+    ? filePath
+      ? handleOpen
+      : undefined
+    : hasBody
+      ? toggleExpanded
+      : filePath
+        ? handleOpen
+        : undefined
 
   return (
-    <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={hasBody ? toggleExpanded : undefined}
-        label={action}
-        title={title}
-        titleTooltip={filePath || ''}
-        subtitle={liveSub || rangeLabel || null}
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-        actions={
-          isDone && codeBody ? (
-            <CopyButton text={codeBody} label='Copy' inline />
-          ) : null
-        }
-      />
-
-      {expanded && isDone && !isError && codeBody && (
-        <pre className='tool-row-body'>{codeBody}</pre>
-      )}
-      {expanded && isDone && !isError && summaryBody && (
+    <ToolChrome
+      variant='read-file-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={headerOnly ? false : expanded}
+      onToggle={onToggle}
+      hasBody={headerOnly ? Boolean(filePath) : hasBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label={action}
+      title={title}
+      titleTooltip={filePath || ''}
+      titlePlain
+      subtitle={liveSub || rangeLabel || null}
+      duration={undefined}
+      showSuccess={false}
+    >
+      {isDone && !isError && summaryBody && (
         <pre className='tool-row-body'>{summaryBody}</pre>
       )}
-      {expanded && isDone && !isError && hasImage && (
+      {isDone && !isError && hasImage && (
         <div className='read-file-shot'>
           <img
             src={header.src}
@@ -196,10 +206,10 @@ export default function ReadFileCard({ part }) {
           />
         </div>
       )}
-      {expanded && isDone && !isError && imageFallbackLabel && (
+      {isDone && !isError && imageFallbackLabel && (
         <pre className='tool-row-body'>{imageFallbackLabel}</pre>
       )}
-      {expanded && isError && (
+      {isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
       {lightbox && (
@@ -207,6 +217,6 @@ export default function ReadFileCard({ part }) {
           <img src={lightbox} alt={fName} />
         </div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

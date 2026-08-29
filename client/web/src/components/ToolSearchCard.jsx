@@ -1,6 +1,6 @@
 import React from 'react'
-import ToolCallLine from './ToolCallLine.jsx'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import ToolChrome from './ToolChrome.jsx'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
@@ -30,9 +30,11 @@ export default function ToolSearchCard({ part, nested = false }) {
     !hasMatches && typeof result === 'string' && result.trim()
   const hasBody = isError || hasMatches || hasTextFallback
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
-    expandOnceWhen: isDone && hasBody,
-  })
+  // Suppressed from transcript normally; if shown, explore-line density.
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
+    'explore-line',
+    { isDone, isError, nested, hasBody },
+  )
 
   const action = toolActionLabel('toolSearch', {
     loading: !isDone,
@@ -43,23 +45,23 @@ export default function ToolSearchCard({ part, nested = false }) {
     : summary || 'ToolSearch\u2026'
 
   return (
-    <div className={`tool-row tool-search-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={hasBody ? toggleExpanded : undefined}
-        showChevron={Boolean(
-          isDone && !isError && (hasMatches || hasTextFallback),
-        )}
-        label={action}
-        title={title}
-        titleTooltip={query || undefined}
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-      />
-
-      {expanded && isDone && !isError && hasMatches && (
+    <ToolChrome
+      variant='tool-search-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasBody ? toggleExpanded : undefined}
+      hasBody={hasBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label={action}
+      title={title}
+      titleTooltip={query || undefined}
+      duration={undefined}
+      showSuccess={false}
+    >
+      {isDone && !isError && hasMatches && (
         <ul className='tool-row-body tool-search-matches'>
           {matches.map(m => (
             <li key={m.name}>
@@ -69,14 +71,12 @@ export default function ToolSearchCard({ part, nested = false }) {
           ))}
         </ul>
       )}
-      {expanded &&
-        isDone &&
-        !isError &&
-        !hasMatches &&
-        hasTextFallback && <pre className='tool-row-body'>{result}</pre>}
-      {expanded && isError && (
+      {isDone && !isError && !hasMatches && hasTextFallback && (
+        <pre className='tool-row-body'>{result}</pre>
+      )}
+      {isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

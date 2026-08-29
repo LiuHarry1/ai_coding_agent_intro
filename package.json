@@ -10,6 +10,7 @@
     "acp": "tsx start.js --acp",
     "dev:web": "npm --prefix client/web run dev",
     "build:web": "npm --prefix client/web run build",
+    "test:density": "node --test client/web/src/lib/tool-density-policy.test.js",
     "build:worker": "node ./src/worker/build-worker.cjs",
     "build:agent": "node ./src/agent/build-agent.cjs",
     "stage:agent-runtime": "node ./scripts/stage-agent-runtime.cjs",

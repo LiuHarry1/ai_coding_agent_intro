@@ -11,122 +11,22 @@ import {
   toWorkspaceRelative,
   insertTextAtCursor,
 } from '../lib/at-mention.js'
-
-const MAX_IMAGES = 5
-const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
-
-function fileToDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-function extractDroppedFiles(dataTransfer) {
-  const files = []
-  if (!dataTransfer?.items) return files
-  for (const item of dataTransfer.items) {
-    if (item.kind === 'file') {
-      const f = item.getAsFile()
-      if (f) files.push(f)
-    }
-  }
-  return files
-}
-
-function extractImages(dataTransfer) {
-  return extractDroppedFiles(dataTransfer).filter(f =>
-    ACCEPTED_TYPES.includes(f.type),
-  )
-}
-
-function isImageFile(file) {
-  return ACCEPTED_TYPES.includes(file.type)
-}
-
-/** Returns partial name after `/`, or null when not in slash-pick mode. */
-function getSlashFilter(text) {
-  const trimmed = text.trimStart()
-  if (!trimmed.startsWith('/')) return null
-  const rest = trimmed.slice(1)
-  if (rest.includes(' ') || rest.includes('\n')) return null
-  return rest.toLowerCase()
-}
-
-const INITIAL_VISIBLE = 3
-
-/** Group matches: Skills → user Commands → Built-in. */
-function groupEntries(matches) {
-  const skills = matches
-    .filter(e => e.kind === 'skill')
-    .sort((a, b) => a.name.localeCompare(b.name))
-  const commands = matches
-    .filter(e => e.kind === 'command')
-    .sort((a, b) => a.name.localeCompare(b.name))
-  const builtins = matches
-    .filter(e => e.kind === 'built-in' && e.name !== 'commands')
-    .sort((a, b) => a.name.localeCompare(b.name))
-
-  const groups = []
-  if (skills.length > 0)
-    groups.push({ label: 'Skills', icon: 'skill', items: skills })
-  if (commands.length > 0)
-    groups.push({ label: 'Commands', icon: 'command', items: commands })
-  if (builtins.length > 0)
-    groups.push({ label: 'Built-in', icon: 'command', items: builtins })
-  return groups
-}
-
-/** Flat navigable rows for keyboard + mouse (items, show more, show less). */
-function rowFromSectionRow(section, row) {
-  if (row.kind === 'item') {
-    return {
-      kind: 'item',
-      groupLabel: section.label,
-      groupIcon: section.icon,
-      entry: row.entry,
-    }
-  }
-  if (row.kind === 'more') {
-    return { kind: 'more', groupLabel: section.label, count: row.count }
-  }
-  return { kind: 'less', groupLabel: section.label }
-}
-
-function clearSlashToken(value) {
-  return value.replace(/^\s*\/[^\s\n]*/, '')
-}
-
-function SlashMenuIcon({ type }) {
-  if (type === 'skill') {
-    return (
-      <svg
-        className='slash-menu__icon'
-        width='14'
-        height='14'
-        viewBox='0 0 24 24'
-        fill='currentColor'
-        aria-hidden='true'
-      >
-        <path d='M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z' />
-      </svg>
-    )
-  }
-  return (
-    <svg
-      className='slash-menu__icon'
-      width='14'
-      height='14'
-      viewBox='0 0 24 24'
-      fill='currentColor'
-      aria-hidden='true'
-    >
-      <path d='M13 2 3 14h7l-1 8 10-12h-7l1-8z' />
-    </svg>
-  )
-}
+import {
+  MAX_IMAGES,
+  ACCEPTED_TYPES,
+  fileToDataURL,
+  extractDroppedFiles,
+  extractImages,
+  isImageFile,
+} from '../lib/composer-attachments.js'
+import {
+  INITIAL_VISIBLE,
+  getSlashFilter,
+  groupEntries,
+  rowFromSectionRow,
+  clearSlashToken,
+  SlashMenuIcon,
+} from '../lib/slash-menu.jsx'
 
 const MODE_PLACEHOLDERS = {
   agent: 'Describe your task… @file',
@@ -137,6 +37,7 @@ const MODE_PLACEHOLDERS = {
 export default function InputArea() {
   const sendMessage = useChatStore(s => s.sendMessage)
   const isStreaming = useChatStore(s => s.isStreaming)
+  const isAwaitingInteraction = useChatStore(s => s.isAwaitingInteraction)
   const stopStreaming = useChatStore(s => s.stopStreaming)
   const workspace = useChatStore(s => s.workspace)
   const agentMode = useChatStore(s => s.agentMode)
@@ -763,11 +664,33 @@ export default function InputArea() {
             onPaste={handlePaste}
             autoFocus
           />
-          {isStreaming ? (
+          {isAwaitingInteraction ? (
+            <button
+              className='composer-btn composer-btn--stop'
+              onClick={stopStreaming}
+              title='Cancel'
+              aria-label='Cancel'
+              type='button'
+            >
+              <svg
+                width='14'
+                height='14'
+                viewBox='0 0 24 24'
+                fill='none'
+                stroke='currentColor'
+                strokeWidth='2.5'
+                strokeLinecap='round'
+              >
+                <line x1='6' y1='6' x2='18' y2='18' />
+                <line x1='18' y1='6' x2='6' y2='18' />
+              </svg>
+            </button>
+          ) : isStreaming ? (
             <button
               className='composer-btn composer-btn--stop'
               onClick={stopStreaming}
               title='Stop'
+              aria-label='Stop'
               type='button'
             >
               <svg

@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { parseMcpToolName } from '../lib/tool-kind.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
@@ -100,10 +100,16 @@ export default function WebSearchCard({ part, nested = false }) {
     answers.length > 0 ||
     (typeof result === 'string' && result.length > 0)
 
-  // Keep expanded while running; on success keep results scannable.
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
-    expandOnceWhen: isDone && hasScannableBody,
-  })
+  // Explore density: stay collapsed when done; user opens for body / errors.
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
+    'explore-line',
+    {
+      isDone,
+      isError,
+      nested,
+      hasBody: hasScannableBody,
+    },
+  )
   const [showAll, setShowAll] = useState(false)
 
   const query = args.query || parsed?.query || ''
@@ -132,41 +138,43 @@ export default function WebSearchCard({ part, nested = false }) {
       : 'search\u2026'
 
   return (
-    <div className={`tool-row web-search-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={toggleExpanded}
-        label={action}
-        title={titleText}
-        titleTooltip={query}
-        subtitle={
-          filter.length > 0
-            ? filter.join(' \u00B7 ')
-            : mcpServer
-              ? `via ${mcpServer}`
-              : null
-        }
-        meta={
-          isDone && results.length > 0 ? (
-            <span className='web-search-meta'>
-              {results.length} {results.length === 1 ? 'result' : 'results'}
-            </span>
-          ) : null
-        }
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-        emptyHint={emptyHint}
-        actions={
-          isDone && !isError && typeof result === 'string' ? (
-            <CopyButton text={result} label='Copy raw' inline />
-          ) : null
-        }
-      />
-
-      {expanded && (
-        <div className='web-search-body'>
+    <ToolChrome
+      variant='web-search-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasScannableBody ? toggleExpanded : undefined}
+      hasBody={hasScannableBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label={action}
+      title={titleText}
+      titleTooltip={query}
+      subtitle={
+        filter.length > 0
+          ? filter.join(' \u00B7 ')
+          : mcpServer
+            ? `via ${mcpServer}`
+            : null
+      }
+      meta={
+        isDone && results.length > 0 ? (
+          <span className='web-search-meta'>
+            {results.length} {results.length === 1 ? 'result' : 'results'}
+          </span>
+        ) : null
+      }
+      duration={undefined}
+      showSuccess={false}
+      emptyHint={emptyHint}
+      actions={
+        expanded && isDone && !isError && typeof result === 'string' ? (
+          <CopyButton text={result} label='Copy raw' inline />
+        ) : null
+      }
+    >
+      <div className='web-search-body'>
           {isError && <div className='web-search-error'>{result}</div>}
           {!isError && answers.length > 0 && (
             <div className='web-search-answers'>
@@ -225,7 +233,6 @@ export default function WebSearchCard({ part, nested = false }) {
             <pre className='web-search-raw'>{result}</pre>
           )}
         </div>
-      )}
-    </div>
+    </ToolChrome>
   )
 }

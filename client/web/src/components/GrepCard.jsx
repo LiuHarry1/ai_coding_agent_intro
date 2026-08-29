@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { FileIcon } from './workspace-ide/icons.jsx'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 import {
   fileName,
@@ -208,12 +208,10 @@ export default function GrepCard({ part, nested = false }) {
   const hasBody =
     isError || (!!parsed && (parsed.empty || fileHits.length > 0))
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
-    expandOnceWhen:
-      isDone &&
-      ((isError && !!result) || (!!parsed && !parsed.empty && hasBody)),
-  })
-  const showBody = expanded && hasBody
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
+    'explore-line',
+    { isDone, isError, nested, hasBody },
+  )
 
   const pattern = args.pattern || ''
   const displayPattern = pattern ? truncateEnd(pattern, 44) : ''
@@ -257,9 +255,11 @@ export default function GrepCard({ part, nested = false }) {
         displayPattern ? `\u201C${displayPattern}\u201D` : 'grep\u2026',
         true,
       )
-    : displayPattern
-      ? `\u201C${displayPattern}\u201D`
-      : 'grep\u2026'
+    : nested && displayPattern && shortPath
+      ? `\u201C${displayPattern}\u201D in ${shortPath}`
+      : displayPattern
+        ? `\u201C${displayPattern}\u201D`
+        : 'grep\u2026'
 
   const handleOpen = filePath => {
     if (typeof openFile !== 'function') return
@@ -269,41 +269,46 @@ export default function GrepCard({ part, nested = false }) {
   const isContentMode = parsed?.mode === 'content' && contentGroups.length > 0
 
   return (
-    <div className={`tool-row grep-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded && hasBody}
-        onToggle={hasBody ? toggleExpanded : undefined}
-        showChevron={hasBody}
-        label={action}
-        title={title}
-        titleTooltip={
-          [pattern && `pattern: ${pattern}`, filterTooltip]
-            .filter(Boolean)
-            .join('\n') || undefined
-        }
-        subtitle={subtitle}
-        subtitleTooltip={filterTooltip || undefined}
-        meta={
-          countLabel ? (
-            <span className='grep-count-label'>{countLabel}</span>
-          ) : null
-        }
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-        emptyHint={emptyHint}
-        actions={
-          isDone &&
-          !isError &&
-          typeof result === 'string' &&
-          result.length > 0 ? (
-            <CopyButton text={result} label='Copy' inline />
-          ) : null
-        }
-      />
-
-      {showBody && isDone && !isError && isContentMode && (
+    <ToolChrome
+      variant='grep-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasBody ? toggleExpanded : undefined}
+      hasBody={hasBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label={action}
+      title={title}
+      titlePlain
+      titleTooltip={
+        [pattern && `pattern: ${pattern}`, filterTooltip]
+          .filter(Boolean)
+          .join('\n') || undefined
+      }
+      subtitle={nested ? null : subtitle}
+      subtitleTooltip={filterTooltip || undefined}
+      meta={
+        !nested && countLabel ? (
+          <span className='grep-count-label'>{countLabel}</span>
+        ) : null
+      }
+      duration={undefined}
+      showSuccess={false}
+      emptyHint={emptyHint}
+      actions={
+        expanded &&
+        !nested &&
+        isDone &&
+        !isError &&
+        typeof result === 'string' &&
+        result.length > 0 ? (
+          <CopyButton text={result} label='Copy' inline />
+        ) : null
+      }
+    >
+      {isDone && !isError && isContentMode && (
         <ul className='grep-results'>
           {contentGroups.map(g => (
             <GrepContentGroup
@@ -316,8 +321,7 @@ export default function GrepCard({ part, nested = false }) {
         </ul>
       )}
 
-      {showBody &&
-        isDone &&
+      {isDone &&
         !isError &&
         !isContentMode &&
         fileHits.length > 0 && (
@@ -333,13 +337,13 @@ export default function GrepCard({ part, nested = false }) {
           </ul>
         )}
 
-      {showBody && isDone && !isError && parsed?.empty && (
+      {isDone && !isError && parsed?.empty && (
         <div className='grep-empty'>No matches</div>
       )}
 
-      {showBody && isError && (
+      {isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

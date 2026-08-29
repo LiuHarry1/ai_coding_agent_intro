@@ -1,12 +1,11 @@
-import React, { useState } from 'react'
+import React from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { liveToolSubtitle } from '../lib/tool-density.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 
 /**
- * Single-row card for list_dir, mirroring ReadFileCard.
- * The tool's output ends with `\n(N files)`, which we parse for the
- * collapsed-state summary.
+ * list_dir row — explore-line density: collapsed one-liner; body on demand.
  */
 
 function parseFileCount(result) {
@@ -15,8 +14,7 @@ function parseFileCount(result) {
   return m ? +m[1] : null
 }
 
-export default function ListDirCard({ part }) {
-  const [expanded, setExpanded] = useState(false)
+export default function ListDirCard({ part, nested = false }) {
   const args = part.args || {}
   const result = part.result
   const isDone = part.status === 'done'
@@ -37,32 +35,43 @@ export default function ListDirCard({ part }) {
   const liveSub = !isDone ? liveToolSubtitle(part) : null
   const subtitle =
     liveSub || (meta.length > 0 ? meta.join(' \u00B7 ') : null)
+  const hasBody = isDone && typeof result === 'string'
+
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
+    'explore-line',
+    { isDone, isError, nested, hasBody },
+  )
 
   return (
-    <div className={`tool-row read-file-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={() => setExpanded(v => !v)}
-        label='LS'
-        title={dirPath}
-        titleTooltip={dirPath}
-        subtitle={subtitle}
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        actions={
-          isDone && !isError && typeof result === 'string' ? (
-            <CopyButton text={result} label='Copy' inline />
-          ) : null
-        }
-      />
-
-      {expanded && isDone && !isError && typeof result === 'string' && (
+    <ToolChrome
+      variant='read-file-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasBody ? toggleExpanded : undefined}
+      hasBody={hasBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label='LS'
+      title={dirPath}
+      titleTooltip={dirPath}
+      titlePlain
+      subtitle={subtitle}
+      duration={undefined}
+      showSuccess={false}
+      actions={
+        expanded && isDone && !isError && typeof result === 'string' ? (
+          <CopyButton text={result} label='Copy' inline />
+        ) : null
+      }
+    >
+      {isDone && !isError && typeof result === 'string' && (
         <pre className='tool-row-body'>{result}</pre>
       )}
-      {expanded && isError && (
+      {isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

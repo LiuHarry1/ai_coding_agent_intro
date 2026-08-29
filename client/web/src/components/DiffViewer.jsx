@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued'
 import { useChatStore } from '../stores/chat-store.js'
 import CopyButton from './CopyButton.jsx'
@@ -118,9 +118,36 @@ export default function DiffViewer({
   const theme = useChatStore(s => s.theme)
   const isDark = theme === 'dark'
   const fName = fileName(filePath)
+  const rootRef = useRef(null)
+
+  // Cursor edit chrome: jump the card body to the first changed hunk so a
+  // +1 edit mid-file isn't buried under unchanged lines at the top.
+  useEffect(() => {
+    if (!embedded) return
+    const root = rootRef.current
+    if (!root) return
+    const id = requestAnimationFrame(() => {
+      const firstChange =
+        root.querySelector(
+          '[class*="diff-added"], [class*="diff-removed"], .diff-line-add, .diff-line-delete',
+        ) ||
+        root.querySelector('td[style*="rgba(63,185,80"], td[style*="rgba(248,81,73"]')
+      const scroller = root.closest('.file-change-body') || root
+      if (firstChange && typeof firstChange.scrollIntoView === 'function') {
+        firstChange.scrollIntoView({ block: 'center', inline: 'nearest' })
+      } else if (scroller) {
+        // Fallback: keep top for tiny hunks rendered with showDiffOnly.
+        scroller.scrollTop = 0
+      }
+    })
+    return () => cancelAnimationFrame(id)
+  }, [oldStr, newStr, embedded])
 
   return (
-    <div className={`diff-viewer ${embedded ? 'diff-viewer--embedded' : ''}`}>
+    <div
+      ref={rootRef}
+      className={`diff-viewer ${embedded ? 'diff-viewer--embedded' : ''}`}
+    >
       {!embedded && filePath && (
         <div className='diff-file-header'>
           <span className='diff-file-icon'>{'\u{1F4C4}'}</span>
@@ -139,11 +166,10 @@ export default function DiffViewer({
         splitView={false}
         useDarkTheme={isDark}
         compareMethod={DiffMethod.LINES}
-        // Show ALL lines, no fold/expand bar. The "🔀 N 🟩🟥" marker that
-        // appears with `showDiffOnly: true` is more visual noise than help
-        // for the small targeted edits this tool produces.
-        showDiffOnly={false}
-        extraLinesSurroundingDiff={3}
+        // Embedded file-change cards: show the hunk (+ context), like Cursor.
+        // Standalone diffs keep the full file for review.
+        showDiffOnly={embedded}
+        extraLinesSurroundingDiff={4}
         // The library always renders TWO line-number gutters in unified
         // mode (old | new). We hide the OLD gutter via CSS in styles/tools/file.css to
         // keep just the new-side numbers — that's what users care about.

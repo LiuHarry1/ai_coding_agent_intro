@@ -87,6 +87,12 @@ export interface ChatRequest {
   workspace?: string
   session_id?: string
   images?: string[]
+  /** Permission mode: agent | ask | plan. */
+  mode?: string
+  /** Primary agent profile id (null/omit = default Agent). */
+  agentType?: string | null
+  /** Execution-plane environment (local | remote id). */
+  environmentId?: string
   /** Same semantics as `SkillInvokeRequest.stream`. */
   stream?: boolean
 }

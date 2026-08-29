@@ -41,6 +41,9 @@ function renderToolRuns(runs) {
 /**
  * Render one timeline row (grouped assistant part).
  * `work_group` rows are owned by MessageBubble (≈ Cursor EIt workGroup case).
+ *
+ * Interaction callbacks (answer / approve / stop) come from ChatActionsProvider
+ * — leaf cards do not import the chat store.
  */
 export default function PartRenderer({
   part,

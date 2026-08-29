@@ -142,6 +142,9 @@ export class AgentClient {
     }
     if (req.session_id) body.session_id = req.session_id
     if (req.images?.length) body.images = req.images
+    if (req.mode) body.mode = req.mode
+    if (req.agentType !== undefined) body.agentType = req.agentType
+    if (req.environmentId) body.environmentId = req.environmentId
     return body
   }
 

@@ -1,9 +1,9 @@
 import React from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { formatBytes, detectError } from '../lib/utils.js'
 import { formatMcpToolTitle } from '../lib/tool-kind.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 
 /**
  * Compact row for real MCP tool calls (never folded into Explored).
@@ -37,7 +37,13 @@ export default function McpToolCard({ part, nested = false }) {
   const isError = isDone && detectError(name, result)
   const hasBody = typeof result === 'string' && result.length > 0
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone)
+  const bodyReady = Boolean(isDone && (hasBody || isError))
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('default', {
+    isDone,
+    isError,
+    nested,
+    hasBody: bodyReady,
+  })
 
   const title = formatMcpToolTitle(name)
   const hint = argHint(args)
@@ -45,42 +51,43 @@ export default function McpToolCard({ part, nested = false }) {
     isDone && !isError && hasBody ? formatBytes(result.length) : null
 
   return (
-    <div
-      className={`tool-row mcp-tool-card ${nested ? 'tool-row--nested' : ''} ${isError ? 'has-error' : ''}`}
+    <ToolChrome
+      variant='mcp-tool-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={bodyReady ? toggleExpanded : undefined}
+      hasBody={bodyReady}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label='MCP'
+      title={title || '\u2026'}
+      titleTooltip={name}
+      subtitle={hint || undefined}
+      meta={
+        sizeLabel ? (
+          <span className='tool-row-meta-badge' title='Result size'>
+            {sizeLabel}
+          </span>
+        ) : null
+      }
+      duration={undefined}
+      showSuccess={false}
+      actions={
+        expanded && isDone && !isError && hasBody ? (
+          <CopyButton text={result} label='Copy' inline />
+        ) : null
+      }
     >
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={toggleExpanded}
-        showChevron={Boolean(isDone && (hasBody || isError))}
-        label='MCP'
-        title={title || '\u2026'}
-        titleTooltip={name}
-        subtitle={hint || undefined}
-        meta={
-          sizeLabel ? (
-            <span className='tool-row-meta-badge' title='Result size'>
-              {sizeLabel}
-            </span>
-          ) : null
-        }
-        duration={nested ? undefined : part.duration}
-        isDone={isDone}
-        isError={isError}
-        actions={
-          isDone && !isError && hasBody ? (
-            <CopyButton text={result} label='Copy' inline />
-          ) : null
-        }
-      />
-
-      {expanded && isDone && !isError && hasBody && (
+      {isDone && !isError && hasBody && (
         <pre className='tool-row-body'>{result}</pre>
       )}
-      {expanded && isError && (
+      {isError && (
         <div className='tool-row-body tool-row-body--error'>
           {typeof result === 'string' ? result : 'Error'}
         </div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

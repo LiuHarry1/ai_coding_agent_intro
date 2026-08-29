@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { formatBytes } from '../lib/utils.js'
 import { parseMcpToolName } from '../lib/tool-kind.js'
 import { normalizeFetchResult, compactFetchError } from '../lib/fetch-result.js'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
@@ -91,10 +91,16 @@ export default function WebFetchCard({ part, nested = false }) {
     Boolean(normalized.excerpt) ||
     Boolean(normalized.note)
 
-  // Keep expanded while running; on success keep results scannable (don't force-collapse).
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
-    expandOnceWhen: isDone && hasScannableBody,
-  })
+  // Explore density: stay collapsed when done; user opens for body / errors.
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
+    'explore-line',
+    {
+      isDone,
+      isError,
+      nested,
+      hasBody: hasScannableBody,
+    },
+  )
   const [showFull, setShowAll] = useState(false)
 
   const headline = isDone && title ? title : urlHeadline(articleUrl)
@@ -120,36 +126,38 @@ export default function WebFetchCard({ part, nested = false }) {
   const titleText = isError ? toolErrorDetails(headline, true) : headline
 
   return (
-    <div className={`tool-row web-fetch-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded}
-        onToggle={toggleExpanded}
-        icon={'\u{1F310}'}
-        label={action}
-        title={titleText}
-        titleTooltip={articleUrl || requestUrl}
-        subtitle={subtitle}
-        meta={
-          isDone && (fetchedBytes > 0 || resultSize > 0) ? (
-            <span className='web-fetch-meta'>
-              {formatBytes(fetchedBytes || resultSize)}
-              {httpStatus ? ` (${httpStatus})` : ''}
-            </span>
-          ) : null
-        }
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-        actions={
-          isDone && !isError && text ? (
-            <CopyButton text={text} label='Copy' inline />
-          ) : null
-        }
-      />
-
-      {expanded && (
-        <div className='web-fetch-body'>
+    <ToolChrome
+      variant='web-fetch-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasScannableBody ? toggleExpanded : undefined}
+      hasBody={hasScannableBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      icon={'\u{1F310}'}
+      label={action}
+      title={titleText}
+      titleTooltip={articleUrl || requestUrl}
+      subtitle={subtitle}
+      meta={
+        isDone && (fetchedBytes > 0 || resultSize > 0) ? (
+          <span className='web-fetch-meta'>
+            {formatBytes(fetchedBytes || resultSize)}
+            {httpStatus ? ` (${httpStatus})` : ''}
+          </span>
+        ) : null
+      }
+      duration={undefined}
+      showSuccess={false}
+      actions={
+        expanded && isDone && !isError && text ? (
+          <CopyButton text={text} label='Copy' inline />
+        ) : null
+      }
+    >
+      <div className='web-fetch-body'>
           {isError && (
             <div className='web-fetch-error'>
               {compactFetchError(normalized.error, articleUrl || requestUrl)}
@@ -210,7 +218,6 @@ export default function WebFetchCard({ part, nested = false }) {
             </div>
           )}
         </div>
-      )}
-    </div>
+    </ToolChrome>
   )
 }

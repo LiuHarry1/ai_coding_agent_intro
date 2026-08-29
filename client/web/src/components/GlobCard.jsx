@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
-import ToolCallLine from './ToolCallLine.jsx'
+import ToolChrome from './ToolChrome.jsx'
 import { FileIcon } from './workspace-ide/icons.jsx'
-import { useStreamingExpanded } from '../lib/use-streaming-expanded.js'
+import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 import { fileName, shortDisplayPath, truncateEnd } from '../lib/utils.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
@@ -50,12 +50,10 @@ export default function GlobCard({ part, nested = false }) {
     isError ||
     (!!parsed && (parsed.empty || parsed.files.length > 0))
 
-  const [expanded, toggleExpanded] = useStreamingExpanded(!nested && !isDone, {
-    expandOnceWhen:
-      isDone &&
-      ((isError && !!result) || (!!parsed && !parsed.empty)),
-  })
-  const showBody = expanded && hasBody
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
+    'explore-line',
+    { isDone, isError, nested, hasBody },
+  )
 
   const pattern = args.pattern || ''
   const displayPattern = pattern ? truncateEnd(pattern, 44) : ''
@@ -92,31 +90,39 @@ export default function GlobCard({ part, nested = false }) {
   }
 
   return (
-    <div className={`tool-row glob-card ${isError ? 'has-error' : ''}`}>
-      <ToolCallLine
-        expanded={expanded && hasBody}
-        onToggle={hasBody ? toggleExpanded : undefined}
-        showChevron={hasBody}
-        label={action}
-        title={title}
-        titleTooltip={pattern}
-        subtitle={
-          subtitleParts.length > 0 ? subtitleParts.join(' \u00B7 ') : null
-        }
-        subtitleTooltip={searchPath || undefined}
-        duration={part.duration}
-        isDone={isDone}
-        isError={isError}
-        showSuccess={isDone && !isError}
-        emptyHint={emptyHint}
-        actions={
-          isDone && !isError && parsed && parsed.files.length > 0 ? (
-            <CopyButton text={parsed.files.join('\n')} label='Copy' inline />
-          ) : null
-        }
-      />
-
-      {showBody && isDone && !isError && parsed && parsed.files.length > 0 && (
+    <ToolChrome
+      variant='glob-card'
+      nested={nested}
+      isError={isError}
+      isDone={isDone}
+      expanded={expanded}
+      onToggle={hasBody ? toggleExpanded : undefined}
+      hasBody={hasBody}
+      showChevron={chevron.showChevron}
+      chevronSlot={chevron.chevronSlot}
+      label={action}
+      title={title}
+      titlePlain
+      titleTooltip={pattern}
+      subtitle={
+        subtitleParts.length > 0 ? subtitleParts.join(' \u00B7 ') : null
+      }
+      subtitleTooltip={searchPath || undefined}
+      duration={undefined}
+      showSuccess={false}
+      emptyHint={emptyHint}
+      actions={
+        expanded &&
+        !nested &&
+        isDone &&
+        !isError &&
+        parsed &&
+        parsed.files.length > 0 ? (
+          <CopyButton text={parsed.files.join('\n')} label='Copy' inline />
+        ) : null
+      }
+    >
+      {isDone && !isError && parsed && parsed.files.length > 0 && (
         <ul className='grep-results'>
           {parsed.files.map(f => {
             const parts = splitPathParts(f)
@@ -147,13 +153,13 @@ export default function GlobCard({ part, nested = false }) {
         </ul>
       )}
 
-      {showBody && isDone && !isError && parsed?.empty && (
+      {isDone && !isError && parsed?.empty && (
         <div className='grep-empty'>No files matched</div>
       )}
 
-      {showBody && isError && (
+      {isError && (
         <div className='tool-row-body tool-row-body--error'>{result}</div>
       )}
-    </div>
+    </ToolChrome>
   )
 }

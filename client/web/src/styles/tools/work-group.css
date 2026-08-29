@@ -1,0 +1,132 @@
+/* Turn-level Worked fold (Cursor workGroup) */
+/* ── Turn-level work fold (Cursor default `workGroup`) ──────────
+   Only on completed turns; final answer stays outside the fold. */
+.work-group {
+  margin: 2px 0 4px;
+}
+.work-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 6px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.work-group-header:focus-visible {
+  outline: 1px solid var(--border);
+  outline-offset: 1px;
+}
+.work-group.active .work-group-header {
+  color: var(--text-primary);
+}
+.work-group-header:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.work-group-chevron {
+  display: inline-block;
+  font-size: 7px;
+  width: 10px;
+  text-align: center;
+  transition: transform 120ms ease;
+  flex-shrink: 0;
+  opacity: 0.55;
+  color: var(--text-muted);
+}
+.work-group-chevron.open {
+  transform: rotate(90deg);
+}
+.work-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+}
+.work-group-action {
+  /* Cursor ui-step-group tertiary: whole "Worked for Ns" is muted */
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.work-group-details {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.work-group-header .spinner {
+  margin-left: 2px;
+}
+.work-group-body {
+  /* Cursor: shallow indent — flat status lines, not a file-tree */
+  margin: 1px 0 2px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.work-group-body[hidden] {
+  display: none !important;
+}
+
+/* Cursor Worked children: muted one-liners, no grey pill bars / cards. */
+.work-group-body .tool-row-header {
+  background: transparent !important;
+  padding: 1px 0;
+  border-radius: 0;
+}
+.work-group-body .tool-row-header:hover {
+  background: transparent !important;
+}
+.work-group-body .tool-row-chevron {
+  opacity: 0.35;
+}
+.work-group-body .tool-row-label,
+.work-group-body .tool-row-title,
+.work-group-body .tool-row-subtitle,
+.work-group-body .read-file-card .tool-row-label,
+.work-group-body .read-file-card .tool-row-title,
+.work-group-body .read-file-card .tool-row-subtitle,
+.work-group-body .grep-card .tool-row-label,
+.work-group-body .grep-card .tool-row-title,
+.work-group-body .grep-card .tool-row-subtitle,
+.work-group-body .glob-card .tool-row-label,
+.work-group-body .glob-card .tool-row-title,
+.work-group-body .glob-card .tool-row-subtitle,
+.work-group-body .explored-group .tool-row-label,
+.work-group-body .explored-group .tool-row-title,
+.work-group-body .subagent-timeline-row .tool-row-label,
+.work-group-body .subagent-timeline-row .tool-row-title,
+.work-group-body .tool-search-card .tool-row-label,
+.work-group-body .tool-search-card .tool-row-title {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.work-group-body .tool-row-body {
+  margin: 4px 0 2px 0;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 220px;
+}
+
+[data-theme="light"] .work-group-header {
+  color: var(--text-muted);
+}
+[data-theme="light"] .work-group-header:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+[data-theme="light"] .work-group-action,
+[data-theme="light"] .work-group-details {
+  color: var(--text-muted);
+}

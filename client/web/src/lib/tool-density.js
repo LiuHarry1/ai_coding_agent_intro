@@ -179,7 +179,7 @@ export function pickLiveMember(items) {
   return running || items[items.length - 1]
 }
 
-/** Compact "3 reads · 2 searches" mix for done Explored / subagent rows. */
+/** Compact "3 reads, 2 searches" mix for done Explored / subagent rows. */
 export function summarizeToolSteps(steps) {
   const counts = {}
   for (const s of steps || []) {
@@ -213,7 +213,69 @@ export function summarizeToolSteps(steps) {
       phrases.push(`${counts[key]} ${counts[key] > 1 ? plur : sing}`)
   }
   if (phrases.length === 0) return null
-  return phrases.join(' \u00B7 ')
+  // Cursor transcript: "3 searches, 17 browser actions"
+  return phrases.join(', ')
+}
+
+/**
+ * Cursor collapsed explore line details.
+ * Prefer "9 files" / "1 file, 1 search" — never "1 read, 1 search, 1 tool search".
+ */
+export function summarizeExploredDetails(steps) {
+  const list = (steps || []).filter(s => s.name !== TOOL_SEARCH)
+  if (list.length === 0) {
+    const n = (steps || []).length
+    return n > 0 ? `${n} tool${n === 1 ? '' : 's'}` : null
+  }
+
+  let files = 0
+  let searches = 0
+  let webSearches = 0
+  let fetches = 0
+  let other = 0
+
+  for (const s of list) {
+    const n = s.name
+    if (
+      n === READ ||
+      n === GLOB ||
+      n === LIST_DIR ||
+      n === 'list_directory'
+    ) {
+      files += 1
+    } else if (n === GREP) {
+      searches += 1
+    } else if (n === WEB_SEARCH || n === 'search') {
+      webSearches += 1
+    } else if (n === WEB_FETCH || n === 'fetch') {
+      fetches += 1
+    } else {
+      other += 1
+    }
+  }
+
+  // Pure file reads/globs/ls → "9 files" (Cursor default-chat).
+  if (files === list.length) {
+    return `${files} file${files === 1 ? '' : 's'}`
+  }
+  if (searches === list.length) {
+    return `${searches} search${searches === 1 ? '' : 'es'}`
+  }
+
+  const phrases = []
+  if (files > 0) phrases.push(`${files} file${files === 1 ? '' : 's'}`)
+  if (searches > 0)
+    phrases.push(`${searches} search${searches === 1 ? '' : 'es'}`)
+  if (webSearches > 0)
+    phrases.push(
+      `${webSearches} web search${webSearches === 1 ? '' : 'es'}`,
+    )
+  if (fetches > 0)
+    phrases.push(`${fetches} fetch${fetches === 1 ? '' : 'es'}`)
+  if (other > 0 && phrases.length === 0) {
+    return summarizeToolSteps(list)
+  }
+  return phrases.length > 0 ? phrases.join(', ') : summarizeToolSteps(list)
 }
 
 export function detectToolError(part) {

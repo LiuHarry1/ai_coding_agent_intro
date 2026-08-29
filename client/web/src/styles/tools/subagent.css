@@ -1,4 +1,3 @@
-/* Subagent timeline, work-group, explored-group */
 /* Subagent stop control + timeline (flat tool-row tier; no card chrome). */
 .subagent-stop-btn {
   padding: 1px 8px;
@@ -22,87 +21,15 @@
   cursor: default;
 }
 
-/* ── Cursor-style subagent timeline row (all subagent types) ───── */
+/* ── Cursor-style subagent timeline row (flat tool-row tier) ───── */
 .subagent-timeline-row {
-  margin: 2px 0;
-}
-.subagent-timeline-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 8px;
-  background: transparent;
-  border: 0;
-  text-align: left;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  border-radius: 4px;
-  color: inherit;
-}
-.subagent-timeline-header:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-.subagent-timeline-icon {
-  width: 14px;
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 3px;
-  flex-shrink: 0;
-  min-height: 14px;
-}
-.subagent-timeline-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  display: inline-block;
-}
-.subagent-timeline-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.subagent-timeline-title-line {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.subagent-timeline-title {
-  color: var(--text-primary);
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.subagent-timeline-badge {
-  color: var(--text-secondary);
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.subagent-timeline-subtitle {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-left: 0;
-}
-.subagent-timeline-actions {
-  flex-shrink: 0;
-  margin-top: 1px;
+  margin: 0;
 }
 .subagent-timeline-expanded {
-  margin: 2px 0 6px 30px;
-}
-.subagent-timeline-row.has-error .subagent-timeline-title {
-  color: var(--red);
+  margin: 2px 0 4px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .waiting-for-subagent {
@@ -110,94 +37,6 @@
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
-}
-
-/* ── Turn-level work fold (Cursor default `workGroup`) ──────────
-   Only on completed turns; final answer stays outside the fold. */
-.work-group {
-  margin: 2px 0 4px;
-}
-.work-group-header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  padding: 2px 6px;
-  background: transparent;
-  border: 0;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: 4px;
-}
-.work-group.active .work-group-header {
-  color: var(--text-primary);
-}
-.work-group-header:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
-}
-.work-group-chevron {
-  display: inline-block;
-  font-size: 7px;
-  width: 10px;
-  text-align: center;
-  transition: transform 120ms ease;
-  flex-shrink: 0;
-  opacity: 0.55;
-  color: var(--text-muted);
-}
-.work-group-chevron.open {
-  transform: rotate(90deg);
-}
-.work-group-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35em;
-}
-.work-group-action {
-  color: inherit;
-}
-.work-group-details {
-  color: var(--text-muted);
-  font-weight: 400;
-}
-.work-group-header .spinner {
-  margin-left: 2px;
-}
-.work-group-body {
-  margin: 2px 0 4px 18px;
-}
-.work-group-body[hidden] {
-  display: none !important;
-}
-
-[data-theme="light"] .subagent-timeline-subtitle {
-  color: var(--text-muted);
-}
-
-[data-theme="light"] .subagent-stop-btn:hover:not(:disabled) {
-  background: rgba(207, 34, 46, 0.08);
-  color: var(--red);
-}
-
-/* ── Explored N tools (Cursor-style density group) ─────────────── */
-.explored-group-body {
-  margin: 2px 0 4px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.explored-group-step > .tool-row,
-.explored-group-step > .tool-card {
-  margin: 0;
 }
 
 .subagent-step-toggle {
@@ -221,12 +60,12 @@
 }
 
 .subagent-expanded {
-  margin: 2px 0 4px 18px;
+  margin: 2px 0 4px 14px;
   color: var(--text-primary);
 }
 
 .subagent-steps {
-  margin: 0 0 6px;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -307,19 +146,11 @@
 
 [data-theme="light"] .subagent-result code { background: rgba(0,0,0,0.05); }
 
+[data-theme="light"] .subagent-stop-btn:hover:not(:disabled) {
+  background: rgba(207, 34, 46, 0.08);
+  color: var(--red);
+}
 
-/* Light theme (restored) */
-[data-theme="light"] .work-group-header {
-  color: var(--text-secondary);
-}
-[data-theme="light"] .work-group-header:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-[data-theme="light"] .subagent-timeline-badge,
 [data-theme="light"] .waiting-for-subagent {
   color: var(--text-secondary);
-}
-[data-theme="light"] .subagent-timeline-header:hover {
-  background: var(--bg-secondary);
 }

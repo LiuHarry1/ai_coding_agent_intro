@@ -1,0 +1,25 @@
+---
+description: client-sdk is for headless callers of the Baize agent backend — not the primary web UI client
+alwaysApply: true
+---
+
+# `@ai-agent/client` (client-sdk) purpose
+
+`client-sdk` (`@ai-agent/client`) is the **typed HTTP/SSE client for headless callers** that need to talk to the Baize AI agent backend directly — scripts, integrations, IDE bridges, automation, other services — **not** the main browser UI stack.
+
+## Do
+
+- Extend / stabilize the SDK for programmatic chat, skills, agents, auth (JWT), and SSE streaming.
+- Keep wire types aligned with the protocol / server API.
+- Point external consumers (Node, Bun, edge, integrations) at this package.
+
+## Don't
+
+- Add `@ai-agent/client` as a dependency of `client/web`.
+- Treat `client-sdk` as the data layer for the React SPA.
+- Force the SPA to replace `agentApi` / `_http` SSO auth with `AgentClient`.
+- Pull Node-only helpers (e.g. `mintJwt` / `node:crypto`) into the browser bundle.
+
+## Web UI
+
+Session/chat HTTP stays on `client/web/src/lib/api/*`. SSE parsing for the SPA lives in `client/web/src/lib/sse.js` (mirrors SDK `parseSSE` — keep wire shape in sync if either changes).
