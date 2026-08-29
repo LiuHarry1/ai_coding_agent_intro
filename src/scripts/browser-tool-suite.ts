@@ -452,6 +452,21 @@ const PDF_PREVIEW_PAGE = `<!doctype html>
 </body>
 </html>`
 
+const ITEMIZATION_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Itemization</title></head>
+<body>
+  <span>Room Rate</span>
+  <input id="room-rate" type="text">
+  <p id="out"></p>
+  <script>
+    document.getElementById('room-rate').addEventListener('input', function () {
+      document.getElementById('out').textContent = this.value;
+    });
+  </script>
+</body>
+</html>`
+
 export function startFixtureServer(): Promise<{
   url: string
   close: () => Promise<void>
@@ -508,6 +523,10 @@ export function startFixtureServer(): Promise<{
     }
     if (route === '/pdf-preview') {
       res.end(PDF_PREVIEW_PAGE)
+      return
+    }
+    if (route === '/itemization') {
+      res.end(ITEMIZATION_PAGE)
       return
     }
     if (route === '/hang-frame') {

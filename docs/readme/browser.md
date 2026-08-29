@@ -116,7 +116,7 @@ npm run browser:pair
 
 ---
 
-## 22 个工具
+## 23 个工具
 
 一般不用记,直接用自然语言描述目标就行。列出来是方便你看懂对话里的工具卡片:
 
@@ -142,6 +142,7 @@ npm run browser:pair
 | `browser_network` | 列出页面发的 fetch/XHR 请求,带状态码和耗时 |
 | `browser_highlight` | 在页面上高亮一个 ref（视觉对齐） |
 | `browser_get_bounding_box` | 读取 ref 的视口坐标框 |
+| `browser_cdp` | 发一条 CDP 命令（逃生口）。`Runtime.evaluate` 用于 snapshot 找不到的控件；禁止 `Input.*` |
 | `browser_tabs` | 列出/新建/切换/关闭标签页 |
 | `browser_lock` | 把控制权交给用户(`unlock`)或收回(`lock`) |
 

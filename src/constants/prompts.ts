@@ -27,14 +27,23 @@ export function prependBullets(items: Array<string | string[]>): string[] {
 }
 
 function getShellInfoLine(): string {
-  const shell = process.env.SHELL || 'unknown'
-  const shellName = shell.includes('zsh')
-    ? 'zsh'
-    : shell.includes('bash')
-      ? 'bash'
-      : shell
+  // POSIX login shells set SHELL. Windows npm/PowerShell sessions usually do
+  // not — the Bash tool still runs Git Bash (see BashTool prompt).
+  const shell = process.env.SHELL?.trim()
+  let shellName: string
+  if (shell) {
+    shellName = shell.includes('zsh')
+      ? 'zsh'
+      : shell.includes('bash')
+        ? 'bash'
+        : shell
+  } else if (isWindows) {
+    shellName = 'Git Bash'
+  } else {
+    shellName = 'unknown'
+  }
   if (isWindows) {
-    return `Shell: ${shellName} (use Unix shell syntax, not Windows — e.g., /dev/null not NUL, forward slashes in paths)`
+    return `Shell: ${shellName} (Bash tool uses Unix syntax, not cmd.exe or PowerShell — e.g., /dev/null not NUL, forward slashes in paths)`
   }
   return `Shell: ${shellName}`
 }

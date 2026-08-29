@@ -60,6 +60,9 @@ import {
 } from '../browser/manager.js'
 import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../browser/heavy-media.js'
 import { assertNavigateUrl } from '../browser/navigate-policy.js'
+import { denyCdpMethod } from '../browser/cdp-policy.js'
+import { sendCdpCommand } from '../browser/cdp-command.js'
+import { CDP_INLINE_MAX_CHARS } from '../browser/limits.js'
 import {
   planAnnotations,
   scaleAnnotations,
@@ -692,6 +695,129 @@ await withRelay(async relay => {
     'non-Error throws are still reported',
   )
   ok('error funnel keeps messages actionable')
+}
+
+{
+  eq(
+    denyCdpMethod('Runtime.evaluate'),
+    undefined,
+    'Runtime.evaluate is the evaluate hatch',
+  )
+  eq(denyCdpMethod('DOM.getDocument'), undefined, 'DOM queries are allowed')
+  eq(denyCdpMethod('Profiler.start'), undefined, 'Profiler is allowed')
+  eq(denyCdpMethod('Network.enable'), undefined, 'Network.enable is allowed')
+  eq(
+    denyCdpMethod('Page.reload'),
+    undefined,
+    'Page.reload is not on Cursor deny list',
+  )
+  assert(
+    /Input\.\*/.test(String(denyCdpMethod('Input.dispatchMouseEvent'))),
+    'Input.* gets a dedicated error pointing at browser tools',
+  )
+  eq(
+    denyCdpMethod('Browser.close'),
+    "CDP method 'Browser.close' is not allowed",
+    'Browser domain is blocked',
+  )
+  eq(
+    denyCdpMethod('Storage.getCookies'),
+    "CDP method 'Storage.getCookies' is not allowed",
+    'Storage domain is blocked',
+  )
+  eq(
+    denyCdpMethod('Network.getCookies'),
+    "CDP method 'Network.getCookies' is not allowed",
+    'cookie methods are blocked',
+  )
+  eq(
+    denyCdpMethod('Page.navigate'),
+    "CDP method 'Page.navigate' is not allowed",
+    'CDP navigation is blocked',
+  )
+  eq(
+    denyCdpMethod('DOM.setFileInputFiles'),
+    "CDP method 'DOM.setFileInputFiles' is not allowed",
+    'file input is blocked',
+  )
+  ok('cdp deny list matches Cursor')
+}
+
+{
+  const calls: Array<{ method: string; params?: Record<string, unknown> }> = []
+  const backend = {
+    kind: 'isolated' as const,
+    async listTabs() {
+      return []
+    },
+    async createTab() {
+      return { targetId: 't', url: '', title: '' }
+    },
+    async closeTab() {},
+    async send(_id: string, method: string, params?: Record<string, unknown>) {
+      calls.push({ method, params })
+      if (method === 'Runtime.evaluate') {
+        return { result: { type: 'number', value: 2 } } as never
+      }
+      if (method === 'Profiler.stop') {
+        return { profile: { ok: true } } as never
+      }
+      if (method === 'huge') {
+        return { blob: 'x'.repeat(CDP_INLINE_MAX_CHARS + 10) } as never
+      }
+      return {} as never
+    },
+    async getActiveUserTabId() {
+      return null
+    },
+    async focusTab() {},
+    async restoreTab() {},
+    async dispose() {},
+  }
+
+  const evaled = await sendCdpCommand(
+    backend,
+    't',
+    'Runtime.evaluate',
+    { expression: '1+1', returnByValue: true },
+  )
+  assert(evaled.overflow === false, 'small evaluate stays inline')
+  if (evaled.overflow === false) {
+    eq(
+      JSON.stringify(evaled.result),
+      JSON.stringify({ result: { type: 'number', value: 2 } }),
+      'evaluate result is passed through',
+    )
+  }
+  eq(calls.length, 1, 'allowed method is forwarded')
+
+  let denied = ''
+  try {
+    await sendCdpCommand(backend, 't', 'Input.dispatchKeyEvent', {
+      type: 'char',
+      text: 'a',
+    })
+  } catch (err) {
+    denied = err instanceof Error ? err.message : String(err)
+  }
+  assert(/Input\.\*/.test(denied), denied)
+  eq(calls.length, 1, 'denied Input.* must not reach the backend')
+
+  const profiled = await sendCdpCommand(backend, 't', 'Profiler.stop', {})
+  assert(profiled.overflow === true, 'Profiler.stop always spills to a file')
+  if (profiled.overflow === true) {
+    assert(fs.existsSync(profiled.filePath), 'profile file exists')
+    fs.unlinkSync(profiled.filePath)
+  }
+
+  const spilled = await sendCdpCommand(backend, 't', 'huge', {})
+  assert(spilled.overflow === true, 'responses over 25k spill to a file')
+  if (spilled.overflow === true) {
+    assert(/25000 characters/.test(spilled.reason), spilled.reason)
+    assert(fs.existsSync(spilled.filePath), 'overflow file exists')
+    fs.unlinkSync(spilled.filePath)
+  }
+  ok('cdp send forwards allowed methods and spills large results')
 }
 
 // ── settings: the browser block is actually applied ──────

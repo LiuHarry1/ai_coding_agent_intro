@@ -57,3 +57,9 @@ export const ACT_MAX_VIEWPORT_DIMENSION = 8192
 
 /** Auto-refresh snapshot before ref actions when older than this (Cursor-style). */
 export const SNAPSHOT_TTL_MS = 10_000
+
+/**
+ * Cursor inlines CDP JSON up to 25_000 characters; Profiler.stop always
+ * spills to a file. Same threshold so a heap profile cannot eat the context.
+ */
+export const CDP_INLINE_MAX_CHARS = 25_000

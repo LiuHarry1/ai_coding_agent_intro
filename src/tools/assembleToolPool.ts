@@ -11,6 +11,7 @@ import {
 import { createToolSearchDefinition } from './ToolSearchTool/ToolSearchTool.js'
 import {
   BROWSER_TOOL_NAMES,
+  ENTER_PLAN_MODE_TOOL_NAME,
   READ_ONLY_TOOLS,
   TOOL_SEARCH_TOOL_NAME,
 } from '../constants/tool_names.js'
@@ -171,6 +172,10 @@ export function assembleToolPool(
   )
   if (denyGlobs.length > 0) {
     tools = filterToolsRecordByDisallowedGlobs(tools, denyGlobs)
+  }
+  // Browser specialist cannot edit code; plan mode is for implementation design.
+  if (mainThreadProfile?.agentType === BROWSER_AGENT_TYPE) {
+    delete tools[ENTER_PLAN_MODE_TOOL_NAME]
   }
 
   const askMode = session.permissionMode.mode === 'ask'

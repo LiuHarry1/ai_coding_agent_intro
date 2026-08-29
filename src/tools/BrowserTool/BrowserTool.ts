@@ -13,6 +13,7 @@ import * as path from 'path'
 import { tool } from 'ai'
 import { z } from 'zod'
 import * as inspect from '../../browser/page-inspect.js'
+import { sendCdpCommand } from '../../browser/cdp-command.js'
 import * as pw from '../../browser/playwright/index.js'
 import {
   CALL_TIMEOUT_MS,
@@ -37,6 +38,7 @@ import {
   untrackActiveBrowserTool,
 } from '../../browser/active-browser-tools.js'
 import {
+  BROWSER_CDP_TOOL_NAME,
   BROWSER_CLICK_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
   BROWSER_FILE_UPLOAD_TOOL_NAME,
@@ -1213,6 +1215,69 @@ export const getBoundingBoxTool = defineBrowserTool({
   },
 })
 
+export const cdpTool = defineBrowserTool({
+  name: BROWSER_CDP_TOOL_NAME,
+  summary: prompt.CDP_SUMMARY,
+  description: prompt.CDP_DESCRIPTION,
+  inputSchema: z.object({
+    method: z
+      .string()
+      .describe(
+        'CDP method name, for example Runtime.evaluate, DOM.getDocument, Profiler.start, or Performance.getMetrics.',
+      ),
+    params: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe(
+        'CDP params object. Omit or pass {} when the command takes no params.',
+      ),
+    viewId: z
+      .string()
+      .optional()
+      .describe(
+        'Target browser tab ID. If omitted, uses the last interacted tab.',
+      ),
+    take_screenshot_afterwards: z
+      .boolean()
+      .optional()
+      .describe(
+        'When true, takes a screenshot after the CDP command completes. Defaults to false.',
+      ),
+  }),
+  async run(args, ctx) {
+    let targetId = ctx.targetId
+    if (args.viewId) {
+      const resolved = await resolveTab(ctx.cwd, args.viewId, ctx.sessionId)
+      targetId = resolved.targetId
+    }
+    const sent = await sendCdpCommand(
+      ctx.backend,
+      targetId,
+      args.method,
+      args.params,
+      ctx.sessionId,
+    )
+    const message = sent.overflow
+      ? `${sent.reason}\nFile: ${sent.filePath}`
+      : `CDP ${args.method.trim()}`
+    const out = await observeAfterAction(
+      ctx.backend,
+      targetId,
+      {
+        action: 'cdp',
+        message,
+        withSnapshot: false,
+        screenshotAfterwards: args.take_screenshot_afterwards,
+      },
+      ctx,
+    )
+    out.value = sent.overflow
+      ? { savedTo: sent.filePath, size: sent.sizeBytes }
+      : sent.result
+    return out
+  },
+})
+
 export const lockTool = defineBrowserTool({
   name: BROWSER_LOCK_TOOL_NAME,
   summary: 'Take or release control of the browser',
@@ -1272,5 +1337,6 @@ export const browserToolDefinitions: ToolDefinition[] = [
   waitForDownloadTool,
   highlightTool,
   getBoundingBoxTool,
+  cdpTool,
   lockTool,
 ]

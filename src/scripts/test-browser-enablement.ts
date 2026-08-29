@@ -13,10 +13,13 @@ import {
   isBrowserEnabledForMainThread,
 } from '../browser/enablement.js'
 import {
+  ASK_USER_QUESTION_TOOL_NAME,
+  BROWSER_CDP_TOOL_NAME,
   BROWSER_DRAG_TOOL_NAME,
   BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
   BROWSER_HIGHLIGHT_TOOL_NAME,
   BROWSER_CLICK_TOOL_NAME,
+  ENTER_PLAN_MODE_TOOL_NAME,
   LSP_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
@@ -85,9 +88,12 @@ assert.ok(BROWSER_CLICK_TOOL_NAME in browserPool.tools)
 assert.ok(BROWSER_DRAG_TOOL_NAME in browserPool.tools)
 assert.ok(BROWSER_HIGHLIGHT_TOOL_NAME in browserPool.tools)
 assert.ok(BROWSER_GET_BOUNDING_BOX_TOOL_NAME in browserPool.tools)
+assert.ok(BROWSER_CDP_TOOL_NAME in browserPool.tools)
 assert.ok(!(LSP_TOOL_NAME in browserPool.tools))
 assert.ok(!(WEB_SEARCH_TOOL_NAME in browserPool.tools))
 assert.ok(!(TOOL_SEARCH_TOOL_NAME in browserPool.tools))
+assert.ok(!(ASK_USER_QUESTION_TOOL_NAME in browserPool.tools))
+assert.ok(!(ENTER_PLAN_MODE_TOOL_NAME in browserPool.tools))
 console.log('ok browser primary loads curated tool set')
 
 const optedIn = poolFor(null, { enabled: true })

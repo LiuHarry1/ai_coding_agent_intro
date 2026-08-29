@@ -16,6 +16,7 @@ import {
 } from '../browser/manager.js'
 import type { BrowserBackend } from '../browser/types.js'
 import {
+  cdpTool,
   clickTool,
   consoleTool,
   lockTool,
@@ -104,9 +105,21 @@ function createFakeBackend(state: FakeState): BrowserBackend {
     async send(_targetId, method, params) {
       state.calls.push({ method, params })
       if (method === 'Runtime.evaluate') {
+        const expr = String(params?.expression ?? '')
+        if (expr === '1+1') {
+          return { result: { type: 'number', value: 2 } } as never
+        }
+        if (expr === 'huge') {
+          return {
+            result: { type: 'string', value: 'x'.repeat(26_000) },
+          } as never
+        }
         return {
           result: { type: 'object', value: evaluate(String(params?.expression)) },
         } as never
+      }
+      if (method === 'DOM.getDocument') {
+        return { root: { nodeId: 1 } } as never
       }
       return {} as never
     },
@@ -226,6 +239,48 @@ async function main() {
     )
   }
   console.log(`ok CDP surface (${used.size} methods, inject path only)`)
+
+  const evaled = expectData(
+    await run(cdpTool, {
+      method: 'Runtime.evaluate',
+      params: { expression: '1+1', returnByValue: true },
+    }),
+  )
+  assert.match(String(evaled.message), /Runtime\.evaluate/)
+  assert.equal(
+    JSON.stringify(evaled.value),
+    JSON.stringify({ result: { type: 'number', value: 2 } }),
+  )
+  console.log('ok browser_cdp Runtime.evaluate')
+
+  const blockedInput = await run(cdpTool, {
+    method: 'Input.dispatchMouseEvent',
+    params: { type: 'mousePressed', x: 1, y: 1 },
+  })
+  assert.ok(
+    typeof blockedInput === 'string' && /Input\.\*/.test(blockedInput),
+    `Input.* must be denied:\n${blockedInput}`,
+  )
+  console.log('ok browser_cdp denies Input.*')
+
+  const cookie = await run(cdpTool, { method: 'Network.getCookies' })
+  assert.ok(
+    typeof cookie === 'string' && /not allowed/.test(cookie),
+    `cookies must be denied:\n${cookie}`,
+  )
+  console.log('ok browser_cdp denies cookie commands')
+
+  expectData(await run(lockTool, { action: 'unlock' }))
+  const cdpBlocked = await run(cdpTool, {
+    method: 'Runtime.evaluate',
+    params: { expression: '1+1' },
+  })
+  assert.ok(
+    typeof cdpBlocked === 'string' && /user has control/i.test(cdpBlocked),
+    `cdp while user has control must fail:\n${cdpBlocked}`,
+  )
+  expectData(await run(lockTool, { action: 'lock' }))
+  console.log('ok browser_cdp blocked while user has control')
 
   const browserDir = path.resolve('src/browser')
   const importsPlaywright = (full: string) =>

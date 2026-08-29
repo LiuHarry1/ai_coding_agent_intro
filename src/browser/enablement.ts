@@ -5,7 +5,6 @@
  * - everyone else → off unless `browser.enabled: true` (deferred + ToolSearch)
  */
 import {
-  ASK_USER_QUESTION_TOOL_NAME,
   BASH_TOOL_NAME,
   BROWSER_TOOL_NAMES,
   FILE_READ_TOOL_NAME,
@@ -30,7 +29,6 @@ export const BROWSER_AGENT_SUPPORT_TOOLS: readonly string[] = [
   FILE_READ_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
-  ASK_USER_QUESTION_TOOL_NAME,
 ]
 
 export const BROWSER_AGENT_TOOLS: readonly string[] = [

@@ -26,6 +26,7 @@ import {
   BROWSER_WAIT_FOR_DOWNLOAD,
   BROWSER_HIGHLIGHT,
   BROWSER_GET_BOUNDING_BOX,
+  BROWSER_CDP,
 } from '../lib/tool-names.js'
 
 /**
@@ -60,6 +61,7 @@ const ICONS = {
   [BROWSER_WAIT_FOR_DOWNLOAD]: '\u{1F4E5}',
   [BROWSER_HIGHLIGHT]: '\u{2728}',
   [BROWSER_GET_BOUNDING_BOX]: '\u{25A3}',
+  [BROWSER_CDP]: '\u{2699}',
 }
 
 const RUNNING_LABELS = {
@@ -85,6 +87,7 @@ const RUNNING_LABELS = {
   [BROWSER_WAIT_FOR_DOWNLOAD]: 'Waiting for download',
   [BROWSER_HIGHLIGHT]: 'Highlighting',
   [BROWSER_GET_BOUNDING_BOX]: 'Measuring element',
+  [BROWSER_CDP]: 'Sending CDP command',
 }
 
 const DONE_LABELS = {
@@ -110,6 +113,7 @@ const DONE_LABELS = {
   [BROWSER_WAIT_FOR_DOWNLOAD]: 'Download saved',
   [BROWSER_HIGHLIGHT]: 'Highlighted',
   [BROWSER_GET_BOUNDING_BOX]: 'Bounding box',
+  [BROWSER_CDP]: 'CDP command',
 }
 
 function compactUrl(url) {

@@ -57,7 +57,7 @@ export function createSkillTool(
 
 Important:
 - Available skills are listed in <system-reminder> messages in the conversation.
-- When a skill matches the user's request, invoke the relevant skill BEFORE generating any other response.
+- When a listed skill's description matches this task, invoke it before starting that workflow. Skip skills that do not match.
 
 Two execution modes:
 - **inline** skills return their expanded body as the tool result. Use them when you want to *remember* a procedure mid-thought (e.g. "code-review checklist", "PR-body template").

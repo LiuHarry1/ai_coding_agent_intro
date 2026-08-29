@@ -45,6 +45,7 @@ export const BROWSER_RESIZE_TOOL_NAME = 'browser_resize'
 export const BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME = 'browser_wait_for_download'
 export const BROWSER_HIGHLIGHT_TOOL_NAME = 'browser_highlight'
 export const BROWSER_GET_BOUNDING_BOX_TOOL_NAME = 'browser_get_bounding_box'
+export const BROWSER_CDP_TOOL_NAME = 'browser_cdp'
 
 export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_NAVIGATE_TOOL_NAME,
@@ -69,6 +70,7 @@ export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_WAIT_FOR_DOWNLOAD_TOOL_NAME,
   BROWSER_HIGHLIGHT_TOOL_NAME,
   BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
+  BROWSER_CDP_TOOL_NAME,
 ]
 
 /** Browser tools that only observe — safe in Ask mode. */

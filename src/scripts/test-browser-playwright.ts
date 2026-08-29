@@ -19,6 +19,7 @@ import {
 import { findInSnapshot } from '../browser/playwright/index.js'
 import {
   clickTool,
+  cdpTool,
   fileUploadTool,
   fillFormTool,
   handleDialogTool,
@@ -511,6 +512,44 @@ async function main() {
       `interactive snapshot must keep the controls:\n${interactiveSnap}`,
     )
     console.log('ok [playwright] snapshot interactive keeps refs only')
+
+    expectData(
+      await run(navigateTool, { url: `${server.url}itemization` }, sessionId),
+    )
+    const filledRate = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression: `(() => {
+              const label = [...document.querySelectorAll('span')]
+                .find(el => (el.textContent || '').trim() === 'Room Rate');
+              const input = label && label.nextElementSibling;
+              if (!(input instanceof HTMLInputElement)) return { ok: false };
+              const setter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value'
+              ).set;
+              setter.call(input, '188.00');
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              return {
+                ok: true,
+                value: input.value,
+                echoed: document.getElementById('out').textContent,
+              };
+            })()`,
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    const rate = JSON.stringify(filledRate.value)
+    assert.ok(
+      /188\.00/.test(rate) && /"ok":true/.test(rate.replace(/\s/g, '')),
+      `evaluate must set Room Rate by visible label:\n${rate}`,
+    )
+    console.log('ok [playwright] browser_cdp evaluate fills an unlabeled field')
 
     console.log('\nall playwright-engine tests passed')
   } finally {

@@ -44,6 +44,7 @@ export const BROWSER_RESIZE = 'browser_resize'
 export const BROWSER_WAIT_FOR_DOWNLOAD = 'browser_wait_for_download'
 export const BROWSER_HIGHLIGHT = 'browser_highlight'
 export const BROWSER_GET_BOUNDING_BOX = 'browser_get_bounding_box'
+export const BROWSER_CDP = 'browser_cdp'
 
 export const BROWSER_TOOLS = [
   BROWSER_NAVIGATE,
@@ -68,6 +69,7 @@ export const BROWSER_TOOLS = [
   BROWSER_WAIT_FOR_DOWNLOAD,
   BROWSER_HIGHLIGHT,
   BROWSER_GET_BOUNDING_BOX,
+  BROWSER_CDP,
 ]
 
 /** Shown elsewhere / plumbing — keep in sync with TOOL_META.suppress* flags. */
