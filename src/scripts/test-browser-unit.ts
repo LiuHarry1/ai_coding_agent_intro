@@ -25,6 +25,7 @@ import {
   startRelayServer,
   type RelayServer,
 } from '../browser/relay/server.js'
+import { startCdpEndpoint } from '../browser/relay/cdp-endpoint.js'
 import {
   resetSettingsCache,
   resolveSettings,
@@ -447,6 +448,93 @@ await withRelay(async relay => {
   await second.close()
   ok('a reconnecting extension replaces the previous connection')
 })
+
+// ── cdp endpoint: reconnecting Playwright gets attachedToTarget ──
+
+{
+  const tabs = [
+    {
+      targetId: 'tab-1',
+      url: 'https://example.com/',
+      title: 'Example',
+    },
+  ]
+  const backend = {
+    kind: 'extension' as const,
+    async listTabs() {
+      return tabs
+    },
+    async createTab(url: string) {
+      const t = { targetId: 'tab-new', url, title: 'New' }
+      tabs.push(t)
+      return t
+    },
+    async closeTab() {},
+    async focusTab() {},
+    async restoreTab() {},
+    async getActiveUserTabId() {
+      return tabs[0]?.targetId ?? null
+    },
+    async send() {
+      return {
+        targetInfo: {
+          targetId: 'chrome-1',
+          type: 'page',
+          title: 'Example',
+          url: 'https://example.com/',
+        },
+      }
+    },
+    async dispose() {},
+  }
+
+  await withRelay(async relay => {
+    const endpoint = await startCdpEndpoint({ backend, relay })
+    try {
+      async function autoAttachCount(): Promise<number> {
+        const ver = await fetch(`${endpoint.httpUrl}/json/version`).then(r =>
+          r.json(),
+        )
+        const wsUrl = ver.webSocketDebuggerUrl as string
+        const ws = new WebSocket(wsUrl)
+        await new Promise<void>((resolve, reject) => {
+          ws.once('open', () => resolve())
+          ws.once('error', reject)
+        })
+        let attached = 0
+        ws.on('message', raw => {
+          const msg = JSON.parse(String(raw)) as { method?: string }
+          if (msg.method === 'Target.attachedToTarget') attached++
+        })
+        ws.send(
+          JSON.stringify({
+            id: 1,
+            method: 'Target.setAutoAttach',
+            params: {
+              autoAttach: true,
+              waitForDebuggerOnStart: false,
+              flatten: true,
+            },
+          }),
+        )
+        await new Promise(r => setTimeout(r, 150))
+        ws.close()
+        return attached
+      }
+
+      const first = await autoAttachCount()
+      const second = await autoAttachCount()
+      assert(first >= 1, 'first setAutoAttach must announce existing tabs')
+      assert(
+        second >= 1,
+        'second setAutoAttach must re-announce already-tracked tabs',
+      )
+      ok('cdp endpoint re-announces tabs to a reconnecting client')
+    } finally {
+      await endpoint.close()
+    }
+  })
+}
 
 // ── relay: close does not hang on a live peer ────────────
 

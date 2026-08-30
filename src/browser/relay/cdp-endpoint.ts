@@ -148,7 +148,29 @@ export async function startCdpEndpoint(opts: {
     })
   }
 
-  async function enableAutoAttach(): Promise<void> {
+  function announceTo(
+    socket: WebSocket,
+    tab: TabSession,
+  ): void {
+    socket.send(
+      JSON.stringify({
+        method: 'Target.attachedToTarget',
+        params: {
+          sessionId: tab.sessionId,
+          targetInfo: targetInfo(tab),
+          waitingForDebugger: false,
+        },
+      }),
+    )
+  }
+
+  /**
+   * Attach every owned tab and notify CDP clients.
+   * Pass `socket` when handling Target.setAutoAttach so a reconnecting
+   * Playwright still receives attachedToTarget for tabs we already track
+   * (global announce alone skips those, which yields connectOverCDP with 0 pages).
+   */
+  async function enableAutoAttach(socket?: WebSocket): Promise<void> {
     const tabs = await backend.listTabs()
     const live = new Set(tabs.map(t => t.targetId))
     for (const [id, session] of tabSessions) {
@@ -169,7 +191,11 @@ export async function startCdpEndpoint(opts: {
         const session = await ensureAttached(tab.targetId)
         session.url = tab.url
         session.title = tab.title
-        if (!already) announce(session)
+        if (!already) {
+          announce(session)
+        } else if (socket) {
+          announceTo(socket, session)
+        }
       } catch {
         // A tab the extension no longer owns — skip.
       }
@@ -272,7 +298,7 @@ export async function startCdpEndpoint(opts: {
       }
       case 'Target.setAutoAttach': {
         if (request.params?.autoAttach !== false) {
-          await enableAutoAttach()
+          await enableAutoAttach(socket)
         }
         respond(socket, request, {})
         return
