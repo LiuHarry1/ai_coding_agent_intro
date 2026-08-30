@@ -20,6 +20,12 @@ import {
 import { forceKillChild, killChild } from '../platform.js'
 import { getShellHome } from '../../utils/request-scope.js'
 import { WORKER_CWD_FILE_PREFIX } from '../../brand.js'
+import {
+  quotePosixPath,
+  quoteShellCommand,
+  rewriteWindowsNullRedirect,
+  shouldAddStdinRedirect,
+} from '../../utils/bash/shellQuoting.js'
 
 const isWindows = process.platform === 'win32'
 
@@ -62,8 +68,20 @@ function makeTempPath(prefix: string): string {
   )
 }
 
+/**
+ * CC `bashProvider.buildExecCommand`: rewrite `>nul`, quote for eval, optional
+ * `< /dev/null`, then write cwd with `pwd -P` (CC) — on Git Bash `pwd -P` is an
+ * MSYS path like `/tmp/...`, which is not `process.cwd()`, so prefer `pwd -W`
+ * when it exists (same native path CC's `setCwd`/`realpathSync` expect).
+ */
 function wrapBash(userCmd: string, cwdFileForBash: string): string {
-  return `${userCmd}\n__ec=$?\npwd -P > '${cwdFileForBash}' 2>/dev/null\nexit $__ec`
+  const normalized = rewriteWindowsNullRedirect(userCmd)
+  const quoted = quoteShellCommand(
+    normalized,
+    shouldAddStdinRedirect(normalized),
+  )
+  const pwd = isWindows ? '{ pwd -W 2>/dev/null || pwd -P; }' : 'pwd -P'
+  return `eval ${quoted} && ${pwd} >| ${quotePosixPath(cwdFileForBash)}`
 }
 
 function wrapPowerShell(userCmd: string, cwdFileNative: string): string {
@@ -122,7 +140,11 @@ export function prepareShellSpawn(opts: {
   }
 }
 
-/** Read cwd trailer; convert bash/MSYS pwd to native on Windows. */
+/**
+ * Read cwd trailer. Windows bash: POSIX → native (CC `posixPathToWindowsPath`),
+ * then `realpathSync` like CC `setCwd` so a mangled MSYS path that is not a
+ * real directory does not replace the session cwd.
+ */
 export function readCwdAfter(
   cwdFileNative: string,
   shellKind: ShellKind,
@@ -130,12 +152,15 @@ export function readCwdAfter(
   try {
     const tracked = fs.readFileSync(cwdFileNative, 'utf8').trim()
     if (!tracked) return undefined
-    if (shellKind !== 'bash' || !isWindows) return tracked
-    const native = posixPathToWindowsPath(tracked)
-    if (native.startsWith('/') && !/^[A-Za-z]:/.test(native)) {
+    const native =
+      shellKind === 'bash' && isWindows
+        ? posixPathToWindowsPath(tracked)
+        : tracked
+    try {
+      return fs.realpathSync(native)
+    } catch {
       return undefined
     }
-    return native
   } catch {
     return undefined
   }

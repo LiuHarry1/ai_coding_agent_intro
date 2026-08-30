@@ -69,7 +69,7 @@ export function getSimplePrompt(): string {
   const instructionItems: Array<string | string[]> = [
     'If your command will create new directories or files, first use this tool to run `ls` to verify the parent directory exists and is the correct location.',
     'Always quote file paths that contain spaces with double quotes in your command (e.g., cd "path with spaces/file.txt")',
-    'On Windows this tool is Git Bash, not PowerShell. Do not run Test-Path, Copy-Item, or `if (...) { }`. Use the PowerShell tool for those, or a python one-liner.',
+    'On Windows this tool is Git Bash, not cmd.exe or PowerShell. Use Unix shell syntax (e.g., /dev/null not NUL, forward slashes in paths). Do not run Test-Path, Copy-Item, or `if (...) { }`. Use the PowerShell tool for those, or a python one-liner.',
     'Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of `cd`. You may use `cd` if the User explicitly requests it.',
     `You may specify an optional timeout in milliseconds (up to ${getMaxTimeoutMs()}ms / ${getMaxTimeoutMs() / 60000} minutes). By default, your command will timeout after ${getDefaultTimeoutMs()}ms (${getDefaultTimeoutMs() / 60000} minutes).`,
     ...(backgroundNote !== null ? [backgroundNote] : []),

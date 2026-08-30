@@ -43,7 +43,7 @@ function getShellInfoLine(): string {
     shellName = 'unknown'
   }
   if (isWindows) {
-    return `Shell: ${shellName} (Bash tool uses Unix syntax, not cmd.exe or PowerShell — e.g., /dev/null not NUL, forward slashes in paths)`
+    return `Shell: ${shellName} (use Unix shell syntax, not Windows — e.g., /dev/null not NUL, forward slashes in paths)`
   }
   return `Shell: ${shellName}`
 }

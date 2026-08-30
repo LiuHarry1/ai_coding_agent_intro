@@ -44,10 +44,10 @@ export function posixPathToWindowsPath(posixPath: string): string {
     const rest = posixPath.slice(2).replace(/\//g, '\\')
     return letter + ':' + (rest || '\\')
   }
-  if (/^[A-Za-z]:/.test(posixPath)) {
-    return posixPath.replace(/\//g, '\\')
-  }
-  return posixPath
+  // Already Windows (`C:/Users/…`) or leftover MSYS (`/tmp` → `\tmp`).
+  // Callers (CC `setCwd` / `readCwdAfter`) realpath the result and ignore
+  // conversions that do not exist on disk.
+  return posixPath.replace(/\//g, '\\')
 }
 
 // ── Git Bash ─────────────────────────────────────────────────────────────────

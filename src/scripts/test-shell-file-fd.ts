@@ -19,6 +19,10 @@ import {
   runShellCommand,
 } from '../core/shell/spawn-shell.js'
 import { findGitBashPath } from '../core/shell/windows-paths.js'
+import {
+  quoteShellCommand,
+  rewriteWindowsNullRedirect,
+} from '../utils/bash/shellQuoting.js'
 
 const isWindows = process.platform === 'win32'
 
@@ -156,7 +160,10 @@ async function testTimeout(): Promise<void> {
     timeoutMs: 800,
   })
   const elapsed = Date.now() - started
-  assert.ok(r.timedOut || r.interrupted, `expected timeout flags, got ${JSON.stringify(r)}`)
+  assert.ok(
+    r.timedOut || r.interrupted,
+    `expected timeout flags, got ${JSON.stringify(r)}`,
+  )
   assert.ok(elapsed < 12_000, `timeout settle too slow: ${elapsed}ms`)
   console.log(`ok: timeout kills sleep (${elapsed}ms)`)
 }
@@ -197,6 +204,88 @@ async function testPowerShellIfWindows(): Promise<void> {
   console.log('ok: PowerShell file-fd Write-Output')
 }
 
+function testRewriteWindowsNullRedirect(): void {
+  assert.equal(rewriteWindowsNullRedirect('ls 2>nul'), 'ls 2>/dev/null')
+  assert.equal(rewriteWindowsNullRedirect('ls 2> NUL'), 'ls 2> /dev/null')
+  assert.equal(rewriteWindowsNullRedirect('echo x >nul'), 'echo x >/dev/null')
+  assert.equal(
+    rewriteWindowsNullRedirect('cat nul.txt'),
+    'cat nul.txt',
+    'must not rewrite a filename starting with nul',
+  )
+  assert.match(quoteShellCommand('echo hi'), /\/dev\/null/)
+  assert.match(quoteShellCommand('echo a | wc -l'), /\/dev\/null/)
+  console.log('ok: rewriteWindowsNullRedirect / quoteShellCommand')
+}
+
+async function testNulRedirectDoesNotCreateNulFile(): Promise<void> {
+  await withTempDir(async dir => {
+    const r = await runShellCommand({
+      shell: 'bash',
+      command: 'echo x 2>nul',
+      cwd: dir,
+      timeoutMs: 20_000,
+    })
+    assert.equal(r.code, 0, r.stdout)
+    assert.equal(
+      fs.existsSync(path.join(dir, 'nul')),
+      false,
+      'created a nul device file',
+    )
+    assert.equal(
+      fs.existsSync(path.join(dir, 'NUL')),
+      false,
+      'created a NUL device file',
+    )
+  })
+  console.log('ok: 2>nul rewritten, no nul file')
+}
+
+async function testPipeStillWorks(): Promise<void> {
+  const r = await runShellCommand({
+    shell: 'bash',
+    command: 'printf "a\\nb\\n" | wc -l',
+    cwd: process.cwd(),
+    timeoutMs: 20_000,
+  })
+  assert.equal(r.code, 0, r.stdout)
+  assert.match(r.stdout, /2/)
+  console.log('ok: pipe + eval stdin redirect')
+}
+
+async function testHeredoc(): Promise<void> {
+  const r = await runShellCommand({
+    shell: 'bash',
+    command: 'cat <<EOF\nheredoc-ok\nEOF',
+    cwd: process.cwd(),
+    timeoutMs: 20_000,
+  })
+  assert.equal(r.code, 0, r.stdout)
+  assert.match(r.stdout, /heredoc-ok/)
+  console.log('ok: heredoc via eval wrap')
+}
+
+async function testCmdCDoesNotHang(): Promise<void> {
+  if (!isWindows) {
+    console.log('skip: cmd.exe /c (non-Windows)')
+    return
+  }
+  const started = Date.now()
+  const r = await runShellCommand({
+    shell: 'bash',
+    command: 'cmd.exe /c echo cmd-ok',
+    cwd: process.cwd(),
+    timeoutMs: 12_000,
+  })
+  const elapsed = Date.now() - started
+  assert.ok(
+    elapsed < 10_000,
+    `cmd.exe /c hung ${elapsed}ms — stdin redirect missing?`,
+  )
+  assert.ok(!r.timedOut, `cmd.exe /c timed out (${elapsed}ms)`)
+  console.log(`ok: cmd.exe /c settled in ${elapsed}ms code=${r.code}`)
+}
+
 async function main(): Promise<void> {
   if (isWindows) {
     const gitBash = findGitBashPath()
@@ -209,6 +298,7 @@ async function main(): Promise<void> {
     console.log(`Git Bash: ${gitBash}`)
   }
 
+  testRewriteWindowsNullRedirect()
   await testOpenFlagsWrite()
   await testEchoStdout()
   await testStdoutStderrMerged()
@@ -218,6 +308,10 @@ async function main(): Promise<void> {
   await testTimeout()
   await testProgressCallback()
   await testPowerShellIfWindows()
+  await testNulRedirectDoesNotCreateNulFile()
+  await testPipeStillWorks()
+  await testHeredoc()
+  await testCmdCDoesNotHang()
 
   console.log('\nAll shell file-fd tests passed.')
 }
