@@ -20,9 +20,15 @@ import {
 } from './lsp-host.js'
 import type { LspServerConfig } from '../core/types.js'
 import { runShellCommand, type ShellKind } from '../core/shell/spawn-shell.js'
-import { prepareShellSpawn } from '../core/shell/spawn-shell.js'
+import {
+  prepareShellSpawn,
+  openShellOutputHandle,
+  closeShellOutputHandle,
+  spawnPreparedShell,
+  cleanupCwdFile,
+} from '../core/shell/spawn-shell.js'
 import { forceKillChild } from '../core/platform.js'
-import { spawn, type ChildProcess } from 'child_process'
+import { type ChildProcess } from 'child_process'
 import { runRg } from './run-rg.js'
 import {
   APP_SLUG,
@@ -109,18 +115,30 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
       })
     case 'exec_bg_start': {
       await fs.promises.mkdir(path.dirname(op.outputPath), { recursive: true })
-      await fs.promises.writeFile(op.outputPath, '', 'utf-8')
+      // Truncate/create; openShellOutputHandle uses 'w' on Windows (MSYS-safe).
       const prepared = prepareShellSpawn({
         shell: (op.shell ?? 'bash') as ShellKind,
         userCommand: op.command,
         cwdFilePrefix: WORKER_BG_CWD_FILE_PREFIX,
       })
-      const child = spawn(prepared.command, prepared.args, {
-        cwd: op.cwd,
-        env: prepared.env,
-        windowsHide: true,
-        detached: process.platform !== 'win32',
-      })
+      const outputHandle = await openShellOutputHandle(op.outputPath)
+      let child: ChildProcess
+      try {
+        child = spawnPreparedShell({
+          prepared,
+          cwd: op.cwd,
+          outputFd: outputHandle.fd,
+          detached: process.platform !== 'win32',
+        })
+      } catch (err) {
+        await closeShellOutputHandle(outputHandle)
+        cleanupCwdFile(prepared.cwdFileNative)
+        throw err
+      }
+      // Parent closes its copy — child has a dup (CC Shell.ts).
+      await closeShellOutputHandle(outputHandle)
+      child.stdin?.end()
+
       const entry: BgEntry = {
         taskId: op.taskId,
         child,
@@ -128,26 +146,22 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
         exitCode: null,
         killed: false,
       }
-      const append = (chunk: Buffer) => {
-        try {
-          fs.appendFileSync(op.outputPath, chunk)
-        } catch {
-          /* ignore */
-        }
-      }
-      child.stdout?.on('data', append)
-      child.stderr?.on('data', append)
       child.on('close', code => {
         entry.done = true
         entry.exitCode = code
+        cleanupCwdFile(prepared.cwdFileNative)
       })
       child.on('error', () => {
         entry.done = true
         entry.exitCode = 1
+        cleanupCwdFile(prepared.cwdFileNative)
       })
       bgByTask.set(op.taskId, entry)
       const pid = child.pid
-      if (pid == null) throw new Error('Failed to spawn background process')
+      if (pid == null) {
+        cleanupCwdFile(prepared.cwdFileNative)
+        throw new Error('Failed to spawn background process')
+      }
       return { pid }
     }
     case 'exec_bg_poll': {

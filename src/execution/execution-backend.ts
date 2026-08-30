@@ -8,6 +8,9 @@ export type ExecResult = {
   stdout: string
   stderr: string
   code: number | null
+  /** Set when the shell was killed after timeout (file-fd path). */
+  timedOut?: boolean
+  interrupted?: boolean
 }
 
 export interface ExecutionBackend {

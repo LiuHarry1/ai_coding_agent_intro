@@ -43,6 +43,7 @@ Agent 没有「一直开着的终端窗口」。
 1. **每次工具调用 ≈ 新起一个 shell 进程**，跑完就退出（不是同一个 bash 一直活着）。
 2. **工作目录会跨命令接上**：靠内存里的 `cwdRef` + 命令结束时写的临时 cwd 文件（见第 4 节）。
 3. **环境变量可被改写**：例如 SSO 下会给子进程设置逻辑 `HOME`（见第 5 节），这不等于改你本机系统环境。
+4. **输出默认走文件 fd**（对齐 CC）：stdout/stderr 接到同一文件，进程退出后再读；Windows 用 `'w'` 打开。细节见 [output-file-fd.md](./output-file-fd.md)。
 
 ---
 
@@ -214,6 +215,7 @@ Shell 工具使用「双通道」结果（与其它部分工具一致）：
 | 文档 | 内容 |
 |------|------|
 | [bash-task-system.md](./bash-task-system.md) | 后台 task_id、落盘、通知、TaskOutput / TaskStop |
+| [output-file-fd.md](./output-file-fd.md) | 输出接文件 fd（相对 pipe）的设计与为何要用；Windows `'w'` |
 | [deploy/README.md](../deploy/README.md) | SSO、逻辑 HOME、沙箱边界（bash 非 OS 隔离） |
 | `src/README.md` | `tools/` 目录与工具约定 |
 

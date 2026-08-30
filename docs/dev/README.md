@@ -35,6 +35,7 @@
 |------|------|
 | [bash-task-system.md](shell/bash-task-system.md) | Bash 后台任务系统 |
 | [tool-execution.md](shell/tool-execution.md) | Shell 工具执行 |
+| [output-file-fd.md](shell/output-file-fd.md) | 输出用文件 fd 的设计与动机（对齐 CC） |
 | [html/bash-task-system.html](html/bash-task-system.html) | 任务系统图解 |
 
 ### Worker

@@ -1,8 +1,6 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { spawn } from 'child_process'
 import { truncate } from './utils.js'
-import { killChild } from '../core/platform.js'
 import type {
   DualChannelToolResult,
   ToolDefinition,
@@ -10,9 +8,7 @@ import type {
 } from '../core/types.js'
 import { isShellInputConcurrencySafe } from '../core/shell/shell-readonly.js'
 import {
-  prepareShellSpawn,
-  readCwdAfter,
-  cleanupCwdFile,
+  runShellCommand,
   type ShellKind,
 } from '../core/shell/spawn-shell.js'
 import { spawnShellTask } from '../tasks/LocalShellTask/LocalShellTask.js'
@@ -53,13 +49,6 @@ function shellOk(
 }
 
 const PROGRESS_INTERVAL_MS = 2_000
-const MAX_BUFFER = 100_000
-
-function cappedAppend(buf: string, chunk: string): string {
-  const combined = buf + chunk
-  if (combined.length <= MAX_BUFFER) return combined
-  return '...[earlier output truncated]\n' + combined.slice(-MAX_BUFFER)
-}
 
 export interface ShellToolOptions {
   name: string
@@ -206,6 +195,12 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               if (result.code !== 0 && result.code !== null) {
                 out += `\n[exit code: ${result.code}]`
               }
+              const interrupted = !!(result.timedOut || result.interrupted)
+              if (interrupted) {
+                out += result.timedOut
+                  ? `\n[timed out after ${(timeout / 1000).toFixed(1)}s]`
+                  : '\n[interrupted]'
+              }
               const final =
                 out ||
                 (result.code === 0
@@ -220,6 +215,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
                 stdout: result.stdout || '',
                 stderr: result.stderr || '',
                 exitCode: result.code,
+                interrupted,
               })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
@@ -250,13 +246,53 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             })
           }
 
-          // ── In-process foreground (tests / no Worker) ──
-          let prepared
+          // ── In-process foreground (tests / no Worker) — file-fd like Worker ──
           try {
-            prepared = prepareShellSpawn({
+            const start = Date.now()
+            const result = await runShellCommand({
               shell,
-              userCommand: command,
+              command,
+              cwd: cwdRef.current,
+              timeoutMs: timeout,
+              stdin,
+              abortSignal,
               cwdFilePrefix: 'agent-shell-cwd',
+              progressIntervalMs: PROGRESS_INTERVAL_MS,
+              onProgress:
+                wire && toolUseId
+                  ? text => {
+                      wire.processOutput(toolUseId, name, truncate(text))
+                    }
+                  : undefined,
+            })
+            if (result.cwdAfter) cwdRef.current = result.cwdAfter
+
+            let out = result.stdout || ''
+            if (result.stderr) {
+              out += (out ? '\n' : '') + `<stderr>\n${result.stderr}</stderr>`
+            }
+            if (result.code !== 0 && result.code !== null) {
+              out += `\n[exit code: ${result.code}]`
+            }
+            const interrupted = !!(result.interrupted || result.timedOut)
+            if (interrupted) {
+              out += `\n[interrupted after ${((Date.now() - start) / 1000).toFixed(1)}s]`
+            }
+            const final =
+              out ||
+              (result.code === 0
+                ? '(no output)'
+                : `(no output, exit code ${result.code})`)
+            const text = truncate(final)
+            if (wire && toolUseId) {
+              wire.processOutput(toolUseId, name, text)
+            }
+            return shellOk({
+              text,
+              stdout: result.stdout || '',
+              stderr: result.stderr || '',
+              exitCode: result.code,
+              interrupted,
             })
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -265,101 +301,6 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               interrupted: true,
             })
           }
-
-          const child = spawn(prepared.command, prepared.args, {
-            cwd: cwdRef.current,
-            env: prepared.env,
-            windowsHide: true,
-          })
-
-          const updateCwdFromFile = () => {
-            const tracked = readCwdAfter(
-              prepared.cwdFileNative,
-              prepared.shellKind,
-            )
-            if (tracked) cwdRef.current = tracked
-            cleanupCwdFile(prepared.cwdFileNative)
-          }
-
-          let stdout = ''
-          let stderr = ''
-          let interrupted = false
-          const start = Date.now()
-          let lastProgress = 0
-
-          if (stdin != null) {
-            child.stdin?.write(stdin)
-            child.stdin?.end()
-          } else {
-            child.stdin?.end()
-          }
-
-          child.stdout?.on('data', (chunk: Buffer) => {
-            stdout = cappedAppend(stdout, chunk.toString('utf8'))
-            const now = Date.now()
-            if (wire && toolUseId && now - lastProgress >= PROGRESS_INTERVAL_MS) {
-              lastProgress = now
-              wire.processOutput(
-                toolUseId,
-                name,
-                truncate(stdout + (stderr ? `\n<stderr>\n${stderr}</stderr>` : '')),
-              )
-            }
-          })
-          child.stderr?.on('data', (chunk: Buffer) => {
-            stderr = cappedAppend(stderr, chunk.toString('utf8'))
-          })
-
-          const exitCode = await new Promise<number | null>(resolve => {
-            const timer = setTimeout(() => {
-              interrupted = true
-              killChild(child)
-            }, timeout)
-            const onAbort = () => {
-              interrupted = true
-              killChild(child)
-            }
-            abortSignal?.addEventListener('abort', onAbort, { once: true })
-            if (abortSignal?.aborted) onAbort()
-            child.on('close', code => {
-              clearTimeout(timer)
-              abortSignal?.removeEventListener('abort', onAbort)
-              resolve(code)
-            })
-            child.on('error', () => {
-              clearTimeout(timer)
-              abortSignal?.removeEventListener('abort', onAbort)
-              interrupted = true
-              resolve(1)
-            })
-          })
-
-          updateCwdFromFile()
-
-          let out = stdout || ''
-          if (stderr) out += (out ? '\n' : '') + `<stderr>\n${stderr}</stderr>`
-          if (exitCode !== 0 && exitCode !== null) {
-            out += `\n[exit code: ${exitCode}]`
-          }
-          if (interrupted) {
-            out += `\n[interrupted after ${((Date.now() - start) / 1000).toFixed(1)}s]`
-          }
-          const final =
-            out ||
-            (exitCode === 0
-              ? '(no output)'
-              : `(no output, exit code ${exitCode})`)
-          const text = truncate(final)
-          if (wire && toolUseId) {
-            wire.processOutput(toolUseId, name, text)
-          }
-          return shellOk({
-            text,
-            stdout,
-            stderr,
-            exitCode,
-            interrupted,
-          })
         },
       })
     },

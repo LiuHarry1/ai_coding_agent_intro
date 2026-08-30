@@ -1,14 +1,23 @@
 /**
  * In-process background shell — lean stand-in for CC `utils/ShellCommand.ts`
  * when ExecutionBackend / Worker is absent (tests, scripts).
+ *
+ * Output uses file-fd mode (CC tool path): stdout+stderr → task `.output` file.
  */
-import { spawn, type ChildProcess } from 'child_process'
+import type { ChildProcess } from 'child_process'
 import { forceKillChild } from '../core/platform.js'
 import {
   prepareShellSpawn,
+  openShellOutputFdSync,
+  closeShellOutputFdSync,
+  spawnPreparedShell,
+  cleanupCwdFile,
   type ShellKind,
 } from '../core/shell/spawn-shell.js'
-import { appendTaskOutput, initTaskOutput } from './task/diskOutput.js'
+import {
+  getTaskOutputPath,
+  initTaskOutput,
+} from './task/diskOutput.js'
 
 type InProcessBg = {
   taskId: string
@@ -47,17 +56,30 @@ export function spawnInProcessBackground(opts: {
   shell: ShellKind
 }): InProcessBg {
   initTaskOutput(opts.taskId)
+  const outputPath = getTaskOutputPath(opts.taskId)
   const prepared = prepareShellSpawn({
     shell: opts.shell,
     userCommand: opts.command,
     cwdFilePrefix: 'agent-bg-cwd',
   })
-  const child = spawn(prepared.command, prepared.args, {
-    cwd: opts.cwd,
-    env: prepared.env,
-    windowsHide: true,
-    detached: process.platform !== 'win32',
-  })
+
+  const outputFd = openShellOutputFdSync(outputPath)
+  let child: ChildProcess
+  try {
+    child = spawnPreparedShell({
+      prepared,
+      cwd: opts.cwd,
+      outputFd,
+      detached: process.platform !== 'win32',
+    })
+  } catch (err) {
+    closeShellOutputFdSync(outputFd)
+    cleanupCwdFile(prepared.cwdFileNative)
+    throw err
+  }
+  // Parent closes its copy — child has a dup (CC Shell.ts).
+  closeShellOutputFdSync(outputFd)
+  child.stdin?.end()
 
   const entry: InProcessBg = {
     taskId: opts.taskId,
@@ -69,15 +91,10 @@ export function spawnInProcessBackground(opts: {
   }
 
   entry.result = new Promise(resolve => {
-    child.stdout?.on('data', (chunk: Buffer) => {
-      appendTaskOutput(opts.taskId, chunk.toString('utf8'))
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      appendTaskOutput(opts.taskId, chunk.toString('utf8'))
-    })
     child.on('close', code => {
       entry.done = true
       entry.exitCode = code
+      cleanupCwdFile(prepared.cwdFileNative)
       resolve({
         code,
         interrupted: entry.killed,
@@ -87,6 +104,7 @@ export function spawnInProcessBackground(opts: {
     child.on('error', () => {
       entry.done = true
       entry.exitCode = 1
+      cleanupCwdFile(prepared.cwdFileNative)
       resolve({ code: 1, interrupted: entry.killed })
     })
   })

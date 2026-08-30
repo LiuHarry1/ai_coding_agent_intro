@@ -1,9 +1,14 @@
 /**
  * Shared shell spawn (aligned with Claude Code `utils/Shell.ts` + providers).
  * Worker `exec` and in-process shell-runner both call this — one wrap/args/cwd story.
+ *
+ * Default output capture is **file fd** (CC tool mode): stdout+stderr → one file;
+ * Windows opens with `'w'` so Git Bash/MSYS does not silently discard output.
+ * Pass `usePipeMode: true` for real-time stream callbacks (CC hooks path).
  */
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, type ChildProcess, type StdioOptions } from 'child_process'
 import * as fs from 'fs'
+import { open as fsOpen, type FileHandle } from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
 import {
@@ -17,6 +22,9 @@ import { getShellHome } from '../../utils/request-scope.js'
 import { WORKER_CWD_FILE_PREFIX } from '../../brand.js'
 
 const isWindows = process.platform === 'win32'
+
+/** Default cap for returned stdout (file or pipe). */
+export const DEFAULT_SHELL_OUTPUT_CAP = 100_000
 
 /** Shell used by Bash / PowerShell tools and Worker `fs_op.exec`. */
 export type ShellKind = 'bash' | 'powershell'
@@ -38,7 +46,16 @@ export type ShellExecResult = {
   child: ChildProcess
 }
 
-function makeCwdFile(prefix: string): string {
+export type RunShellCommandResult = {
+  stdout: string
+  stderr: string
+  code: number | null
+  cwdAfter?: string
+  timedOut?: boolean
+  interrupted?: boolean
+}
+
+function makeTempPath(prefix: string): string {
   return path.join(
     os.tmpdir(),
     `${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -65,7 +82,7 @@ export function prepareShellSpawn(opts: {
   userCommand: string
   cwdFilePrefix?: string
 }): PreparedShellSpawn {
-  const cwdFileNative = makeCwdFile(opts.cwdFilePrefix ?? 'agent-shell-cwd')
+  const cwdFileNative = makeTempPath(opts.cwdFilePrefix ?? 'agent-shell-cwd')
 
   const agentHome = getShellHome()
   const homeEnv: NodeJS.ProcessEnv = {
@@ -132,14 +149,137 @@ export function cleanupCwdFile(cwdFileNative: string): void {
   }
 }
 
-/** Foreground shell exec for Worker / simple callers. */
-export function runShellCommand(opts: {
+/**
+ * Open an output file for shell stdout+stderr (CC `Shell.ts` file mode).
+ * Windows: `'w'` — MSYS needs FILE_WRITE_DATA or it silently discards output.
+ * POSIX: O_APPEND so interleaved stdout/stderr writes stay atomic.
+ */
+export async function openShellOutputHandle(
+  outputPath: string,
+): Promise<FileHandle> {
+  const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0
+  return fsOpen(
+    outputPath,
+    isWindows
+      ? 'w'
+      : fs.constants.O_WRONLY |
+          fs.constants.O_CREAT |
+          fs.constants.O_APPEND |
+          O_NOFOLLOW,
+  )
+}
+
+/** Sync open for background spawn APIs that must return immediately. */
+export function openShellOutputFdSync(outputPath: string): number {
+  const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0
+  return fs.openSync(
+    outputPath,
+    isWindows
+      ? 'w'
+      : fs.constants.O_WRONLY |
+          fs.constants.O_CREAT |
+          fs.constants.O_APPEND |
+          O_NOFOLLOW,
+  )
+}
+
+export function closeShellOutputFdSync(fd: number): void {
+  try {
+    fs.closeSync(fd)
+  } catch {
+    // ignore
+  }
+}
+
+/** Close parent FileHandle after spawn; child already has its own dup. */
+export async function closeShellOutputHandle(
+  handle: FileHandle | undefined,
+): Promise<void> {
+  if (!handle) return
+  try {
+    await handle.close()
+  } catch {
+    // fd may already be closed; safe to ignore
+  }
+}
+
+function capOutput(text: string, maxBytes: number): string {
+  if (text.length <= maxBytes) return text
+  return '...[earlier output truncated]\n' + text.slice(-maxBytes)
+}
+
+function readOutputFile(filePath: string, maxBytes: number): string {
+  try {
+    const buf = fs.readFileSync(filePath)
+    if (buf.length <= maxBytes) return buf.toString('utf8')
+    return (
+      '...[earlier output truncated]\n' +
+      buf.subarray(buf.length - maxBytes).toString('utf8')
+    )
+  } catch {
+    return ''
+  }
+}
+
+export type SpawnPreparedShellOpts = {
+  prepared: PreparedShellSpawn
+  cwd: string
+  /**
+   * When set, stdout+stderr are redirected to this fd (CC file mode).
+   * Caller opens via `openShellOutputHandle` / `openShellOutputFdSync` and
+   * must close the **parent** copy after spawn (child has its own dup).
+   */
+  outputFd?: number
+  /** CC pipe mode — real-time stream callbacks. Mutually exclusive with outputFd. */
+  usePipeMode?: boolean
+  detached?: boolean
+}
+
+/**
+ * Spawn a prepared shell. Prefer passing `outputFd` (file mode).
+ * Returns the child; caller owns lifecycle / wait / cwd trailer cleanup.
+ */
+export function spawnPreparedShell(opts: SpawnPreparedShellOpts): ChildProcess {
+  const { prepared, cwd, outputFd, usePipeMode, detached } = opts
+  if (outputFd !== undefined && usePipeMode) {
+    throw new Error(
+      'spawnPreparedShell: pass either outputFd or usePipeMode, not both',
+    )
+  }
+
+  const stdio: StdioOptions =
+    outputFd !== undefined
+      ? ['pipe', outputFd, outputFd]
+      : ['pipe', 'pipe', 'pipe']
+
+  return spawn(prepared.command, prepared.args, {
+    cwd,
+    env: prepared.env,
+    stdio,
+    windowsHide: true,
+    ...(detached !== undefined ? { detached } : {}),
+  })
+}
+
+/**
+ * Foreground shell exec for Worker / shell-runner.
+ * Default: file-fd capture (aligned with Claude Code tool path).
+ */
+export async function runShellCommand(opts: {
   shell: ShellKind
   command: string
   cwd: string
   timeoutMs: number
   cwdFilePrefix?: string
-}): Promise<Omit<ShellExecResult, 'child'> & { cwdAfter?: string }> {
+  stdin?: string
+  abortSignal?: AbortSignal
+  /** Default false — file fd mode. True = pipes (real-time onStdout-style). */
+  usePipeMode?: boolean
+  /** Progress while running (polled from output file, or pipe chunks in pipe mode). */
+  onProgress?: (text: string) => void
+  progressIntervalMs?: number
+  maxOutputBytes?: number
+}): Promise<RunShellCommandResult> {
   let prepared: PreparedShellSpawn
   try {
     prepared = prepareShellSpawn({
@@ -148,50 +288,162 @@ export function runShellCommand(opts: {
       cwdFilePrefix: opts.cwdFilePrefix ?? WORKER_CWD_FILE_PREFIX,
     })
   } catch (err) {
-    return Promise.reject(err instanceof Error ? err : new Error(String(err)))
+    throw err instanceof Error ? err : new Error(String(err))
   }
 
-  return new Promise((resolve, reject) => {
-    const child = spawn(prepared.command, prepared.args, {
+  const usePipe = opts.usePipeMode === true
+  const maxBytes = opts.maxOutputBytes ?? DEFAULT_SHELL_OUTPUT_CAP
+  const progressMs = opts.progressIntervalMs ?? 2_000
+  const outputPath = usePipe ? undefined : makeTempPath('agent-shell-out')
+
+  let outputHandle: FileHandle | undefined
+  if (!usePipe && outputPath) {
+    outputHandle = await openShellOutputHandle(outputPath)
+  }
+
+  let child: ChildProcess
+  try {
+    child = spawnPreparedShell({
+      prepared,
       cwd: opts.cwd,
-      env: prepared.env,
-      windowsHide: true,
+      outputFd: outputHandle?.fd,
+      usePipeMode: usePipe,
     })
-    let stdout = ''
-    let stderr = ''
-    let settled = false
+  } catch (err) {
+    await closeShellOutputHandle(outputHandle)
+    if (outputPath) {
+      try {
+        fs.unlinkSync(outputPath)
+      } catch {
+        /* ignore */
+      }
+    }
+    cleanupCwdFile(prepared.cwdFileNative)
+    throw err
+  }
+
+  // Parent closes its copy — child has a dup (CC Shell.ts).
+  await closeShellOutputHandle(outputHandle)
+  outputHandle = undefined
+
+  if (opts.stdin != null && opts.stdin.length > 0) {
+    child.stdin?.write(opts.stdin)
+  }
+  child.stdin?.end()
+
+  let stdout = ''
+  let stderr = ''
+  let timedOut = false
+  let interrupted = false
+  let settled = false
+
+  if (usePipe) {
+    child.stdout?.on('data', (d: Buffer) => {
+      const chunk = d.toString('utf8')
+      stdout = capOutput(stdout + chunk, maxBytes)
+      opts.onProgress?.(
+        stdout + (stderr ? `\n<stderr>\n${stderr}</stderr>` : ''),
+      )
+    })
+    child.stderr?.on('data', (d: Buffer) => {
+      stderr = capOutput(stderr + d.toString('utf8'), maxBytes)
+    })
+  }
+
+  let progressTimer: ReturnType<typeof setInterval> | undefined
+  if (!usePipe && outputPath && opts.onProgress) {
+    progressTimer = setInterval(() => {
+      opts.onProgress?.(readOutputFile(outputPath, maxBytes))
+    }, progressMs)
+    progressTimer.unref?.()
+  }
+
+  const clearProgress = () => {
+    if (progressTimer) clearInterval(progressTimer)
+  }
+
+  const result = await new Promise<RunShellCommandResult>((resolve, reject) => {
+    const finish = (partial: RunShellCommandResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      clearProgress()
+      opts.abortSignal?.removeEventListener('abort', onAbort)
+      const cwdAfter = readCwdAfter(prepared.cwdFileNative, prepared.shellKind)
+      cleanupCwdFile(prepared.cwdFileNative)
+
+      let out = partial.stdout
+      let err = partial.stderr
+      if (!usePipe && outputPath) {
+        out = readOutputFile(outputPath, maxBytes)
+        err = ''
+        try {
+          fs.unlinkSync(outputPath)
+        } catch {
+          /* ignore */
+        }
+      }
+
+      resolve({
+        ...partial,
+        stdout: out,
+        stderr: err,
+        cwdAfter,
+      })
+    }
 
     const timer = setTimeout(() => {
+      timedOut = true
       killChild(child)
       setTimeout(() => {
         forceKillChild(child)
-        if (settled) return
-        settled = true
-        cleanupCwdFile(prepared.cwdFileNative)
-        reject(new Error(`exec timed out after ${opts.timeoutMs}ms`))
+        // If `close` never fires (rare Windows races), still settle.
+        setTimeout(() => {
+          finish({
+            stdout,
+            stderr,
+            code: null,
+            timedOut: true,
+            interrupted: true,
+          })
+        }, 500)
       }, 3000)
     }, opts.timeoutMs)
 
-    child.stdout?.on('data', (d: Buffer) => {
-      stdout += d.toString('utf8')
-    })
-    child.stderr?.on('data', (d: Buffer) => {
-      stderr += d.toString('utf8')
-    })
+    const onAbort = () => {
+      interrupted = true
+      killChild(child)
+    }
+    opts.abortSignal?.addEventListener('abort', onAbort, { once: true })
+    if (opts.abortSignal?.aborted) onAbort()
+
     child.on('error', err => {
-      clearTimeout(timer)
       if (settled) return
       settled = true
+      clearTimeout(timer)
+      clearProgress()
+      opts.abortSignal?.removeEventListener('abort', onAbort)
       cleanupCwdFile(prepared.cwdFileNative)
+      if (outputPath) {
+        try {
+          fs.unlinkSync(outputPath)
+        } catch {
+          /* ignore */
+        }
+      }
       reject(err)
     })
+
     child.on('close', code => {
-      clearTimeout(timer)
-      if (settled) return
-      settled = true
-      const cwdAfter = readCwdAfter(prepared.cwdFileNative, prepared.shellKind)
-      cleanupCwdFile(prepared.cwdFileNative)
-      resolve({ stdout, stderr, code, cwdAfter })
+      finish({
+        stdout,
+        stderr,
+        code,
+        timedOut,
+        interrupted: interrupted || timedOut,
+      })
     })
   })
+
+  return result
 }
