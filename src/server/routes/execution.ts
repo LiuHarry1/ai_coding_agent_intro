@@ -3,6 +3,7 @@ import { readBody, sendJSON } from '../http.js'
 import {
   getExecutionPlane,
   isWorkspaceHandle,
+  prewarmRuntime,
   type WorkspaceHandle,
 } from '../../execution/index.js'
 import {
@@ -195,8 +196,10 @@ export function createExecutionRouter() {
         const normalized = await plane.workspaces.normalizeHandle(body)
         setSessionWorkspace(sessionId, normalized)
         const label = await plane.workspaces.label(normalized)
-        // Warm runtime
-        await plane.runtimes.getOrCreate(normalized, sessionId)
+        // Warm the runtime in the background: binding a workspace shouldn't
+        // wait on a process launch, and the first turn reuses whatever this
+        // opens (RuntimeBroker keys by environmentId::cwd).
+        prewarmRuntime(normalized)
         sendJSON(res, 200, { workspace: normalized, label })
         return true
       }

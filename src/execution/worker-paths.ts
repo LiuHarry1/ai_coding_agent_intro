@@ -10,6 +10,7 @@ import {
   WORKER_BUNDLE_NAME,
   agentNativeFileName,
 } from '../brand.js'
+import { isInBundledMode } from '../utils/bundledMode.js'
 
 declare const __dirname: string | undefined
 declare const __filename: string | undefined
@@ -138,11 +139,27 @@ export function applyRuntimeModulePath(appRoot?: string): void {
 }
 
 /**
- * Local execution-plane worker: slim worker.cjs first, then unified agent, then native.
+ * Local execution-plane worker: compiled self first, then slim worker.cjs,
+ * then unified agent, then native.
  */
 export function resolveWorkerLaunch(): WorkerLaunch {
   const root = getRepoRoot()
   const version = readWorkerVersion()
+
+  // Compiled binaries re-run their embedded entry, so `execPath worker.cjs
+  // --stdio` would start the chat stdio agent and never send `ready` — the
+  // Control Plane would then wait out the whole bind timeout on every turn.
+  // Dispatch on our own flag instead (CC: ripgrep.ts / computerUse/setup.ts).
+  if (isInBundledMode()) {
+    return {
+      command: process.execPath,
+      args: ['--worker-stdio'],
+      cwd: root,
+      artifactPath: process.execPath,
+      version,
+      mode: 'agent-native',
+    }
+  }
 
   const workerBundle = getWorkerBundlePath()
   if (fs.existsSync(workerBundle)) {

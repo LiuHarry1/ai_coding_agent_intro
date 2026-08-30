@@ -44,6 +44,7 @@ import {
   commitPartialStreamToHistory,
 } from '../../utils/interrupt.js'
 import { abortReasonFromSignal } from '../turn-abort-registry.js'
+import { profileCheckpoint } from '../../utils/startupProfiler.js'
 import {
   createDumpPromptsRecorder,
   createNoopDumpPromptsRecorder,
@@ -197,6 +198,8 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
         ...provider.streamTextExtras(),
       })
 
+      // streamText is lazy — the request goes out when consumeStream pulls.
+      profileCheckpoint('turn_api_request_sent')
       const timing = { firstEventMs: 0 }
       const stepResult = await consumeStream(
         stream,
@@ -207,6 +210,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
           streamingExecutor: streamingExecutor ?? undefined,
         },
       )
+      profileCheckpoint(`turn_stream_done_ttft=${timing.firstEventMs}ms`)
 
       if (stepResult.aborted) {
         if (streamingExecutor) {

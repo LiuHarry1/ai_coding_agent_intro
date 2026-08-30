@@ -32,7 +32,13 @@ export class StdioRuntimePort implements RuntimePort {
   private onCloseHook?: () => void | Promise<void>
   private unsub: () => void
   private ready = false
-  private readyWaiters: Array<() => void> = []
+  private readyWaiters: Array<{
+    resolve: () => void
+    reject: (err: Error) => void
+    timer: NodeJS.Timeout
+  }> = []
+  /** Last transport failure, used to explain an unmet `ready`. */
+  private lastError: string | null = null
 
   constructor(opts: StdioRuntimePortOptions) {
     this.workspace = opts.workspace
@@ -46,12 +52,17 @@ export class StdioRuntimePort implements RuntimePort {
         const m = msg as RuntimeServerMessage
         if (m.type === 'ready') {
           this.ready = true
-          for (const w of this.readyWaiters) w()
+          const waiters = this.readyWaiters
           this.readyWaiters = []
+          for (const w of waiters) {
+            clearTimeout(w.timer)
+            w.resolve()
+          }
         }
         this.ee.emit('message', m)
       },
       err => {
+        this.lastError = err.message
         this.ee.emit('message', {
           type: 'error',
           message: err.message,
@@ -64,28 +75,51 @@ export class StdioRuntimePort implements RuntimePort {
       if (text) console.error(`[worker:${this.workspace.environmentId}] ${text}`)
     })
 
-    this.child?.on('exit', (code, signal) => {
+    // Spawn failures (ENOENT, EACCES) emit 'error' and may never emit 'exit'.
+    this.child?.on('error', err => {
       if (this.closed) return
+      this.lastError = `Worker spawn failed: ${err.message}`
       this.ee.emit('message', {
         type: 'error',
-        message: `Worker exited (code=${code}, signal=${signal})`,
+        message: this.lastError,
+      } satisfies RuntimeServerMessage)
+      void this.close()
+    })
+
+    this.child?.on('exit', (code, signal) => {
+      if (this.closed) return
+      this.lastError = `Worker exited (code=${code}, signal=${signal})`
+      this.ee.emit('message', {
+        type: 'error',
+        message: this.lastError,
       } satisfies RuntimeServerMessage)
       void this.close()
     })
   }
 
-  /** Wait until Worker sends `ready` (after bind). */
+  /**
+   * Wait until Worker sends `ready` (after bind). Rejects as soon as the
+   * child dies — waiting out the full timeout on a dead worker would stall
+   * every turn that resolves an execution backend.
+   */
   waitUntilReady(timeoutMs = 60_000): Promise<void> {
     if (this.ready) return Promise.resolve()
+    if (this.closed) {
+      return Promise.reject(new Error(this.readyFailureMessage()))
+    }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error('Worker ready timed out'))
+        this.readyWaiters = this.readyWaiters.filter(w => w.timer !== timer)
+        reject(new Error(`Worker ready timed out after ${timeoutMs}ms`))
       }, timeoutMs)
-      this.readyWaiters.push(() => {
-        clearTimeout(timer)
-        resolve()
-      })
+      this.readyWaiters.push({ resolve, reject, timer })
     })
+  }
+
+  private readyFailureMessage(): string {
+    return this.lastError
+      ? `Worker closed before ready: ${this.lastError}`
+      : 'Worker closed before ready'
   }
 
   send(msg: RuntimeClientMessage): void {
@@ -116,6 +150,12 @@ export class StdioRuntimePort implements RuntimePort {
       this.send({ type: 'shutdown' })
     } catch {
       /* ignore */
+    }
+    const waiters = this.readyWaiters
+    this.readyWaiters = []
+    for (const w of waiters) {
+      clearTimeout(w.timer)
+      w.reject(new Error(this.readyFailureMessage()))
     }
     this.unsub()
     this.ee.removeAllListeners()

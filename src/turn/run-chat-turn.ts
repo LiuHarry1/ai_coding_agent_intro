@@ -27,6 +27,7 @@ import {
   appendModeChange,
 } from '../session/index.js'
 import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
+import { profileSpan } from '../utils/startupProfiler.js'
 import { getSystemPromptForMode } from '../prompts/mode.js'
 import { getSystemPromptForAgentProfile } from '../prompts/agent-profile.js'
 import { applyModeRestrictions } from '../core/mode-restrictions.js'
@@ -255,18 +256,20 @@ export async function runChatTurn(
   middleware.use('beforeTool', createPlanModeGuardMiddleware(session, cwd))
   if (hasPluginHooks()) applyPluginHooks(middleware, eventBus)
 
-  const prepared = await prepareChatTurn({
-    message,
-    cwd,
-    session,
-    registry: defaultRegistry,
-    config: resolvedSettings.config,
-    provider,
-    models,
-    eventBus,
-    middleware,
-    runAgent,
-  })
+  const prepared = await profileSpan('turn_prepare', () =>
+    prepareChatTurn({
+      message,
+      cwd,
+      session,
+      registry: defaultRegistry,
+      config: resolvedSettings.config,
+      provider,
+      models,
+      eventBus,
+      middleware,
+      runAgent,
+    }),
+  )
 
   // Title via small model after the first real user turn.
   maybeGenerateSessionTitle(session, message, models)

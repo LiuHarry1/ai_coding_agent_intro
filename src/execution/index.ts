@@ -47,3 +47,4 @@ export {
   getWorkerBundlePath,
   readWorkerVersion,
 } from './worker-paths.js'
+export { prewarmRuntime, prewarmLocalRuntime } from './prewarm.js'

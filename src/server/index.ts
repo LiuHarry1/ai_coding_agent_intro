@@ -7,6 +7,7 @@ import type { ServerOptions } from '../core/types.js'
 import { shutdownAllLspManagers } from '../services/lsp/manager.js'
 import {
   bootstrapExecutionPlane,
+  prewarmLocalRuntime,
   shutdownExecutionPlane,
 } from '../execution/index.js'
 import * as os from 'os'
@@ -14,6 +15,8 @@ import { resolveSettings } from '../core/settings-manager.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
 import { runWithRequestScope } from '../utils/request-scope.js'
 import { initBrowserLifecycle } from '../browser/manager.js'
+import { preconnectModelApis } from '../utils/apiPreconnect.js'
+import { profileCheckpoint } from '../utils/startupProfiler.js'
 
 export function startServer(_opts: ServerOptions = {}): void {
   const PORT = parseInt(process.env.PORT || '4567', 10)
@@ -86,6 +89,11 @@ export function startServer(_opts: ServerOptions = {}): void {
           await bootstrapExecutionPlane({
             sshHosts: settings.config.environments?.ssh ?? [],
           })
+          profileCheckpoint('execution_plane_ready')
+          // Overlap the TLS handshake and the Worker process launch with the
+          // rest of boot instead of paying for both inside the first turn.
+          preconnectModelApis(settings.config.models)
+          prewarmLocalRuntime(bootCwd)
         },
       )
       console.log(`[server] execution plane ready (local + ssh providers)`)
@@ -97,6 +105,7 @@ export function startServer(_opts: ServerOptions = {}): void {
     }
 
     server.listen(PORT, () => {
+      profileCheckpoint('server_listen')
       console.log(`[server] listening on http://localhost:${PORT}`)
       console.log(`[server]   POST /sessions     -- create session`)
       console.log(`[server]   GET  /sessions     -- list sessions`)

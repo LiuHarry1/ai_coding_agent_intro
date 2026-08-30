@@ -42,6 +42,11 @@ async function main() {
     external,
     sourcemap: true,
     logLevel: 'info',
+    define: {
+      // CJS has no import.meta; packaged runs set AGENT_ROOT. Same stub as
+      // build-worker.cjs so worker-paths moduleDir/moduleRequire don't warn.
+      'import.meta.url': JSON.stringify(`file:///${agentFile}`),
+    },
   })
 
   const builtAt = new Date().toISOString()

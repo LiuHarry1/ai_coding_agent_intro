@@ -28,6 +28,12 @@ import {
 } from '../../stdio-runtime-port.js'
 import { getAgentHome } from '../../../utils/request-scope.js'
 
+/**
+ * A local worker either starts in a couple of seconds or is misconfigured.
+ * Remote (SSH) keeps a much longer budget — see ssh-stdio-session.
+ */
+const LOCAL_BIND_TIMEOUT_MS = 15_000
+
 const LOCAL_CAPS = {
   canBrowseFs: true,
   canDeployWorker: true,
@@ -163,7 +169,17 @@ class LocalConnection implements EnvironmentConnection {
       stderr: child.stderr ?? undefined,
       child,
     })
-    await bindStdioRuntime(port, workspace, 60_000)
+    try {
+      await bindStdioRuntime(port, workspace, LOCAL_BIND_TIMEOUT_MS)
+    } catch (err) {
+      // Nothing caches a port that never bound, so leaving it open would leak
+      // one worker process per attempt.
+      await port.close().catch(() => {})
+      throw new Error(
+        `Local worker failed to bind (${launch.mode}: ${launch.command}): ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
     return port
   }
 

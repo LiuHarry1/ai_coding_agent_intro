@@ -53,6 +53,7 @@ import {
   isBrowserEnabledForMainThread,
 } from '../../browser/enablement.js'
 import { warmExtensionRelay } from '../../browser/manager.js'
+import { profileSpan } from '../startupProfiler.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -242,7 +243,9 @@ export async function prepareChatTurn(
 
   let execution
   try {
-    execution = await resolveExecutionBackend(session, config.lspServers)
+    execution = await profileSpan('turn_execution_backend', () =>
+      resolveExecutionBackend(session, config.lspServers),
+    )
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.warn(`[server] execution backend resolve failed:`, msg)

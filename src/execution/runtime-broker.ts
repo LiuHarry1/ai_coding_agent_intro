@@ -12,6 +12,8 @@ function handleKey(h: WorkspaceHandle): string {
  */
 export class RuntimeBroker {
   private runtimes = new Map<string, RuntimePort>()
+  /** Opens in progress, so concurrent callers share one worker per key. */
+  private opening = new Map<string, Promise<RuntimePort>>()
 
   constructor(
     private registry: EnvironmentRegistry,
@@ -31,6 +33,25 @@ export class RuntimeBroker {
       this.runtimes.delete(key)
     }
 
+    // A prewarm and the first turn typically arrive together; without this the
+    // turn would spawn a second worker and orphan whichever lost the race.
+    const inFlight = this.opening.get(key)
+    if (inFlight) return inFlight
+
+    const opened = this.open(handle, sessionId, key)
+    this.opening.set(key, opened)
+    try {
+      return await opened
+    } finally {
+      this.opening.delete(key)
+    }
+  }
+
+  private async open(
+    handle: WorkspaceHandle,
+    sessionId: string,
+    key: string,
+  ): Promise<RuntimePort> {
     let conn = this.registry.getConnectionForEnv(handle.environmentId)
     if (!conn) {
       conn = await this.registry.connect(handle.environmentId, {
