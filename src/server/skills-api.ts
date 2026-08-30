@@ -52,6 +52,7 @@ import type { AgentDefinition, RunAgentFn } from '../core/types.js'
 import type { SkillDefinition } from '../skills/types.js'
 import { resolveRequestCwd } from './request-cwd.js'
 import { resolveSettings } from '../core/settings-manager.js'
+import { resolveAgentPicker } from '../core/agent-picker.js'
 import { createModelRegistry } from '../core/llm/index.js'
 
 function sendJSON(res: ServerResponse, status: number, data: unknown): void {
@@ -209,12 +210,19 @@ export function createSkillsApi({ runAgent }: SkillsApiOptions) {
         const { agents, plugins } = await loadWorkspaceContributions(cwd)
         const { activeAgents, allAgents, errors: agentErrors } = agents
         const resolved = resolveAgentOverrides(allAgents, activeAgents)
+        const settings = resolveSettings(cwd)
+        const picker = resolveAgentPicker(settings.config.agents, activeAgents)
         sendJSON(res, 200, {
           workspace: cwd,
           agents: activeAgents.map(a => toAgentSummary(a)),
           all: resolved.map(a => toAgentSummary(a)),
           sourceGroups: AGENT_SOURCE_GROUPS,
           builtin: BUILTIN_AGENTS.map(a => a.agentType),
+          picker: {
+            modes: picker.modes,
+            primaries: picker.primaries.map(a => toAgentSummary(a)),
+            default: picker.default,
+          },
           errors: [...mapPluginErrors(plugins), ...agentErrors],
         })
       } catch (e) {

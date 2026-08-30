@@ -2,6 +2,8 @@
 
 三个镜像、两种部署模式。前端(web)和后端(agent)**完全分离**,跑在不同的源上:浏览器从 web 源加载页面,直接跨域调用 agent API。
 
+桌面版（Electron）发布模板见 **[`desktop/`](desktop/)**（Browser-only seed + `agents.picker`）。
+
 ```
                     ${FRONTEND_ORIGIN}
    browser ─┬─ 加载 SPA ──────────▶ web   (nginx 静态站)
@@ -13,6 +15,7 @@
 |------|--------------|------|--------|
 | **admin** | `docker-compose.admin.yml` | web 源一个共享密码(Basic Auth);agent 源不鉴权,靠内网保护 | 自由切换 |
 | **sso** | `docker-compose.sso.yml` | 外部 auth-service 签发 JWT,agent 逐请求校验 | 按用户锁定 |
+| **desktop** | 见 [`desktop/README.md`](desktop/README.md) | Electron 本机 agent | 首次打开时从 `desktop/workspace-seed` 落盘 |
 
 ---
 
@@ -41,7 +44,7 @@ Tenant 镜像打到 **`/etc/ai-agent/`**（可用 `AI_AGENT_MANAGED_DIR` 覆盖�
 | [`deploy/managed/AGENTS.md`](managed/AGENTS.md) | `/etc/ai-agent/AGENTS.md` |
 | [`deploy/managed/.ai-agent/`](managed/) | `/etc/ai-agent/.ai-agent/{skills,agents,commands,rules}` |
 
-**不要**把整个项目 `.ai-agent/` 打进 `/etc`——平台策略只放 `deploy/managed/`；本地开发仍用仓库根 `.ai-agent/settings.json`；用户可见模板放 `deploy/workspace-seed/`。
+**不要**把整个项目 `.ai-agent/` 打进 `/etc`——平台策略只放 `deploy/managed/`；本地开发仍用仓库根 `.ai-agent/settings.json`；Docker 用户可见模板放 `deploy/workspace-seed/`；桌面安装包模板放 [`deploy/desktop/workspace-seed/`](desktop/)。
 
 | 层 | 说明 |
 |----|------|

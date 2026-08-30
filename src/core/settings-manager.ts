@@ -326,6 +326,30 @@ function deepMergeSettingsLayer(
   if (base.browser || overlay.browser) {
     out.browser = { ...(base.browser ?? {}), ...(overlay.browser ?? {}) }
   }
+  if (base.agents || overlay.agents) {
+    const mergedPicker =
+      base.agents?.picker || overlay.agents?.picker
+        ? {
+            ...(base.agents?.picker ?? {}),
+            ...(overlay.agents?.picker ?? {}),
+          }
+        : undefined
+    const mergedDefault =
+      base.agents?.default || overlay.agents?.default
+        ? {
+            ...(base.agents?.default ?? {}),
+            ...(overlay.agents?.default ?? {}),
+          }
+        : undefined
+    out.agents = {
+      ...(base.agents ?? {}),
+      ...(overlay.agents ?? {}),
+      ...(mergedPicker ? { picker: mergedPicker } : {}),
+      ...(mergedDefault ? { default: mergedDefault } : {}),
+    }
+    if (!mergedPicker) delete out.agents.picker
+    if (!mergedDefault) delete out.agents.default
+  }
   if (base.disabledTools || overlay.disabledTools) {
     out.disabledTools = [
       ...new Set([
@@ -551,6 +575,31 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
 
   if (layer.browser && typeof layer.browser === 'object') {
     config.browser = { ...(config.browser ?? {}), ...layer.browser }
+  }
+
+  if (layer.agents && typeof layer.agents === 'object') {
+    const nextPicker =
+      config.agents?.picker || layer.agents.picker
+        ? {
+            ...(config.agents?.picker ?? {}),
+            ...(layer.agents.picker ?? {}),
+          }
+        : undefined
+    const nextDefault =
+      config.agents?.default || layer.agents.default
+        ? {
+            ...(config.agents?.default ?? {}),
+            ...(layer.agents.default ?? {}),
+          }
+        : undefined
+    config.agents = {
+      ...(config.agents ?? {}),
+      ...layer.agents,
+      ...(nextPicker ? { picker: nextPicker } : { picker: undefined }),
+      ...(nextDefault ? { default: nextDefault } : { default: undefined }),
+    }
+    if (!nextPicker) delete config.agents.picker
+    if (!nextDefault) delete config.agents.default
   }
 
   if (Array.isArray(layer.disabledTools)) {

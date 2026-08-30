@@ -17,11 +17,37 @@ export function runtimeNodeModulesPath(appRoot) {
   return path.join(appRoot, 'dist', 'agent', 'runtime', 'node_modules')
 }
 
-export function buildAgentSpawnEnv(appRoot, port, baseEnv = process.env) {
+/**
+ * Packaged: resources/workspace-seed next to the app.
+ * Dev: repo deploy/desktop/workspace-seed.
+ */
+export function resolveWorkspaceSeedDir(
+  appRoot,
+  { packaged = false, resourcesPath } = {},
+) {
+  if (packaged && resourcesPath) {
+    const packed = path.join(resourcesPath, 'workspace-seed')
+    if (fs.existsSync(packed)) return packed
+  }
+  const dev = path.join(appRoot, 'deploy', 'desktop', 'workspace-seed')
+  if (fs.existsSync(dev)) return dev
+  return null
+}
+
+export function buildAgentSpawnEnv(
+  appRoot,
+  port,
+  baseEnv = process.env,
+  { packaged = false, resourcesPath } = {},
+) {
   const env = {
     ...baseEnv,
     PORT: String(port),
     AGENT_ROOT: appRoot,
+  }
+  const seedDir = resolveWorkspaceSeedDir(appRoot, { packaged, resourcesPath })
+  if (seedDir && env.WORKSPACE_SEED_DIR == null) {
+    env.WORKSPACE_SEED_DIR = seedDir
   }
   const runtimeModules = runtimeNodeModulesPath(appRoot)
   if (!fs.existsSync(runtimeModules)) {

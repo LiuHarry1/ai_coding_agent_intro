@@ -15,6 +15,7 @@ import {
   mergeSkillsByName,
 } from '../skills/loadSkillsDir.js'
 import type { SkillDefinition } from '../skills/types.js'
+import { seedUserWorkspaceIfNeeded } from './workspace-seed.js'
 
 export interface WorkspaceContributions {
   plugins: PluginContributions
@@ -35,6 +36,9 @@ export function mapPluginErrors(
 export async function loadWorkspaceContributions(
   cwd: string,
 ): Promise<WorkspaceContributions> {
+  // Desktop / SSO: apply baked WORKSPACE_SEED_DIR once before discovery.
+  seedUserWorkspaceIfNeeded(cwd)
+
   const plugins = await loadPlugins(cwd)
   const agents = await loadAgentDefinitions(cwd, plugins.agentFiles)
   const { skills: diskSkills, errors: skillDiskErrors } =

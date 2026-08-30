@@ -856,6 +856,23 @@ export interface AppConfig {
   /** Browser automation (`browser_*` tools). See src/browser/types.ts. */
   browser?: import('../browser/types.js').BrowserConfig
   /**
+   * ModePicker visibility + new-session defaults for permission modes and
+   * primary agent profiles. See agents.picker / agents.default in settings.
+   */
+  agents?: {
+    picker?: {
+      /** Omit = all three modes; [] = hide mode rows. */
+      modes?: Array<'agent' | 'ask' | 'plan'>
+      /** Omit = all primary agents; [] = no specialists. */
+      primaries?: string[]
+    }
+    default?: {
+      mode?: 'agent' | 'ask' | 'plan'
+      /** null = default coding (no specialist). */
+      agentType?: string | null
+    }
+  }
+  /**
    * Extra SSH hosts for the execution EnvironmentRegistry (merged with ~/.ssh/config).
    */
   environments?: {

@@ -91,6 +91,29 @@ const BrowserConfigSchema = z.object({
   mode: z.enum(['isolated', 'extension']).optional(),
   headless: z.boolean().optional(),
   cdpEndpoint: z.string().optional(),
+  enabled: z.boolean().optional(),
+  relayPort: z.number().int().positive().optional(),
+  profile: z.enum(['fresh', 'persist']).optional(),
+})
+
+const ExternalModeSchema = z.enum(['agent', 'ask', 'plan'])
+
+const AgentsPickerSchema = z.object({
+  /** Omit = show all three; [] = hide permission-mode rows. */
+  modes: z.array(ExternalModeSchema).optional(),
+  /** Omit = all primary agents; [] = no specialists in picker. */
+  primaries: z.array(z.string().min(1)).optional(),
+})
+
+const AgentsDefaultSchema = z.object({
+  mode: ExternalModeSchema.optional(),
+  /** null = default coding agent (no specialist). */
+  agentType: z.union([z.string().min(1), z.null()]).optional(),
+})
+
+const AgentsConfigSchema = z.object({
+  picker: AgentsPickerSchema.optional(),
+  default: AgentsDefaultSchema.optional(),
 })
 
 /** Parsed settings layer before merge into AppConfig. */
@@ -107,6 +130,7 @@ export const SettingsFileSchema = z.object({
   lspServers: z.record(z.string(), LspServerSchema).optional(),
   disabledTools: z.array(z.string()).optional(),
   browser: BrowserConfigSchema.optional(),
+  agents: AgentsConfigSchema.optional(),
   environments: z
     .object({
       ssh: z.array(SshHostSchema).optional(),

@@ -437,6 +437,13 @@
   background: color-mix(in srgb, var(--text-muted) 16%, var(--bg-tertiary));
 }
 
+.mode-pill--fixed {
+  cursor: default;
+}
+.mode-pill--fixed:hover {
+  background: var(--bg-tertiary);
+}
+
 .mode-pill--agent { color: var(--accent); }
 .mode-pill--ask   { color: #58a6ff; }
 .mode-pill--plan  { color: var(--purple, #bc8cff); }

@@ -31,6 +31,19 @@ export interface AgentSummary {
   disallowedTools?: string[]
   maxSteps?: number
   model?: string
+  mode?: 'primary' | 'subagent'
+  label?: string
+  source?: string
+  filePath?: string
+}
+
+export interface AgentPickerResponse {
+  modes: Array<'agent' | 'ask' | 'plan'>
+  primaries: AgentSummary[]
+  default: {
+    mode: 'agent' | 'ask' | 'plan'
+    agentType: string | null
+  }
 }
 
 export interface SkillsListResponse {
@@ -42,7 +55,10 @@ export interface SkillsListResponse {
 export interface AgentsListResponse {
   workspace: string
   agents: AgentSummary[]
+  all?: AgentSummary[]
+  sourceGroups?: string[]
   builtin: string[]
+  picker?: AgentPickerResponse
   errors: Array<{ filePath: string; error: string }>
 }
 

@@ -67,7 +67,10 @@ function pipeAgentLogs(proc) {
 
 function startAgent() {
   const appRoot = getAppRoot()
-  const env = buildAgentSpawnEnv(appRoot, agentPort)
+  const env = buildAgentSpawnEnv(appRoot, agentPort, process.env, {
+    packaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+  })
 
   const launch = resolveAgentLaunch(appRoot, SLUG, {
     packaged: app.isPackaged,
@@ -254,7 +257,8 @@ ipcMain.handle('pick-workspace', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
     properties: ['openDirectory', 'createDirectory'],
   })
-  return canceled ? null : (filePaths[0] ?? null)
+  if (canceled) return null
+  return filePaths[0] ?? null
 })
 
 ipcMain.handle('get-agent-url', () => getAgentUrl())

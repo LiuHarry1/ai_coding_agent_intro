@@ -23,6 +23,12 @@ import {
 import { loadWorkspaceContributions } from '../core/workspace-load.js'
 import { findPrimaryAgent } from '../tools/AgentTool/mergeAgents.js'
 import {
+  applyPickerDefaultsToSession,
+  loadResolvedAgentPicker,
+  pickerAgentTypeError,
+  pickerModeError,
+} from '../core/agent-picker-workspace.js'
+import {
   handlePlanModeTransition,
   isValidExternalMode,
   transitionPermissionMode,
@@ -221,9 +227,35 @@ export function createRouter({ staticDir }: RouterOptions) {
     if (await executionRouter(req, res)) return
 
     if (method === 'POST' && url === '/sessions') {
+      let workspace: string | undefined
+      try {
+        const body = await readBody(req)
+        if (typeof body.workspace === 'string' && body.workspace.length > 0) {
+          workspace = body.workspace
+        }
+      } catch {
+        // empty body ok
+      }
       const session = createSession(authed.user?.email)
+      const cwd =
+        authed.userWorkspace ??
+        (workspace && fs.existsSync(workspace)
+          ? path.resolve(workspace)
+          : getDefaultWorkspace())
+      try {
+        const picker = await loadResolvedAgentPicker(cwd)
+        applyPickerDefaultsToSession(session, picker)
+      } catch (e) {
+        console.warn(
+          `[server] apply picker defaults failed: ${(e as Error).message}`,
+        )
+      }
       console.log(`[server] new session: ${session.id}`)
-      sendJSON(res, 200, { session_id: session.id })
+      sendJSON(res, 200, {
+        session_id: session.id,
+        mode: session.permissionMode.mode,
+        agentType: session.agentType ?? null,
+      })
       return
     }
     if (method === 'GET' && url === '/sessions') {
@@ -573,8 +605,20 @@ export function createRouter({ staticDir }: RouterOptions) {
           return
         }
 
+        const cwd =
+          authed.userWorkspace ??
+          (workspace && fs.existsSync(workspace)
+            ? path.resolve(workspace)
+            : getDefaultWorkspace())
+
         const from = session.permissionMode.mode
         if (from !== mode) {
+          const picker = await loadResolvedAgentPicker(cwd)
+          const modeErr = pickerModeError(picker, mode)
+          if (modeErr) {
+            sendJSON(res, 400, { error: modeErr })
+            return
+          }
           handlePlanModeTransition(from, mode, session)
           session.permissionMode = transitionPermissionMode(
             from,
@@ -587,12 +631,6 @@ export function createRouter({ staticDir }: RouterOptions) {
           }
           appendModeChange(sessionId, session)
         }
-
-        const cwd =
-          authed.userWorkspace ??
-          (workspace && fs.existsSync(workspace)
-            ? path.resolve(workspace)
-            : getDefaultWorkspace())
 
         sendJSON(res, 200, {
           mode: session.permissionMode.mode,
@@ -656,6 +694,13 @@ export function createRouter({ staticDir }: RouterOptions) {
             })
             return
           }
+        }
+
+        const picker = await loadResolvedAgentPicker(cwd)
+        const typeErr = pickerAgentTypeError(picker, nextType)
+        if (typeErr) {
+          sendJSON(res, 400, { error: typeErr })
+          return
         }
 
         const prev = session.agentType ?? null

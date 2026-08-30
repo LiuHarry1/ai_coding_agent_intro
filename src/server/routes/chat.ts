@@ -34,6 +34,12 @@ import type { Message, RunAgentFn } from '../../core/types.js'
 import { createNoopTransport, runChatTurn } from '../../turn/run-chat-turn.js'
 import { loadWorkspaceContributions } from '../../core/workspace-load.js'
 import { findPrimaryAgent } from '../../tools/AgentTool/mergeAgents.js'
+import {
+  applyPickerDefaultsToSession,
+  loadResolvedAgentPicker,
+  pickerAgentTypeError,
+  pickerModeError,
+} from '../../core/agent-picker-workspace.js'
 import { normalizeWorkspacePath } from '../../core/workspace-path.js'
 
 export async function handleChat(
@@ -179,28 +185,97 @@ async function handleChatLocked(
     session.agentType = null
   }
 
+  const picker = await loadResolvedAgentPicker(cwd)
+  const isFreshSession = session.messages.length === 0
+
+  // New session with no client override → workspace picker defaults.
   if (
-    mode &&
-    isValidExternalMode(mode) &&
-    mode !== session.permissionMode.mode
+    isFreshSession &&
+    mode === undefined &&
+    agentType === undefined
+  ) {
+    applyPickerDefaultsToSession(session, picker)
+  }
+
+  // Fresh chat: stale localStorage mode/agentType must not 400 — snap to
+  // picker.default. Resume / later turns still reject illegal values.
+  let effectiveMode = mode
+  let effectiveAgentType = agentType
+  if (isFreshSession) {
+    let snap = false
+    if (effectiveMode !== undefined) {
+      if (
+        !isValidExternalMode(effectiveMode) ||
+        pickerModeError(picker, effectiveMode)
+      ) {
+        snap = true
+      }
+    }
+    if (effectiveAgentType !== undefined) {
+      const nextType =
+        effectiveAgentType === null || effectiveAgentType === ''
+          ? null
+          : String(effectiveAgentType)
+      if (pickerAgentTypeError(picker, nextType)) snap = true
+    }
+    if (snap) {
+      applyPickerDefaultsToSession(session, picker)
+      effectiveMode = undefined
+      effectiveAgentType = undefined
+    }
+  }
+
+  if (effectiveMode !== undefined) {
+    if (!isValidExternalMode(effectiveMode)) {
+      sendJSON(res, 400, { error: `Invalid mode '${effectiveMode}'` })
+      return
+    }
+    const modeErr = pickerModeError(picker, effectiveMode)
+    if (modeErr) {
+      sendJSON(res, 400, { error: modeErr })
+      return
+    }
+  }
+
+  if (effectiveAgentType !== undefined) {
+    const nextType =
+      effectiveAgentType === null || effectiveAgentType === ''
+        ? null
+        : String(effectiveAgentType)
+    const typeErr = pickerAgentTypeError(picker, nextType)
+    if (typeErr) {
+      sendJSON(res, 400, { error: typeErr })
+      return
+    }
+  }
+
+  if (
+    effectiveMode &&
+    isValidExternalMode(effectiveMode) &&
+    effectiveMode !== session.permissionMode.mode
   ) {
     const from = session.permissionMode.mode
-    handlePlanModeTransition(from, mode, session)
+    handlePlanModeTransition(from, effectiveMode, session)
     session.permissionMode = transitionPermissionMode(
       from,
-      mode,
+      effectiveMode,
       session.permissionMode,
     )
-    if (mode === 'ask' || mode === 'plan') {
+    if (effectiveMode === 'ask' || effectiveMode === 'plan') {
       session.agentType = null
     }
     appendModeChange(session.id, session)
   }
 
   // Sync main-thread profile from client (before session exists, or on resume).
-  if (agentType !== undefined && (mode === undefined || mode === 'agent')) {
+  if (
+    effectiveAgentType !== undefined &&
+    (effectiveMode === undefined || effectiveMode === 'agent')
+  ) {
     const nextType =
-      agentType === null || agentType === '' ? null : String(agentType)
+      effectiveAgentType === null || effectiveAgentType === ''
+        ? null
+        : String(effectiveAgentType)
     if (nextType !== (session.agentType ?? null)) {
       if (nextType !== null) {
         const { agents } = await loadWorkspaceContributions(cwd)

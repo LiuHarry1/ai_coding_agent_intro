@@ -1,21 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useChatStore } from '../stores/chat-store.js'
-import { agentApi } from '../lib/api/agent.js'
 
-const MODES = [
-  { id: 'agent', label: 'Agent', desc: 'Edit and run commands' },
-  { id: 'ask', label: 'Ask', desc: 'Read-only exploration' },
-  { id: 'plan', label: 'Plan', desc: 'Design before building' },
-]
-
-/** Short blurb for hover tip — keep full whenToUse for the model. */
-function pickerBlurb(whenToUse, fallback = '') {
-  const t = String(whenToUse || fallback || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!t) return ''
-  const m = t.match(/^(.+?[.!?])(?:\s|$)/)
-  return m ? m[1] : t.length > 96 ? `${t.slice(0, 96)}…` : t
+const MODE_META = {
+  agent: { id: 'agent', label: 'Agent', desc: 'Edit and run commands' },
+  ask: { id: 'ask', label: 'Ask', desc: 'Read-only exploration' },
+  plan: { id: 'plan', label: 'Plan', desc: 'Design before building' },
 }
 
 export default function ModePicker() {
@@ -23,12 +12,17 @@ export default function ModePicker() {
   const agentType = useChatStore(s => s.agentType)
   const setAgentMode = useChatStore(s => s.setAgentMode)
   const setAgentType = useChatStore(s => s.setAgentType)
+  const loadAgentPicker = useChatStore(s => s.loadAgentPicker)
   const workspace = useChatStore(s => s.workspace)
+  const agentPicker = useChatStore(s => s.agentPicker)
+  const primaryAgents = useChatStore(s => s.agentPickerPrimaries)
+  const loaded = useChatStore(s => s.agentPickerLoaded)
   const [open, setOpen] = useState(false)
-  const [primaryAgents, setPrimaryAgents] = useState([])
   const [hovered, setHovered] = useState(null)
   const ref = useRef(null)
   const flyoutRef = useRef(null)
+
+  const modes = agentPicker?.modes ?? ['agent', 'ask', 'plan']
 
   const showTip = (e, label, desc) => {
     if (!desc) {
@@ -50,30 +44,13 @@ export default function ModePicker() {
   const hideTip = () => setHovered(null)
 
   useEffect(() => {
-    let cancelled = false
-    agentApi
-      .getAgents(workspace || undefined)
-      .then(data => {
-        if (cancelled) return
-        const list = Array.isArray(data?.agents) ? data.agents : []
-        setPrimaryAgents(
-          list
-            .filter(a => a.mode === 'primary')
-            .map(a => ({
-              id: a.agentType,
-              label: a.label || a.agentType,
-              desc: pickerBlurb(a.whenToUse, a.description),
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label)),
-        )
-      })
-      .catch(() => {
-        if (!cancelled) setPrimaryAgents([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [workspace])
+    loadAgentPicker?.(workspace || undefined)
+  }, [workspace, loadAgentPicker])
+
+  const modeRows = useMemo(
+    () => modes.map(id => MODE_META[id]).filter(Boolean),
+    [modes],
+  )
 
   const current = useMemo(() => {
     if (agentType) {
@@ -87,9 +64,13 @@ export default function ModePicker() {
       }
       return { id: agentType, label: agentType, pillClass: 'specialist' }
     }
-    const mode = MODES.find(m => m.id === agentMode) ?? MODES[0]
+    const mode =
+      modeRows.find(m => m.id === agentMode) ?? modeRows[0] ?? MODE_META.agent
     return { id: mode.id, label: mode.label, pillClass: mode.id }
-  }, [agentMode, agentType, primaryAgents])
+  }, [agentMode, agentType, primaryAgents, modeRows])
+
+  const optionCount = modeRows.length + primaryAgents.length
+  const singleOption = optionCount <= 1
 
   useEffect(() => {
     if (!open) setHovered(null)
@@ -104,11 +85,13 @@ export default function ModePicker() {
   }, [])
 
   const selectMode = id => {
+    if (!modes.includes(id)) return
     setAgentMode(id)
     setOpen(false)
   }
 
   const selectSpecialist = id => {
+    if (!primaryAgents.some(a => a.id === id)) return
     setAgentType(id)
     setOpen(false)
   }
@@ -154,28 +137,35 @@ export default function ModePicker() {
     <div className='mode-picker' ref={ref}>
       <button
         type='button'
-        className={`mode-pill mode-pill--${current.pillClass}${open ? ' mode-pill--open' : ''}`}
-        onClick={() => setOpen(v => !v)}
-        aria-haspopup='listbox'
-        aria-expanded={open}
+        className={`mode-pill mode-pill--${current.pillClass}${open ? ' mode-pill--open' : ''}${singleOption ? ' mode-pill--fixed' : ''}`}
+        onClick={() => {
+          if (singleOption) return
+          setOpen(v => !v)
+        }}
+        aria-haspopup={singleOption ? undefined : 'listbox'}
+        aria-expanded={singleOption ? undefined : open}
+        aria-disabled={singleOption || !loaded ? true : undefined}
+        title={singleOption ? current.label : undefined}
       >
         <span className='mode-pill__label'>{current.label}</span>
-        <svg
-          className={`mode-pill__chevron${open ? ' mode-pill__chevron--open' : ''}`}
-          width='12'
-          height='12'
-          viewBox='0 0 24 24'
-          fill='none'
-          stroke='currentColor'
-          strokeWidth='2.5'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-          aria-hidden='true'
-        >
-          <polyline points='6 9 12 15 18 9' />
-        </svg>
+        {!singleOption && (
+          <svg
+            className={`mode-pill__chevron${open ? ' mode-pill__chevron--open' : ''}`}
+            width='12'
+            height='12'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2.5'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            aria-hidden='true'
+          >
+            <polyline points='6 9 12 15 18 9' />
+          </svg>
+        )}
       </button>
-      {open && (
+      {open && !singleOption && (
         <div className='mode-picker__flyout' ref={flyoutRef}>
           {hovered?.desc ? (
             <div
@@ -191,7 +181,7 @@ export default function ModePicker() {
             role='listbox'
             aria-label='Select mode'
           >
-            {MODES.map(m =>
+            {modeRows.map(m =>
               renderRow({
                 key: m.id,
                 label: m.label,
@@ -200,19 +190,17 @@ export default function ModePicker() {
                 onClick: () => selectMode(m.id),
               }),
             )}
-            {primaryAgents.length > 0 && (
-              <>
-                <div className='mode-picker__divider' role='separator' />
-                {primaryAgents.map(a =>
-                  renderRow({
-                    key: a.id,
-                    label: a.label,
-                    desc: a.desc,
-                    active: isSpecialistActive(a.id),
-                    onClick: () => selectSpecialist(a.id),
-                  }),
-                )}
-              </>
+            {primaryAgents.length > 0 && modeRows.length > 0 && (
+              <div className='mode-picker__divider' role='separator' />
+            )}
+            {primaryAgents.map(a =>
+              renderRow({
+                key: a.id,
+                label: a.label,
+                desc: a.desc,
+                active: isSpecialistActive(a.id),
+                onClick: () => selectSpecialist(a.id),
+              }),
             )}
           </div>
         </div>
