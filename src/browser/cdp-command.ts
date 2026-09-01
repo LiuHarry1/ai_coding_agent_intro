@@ -1,6 +1,6 @@
 /**
  * Send one CDP command through BrowserBackend, with Cursor's deny list and
- * overflow-to-file behaviour (25k chars, or always for Profiler.stop).
+ * overflow-to-file behaviour (CDP_INLINE_MAX_CHARS, or always for Profiler.stop).
  */
 
 import * as fs from 'fs/promises'
@@ -59,7 +59,7 @@ export async function sendCdpCommand(
   )
   const reason =
     method.trim() === 'Profiler.stop'
-      ? 'Profile data can be large, so it was saved to a file instead of being inlined.'
-      : 'CDP response exceeded 25000 characters, so it was saved to a file instead of being inlined.'
+      ? 'Profile data can be large, so it was saved to a file instead of being inlined. Use Read/Grep on that path with offset+limit — do not Bash the whole file into context.'
+      : `CDP response exceeded ${CDP_INLINE_MAX_CHARS} characters, so it was saved to a file instead of being inlined. Do not dump the whole file via Bash/python. Prefer a narrower Runtime.evaluate expression, browser_snapshot, or browser_get_text. If you must inspect the file, use Grep or Read with offset+limit.`
   return { overflow: true, filePath, sizeBytes, reason }
 }

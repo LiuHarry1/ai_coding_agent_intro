@@ -2,11 +2,10 @@
  * Shared plumbing for the `browser_*` tools: one output shape, one text
  * projection, one error funnel.
  *
- * Projection mode A — the model gets the page observation (snapshot, console,
- * screenshot); the UI card gets the same fields minus the screenshot base64,
- * which zod strips because `BrowserOutputSchema` doesn't declare it. That keeps
- * megabytes of image data out of the wire and the session jsonl while the model
- * still receives a real image block.
+ * Three-layer budgets (OpenClaw-style):
+ * - Capture fills `snapshot` on BrowserToolOutput for the model mapper only
+ * - mapBrowserOutput wraps model text to MODEL_TOOL_RESULT_MAX_CHARS
+ * - projectBrowserWireDetails builds SSE/session details without raw trees
  */
 
 import * as fs from 'fs/promises'
@@ -15,8 +14,16 @@ import { z } from 'zod'
 import { sinceReport } from '../../browser/page-inspect.js'
 import {
   DEFAULT_MAX_CHARS,
+  DEFAULT_MAX_NODES,
+  EFFICIENT_DEPTH,
+  EFFICIENT_MAX_CHARS,
+  MODEL_TOOL_RESULT_MAX_CHARS,
   POST_ACTION_MAX_NODES,
   SCREENSHOT_TOKEN_BUDGET,
+  WIRE_CONSOLE_MAX,
+  WIRE_DETAILS_MAX_BYTES,
+  WIRE_DETAIL_STRING_MAX,
+  WIRE_NETWORK_MAX,
 } from '../../browser/limits.js'
 import { getLastSnapshot, isSnapshotDegraded } from '../../browser/session-flags.js'
 import { snapshotDiff } from '../../browser/snapshot-index.js'
@@ -25,6 +32,7 @@ import {
   BrowserError,
   type BrowserBackend,
   type NetworkEntry,
+  type SnapshotMode,
 } from '../../browser/types.js'
 import { getSessionDataDir } from '../../core/session-paths.js'
 import type {
@@ -58,13 +66,26 @@ export function toNetworkRow(e: NetworkEntry): NetworkRow {
   }
 }
 
+export interface BrowserPageState {
+  truncated: boolean
+  chars: number
+  mode: SnapshotMode | 'text' | string
+  artifactPath?: string
+}
+
 export interface BrowserToolOutput {
   action: string
   message: string
   url: string
   title: string
+  /**
+   * Model-only. Never put on the wire — projectBrowserWireDetails drops it.
+   */
   snapshot?: string
   snapshotTruncated?: boolean
+  snapshotMode?: SnapshotMode | 'text' | string
+  snapshotArtifactPath?: string
+  pageState?: BrowserPageState
   consoleErrors?: Array<{ level: string; text: string }>
   network?: NetworkRow[]
   /** Set when `network` is a filtered view, so the card can say so. */
@@ -92,12 +113,20 @@ export interface BrowserToolOutput {
   screenshotMediaType?: ImageMediaType
 }
 
+const PageStateSchema = z.object({
+  truncated: z.boolean(),
+  chars: z.number(),
+  mode: z.string(),
+  artifactPath: z.string().optional(),
+})
+
+/** Wire / session schema — no raw snapshot strings. */
 export const BrowserOutputSchema = z.object({
   action: z.string(),
   message: z.string(),
   url: z.string(),
   title: z.string(),
-  snapshot: z.string().optional(),
+  pageState: PageStateSchema.optional(),
   snapshotTruncated: z.boolean().optional(),
   consoleErrors: z
     .array(z.object({ level: z.string(), text: z.string() }))
@@ -165,6 +194,193 @@ export function resetConsoleWatermark(targetId: string): void {
   consoleWatermark.delete(targetId)
 }
 
+const MODEL_TRUNCATION_MARKER =
+  '\n[truncated — retry browser_snapshot mode=full or smaller maxChars / browser_get_text]'
+
+export function wrapModelToolText(
+  text: string,
+  maxChars: number = MODEL_TOOL_RESULT_MAX_CHARS,
+): string {
+  if (text.length <= maxChars) return text
+  const budget = Math.max(0, maxChars - MODEL_TRUNCATION_MARKER.length)
+  return `${text.slice(0, budget)}${MODEL_TRUNCATION_MARKER}`
+}
+
+function wireTruncateString(value: string, max = WIRE_DETAIL_STRING_MAX): string {
+  if (value.length <= max) return value
+  return `${value.slice(0, Math.max(0, max - 1))}…`
+}
+
+function wireTruncateUnknown(value: unknown, max = WIRE_DETAIL_STRING_MAX): unknown {
+  if (value === undefined || value === null) return value
+  if (typeof value === 'string') return wireTruncateString(value, max)
+  if (typeof value === 'number' || typeof value === 'boolean') return value
+  try {
+    const raw = JSON.stringify(value)
+    if (raw.length <= max) return value
+    return {
+      truncated: true,
+      preview: wireTruncateString(raw, max),
+      originalChars: raw.length,
+    }
+  } catch {
+    return wireTruncateString(String(value), max)
+  }
+}
+
+function utf8Bytes(text: string): number {
+  return Buffer.byteLength(text, 'utf8')
+}
+
+/**
+ * Persist a snapshot sidecar when truncated or larger than the efficient tier,
+ * so the model can Read it after the live wrap drops the tail.
+ */
+export async function maybePersistSnapshotArtifact(
+  out: BrowserToolOutput,
+  sessionId: string | undefined,
+  toolCallId: string,
+): Promise<void> {
+  if (!out.snapshot || !sessionId) return
+  const shouldPersist =
+    Boolean(out.snapshotTruncated) || out.snapshot.length > EFFICIENT_MAX_CHARS
+  if (!shouldPersist) return
+  if (out.snapshotArtifactPath) return
+
+  const dir = path.join(getSessionDataDir(sessionId), 'browser')
+  await fs.mkdir(dir, { recursive: true })
+  const name = `snapshot-${toolCallId.replace(/[^a-zA-Z0-9_-]/g, '_')}.txt`
+  const filePath = path.join(dir, name)
+  await fs.writeFile(filePath, out.snapshot, 'utf8')
+  out.snapshotArtifactPath = filePath
+}
+
+export function attachPageState(out: BrowserToolOutput): void {
+  if (out.snapshot === undefined && !out.pageState) return
+  const mode = out.snapshotMode ?? (out.snapshot !== undefined ? 'efficient' : 'none')
+  out.pageState = {
+    truncated: Boolean(out.snapshotTruncated),
+    chars: out.snapshot?.length ?? out.pageState?.chars ?? 0,
+    mode,
+    ...(out.snapshotArtifactPath
+      ? { artifactPath: out.snapshotArtifactPath }
+      : out.pageState?.artifactPath
+        ? { artifactPath: out.pageState.artifactPath }
+        : {}),
+  }
+}
+
+/**
+ * Build the compact UI/session payload. Never includes `snapshot` or base64.
+ */
+export function projectBrowserWireDetails(output: unknown): Record<string, unknown> {
+  const out = (output ?? {}) as BrowserToolOutput
+  attachPageState(out)
+
+  const projected: Record<string, unknown> = {
+    action: wireTruncateString(String(out.action ?? '')),
+    message: wireTruncateString(String(out.message ?? '')),
+    url: wireTruncateString(String(out.url ?? '')),
+    title: wireTruncateString(String(out.title ?? '')),
+  }
+
+  if (out.pageState) {
+    projected.pageState = {
+      truncated: out.pageState.truncated,
+      chars: out.pageState.chars,
+      mode: wireTruncateString(String(out.pageState.mode), 64),
+      ...(out.pageState.artifactPath
+        ? { artifactPath: wireTruncateString(out.pageState.artifactPath) }
+        : {}),
+    }
+  }
+  if (out.snapshotTruncated !== undefined) {
+    projected.snapshotTruncated = out.snapshotTruncated
+  }
+  if (out.consoleErrors?.length) {
+    projected.consoleErrors = out.consoleErrors.slice(0, WIRE_CONSOLE_MAX).map(e => ({
+      level: wireTruncateString(e.level, 32),
+      text: wireTruncateString(e.text),
+    }))
+  }
+  if (out.network?.length) {
+    projected.network = out.network.slice(0, WIRE_NETWORK_MAX).map(r => ({
+      method: wireTruncateString(r.method, 16),
+      url: wireTruncateString(r.url),
+      status: r.status,
+      ok: r.ok,
+      pending: r.pending,
+      failed: r.failed,
+      error: wireTruncateString(r.error, 240),
+      durationMs: r.durationMs,
+    }))
+  }
+  if (out.networkTotal !== undefined) projected.networkTotal = out.networkTotal
+  if (out.tabs?.length) {
+    projected.tabs = out.tabs.slice(0, 40).map(t => ({
+      targetId: wireTruncateString(t.targetId, 128),
+      url: wireTruncateString(t.url),
+      title: wireTruncateString(t.title, 240),
+      current: t.current,
+    }))
+  }
+  if (out.value !== undefined) {
+    projected.value = wireTruncateUnknown(out.value)
+  }
+  if (out.screenshotPath) {
+    projected.screenshotPath = wireTruncateString(out.screenshotPath)
+  }
+  if (out.screenshotUrl) {
+    projected.screenshotUrl = wireTruncateString(out.screenshotUrl)
+  }
+  if (out.annotations?.length) {
+    projected.annotations = out.annotations.slice(0, 40).map(a => ({
+      ref: wireTruncateString(a.ref, 32),
+      number: a.number,
+      role: wireTruncateString(a.role, 64),
+      ...(a.name ? { name: wireTruncateString(a.name, 120) } : {}),
+      box: a.box,
+    }))
+  }
+  if (out.downloadPath) {
+    projected.downloadPath = wireTruncateString(out.downloadPath)
+  }
+  if (out.batchResults?.length) {
+    projected.batchResults = out.batchResults.slice(0, 50).map(r => ({
+      ok: r.ok,
+      ...(r.error ? { error: wireTruncateString(r.error, 240) } : {}),
+      ...(r.url ? { url: wireTruncateString(r.url) } : {}),
+    }))
+  }
+
+  let serialized = JSON.stringify(projected)
+  if (utf8Bytes(serialized) <= WIRE_DETAILS_MAX_BYTES) return projected
+
+  // Drop heavier optional arrays first, then hard-truncate message/value.
+  delete projected.annotations
+  delete projected.batchResults
+  delete projected.network
+  delete projected.consoleErrors
+  delete projected.tabs
+  if (projected.value !== undefined) {
+    projected.value = wireTruncateUnknown(projected.value, 200)
+  }
+  projected.message = wireTruncateString(String(projected.message ?? ''), 200)
+  serialized = JSON.stringify(projected)
+  if (utf8Bytes(serialized) > WIRE_DETAILS_MAX_BYTES) {
+    return {
+      action: projected.action,
+      message: wireTruncateString(String(projected.message ?? ''), 120),
+      url: wireTruncateString(String(projected.url ?? ''), 240),
+      title: wireTruncateString(String(projected.title ?? ''), 120),
+      pageState: projected.pageState,
+      wireTruncated: true,
+    }
+  }
+  projected.wireTruncated = true
+  return projected
+}
+
 /**
  * Gather everything the model needs to decide its next move: where it ended up,
  * what the page looks like now, and whether the action broke anything.
@@ -184,13 +400,29 @@ export async function observe(
     includeDiff?: boolean
     urls?: boolean
     skipIfDegraded?: boolean
+    mode?: SnapshotMode
+    depth?: number
+    sessionId?: string
+    toolCallId?: string
   },
 ): Promise<BrowserToolOutput> {
+  const mode: SnapshotMode =
+    opts.mode ?? (opts.compact ? 'efficient' : 'full')
+  const efficient = mode === 'efficient'
+  const compact = opts.compact ?? efficient
+  const interactive = opts.interactive ?? (efficient ? true : undefined)
+  const maxChars =
+    opts.maxChars ?? (efficient ? EFFICIENT_MAX_CHARS : DEFAULT_MAX_CHARS)
+  const maxNodes =
+    opts.maxNodes ?? (efficient ? POST_ACTION_MAX_NODES : DEFAULT_MAX_NODES)
+  const depth = opts.depth ?? (compact ? EFFICIENT_DEPTH : undefined)
+
   const out: BrowserToolOutput = {
     action: opts.action,
     message: opts.message,
     url: '',
     title: '',
+    snapshotMode: mode,
   }
 
   const dialog = await pw
@@ -205,12 +437,14 @@ export async function observe(
   if (!skipSnap) {
     const previous = opts.includeDiff ? getLastSnapshot(targetId) : undefined
     const snap = await pw.snapshot(backend, targetId, {
-      maxNodes: opts.maxNodes ?? POST_ACTION_MAX_NODES,
-      maxChars: opts.maxChars ?? DEFAULT_MAX_CHARS,
+      maxNodes,
+      maxChars,
       selector: opts.selector,
-      compact: opts.compact,
-      interactive: opts.interactive,
+      compact,
+      interactive,
       urls: opts.urls,
+      depth,
+      mode,
     })
     out.url = snap.url
     out.title = snap.title
@@ -219,13 +453,17 @@ export async function observe(
         ? snapshotDiff(previous, snap.text)
         : snap.text
     out.snapshotTruncated = snap.truncated
+    if (opts.sessionId && opts.toolCallId) {
+      await maybePersistSnapshotArtifact(out, opts.sessionId, opts.toolCallId)
+    }
+    attachPageState(out)
   } else {
     const tabs = await backend.listTabs()
     const tab = tabs.find(t => t.targetId === targetId)
     out.url = tab?.url ?? ''
     out.title = tab?.title ?? ''
     if (opts.skipIfDegraded && isSnapshotDegraded(targetId)) {
-      out.message = `${out.message} (snapshot skipped — page still degraded; capture a new snapshot when the viewer closes)`
+      out.message = `${out.message} (snapshot skipped — page still degraded from a PDF/iframe stall; keep filling the main form with click/type/fill-form, do not loop on screenshot or full snapshot)`
     }
   }
 
@@ -372,13 +610,18 @@ function renderText(out: BrowserToolOutput): string {
     lines.push(`Screenshot saved to ${out.screenshotPath}`)
   }
 
+  if (out.snapshotArtifactPath) {
+    lines.push('')
+    lines.push(`Full snapshot saved to ${out.snapshotArtifactPath}`)
+  }
+
   if (out.snapshot !== undefined) {
     lines.push('')
     lines.push('Page snapshot:')
     lines.push(out.snapshot || '(no visible content)')
     if (out.snapshotTruncated) {
       lines.push(
-        '… snapshot truncated; open dialogs and end-of-tree widgets are kept. Pass selector (e.g. [role=dialog]) to snapshot a subtree, or compact: true to drop wrappers.',
+        '… snapshot truncated; open dialogs and end-of-tree widgets are kept. Pass selector (e.g. [role=dialog]) to snapshot a subtree, mode=full for a wider tree, or browser_get_text for prose.',
       )
     }
   }
@@ -391,7 +634,7 @@ export function mapBrowserOutput(
   toolUseID: string,
 ): ToolResultBlockParam {
   const out = output as BrowserToolOutput
-  const text = renderText(out)
+  const text = wrapModelToolText(renderText(out))
 
   if (out.screenshotBase64 && out.screenshotMediaType) {
     const content: ToolResultContentBlockParam[] = [
@@ -425,8 +668,10 @@ export function browserErrorText(
     err instanceof BrowserError
       ? `Error: ${err.message}`
       : `Error: ${action} failed: ${err instanceof Error ? err.message : String(err)}`
-  if (!freshSnapshot) return head
-  return `${head}\n\nCurrent page snapshot (use these refs, the old ones are stale):\n${
-    freshSnapshot || '(no visible content)'
-  }`
+  if (!freshSnapshot) return wrapModelToolText(head)
+  return wrapModelToolText(
+    `${head}\n\nCurrent page snapshot (use these refs, the old ones are stale):\n${
+      freshSnapshot || '(no visible content)'
+    }`,
+  )
 }

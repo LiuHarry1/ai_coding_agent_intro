@@ -13,6 +13,11 @@ import type { WireEmitter } from '../wire-emitter.js'
 import { emitTodoUpdate } from '../wire-internal.js'
 import { TOOL_SEARCH_TOOL_NAME, TODO_WRITE_TOOL_NAME } from '../../constants/tool_names.js'
 import type { StreamResult } from '../agent/streamConsumer.js'
+import {
+  mediaTypeForExt,
+  parseChatUploadUrl,
+  parseDataUrl,
+} from '../../utils/chat-uploads.js'
 
 export const DEFAULT_MAX_OUTPUT_TOKENS = 16_384
 export const MAX_TRANSIENT_RETRIES = 2
@@ -40,20 +45,36 @@ export function capMaxOutputTokens(
   return Math.max(1_024, Math.min(wanted, remaining))
 }
 
-function parseDataUrl(dataUrl: string): { buffer: Buffer; mediaType: string } {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-  if (!match) throw new Error('Invalid data URL')
-  return { mediaType: match[1], buffer: Buffer.from(match[2], 'base64') }
-}
-
+/**
+ * Build a user message. Image refs should already be durable upload URLs
+ * (`/sessions/{id}/uploads/{file}`) from `offloadChatImageRefs`. Legacy data
+ * URLs are accepted as a last resort (prefer offload so session JSONL never
+ * embeds megabyte base64).
+ *
+ * Parts store short string refs — bytes are hydrated in `projectMessagesForApi`.
+ */
 export function buildUserMessage(text: string, images?: string[]): UserMessage {
   if (!images || images.length === 0) {
     return ensureMessageUuid({ role: 'user', content: text })
   }
   const parts: UserContentPart[] = [{ type: 'text', text }]
-  for (const dataUrl of images) {
-    const { buffer, mediaType } = parseDataUrl(dataUrl)
-    parts.push({ type: 'image', image: buffer, mediaType })
+  for (const ref of images) {
+    const upload = parseChatUploadUrl(ref)
+    if (upload) {
+      const ext = upload.fileName.split('.').pop() || 'png'
+      parts.push({
+        type: 'image',
+        image: ref,
+        mediaType: mediaTypeForExt(ext),
+      })
+      continue
+    }
+    if (ref.startsWith('data:')) {
+      const { mediaType } = parseDataUrl(ref)
+      parts.push({ type: 'image', image: ref, mediaType })
+      continue
+    }
+    throw new Error('Unsupported image ref in buildUserMessage')
   }
   return ensureMessageUuid({ role: 'user', content: parts })
 }

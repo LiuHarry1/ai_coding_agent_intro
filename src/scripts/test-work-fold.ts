@@ -1,118 +1,215 @@
 /**
- * Work-group unit checks — Cursor default-chat `U0m` timing.
+ * Work-group + explore-coalesce checks against the live transcript path.
  * Run: npx tsx src/scripts/test-work-fold.ts
  */
 import assert from 'assert'
-import {
-  applyWorkGrouping,
-  buildAssistantTimeline,
-  formatWorkedDuration,
-  groupAssistantParts,
-} from '../../client/web/src/lib/timeline.js'
+import { buildFlatElements } from '../../client/web/src/lib/bubbles/flat-elements.js'
+import { formatWorkedDuration } from '../../client/web/src/lib/timeline.js'
+import { coalesceToolRuns } from '../../client/web/src/lib/tool-density.js'
 
-function rows(parts) {
-  return groupAssistantParts(parts)
+function flat(bubbles, opts = {}) {
+  const bubbleOrder = bubbles.map(b => b.id)
+  const bubblesById = Object.fromEntries(bubbles.map(b => [b.id, b]))
+  return buildFlatElements(bubbleOrder, bubblesById, opts)
 }
 
-const doneTool = (id, t0 = 1000, t1 = 2000) => ({
-  type: 'tool_call',
-  toolCallId: id,
-  name: 'Bash',
-  status: 'done',
-  startTime: t0,
-  endTime: t1,
-})
-
-const liveTool = id => ({
-  type: 'tool_call',
-  toolCallId: id,
-  name: 'Bash',
-  status: 'streaming-input',
-  startTime: Date.now(),
+const tool = (id, extra = {}) => ({
+  id,
+  kind: 'tool',
+  turnId: extra.turnId ?? 't1',
+  name: extra.name ?? 'Bash',
+  status: extra.status ?? 'done',
+  startTime: extra.startTime ?? 1000,
+  endTime: extra.endTime ?? 2000,
+  ...extra,
 })
 
 {
-  // Streaming: settled tools — NO work_group (Cursor incomplete turn)
-  const out = applyWorkGrouping(rows([doneTool('a'), doneTool('b')]), {
-    streaming: true,
-    messageId: 'm1',
-  })
-  assert.equal(out.length, 1)
-  assert.equal(out[0].type, 'tool_group')
-}
-
-{
-  // Streaming: settled + Thinking — still flat, Thinking visible
-  const out = applyWorkGrouping(
-    rows([doneTool('a'), { type: 'thinking' }]),
-    { streaming: true, messageId: 'm1' },
+  // Streaming: Cursor Gug !completed — no workGroup; tools stay flat.
+  const out = flat(
+    [
+      tool('a', { status: 'done' }),
+      tool('b', { status: 'streaming-input', endTime: undefined }),
+    ],
+    { isStreaming: true, activeTurnId: 't1' },
   )
-  assert.equal(out.length, 2)
-  assert.equal(out[0].type, 'tool_group')
-  assert.equal(out[1].type, 'thinking')
-}
-
-{
-  // Streaming: live tool — no fold
-  const out = applyWorkGrouping(rows([doneTool('a'), liveTool('b')]), {
-    streaming: true,
-    messageId: 'm1',
-  })
   assert.ok(out.every(r => r.type !== 'work_group'))
+  assert.equal(out[0].type, 'bubble')
+  assert.equal(out[0].bubbleId, 'a')
+  assert.equal(out[1].type, 'bubble')
+  assert.equal(out[1].bubbleId, 'b')
 }
 
 {
-  // Done turn: fold before final text → Worked for …
-  const out = applyWorkGrouping(
-    rows([
-      doneTool('a', 1000, 8000),
-      { type: 'text', content: '项目已启动', id: 't1' },
-    ]),
-    { streaming: false, messageId: 'm1' },
+  // Streaming: thinking stays visible; still no Worked header.
+  const out = flat(
+    [tool('a'), { id: 'th', kind: 'thinking', turnId: 't1' }],
+    { isStreaming: true, activeTurnId: 't1' },
+  )
+  assert.ok(out.every(r => r.type !== 'work_group'))
+  assert.equal(out[0].bubbleId, 'a')
+  assert.equal(out[1].bubbleId, 'th')
+}
+
+{
+  // Done turn, single tool: Cursor $ug unwraps one-row workGroup.
+  const out = flat(
+    [
+      tool('a', { startTime: 1000, endTime: 8000 }),
+      {
+        id: 't1-text',
+        kind: 'assistant_text',
+        turnId: 't1',
+        content: '项目已启动',
+      },
+    ],
+    { isStreaming: false },
+  )
+  assert.ok(out.every(r => r.type !== 'work_group'))
+  assert.equal(out[0].type, 'bubble')
+  assert.equal(out[0].bubbleId, 'a')
+  assert.equal(out[1].bubbleId, 't1-text')
+}
+
+{
+  // Done turn, two tools: keep Worked (more than one view row).
+  const out = flat(
+    [
+      tool('a', { startTime: 1000, endTime: 4000 }),
+      tool('b', { startTime: 4000, endTime: 8000 }),
+      {
+        id: 't1-text',
+        kind: 'assistant_text',
+        turnId: 't1',
+        content: '项目已启动',
+      },
+    ],
+    { isStreaming: false },
   )
   assert.equal(out.length, 2)
   assert.equal(out[0].type, 'work_group')
   assert.equal(out[0].state, 'completed')
-  assert.equal(out[0].rowId, 'work-group:m1:t1')
-  assert.equal(out[1].type, 'text')
+  assert.deepEqual(out[0].memberIds, ['a', 'b'])
+  assert.equal(out[1].bubbleId, 't1-text')
   assert.ok(out[0].durationMs > 0)
 }
 
 {
-  // Done turn: thinking placeholder stripped from fold body
-  const out = applyWorkGrouping(
-    rows([
-      doneTool('a'),
-      { type: 'thinking' },
-      { type: 'text', content: 'done', id: 't2' },
-    ]),
-    { streaming: false, messageId: 'm1' },
+  // Done turn: thinking placeholder stripped from fold body.
+  const out = flat(
+    [
+      tool('a'),
+      tool('b'),
+      { id: 'th', kind: 'thinking', turnId: 't1' },
+      { id: 'txt', kind: 'assistant_text', turnId: 't1', content: 'done' },
+    ],
+    { isStreaming: false },
   )
   assert.equal(out[0].type, 'work_group')
-  assert.ok(out[0].children.every(c => c.type !== 'thinking'))
+  assert.ok(!out[0].memberIds.includes('th'))
+  assert.equal(out[1].bubbleId, 'txt')
 }
 
 {
-  // Done turn with no text → no work_group
-  const out = applyWorkGrouping(rows([doneTool('a')]), {
-    streaming: false,
-    messageId: 'm1',
-  })
+  // Three Reads coalesce to one explore group → Cursor keeps Worked.
+  const out = flat(
+    [
+      tool('r1', { name: 'Read' }),
+      tool('r2', { name: 'Read' }),
+      tool('r3', { name: 'Read' }),
+      { id: 'txt', kind: 'assistant_text', turnId: 't1', content: 'done' },
+    ],
+    { isStreaming: false },
+  )
+  assert.equal(out[0].type, 'work_group')
+  assert.equal(out[1].bubbleId, 'txt')
+}
+
+{
+  // Tool-only completed turn — no work_group (Cursor: no final reply).
+  const out = flat([tool('a')], { isStreaming: false })
   assert.ok(out.every(r => r.type !== 'work_group'))
 }
 
 {
-  const { rows: tl } = buildAssistantTimeline(
-    [doneTool('a'), { type: 'text', content: 'hi', id: 'x' }],
-    { streaming: false, messageId: 'abc' },
+  const turn = (turnId, userId) => [
+    { id: userId, kind: 'user', turnId, content: 'go' },
+    tool(`${turnId}-a`, { turnId, startTime: 1000, endTime: 2000 }),
+    tool(`${turnId}-b`, { turnId, startTime: 2000, endTime: 3000 }),
+    {
+      id: `${turnId}-txt`,
+      kind: 'assistant_text',
+      turnId,
+      content: 'ok',
+    },
+  ]
+
+  // History hydrate: no unfoldLatestTurn → every Worked stays collapsed.
+  const history = flat([...turn('t1', 'u1'), ...turn('t2', 'u2')])
+  const historyGroups = history.filter(r => r.type === 'work_group')
+  assert.equal(historyGroups.length, 2)
+  assert.ok(historyGroups.every(g => g.defaultOpen !== true))
+
+  // Watched this session: only the latest turn's Worked is defaultOpen.
+  const live = flat([...turn('t1', 'u1'), ...turn('t2', 'u2')], {
+    unfoldLatestTurn: true,
+  })
+  const liveGroups = live.filter(r => r.type === 'work_group')
+  assert.equal(liveGroups.length, 2)
+  assert.equal(liveGroups[0].turnId, 't1')
+  assert.notEqual(liveGroups[0].defaultOpen, true)
+  assert.equal(liveGroups[1].turnId, 't2')
+  assert.equal(liveGroups[1].defaultOpen, true)
+
+  // Latest still streaming: no Worked on t2; t1 stays collapsed.
+  const streaming = flat(
+    [
+      ...turn('t1', 'u1'),
+      { id: 'u2', kind: 'user', turnId: 't2', content: 'go' },
+      tool('t2-a', { turnId: 't2' }),
+      tool('t2-b', { turnId: 't2' }),
+    ],
+    { isStreaming: true, activeTurnId: 't2', unfoldLatestTurn: true },
   )
-  assert.equal(tl[0].rowId, 'work-group:abc:x')
+  const streamingGroups = streaming.filter(r => r.type === 'work_group')
+  assert.equal(streamingGroups.length, 1)
+  assert.equal(streamingGroups[0].turnId, 't1')
+  assert.notEqual(streamingGroups[0].defaultOpen, true)
 }
 
 {
   assert.equal(formatWorkedDuration(500), 'for 1s')
   assert.equal(formatWorkedDuration(7000), 'for 7s')
   assert.equal(formatWorkedDuration(65000), 'for 1m 5s')
+}
+
+{
+  const twoReads = coalesceToolRuns([
+    { type: 'tool_call', name: 'Read' },
+    { type: 'tool_call', name: 'Read' },
+  ])
+  assert.equal(twoReads.length, 2)
+  assert.ok(twoReads.every(r => r.type === 'tool'))
+
+  const threeReads = coalesceToolRuns([
+    { type: 'tool_call', name: 'Read' },
+    { type: 'tool_call', name: 'Read' },
+    { type: 'tool_call', name: 'Read' },
+  ])
+  assert.equal(threeReads.length, 1)
+  assert.equal(threeReads[0].type, 'explored_run')
+
+  const twoGreps = coalesceToolRuns([
+    { type: 'tool_call', name: 'Grep' },
+    { type: 'tool_call', name: 'Grep' },
+  ])
+  assert.equal(twoGreps[0].type, 'explored_run')
+
+  const twoBrowser = coalesceToolRuns([
+    { type: 'tool_call', name: 'browser_navigate' },
+    { type: 'tool_call', name: 'browser_click' },
+  ])
+  assert.equal(twoBrowser[0].type, 'browser_run')
 }
 
 console.log('work-fold tests OK')

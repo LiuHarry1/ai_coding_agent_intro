@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import ToolChrome from './ToolChrome.jsx'
-import CopyButton from './CopyButton.jsx'
-import { apiUrl, withAuth } from '../lib/api/_http.js'
+import { useAuthedImage } from '../hooks/useAuthedImage.js'
 import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
+import { getToolDensityKind } from '../lib/tool-registry-meta.js'
 import {
   BROWSER_CLICK,
   BROWSER_CONSOLE,
@@ -17,6 +17,7 @@ import {
   BROWSER_SCROLL,
   BROWSER_SELECT_OPTION,
   BROWSER_SNAPSHOT,
+  BROWSER_GET_TEXT,
   BROWSER_TABS,
   BROWSER_TYPE,
   BROWSER_WAIT_FOR,
@@ -41,6 +42,7 @@ import {
 const ICONS = {
   [BROWSER_NAVIGATE]: '\u{1F310}',
   [BROWSER_SNAPSHOT]: '\u{1F50D}',
+  [BROWSER_GET_TEXT]: '\u{1F4C4}',
   [BROWSER_CLICK]: '\u{1F5B1}',
   [BROWSER_HOVER]: '\u{1F5B1}',
   [BROWSER_TYPE]: '\u{2328}',
@@ -67,6 +69,7 @@ const ICONS = {
 const RUNNING_LABELS = {
   [BROWSER_NAVIGATE]: 'Opening page',
   [BROWSER_SNAPSHOT]: 'Reading page',
+  [BROWSER_GET_TEXT]: 'Reading text',
   [BROWSER_CLICK]: 'Clicking',
   [BROWSER_HOVER]: 'Hovering',
   [BROWSER_TYPE]: 'Typing',
@@ -93,6 +96,7 @@ const RUNNING_LABELS = {
 const DONE_LABELS = {
   [BROWSER_NAVIGATE]: 'Opened page',
   [BROWSER_SNAPSHOT]: 'Read page',
+  [BROWSER_GET_TEXT]: 'Read text',
   [BROWSER_CLICK]: 'Clicked',
   [BROWSER_HOVER]: 'Hovered',
   [BROWSER_TYPE]: 'Typed',
@@ -128,40 +132,29 @@ function compactUrl(url) {
   }
 }
 
-/** Load an authed image into an object URL, revoking it on unmount. */
-function useAuthedImage(path) {
-  const [src, setSrc] = useState(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    if (!path) {
-      setSrc(null)
-      return undefined
-    }
-    let revoked = false
-    let objectUrl = null
-
-    fetch(apiUrl(path), withAuth())
-      .then(res => (res.ok ? res.blob() : Promise.reject(new Error(res.status))))
-      .then(blob => {
-        if (revoked) return
-        objectUrl = URL.createObjectURL(blob)
-        setSrc(objectUrl)
-      })
-      .catch(() => {
-        if (!revoked) setFailed(true)
-      })
-
-    return () => {
-      revoked = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [path])
-
-  return { src, failed }
+/** One-line header copy — never mount multi-KB snapshots in the title row. */
+function compactBrowserTitle(raw) {
+  if (raw == null || raw === '') return ''
+  let text = String(raw)
+  const snapIdx = text.indexOf('Current page snapshot')
+  if (snapIdx >= 0) text = text.slice(0, snapIdx)
+  text = text.split('\n')[0].trim()
+  if (text.length > 160) text = `${text.slice(0, 157)}\u2026`
+  return text
 }
 
-export default function BrowserToolCard({ part, nested = false }) {
+/** Expanded error body — strip embedded snapshot text, keep the message. */
+function browserErrorBody(raw) {
+  if (raw == null || raw === '') return ''
+  let text = String(raw).replace(/^Error:\s*/, '')
+  const snapIdx = text.indexOf('Current page snapshot')
+  if (snapIdx >= 0) text = text.slice(0, snapIdx)
+  text = text.trim()
+  if (text.length > 480) text = `${text.slice(0, 477)}\u2026`
+  return text
+}
+
+function BrowserToolCard({ part, nested = false }) {
   const toolName = part.name || ''
   const args = part.args || {}
   const isDone = part.status === 'done'
@@ -170,7 +163,9 @@ export default function BrowserToolCard({ part, nested = false }) {
     : null
 
   const isError =
-    isDone && typeof part.result === 'string' && part.result.startsWith('Error:')
+    isDone &&
+    (part.isError === true ||
+      (typeof part.result === 'string' && part.result.startsWith('Error:')))
 
   const { src: shotSrc, failed: shotFailed } = useAuthedImage(tur?.screenshotUrl)
 
@@ -184,37 +179,43 @@ export default function BrowserToolCard({ part, nested = false }) {
     () => (Array.isArray(tur?.network) ? tur.network : []),
     [tur],
   )
-  const badRequests = network.filter(r => r.failed || r.status >= 400).length
 
   const hasBody =
     isError ||
     Boolean(tur?.screenshotUrl) ||
-    Boolean(tur?.snapshot) ||
+    Boolean(tur?.pageState) ||
     consoleErrors.length > 0 ||
     network.length > 0 ||
     Array.isArray(tur?.tabs) ||
     tur?.value !== undefined
 
-  const [expanded, toggleExpanded, chevron] = useToolDensityExpand('default', {
-    isDone,
-    isError,
-    nested,
-    hasBody,
-    forceExpandOnce:
-      isDone &&
-      (Boolean(tur?.screenshotUrl) || errorCount > 0 || badRequests > 0),
-  })
-  const [showSnapshot, setShowSnapshot] = useState(false)
+  const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
+    getToolDensityKind(toolName) || 'explore-line',
+    {
+      isDone,
+      // Stay collapsed on error — snapshot text used to land in the error body.
+      isError: false,
+      nested,
+      hasBody,
+    },
+  )
 
   const label = isDone
     ? DONE_LABELS[toolName] || 'Browser'
     : RUNNING_LABELS[toolName] || 'Browser'
 
   const title = isError
-    ? part.result.replace(/^Error:\s*/, '')
-    : String(tur?.message || args.url || args.ref || args.expression || '').split(
-        '\n',
-      )[0]
+    ? compactBrowserTitle(part.result?.replace(/^Error:\s*/, ''))
+    : compactBrowserTitle(
+        tur?.message || args.url || args.ref || args.expression || '',
+      )
+
+  const errorDetail =
+    isError && typeof part.result === 'string'
+      ? browserErrorBody(part.result)
+      : null
+
+  const pageState = tur?.pageState && typeof tur.pageState === 'object' ? tur.pageState : null
 
   return (
     <ToolChrome
@@ -243,7 +244,22 @@ export default function BrowserToolCard({ part, nested = false }) {
       showSuccess={false}
     >
       <div className='browser-body'>
-          {isError && <div className='browser-error'>{part.result}</div>}
+          {errorDetail && <div className='browser-error'>{errorDetail}</div>}
+
+          {pageState && (
+            <div className='browser-page-state'>
+              <span>
+                {pageState.mode || 'snapshot'}
+                {typeof pageState.chars === 'number' ? ` · ${pageState.chars} chars` : ''}
+                {pageState.truncated ? ' · truncated' : ''}
+              </span>
+              {pageState.artifactPath ? (
+                <span className='browser-page-state-path' title={pageState.artifactPath}>
+                  {pageState.artifactPath}
+                </span>
+              ) : null}
+            </div>
+          )}
 
           {tur?.screenshotUrl && !shotFailed && (
             <div className='browser-shot'>
@@ -303,7 +319,20 @@ export default function BrowserToolCard({ part, nested = false }) {
 
           {tur?.value !== undefined && (
             <pre className='browser-value'>
-              {JSON.stringify(tur.value, null, 2)}
+              {typeof tur.value === 'string'
+                ? tur.value.length > 400
+                  ? `${tur.value.slice(0, 399)}\u2026`
+                  : tur.value
+                : (() => {
+                    try {
+                      const raw = JSON.stringify(tur.value, null, 2)
+                      return raw.length > 400
+                        ? `${raw.slice(0, 399)}\u2026`
+                        : raw
+                    } catch {
+                      return String(tur.value)
+                    }
+                  })()}
             </pre>
           )}
 
@@ -322,28 +351,9 @@ export default function BrowserToolCard({ part, nested = false }) {
               ))}
             </ul>
           )}
-
-          {tur?.snapshot && (
-            <div className='browser-snapshot'>
-              <button
-                type='button'
-                className='browser-snapshot-toggle'
-                onClick={e => {
-                  e.stopPropagation()
-                  setShowSnapshot(v => !v)
-                }}
-              >
-                {showSnapshot ? 'Hide' : 'Show'} page structure
-              </button>
-              {showSnapshot && (
-                <>
-                  <pre className='browser-snapshot-tree'>{tur.snapshot}</pre>
-                  <CopyButton text={tur.snapshot} label='Copy' inline />
-                </>
-              )}
-            </div>
-          )}
         </div>
     </ToolChrome>
   )
 }
+
+export default React.memo(BrowserToolCard)

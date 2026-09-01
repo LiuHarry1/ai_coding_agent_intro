@@ -53,13 +53,15 @@ function fromToolUseResult(tur) {
       sizeLabel: formatBytes(file.originalSize),
     }
   }
-  if (tur.type === 'pdf' || tur.type === 'pdf_pages') {
+  if (tur.type === 'pdf' || tur.type === 'pdf_pages' || tur.type === 'parts') {
     return {
       kind: 'pdf',
       label:
         tur.type === 'pdf_pages'
           ? tur.file?.text || '[PDF pages]'
-          : `[PDF: ${tur.file?.filePath}]`,
+          : tur.type === 'parts'
+            ? `PDF pages extracted: ${tur.file?.count ?? '?'} page(s)`
+            : `[PDF: ${tur.file?.filePath}]`,
     }
   }
   if (tur.type === 'notebook') {

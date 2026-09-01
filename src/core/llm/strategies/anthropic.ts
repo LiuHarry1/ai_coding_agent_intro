@@ -78,6 +78,7 @@ export const anthropicStrategy: ProviderStrategy = {
         anthropic: { cacheControl: { type: 'ephemeral' } },
       }),
       supportsToolResultContentBlocks: () => true,
+      supportsNativePdf: () => true,
       describe: () => {
         const adaptive = p.thinking.mode === 'auto' || needsAdaptive(p.model)
         if (p.thinking.mode === 'off')

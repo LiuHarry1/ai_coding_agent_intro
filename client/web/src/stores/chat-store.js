@@ -15,6 +15,15 @@ import {
   pickerBlurb,
 } from '../lib/agent-picker.js'
 import { newId } from '../lib/utils.js'
+import { sanitizeMessagesForUi } from '../lib/sanitize-tool-ui.js'
+import {
+  emptyTranscript,
+  messagesToBubbles,
+  appendBubble,
+  patchBubble,
+  toolBubbleId,
+  errorBubbleId,
+} from '../lib/bubbles/messages-to-bubbles.js'
 import { applySseEvent } from './chat/apply-sse-event.js'
 import { createAssistantMutators } from './chat/assistant-mutators.js'
 import { refreshIdeAfterAgentTurn } from './chat/ide-bridge.js'
@@ -72,8 +81,10 @@ export const useChatStore = create((set, get) => {
     /** Bound WorkspaceHandle from execution plane. */
     workspaceHandle: null,
 
-    // ── Messages ────────────────────────────────
-    messages: [],
+    // ── Transcript (Cursor-like flat bubbles) ──
+    bubbleOrder: [],
+    bubblesById: {},
+    activeTurnId: null,
 
     // ── Todos ──────────────────────────────────
     todos: [],
@@ -281,16 +292,15 @@ export const useChatStore = create((set, get) => {
         : undefined
       await agentApi.answerQuestion({ id, answers, annotations })
       set(s => {
-        const msgs = [...s.messages]
-        const last = msgs[msgs.length - 1]
-        if (last?.type !== 'assistant') return { isAwaitingInteraction: false }
-        const parts = last.parts.map(p =>
-          p.type === 'ask_user_question' && p.id === id
-            ? { ...p, status: 'answered', answers }
-            : p,
-        )
-        msgs[msgs.length - 1] = { ...last, parts }
-        return { messages: msgs, isAwaitingInteraction: false }
+        const bid = `ask:${id}`
+        if (s.bubblesById[bid]?.kind !== 'ask') {
+          return { isAwaitingInteraction: false }
+        }
+        return {
+          ...patchBubble(s, bid, { status: 'answered', answers }),
+          bubbleOrder: s.bubbleOrder,
+          isAwaitingInteraction: false,
+        }
       })
     },
 
@@ -303,7 +313,6 @@ export const useChatStore = create((set, get) => {
         reason: opts.reason,
       })
       if (opts.approved) {
-        // Cursor Build → leave Plan mode and execute in Agent.
         const nextMode = opts.targetMode || 'agent'
         if (['agent', 'ask', 'plan'].includes(nextMode)) {
           localStorage.setItem('coding_agent_mode', nextMode)
@@ -331,16 +340,18 @@ export const useChatStore = create((set, get) => {
         })
       }
       set(s => {
-        const msgs = [...s.messages]
-        const last = msgs[msgs.length - 1]
-        if (last?.type !== 'assistant') return { isAwaitingInteraction: false }
-        const parts = last.parts.map(p =>
-          p.type === 'plan_approval' && p.requestId === requestId
-            ? { ...p, status: 'answered', approved: opts.approved }
-            : p,
-        )
-        msgs[msgs.length - 1] = { ...last, parts }
-        return { messages: msgs, isAwaitingInteraction: false }
+        const bid = `plan:${requestId}`
+        if (s.bubblesById[bid]?.kind !== 'plan') {
+          return { isAwaitingInteraction: false }
+        }
+        return {
+          ...patchBubble(s, bid, {
+            status: 'answered',
+            approved: opts.approved,
+          }),
+          bubbleOrder: s.bubbleOrder,
+          isAwaitingInteraction: false,
+        }
       })
     },
 
@@ -375,11 +386,9 @@ export const useChatStore = create((set, get) => {
         return
       }
       localStorage.setItem('coding_agent_session_id', id)
-      // Clear turn-local UI state so prior session todos / plan don't leak
-      // into an empty New Chat (Cursor session switch behavior).
       set({
         currentSessionId: id,
-        messages: [],
+        ...emptyTranscript(),
         todos: [],
         sessionLoading: true,
         isAwaitingInteraction: false,
@@ -388,10 +397,18 @@ export const useChatStore = create((set, get) => {
       try {
         const data = await agentApi.getSessionMessages(id)
         if (get().currentSessionId !== id) return
-        const msgs = (data.messages || []).map(m =>
-          m.id ? m : { ...m, id: newId() },
+        const msgs = sanitizeMessagesForUi(
+          (data.messages || []).map(m =>
+            m.id ? m : { ...m, id: newId() },
+          ),
         )
-        set({ messages: msgs, sessionLoading: false })
+        const next = messagesToBubbles(msgs)
+        set({
+          bubbleOrder: next.bubbleOrder,
+          bubblesById: next.bubblesById,
+          activeTurnId: null,
+          sessionLoading: false,
+        })
       } catch (err) {
         if (get().currentSessionId !== id) return
         if (
@@ -410,7 +427,7 @@ export const useChatStore = create((set, get) => {
       localStorage.removeItem('coding_agent_session_id')
       set({
         currentSessionId: null,
-        messages: [],
+        ...emptyTranscript(),
         todos: [],
         sessionLoading: false,
         isAwaitingInteraction: false,
@@ -459,18 +476,13 @@ export const useChatStore = create((set, get) => {
       if (!sessionId) return
 
       set(s => {
-        const msgs = [...s.messages]
-        const last = msgs[msgs.length - 1]
-        if (last?.type !== 'assistant') return s
-        const parts = last.parts.map(p =>
-          p.type === 'tool_call' &&
-          p.toolCallId === toolCallId &&
-          p.status !== 'done'
-            ? { ...p, stopping: true, liveTask: 'Stopping…' }
-            : p,
-        )
-        msgs[msgs.length - 1] = { ...last, parts }
-        return { messages: msgs }
+        const id = toolBubbleId(toolCallId)
+        const b = s.bubblesById[id]
+        if (!b || b.kind !== 'tool' || b.status === 'done') return s
+        return {
+          ...patchBubble(s, id, { stopping: true, liveTask: 'Stopping…' }),
+          bubbleOrder: s.bubbleOrder,
+        }
       })
 
       try {
@@ -481,16 +493,12 @@ export const useChatStore = create((set, get) => {
       } catch (err) {
         console.warn('[chat] abortTool failed', err)
         set(s => {
-          const msgs = [...s.messages]
-          const last = msgs[msgs.length - 1]
-          if (last?.type !== 'assistant') return s
-          const parts = last.parts.map(p =>
-            p.type === 'tool_call' && p.toolCallId === toolCallId
-              ? { ...p, stopping: false, liveTask: undefined }
-              : p,
-          )
-          msgs[msgs.length - 1] = { ...last, parts }
-          return { messages: msgs }
+          const id = toolBubbleId(toolCallId)
+          if (!s.bubblesById[id]) return s
+          return {
+            ...patchBubble(s, id, { stopping: false, liveTask: undefined }),
+            bubbleOrder: s.bubbleOrder,
+          }
         })
       }
     },
@@ -498,33 +506,102 @@ export const useChatStore = create((set, get) => {
     /**
      * Send a message and process the SSE response stream.
      * @param {string} text
-     * @param {string[]} [images]
+     * @param {Array<string|{previewUrl:string,file:File}>} [attachments]
      */
-    sendMessage: async (text, images = []) => {
+    sendMessage: async (text, attachments = []) => {
       if (!text.trim() || get().isStreaming) return
 
       const abortController = new AbortController()
 
-      set(s => ({
-        isStreaming: true,
-        abortController,
-        currentStep: 0,
-        messages: [
-          ...s.messages,
-          {
-            id: newId(),
-            type: 'user',
-            content: text,
-            images: images.length > 0 ? images : undefined,
-          },
-          {
-            id: newId(),
-            type: 'assistant',
-            parts: [],
-            status: 'streaming',
-          },
-        ],
-      }))
+      const isComposerAtt =
+        attachments.length > 0 &&
+        typeof attachments[0] === 'object' &&
+        attachments[0] != null &&
+        'file' in attachments[0]
+
+      const userMsgId = newId()
+      const assistantMsgId = newId()
+      const previewUrls = isComposerAtt
+        ? attachments.map(a => a.previewUrl)
+        : []
+
+      set(s => {
+        let next = appendBubble(s, {
+          id: userMsgId,
+          kind: 'user',
+          content: text,
+          images: previewUrls.length > 0 ? previewUrls : undefined,
+        })
+        return {
+          isStreaming: true,
+          abortController,
+          currentStep: 0,
+          activeTurnId: assistantMsgId,
+          bubbleOrder: next.bubbleOrder,
+          bubblesById: next.bubblesById,
+        }
+      })
+
+      let wireImages = []
+
+      if (isComposerAtt) {
+        try {
+          const up = await agentApi.uploadChatImages(
+            get().currentSessionId,
+            attachments.map(a => a.file),
+          )
+          if (up.session_id) get().setSessionId(up.session_id)
+          wireImages = up.urls || []
+          set(s => ({
+            ...patchBubble(s, userMsgId, {
+              images: wireImages.length ? wireImages : undefined,
+            }),
+            bubbleOrder: s.bubbleOrder,
+          }))
+          for (const a of attachments) {
+            if (a.previewUrl?.startsWith('blob:')) {
+              URL.revokeObjectURL(a.previewUrl)
+            }
+          }
+        } catch (err) {
+          for (const a of attachments) {
+            if (a.previewUrl?.startsWith('blob:')) {
+              URL.revokeObjectURL(a.previewUrl)
+            }
+          }
+          set(s => {
+            let next = {
+              bubbleOrder: s.bubbleOrder.filter(
+                id => id !== userMsgId,
+              ),
+              bubblesById: { ...s.bubblesById },
+            }
+            delete next.bubblesById[userMsgId]
+            const eid = newId()
+            next = appendBubble(next, {
+              id: errorBubbleId(eid),
+              kind: 'error',
+              turnId: assistantMsgId,
+              message:
+                err?.message || 'Failed to upload image attachments',
+            })
+            return {
+              isStreaming: false,
+              abortController: null,
+              activeTurnId: null,
+              bubbleOrder: next.bubbleOrder,
+              bubblesById: next.bubblesById,
+            }
+          })
+          return
+        }
+      } else if (attachments.length > 0) {
+        wireImages = attachments
+        set(s => ({
+          ...patchBubble(s, userMsgId, { images: undefined }),
+          bubbleOrder: s.bubbleOrder,
+        }))
+      }
 
       const body = {
         message: text,
@@ -534,7 +611,7 @@ export const useChatStore = create((set, get) => {
         agentType: get().agentType,
         environmentId: get().workspaceHandle?.environmentId || 'local',
       }
-      if (images.length > 0) body.images = images
+      if (wireImages.length > 0) body.images = wireImages
 
       try {
         const meta = await streamChatTurn({
@@ -543,11 +620,19 @@ export const useChatStore = create((set, get) => {
           onEvent: handleSse,
           onSessionNotFound: () => {
             get().setSessionId(null)
-            set(s => ({
-              messages: s.messages.slice(0, -2),
-              isStreaming: true,
-              abortController,
-            }))
+            set(s => {
+              // Drop last user bubble for this failed open
+              const order = s.bubbleOrder.slice(0, -1)
+              const byId = { ...s.bubblesById }
+              delete byId[userMsgId]
+              return {
+                bubbleOrder: order,
+                bubblesById: byId,
+                isStreaming: true,
+                abortController,
+                activeTurnId: assistantMsgId,
+              }
+            })
           },
           onHttpError: ({ status, message }) => {
             get()._appendPart({
@@ -555,11 +640,10 @@ export const useChatStore = create((set, get) => {
               message:
                 status === 404 ? `HTTP ${status}: ${message}` : message,
             })
-            set({ isStreaming: false, abortController: null })
+            set({ isStreaming: false, abortController: null, activeTurnId: null })
           },
         })
 
-        // HTTP failure already recorded an error part — match prior early-return.
         if (meta === null) return
 
         if (meta.sessionId) get().setSessionId(meta.sessionId)
@@ -567,8 +651,6 @@ export const useChatStore = create((set, get) => {
           meta.permissionMode &&
           ['agent', 'ask', 'plan'].includes(meta.permissionMode)
         ) {
-          // Build already flipped the pill to Agent; don't let a stale
-          // x-permission-mode: plan header snap it back (Cursor stays Agent).
           const skipPlanSnap =
             meta.permissionMode === 'plan' &&
             get().planState?.status === 'building'
@@ -603,6 +685,7 @@ export const useChatStore = create((set, get) => {
         isStreaming: false,
         abortController: null,
         isAwaitingInteraction: false,
+        activeTurnId: null,
         ...planPatch,
       })
       refreshIdeAfterAgentTurn()

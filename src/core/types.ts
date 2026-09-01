@@ -214,6 +214,18 @@ export interface ImagePart {
   mediaType?: string
 }
 
+/**
+ * Claude Code / Anthropic document block for native PDF input.
+ * Prefer claim-check refs (`file://` or upload URL) in session; hydrate to
+ * Buffer in `projectMessagesForApi` / `reviveBuffersInMessages`.
+ */
+export interface FilePart {
+  type: 'file'
+  data: string | Buffer | Uint8Array
+  mediaType: string
+  filename?: string
+}
+
 export interface ToolCallPart {
   type: 'tool-call'
   toolCallId: string
@@ -234,7 +246,7 @@ export interface ReasoningPart {
   providerOptions?: ProviderOptions
 }
 
-export type UserContentPart = TextPart | ImagePart
+export type UserContentPart = TextPart | ImagePart | FilePart
 export type AssistantContentPart = TextPart | ReasoningPart | ToolCallPart
 
 export interface UserMessage {

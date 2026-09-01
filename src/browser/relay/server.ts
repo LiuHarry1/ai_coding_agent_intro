@@ -59,6 +59,44 @@ function relayConfigPath(): string {
   return path.join(getUserAppDir(), 'browser', 'relay.json')
 }
 
+function readRelayConfigFile(): { token?: string; port?: number } {
+  try {
+    return JSON.parse(fs.readFileSync(relayConfigPath(), 'utf8')) as {
+      token?: string
+      port?: number
+    }
+  } catch {
+    return {}
+  }
+}
+
+/** Persist pairing metadata the extension popup should mirror (`browser.relayPort`). */
+export function persistRelayConfig(patch: {
+  token?: string
+  port?: number
+}): void {
+  const file = relayConfigPath()
+  const existing = readRelayConfigFile()
+  const next = { ...existing, ...patch }
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(next, null, 2), { mode: 0o600 })
+}
+
+/**
+ * Read the pairing token, creating it on first use. Stable across restarts so
+ * the user only ever pastes it into the extension once.
+ */
+export function getPairingToken(): string {
+  const parsed = readRelayConfigFile()
+  if (typeof parsed.token === 'string' && parsed.token.length >= 16) {
+    return parsed.token
+  }
+
+  const token = randomBytes(24).toString('base64url')
+  persistRelayConfig({ token })
+  return token
+}
+
 /**
  * The agent is configured to drive the user's browser and cannot reach it. Both
  * ways out belong in the message: nothing about the running process tells the
@@ -70,29 +108,6 @@ function notConnectedMessage(port: number): string {
     'Open Chrome with the agent extension installed and paired (see chrome-extension/README.md), ' +
     'or set browser.mode to "isolated" in .ai-agent/settings.json to use a separate browser instead.'
   )
-}
-
-/**
- * Read the pairing token, creating it on first use. Stable across restarts so
- * the user only ever pastes it into the extension once.
- */
-export function getPairingToken(): string {
-  const file = relayConfigPath()
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as {
-      token?: string
-    }
-    if (typeof parsed.token === 'string' && parsed.token.length >= 16) {
-      return parsed.token
-    }
-  } catch {
-    // Missing or corrupt — fall through and mint a new one.
-  }
-
-  const token = randomBytes(24).toString('base64url')
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify({ token }, null, 2), { mode: 0o600 })
-  return token
 }
 
 export async function startRelayServer(
@@ -126,6 +141,8 @@ export async function startRelayServer(
     typeof address === 'object' && address !== null
       ? address.port
       : requestedPort
+
+  persistRelayConfig({ port })
 
   let peer: WebSocket | undefined
   let peerName: string | undefined

@@ -132,7 +132,13 @@ export const definition: ToolDefinition = {
           const { output, followUpMessages } = await readFileCore(
             cwd,
             file_path,
-            { offset, limit, pages },
+            {
+              offset,
+              limit,
+              pages,
+              sessionId: context.sessionId,
+              supportsNativePdf: context.provider?.supportsNativePdf?.() === true,
+            },
           )
           if (output.type === 'text') {
             recordReadInState(

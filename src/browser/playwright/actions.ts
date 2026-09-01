@@ -508,7 +508,7 @@ export async function screenshot(
   } catch (err) {
     if (!opts.ref && /Timeout|waiting/i.test(err instanceof Error ? err.message : String(err))) {
       throw new BrowserError(
-        'Screenshot timed out (PDF/iframe viewers often stall it). Use browser_snapshot instead, or close the viewer first.',
+        'Screenshot timed out (PDF/iframe receipt previews often stall it). Do not retry screenshot in a loop. Prefer a compact accessibility snapshot after the next form action, or keep filling visible form controls if they are already known.',
       )
     }
     mapPlaywrightError(err, opts.ref)

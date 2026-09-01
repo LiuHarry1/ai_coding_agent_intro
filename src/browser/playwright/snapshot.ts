@@ -5,8 +5,8 @@
 
 import type { Frame, Page } from 'playwright-core'
 import {
-  COMPACT_DEPTH,
   DEFAULT_MAX_CHARS,
+  EFFICIENT_DEPTH,
   POST_ACTION_MAX_NODES,
   SNAPSHOT_TIMEOUT_MS,
   WAIT_FOR_TIMEOUT_MS,
@@ -42,7 +42,8 @@ const DIALOG_PREFIX =
   'A modal dialog is covering the page. Click a control on this dialog before the page underneath.\n\n'
 const DIALOG_NO_REF_PREFIX = `A modal is open but refs could not be stamped (PDF/iframe stalled the tree). ${SNAPSHOT_STALL_NEXT}\n`
 
-async function richestLocatorSnapshot(
+/** CSS-scoped snapshot — OpenClaw-style: selector is CSS only, not aria-ref. */
+async function scopedLocatorSnapshot(
   page: Page,
   selector: string,
   timeout: number,
@@ -50,23 +51,7 @@ async function richestLocatorSnapshot(
   const loc = page.locator(selector)
   const n = await loc.count().catch(() => 0)
   if (n === 0) return ''
-  if (n === 1) {
-    return loc.ariaSnapshot({ mode: 'ai', timeout })
-  }
-  let best = ''
-  let bestRefs = -1
-  for (let i = 0; i < n; i++) {
-    const yaml = await loc
-      .nth(i)
-      .ariaSnapshot({ mode: 'ai', timeout })
-      .catch(() => '')
-    const refs = countRefs(yaml)
-    if (refs > bestRefs) {
-      bestRefs = refs
-      best = yaml
-    }
-  }
-  return best
+  return loc.ariaSnapshot({ mode: 'ai', timeout }).catch(() => '')
 }
 
 function raceMs<T>(ms: number, work: Promise<T>, fallback: T): Promise<T> {
@@ -401,9 +386,11 @@ async function snapshotInner(
     }
     // compact on a subtree must not clip depth: that is what turned an open
     // dialog into Close + title. A selector-scoped snapshot is already narrow.
-    const depth = opts.compact && !opts.selector ? COMPACT_DEPTH : undefined
+    const depth =
+      opts.depth ??
+      (opts.compact && !opts.selector ? EFFICIENT_DEPTH : undefined)
     let raw = opts.selector
-      ? await richestLocatorSnapshot(page, opts.selector, SNAPSHOT_TIMEOUT_MS)
+      ? await scopedLocatorSnapshot(page, opts.selector, SNAPSHOT_TIMEOUT_MS)
       : await raceMs(
           SNAPSHOT_TIMEOUT_MS + 500,
           withHeavyMediaHidden(page, () =>
@@ -424,6 +411,7 @@ async function snapshotInner(
         '',
       )
     }
+    // OpenClaw: miss → empty result, no full-page fallback. Refs are for act only.
     if (opts.selector && !raw) {
       return finish({
         url: page.url(),

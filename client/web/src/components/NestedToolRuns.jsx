@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react'
 import ExploredGroup from './ExploredGroup.jsx'
 import { pickCard } from './pickToolCard.js'
-import { expandToolGroup, toolPartKey } from '../lib/timeline.js'
+import { expandToolGroup } from '../lib/tool-density.js'
+import { toolPartKey } from '../lib/timeline.js'
 
 const STEP_PREVIEW_LIMIT = 6
 
@@ -23,13 +24,14 @@ export default function NestedToolRuns({
 
   for (let i = 0; i < runs.length; i++) {
     const run = runs[i]
-    const weight = run.type === 'explored_run' ? run.items.length : 1
+    const isGroup = run.type === 'explored_run' || run.type === 'browser_run'
+    const weight = isGroup ? run.items.length : 1
     if (shown >= flatLimit) {
       hidden += weight
       continue
     }
     shown += weight
-    if (run.type === 'explored_run') {
+    if (isGroup) {
       const first = toolPartKey(run.items[0], `nex-a-${i}`)
       const last = toolPartKey(
         run.items[run.items.length - 1],
@@ -37,8 +39,9 @@ export default function NestedToolRuns({
       )
       nodes.push(
         <ExploredGroup
-          key={`explored-${first}-${last}`}
+          key={`${run.type}-${first}-${last}`}
           items={run.items}
+          kind={run.type === 'browser_run' ? 'browser' : 'explore'}
         />,
       )
     } else {

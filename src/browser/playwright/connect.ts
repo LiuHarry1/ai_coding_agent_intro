@@ -22,6 +22,8 @@ const browsers = new WeakMap<BrowserBackend, Promise<Browser>>()
 const endpoints = new WeakMap<BrowserBackend, CdpEndpoint>()
 
 const PAGE_ATTACH_MS = 3_000
+/** Cold connectOverCDP on Windows/extension can exceed 20s; agent log showed ~28s before attach. */
+const CDP_CONNECT_MS = 45_000
 const pagesByTarget = new Map<string, Page>()
 
 export async function attachExtensionPlaywright(
@@ -32,6 +34,11 @@ export async function attachExtensionPlaywright(
   if (endpoints.has(backend)) return
   const endpoint = await startCdpEndpoint({ backend, relay })
   endpoints.set(backend, endpoint)
+  // Pay cold connectOverCDP cost at backend init, not on the first browser_navigate.
+  void connectExtension(backend).catch(err => {
+    const message = err instanceof Error ? err.message : String(err)
+    console.warn(`[browser] playwright CDP preconnect: ${message}`)
+  })
 }
 
 export async function detachPlaywright(backend: BrowserBackend): Promise<void> {
@@ -65,7 +72,7 @@ async function connectExtension(backend: BrowserBackend): Promise<Browser> {
   }
 
   const connecting = chromium.connectOverCDP(endpoint.httpUrl, {
-    timeout: 20_000,
+    timeout: CDP_CONNECT_MS,
   })
   browsers.set(backend, connecting)
   try {
@@ -132,6 +139,11 @@ export function isRecoverablePlaywrightDisconnectError(err: unknown): boolean {
     message.includes('websocket closed') ||
     message.includes('cdp socket closed')
   )
+}
+
+function isConnectOverCDPTimeout(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  return message.includes('connectovercdp') && message.includes('timeout')
 }
 
 function isRecoverableStalePageSelectionError(
@@ -210,7 +222,10 @@ export async function getPageForTarget(
   try {
     return await getPageForTargetOnce(backend, targetId)
   } catch (err) {
-    if (!isRecoverableStalePageSelectionError(err, reusedCachedBrowser)) {
+    if (
+      !isRecoverableStalePageSelectionError(err, reusedCachedBrowser) &&
+      !isConnectOverCDPTimeout(err)
+    ) {
       throw err
     }
     await retireExtensionBrowser(backend)

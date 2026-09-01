@@ -2,48 +2,17 @@ import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import { pickCard } from './pickToolCard.js'
-import { expandToolGroup, toolPartKey } from '../lib/timeline.js'
 import { getMdComponents } from '../lib/markdown-components.jsx'
 import AskUserQuestionCard from './AskUserQuestionCard.jsx'
 import PlanApprovalCard from './PlanApprovalCard.jsx'
-import ExploredGroup from './ExploredGroup.jsx'
 import ReasoningBlock from './ReasoningBlock.jsx'
 import ThinkingDots from './ThinkingDots.jsx'
 import CompactionRow from './CompactionRow.jsx'
 import TodoListCard from './TodoListCard.jsx'
 
-function renderToolRuns(runs) {
-  return runs.map((run, j) => {
-    if (run.type === 'explored_run') {
-      const first = toolPartKey(run.items[0], `ex-a-${j}`)
-      const last = toolPartKey(
-        run.items[run.items.length - 1],
-        `ex-b-${j}`,
-      )
-      return (
-        <ExploredGroup
-          key={`explored-${first}-${last}`}
-          items={run.items}
-        />
-      )
-    }
-    const Card = pickCard(run.part)
-    return (
-      <Card
-        key={toolPartKey(run.part, `tool-${j}`)}
-        part={run.part}
-      />
-    )
-  })
-}
-
 /**
- * Render one timeline row (grouped assistant part).
- * `work_group` rows are owned by MessageBubble (≈ Cursor EIt workGroup case).
- *
- * Interaction callbacks (answer / approve / stop) come from ChatActionsProvider
- * — leaf cards do not import the chat store.
+ * Non-tool transcript parts (reasoning, ask, plan, todo, compaction).
+ * Tool rows and explore/browser groups are owned by BubbleRow / ToolGroupRow.
  */
 export default function PartRenderer({
   part,
@@ -78,11 +47,6 @@ export default function PartRenderer({
       return <ReasoningBlock part={part} />
     case 'thinking':
       return <ThinkingDots />
-    case 'tool_group': {
-      const { runs } = expandToolGroup(part.items)
-      if (runs.length === 0) return null
-      return <div className='tool-group'>{renderToolRuns(runs)}</div>
-    }
     case 'ask_user_question':
       return <AskUserQuestionCard part={part} />
     case 'plan_approval':

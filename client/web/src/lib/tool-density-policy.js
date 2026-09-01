@@ -6,6 +6,8 @@
  *
  * Kinds:
  *   explore-group — Explored N files (always chevron; open while running)
+ *   browser-group — browser_* rollup (chevron; stay collapsed while running —
+ *                   only the live subtitle updates; avoids DOM storms)
  *   subagent      — Explorer / Plan / Task (chevron if hasBody; open while running)
  *   explore-line  — Grep / Glob / ListDir / Web* under explore density
  *                   (collapsed by default; expand on error or user; chevron if hasBody)
@@ -16,7 +18,7 @@
  *   default       — MCP / unknown: open while running; collapse when done
  */
 
-/** @typedef {'explore-group'|'subagent'|'explore-line'|'read'|'shell'|'default'} DensityKind */
+/** @typedef {'explore-group'|'browser-group'|'subagent'|'explore-line'|'read'|'shell'|'default'} DensityKind */
 
 /**
  * @typedef {object} DensityContext
@@ -48,6 +50,12 @@ export function resolveExpandArgs(kind, ctx = {}) {
     case 'explore-group':
       return {
         isRunning: isRunning && hasBody,
+        expandOnceWhen: isError,
+      }
+    case 'browser-group':
+      // Keep one-line rollup during automation; expand only on error / user.
+      return {
+        isRunning: false,
         expandOnceWhen: isError,
       }
     case 'subagent':
@@ -97,6 +105,7 @@ export function resolveChevron(kind, ctx = {}) {
 
   switch (kind) {
     case 'explore-group':
+    case 'browser-group':
       return { showChevron: true, chevronSlot: false }
     case 'subagent':
       return { showChevron: hasBody, chevronSlot: false }

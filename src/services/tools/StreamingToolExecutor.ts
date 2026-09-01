@@ -13,6 +13,26 @@ import {
   type ToolCallRef,
 } from '../../services/tools/tool_execution.js'
 
+/** Common model typos / case variants → canonical tool names. */
+const TOOL_NAME_ALIASES: Record<string, string> = {
+  bash: BASH_TOOL_NAME,
+  BASH: BASH_TOOL_NAME,
+}
+
+function resolveToolName(name: string, ctx: ToolUseContext): string {
+  if (ctx.getDefinition?.(name) || ctx.tools[name]) return name
+  const aliased = TOOL_NAME_ALIASES[name] ?? TOOL_NAME_ALIASES[name.toLowerCase()]
+  if (aliased && (ctx.getDefinition?.(aliased) || ctx.tools[aliased])) {
+    return aliased
+  }
+  // Case-insensitive match against registered tools (Bash vs bash).
+  const lower = name.toLowerCase()
+  for (const key of Object.keys(ctx.tools)) {
+    if (key.toLowerCase() === lower) return key
+  }
+  return name
+}
+
 type ToolStatus = 'queued' | 'executing' | 'completed' | 'yielded'
 
 type TrackedTool = {
@@ -47,12 +67,17 @@ export class StreamingToolExecutor {
   }
 
   addTool(call: ToolCallRef): void {
-    const def = this.#ctx.getDefinition?.(call.toolName)
-    const isConcurrencySafe = this.#isConcurrencySafe(def, call)
-    if (!def && !this.#ctx.tools[call.toolName]) {
+    const resolvedName = resolveToolName(call.toolName, this.#ctx)
+    const normalizedCall =
+      resolvedName === call.toolName
+        ? call
+        : { ...call, toolName: resolvedName }
+    const def = this.#ctx.getDefinition?.(normalizedCall.toolName)
+    const isConcurrencySafe = this.#isConcurrencySafe(def, normalizedCall)
+    if (!def && !this.#ctx.tools[normalizedCall.toolName]) {
       this.#tools.push({
         id: call.toolCallId,
-        call,
+        call: normalizedCall,
         status: 'completed',
         isConcurrencySafe: true,
         result: {
@@ -68,7 +93,7 @@ export class StreamingToolExecutor {
 
     this.#tools.push({
       id: call.toolCallId,
-      call,
+      call: normalizedCall,
       status: 'queued',
       isConcurrencySafe,
     })

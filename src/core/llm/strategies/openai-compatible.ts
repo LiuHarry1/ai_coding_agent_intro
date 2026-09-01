@@ -24,6 +24,8 @@ export const openaiCompatibleStrategy: ProviderStrategy = {
       // chat/completions JSON.stringifies content arrays — images must be
       // relocated to a user message instead.
       supportsToolResultContentBlocks: () => false,
+      // LiteLLM/vLLM Qwen etc. reject application/pdf file parts (probe 400).
+      supportsNativePdf: () => false,
       describe: () =>
         `openai-compatible model=${p.model} structuredOutputs=true`,
     }

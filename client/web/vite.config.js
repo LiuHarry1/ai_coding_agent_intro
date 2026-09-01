@@ -53,7 +53,7 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     // Push heavy markdown / syntax-highlight deps into their own vendor
-    // chunk so MessageBubble itself stays small. highlight.js (pulled in
+    // chunk so transcript rows stay small. highlight.js (pulled in)
     // by rehype-highlight) is what bloated the bundle past 500 kB.
     rollupOptions: {
       output: {

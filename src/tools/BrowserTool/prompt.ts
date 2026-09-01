@@ -8,7 +8,7 @@
 
 export const NAVIGATE_DESCRIPTION = `Navigate to a URL, or go back / forward / reload.
 
-Waits for the document and in-flight XHR/fetch, then snapshots. If a list is still empty, ${'`browser_wait_for`'} that text. Session cookies persist across calls.
+Waits for the document and in-flight XHR/fetch, then returns an **efficient** interactive snapshot (enough refs for the next click). Do not call browser_snapshot immediately after navigate unless you need mode=full. If a list is still empty, ${'`browser_wait_for`'} that text. Session cookies persist across calls.
 
 http(s) only — no file: or javascript: URLs. If a modal is covering the current page, click it — do not navigate away to dismiss it.`
 
@@ -16,15 +16,23 @@ export const SNAPSHOT_DESCRIPTION = `Capture an accessibility snapshot of the cu
 
 Playwright's AI aria tree. Clickable nodes have \`[ref=eN]\` from this tree — after any action, use the new refs. A bare \`text:\` line is not clickable. Prefer this over ${'`browser_screenshot`'} for deciding what to click.
 
-- \`selector\`: one subtree
-- \`compact\`: clip depth
-- \`interactive\`: only ref-bearing controls
+- \`mode\`: \`efficient\` (default) — interactive controls, ~8k chars, depth 6. \`full\` — wider tree up to ~40k chars. Use full sparingly.
+- \`selector\`: CSS for one subtree only (e.g. \`[role=dialog]\`, \`.panel\`). Not snapshot \`[ref=eN]\` — refs are for click/type. Miss → empty; omit selector and re-snapshot the page.
+- \`compact\` / \`interactive\`: further shape the tree (efficient sets both by default)
 - \`includeDiff\`: only lines that changed since the last snapshot
 - \`urls\`: append discovered link destinations
+
+For page **prose**, use ${'`browser_get_text`'} instead of a full snapshot.
+
+**Do not** call this tool multiple times in parallel, or back-to-back with no click/type/navigate between them. Click/type/navigate already return an efficient snapshot — reuse that tree. \`mode=full\` at most once when efficient was truncated; never full→full→full.
 
 If an in-page modal (\`alertdialog\` / Yes / No / OK) is open, the snapshot is that dialog. Click those refs. That is not ${'`browser_handle_dialog`'} (native \`alert\`/\`confirm\` only).
 
 If the snapshot times out, a PDF or iframe likely stalled the tree. Do not retry a full snapshot, screenshot, or wait in a loop — close the viewer or work from whatever partial tree you have, then capture a new snapshot when the page is usable.`
+
+export const GET_TEXT_DESCRIPTION = `Read bounded visible page text for answering questions or extracting copy.
+
+Uses the first match of \`selector\`, otherwise article → main → body. Cap with \`maxChars\` (default/ceiling 40k). Prefer this over ${'`browser_snapshot`'} mode=full or ${'`browser_cdp`'} Runtime.evaluate when you need prose, not clickable refs.`
 
 export const CLICK_DESCRIPTION = `Perform click on a web page.
 
@@ -118,4 +126,6 @@ export const CDP_SUMMARY =
  */
 export const CDP_DESCRIPTION = `Send a Chrome DevTools Protocol command to the target browser tab. Do not use CDP Input.* methods; use dedicated browser tools for clicks, text input, key presses, scrolling, and drag-and-drop. Browser-wide, storage, cookie, permission, download, target-management, and system-level commands are denied.
 
-Use Runtime.evaluate when a control has no snapshot ref (unlabeled inputs) or dedicated tools cannot reach it. Prefer returnByValue. Poll with short evaluate / DOM / snapshot checks rather than one long wait. Large results and Profiler.stop are written to a file under the session browser directory — read that path instead of stuffing the payload into context.`
+Do **not** call DOM.getDocument / DOM.getFlattenedDocument — those always overflow and are not useful for clicks. Use Runtime.evaluate with a small querySelector expression (return a short value or click and return "clicked"), or browser_snapshot / browser_get_text.
+
+Use Runtime.evaluate when a control has no snapshot ref (unlabeled inputs) or dedicated tools cannot reach it. Prefer returnByValue. Prefer ${'`browser_get_text`'} for page prose instead of evaluate that returns large DOM strings. Poll with short evaluate / DOM / snapshot checks rather than one long wait. Large results and Profiler.stop are written to a file under the session browser directory — Grep/Read with offset+limit; do not Bash the whole file into context.`

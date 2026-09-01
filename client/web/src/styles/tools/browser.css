@@ -24,6 +24,23 @@
   word-break: break-word;
 }
 
+.browser-page-state {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-muted, #9aa0a6);
+  font-family: var(--font-mono);
+}
+
+.browser-page-state-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 /* ── Screenshot ──────────────────────────── */
 .browser-shot {
   margin-bottom: 8px;

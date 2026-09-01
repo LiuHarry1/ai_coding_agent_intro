@@ -18,6 +18,7 @@ import {
   sessionJsonReviver,
   stringifySessionJsonLine,
 } from './json-serialize.js'
+import { projectMessageForDisk } from './persist-project.js'
 
 const sessions = new Map<string, Session>()
 
@@ -188,7 +189,8 @@ export function appendMessage(sessionId: string, message: Message): void {
     appendLine(sessionId, { ...message, timestamp })
     return
   }
-  appendLine(sessionId, { type: 'message', ...message, timestamp })
+  const forDisk = projectMessageForDisk(message)
+  appendLine(sessionId, { type: 'message', ...forDisk, timestamp })
 }
 
 /**

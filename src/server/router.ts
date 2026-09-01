@@ -343,6 +343,94 @@ export function createRouter({ staticDir }: RouterOptions) {
       return
     }
 
+    // User chat image uploads (claim-check; see utils/chat-uploads.ts).
+    const uploadGetMatch = url?.match(
+      /^\/sessions\/([^/]+)\/uploads\/([^/]+)$/,
+    )
+    if (method === 'GET' && uploadGetMatch) {
+      const id = decodeURIComponent(uploadGetMatch[1]!)
+      const file = decodeURIComponent(uploadGetMatch[2]!)
+      const {
+        CHAT_UPLOAD_FILE_RE,
+        getChatUploadsDir,
+        mimeFromUploadFileName,
+      } = await import('../utils/chat-uploads.js')
+      const session = getSession(id)
+      if (
+        !session ||
+        !canAccessSession(session, authed.user?.email, authed.user?.role) ||
+        !CHAT_UPLOAD_FILE_RE.test(file)
+      ) {
+        sendJSON(res, 404, { error: 'Not found' })
+        return
+      }
+      const fsp = await import('fs/promises')
+      try {
+        const buf = await fsp.readFile(path.join(getChatUploadsDir(id), file))
+        res.writeHead(200, {
+          'content-type': mimeFromUploadFileName(file),
+          'cache-control': 'private, max-age=31536000, immutable',
+        })
+        res.end(buf)
+      } catch {
+        sendJSON(res, 404, { error: 'Not found' })
+      }
+      return
+    }
+
+    const uploadPostMatch = url?.match(/^\/sessions\/([^/]+)\/uploads$/)
+    if (method === 'POST' && uploadPostMatch) {
+      const id = decodeURIComponent(uploadPostMatch[1]!)
+      const session = getSession(id)
+      if (
+        !session ||
+        !canAccessSession(session, authed.user?.email, authed.user?.role)
+      ) {
+        sendJSON(res, 404, { error: 'Session not found' })
+        return
+      }
+      const { handleSessionChatUploads } = await import(
+        './routes/chat-uploads.js'
+      )
+      await handleSessionChatUploads(req, res, id)
+      return
+    }
+
+    // Create session (optional) + upload images in one shot for first message.
+    // Client may pass ?session_id= — compare pathname only (same as /chat).
+    if (method === 'POST' && url?.split('?')[0] === '/chat/uploads') {
+      let sessionIdBody: string | undefined
+      // Content-Type is multipart — session_id may arrive as a form field after
+      // multer parses. Prefer query ?session_id= for early binding.
+      try {
+        const u = new URL(req.url || '', 'http://localhost')
+        const q = u.searchParams.get('session_id')
+        if (q) sessionIdBody = q
+      } catch {
+        /* ignore */
+      }
+      let session =
+        sessionIdBody && getSession(sessionIdBody)
+          ? getSession(sessionIdBody)
+          : null
+      if (
+        session &&
+        !canAccessSession(session, authed.user?.email, authed.user?.role)
+      ) {
+        sendJSON(res, 404, { error: 'Session not found' })
+        return
+      }
+      if (!session) {
+        session = createSession(authed.user?.email)
+        console.log(`[server] new session (chat upload): ${session.id}`)
+      }
+      const { handleSessionChatUploads } = await import(
+        './routes/chat-uploads.js'
+      )
+      await handleSessionChatUploads(req, res, session.id)
+      return
+    }
+
     // Background shell tasks (CC BackgroundTasksDialog / Cursor background terminals)
     const tasksListMatch = url?.match(/^\/sessions\/([^/]+)\/tasks$/)
     if (method === 'GET' && tasksListMatch) {

@@ -65,10 +65,18 @@ export function resolveTsxCli(appRoot) {
   return path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 }
 
-/** HTTP/ACP agent: native exe → CJS bundle → tsx dev. */
+/** HTTP/ACP agent: packaged → native → CJS bundle; dev → tsx (same as npm start). */
 export function resolveAgentLaunch(appRoot, slug, { packaged = false } = {}) {
+  if (!packaged) {
+    const tsxCli = resolveTsxCli(appRoot)
+    const startScript = path.join(appRoot, 'start.js')
+    if (fs.existsSync(tsxCli) && fs.existsSync(startScript)) {
+      return { kind: 'tsx', tsxCli, startScript }
+    }
+  }
+
   const native = agentNativePath(appRoot, slug)
-  if ((packaged || fs.existsSync(native)) && fs.existsSync(native)) {
+  if (fs.existsSync(native)) {
     return { kind: 'native', entry: native }
   }
 

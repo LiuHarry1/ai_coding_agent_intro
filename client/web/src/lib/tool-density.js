@@ -3,8 +3,11 @@
  *
  * Explored groups only fold built-in explore tools — never real MCP calls
  * (merged as `${server}_${tool}` in mcp-manager).
+ * Consecutive `browser_*` tools fold into Cursor's `browser-group`
+ * (`Ran N browser actions`, N ≥ 2).
  */
 
+import { isPlanFileWrite } from './plan-utils.js'
 import {
   BASH,
   POWERSHELL,
@@ -25,6 +28,7 @@ import {
   EXIT_PLAN_MODE,
   TASK_OUTPUT,
   TASK_STOP,
+  SUPPRESSED_TOOL_CARDS,
 } from './tool-names.js'
 import { EXPLORE_GROUPABLE_NAMES } from './tool-registry-meta.js'
 
@@ -65,11 +69,44 @@ export const BUILT_IN_TOOLS = new Set([
  */
 export const EXPLORE_BUILTINS = EXPLORE_GROUPABLE_NAMES
 
+/**
+ * Cursor `Pol`: pure read/ls groups need ≥ 3 steps before folding.
+ * Grep / glob / web mix folds at N ≥ 2.
+ */
+const PURE_FILE_EXPLORE_NAMES = new Set([
+  READ,
+  'read',
+  LIST_DIR,
+  'list_directory',
+])
+const PURE_FILE_EXPLORE_MIN = 3
+const BROWSER_GROUP_MIN = 2
+const EXPLORE_GROUP_MIN = 2
+
+/** tool_call parts and transcript tool bubbles share name / isSubagent. */
+function isToolish(item) {
+  if (!item) return false
+  if (item.type && item.type !== 'tool_call') return false
+  if (item.kind && item.kind !== 'tool') return false
+  return typeof item.name === 'string'
+}
+
 export function isExploreTool(part) {
-  if (!part || part.type !== 'tool_call') return false
-  if (part.isSubagent) return false
+  if (!isToolish(part) || part.isSubagent) return false
   if (part.name === SKILL) return false
   return EXPLORE_GROUPABLE_NAMES.has(part.name)
+}
+
+/** Playwright / agent browser_* family — high-churn automation steps. */
+export function isBrowserTool(part) {
+  if (!isToolish(part) || part.isSubagent) return false
+  return part.name.startsWith('browser_')
+}
+
+function isPureFileExplore(buf) {
+  return (
+    buf.length > 0 && buf.every(p => PURE_FILE_EXPLORE_NAMES.has(p.name))
+  )
 }
 
 /**
@@ -77,53 +114,95 @@ export function isExploreTool(part) {
  * Subagents / skills are excluded even if the name is unusual.
  */
 export function isMcpTool(part) {
-  if (!part || part.type !== 'tool_call') return false
-  if (part.isSubagent) return false
+  if (!isToolish(part) || part.isSubagent) return false
   if (part.name === SKILL) return false
-  if (!part.name) return false
+  if (isBrowserTool(part)) return false
   return !BUILT_IN_TOOLS.has(part.name)
 }
 
 /**
- * Coalesce consecutive explore built-ins into explored_run groups when N ≥ 2.
+ * Coalesce consecutive explore / browser built-ins into density groups.
  *
  * Subagents are deliberately NOT coalesced: they always render as their own
  * row, matching Cursor (`taskToolCall` is excluded from the groupable set and
  * force-flushes the pending group). Turn-level folding is WorkGroup's job.
  *
- * @param {object[]} items tool_call parts
- * @returns {Array<{ type: 'explored_run', items: object[] } | { type: 'tool', part: object }>}
+ * @param {object[]} items tool_call parts or tool bubbles
+ * @returns {Array<{ type: 'explored_run'|'browser_run', items: object[] } | { type: 'tool', part: object }>}
  */
 export function coalesceToolRuns(items) {
   const out = []
   let exploreBuf = []
+  let browserBuf = []
 
   const flushExplore = () => {
     if (exploreBuf.length === 0) return
-    if (exploreBuf.length === 1) {
-      out.push({ type: 'tool', part: exploreBuf[0] })
+    const min = isPureFileExplore(exploreBuf)
+      ? PURE_FILE_EXPLORE_MIN
+      : EXPLORE_GROUP_MIN
+    if (exploreBuf.length < min) {
+      for (const part of exploreBuf) out.push({ type: 'tool', part })
     } else {
       out.push({ type: 'explored_run', items: exploreBuf })
     }
     exploreBuf = []
   }
 
+  const flushBrowser = () => {
+    if (browserBuf.length === 0) return
+    if (browserBuf.length < BROWSER_GROUP_MIN) {
+      out.push({ type: 'tool', part: browserBuf[0] })
+    } else {
+      out.push({ type: 'browser_run', items: browserBuf })
+    }
+    browserBuf = []
+  }
+
   for (const part of items) {
-    if (isExploreTool(part)) {
+    if (isBrowserTool(part)) {
+      flushExplore()
+      browserBuf.push(part)
+    } else if (isExploreTool(part)) {
+      flushBrowser()
       exploreBuf.push(part)
     } else {
       flushExplore()
+      flushBrowser()
       out.push({ type: 'tool', part })
     }
   }
   flushExplore()
+  flushBrowser()
   return out
+}
+
+/**
+ * Filter suppressed / plan-file writes, then coalesce explore / browser runs.
+ * Used by nested Skill / Agent step lists — not the main transcript.
+ *
+ * @param {object[]} items tool_call parts
+ * @returns {{ runs: ReturnType<typeof coalesceToolRuns>, waiting: boolean }}
+ */
+export function expandToolGroup(items) {
+  const visibleItems = (items || []).filter(
+    it =>
+      isToolish(it) &&
+      !SUPPRESSED_TOOL_CARDS.has(it.name) &&
+      !isPlanFileWrite(it),
+  )
+  if (visibleItems.length === 0) {
+    return { runs: [], waiting: false }
+  }
+  return {
+    runs: coalesceToolRuns(visibleItems),
+    waiting: hasRunningSubagent(visibleItems),
+  }
 }
 
 /** True when any subagent (Agent / Skill fork) is still running. */
 export function hasRunningSubagent(items) {
   return (items || []).some(
-    p => p?.type === 'tool_call' && p.isSubagent && p.status !== 'done',
+    p => isToolish(p) && p.isSubagent && p.status !== 'done',
   )
 }
 
@@ -131,6 +210,10 @@ export function hasRunningSubagent(items) {
 export function liveToolSubtitle(part) {
   if (!part) return ''
   const name = part.name || 'tool'
+  if (typeof name === 'string' && name.startsWith('browser_')) {
+    const action = name.slice('browser_'.length).replace(/_/g, ' ')
+    return part.status === 'done' ? action : `${action}\u2026`
+  }
   const args = part.args || {}
   const path =
     args.file_path ||
@@ -185,7 +268,8 @@ export function summarizeToolSteps(steps) {
   for (const s of steps || []) {
     const n = s.name || 'other'
     let bucket = n
-    if (n.endsWith('_fetch')) bucket = '__fetch__'
+    if (typeof n === 'string' && n.startsWith('browser_')) bucket = '__browser__'
+    else if (n.endsWith('_fetch')) bucket = '__fetch__'
     else if (n.endsWith('_search') || n.endsWith('_web_search'))
       bucket = '__search__'
     counts[bucket] = (counts[bucket] || 0) + 1
@@ -202,6 +286,7 @@ export function summarizeToolSteps(steps) {
     ['__search__', 'web search', 'web searches'],
     [WEB_FETCH, 'fetch', 'fetches'],
     ['__fetch__', 'fetch', 'fetches'],
+    ['__browser__', 'browser action', 'browser actions'],
     [WRITE, 'write', 'writes'],
     [EDIT, 'edit', 'edits'],
     [SKILL, 'skill', 'skills'],
@@ -226,6 +311,11 @@ export function summarizeExploredDetails(steps) {
   if (list.length === 0) {
     const n = (steps || []).length
     return n > 0 ? `${n} tool${n === 1 ? '' : 's'}` : null
+  }
+
+  if (list.every(s => typeof s.name === 'string' && s.name.startsWith('browser_'))) {
+    const n = list.length
+    return `${n} browser action${n === 1 ? '' : 's'}`
   }
 
   let files = 0
@@ -280,6 +370,7 @@ export function summarizeExploredDetails(steps) {
 
 export function detectToolError(part) {
   if (!part || part.status !== 'done') return false
+  if (part.isError) return true
   const r = part.result
   return typeof r === 'string' && r.startsWith('Error:')
 }

@@ -3,7 +3,6 @@
  * HTTP / stdio / ACP adapters call this; persistence still uses server/session.
  */
 import type { ServerResponse } from 'http'
-import { randomUUID } from 'crypto'
 import type {
   Session,
   RunAgentFn,
@@ -12,6 +11,8 @@ import type {
   IEventBus,
   AgentDefinition,
 } from '../core/types.js'
+import { buildUserMessage } from '../core/query/helpers.js'
+import { offloadChatImageRefs } from '../utils/chat-uploads.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import type { ModelRegistry } from '../core/llm/index.js'
 import { EventBus } from '../core/event-bus.js'
@@ -240,6 +241,19 @@ export async function runChatTurn(
   const finish = <T extends RunChatTurnResult>(result: T): T => {
     clearTurnAbort(session.id, turnAbort)
     return result
+  }
+
+  // OpenClaw claim-check: persist bytes under uploads/, keep short URLs in history.
+  let imageRefs: string[] | undefined
+  try {
+    const refs = await offloadChatImageRefs(session.id, images)
+    imageRefs = refs.length ? refs : undefined
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    wire.error(msg)
+    wire.done()
+    if (transport !== noopTransport) transport.end()
+    return finish({ finalText: '', error: e as Error })
   }
 
   let unsubTelemetry: (() => void) | undefined
@@ -475,11 +489,7 @@ export async function runChatTurn(
   let persistFrom = messagesBefore
   let finalText = ''
   let runError: Error | null = null
-  const userTurnForDisplay: UserMessage = {
-    role: 'user',
-    content: message,
-    uuid: randomUUID(),
-  }
+  const userTurnForDisplay: UserMessage = buildUserMessage(message, imageRefs)
 
   const systemPrompt = await resolveTurnSystemPrompt(
     session,
@@ -587,7 +597,7 @@ export async function runChatTurn(
         compaction: resolvedSettings.config.compaction,
         sessionMemory: resolvedSettings.config.sessionMemory,
         messages: session.messages,
-        images: images?.length ? images : undefined,
+        images: imageRefs,
         subagentNames: prepared.subagentNames,
         deferredToolPool: prepared.deferredToolPool,
         getToolDefinition: prepared.getToolDefinition,

@@ -50,6 +50,8 @@ export const openaiStrategy: ProviderStrategy = {
       // Responses API maps content parts to `input_image`; keep this in sync
       // if `chatModel` ever switches to `client.chat(id)`.
       supportsToolResultContentBlocks: () => true,
+      // Do not assume Responses accepts PDF file parts until verified per gateway.
+      supportsNativePdf: () => false,
       describe: () =>
         `openai(responses) thinking=${p.thinking.mode}${
           p.thinking.mode === 'budget' ? `(${p.thinking.tokens})` : ''

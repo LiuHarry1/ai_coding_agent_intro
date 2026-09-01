@@ -9,14 +9,14 @@
   align-items: center;
   gap: 4px;
   width: 100%;
-  padding: 2px 6px;
+  padding: 1px 4px;
   background: transparent;
   border: 0;
   outline: none;
   text-align: left;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  line-height: 1.5;
+  line-height: 1.35;
   color: var(--text-muted);
   cursor: pointer;
   border-radius: 4px;

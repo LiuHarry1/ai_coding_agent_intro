@@ -18,6 +18,7 @@ import {
   registerToolAbort,
 } from '../../core/tool-abort-registry.js'
 import { maybePersistAfterExecute } from '../tool-storage/index.js'
+import { projectToolUseResult } from '../../utils/project-tool-use-result.js'
 import {
   blocksToToolResultOutputParts,
   hasImageBlock,
@@ -144,9 +145,10 @@ export async function executeOneTool(
       }
 
       if (def.outputSchema) {
-        const parsed = def.outputSchema.safeParse(raw.data)
+        const forWire = projectToolUseResult(tc.toolName, raw.data)
+        const parsed = def.outputSchema.safeParse(forWire)
         if (parsed.success) {
-          toolUseResult = parsed.data ?? raw.data
+          toolUseResult = parsed.data ?? forWire
         } else {
           console.warn(
             `[tools] ${tc.toolName}: outputSchema validation failed; omitting tool_use_result`,

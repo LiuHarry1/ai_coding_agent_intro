@@ -42,6 +42,11 @@ const LABELS = {
     completed: 'Explored',
     error: 'Explore',
   },
+  browser: {
+    loading: 'Running',
+    completed: 'Ran',
+    error: 'Run',
+  },
   mcp: { loading: 'Running', completed: 'Ran', error: 'Run' },
 }
 

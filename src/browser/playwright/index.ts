@@ -31,6 +31,7 @@ export {
 export { fillForm } from './forms.js'
 export { normalizeRef } from './locator.js'
 export { snapshot, waitFor, findInSnapshot, ensureSnapshotFresh } from './snapshot.js'
+export { getPageText } from './page-text.js'
 export { screenshotWithLabels } from './screenshot-labels.js'
 export { waitForDownload, downloadByRef } from './downloads.js'
 export { highlightElement, getElementBoundingBox } from './visual.js'

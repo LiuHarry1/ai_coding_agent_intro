@@ -13,11 +13,18 @@ import {
   isInterruptMessage,
 } from '../utils/interrupt.js'
 import { toolResultOutputToText } from '../utils/tool-result-content.js'
+import { projectLegacyFatToolUseResult } from '../utils/project-tool-use-result.js'
 
 const COMPACT_SUMMARY_PREFIX =
   '[Previous conversation compacted — context continues below]\n\n'
 const COMPACT_SUMMARY_FOOTER =
   '\n\nContinue from where you left off without asking questions.'
+const UI_RESULT_MAX_CHARS = 2_000
+
+function truncateUiResult(text: string): string {
+  if (text.length <= UI_RESULT_MAX_CHARS) return text
+  return `${text.slice(0, UI_RESULT_MAX_CHARS - 1)}…`
+}
 
 function userMessageText(msg: Message): string {
   if (!isRoleMessage(msg) || msg.role !== 'user') return ''
@@ -27,6 +34,27 @@ function userMessageText(msg: Message): string {
         .filter(p => p.type === 'text')
         .map(p => p.text)
         .join('')
+}
+
+/** Short upload URLs for the UI — never revive Buffer / data URLs into React. */
+function userMessageImageUrls(msg: Message): string[] | undefined {
+  if (!isRoleMessage(msg) || msg.role !== 'user') return undefined
+  if (!Array.isArray(msg.content)) return undefined
+  const urls: string[] = []
+  for (const part of msg.content as Array<{
+    type?: string
+    image?: unknown
+  }>) {
+    if (part.type !== 'image') continue
+    if (
+      typeof part.image === 'string' &&
+      part.image.startsWith('/sessions/') &&
+      part.image.includes('/uploads/')
+    ) {
+      urls.push(part.image)
+    }
+  }
+  return urls.length ? urls : undefined
 }
 
 /** compact summary is model-only; UI gets a boundary marker. */
@@ -42,7 +70,10 @@ function extractCompactSummaryBody(content: string): string {
   let body = content.slice(COMPACT_SUMMARY_PREFIX.length)
   const footerIdx = body.indexOf(COMPACT_SUMMARY_FOOTER)
   if (footerIdx >= 0) body = body.slice(0, footerIdx)
-  return body.trim()
+  body = body.trim()
+  const MAX_SUMMARY = 4_000
+  if (body.length > MAX_SUMMARY) return `${body.slice(0, MAX_SUMMARY - 1)}…`
+  return body
 }
 
 type UIPart = {
@@ -148,7 +179,13 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
         } satisfies UICompactBoundaryMessage)
         continue
       }
-      uiMessages.push({ type: 'user', id: randomUUID(), content })
+      const images = userMessageImageUrls(msg)
+      uiMessages.push({
+        type: 'user',
+        id: randomUUID(),
+        content,
+        ...(images ? { images } : {}),
+      })
     } else if (msg.role === 'assistant') {
       if (!currentAssistant) {
         currentAssistant = {
@@ -184,9 +221,12 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
             p => p.type === 'tool_call' && p.toolCallId === tr.toolCallId,
           )
           if (tc) {
-            tc.result = toolResultOutputToText(tr.output)
+            tc.result = truncateUiResult(toolResultOutputToText(tr.output))
             if (tr.toolUseResult !== undefined) {
-              tc.toolUseResult = tr.toolUseResult
+              tc.toolUseResult = projectLegacyFatToolUseResult(
+                tr.toolName ?? tc.name,
+                tr.toolUseResult,
+              )
             }
             if (tr.isError) tc.isError = true
           }

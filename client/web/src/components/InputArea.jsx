@@ -14,7 +14,9 @@ import {
 import {
   MAX_IMAGES,
   ACCEPTED_TYPES,
-  fileToDataURL,
+  fileToAttachment,
+  revokeAttachment,
+  revokeAttachments,
   extractDroppedFiles,
   extractImages,
   isImageFile,
@@ -60,6 +62,12 @@ export default function InputArea() {
   const [uploadingDrop, setUploadingDrop] = useState(false)
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false)
   const [atMenuSuppressed, setAtMenuSuppressed] = useState(false)
+  const imagesRef = useRef(images)
+  imagesRef.current = images
+
+  useEffect(() => {
+    return () => revokeAttachments(imagesRef.current)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -219,18 +227,21 @@ export default function InputArea() {
     return () => document.removeEventListener('mousedown', onDocMouseDown)
   }, [showSlashMenu, showAtMenu])
 
-  const addImageFiles = useCallback(
-    async files => {
-      const remaining = MAX_IMAGES - images.length
-      const toProcess = files.slice(0, remaining)
-      const dataUrls = await Promise.all(toProcess.map(fileToDataURL))
-      setImages(prev => [...prev, ...dataUrls].slice(0, MAX_IMAGES))
-    },
-    [images.length],
-  )
+  const addImageFiles = useCallback(files => {
+    const accepted = files.filter(isImageFile)
+    setImages(prev => {
+      const remaining = MAX_IMAGES - prev.length
+      const next = accepted.slice(0, remaining).map(fileToAttachment)
+      return [...prev, ...next].slice(0, MAX_IMAGES)
+    })
+  }, [])
 
   const removeImage = useCallback(idx => {
-    setImages(prev => prev.filter((_, i) => i !== idx))
+    setImages(prev => {
+      const doomed = prev[idx]
+      if (doomed) revokeAttachment(doomed)
+      return prev.filter((_, i) => i !== idx)
+    })
   }, [])
 
   const handleInput = useCallback(e => {
@@ -336,9 +347,10 @@ export default function InputArea() {
     setInputValue('')
     setCursorPos(0)
     el.style.height = 'auto'
-    sendMessage(text || '(image)', images)
+    const attachments = images
     setImages([])
     setAtSuggestions([])
+    sendMessage(text || '(image)', attachments)
   }, [sendMessage, isStreaming, images])
 
   const handleKeyDown = useCallback(
@@ -598,12 +610,12 @@ export default function InputArea() {
       >
         {images.length > 0 && (
           <div className='image-preview-bar'>
-            {images.map((src, i) => (
-              <div key={i} className='image-preview-item'>
+            {images.map((att, i) => (
+              <div key={att.id} className='image-preview-item'>
                 <img
-                  src={src}
+                  src={att.previewUrl}
                   alt={`Attachment ${i + 1}`}
-                  onClick={() => setLightbox(src)}
+                  onClick={() => setLightbox(att.previewUrl)}
                 />
                 <button
                   className='image-preview-remove'

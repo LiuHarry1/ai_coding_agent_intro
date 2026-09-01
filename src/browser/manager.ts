@@ -409,17 +409,13 @@ export function initBrowserLifecycle(cwd: string = process.cwd()): void {
     void relay?.close()
   })
 
-  // Extension relay at boot only when browser is globally opted in (CC-style).
-  // The `browser` primary agent still warms the relay per turn; first tool call
-  // also lazy-starts via getRelay().
-  warmExtensionRelay(cwd, { requireEnabled: true })
+  // Extension mode starts the relay at boot. First tool call also lazy-starts
+  // via getRelay(); the `browser` primary agent warms it per turn as well.
+  warmExtensionRelay(cwd)
 }
 
 /** Start the extension relay if extension mode is configured. */
-export function warmExtensionRelay(
-  cwd: string,
-  opts?: { requireEnabled?: boolean },
-): void {
+export function warmExtensionRelay(cwd: string): void {
   let config: { mode?: string; relayPort?: number; enabled?: boolean } = {}
   try {
     config = resolveSettings(cwd).config.browser ?? {}
@@ -430,7 +426,6 @@ export function warmExtensionRelay(
     return
   }
   if (config.mode !== 'extension') return
-  if (opts?.requireEnabled && config.enabled !== true) return
   const port = config.relayPort ?? DEFAULT_RELAY_PORT
   void getRelay(port)
     .then(() => {

@@ -22,4 +22,4 @@ export function isHeavyMediaFrame(src: string, type = ''): boolean {
 
 /** Recovery when ariaSnapshot times out. */
 export const SNAPSHOT_STALL_NEXT =
-  'A full accessibility snapshot timed out (often a PDF/iframe). Do not retry a full snapshot, screenshot, or wait_for in a loop. Close the viewer or work from partial state, then capture a new snapshot when the page is usable.'
+  'A full accessibility snapshot timed out (often a PDF/iframe receipt preview). Do not retry full snapshot, screenshot, or wait_for in a loop. If the main form is still usable (e.g. View Receipt / Save visible), keep filling it with click/type/fill-form — do not try to "close the PDF viewer". Only take a fresh snapshot after the next form action returns refs, or if the overlay truly blocks the controls you need.'

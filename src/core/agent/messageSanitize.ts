@@ -9,6 +9,7 @@ import { isAttachmentMessage, isRoleMessage } from '../types.js'
 import type { IProvider } from '../llm/types.js'
 import { toolResultOutputToText } from '../../utils/tool-result-content.js'
 import { reviveBuffersInMessages } from '../../session/json-serialize.js'
+import { hydrateToolResultImagesFromDisk } from '../../session/persist-project.js'
 
 /**
  * Move images out of `tool_result` content and into a meta user message that
@@ -84,10 +85,14 @@ export function projectMessagesForApi(
       return {
         ...m,
         content: (m.content as ToolResultPart[]).map(p => {
-          if (p.type !== 'tool-result' || p.toolUseResult === undefined) {
-            return p
+          const withShot = hydrateToolResultImagesFromDisk(p)
+          if (
+            withShot.type !== 'tool-result' ||
+            withShot.toolUseResult === undefined
+          ) {
+            return withShot
           }
-          const { toolUseResult: _, ...rest } = p
+          const { toolUseResult: _, ...rest } = withShot
           return rest
         }),
       }

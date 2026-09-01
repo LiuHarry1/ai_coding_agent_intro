@@ -123,7 +123,10 @@ export const TOOL_META = {
   },
 
   ...Object.fromEntries(
-    BROWSER_TOOLS.map(name => [name, { chrome: 'line', density: 'default' }]),
+    BROWSER_TOOLS.map(name => [
+      name,
+      { chrome: 'line', density: 'explore-line' },
+    ]),
   ),
 }
 

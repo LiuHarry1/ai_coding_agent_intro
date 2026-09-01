@@ -24,6 +24,7 @@ export const TASK_STOP = 'TaskStop'
 
 export const BROWSER_NAVIGATE = 'browser_navigate'
 export const BROWSER_SNAPSHOT = 'browser_snapshot'
+export const BROWSER_GET_TEXT = 'browser_get_text'
 export const BROWSER_CLICK = 'browser_click'
 export const BROWSER_TYPE = 'browser_type'
 export const BROWSER_FILL_FORM = 'browser_fill_form'
@@ -49,6 +50,7 @@ export const BROWSER_CDP = 'browser_cdp'
 export const BROWSER_TOOLS = [
   BROWSER_NAVIGATE,
   BROWSER_SNAPSHOT,
+  BROWSER_GET_TEXT,
   BROWSER_CLICK,
   BROWSER_TYPE,
   BROWSER_FILL_FORM,

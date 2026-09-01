@@ -17,7 +17,9 @@ import { sendCdpCommand } from '../../browser/cdp-command.js'
 import * as pw from '../../browser/playwright/index.js'
 import {
   CALL_TIMEOUT_MS,
+  DEFAULT_MAX_CHARS,
   DEFAULT_MAX_NODES,
+  EFFICIENT_MAX_CHARS,
   ERROR_SNAPSHOT_TIMEOUT_MS,
   POST_ACTION_MAX_NODES,
   POST_ACTION_SNAPSHOT_MS,
@@ -32,7 +34,13 @@ import {
   setCurrentTab,
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
-import { getUserHasControl, isTabPoisoned, setUserHasControl } from '../../browser/session-flags.js'
+import {
+  getUserHasControl,
+  isSnapshotDegraded,
+  isTabPoisoned,
+  setSnapshotDegraded,
+  setUserHasControl,
+} from '../../browser/session-flags.js'
 import {
   trackActiveBrowserTool,
   untrackActiveBrowserTool,
@@ -44,6 +52,7 @@ import {
   BROWSER_FILE_UPLOAD_TOOL_NAME,
   BROWSER_FILL_FORM_TOOL_NAME,
   BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
+  BROWSER_GET_TEXT_TOOL_NAME,
   BROWSER_HANDLE_DIALOG_TOOL_NAME,
   BROWSER_HIGHLIGHT_TOOL_NAME,
   BROWSER_HOVER_TOOL_NAME,
@@ -73,6 +82,7 @@ import {
   browserErrorText,
   BrowserOutputSchema,
   mapBrowserOutput,
+  maybePersistSnapshotArtifact,
   observe,
   resetConsoleWatermark,
   toNetworkRow,
@@ -93,12 +103,28 @@ async function observeAfterAction(
   opts: Parameters<typeof observe>[2] & { screenshotAfterwards?: boolean },
   ctx?: Pick<RunContext, 'sessionId' | 'toolCallId'>,
 ): Promise<BrowserToolOutput> {
+  // Sticky degrade after PDF/iframe stall used to skip every post-action
+  // snapshot, so the model never got new refs and looped on screenshot.
+  // Form mutations clear the flag and re-attempt with a short budget.
+  const recovering = isSnapshotDegraded(targetId) && opts.withSnapshot !== false
+  if (recovering) setSnapshotDegraded(targetId, false)
   const skipIfDegraded = opts.skipIfDegraded !== false
   const snapshotMs =
-    opts.withSnapshot === false ? 5_000 : POST_ACTION_SNAPSHOT_MS
+    opts.withSnapshot === false
+      ? 5_000
+      : recovering
+        ? 5_000
+        : POST_ACTION_SNAPSHOT_MS
   try {
     const out = await withTimeout(
-      observe(backend, targetId, { ...opts, skipIfDegraded }),
+      observe(backend, targetId, {
+        ...opts,
+        skipIfDegraded,
+        // observe() derives compact / maxChars / maxNodes from mode.
+        mode: opts.mode ?? 'efficient',
+        sessionId: ctx?.sessionId ?? opts.sessionId,
+        toolCallId: ctx?.toolCallId ?? opts.toolCallId,
+      }),
       'snapshot',
       snapshotMs,
     )
@@ -119,14 +145,23 @@ async function observeAfterAction(
         5_000,
       )
       if (snap.nodes > 0 || (snap.text && !/^No blocking in-page dialog/.test(snap.text))) {
-        return {
+        const dialogOut: BrowserToolOutput = {
           action: opts.action,
           message: `${opts.message} (full snapshot timed out; showing the open dialog — click it, do not wait or navigate)`,
           url: snap.url,
           title: snap.title,
           snapshot: snap.text,
           snapshotTruncated: snap.truncated,
+          snapshotMode: 'efficient',
         }
+        if (ctx) {
+          await maybePersistSnapshotArtifact(
+            dialogOut,
+            ctx.sessionId,
+            ctx.toolCallId,
+          )
+        }
+        return dialogOut
       }
     } catch {
       /* dialog-only look failed too */
@@ -137,6 +172,7 @@ async function observeAfterAction(
       url: '',
       title: '',
       snapshot: SNAPSHOT_STALL_NEXT,
+      snapshotMode: 'efficient',
     }
   }
 }
@@ -192,7 +228,10 @@ async function freshSnapshotText(
     const snap = await withTimeout(
       pw.snapshot(backend, targetId, {
         maxNodes: POST_ACTION_MAX_NODES,
+        maxChars: EFFICIENT_MAX_CHARS,
         compact: true,
+        interactive: true,
+        mode: 'efficient',
       }),
       'snapshot',
       ERROR_SNAPSHOT_TIMEOUT_MS,
@@ -206,6 +245,7 @@ async function freshSnapshotText(
 const USER_CONTROL_ALLOWED = new Set([
   BROWSER_LOCK_TOOL_NAME,
   BROWSER_SNAPSHOT_TOOL_NAME,
+  BROWSER_GET_TEXT_TOOL_NAME,
   BROWSER_SCREENSHOT_TOOL_NAME,
   BROWSER_CONSOLE_TOOL_NAME,
   BROWSER_NETWORK_TOOL_NAME,
@@ -375,8 +415,13 @@ export const navigateTool = defineBrowserTool({
     return observe(ctx.backend, targetId, {
       action: 'navigate',
       message,
+      mode: 'efficient',
       maxNodes: POST_ACTION_MAX_NODES,
+      maxChars: EFFICIENT_MAX_CHARS,
       compact: true,
+      interactive: true,
+      sessionId: ctx.sessionId,
+      toolCallId: ctx.toolCallId,
     })
   },
 })
@@ -386,19 +431,33 @@ export const snapshotTool = defineBrowserTool({
   summary: 'Capture an accessibility snapshot of the current page',
   description: prompt.SNAPSHOT_DESCRIPTION,
   inputSchema: z.object({
+    mode: z
+      .enum(['efficient', 'full'])
+      .optional()
+      .describe(
+        `efficient (default): interactive controls, ~${EFFICIENT_MAX_CHARS} chars, depth 6. full: wider tree up to ${DEFAULT_MAX_CHARS} chars.`,
+      ),
     maxNodes: z
       .number()
       .int()
       .positive()
       .optional()
       .describe(
-        `Cap on ref-bearing nodes; open dialogs and end-of-tree widgets are kept first (default ${DEFAULT_MAX_NODES})`,
+        `Cap on ref-bearing nodes; open dialogs and end-of-tree widgets are kept first (default efficient ${POST_ACTION_MAX_NODES} / full ${DEFAULT_MAX_NODES})`,
+      ),
+    maxChars: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        `Character budget for the snapshot text (capped at ${DEFAULT_MAX_CHARS})`,
       ),
     selector: z
       .string()
       .optional()
       .describe(
-        'CSS selector; snapshot only this subtree (e.g. the chat panel)',
+        'CSS selector for one subtree (e.g. [role=dialog]). Not a snapshot ref — use omit selector for the full tree.',
       ),
     compact: z
       .boolean()
@@ -425,18 +484,79 @@ export const snapshotTool = defineBrowserTool({
         'Append discovered link hrefs',
       ),
   }),
-  async run({ maxNodes, selector, compact, interactive, includeDiff, urls }, ctx) {
+  async run(
+    { mode, maxNodes, maxChars, selector, compact, interactive, includeDiff, urls },
+    ctx,
+  ) {
+    const resolvedMode = mode ?? 'efficient'
     return observe(ctx.backend, ctx.targetId, {
       action: 'snapshot',
-      message: includeDiff ? 'Page snapshot (diff)' : 'Page snapshot',
-      maxNodes: maxNodes ?? DEFAULT_MAX_NODES,
+      message:
+        includeDiff
+          ? `Page snapshot (diff, ${resolvedMode})`
+          : `Page snapshot (${resolvedMode})`,
+      mode: resolvedMode,
+      maxNodes:
+        maxNodes ??
+        (resolvedMode === 'full' ? DEFAULT_MAX_NODES : POST_ACTION_MAX_NODES),
+      maxChars:
+        maxChars ??
+        (resolvedMode === 'full' ? DEFAULT_MAX_CHARS : EFFICIENT_MAX_CHARS),
       selector,
-      compact,
-      interactive,
+      compact: compact ?? resolvedMode === 'efficient',
+      interactive: interactive ?? resolvedMode === 'efficient',
       includeDiff,
       urls,
       skipIfDegraded: false,
+      sessionId: ctx.sessionId,
+      toolCallId: ctx.toolCallId,
     })
+  },
+})
+
+export const getTextTool = defineBrowserTool({
+  name: BROWSER_GET_TEXT_TOOL_NAME,
+  summary: 'Read bounded visible page text (article/main/body or a selector)',
+  description: prompt.GET_TEXT_DESCRIPTION,
+  inputSchema: z.object({
+    selector: z
+      .string()
+      .optional()
+      .describe(
+        'CSS selector for the prose region; defaults to first of article, main, body',
+      ),
+    maxChars: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        `Character budget for returned text (default/ceiling ${DEFAULT_MAX_CHARS})`,
+      ),
+  }),
+  async run({ selector, maxChars }, ctx) {
+    const got = await pw.getPageText(ctx.backend, ctx.targetId, {
+      selector,
+      maxChars,
+    })
+    const out: BrowserToolOutput = {
+      action: 'get_text',
+      message: got.truncated
+        ? `Page text truncated at ${got.text.length} chars (selector ${got.selectorUsed}). Narrow the selector or raise maxChars.`
+        : `Page text via ${got.selectorUsed}`,
+      url: got.url,
+      title: got.title,
+      snapshot: got.text,
+      snapshotTruncated: got.truncated,
+      snapshotMode: 'text',
+      pageState: {
+        truncated: got.truncated,
+        chars: got.text.length,
+        mode: 'text',
+      },
+    }
+    await maybePersistSnapshotArtifact(out, ctx.sessionId, ctx.toolCallId)
+    return out
   },
 })
 
@@ -678,12 +798,16 @@ export const fileUploadTool = defineBrowserTool({
       ref: args.ref,
     })
     const n = res.files.length
+    // Receipt/PDF previews often stall Playwright snapshot+screenshot after
+    // upload. Confirm success from the action message; let the next form
+    // mutation re-observe instead of blocking here.
     return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'file_upload',
       message: res.cancelled
         ? 'Cancelled the file chooser'
-        : `Uploaded ${n} file${n === 1 ? '' : 's'}`,
+        : `Uploaded ${n} file${n === 1 ? '' : 's'}. Skip full snapshot/screenshot until the next form action — keep filling the expense form if it is still visible.`,
       compact: true,
+      withSnapshot: false,
     })
   },
 })
@@ -1223,7 +1347,7 @@ export const cdpTool = defineBrowserTool({
     method: z
       .string()
       .describe(
-        'CDP method name, for example Runtime.evaluate, DOM.getDocument, Profiler.start, or Performance.getMetrics.',
+        'CDP method name, for example Runtime.evaluate, Profiler.start, or Performance.getMetrics. Do not use DOM.getDocument.',
       ),
     params: z
       .record(z.string(), z.unknown())
@@ -1318,6 +1442,7 @@ export const lockTool = defineBrowserTool({
 export const browserToolDefinitions: ToolDefinition[] = [
   navigateTool,
   snapshotTool,
+  getTextTool,
   clickTool,
   typeTool,
   fillFormTool,

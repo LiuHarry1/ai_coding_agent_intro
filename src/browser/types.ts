@@ -61,6 +61,8 @@ export interface SnapshotResult {
   truncated: boolean
 }
 
+export type SnapshotMode = 'efficient' | 'full'
+
 export interface SnapshotOpts {
   /** Cap on ref-bearing nodes. Bounds the tree the way the model counts it. */
   maxNodes?: number
@@ -69,12 +71,16 @@ export interface SnapshotOpts {
   selector?: string
   /** Clip tree depth, for a cheaper post-action look at the page. */
   compact?: boolean
+  /** Explicit depth override (efficient default is EFFICIENT_DEPTH). */
+  depth?: number
   /** Only keep ref-bearing nodes (and their ancestors). Cheaper for driving actions. */
   interactive?: boolean
   /** Capture an in-page Error/Yes-No modal only — never walk the full tree. */
   dialogOnly?: boolean
   /** Append discovered link hrefs. */
   urls?: boolean
+  /** efficient = controls tier; full = wider tree. */
+  mode?: SnapshotMode
 }
 
 /**

@@ -1,636 +1,648 @@
 /**
- * Assistant transcript mutators (Zustand set/get closures).
- * Pure-ish message/part updates — no HTTP. IDE FS notifies go through ide-bridge.
- *
- * Split helpers:
- *   find-tool-call.js · reasoning-mutators.js
+ * Assistant transcript mutators — Cursor-like flat bubble store.
+ * Tool patches touch only bubblesById[id]; order pushes only on first insert.
  */
 import { newId } from '../../lib/utils.js'
 import { agentApi } from '../../lib/api/agent.js'
+import { sanitizeToolUpdatePayload } from '../../lib/sanitize-tool-ui.js'
+import { sanitizeMessagesForUi } from '../../lib/sanitize-tool-ui.js'
 import { notifyIdeFilesystemFromTool } from './ide-bridge.js'
-import { createStreamBatcher } from './stream-batch.js'
-import { findToolCallInAssistant } from './find-tool-call.js'
+import {
+  createStreamBatcher,
+  createThrottledSet,
+  TOOL_STREAM_THROTTLE_MS,
+} from './stream-batch.js'
 import { createReasoningMutators } from './reasoning-mutators.js'
+import {
+  appendBubble,
+  findToolBubble,
+  messagesToBubbles,
+  patchBubble,
+  removeBubble,
+  askBubbleId,
+  compactionBubbleId,
+  errorBubbleId,
+  planBubbleId,
+  textBubbleId,
+  thinkingBubbleId,
+  todoBubbleId,
+  toolBubbleId,
+} from '../../lib/bubbles/messages-to-bubbles.js'
 
-export { findToolCallInAssistant } from './find-tool-call.js'
+const TOOL_STREAM_KEYS = new Set([
+  '_beginToolCall',
+  '_upsertToolCall',
+  '_appendSubagentEvent',
+  '_updateToolResult',
+  '_updateLastToolTiming',
+  '_updateProcessOutput',
+  '_appendToolInputDelta',
+  '_appendToolInputPreviewDelta',
+])
+
+function transcriptPatch(next) {
+  return {
+    bubbleOrder: next.bubbleOrder,
+    bubblesById: next.bubblesById,
+  }
+}
+
+function sealTrailingAssistantText(state, turnId) {
+  if (!turnId) return state
+  for (let i = state.bubbleOrder.length - 1; i >= 0; i--) {
+    const b = state.bubblesById[state.bubbleOrder[i]]
+    if (!b || b.turnId !== turnId) continue
+    if (b.kind === 'thinking') continue
+    if (b.kind === 'assistant_text' && b.streaming) {
+      return patchBubble(state, b.id, { streaming: false })
+    }
+    break
+  }
+  return state
+}
+
+function findParentToolId(bubblesById, bubbleOrder, parentToolCallId) {
+  if (parentToolCallId) {
+    const id = toolBubbleId(parentToolCallId)
+    if (bubblesById[id]?.kind === 'tool') return id
+  }
+  const running = []
+  for (const id of bubbleOrder) {
+    const b = bubblesById[id]
+    if (b?.kind === 'tool' && b.isSubagent && b.status !== 'done') {
+      running.push(id)
+    }
+  }
+  if (running.length === 1) return running[0]
+  if (running.length > 1) {
+    const active = running.filter(
+      id => (bubblesById[id].subagentParts?.length ?? 0) > 0,
+    )
+    return (active.length === 1 ? active[0] : running[0])
+  }
+  for (let i = bubbleOrder.length - 1; i >= 0; i--) {
+    const b = bubblesById[bubbleOrder[i]]
+    if (b?.kind === 'tool' && b.status !== 'done') return bubbleOrder[i]
+  }
+  for (let i = bubbleOrder.length - 1; i >= 0; i--) {
+    const b = bubblesById[bubbleOrder[i]]
+    if (b?.kind === 'tool' && b.isSubagent) return bubbleOrder[i]
+  }
+  return null
+}
 
 /**
  * @param {Function} set
  * @param {Function} get
  */
 export function createAssistantMutators(set, get) {
+  const toolSet = createThrottledSet(set, get, TOOL_STREAM_THROTTLE_MS)
+
   const mutators = {
-  ...createReasoningMutators(set),
+    ...createReasoningMutators(set, get),
 
-  /** Drop Thinking... and append a tool_call in one update (no fold remount gap). */
-  _beginToolCall: part => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return s
-      const parts = last.parts.filter(p => p.type !== 'thinking')
-      // Dedup: a repeated tool_input_start for the same id must not leave a
-      // second card spinning after tool_result only updates one of them.
-      if (part.toolCallId) {
-        const idx = parts.findIndex(
-          p => p.type === 'tool_call' && p.toolCallId === part.toolCallId,
-        )
-        if (idx >= 0) {
-          const existing = parts[idx]
-          if (existing.status === 'done') {
-            msgs[msgs.length - 1] = { ...last, parts }
-            return { messages: msgs }
-          }
-          parts[idx] = { ...existing, ...part }
-          msgs[msgs.length - 1] = { ...last, parts }
-          return { messages: msgs }
+    _beginToolCall: part => {
+      toolSet.schedule(s => {
+        const turnId = s.activeTurnId
+        if (!turnId || !part.toolCallId) return s
+        let next = removeBubble(s, thinkingBubbleId(turnId))
+        next = sealTrailingAssistantText(next, turnId)
+        const id = toolBubbleId(part.toolCallId)
+        const existing = next.bubblesById[id]
+        if (existing?.kind === 'tool') {
+          if (existing.status === 'done') return transcriptPatch(next)
+          return transcriptPatch(
+            patchBubble(next, id, {
+              ...part,
+              kind: 'tool',
+              turnId,
+              id,
+              toolCallId: part.toolCallId,
+            }),
+          )
         }
-      }
-      parts.push(part)
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
-
-  _updateTodos: todos => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return { todos }
-
-      const parts = [...last.parts]
-      let existingIdx = -1
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (parts[i].type === 'todo_list') {
-          existingIdx = i
-          break
-        }
-      }
-      if (existingIdx >= 0) {
-        parts[existingIdx] = { ...parts[existingIdx], todos }
-      } else {
-        parts.push({ type: 'todo_list', todos })
-      }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { todos, messages: msgs }
-    })
-  },
-
-  _appendPart: part => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type === 'assistant') {
-        msgs[msgs.length - 1] = { ...last, parts: [...last.parts, part] }
-      }
-      return { messages: msgs }
-    })
-  },
-
-  /**
-   * Settle the in-progress compaction row when compaction_done arrives.
-   * ok/error → the running `compaction_start` part becomes a settled
-   * `compaction_done` part (instant feedback, before any refetch).
-   * noop → the row is dropped entirely; nothing happened worth showing.
-   *
-   * The settled part is only a transitional frame: after the transcript
-   * refetch the canonical `compact_boundary` message replaces it.
-   */
-  _resolveCompactionPart: status => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return s
-
-      let parts
-      if (status === 'noop') {
-        parts = last.parts.filter(p => p.type !== 'compaction_start')
-      } else {
-        parts = [...last.parts]
-        for (let i = parts.length - 1; i >= 0; i--) {
-          if (parts[i].type === 'compaction_start') {
-            parts[i] = { type: 'compaction_done', status }
-            break
-          }
-        }
-      }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
-
-  /**
-   * Full compact updates agent memory but JSONL keeps the complete transcript.
-   * Refetch from the server instead of truncating local UI.
-   */
-  _refetchTranscriptAfterCompaction: async () => {
-    const id = get().currentSessionId
-    if (!id) return
-
-    const s = get()
-    const last = s.messages[s.messages.length - 1]
-    let streamingAssistant = null
-    if (s.isStreaming && last?.type === 'assistant') {
-      // Drop the transitional compaction parts: the refetched transcript
-      // carries the canonical compact_boundary marker instead.
-      const parts = last.parts.filter(
-        p =>
-          p.type !== 'compaction_start' &&
-          p.type !== 'compaction_done' &&
-          p.type !== 'thinking',
-      )
-      streamingAssistant = { ...last, parts }
-    }
-
-    try {
-      const data = await agentApi.getSessionMessages(id)
-      if (get().currentSessionId !== id) return
-      let msgs = data.messages ?? []
-      if (streamingAssistant?.status === 'streaming') {
-        const tail = msgs[msgs.length - 1]
-        if (tail?.type === 'assistant') {
-          msgs = msgs.slice(0, -1)
-        }
-        msgs.push(streamingAssistant)
-      }
-      if (msgs.length > 0) set({ messages: msgs })
-    } catch (err) {
-      console.error('[chat] transcript refetch after compact failed', err)
-    }
-  },
-
-  /** ExitPlanMode — show plan card only when user approval is requested. */
-  _appendPlanApprovalPart: data => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return s
-
-      const parts = last.parts.filter(p => p.type !== 'plan_approval')
-      parts.push({
-        type: 'plan_approval',
-        requestId: data.requestId,
-        plan: data.plan ?? '',
-        filePath: data.filePath,
-        status: 'pending',
+        next = appendBubble(next, {
+          id,
+          kind: 'tool',
+          turnId,
+          toolCallId: part.toolCallId,
+          name: part.name,
+          args: part.args || {},
+          status: part.status || 'streaming-input',
+          isSubagent: part.isSubagent === true,
+          liveInputBytes: part.liveInputBytes,
+          liveInputStart: part.liveInputStart,
+          startTime: part.startTime || Date.now(),
+        })
+        return transcriptPatch(next)
       })
+    },
 
-      msgs[msgs.length - 1] = { ...last, parts }
-      return {
-        messages: msgs,
-        isAwaitingInteraction: true,
-        planState: {
-          status: 'awaiting_approval',
-          content: data.plan ?? '',
-          filePath: data.filePath ?? null,
-        },
-      }
-    })
-  },
+    _updateTodos: todos => {
+      set(s => {
+        const turnId = s.activeTurnId
+        if (!turnId) return { todos }
+        const id = todoBubbleId(turnId)
+        let next = s
+        if (next.bubblesById[id]) {
+          next = patchBubble(next, id, { todos })
+        } else {
+          next = appendBubble(next, {
+            id,
+            kind: 'todo',
+            turnId,
+            todos,
+          })
+        }
+        return { todos, ...transcriptPatch(next) }
+      })
+    },
 
-  /**
-   * Append decoded preview text to the in-progress tool_call card. Server
-   * extracts the value of the tool's main string field (e.g. write_file's
-   * `content`, edit_file's `new_string`) from the partial JSON args and
-   * streams it here so the UI can render the file being typed live.
-   */
-  _appendToolInputPreviewDelta: data => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return s
+    _appendPart: part => {
+      set(s => {
+        const turnId = s.activeTurnId
+        if (!turnId) return s
+        let next = s
+        if (part.type === 'ask_user_question') {
+          next = appendBubble(next, {
+            id: askBubbleId(part.id),
+            kind: 'ask',
+            turnId,
+            questionId: part.id,
+            questions: part.questions,
+            status: part.status || 'pending',
+          })
+        } else if (part.type === 'compaction_start') {
+          next = appendBubble(next, {
+            id: compactionBubbleId(turnId),
+            kind: 'compaction_start',
+            turnId,
+          })
+        } else if (part.type === 'error') {
+          const eid = newId()
+          next = appendBubble(next, {
+            id: errorBubbleId(eid),
+            kind: 'error',
+            turnId,
+            message: part.message,
+          })
+        } else {
+          return s
+        }
+        return transcriptPatch(next)
+      })
+    },
 
-      const parts = [...last.parts]
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const p = parts[i]
-        if (
-          p.type === 'tool_call' &&
-          p.toolCallId === data.toolCallId &&
-          p.status !== 'done'
-        ) {
-          parts[i] = {
-            ...p,
-            livePreview: (p.livePreview || '') + (data.delta || ''),
+    _resolveCompactionPart: status => {
+      set(s => {
+        const turnId = s.activeTurnId
+        if (!turnId) return s
+        const id = compactionBubbleId(turnId)
+        if (status === 'noop') {
+          return transcriptPatch(removeBubble(s, id))
+        }
+        if (!s.bubblesById[id]) return s
+        return transcriptPatch(
+          patchBubble(s, id, { kind: 'compaction_done', status }),
+        )
+      })
+    },
+
+    _refetchTranscriptAfterCompaction: async () => {
+      const id = get().currentSessionId
+      if (!id) return
+      const s = get()
+      const turnId = s.activeTurnId
+      let liveOrder = null
+      let liveById = null
+      if (s.isStreaming && turnId) {
+        liveOrder = []
+        liveById = {}
+        for (const bid of s.bubbleOrder) {
+          const b = s.bubblesById[bid]
+          if (!b || b.turnId !== turnId) continue
+          if (
+            b.kind === 'compaction_start' ||
+            b.kind === 'compaction_done' ||
+            b.kind === 'thinking'
+          ) {
+            continue
           }
-          break
+          liveOrder.push(bid)
+          liveById[bid] = b
         }
       }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
-
-  /**
-   * Bump the live byte counter on the in-progress tool_call card matching
-   * `toolCallId`. Used to show "Generating arguments… N chars" while the
-   * model is streaming the tool's argument JSON.
-   */
-  _appendToolInputDelta: data => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return s
-
-      const parts = [...last.parts]
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const p = parts[i]
-        if (
-          p.type === 'tool_call' &&
-          p.toolCallId === data.toolCallId &&
-          p.status !== 'done'
-        ) {
-          parts[i] = {
-            ...p,
-            liveInputBytes: (p.liveInputBytes || 0) + (data.bytes || 0),
+      try {
+        const data = await agentApi.getSessionMessages(id)
+        if (get().currentSessionId !== id) return
+        const msgs = sanitizeMessagesForUi(data.messages ?? [])
+        let next = messagesToBubbles(msgs)
+        if (liveOrder?.length) {
+          next = {
+            ...next,
+            activeTurnId: turnId,
+            bubbleOrder: [...next.bubbleOrder, ...liveOrder],
+            bubblesById: { ...next.bubblesById, ...liveById },
           }
-          break
         }
+        set({
+          bubbleOrder: next.bubbleOrder,
+          bubblesById: next.bubblesById,
+          activeTurnId: turnId || next.activeTurnId,
+        })
+      } catch (err) {
+        console.error('[chat] transcript refetch after compact failed', err)
       }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
+    },
 
-  /**
-   * Upgrade a streaming-input placeholder (created by tool_input_start) into
-   * a fully-populated tool_call once the SDK has parsed the complete args,
-   * or just append a new card if no placeholder existed (older SDK paths
-   * that skip tool-input-* events).
-   */
-  _upsertToolCall: data => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return s
+    _appendPlanApprovalPart: data => {
+      set(s => {
+        const turnId = s.activeTurnId
+        if (!turnId) return s
+        const id = planBubbleId(data.requestId)
+        let next = removeBubble(s, id)
+        next = appendBubble(next, {
+          id,
+          kind: 'plan',
+          turnId,
+          requestId: data.requestId,
+          plan: data.plan ?? '',
+          filePath: data.filePath,
+          status: 'pending',
+        })
+        return {
+          ...transcriptPatch(next),
+          isAwaitingInteraction: true,
+          planState: {
+            status: 'awaiting_approval',
+            content: data.plan ?? '',
+            filePath: data.filePath ?? null,
+          },
+        }
+      })
+    },
 
-      const parts = [...last.parts]
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const p = parts[i]
-        if (p.type === 'tool_call' && p.toolCallId === data.toolCallId) {
-          // Never demote a finished card back to running — a late/duplicate
-          // tool_call after tool_result left Pause→Resume rows spinning forever.
-          if (p.status === 'done') {
-            parts[i] = {
-              ...p,
-              name: data.name ?? p.name,
-              args: data.args ?? p.args,
-              isSubagent: data.isSubagent === true || p.isSubagent === true,
-            }
-          } else {
-            parts[i] = {
-              ...p,
+    _appendToolInputPreviewDelta: data => {
+      toolSet.schedule(s => {
+        const id = toolBubbleId(data.toolCallId)
+        const b = s.bubblesById[id]
+        if (!b || b.kind !== 'tool' || b.status === 'done') return s
+        return transcriptPatch(
+          patchBubble(s, id, {
+            livePreview: (b.livePreview || '') + (data.delta || ''),
+          }),
+        )
+      })
+    },
+
+    _appendToolInputDelta: data => {
+      toolSet.schedule(s => {
+        const id = toolBubbleId(data.toolCallId)
+        const b = s.bubblesById[id]
+        if (!b || b.kind !== 'tool' || b.status === 'done') return s
+        return transcriptPatch(
+          patchBubble(s, id, {
+            liveInputBytes: (b.liveInputBytes || 0) + (data.bytes || 0),
+          }),
+        )
+      })
+    },
+
+    _upsertToolCall: data => {
+      toolSet.schedule(s => {
+        const turnId = s.activeTurnId
+        if (!turnId || !data.toolCallId) return s
+        let next = removeBubble(s, thinkingBubbleId(turnId))
+        next = sealTrailingAssistantText(next, turnId)
+        const id = toolBubbleId(data.toolCallId)
+        const existing = next.bubblesById[id]
+        if (existing?.kind === 'tool') {
+          if (existing.status === 'done') {
+            return transcriptPatch(
+              patchBubble(next, id, {
+                name: data.name ?? existing.name,
+                args: data.args ?? existing.args,
+                isSubagent:
+                  data.isSubagent === true || existing.isSubagent === true,
+              }),
+            )
+          }
+          return transcriptPatch(
+            patchBubble(next, id, {
               name: data.name,
               args: data.args,
               status: 'running',
-              // Re-affirm isSubagent on the upsert. The placeholder created by
-              // tool_input_start already set it, but if the SDK skipped that
-              // event (some providers don't emit tool-input-start) and we land
-              // here directly, this is the only place the flag gets recorded.
-              // Coalesce instead of overwrite: don't lose `true` if the
-              // tool_call payload happens to omit the field.
-              isSubagent: data.isSubagent === true || p.isSubagent === true,
+              isSubagent:
+                data.isSubagent === true || existing.isSubagent === true,
               liveInputBytes: undefined,
               liveInputStart: undefined,
-            }
-          }
-          msgs[msgs.length - 1] = { ...last, parts }
-          return { messages: msgs }
-        }
-      }
-      parts.push({ type: 'tool_call', ...data })
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
-
-  _appendSubagentEvent: ev => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return s
-
-      const parts = [...last.parts]
-      let targetIdx = -1
-
-      // Prefer explicit routing from backend (parallel subagents of same type).
-      if (ev.parentToolCallId) {
-        targetIdx = parts.findIndex(
-          p => p.type === 'tool_call' && p.toolCallId === ev.parentToolCallId,
-        )
-      }
-
-      if (targetIdx === -1) {
-        const runningSubagents = parts
-          .map((p, i) => ({ p, i }))
-          .filter(
-            ({ p }) =>
-              p.type === 'tool_call' && p.isSubagent && p.status !== 'done',
+            }),
           )
+        }
+        next = appendBubble(next, {
+          id,
+          kind: 'tool',
+          turnId,
+          toolCallId: data.toolCallId,
+          name: data.name,
+          args: data.args || {},
+          status: 'running',
+          isSubagent: data.isSubagent === true,
+          startTime: data.startTime || Date.now(),
+        })
+        return transcriptPatch(next)
+      })
+    },
 
-        if (runningSubagents.length === 1) {
-          targetIdx = runningSubagents[0].i
-        } else if (runningSubagents.length > 1) {
-          // Serial subagent runs: prefer the card that already has nested
-          // steps (active run). Parallel runs require parentToolCallId.
-          const active = runningSubagents.filter(
-            ({ p }) => (p.subagentParts?.length ?? 0) > 0,
+    _appendSubagentEvent: ev => {
+      toolSet.schedule(s => {
+        const parentId = findParentToolId(
+          s.bubblesById,
+          s.bubbleOrder,
+          ev.parentToolCallId,
+        )
+        if (!parentId) return s
+        const parent = s.bubblesById[parentId]
+        if (parent?.kind !== 'tool') return s
+        const sub = [...(parent.subagentParts || [])]
+
+        if (ev.type === 'step_start') {
+          return transcriptPatch(
+            patchBubble(s, parentId, {
+              liveTask: ev.task || parent.liveTask,
+              liveLabel: ev.label || parent.liveLabel,
+            }),
           )
-          targetIdx = (active.length === 1 ? active[0] : runningSubagents[0]).i
         }
-      }
-
-      if (targetIdx === -1) {
-        for (let i = parts.length - 1; i >= 0; i--) {
-          if (parts[i].type === 'tool_call' && parts[i].status !== 'done') {
-            targetIdx = i
-            break
+        if (ev.type === 'tool_input_start') {
+          if (!sub.some(x => x.toolCallId === ev.toolCallId)) {
+            sub.push({
+              type: 'tool_call',
+              name: ev.name,
+              args: {},
+              toolCallId: ev.toolCallId,
+              status: 'streaming-input',
+            })
           }
+          return transcriptPatch(patchBubble(s, parentId, { subagentParts: sub }))
         }
-      }
-      if (targetIdx === -1) {
-        for (let i = parts.length - 1; i >= 0; i--) {
-          if (parts[i].type === 'tool_call' && parts[i].isSubagent) {
-            targetIdx = i
-            break
-          }
-        }
-      }
-      if (targetIdx === -1) return s
-
-      const parent = parts[targetIdx]
-      const sub = [...(parent.subagentParts || [])]
-
-      if (ev.type === 'step_start') {
-        parts[targetIdx] = {
-          ...parent,
-          liveTask: ev.task || parent.liveTask,
-          liveLabel: ev.label || parent.liveLabel,
-        }
-        msgs[msgs.length - 1] = { ...last, parts }
-        return { messages: msgs }
-      }
-
-      if (ev.type === 'tool_input_start') {
-        const exists = sub.some(s => s.toolCallId === ev.toolCallId)
-        if (!exists) {
-          sub.push({
-            type: 'tool_call',
-            name: ev.name,
-            args: {},
-            toolCallId: ev.toolCallId,
-            status: 'streaming-input',
-          })
-        }
-        parts[targetIdx] = { ...parent, subagentParts: sub }
-        msgs[msgs.length - 1] = { ...last, parts }
-        return { messages: msgs }
-      }
-
-      if (ev.type === 'tool_call') {
-        const idx = sub.findIndex(s => s.toolCallId === ev.toolCallId)
-        if (idx >= 0) {
-          sub[idx] = {
-            ...sub[idx],
-            name: ev.name,
-            args: ev.args,
-            ...(sub[idx].status === 'done' ? {} : { status: 'running' }),
-          }
-        } else {
-          sub.push({
-            type: 'tool_call',
-            name: ev.name,
-            args: ev.args,
-            toolCallId: ev.toolCallId,
-            status: 'running',
-          })
-        }
-      } else if (ev.type === 'tool_result') {
-        for (let j = sub.length - 1; j >= 0; j--) {
-          if (sub[j].toolCallId === ev.toolCallId) {
-            sub[j] = {
-              ...sub[j],
-              result: ev.result,
-              ...(ev.toolUseResult !== undefined
-                ? { toolUseResult: ev.toolUseResult }
-                : {}),
-              ...(ev.isError ? { isError: true } : {}),
-              status: 'done',
+        if (ev.type === 'tool_call') {
+          const idx = sub.findIndex(x => x.toolCallId === ev.toolCallId)
+          if (idx >= 0) {
+            sub[idx] = {
+              ...sub[idx],
+              name: ev.name,
+              args: ev.args,
+              ...(sub[idx].status === 'done' ? {} : { status: 'running' }),
             }
-            notifyIdeFilesystemFromTool(sub[j].name, sub[j].args, ev.result)
-            break
+          } else {
+            sub.push({
+              type: 'tool_call',
+              name: ev.name,
+              args: ev.args,
+              toolCallId: ev.toolCallId,
+              status: 'running',
+            })
           }
-        }
-      }
-      // text_delta is accepted for nesting but not rendered as a part yet
-      parts[targetIdx] = { ...parent, subagentParts: sub }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
-
-  _appendTextDelta: delta => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return { messages: msgs }
-
-      const parts = [...last.parts]
-      const lastPart = parts[parts.length - 1]
-
-      if (lastPart?.type === 'text') {
-        parts[parts.length - 1] = {
-          ...lastPart,
-          content: lastPart.content + delta,
-        }
-      } else {
-        parts.push({ type: 'text', content: delta })
-      }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
-
-  _updateToolResult: data => {
-    const toolCallId = data.tool_use_id ?? data.toolCallId
-    const last = get().messages[get().messages.length - 1]
-    const matched = findToolCallInAssistant(last, toolCallId)
-
-    set(s => {
-      const msgs = [...s.messages]
-      const lastMsg = msgs[msgs.length - 1]
-      if (lastMsg?.type !== 'assistant') return { messages: msgs }
-
-      const patch = p => ({
-        ...p,
-        result: data.result,
-        ...(data.toolUseResult !== undefined
-          ? { toolUseResult: data.toolUseResult }
-          : {}),
-        ...(data.isError ? { isError: true } : {}),
-        status: 'done',
-        endTime: Date.now(),
-        stopping: false,
-        liveTask: undefined,
-      })
-
-      const parts = lastMsg.parts.map(p => {
-        if (p.type === 'tool_call' && p.toolCallId === toolCallId) {
-          return patch(p)
-        }
-        if (p.type === 'tool_call' && Array.isArray(p.subagentParts)) {
-          let changed = false
-          const sub = p.subagentParts.map(sp => {
-            if (sp.type === 'tool_call' && sp.toolCallId === toolCallId) {
-              changed = true
-              return patch(sp)
-            }
-            return sp
-          })
-          return changed ? { ...p, subagentParts: sub } : p
-        }
-        return p
-      })
-      msgs[msgs.length - 1] = { ...lastMsg, parts }
-      return { messages: msgs }
-    })
-
-    if (matched) {
-      notifyIdeFilesystemFromTool(matched.name, matched.args, data.result)
-    }
-  },
-
-  /**
-   * Attach execute() wall time from middleware.
-   * Prefer `tool_use_id` — name-only matching mis-attributes parallel Bash.
-   * Timing is emitted from middleware afterTool, which runs BEFORE tool_result
-   * is wired — so match by id even while status is still running.
-   */
-  _updateLastToolTiming: data => {
-    const toolCallId = data.tool_use_id ?? data.toolCallId
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return { messages: msgs }
-
-      const parts = [...last.parts]
-      let target = -1
-      if (toolCallId) {
-        target = parts.findIndex(
-          p => p.type === 'tool_call' && p.toolCallId === toolCallId,
-        )
-      } else if (data.name) {
-        // Legacy (no id): FIFO among same-name cards still missing duration.
-        target = parts.findIndex(
-          p =>
-            p.type === 'tool_call' &&
-            p.name === data.name &&
-            p.duration == null,
-        )
-        if (target < 0) {
-          for (let i = parts.length - 1; i >= 0; i--) {
-            if (parts[i].type === 'tool_call' && parts[i].name === data.name) {
-              target = i
+        } else if (ev.type === 'tool_result') {
+          for (let j = sub.length - 1; j >= 0; j--) {
+            if (sub[j].toolCallId === ev.toolCallId) {
+              const safe = sanitizeToolUpdatePayload(sub[j].name || ev.name, {
+                result: ev.result,
+                toolUseResult: ev.toolUseResult,
+              })
+              sub[j] = {
+                ...sub[j],
+                result: safe.result,
+                ...(safe.toolUseResult !== undefined
+                  ? { toolUseResult: safe.toolUseResult }
+                  : {}),
+                ...(ev.isError ? { isError: true } : {}),
+                status: 'done',
+              }
+              notifyIdeFilesystemFromTool(sub[j].name, sub[j].args, ev.result)
               break
             }
           }
         }
-      }
-      if (target < 0 || typeof data.duration !== 'number') {
-        return { messages: msgs }
-      }
-      parts[target] = { ...parts[target], duration: data.duration }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
+        return transcriptPatch(patchBubble(s, parentId, { subagentParts: sub }))
+      })
+    },
 
-  /**
-   * Attach live process output to the last pending bash tool call.
-   * Emitted by the bash tool in wait mode — streams output to UI
-   * without requiring the LLM to poll.
-   */
-  _updateProcessOutput: data => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type !== 'assistant') return { messages: msgs }
+    _appendTextDelta: delta => {
+      set(s => {
+        const turnId = s.activeTurnId
+        if (!turnId || !delta) return s
 
-      const parts = [...last.parts]
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const p = parts[i]
-        if (
-          p.type === 'tool_call' &&
-          (p.name === 'Bash' || p.name === 'PowerShell') &&
-          p.status !== 'done'
-        ) {
-          parts[i] = {
-            ...p,
-            liveOutput: data.output,
-            liveElapsed: data.elapsed,
-            liveDone: data.done,
+        // Chronology: only append onto the turn's trailing assistant_text.
+        // If tools (or other parts) landed after the previous text, open a new
+        // text bubble so the UI stays interleaved (text → tools → text → …).
+        for (let i = s.bubbleOrder.length - 1; i >= 0; i--) {
+          const b = s.bubblesById[s.bubbleOrder[i]]
+          if (!b || b.turnId !== turnId) continue
+          if (b.kind === 'thinking') continue
+          if (b.kind === 'assistant_text') {
+            return transcriptPatch(
+              patchBubble(s, b.id, {
+                content: (b.content || '') + delta,
+                streaming: true,
+              }),
+            )
           }
           break
         }
-      }
-      msgs[msgs.length - 1] = { ...last, parts }
-      return { messages: msgs }
-    })
-  },
 
-  _finalizeAssistant: () => {
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type === 'assistant') {
-        const settle = p => {
-          if (p.type !== 'tool_call') return p
-          let next = p
-          if (Array.isArray(p.subagentParts)) {
-            next = {
-              ...next,
-              subagentParts: p.subagentParts.map(settle),
+        let seq = 0
+        for (const id of s.bubbleOrder) {
+          const b = s.bubblesById[id]
+          if (b?.kind === 'assistant_text' && b.turnId === turnId) seq++
+        }
+        const id = textBubbleId(turnId, seq)
+        const next = appendBubble(s, {
+          id,
+          kind: 'assistant_text',
+          turnId,
+          content: delta,
+          streaming: true,
+        })
+        return transcriptPatch(next)
+      })
+    },
+
+    _updateToolResult: data => {
+      const toolCallId = data.tool_use_id ?? data.toolCallId
+      const peeked = toolSet.peek()
+      const found = findToolBubble(peeked.bubblesById, toolCallId)
+      const name =
+        found?.kind === 'tool'
+          ? found.name
+          : found?.nested?.name || found?.parent?.name
+      const safe = sanitizeToolUpdatePayload(name, data)
+
+      toolSet.schedule(s => {
+        const id = toolBubbleId(toolCallId)
+        if (s.bubblesById[id]?.kind === 'tool') {
+          return transcriptPatch(
+            patchBubble(s, id, {
+              result: safe.result,
+              ...(safe.toolUseResult !== undefined
+                ? { toolUseResult: safe.toolUseResult }
+                : {}),
+              ...(data.isError ? { isError: true } : {}),
+              status: 'done',
+              endTime: Date.now(),
+              stopping: false,
+              liveTask: undefined,
+            }),
+          )
+        }
+        // Nested under subagent
+        for (const bid of s.bubbleOrder) {
+          const parent = s.bubblesById[bid]
+          if (parent?.kind !== 'tool' || !Array.isArray(parent.subagentParts)) {
+            continue
+          }
+          let changed = false
+          const sub = parent.subagentParts.map(sp => {
+            if (sp.toolCallId !== toolCallId) return sp
+            changed = true
+            return {
+              ...sp,
+              result: safe.result,
+              ...(safe.toolUseResult !== undefined
+                ? { toolUseResult: safe.toolUseResult }
+                : {}),
+              ...(data.isError ? { isError: true } : {}),
+              status: 'done',
+            }
+          })
+          if (changed) {
+            return transcriptPatch(patchBubble(s, bid, { subagentParts: sub }))
+          }
+        }
+        return s
+      })
+
+      if (found?.kind === 'tool') {
+        notifyIdeFilesystemFromTool(found.name, found.args, data.result)
+      } else if (found?.nested) {
+        notifyIdeFilesystemFromTool(
+          found.nested.name,
+          found.nested.args,
+          data.result,
+        )
+      }
+    },
+
+    _updateLastToolTiming: data => {
+      const toolCallId = data.tool_use_id ?? data.toolCallId
+      toolSet.schedule(s => {
+        if (typeof data.duration !== 'number') return s
+        if (toolCallId) {
+          const id = toolBubbleId(toolCallId)
+          if (s.bubblesById[id]?.kind === 'tool') {
+            return transcriptPatch(patchBubble(s, id, { duration: data.duration }))
+          }
+        } else if (data.name) {
+          for (let i = s.bubbleOrder.length - 1; i >= 0; i--) {
+            const b = s.bubblesById[s.bubbleOrder[i]]
+            if (b?.kind === 'tool' && b.name === data.name && b.duration == null) {
+              return transcriptPatch(
+                patchBubble(s, b.id, { duration: data.duration }),
+              )
             }
           }
-          if (next.status === 'done') return next
-          return {
-            ...next,
+        }
+        return s
+      })
+    },
+
+    _updateProcessOutput: data => {
+      toolSet.schedule(s => {
+        for (let i = s.bubbleOrder.length - 1; i >= 0; i--) {
+          const b = s.bubblesById[s.bubbleOrder[i]]
+          if (
+            b?.kind === 'tool' &&
+            (b.name === 'Bash' || b.name === 'PowerShell') &&
+            b.status !== 'done'
+          ) {
+            return transcriptPatch(
+              patchBubble(s, b.id, {
+                liveOutput: data.output,
+                liveDone: data.done,
+                liveElapsed: data.elapsed,
+              }),
+            )
+          }
+        }
+        return s
+      })
+    },
+
+    _finalizeAssistant: () => {
+      set(s => {
+        const turnId = s.activeTurnId
+        if (!turnId) return s
+        let next = removeBubble(s, thinkingBubbleId(turnId))
+        for (const id of next.bubbleOrder) {
+          const b = next.bubblesById[id]
+          if (b?.kind !== 'tool' || b.turnId !== turnId) continue
+          if (b.status === 'done') continue
+          let sub = b.subagentParts
+          if (Array.isArray(sub)) {
+            sub = sub.map(sp =>
+              sp.status === 'done'
+                ? sp
+                : {
+                    ...sp,
+                    status: 'done',
+                    isError: true,
+                    result: sp.result ?? 'Interrupted by user',
+                  },
+            )
+          }
+          next = patchBubble(next, id, {
             status: 'done',
             isError: true,
-            result: next.result ?? 'Interrupted by user',
+            result: b.result ?? 'Interrupted by user',
             stopping: false,
             liveTask: undefined,
             endTime: Date.now(),
+            subagentParts: sub,
+          })
+        }
+        for (const id of next.bubbleOrder) {
+          const b = next.bubblesById[id]
+          if (b?.kind === 'assistant_text' && b.turnId === turnId) {
+            next = patchBubble(next, id, { streaming: false })
           }
         }
-        const parts = last.parts.map(settle)
-        msgs[msgs.length - 1] = { ...last, parts, status: 'done' }
-      }
-      return { messages: msgs }
-    })
-  },
-
-  /** CC Esc/Stop — settle the assistant turn and show Interrupted. */
-  _onInterrupted: data => {
-    get()._finalizeAssistant()
-    set(s => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last?.type === 'interrupted') {
-        return { isAwaitingInteraction: false }
-      }
-      msgs.push({
-        id: newId(),
-        type: 'interrupted',
-        toolUse: data?.tool_use === true,
-        text: data?.text,
+        return transcriptPatch(next)
       })
-      return { messages: msgs, isAwaitingInteraction: false }
-    })
-  },
+    },
+
+    _onInterrupted: data => {
+      get()._finalizeAssistant()
+      set(s => {
+        const lastId = s.bubbleOrder[s.bubbleOrder.length - 1]
+        if (s.bubblesById[lastId]?.kind === 'interrupted') {
+          return { isAwaitingInteraction: false }
+        }
+        const next = appendBubble(s, {
+          id: newId(),
+          kind: 'interrupted',
+          toolUse: data?.tool_use === true,
+          text: data?.text,
+        })
+        return {
+          ...transcriptPatch(next),
+          isAwaitingInteraction: false,
+          activeTurnId: null,
+        }
+      })
+    },
   }
 
-  // Text/reasoning tokens arrive many times per frame — coalesce into one set().
-  // Any other mutator flushes first so tool cards / finalize stay ordered.
   const batcher = createStreamBatcher({
     flush: ({ text, reasoning }) => {
       if (reasoning) mutators._appendReasoningDelta(reasoning)
@@ -638,19 +650,33 @@ export function createAssistantMutators(set, get) {
     },
   })
 
-  /** @type {typeof mutators & { _flushStreamBatch: () => void }} */
   const out = {
-    _flushStreamBatch: () => batcher.flushNow(),
+    _flushStreamBatch: () => {
+      batcher.flushNow()
+      toolSet.flushNow()
+    },
   }
   for (const key of Object.keys(mutators)) {
     const fn = mutators[key]
     if (key === '_appendTextDelta') {
-      out[key] = delta => batcher.appendText(delta)
+      out[key] = delta => {
+        toolSet.flushNow()
+        batcher.appendText(delta)
+      }
     } else if (key === '_appendReasoningDelta') {
-      out[key] = delta => batcher.appendReasoning(delta)
+      out[key] = delta => {
+        toolSet.flushNow()
+        batcher.appendReasoning(delta)
+      }
+    } else if (TOOL_STREAM_KEYS.has(key) && typeof fn === 'function') {
+      out[key] = (...args) => {
+        batcher.flushNow()
+        return fn(...args)
+      }
     } else if (typeof fn === 'function') {
       out[key] = (...args) => {
         batcher.flushNow()
+        toolSet.flushNow()
         return fn(...args)
       }
     } else {
@@ -659,3 +685,5 @@ export function createAssistantMutators(set, get) {
   }
   return out
 }
+
+export { findToolBubble }

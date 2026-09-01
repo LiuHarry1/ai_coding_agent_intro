@@ -23,6 +23,7 @@ const DEFAULT_PORT = 4567
 let agentProc = null
 let mainWindow = null
 let agentPort = DEFAULT_PORT
+let agentStopDone = false
 
 function getAppRoot() {
   return app.isPackaged ? app.getAppPath() : REPO_ROOT
@@ -120,9 +121,40 @@ function startAgent() {
 }
 
 function stopAgent() {
-  if (!agentProc || agentProc.killed) return
-  agentProc.kill('SIGTERM')
+  if (!agentProc || agentProc.killed) return Promise.resolve()
+  const proc = agentProc
   agentProc = null
+  const pid = proc.pid
+
+  return new Promise(resolve => {
+    const forceTimer = setTimeout(() => {
+      try {
+        if (process.platform === 'win32' && pid) {
+          spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+            windowsHide: true,
+            stdio: 'ignore',
+          })
+        } else {
+          proc.kill('SIGKILL')
+        }
+      } catch {
+        // Process already gone.
+      }
+      resolve()
+    }, 5_000)
+
+    proc.once('exit', () => {
+      clearTimeout(forceTimer)
+      resolve()
+    })
+
+    try {
+      proc.kill('SIGTERM')
+    } catch {
+      clearTimeout(forceTimer)
+      resolve()
+    }
+  })
 }
 
 function waitForHealth(timeoutMs = 45_000) {
@@ -224,7 +256,7 @@ if (!gotLock) {
     try {
       await waitForHealth()
     } catch (err) {
-      stopAgent()
+      await stopAgent()
       dialog.showErrorBox(
         'Failed to start',
         `${err.message}\n\nIf port ${agentPort} is in use, free the port or set PORT.`,
@@ -236,9 +268,14 @@ if (!gotLock) {
     createWindow()
   })
 
-  app.on('before-quit', () => {
+  app.on('before-quit', event => {
+    if (agentStopDone) return
+    event.preventDefault()
     app.isQuitting = true
-    stopAgent()
+    void stopAgent().finally(() => {
+      agentStopDone = true
+      app.quit()
+    })
   })
 
   app.on('window-all-closed', () => {

@@ -1,13 +1,10 @@
 /**
  * Every bound the browser tools wait on or spend, in one place.
  *
- * These were scattered across the Playwright ops and the tool layer, which hid
- * the two relationships that matter:
- *
- * - the per-call budget has to exceed the action plus the observation after it,
- *   or a click that landed gets reported as a failure and the model retries it;
- * - a post-action look at the page is cheaper than one the model asked for, so
- *   routine actions do not spend an explicit snapshot's worth of context.
+ * OpenClaw-style three-layer budgets:
+ * - Capture: efficient (8k / depth 6) vs full snapshot (40k)
+ * - Model: MODEL_TOOL_RESULT_MAX_CHARS wrap on tool text
+ * - Wire/UI: WIRE_DETAIL_* caps so SSE/session never carry raw trees
  */
 
 /** No browser call should outlive a stuck page; the model needs its turn back. */
@@ -38,17 +35,20 @@ export const NAVIGATE_SETTLE_MS = 300
 /** Legacy drain constant; navigate no longer waits on network idle. */
 export const NAVIGATE_NETWORK_DRAIN_MS = 2_000
 
-/** Ref-bearing nodes in a snapshot the model asked for. */
+/** Ref-bearing nodes in an explicit full `browser_snapshot`. */
 export const DEFAULT_MAX_NODES = 1500
-/** Ref-bearing nodes in the look at the page that follows an action. */
+/** Ref-bearing nodes in navigate / post-action / efficient snapshot. */
 export const POST_ACTION_MAX_NODES = 800
-export const DEFAULT_MAX_CHARS = 20_000
 
+/** Explicit full-tier AI snapshot character budget. */
+export const DEFAULT_MAX_CHARS = 40_000
+/** Navigate + post-action + `mode=efficient` character budget. */
+export const EFFICIENT_MAX_CHARS = 8_000
 /**
- * Depth clip for `compact`. Playwright's AI snapshot already omits most
- * structural wrappers, so what is left to cut on a routine action is depth.
+ * Depth clip for compact/efficient snapshots. Playwright's AI snapshot already
+ * omits most structural wrappers; depth is what remains to cut.
  */
-export const COMPACT_DEPTH = 16
+export const EFFICIENT_DEPTH = 6
 
 /** Screenshots compete with the snapshot for context; cap them hard. */
 export const SCREENSHOT_TOKEN_BUDGET = 1500
@@ -59,7 +59,19 @@ export const ACT_MAX_VIEWPORT_DIMENSION = 8192
 export const SNAPSHOT_TTL_MS = 10_000
 
 /**
- * Cursor inlines CDP JSON up to 25_000 characters; Profiler.stop always
- * spills to a file. Same threshold so a heap profile cannot eat the context.
+ * CDP JSON inline cap. Larger responses (and Profiler.stop) spill to a file
+ * under `.sessions/{id}/browser/`.
  */
-export const CDP_INLINE_MAX_CHARS = 25_000
+export const CDP_INLINE_MAX_CHARS = 8_000
+
+/** Hard wrap for model-visible browser tool text (OpenClaw live tool-result). */
+export const MODEL_TOOL_RESULT_MAX_CHARS = 16_000
+
+/** Per-string cap inside SSE / session `tool_use_result` details. */
+export const WIRE_DETAIL_STRING_MAX = 2_000
+/** Whole `tool_use_result` blob budget for browser tools. */
+export const WIRE_DETAILS_MAX_BYTES = 8_192
+
+/** Console / network rows kept on the wire (and in observe summaries). */
+export const WIRE_CONSOLE_MAX = 8
+export const WIRE_NETWORK_MAX = 12

@@ -22,12 +22,14 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { getToolResultFilePath } from '../../core/session-paths.js'
+import { MODEL_TOOL_RESULT_MAX_CHARS } from '../../browser/limits.js'
 
 export const PERSISTED_OUTPUT_OPEN = '<persisted-output'
 export const PERSISTED_OUTPUT_CLOSE = '</persisted-output>'
 
 /** Preview kept inline when a result is offloaded. */
 const PREVIEW_SIZE_CHARS = 2_000
+const DEFAULT_PERSIST_THRESHOLD_CHARS = 32_768
 
 function parseEnvInt(name: string, fallback: number): number {
   const v = process.env[name]
@@ -37,8 +39,13 @@ function parseEnvInt(name: string, fallback: number): number {
 }
 
 /** Result size (chars) above which output is offloaded to a sidecar file. */
-export function getPersistThresholdChars(): number {
-  return parseEnvInt('TOOL_PERSIST_THRESHOLD_CHARS', 32_768)
+export function getPersistThresholdChars(toolName?: string): number {
+  const env = parseEnvInt('TOOL_PERSIST_THRESHOLD_CHARS', 0)
+  if (env > 0) return env
+  if (typeof toolName === 'string' && toolName.startsWith('browser_')) {
+    return MODEL_TOOL_RESULT_MAX_CHARS
+  }
+  return DEFAULT_PERSIST_THRESHOLD_CHARS
 }
 
 export function isPersistedReference(text: string): boolean {
@@ -74,7 +81,7 @@ export function persistToolResult(
   content: string,
 ): string | null {
   if (!sessionId) return null
-  const threshold = getPersistThresholdChars()
+  const threshold = getPersistThresholdChars(toolName)
   if (content.length <= threshold) return null
 
   const filePath = getToolResultFilePath(sessionId, toolCallId)

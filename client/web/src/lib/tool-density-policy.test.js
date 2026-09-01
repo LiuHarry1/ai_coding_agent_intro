@@ -18,8 +18,11 @@ import {
   TOOL_SEARCH,
   READ,
   GREP,
+  BROWSER_NAVIGATE,
 } from './tool-names.js'
-import { summarizeExploredDetails } from './tool-density.js'
+import { summarizeExploredDetails, coalesceToolRuns } from './tool-density.js'
+import { sanitizeToolUpdatePayload } from './sanitize-tool-ui.js'
+import { formatWorkedDuration } from './timeline.js'
 
 describe('resolveExpandArgs', () => {
   it('explore-group opens while running, collapses when done', () => {
@@ -100,6 +103,7 @@ describe('TOOL_META density', () => {
   it('maps Read/Grep to density kinds', () => {
     assert.equal(getToolDensityKind(READ), 'read')
     assert.equal(getToolDensityKind(GREP), 'explore-line')
+    assert.equal(getToolDensityKind(BROWSER_NAVIGATE), 'explore-line')
   })
 
   it('keeps ToolSearch suppressed in sync with TOOL_META', () => {
@@ -126,5 +130,55 @@ describe('summarizeExploredDetails', () => {
       summarizeExploredDetails([{ name: READ }, { name: READ }]),
       '2 files',
     )
+  })
+})
+
+describe('coalesceToolRuns', () => {
+  const part = name => ({ type: 'tool_call', name })
+
+  it('keeps two Reads as singles (Cursor Pol ≥ 3)', () => {
+    const runs = coalesceToolRuns([part(READ), part(READ)])
+    assert.equal(runs.length, 2)
+    assert.ok(runs.every(r => r.type === 'tool'))
+  })
+
+  it('folds three Reads into explored_run', () => {
+    const runs = coalesceToolRuns([part(READ), part(READ), part(READ)])
+    assert.equal(runs.length, 1)
+    assert.equal(runs[0].type, 'explored_run')
+  })
+
+  it('folds two Greps at N ≥ 2', () => {
+    const runs = coalesceToolRuns([part(GREP), part(GREP)])
+    assert.equal(runs[0].type, 'explored_run')
+  })
+
+  it('folds consecutive browser_* at N ≥ 2', () => {
+    const runs = coalesceToolRuns([
+      part('browser_navigate'),
+      part('browser_click'),
+    ])
+    assert.equal(runs[0].type, 'browser_run')
+  })
+})
+
+describe('sanitizeToolUpdatePayload', () => {
+  it('does not chop long bash output', () => {
+    const log = 'ok\n'.repeat(300)
+    const out = sanitizeToolUpdatePayload('Bash', { result: log })
+    assert.equal(out.result, log)
+  })
+
+  it('strips legacy page snapshots from browser results', () => {
+    const out = sanitizeToolUpdatePayload('browser_snapshot', {
+      result: 'Loaded.\nCurrent page snapshot\n- heading [ref=e1]',
+    })
+    assert.equal(out.result, 'Loaded.')
+  })
+})
+
+describe('formatWorkedDuration', () => {
+  it('ceils sub-second work to 1s', () => {
+    assert.equal(formatWorkedDuration(500), 'for 1s')
   })
 })

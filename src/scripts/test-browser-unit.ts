@@ -791,7 +791,16 @@ await withRelay(async relay => {
     undefined,
     'Runtime.evaluate is the evaluate hatch',
   )
-  eq(denyCdpMethod('DOM.getDocument'), undefined, 'DOM queries are allowed')
+  const deniedDom = denyCdpMethod('DOM.getDocument')
+  assert(
+    typeof deniedDom === 'string' && /browser_snapshot/.test(deniedDom),
+    'DOM.getDocument is denied — use snapshot / get_text / evaluate',
+  )
+  const deniedFlat = denyCdpMethod('DOM.getFlattenedDocument')
+  assert(
+    typeof deniedFlat === 'string' && /not allowed/.test(deniedFlat),
+    'DOM.getFlattenedDocument is denied',
+  )
   eq(denyCdpMethod('Profiler.start'), undefined, 'Profiler is allowed')
   eq(denyCdpMethod('Network.enable'), undefined, 'Network.enable is allowed')
   eq(
@@ -899,9 +908,12 @@ await withRelay(async relay => {
   }
 
   const spilled = await sendCdpCommand(backend, 't', 'huge', {})
-  assert(spilled.overflow === true, 'responses over 25k spill to a file')
+  assert(spilled.overflow === true, 'responses over the inline cap spill to a file')
   if (spilled.overflow === true) {
-    assert(/25000 characters/.test(spilled.reason), spilled.reason)
+    assert(
+      spilled.reason.includes(`${CDP_INLINE_MAX_CHARS} characters`),
+      spilled.reason,
+    )
     assert(fs.existsSync(spilled.filePath), 'overflow file exists')
     fs.unlinkSync(spilled.filePath)
   }

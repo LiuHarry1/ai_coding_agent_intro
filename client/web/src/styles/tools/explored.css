@@ -7,6 +7,12 @@
   flex-direction: column;
   gap: 0;
 }
+.explored-group-earlier {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 2px 0 4px;
+  opacity: 0.8;
+}
 .explored-group-step > .tool-row,
 .explored-group-step > .tool-card {
   margin: 0;

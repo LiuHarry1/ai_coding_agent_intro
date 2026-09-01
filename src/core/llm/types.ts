@@ -67,6 +67,12 @@ export interface IProvider {
    * Omitted → treated as unsupported.
    */
   supportsToolResultContentBlocks?(): boolean
+  /**
+   * Whether the model accepts native PDF document / file parts (Claude Code
+   * `document` block). When false, Read(PDF) renders pages via pdftoppm and
+   * attaches images instead. Omitted → false.
+   */
+  supportsNativePdf?(): boolean
 }
 
 export interface ProviderStrategy {

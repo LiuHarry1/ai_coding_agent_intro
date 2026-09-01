@@ -39,6 +39,7 @@ export type ReadPdfOutput = {
   }
 }
 
+/** @deprecated Prefer `parts` (pdftoppm images). Kept for legacy wire hydrate. */
 export type ReadPdfPagesOutput = {
   type: 'pdf_pages'
   file: {
@@ -46,6 +47,17 @@ export type ReadPdfPagesOutput = {
     pages: string
     text: string
     pageCount: number
+  }
+}
+
+/** Claude Code `parts` — PDF pages rendered to JPEG under `outputDir`. */
+export type ReadPdfPartsOutput = {
+  type: 'parts'
+  file: {
+    filePath: string
+    originalSize: number
+    count: number
+    outputDir: string
   }
 }
 
@@ -61,6 +73,7 @@ export type ReadOutput =
   | ReadNotebookOutput
   | ReadPdfOutput
   | ReadPdfPagesOutput
+  | ReadPdfPartsOutput
   | ReadFileUnchangedOutput
 
 /** Loose schema for UI/wire validation (CC-style outputSchema gate). */
@@ -98,6 +111,15 @@ export const ReadOutputSchema = z.discriminatedUnion('type', [
       base64: z.string(),
       originalSize: z.number(),
       pageCount: z.number().nullable(),
+    }),
+  }),
+  z.object({
+    type: z.literal('parts'),
+    file: z.object({
+      filePath: z.string(),
+      originalSize: z.number(),
+      count: z.number(),
+      outputDir: z.string(),
     }),
   }),
   z.object({
