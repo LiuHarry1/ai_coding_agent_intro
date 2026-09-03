@@ -33,7 +33,9 @@ WORKDIR /app
 # Optional — improve capability or speed; agent can degrade without them:
 #   ripgrep          grep/glob tools; without it falls back to Node
 #                    (ripgrep-fallback.ts). See RG_FALLBACK in .env.example.
-#   poppler-utils    pdftotext / pdfinfo for PDF extraction in the shell
+#   poppler-utils    pdfinfo / pdftotext / pdftoppm — Read(PDF) renders pages
+#                    to JPEG via pdftoppm when the model lacks native PDF input
+#   fonts-*          matplotlib chart labels (Latin + CJK) in headless Agg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # --- required ---
     ca-certificates \
@@ -46,6 +48,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # --- optional ---
     ripgrep \
     poppler-utils \
+    fonts-dejavu-core \
+    fonts-wqy-zenhei \
   && rm -rf /var/lib/apt/lists/*
 
 # Python 3.11 + venv so the agent's bash tool can invoke python/pip
@@ -54,15 +58,29 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     VIRTUAL_ENV=/opt/venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+# Bash tool uses `bash -lc` (login shell). Debian `/etc/profile` resets PATH
+# and would hide /opt/venv — so matplotlib/`python` fail with ModuleNotFoundError
+# even though the venv has the packages. profile.d runs after that reset.
+RUN printf '%s\n' \
+    '# Keep agent Python venv on PATH for login shells (bash -lc).' \
+    'if [ -d /opt/venv/bin ]; then' \
+    '  case ":$PATH:" in' \
+    '    *:/opt/venv/bin:*) ;;' \
+    '    *) PATH="/opt/venv/bin:$PATH" ;;' \
+    '  esac' \
+    '  export PATH' \
+    '  export VIRTUAL_ENV=/opt/venv' \
+    'fi' \
+    > /etc/profile.d/ai-agent-venv.sh \
+  && chmod 644 /etc/profile.d/ai-agent-venv.sh
 COPY deploy/requirements.txt ./
 RUN python3 -m venv "${VIRTUAL_ENV}" \
   && pip install --no-cache-dir --default-timeout=600 --upgrade pip \
   && pip install --no-cache-dir --default-timeout=600 -r requirements.txt \
-  # MCP stdio fetch server used by settings mcpServers.mcp_server
-  && python -c "import mcp_server_fetch" \
+  && python -c "import matplotlib; print('[agent-base] matplotlib', matplotlib.__version__)" \
   && echo "[agent-base] mcp_server_fetch OK ($(python -c 'import mcp_server_fetch; print(getattr(mcp_server_fetch,\"__file__\",\"ok\"))'))"
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json ./  
 # Runtime needs tsx to load TypeScript sources; keep prod deps lean.
 RUN npm ci --omit=dev \
   && npm install --no-save --ignore-scripts tsx@^4.21.0 \

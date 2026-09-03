@@ -10,10 +10,11 @@ import {
   type RefMeta,
 } from '../snapshot-index.js'
 import { getLastSnapshot, getRefMeta } from '../session-flags.js'
-import { StaleRefError, type ResolvedElement } from '../types.js'
+import { StaleRefError } from '../types.js'
 import {
   assertElementHint,
   describeElement,
+  type DescribedElement,
   normalizeRef,
   targetLocator,
 } from './locator.js'
@@ -35,6 +36,7 @@ export function recoverRefByHint(
   const prefer = (list: RefMeta[]) =>
     list.find(c => c.ref !== ref && elementMatchesHint(c, hint))?.ref
 
+  const known = getRefMeta(targetId, ref)
   if (known?.role) {
     const sameRole = candidates.filter(
       c => c.ref !== ref && c.role === known.role,
@@ -93,7 +95,7 @@ export async function resolveClickTarget(
   targetId: string,
   ref: string,
   element?: string,
-): Promise<{ loc: Locator; ref: string; described: ResolvedElement }> {
+): Promise<{ loc: Locator; ref: string; described: DescribedElement }> {
   const normalized = normalizeRef(ref)
   const tryRef = async (candidate: string) => {
     const loc = await targetLocator(page, { ref: candidate, element })

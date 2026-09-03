@@ -19,10 +19,12 @@ import {
   CALL_TIMEOUT_MS,
   DEFAULT_MAX_CHARS,
   DEFAULT_MAX_NODES,
+  DEFAULT_SNAPSHOT_DEPTH,
   EFFICIENT_MAX_CHARS,
   ERROR_SNAPSHOT_TIMEOUT_MS,
   POST_ACTION_MAX_NODES,
   POST_ACTION_SNAPSHOT_MS,
+  SNAPSHOT_INLINE_MAX_BYTES,
 } from '../../browser/limits.js'
 import { SNAPSHOT_STALL_NEXT } from '../../browser/heavy-media.js'
 import {
@@ -120,8 +122,8 @@ async function observeAfterAction(
       observe(backend, targetId, {
         ...opts,
         skipIfDegraded,
-        // observe() derives compact / maxChars / maxNodes from mode.
-        mode: opts.mode ?? 'efficient',
+        // Cursor: post-action is a full tree (spill to disk if huge), not an 8k clip.
+        mode: opts.mode ?? 'full',
         sessionId: ctx?.sessionId ?? opts.sessionId,
         toolCallId: ctx?.toolCallId ?? opts.toolCallId,
       }),
@@ -227,11 +229,11 @@ async function freshSnapshotText(
   try {
     const snap = await withTimeout(
       pw.snapshot(backend, targetId, {
-        maxNodes: POST_ACTION_MAX_NODES,
-        maxChars: EFFICIENT_MAX_CHARS,
-        compact: true,
-        interactive: true,
-        mode: 'efficient',
+        maxNodes: DEFAULT_MAX_NODES,
+        maxChars: undefined,
+        compact: false,
+        interactive: false,
+        mode: 'full',
       }),
       'snapshot',
       ERROR_SNAPSHOT_TIMEOUT_MS,
@@ -415,11 +417,7 @@ export const navigateTool = defineBrowserTool({
     return observe(ctx.backend, targetId, {
       action: 'navigate',
       message,
-      mode: 'efficient',
-      maxNodes: POST_ACTION_MAX_NODES,
-      maxChars: EFFICIENT_MAX_CHARS,
-      compact: true,
-      interactive: true,
+      mode: 'full',
       sessionId: ctx.sessionId,
       toolCallId: ctx.toolCallId,
     })
@@ -435,7 +433,15 @@ export const snapshotTool = defineBrowserTool({
       .enum(['efficient', 'full'])
       .optional()
       .describe(
-        `efficient (default): interactive controls, ~${EFFICIENT_MAX_CHARS} chars, depth 6. full: wider tree up to ${DEFAULT_MAX_CHARS} chars.`,
+        `full (default, Cursor): complete tree, maxDepth ${DEFAULT_SNAPSHOT_DEPTH}. Over ${SNAPSHOT_INLINE_MAX_BYTES} bytes the YAML is written to disk (Read the file). efficient: interactive clip, ~${EFFICIENT_MAX_CHARS} chars.`,
+      ),
+    maxDepth: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        `Maximum snapshot tree depth. Defaults to ${DEFAULT_SNAPSHOT_DEPTH} (Cursor). Raise if nested comboboxes / iframe forms are missing.`,
       ),
     maxNodes: z
       .number()
@@ -443,7 +449,7 @@ export const snapshotTool = defineBrowserTool({
       .positive()
       .optional()
       .describe(
-        `Cap on ref-bearing nodes; open dialogs and end-of-tree widgets are kept first (default efficient ${POST_ACTION_MAX_NODES} / full ${DEFAULT_MAX_NODES})`,
+        `Cap on ref-bearing nodes for mode=efficient (default ${POST_ACTION_MAX_NODES}). Full trees are not node-capped; huge YAML spills to a file.`,
       ),
     maxChars: z
       .number()
@@ -451,7 +457,7 @@ export const snapshotTool = defineBrowserTool({
       .positive()
       .optional()
       .describe(
-        `Character budget for the snapshot text (capped at ${DEFAULT_MAX_CHARS})`,
+        `Character budget for mode=efficient only (capped at ${DEFAULT_MAX_CHARS}). Full snapshots are not clipped; they spill to disk above ${SNAPSHOT_INLINE_MAX_BYTES} bytes.`,
       ),
     selector: z
       .string()
@@ -463,13 +469,13 @@ export const snapshotTool = defineBrowserTool({
       .boolean()
       .optional()
       .describe(
-        'Clip tree depth for a cheaper look at the page; nested content is dropped',
+        'When true, more compact snapshot format. Defaults to false (Cursor). Does not use a shallow depth-6 clip.',
       ),
     interactive: z
       .boolean()
       .optional()
       .describe(
-        'Keep only ref-bearing controls and their ancestors; cheaper for driving a form',
+        'When true, only include interactive elements. Defaults to false (Cursor).',
       ),
     includeDiff: z
       .boolean()
@@ -485,10 +491,10 @@ export const snapshotTool = defineBrowserTool({
       ),
   }),
   async run(
-    { mode, maxNodes, maxChars, selector, compact, interactive, includeDiff, urls },
+    { mode, maxDepth, maxNodes, maxChars, selector, compact, interactive, includeDiff, urls },
     ctx,
   ) {
-    const resolvedMode = mode ?? 'efficient'
+    const resolvedMode = mode ?? 'full'
     return observe(ctx.backend, ctx.targetId, {
       action: 'snapshot',
       message:
@@ -496,12 +502,13 @@ export const snapshotTool = defineBrowserTool({
           ? `Page snapshot (diff, ${resolvedMode})`
           : `Page snapshot (${resolvedMode})`,
       mode: resolvedMode,
+      depth: maxDepth,
       maxNodes:
         maxNodes ??
-        (resolvedMode === 'full' ? DEFAULT_MAX_NODES : POST_ACTION_MAX_NODES),
+        (resolvedMode === 'efficient' ? POST_ACTION_MAX_NODES : undefined),
       maxChars:
         maxChars ??
-        (resolvedMode === 'full' ? DEFAULT_MAX_CHARS : EFFICIENT_MAX_CHARS),
+        (resolvedMode === 'efficient' ? EFFICIENT_MAX_CHARS : undefined),
       selector,
       compact: compact ?? resolvedMode === 'efficient',
       interactive: interactive ?? resolvedMode === 'efficient',

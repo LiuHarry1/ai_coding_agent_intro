@@ -22,7 +22,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { getToolResultFilePath } from '../../core/session-paths.js'
-import { MODEL_TOOL_RESULT_MAX_CHARS } from '../../browser/limits.js'
+import { BROWSER_MODEL_RESULT_MAX_CHARS } from '../../browser/limits.js'
 
 export const PERSISTED_OUTPUT_OPEN = '<persisted-output'
 export const PERSISTED_OUTPUT_CLOSE = '</persisted-output>'
@@ -43,7 +43,7 @@ export function getPersistThresholdChars(toolName?: string): number {
   const env = parseEnvInt('TOOL_PERSIST_THRESHOLD_CHARS', 0)
   if (env > 0) return env
   if (typeof toolName === 'string' && toolName.startsWith('browser_')) {
-    return MODEL_TOOL_RESULT_MAX_CHARS
+    return BROWSER_MODEL_RESULT_MAX_CHARS
   }
   return DEFAULT_PERSIST_THRESHOLD_CHARS
 }

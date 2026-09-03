@@ -33,14 +33,43 @@ export function namesOverlap(a: string, b: string): boolean {
   return left === right || left.includes(right) || right.includes(left)
 }
 
-/** The description must overlap role or name. */
+/**
+ * Cursor `assertDescriptionMatches` (cursor-browser-automation):
+ * 1. If the hint contains "button", the live node must be a button
+ *    (tag/role/description). ExtJS `table "Save"` is not a button — pass
+ *    element: "Save", not "Save button".
+ * 2. Strip `button|link|input|checkbox|radio`, split on whitespace, keep
+ *    tokens longer than 2 chars, succeed if **any** token appears in the
+ *    accessible name (`.some()`, not `.every()`).
+ */
 export function elementMatchesHint(
-  described: { role: string; name: string },
+  described: { role: string; name: string; tag?: string },
   hint: string,
 ): boolean {
   const h = hint.replace(/\s+/g, ' ').trim()
   if (!h) return true
-  return namesOverlap(described.name, h) || namesOverlap(described.role, h)
+  const expectedLower = h.toLowerCase()
+  const actualRole = described.role.replace(/\s+/g, ' ').trim().toLowerCase()
+  const actualTag = (described.tag ?? '').toLowerCase()
+  const actualText = described.name.replace(/\s+/g, ' ').trim().toLowerCase()
+  const actualDescription = `${actualRole} "${actualText}"`
+
+  const expectedMentionsButton = expectedLower.includes('button')
+  const actualIsButton =
+    actualTag === 'button' ||
+    actualRole === 'button' ||
+    actualDescription.includes('button')
+  if (expectedMentionsButton && !actualIsButton) return false
+
+  const expectedWords = expectedLower
+    .replace(/button|link|input|checkbox|radio/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(w => w.length > 2)
+  if (expectedWords.length > 0 && actualText) {
+    return expectedWords.some(word => actualText.includes(word))
+  }
+  return true
 }
 
 export function filterSnapshotLines(yaml: string, query: string): string {

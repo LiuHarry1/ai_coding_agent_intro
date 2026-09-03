@@ -42,9 +42,12 @@ import { normalizeRef } from '../browser/playwright/index.js'
 import {
   keepInteractive,
   countRefs,
+  formatSnapshotFileLine,
   groupBadgeLabels,
   isBlockingMessageBox,
   prioritizeAriaSnapshot,
+  snapshotFileDisplayPath,
+  snapshotPreviewLines,
 } from '../browser/distill-snapshot.js'
 import {
   pickPageForTab,
@@ -77,6 +80,10 @@ import {
   parseRefMeta,
   snapshotDiff,
 } from '../browser/snapshot-index.js'
+import {
+  ariaRefCssSelectorMessage,
+  isAriaRefCssSelector,
+} from '../browser/selector-guard.js'
 import {
   getLastSnapshot,
   getRefMeta,
@@ -1174,6 +1181,31 @@ await withRelay(async relay => {
   ok('playwright snapshot keeps primary-frame dock, not footer iframe')
 }
 
+{
+  const yaml = Array.from({ length: 80 }, (_, i) => `- text: line ${i}`).join('\n')
+  const { preview, totalLines } = snapshotPreviewLines(yaml, 50)
+  eq(totalLines, 80, 'preview reports full line count')
+  eq(preview.split('\n').length, 50, 'preview keeps first 50 lines')
+  assert(preview.startsWith('- text: line 0'), 'preview is the head of the yaml')
+  assert(!preview.includes('line 79'), 'preview does not include the tail')
+  ok('Cursor-style snapshot preview is the first N lines, not a middle omit')
+
+  const spill = path.resolve('snapshot-1.txt')
+  const line = formatSnapshotFileLine(spill)
+  assert(line.startsWith(`Snapshot File: [${spill}](`), line)
+  assert(line.includes('file:'), line)
+  ok('Cursor-style Snapshot File is a markdown file:// link')
+
+  assert(isAriaRefCssSelector('[ref=e12]'), 'ref attr is not CSS')
+  assert(isAriaRefCssSelector('aria-ref=e12'), 'aria-ref is not CSS')
+  assert(!isAriaRefCssSelector('#main'), 'real CSS is allowed')
+  assert(
+    ariaRefCssSelectorMessage('[ref=e12]').includes('not a snapshot ref'),
+    'ref selector error tells the model to omit selector',
+  )
+  ok('snapshot selector rejects [ref=eN]')
+}
+
 // ── Playwright page matching: never pages[0] ─────────────
 
 {
@@ -1296,8 +1328,40 @@ await withRelay(async relay => {
     'hint matches name',
   )
   assert(
-    !elementMatchesHint({ role: 'button', name: 'Delete Bob' }, 'Delete Alice'),
-    'hint rejects recycled name',
+    elementMatchesHint({ role: 'button', name: 'Delete Bob' }, 'Delete Alice'),
+    'Cursor some(): a shared word (delete) is enough',
+  )
+  assert(
+    !elementMatchesHint({ role: 'button', name: 'Cancel' }, 'Delete Alice'),
+    'Cursor some(): no shared word fails',
+  )
+  assert(
+    elementMatchesHint(
+      {
+        role: 'a',
+        name: '深圳内审及苏州公务09/01/2026CNY 678.00Not SubmittedInformation',
+      },
+      '深圳内审及苏州公务 report link',
+    ),
+    'Cursor-style tokens match concatenated report-row name',
+  )
+  assert(
+    !elementMatchesHint(
+      { role: 'heading', name: 'Save Expense' },
+      'Save Expense button',
+    ),
+    'Cursor: hint that says button rejects a non-button',
+  )
+  assert(
+    !elementMatchesHint(
+      { role: 'table', name: 'Save' },
+      'Save button to save itinerary',
+    ),
+    'Cursor: table Save is not a button — element should be "Save" without button',
+  )
+  assert(
+    elementMatchesHint({ role: 'table', name: 'Save' }, 'Save'),
+    'Cursor: table Save matches element "Save" (no button word)',
   )
   const diff = snapshotDiff(
     '- button "Save" [ref=e1]',
@@ -1339,6 +1403,22 @@ await withRelay(async relay => {
     blocked = err instanceof Error ? err.message : String(err)
   }
   assert(/credentials/.test(blocked), blocked)
+  blocked = ''
+  try {
+    assertNavigateUrl(
+      'https://us2.concursolutions.com/nui/expense/reports/WPIXXZ',
+    )
+  } catch (err) {
+    blocked = err instanceof Error ? err.message : String(err)
+  }
+  assert(/report number/.test(blocked), blocked)
+  eq(
+    assertNavigateUrl(
+      'https://us2.concursolutions.com/nui/expense/reports/845B82A02D084FE2A7D7',
+    ),
+    'https://us2.concursolutions.com/nui/expense/reports/845B82A02D084FE2A7D7',
+    'Concur GUID url ok',
+  )
   ok('navigate policy allows http(s) and localhost, blocks file/js/credentials')
 }
 

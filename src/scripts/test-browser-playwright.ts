@@ -72,6 +72,14 @@ function expectData(
   return result.data
 }
 
+function yamlFromObserve(out: Record<string, unknown>): string {
+  const artifact = out.snapshotArtifactPath
+  if (typeof artifact === 'string' && artifact && fs.existsSync(artifact)) {
+    return fs.readFileSync(artifact, 'utf8')
+  }
+  return String(out.snapshot ?? '')
+}
+
 function refFor(snapshot: string, role: string, name: string): string {
   const line = snapshot
     .split('\n')
@@ -214,10 +222,10 @@ async function main() {
     const overflow = expectData(
       await run(navigateTool, { url: `${server.url}overflow` }, sessionId),
     )
-    const overflowSnap = String(overflow.snapshot)
+    const overflowSnap = yamlFromObserve(overflow)
     assert.ok(
       overflowSnap.includes('Chat dock'),
-      `truncated Playwright snapshot must keep the fixed dock:\n${overflowSnap.slice(-600)}`,
+      `complete Playwright snapshot must keep the fixed dock:\n${overflowSnap.slice(-600)}`,
     )
     const dockLine = overflowSnap
       .split('\n')
@@ -231,7 +239,7 @@ async function main() {
         /Chat dock/.test(dockLine ?? ''),
       `numeric badge should not be the click target:\n${overflowSnap.slice(-800)}`,
     )
-    console.log('ok [playwright] truncated snapshot keeps end-of-tree chrome')
+    console.log('ok [playwright] complete snapshot keeps end-of-tree chrome')
     console.log('ok [playwright] badge+label grouped onto a clickable parent')
 
     const lazy = expectData(

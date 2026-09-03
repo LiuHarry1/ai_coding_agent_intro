@@ -8,6 +8,10 @@ import {
   SNAPSHOT_TIMEOUT_MS,
 } from '../limits.js'
 import type { BrowserBackend } from '../types.js'
+import {
+  ariaRefCssSelectorMessage,
+  isAriaRefCssSelector,
+} from '../selector-guard.js'
 import { getPageForTarget } from './connect.js'
 
 const DEFAULT_SELECTORS = ['article', 'main', 'body'] as const
@@ -28,6 +32,16 @@ export async function getPageText(
     typeof opts.maxChars === 'number' && opts.maxChars > 0
       ? Math.min(Math.floor(opts.maxChars), DEFAULT_MAX_CHARS)
       : DEFAULT_MAX_CHARS
+
+  if (opts.selector && isAriaRefCssSelector(opts.selector)) {
+    return {
+      url: page.url(),
+      title: await page.title().catch(() => ''),
+      text: ariaRefCssSelectorMessage(opts.selector),
+      truncated: false,
+      selectorUsed: opts.selector,
+    }
+  }
 
   const candidates = opts.selector
     ? [opts.selector]

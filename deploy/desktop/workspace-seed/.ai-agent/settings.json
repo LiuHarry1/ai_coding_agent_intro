@@ -2,21 +2,21 @@
   "models": {
     "large": {
       "provider": "openai-compatible",
-      "baseURL": "http://localhost:4141/v1",
-      "apiKey": "not-needed",
-      "model": "gpt-5.4"
+      "baseURL": "http://10.150.10.54:4000",
+      "apiKey": "sk-bogXNqNWjKviSeRIEpY6Kw",
+      "model": "qwen3.6-35b-a3b"
     },
     "medium": {
       "provider": "openai-compatible",
-      "baseURL": "http://localhost:4141/v1",
-      "apiKey": "not-needed",
-      "model": "gpt-4.1"
+      "baseURL": "http://10.150.10.54:4000",
+      "apiKey": "sk-bogXNqNWjKviSeRIEpY6Kw",
+      "model": "qwen3.6-35b-a3b"
     },
     "small": {
       "provider": "openai-compatible",
-      "baseURL": "http://localhost:4141/v1",
-      "apiKey": "sk-xxx",
-      "model": "gpt-4o-mini"
+      "baseURL": "http://10.150.10.54:4000",
+      "apiKey": "sk-bogXNqNWjKviSeRIEpY6Kw",
+      "model": "qwen3.6-35b-a3b"
     }
   },
   "compaction": {
@@ -58,7 +58,9 @@
     }
   },
   "browser": {
-    "mode": "extension"
+    "mode": "extension",
+    "relayPort": 8766,
+    "enabled": true
   },
   "mcpServers": {},
   "disabledTools": []

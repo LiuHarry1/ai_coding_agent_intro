@@ -1,12 +1,13 @@
 /**
  * How the model sees the page: Playwright's own AI aria snapshot, with `eN`
- * refs stamped on the live DOM, then spent against a budget by priority.
+ * refs stamped on the live DOM. Full trees stay complete (Cursor); only
+ * `mode=efficient` spends a char/node budget by priority.
  */
 
 import type { Frame, Page } from 'playwright-core'
 import {
-  DEFAULT_MAX_CHARS,
-  EFFICIENT_DEPTH,
+  DEFAULT_SNAPSHOT_DEPTH,
+  EFFICIENT_MAX_CHARS,
   POST_ACTION_MAX_NODES,
   SNAPSHOT_TIMEOUT_MS,
   WAIT_FOR_TIMEOUT_MS,
@@ -20,7 +21,10 @@ import {
 } from '../types.js'
 import {
   countRefs,
+  dropRedundantWrapperNames,
+  groupBadgeLabels,
   isBlockingMessageBox,
+  keepInteractive,
   prioritizeAriaSnapshot,
 } from '../distill-snapshot.js'
 import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
@@ -31,6 +35,10 @@ import {
   setSnapshotDegraded,
 } from '../session-flags.js'
 import { filterSnapshotLines } from '../snapshot-index.js'
+import {
+  ariaRefCssSelectorMessage,
+  isAriaRefCssSelector,
+} from '../selector-guard.js'
 import { getPageForTarget } from './connect.js'
 import { withReadBoost } from './focus.js'
 import { appendSnapshotUrls, type SnapshotUrlEntry } from '../snapshot-urls.js'
@@ -338,11 +346,16 @@ async function snapshotInner(
     return result
   }
   const pack = async (raw: string, prefix = ''): Promise<SnapshotResult> => {
-    const { text, truncated } = prioritizeAriaSnapshot(raw, {
-      maxChars: opts.maxChars ?? DEFAULT_MAX_CHARS,
-      maxNodes: opts.maxNodes,
-      interactive: opts.interactive,
-    })
+    const grouped = groupBadgeLabels(dropRedundantWrapperNames(raw))
+    const scoped = opts.interactive ? keepInteractive(grouped) : grouped
+    // Cursor default: complete YAML. Char/node clip is only mode=efficient.
+    const efficient = opts.mode === 'efficient'
+    const { text, truncated } = efficient
+      ? prioritizeAriaSnapshot(scoped, {
+          maxChars: opts.maxChars ?? EFFICIENT_MAX_CHARS,
+          maxNodes: opts.maxNodes ?? POST_ACTION_MAX_NODES,
+        })
+      : { text: scoped, truncated: false }
     let body = prefix + text
     if (opts.urls) {
       body = appendSnapshotUrls(body, await collectSnapshotUrls(page))
@@ -384,11 +397,19 @@ async function snapshotInner(
       const dialog = await snapshotBlockingDialog(page)
       if (dialog) return finish(await packDialog(dialog))
     }
-    // compact on a subtree must not clip depth: that is what turned an open
-    // dialog into Close + title. A selector-scoped snapshot is already narrow.
-    const depth =
-      opts.depth ??
-      (opts.compact && !opts.selector ? EFFICIENT_DEPTH : undefined)
+    // Cursor default maxDepth is 20. Depth 6 on compact trees dropped nested
+    // ExtJS comboboxes (and open dialogs became Close + title) without setting
+    // truncated. Selector-scoped still uses the same default unless overridden.
+    const depth = opts.depth ?? DEFAULT_SNAPSHOT_DEPTH
+    if (opts.selector && isAriaRefCssSelector(opts.selector)) {
+      return finish({
+        url: page.url(),
+        title: await page.title().catch(() => ''),
+        text: ariaRefCssSelectorMessage(opts.selector),
+        nodes: 0,
+        truncated: false,
+      })
+    }
     let raw = opts.selector
       ? await scopedLocatorSnapshot(page, opts.selector, SNAPSHOT_TIMEOUT_MS)
       : await raceMs(

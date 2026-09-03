@@ -2,9 +2,10 @@
  * Shared plumbing for the `browser_*` tools: one output shape, one text
  * projection, one error funnel.
  *
- * Three-layer budgets (OpenClaw-style):
- * - Capture fills `snapshot` on BrowserToolOutput for the model mapper only
- * - mapBrowserOutput wraps model text to MODEL_TOOL_RESULT_MAX_CHARS
+ * Three-layer budgets:
+ * - Capture fills complete YAML on BrowserToolOutput (Cursor: no middle-omit)
+ * - Over SNAPSHOT_INLINE_MAX_BYTES the full tree is spilled; mapBrowserOutput
+ *   wraps remaining text to BROWSER_MODEL_RESULT_MAX_CHARS
  * - projectBrowserWireDetails builds SSE/session details without raw trees
  */
 
@@ -13,13 +14,13 @@ import * as path from 'path'
 import { z } from 'zod'
 import { sinceReport } from '../../browser/page-inspect.js'
 import {
-  DEFAULT_MAX_CHARS,
-  DEFAULT_MAX_NODES,
-  EFFICIENT_DEPTH,
+  BROWSER_MODEL_RESULT_MAX_CHARS,
+  DEFAULT_SNAPSHOT_DEPTH,
   EFFICIENT_MAX_CHARS,
-  MODEL_TOOL_RESULT_MAX_CHARS,
   POST_ACTION_MAX_NODES,
   SCREENSHOT_TOKEN_BUDGET,
+  SNAPSHOT_INLINE_MAX_BYTES,
+  SNAPSHOT_PREVIEW_LINES,
   WIRE_CONSOLE_MAX,
   WIRE_DETAILS_MAX_BYTES,
   WIRE_DETAIL_STRING_MAX,
@@ -27,6 +28,11 @@ import {
 } from '../../browser/limits.js'
 import { getLastSnapshot, isSnapshotDegraded } from '../../browser/session-flags.js'
 import { snapshotDiff } from '../../browser/snapshot-index.js'
+import {
+  formatSnapshotFileLine,
+  snapshotFileDisplayPath,
+  snapshotPreviewLines,
+} from '../../browser/distill-snapshot.js'
 import * as pw from '../../browser/playwright/index.js'
 import {
   BrowserError,
@@ -85,6 +91,9 @@ export interface BrowserToolOutput {
   snapshotTruncated?: boolean
   snapshotMode?: SnapshotMode | 'text' | string
   snapshotArtifactPath?: string
+  /** UTF-8 size of the complete YAML before preview spill. */
+  snapshotFullBytes?: number
+  snapshotTotalLines?: number
   pageState?: BrowserPageState
   consoleErrors?: Array<{ level: string; text: string }>
   network?: NetworkRow[]
@@ -195,11 +204,11 @@ export function resetConsoleWatermark(targetId: string): void {
 }
 
 const MODEL_TRUNCATION_MARKER =
-  '\n[truncated — retry browser_snapshot mode=full or smaller maxChars / browser_get_text]'
+  '\n[truncated — retry browser_snapshot (raise maxDepth / mode=full) or browser_get_text]'
 
 export function wrapModelToolText(
   text: string,
-  maxChars: number = MODEL_TOOL_RESULT_MAX_CHARS,
+  maxChars: number = BROWSER_MODEL_RESULT_MAX_CHARS,
 ): string {
   if (text.length <= maxChars) return text
   const budget = Math.max(0, maxChars - MODEL_TRUNCATION_MARKER.length)
@@ -233,8 +242,9 @@ function utf8Bytes(text: string): number {
 }
 
 /**
- * Persist a snapshot sidecar when truncated or larger than the efficient tier,
- * so the model can Read it after the live wrap drops the tail.
+ * Persist a snapshot sidecar when the complete YAML exceeds Cursor's 25.6KB
+ * inline cap. The file is the full tree (including middle form fields). The
+ * model-facing `snapshot` is replaced with the first SNAPSHOT_PREVIEW_LINES.
  */
 export async function maybePersistSnapshotArtifact(
   out: BrowserToolOutput,
@@ -242,17 +252,25 @@ export async function maybePersistSnapshotArtifact(
   toolCallId: string,
 ): Promise<void> {
   if (!out.snapshot || !sessionId) return
-  const shouldPersist =
-    Boolean(out.snapshotTruncated) || out.snapshot.length > EFFICIENT_MAX_CHARS
-  if (!shouldPersist) return
+  const full = out.snapshot
+  const bytes = Buffer.byteLength(full, 'utf8')
+  if (bytes <= SNAPSHOT_INLINE_MAX_BYTES) return
   if (out.snapshotArtifactPath) return
 
   const dir = path.join(getSessionDataDir(sessionId), 'browser')
   await fs.mkdir(dir, { recursive: true })
   const name = `snapshot-${toolCallId.replace(/[^a-zA-Z0-9_-]/g, '_')}.txt`
   const filePath = path.join(dir, name)
-  await fs.writeFile(filePath, out.snapshot, 'utf8')
+  await fs.writeFile(filePath, full, 'utf8')
   out.snapshotArtifactPath = filePath
+  out.snapshotFullBytes = bytes
+  const { preview, totalLines } = snapshotPreviewLines(
+    full,
+    SNAPSHOT_PREVIEW_LINES,
+  )
+  out.snapshot = preview
+  out.snapshotTruncated = true
+  out.snapshotTotalLines = totalLines
 }
 
 export function attachPageState(out: BrowserToolOutput): void {
@@ -410,12 +428,14 @@ export async function observe(
     opts.mode ?? (opts.compact ? 'efficient' : 'full')
   const efficient = mode === 'efficient'
   const compact = opts.compact ?? efficient
-  const interactive = opts.interactive ?? (efficient ? true : undefined)
-  const maxChars =
-    opts.maxChars ?? (efficient ? EFFICIENT_MAX_CHARS : DEFAULT_MAX_CHARS)
-  const maxNodes =
-    opts.maxNodes ?? (efficient ? POST_ACTION_MAX_NODES : DEFAULT_MAX_NODES)
-  const depth = opts.depth ?? (compact ? EFFICIENT_DEPTH : undefined)
+  const interactive = opts.interactive ?? (efficient ? true : false)
+  const maxChars = efficient
+    ? (opts.maxChars ?? EFFICIENT_MAX_CHARS)
+    : opts.maxChars
+  const maxNodes = efficient
+    ? (opts.maxNodes ?? POST_ACTION_MAX_NODES)
+    : opts.maxNodes
+  const depth = opts.depth ?? DEFAULT_SNAPSHOT_DEPTH
 
   const out: BrowserToolOutput = {
     action: opts.action,
@@ -612,16 +632,45 @@ function renderText(out: BrowserToolOutput): string {
 
   if (out.snapshotArtifactPath) {
     lines.push('')
-    lines.push(`Full snapshot saved to ${out.snapshotArtifactPath}`)
+    if (
+      out.snapshotTruncated &&
+      (out.snapshotFullBytes ?? 0) > SNAPSHOT_INLINE_MAX_BYTES
+    ) {
+      const bytes = out.snapshotFullBytes ?? 0
+      const total = out.snapshotTotalLines ?? 0
+      const previewLines = (out.snapshot ?? '').split('\n').length
+      lines.push(
+        `Page Snapshot: Large snapshot (${bytes} bytes, ${total} lines) written to file`,
+      )
+      lines.push(formatSnapshotFileLine(out.snapshotArtifactPath))
+      lines.push(
+        `Preview (first ${previewLines} lines). Read the Snapshot File path exactly. Middle form fields are in the file, not missing.`,
+      )
+    } else {
+      lines.push(
+        `Full snapshot saved to ${snapshotFileDisplayPath(out.snapshotArtifactPath)}`,
+      )
+    }
   }
 
   if (out.snapshot !== undefined) {
     lines.push('')
     lines.push('Page snapshot:')
     lines.push(out.snapshot || '(no visible content)')
-    if (out.snapshotTruncated) {
+    if (
+      out.snapshotTruncated &&
+      !(out.snapshotFullBytes && out.snapshotFullBytes > SNAPSHOT_INLINE_MAX_BYTES)
+    ) {
       lines.push(
-        '… snapshot truncated; open dialogs and end-of-tree widgets are kept. Pass selector (e.g. [role=dialog]) to snapshot a subtree, mode=full for a wider tree, or browser_get_text for prose.',
+        '… snapshot truncated. Named controls may be missing. Call browser_snapshot again (raise maxDepth, pass selector, or mode=full). Do not treat an empty generic as unautomatable.',
+      )
+    } else if (
+      out.snapshotTruncated &&
+      out.snapshotTotalLines &&
+      out.snapshotTotalLines > SNAPSHOT_PREVIEW_LINES
+    ) {
+      lines.push(
+        `... (${out.snapshotTotalLines - SNAPSHOT_PREVIEW_LINES} more lines in file)`,
       )
     }
   }

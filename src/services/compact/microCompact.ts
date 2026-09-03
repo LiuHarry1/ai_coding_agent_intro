@@ -29,6 +29,7 @@ import {
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
+  BROWSER_TOOL_NAMES,
 } from '../../constants/tool_names.js'
 import { estimateMessageTokens } from './tokens.js'
 import {
@@ -53,6 +54,9 @@ const CLEARABLE_TOOL_RESULTS = new Set<string>([
   FILE_READ_TOOL_NAME,
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
+  // Browser YAML snapshots fill the window in a few dozen clicks; drop old
+  // ones in micro-compact so fill loops do not full-LLM-compact every minute.
+  ...BROWSER_TOOL_NAMES,
 ])
 
 const CLEARABLE_TOOL_INPUTS = new Set<string>([

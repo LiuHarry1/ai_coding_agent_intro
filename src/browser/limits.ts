@@ -1,10 +1,10 @@
 /**
  * Every bound the browser tools wait on or spend, in one place.
  *
- * OpenClaw-style three-layer budgets:
- * - Capture: efficient (8k / depth 6) vs full snapshot (40k)
- * - Model: MODEL_TOOL_RESULT_MAX_CHARS wrap on tool text
- * - Wire/UI: WIRE_DETAIL_* caps so SSE/session never carry raw trees
+ * Capture follows Cursor: full tree (maxDepth 20), no middle-omit. Over
+ * SNAPSHOT_INLINE_MAX_BYTES the complete YAML is spilled to disk and the
+ * model sees a short preview + path. `mode=efficient` is the opt-in clip.
+ * Wire/UI: WIRE_DETAIL_* caps so SSE/session never carry raw trees.
  */
 
 /** No browser call should outlive a stuck page; the model needs its turn back. */
@@ -40,15 +40,25 @@ export const DEFAULT_MAX_NODES = 1500
 /** Ref-bearing nodes in navigate / post-action / efficient snapshot. */
 export const POST_ACTION_MAX_NODES = 800
 
-/** Explicit full-tier AI snapshot character budget. */
+/**
+ * Cursor `browser_snapshot` / post-action: keep the complete YAML inline
+ * until this many UTF-8 bytes, then write the file and return a line preview.
+ */
+export const SNAPSHOT_INLINE_MAX_BYTES = 25_600
+/** Cursor large-snapshot preview: first N YAML lines. */
+export const SNAPSHOT_PREVIEW_LINES = 50
+/** Explicit full-tier clip when the caller opts into `mode=efficient`. */
 export const DEFAULT_MAX_CHARS = 40_000
-/** Navigate + post-action + `mode=efficient` character budget. */
+/** `mode=efficient` character budget (interactive clip). */
 export const EFFICIENT_MAX_CHARS = 8_000
 /**
- * Depth clip for compact/efficient snapshots. Playwright's AI snapshot already
- * omits most structural wrappers; depth is what remains to cut.
+ * Cursor `browser_snapshot` default `maxDepth`. Nested ExtJS / iframe forms
+ * (Concur XpresswayTA) sit below depth 6 — clipping there drops comboboxes
+ * and reports truncated=false.
  */
-export const EFFICIENT_DEPTH = 6
+export const DEFAULT_SNAPSHOT_DEPTH = 20
+/** Compact/efficient depth; same as Cursor maxDepth, not a shallow 6. */
+export const EFFICIENT_DEPTH = DEFAULT_SNAPSHOT_DEPTH
 
 /** Screenshots compete with the snapshot for context; cap them hard. */
 export const SCREENSHOT_TOKEN_BUDGET = 1500
@@ -64,8 +74,13 @@ export const SNAPSHOT_TTL_MS = 10_000
  */
 export const CDP_INLINE_MAX_CHARS = 8_000
 
-/** Hard wrap for model-visible browser tool text (OpenClaw live tool-result). */
+/** Hard wrap for non-browser tool text. */
 export const MODEL_TOOL_RESULT_MAX_CHARS = 16_000
+/**
+ * Browser tool results must fit a Cursor-sized inline snapshot (25.6KB YAML)
+ * plus action/url chrome. Below this, do not wrap or offload.
+ */
+export const BROWSER_MODEL_RESULT_MAX_CHARS = 32_768
 
 /** Per-string cap inside SSE / session `tool_use_result` details. */
 export const WIRE_DETAIL_STRING_MAX = 2_000

@@ -12,6 +12,7 @@ import {
   CLICK_DESCRIPTION,
   FILL_FORM_DESCRIPTION,
   LOCK_DESCRIPTION,
+  SNAPSHOT_DESCRIPTION,
   TYPE_DESCRIPTION,
   WAIT_FOR_DESCRIPTION,
 } from '../tools/BrowserTool/prompt.js'
@@ -135,6 +136,26 @@ assert(
   !WAIT_FOR_DESCRIPTION.includes('e12'),
   'wait_for does not repeat the snapshot primer',
 )
+assert(
+  SNAPSHOT_DESCRIPTION.includes('maxDepth 20'),
+  'snapshot defaults match Cursor maxDepth 20',
+)
+assert(
+  SNAPSHOT_DESCRIPTION.includes('mode=full'),
+  'snapshot default mode is full',
+)
+assert(
+  SNAPSHOT_DESCRIPTION.includes('Passing `[ref=eN]` is rejected'),
+  'snapshot rejects [ref=eN] as CSS selector',
+)
+assert(
+  !SNAPSHOT_DESCRIPTION.includes('never full'),
+  'snapshot does not forbid repeated full captures',
+)
+assert(
+  !SNAPSHOT_DESCRIPTION.includes('at most once'),
+  'snapshot does not cap full at once',
+)
 
 const browserMd = readFileSync(
   path.join(
@@ -146,6 +167,14 @@ const browserMd = readFileSync(
 assert(
   /^omitProjectRules:\s*true\s*$/m.test(browserMd),
   'browser.md omits AGENTS.md / project rules',
+)
+assert(
+  browserMd.includes('maxDepth 20'),
+  'browser.md matches Cursor snapshot depth',
+)
+assert(
+  !browserMd.includes('never full'),
+  'browser.md does not forbid repeated snapshots',
 )
 
 const browserProfile = parseAgentFromMarkdown({

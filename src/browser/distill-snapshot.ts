@@ -9,20 +9,20 @@
  *    and two ref-bearing nodes to the model; the ref belongs on the parent.
  * 3. the budget itself — see below.
  *
- * Deliberately text-in, text-out with no imports: none of this needs a browser,
- * so it is unit-tested directly and stays out of `playwright/`.
+ * Clip passes stay text-in, text-out. `formatSnapshotFileLine` uses `node:url`
+ * so the spill path matches Cursor's markdown `file://` link.
  *
- * On the budget: the AI snapshot keeps every interactable in document order, and
- * chat docks, cookie banners and `role=dialog` panels are usually last. A
- * head-only clip drops them on any long
- * homepage, which is exactly how a "messages" task loses the inbox it just
- * opened. So the budget is spent by priority rather than by position: dialogs and
- * the widgets around them first, then as much of the page start as still fits.
+ * Full / Cursor-default trees are not clipped here: the complete YAML is
+ * returned (or spilled to disk above SNAPSHOT_INLINE_MAX_BYTES). This budget
+ * clip is only `mode=efficient`.
  *
- * Two budgets follow that same policy. Characters bound what the model pays for;
- * nodes bound how many refs it has to choose between, which is the number that
- * decides whether it can find the control it wants.
+ * On the efficient budget: chat docks and `role=dialog` panels are usually last.
+ * A head-only clip drops them on a long homepage. Dialogs and nearby widgets
+ * are kept first, then as much of the page start as still fits.
  */
+
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const DIALOG_ITEM = /^(\s*)- (dialog|alertdialog)\b/
 
@@ -43,6 +43,35 @@ export function isBlockingMessageBox(yaml: string): boolean {
 
 const OMITTED =
   '# … middle omitted; open dialogs and end-of-tree widgets were kept. Pass selector to snapshot a subtree.'
+
+/** Cursor: first N lines shown inline when the complete YAML is on disk. */
+export function snapshotPreviewLines(
+  yaml: string,
+  maxLines: number,
+): { preview: string; totalLines: number } {
+  const lines = yaml.split('\n')
+  const n = Math.min(Math.max(0, maxLines), lines.length)
+  return { preview: lines.slice(0, n).join('\n'), totalLines: lines.length }
+}
+
+/** Workspace-relative posix path when the file is under cwd (easier to Read). */
+export function snapshotFileDisplayPath(
+  absPath: string,
+  cwd = process.cwd(),
+): string {
+  const resolved = path.resolve(absPath)
+  const rel = path.relative(cwd, resolved)
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+    return rel.split(path.sep).join('/')
+  }
+  return resolved
+}
+
+/** Cursor: `Snapshot File: [absPath](file://…)` — label is the on-disk path. */
+export function formatSnapshotFileLine(absPath: string): string {
+  const resolved = path.resolve(absPath)
+  return `Snapshot File: [${resolved}](${pathToFileURL(resolved).href})`
+}
 
 interface Range {
   start: number

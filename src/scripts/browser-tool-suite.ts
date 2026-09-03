@@ -589,6 +589,15 @@ function expectData(
   return result.data
 }
 
+/** Complete YAML: spilled artifact if present, else the inline snapshot. */
+function yamlFromObserve(out: Record<string, unknown>): string {
+  const artifact = out.snapshotArtifactPath
+  if (typeof artifact === 'string' && artifact && fs.existsSync(artifact)) {
+    return fs.readFileSync(artifact, 'utf8')
+  }
+  return String(out.snapshot ?? '')
+}
+
 /** Pull the ref for a snapshot line matching `role "name"`. */
 function refFor(snapshot: string, role: string, name: string): string {
   const line = snapshot
@@ -1247,7 +1256,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     const overflow = expectData(
       await run(navigateTool, { url: `${baseUrl}overflow` }, sessionId),
     )
-    const overflowSnap = String(overflow.snapshot)
+    const overflowSnap = yamlFromObserve(overflow)
     assert.ok(
       overflow.snapshotTruncated === true || overflowSnap.length >= 15_000,
       `overflow page should fill the budget, got ${overflowSnap.length} truncated=${overflow.snapshotTruncated}`,
@@ -1255,9 +1264,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     const dockRef = refForGeneric(overflowSnap, 'Chat dock')
     assert.ok(
       dockRef,
-      `fixed chrome must survive truncation:\n${overflowSnap.slice(-800)}`,
+      `fixed chrome must survive in the complete YAML:\n${overflowSnap.slice(-800)}`,
     )
-    ok('fixed overlay chrome is kept after a truncated snapshot')
+    ok('fixed overlay chrome is kept in the complete snapshot (inline or spilled file)')
 
     // ── tab lifecycle ─────────────────────────────────────
     // On the extension backend this is the path that creates and destroys tabs

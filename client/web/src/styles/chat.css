@@ -12,6 +12,22 @@
   min-height: 0;
   overflow-y: auto;
   padding: 16px 20px;
+  /* JS stick-to-bottom owns follow; browser overflow-anchor fights it when
+     content-visibility / streaming growth shifts scrollHeight. */
+  overflow-anchor: none;
+}
+
+.chat-view--streaming .msg-slot--live {
+  /* Live tail must not use content-visibility guesses — those shift
+     scrollHeight and make stick-to-bottom feel like constant jumping. */
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+/* While streaming, prefer real layout for the whole visible transcript. */
+.chat-view--streaming .msg-slot--contain {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
 }
 
 .chat-view::-webkit-scrollbar { width: 6px; }
@@ -23,13 +39,28 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  /* Cursor stacks ui-tool-call-line with ~0 gap; prose spacing is on .content */
+  gap: 0;
+}
+
+/*
+ * Bottom inset (Cursor agent transcript): stick-to-bottom lands on this spacer
+ * so the newest lines sit mid-lower — height is set in px from JS (pane-based,
+ * not window vh).
+ */
+.messages-scroll-spacer {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 280px; /* fallback before first measure */
+  pointer-events: none;
 }
 
 /* Long-transcript: let the browser skip layout/paint for older bubbles. */
 .msg-slot--contain {
   content-visibility: auto;
-  contain-intrinsic-size: auto 160px;
+  /* Dense tool rows are ~20–28px; 160px placeholders inflated scrollHeight and
+     made stick-to-bottom land on empty space under the real content. */
+  contain-intrinsic-size: auto 48px;
 }
 
 .load-earlier-msgs {
@@ -50,40 +81,299 @@
 
 /* ── Welcome ───────────────────────────────── */
 .welcome {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 16px;
+  justify-content: flex-start;
+  min-height: 100%;
+  gap: 28px;
   color: var(--text-muted);
   text-align: center;
-  padding: 40px 20px;
+  padding: 36px 20px 48px;
+  overflow: auto;
+}
+
+.welcome-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: -20% 10% auto;
+  height: 280px;
+  background:
+    radial-gradient(ellipse 60% 70% at 50% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%);
+  opacity: 0.9;
+  z-index: 0;
+}
+
+.welcome-hero,
+.welcome-body {
+  position: relative;
+  z-index: 1;
+}
+
+.welcome-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  animation: welcomeIn 0.45s ease both;
+}
+
+.welcome-logo {
+  margin-bottom: 4px;
 }
 
 .welcome-title {
-  font-size: 28px;
+  font-size: clamp(28px, 4vw, 36px);
   color: var(--text-primary);
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   margin: 0;
-}
-
-.welcome-subtitle {
-  font-size: 15px;
-  color: var(--text-muted);
-  letter-spacing: 0.35em;
-  text-indent: 0.35em;
-  margin: -8px 0 0;
+  line-height: 1.1;
 }
 
 .welcome-desc {
-  font-size: 14px;
-  max-width: 420px;
-  line-height: 1.7;
+  font-size: 14.5px;
+  max-width: 440px;
+  line-height: 1.55;
   color: var(--text-secondary);
+  margin: 0;
 }
 
+.welcome-setup {
+  margin: 4px 0 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--orange) 10%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--orange) 28%, var(--border));
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.welcome-code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.welcome-body {
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  text-align: left;
+}
+
+.welcome-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: welcomeIn 0.5s ease both;
+}
+.welcome-section:nth-child(1) { animation-delay: 0.06s; }
+.welcome-section:nth-child(2) { animation-delay: 0.12s; }
+.welcome-section:nth-child(3) { animation-delay: 0.18s; }
+
+.welcome-section-title {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.welcome-quick-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.welcome-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 14px 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.welcome-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-secondary));
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+.welcome-card:hover .welcome-card-label {
+  color: var(--accent);
+}
+
+.welcome-card-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.welcome-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.welcome-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.welcome-card-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  transition: color 0.15s;
+}
+
+.welcome-card-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.welcome-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+.welcome-badge--ready {
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
+}
+.welcome-badge--token {
+  color: var(--orange);
+  background: var(--orange-dim);
+  border: 1px solid color-mix(in srgb, var(--orange) 30%, transparent);
+}
+
+.welcome-integ-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.welcome-integ {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: border-color 0.15s, background 0.15s;
+}
+.welcome-integ:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.welcome-integ:hover .welcome-integ-label {
+  color: var(--accent);
+}
+
+.welcome-integ-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.welcome-integ-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  transition: color 0.15s;
+}
+
+.welcome-integ-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.welcome-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.welcome-cap {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.welcome-cap:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-secondary));
+}
+
+@keyframes welcomeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Legacy hint-* kept for any other callers */
 .hint-section {
   width: 100%;
   max-width: 720px;
@@ -201,10 +491,37 @@
   align-self: stretch;
   width: 100%;
   max-width: 100%;
-  margin-top: 8px;
+  margin-top: 0;
   /* Without min-width:0 a flex item with overflow content (long pre lines)
      would push the column wider than 860px and stretch all sibling cards. */
   min-width: 0;
+}
+
+/*
+ * Tool rows must stack densely (Cursor ui-tool-call-line). Spacing belongs on
+ * prose / user turns only — not on every .msg-assistant wrapper.
+ */
+.msg-assistant:has(> .content),
+.msg-assistant:has(> .work-group),
+.msg-assistant:has(> .reasoning-block),
+.msg-assistant:has(> .thinking-indicator),
+.msg-assistant:has(> .streaming-indicator) {
+  margin-top: 8px;
+}
+
+.msg-slot:has(.tool-row) + .msg-slot:has(.msg-assistant > .content),
+.msg-slot:has(.tool-group) + .msg-slot:has(.msg-assistant > .content) {
+  margin-top: 4px;
+}
+
+.msg-slot:has(.msg-assistant > .content) + .msg-slot:has(.tool-row),
+.msg-slot:has(.msg-assistant > .content) + .msg-slot:has(.tool-group) {
+  margin-top: 2px;
+}
+
+/* Keep air after the user bubble (tools no longer carry default margin-top) */
+.msg-slot:has(.msg-user) + .msg-slot {
+  margin-top: 8px;
 }
 
 /* ── Assistant markdown content ──────────── */
@@ -327,10 +644,10 @@
 /* Match tool-row density during early turn (Cursor-like one-liner). */
 .thinking-indicator--dense {
   gap: 6px;
-  padding: 2px 6px;
+  padding: 1px 4px;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  line-height: 1.5;
+  line-height: 1.35;
   color: var(--text-secondary);
 }
 
@@ -628,6 +945,15 @@
 [data-theme="light"] .msg-user { background: #ddf4ff; border-color: rgba(9,105,218,0.2); }
 [data-theme="light"] .msg-assistant .content pre { background: #f6f8fa; border-color: #d1d9e0; }
 [data-theme="light"] .welcome { color: var(--text-secondary); }
+[data-theme="light"] .welcome-card {
+  background: #fff;
+}
+[data-theme="light"] .welcome-card:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .welcome-cap {
+  background: #fff;
+}
 [data-theme="light"] .hint-card { background: #fff; }
 [data-theme="light"] .hint-card:hover { border-color: var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
 [data-theme="light"] .hint-icon { background: #f0f3f6; }

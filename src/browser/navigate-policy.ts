@@ -32,5 +32,25 @@ export function assertNavigateUrl(raw: string): string {
       'browser_navigate cannot include credentials in the URL.',
     )
   }
+  rejectConcurReportNumber(parsed)
   return parsed.href
+}
+
+/**
+ * Concur's list shows a short report number (e.g. WPIXXZ). The real id in
+ * `/nui/expense/reports/<id>` is a long hex GUID. Navigating to the number
+ * opens an error dialog and dumps the agent back to the report list.
+ */
+function rejectConcurReportNumber(parsed: URL): void {
+  if (!/(^|\.)concursolutions\.com$/i.test(parsed.hostname)) return
+  const m = parsed.pathname.match(
+    /\/(?:nui\/expense\/)?reports?\/([^/]+)(?:\/|$)/i,
+  )
+  if (!m) return
+  const id = decodeURIComponent(m[1] ?? '')
+  const hex = id.replace(/-/g, '')
+  if (/^[0-9a-f]{16,}$/i.test(hex)) return
+  throw new BrowserError(
+    `This URL uses report number ${JSON.stringify(id)}, not the report GUID. Click the report in the current list. Copy the GUID already in the address bar — do not put the short code into /reports/.`,
+  )
 }

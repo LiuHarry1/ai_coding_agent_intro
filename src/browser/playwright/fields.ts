@@ -11,6 +11,16 @@ export function valuesMatch(expected: string, actual: string): boolean {
   return strip(actual) === strip(expected) || actual.includes(expected)
 }
 
+/** Typed `MM/DD/YYYY - MM/DD/YYYY` does not bind Concur Date Range / Nights.
+ *  Not in Cursor — Baize overlay for this skill's calendar widgets. */
+export function isTypedDateRange(name: string, value: string): boolean {
+  if (!/date\s*range|日期范围/i.test(name)) return false
+  return /\d{1,2}\/\d{1,2}\/\d{2,4}\s*[-–—]\s*\d{1,2}\/\d{1,2}/.test(value)
+}
+
+export const DATE_RANGE_CALENDAR_MSG =
+  'Date Range is a calendar widget. Open the calendar control and click check-in then check-out; typing the range string does not bind Nights.'
+
 export async function readValue(field: Locator): Promise<string> {
   return field
     .evaluate(node => {

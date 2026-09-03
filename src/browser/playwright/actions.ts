@@ -17,9 +17,11 @@ import {
   NAVIGATE_TIMEOUT_MS,
 } from '../limits.js'
 import { BrowserError, type BrowserBackend, type ResolvedElement } from '../types.js'
+import { DATE_RANGE_CALENDAR_MSG, isTypedDateRange } from './fields.js'
 import {
   assertElementHint,
   describeElement,
+  editableLocator,
   mapPlaywrightError,
   targetLocator,
 } from './locator.js'
@@ -267,16 +269,21 @@ export async function typeText(
     // value makes the refusal visible instead of looking like a silent no-op.
     if (described.readOnly || described.disabled) return { ...described, ref }
 
+    if (isTypedDateRange(described.name, opts.text)) {
+      throw new BrowserError(DATE_RANGE_CALENDAR_MSG)
+    }
+
+    const writeLoc = editableLocator(loc, described.field)
     const value = await withActionWait(page, async () => {
       const timeout = ACTION_TIMEOUT_MS
       if (opts.slowly) {
-        await loc.click({ timeout })
-        await loc.type(opts.text, { timeout, delay: 75 })
+        await writeLoc.click({ timeout })
+        await writeLoc.type(opts.text, { timeout, delay: 75 })
       } else {
-        await loc.fill(opts.text, { timeout })
+        await writeLoc.fill(opts.text, { timeout })
       }
-      if (opts.submit) await loc.press('Enter', { timeout })
-      return loc
+      if (opts.submit) await writeLoc.press('Enter', { timeout })
+      return writeLoc
         .evaluate(node => {
           const t = node as HTMLInputElement
           return t.isContentEditable

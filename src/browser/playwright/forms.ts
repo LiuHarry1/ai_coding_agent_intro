@@ -15,8 +15,13 @@ import type {
   FormFieldKind,
   ResolvedElement,
 } from '../types.js'
-import { valuesMatch, writeText } from './fields.js'
-import { briefError, describeElement, targetLocator } from './locator.js'
+import { DATE_RANGE_CALENDAR_MSG, isTypedDateRange, valuesMatch, writeText } from './fields.js'
+import {
+  briefError,
+  describeElement,
+  editableLocator,
+  targetLocator,
+} from './locator.js'
 import { pickValue } from './pick.js'
 import { throwIfUnarmedDestructiveDialog } from './overlays.js'
 import { withActionWait } from './settle.js'
@@ -44,6 +49,16 @@ export async function fillForm(
 function isTruthy(value: string): boolean {
   return ['true', '1', 'yes', 'on', 'checked'].includes(
     value.trim().toLowerCase(),
+  )
+}
+
+function isNativeEditable(el: ResolvedElement): boolean {
+  return (
+    el.tag === 'input' ||
+    el.tag === 'textarea' ||
+    el.role === 'textbox' ||
+    el.role === 'searchbox' ||
+    el.role === 'combobox'
   )
 }
 
@@ -81,16 +96,34 @@ async function fillOneField(
       return { ...base, value: selected.join(', '), status: 'filled' }
     }
 
-    if (el.readOnly || el.disabled) {
+    if (isTypedDateRange(el.name, field.value)) {
       return {
         ...base,
         value: el.value,
         status: 'skipped',
-        reason: el.readOnly ? 'field is readonly' : 'field is disabled',
+        reason: DATE_RANGE_CALENDAR_MSG,
       }
     }
 
-    const got = await writeText(loc, field.value)
+    if (el.readOnly || el.disabled) {
+      const reason = el.disabled
+        ? 'field is disabled'
+        : el.field !== 'self'
+          ? 'nested control is readonly (display or computed). Snapshot again and use the inner editable textbox, or this value is set by the calendar / itemizations.'
+          : 'field is readonly'
+      return { ...base, value: el.value, status: 'skipped', reason }
+    }
+
+    if (kind === 'textbox' && el.field === 'self' && !isNativeEditable(el)) {
+      return {
+        ...base,
+        value: el.value,
+        status: 'skipped',
+        reason: `ref is not an editable field (got ${el.tag}${el.role ? ` role=${el.role}` : ''}). Snapshot and use the inner textbox / combobox ref.`,
+      }
+    }
+
+    const got = await writeText(editableLocator(loc, el.field), field.value)
     return valuesMatch(field.value, got)
       ? { ...base, value: got, status: 'filled' }
       : {

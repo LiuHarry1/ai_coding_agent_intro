@@ -8,47 +8,35 @@
 
 export const NAVIGATE_DESCRIPTION = `Navigate to a URL, or go back / forward / reload.
 
-Waits for the document and in-flight XHR/fetch, then returns an **efficient** interactive snapshot (enough refs for the next click). Do not call browser_snapshot immediately after navigate unless you need mode=full. If a list is still empty, ${'`browser_wait_for`'} that text. Session cookies persist across calls.
+Waits for the document and in-flight XHR/fetch, then returns a snapshot. Reuse it when the next control is there; if named fields are missing, ${'`browser_snapshot`'}. If a list is still empty, ${'`browser_wait_for`'} that text. Session cookies persist across calls.
 
-http(s) only — no file: or javascript: URLs. If a modal is covering the current page, click it — do not navigate away to dismiss it.`
+http(s) only — no file: or javascript: URLs. If a modal is covering the current page, click it — do not navigate away to dismiss it. Stay on the current page URL; do not replace a GUID path segment with a short display code (click the row in the list instead). Concur report numbers (e.g. WPIXXZ) in \`/reports/\` are rejected.`
 
-export const SNAPSHOT_DESCRIPTION = `Capture an accessibility snapshot of the current page.
+export const SNAPSHOT_DESCRIPTION = `Capture an accessibility snapshot of the current page, this is better than screenshot.
 
-Playwright's AI aria tree. Clickable nodes have \`[ref=eN]\` from this tree — after any action, use the new refs. A bare \`text:\` line is not clickable. Prefer this over ${'`browser_screenshot`'} for deciding what to click.
+Click \`[ref=eN]\` from the latest tree; bare \`text:\` is not clickable. Default maxDepth 20 / \`mode=full\` (complete tree, like Cursor). If the YAML is large, Read the Snapshot File path exactly (do not retype the session id) — the middle of the tree is there, not omitted. If a named control is missing from the latest tree, call again. Do not call in parallel.
 
-- \`mode\`: \`efficient\` (default) — interactive controls, ~8k chars, depth 6. \`full\` — wider tree up to ~40k chars. Use full sparingly.
-- \`selector\`: CSS for one subtree only (e.g. \`[role=dialog]\`, \`.panel\`). Not snapshot \`[ref=eN]\` — refs are for click/type. Miss → empty; omit selector and re-snapshot the page.
-- \`compact\` / \`interactive\`: further shape the tree (efficient sets both by default)
-- \`includeDiff\`: only lines that changed since the last snapshot
-- \`urls\`: append discovered link destinations
-
-For page **prose**, use ${'`browser_get_text`'} instead of a full snapshot.
-
-**Do not** call this tool multiple times in parallel, or back-to-back with no click/type/navigate between them. Click/type/navigate already return an efficient snapshot — reuse that tree. \`mode=full\` at most once when efficient was truncated; never full→full→full.
-
-If an in-page modal (\`alertdialog\` / Yes / No / OK) is open, the snapshot is that dialog. Click those refs. That is not ${'`browser_handle_dialog`'} (native \`alert\`/\`confirm\` only).
-
-If the snapshot times out, a PDF or iframe likely stalled the tree. Do not retry a full snapshot, screenshot, or wait in a loop — close the viewer or work from whatever partial tree you have, then capture a new snapshot when the page is usable.`
+\`selector\` is CSS, not a ref. Passing \`[ref=eN]\` is rejected. Omit selector for the page tree. Prose → ${'`browser_get_text`'}. In-page Yes/No → click snapshot refs, not ${'`browser_handle_dialog`'}. Timeout (PDF/iframe): do not loop snapshot or screenshot.`
 
 export const GET_TEXT_DESCRIPTION = `Read bounded visible page text for answering questions or extracting copy.
 
-Uses the first match of \`selector\`, otherwise article → main → body. Cap with \`maxChars\` (default/ceiling 40k). Prefer this over ${'`browser_snapshot`'} mode=full or ${'`browser_cdp`'} Runtime.evaluate when you need prose, not clickable refs.`
+Uses the first match of \`selector\`, otherwise article → main → body. Cap with \`maxChars\` (default/ceiling 40k). \`selector\` is CSS, not \`[ref=eN]\`. Prefer this over ${'`browser_snapshot`'} mode=full or ${'`browser_cdp`'} Runtime.evaluate when you need prose, not clickable refs.`
 
 export const CLICK_DESCRIPTION = `Perform click on a web page.
 
-Use \`ref\` from the latest snapshot. Pass \`element\` with a human-readable description (role or name overlap); if it does not match the resolved ref, the call fails. A stale ref fails; if \`element\` still matches, the tool may recover a different ref once — otherwise snapshot and use the new tree. The click scrolls into view, dismisses blocking dropdowns, and retries with offset when a non-interactive layer blocks the target. Coordinate \`x\`/\`y\` is for canvas widgets only.
+Use \`ref\` from the latest snapshot. Pass \`element\` with a human-readable description. Matching follows Cursor: if the hint contains "button", the node must be a button (do not put "button" on an ExtJS \`table "Save"\` — use \`Save\`). Role words (button/link/input/checkbox/radio) are stripped; then at least one remaining word longer than 2 characters must appear in the live name (Cursor \`.some()\`, not every token). A stale ref fails; if \`element\` still matches, the tool may recover a different ref once — otherwise snapshot and use the new tree. The click scrolls into view, dismisses blocking dropdowns, and retries with offset when a non-interactive layer blocks the target. Coordinate \`x\`/\`y\` is for canvas widgets only.
 
 Do not wait or navigate instead of clicking.`
 
 export const TYPE_DESCRIPTION = `Type text into editable element (input, textarea, or contenteditable).
 
-Clicks the field, then **replaces** its contents (Playwright \`fill\`). Reports the value that landed; a readonly or disabled field is reported as such. Optional \`element\` must match the resolved ref (same rule as click). \`submit\` presses Enter. \`slowly\` clicks then types at 75ms per character. If the ref points at a non-editable wrapper, capture a new snapshot and use the inner textbox ref.`
+Clicks the field, then **replaces** its contents (Playwright \`fill\`). Reports the value that landed; a readonly or disabled field is reported as such. Optional \`element\` must match the resolved ref (same rule as click). \`submit\` presses Enter. \`slowly\` clicks then types at 75ms per character. If the ref points at a non-editable wrapper, capture a new snapshot and use the inner textbox ref. Do not type a Date Range string (\`MM/DD/YYYY - MM/DD/YYYY\`) — open the calendar and click the two days.`
 
 export const FILL_FORM_DESCRIPTION = `Fill multiple form fields in one call. Prefer this over one ${'`browser_type`'} per field.
 
 Writes every listed field, then settles and snapshots once. Each field comes back as filled, skipped, or failed. Native \`<select>\` uses the visible label. Custom comboboxes: open them and ${'`browser_click`'} the option ref.
 
-If a field has no snapshot ref (unlabeled input), set it with ${'`browser_cdp`'} Runtime.evaluate — do not guess a click.`
+If the ref is a wrapper div, the inner visible textbox is filled. A readonly display, a typed Date Range string (use the calendar), or a non-editable tag is skipped with a reason — use the inner textbox / combobox ref from a new snapshot. If a field has no snapshot ref (unlabeled input), set it with ${'`browser_cdp`'} Runtime.evaluate — do not guess a click.`
 
 export const SELECT_OPTION_DESCRIPTION = `Select an option in a native \`<select>\` dropdown.
 

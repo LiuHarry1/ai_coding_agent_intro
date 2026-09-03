@@ -129,6 +129,20 @@ const VISIBLE_EDITABLE_SELECTOR = EDITABLE_PARTS.map(p => `${p}:visible`).join(
   ', ',
 )
 
+/** Fill the inner input when the snapshot ref is a wrapper div / label. */
+export function editableLocator(
+  loc: Locator,
+  field: DescribedElement['field'],
+): Locator {
+  if (field === 'nested-visible') {
+    return loc.locator(VISIBLE_EDITABLE_SELECTOR).first()
+  }
+  if (field === 'nested-hidden') {
+    return loc.locator(EDITABLE_SELECTOR).first()
+  }
+  return loc
+}
+
 export interface DescribedElement extends ResolvedElement {
   /** Where the editable control is, relative to the ref'd element. */
   field: 'self' | 'nested-visible' | 'nested-hidden'
