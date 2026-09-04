@@ -93,13 +93,13 @@ async function main() {
       const outside = path.join(os.tmpdir(), `outside-${Date.now()}.html`)
       fs.writeFileSync(outside, SAMPLE_HTML, 'utf8')
       try {
-        process.env.SANDBOX_MODE = 'strict'
+        process.env.AUTH_ENABLED = 'true'
         const escapeRes = await fetch(
           `${base}/workspace/preview?path=${encodeURIComponent(outside)}`,
         )
         assert.strictEqual(escapeRes.status, 403)
       } finally {
-        delete process.env.SANDBOX_MODE
+        delete process.env.AUTH_ENABLED
         fs.unlinkSync(outside)
       }
     })

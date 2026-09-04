@@ -4,6 +4,10 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { resolvePath } from '../utils.js'
 import {
+  checkWritePermissionForTool,
+  filePathFromInput,
+} from '../../utils/permissions/filesystem.js'
+import {
   assertAccessibleResolved,
   policyFromContext,
 } from '../../core/sandbox.js'
@@ -37,6 +41,19 @@ export const definition: ToolDefinition = {
   isConcurrencySafe: () => false,
   // Mode B — ACK for model; content/before for UI
   outputSchema: WriteFileOutputSchema,
+  checkPermissions(input, ctx) {
+    return checkWritePermissionForTool(
+      ctx.cwd,
+      ctx.sandbox,
+      input,
+      ['file_path'],
+      undefined,
+      WRITE_FILE_TOOL_NAME,
+    )
+  },
+  getPath(input) {
+    return filePathFromInput(input, ['file_path'])
+  },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as WriteFileOutput
     return {
@@ -82,9 +99,9 @@ export const definition: ToolDefinition = {
         })
 
         const execution = context.execution
-        // Local Worker has real disk — use FS path below so SANDBOX_MODE
-        // extraWriteRoots (auto-memory under ~/.ai-agent) apply. Remote SSH
-        // still goes through Worker RPC + assertInWorkspace.
+        // Local Worker has real disk — use FS path below so extraWriteRoots
+        // (auto-memory under ~/.ai-agent) apply. Remote SSH still goes
+        // through Worker RPC + assertInWorkspace.
         // Match FileReadTool: gate on environmentId, not isWorkerExecutionBackend
         // (that helper also requires configureLsp).
         const useRemoteFs =

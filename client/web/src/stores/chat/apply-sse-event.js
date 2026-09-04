@@ -209,6 +209,16 @@ export function applySseEvent(data, { set, get, mutators: m }) {
             status: 'pending',
           })
           set({ isAwaitingInteraction: true })
+        } else if (data.request?.subtype === 'can_use_tool') {
+          m._appendPart({
+            type: 'can_use_tool',
+            id: data.request_id,
+            toolName: data.request.tool_name,
+            title: data.request.title,
+            description: data.request.description,
+            status: 'pending',
+          })
+          set({ isAwaitingInteraction: true })
         } else if (data.request?.subtype === 'approve_plan') {
           m._appendPlanApprovalPart({
             requestId: data.request_id,

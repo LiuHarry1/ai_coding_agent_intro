@@ -28,6 +28,7 @@ import {
   appendModeChange,
 } from '../session/index.js'
 import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
+import { createCanUseTool } from '../core/can-use-tool.js'
 import { profileSpan } from '../utils/startupProfiler.js'
 import { getSystemPromptForMode } from '../prompts/mode.js'
 import { getSystemPromptForAgentProfile } from '../prompts/agent-profile.js'
@@ -601,6 +602,14 @@ export async function runChatTurn(
         subagentNames: prepared.subagentNames,
         deferredToolPool: prepared.deferredToolPool,
         getToolDefinition: prepared.getToolDefinition,
+        canUseTool: createCanUseTool({
+          cwd,
+          getDefinition: prepared.getToolDefinition,
+          sandbox: prepared.toolContext.sandbox,
+          session,
+          wire,
+          abortSignal: turnAbort.signal,
+        }),
         concurrencyPolicy: prepared.concurrencyPolicy,
         sessionId: session.id,
         toolUseContext: prepared.toolUseContext,

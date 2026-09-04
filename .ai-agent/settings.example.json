@@ -116,5 +116,24 @@
   },
 
   "mcpServers": {},
-  "disabledTools": []
+  "disabledTools": [],
+
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": ["Read(docs/**)"],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Harry",
+      "~/Projects",
+      "D:\\shared"
+    ]
+  }
 }

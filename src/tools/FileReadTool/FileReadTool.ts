@@ -5,7 +5,7 @@ import type {
   DualChannelToolResult,
   ToolDefinition,
 } from '../../core/types.js'
-import { FILE_READ_TOOL_NAME, buildReadToolDescription } from './prompt.js'
+import { DESCRIPTION, FILE_READ_TOOL_NAME, buildReadToolDescription } from './prompt.js'
 import { PDF_MAX_PAGES_PER_READ } from './limits.js'
 import {
   readFileCore,
@@ -19,6 +19,10 @@ import {
   readTextFromString,
 } from '../../utils/read/index.js'
 import type { ReadFileState } from '../../utils/read/types.js'
+import {
+  checkReadPermissionForTool,
+  filePathFromInput,
+} from '../../utils/permissions/filesystem.js'
 import {
   assertAccessibleResolved,
   policyFromContext,
@@ -41,9 +45,22 @@ function unchanged(
 /** FileReadTool — dual-channel: `{ data: ReadOutput }` + mapper. */
 export const definition: ToolDefinition = {
   name: FILE_READ_TOOL_NAME,
-  description: 'Read files, images, PDFs, notebooks',
+  description: DESCRIPTION,
   isConcurrencySafe: () => true,
   outputSchema: ReadOutputSchema,
+  checkPermissions(input, ctx) {
+    return checkReadPermissionForTool(
+      ctx.cwd,
+      ctx.sandbox,
+      input,
+      ['file_path'],
+      undefined,
+      FILE_READ_TOOL_NAME,
+    )
+  },
+  getPath(input) {
+    return filePathFromInput(input, ['file_path'])
+  },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return {
       tool_use_id: toolUseID,
@@ -55,12 +72,23 @@ export const definition: ToolDefinition = {
     return tool({
       description: buildReadToolDescription(),
       inputSchema: z.object({
-        file_path: z.string().describe('Path to the file (relative to cwd)'),
+        file_path: z
+          .string()
+          .describe(
+            'The path to the file to read (absolute, or relative to the workspace cwd)',
+          ),
         offset: z
           .number()
           .optional()
-          .describe('Line to start from (1-based). Negative counts from end'),
-        limit: z.number().optional().describe('Max number of lines to return'),
+          .describe(
+            'The line number to start reading from. Only provide if the file is too large to read at once. Negative counts from the end of the file.',
+          ),
+        limit: z
+          .number()
+          .optional()
+          .describe(
+            'The number of lines to read. Only provide if the file is too large to read at once.',
+          ),
         pages: z
           .string()
           .optional()

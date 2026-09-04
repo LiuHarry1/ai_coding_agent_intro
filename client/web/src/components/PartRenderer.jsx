@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { getMdComponents } from '../lib/markdown-components.jsx'
 import AskUserQuestionCard from './AskUserQuestionCard.jsx'
+import CanUseToolCard from './CanUseToolCard.jsx'
 import PlanApprovalCard from './PlanApprovalCard.jsx'
 import ReasoningBlock from './ReasoningBlock.jsx'
 import ThinkingDots from './ThinkingDots.jsx'
@@ -49,6 +50,8 @@ export default function PartRenderer({
       return <ThinkingDots />
     case 'ask_user_question':
       return <AskUserQuestionCard part={part} />
+    case 'can_use_tool':
+      return <CanUseToolCard part={part} />
     case 'plan_approval':
       return <PlanApprovalCard part={part} />
     case 'todo_list':

@@ -130,18 +130,15 @@ SSO 请求里 **逻辑 HOME = 用户 workspace**（`USERS_ROOT/<slug>`），不�
 - Seed 只放用户可见模板；敏感默认（模型 key、强制禁用工具等）进 `/etc/ai-agent`，不要进 seed。
 - Super 看别人的 session ≠ 代操对方 HOME；工具仍在**请求者** workspace 下跑。
 
-### 工作区沙箱 (`SANDBOX_MODE`)
+### 工作区权限 (SSO = dontAsk + pinned working dir)
 
-SSO 模式默认 `SANDBOX_MODE=strict`：`read_file` / `grep` / `glob` / `write_file` / `edit_file` 以及 HTTP `/workspace/*` 只能访问当前用户的 pinned 目录。系统提示词也会声明该边界。
+SSO（`AUTH_ENABLED=true`）下 File 工具与 HTTP `/workspace/*` 使用 Claude Code 的 **dontAsk**：工作区外的路径直接拒绝，没有 Allow UI。工作目录固定为用户 pinned `userWorkspace`，Alice 不能批准 Bob 的文件。
 
-| 值 | 场景 |
-|----|------|
-| `strict`（或未设但 `AUTH_ENABLED=true`） | SSO：读/写均限制在用户 workspace |
-| `off` / 不设（且无 AUTH） | 本地 / admin：读可越界，写仍限 workspace |
+桌面（无 AUTH）`permissions.defaultMode`：`default` / `acceptEdits` / `plan` 工作区外询问；`dontAsk` 工作区外拒绝；`bypassPermissions` 工作区外也放行（仍尊重 `deny`）。SSO AUTH 强制 `dontAsk`。Always allow 会写入用户 `~/.ai-agent/settings.json` 的 `permissions.additionalDirectories`；也可以手工预填，例如 `"C:\\Users\\Harry"`。`permissions.allow` 用 `Read(docs/**)` 这类规则自动允许匹配路径；`permissions.deny` 用 `Read(.env)` / `Edit(.env)` 永久拒绝（**deny 优先于 allow 和 Always allow**）。SSO 忽略 `allow` 和 `additionalDirectories`，但仍执行 `deny`。
 
-说明：这是**应用层**隔离，不阻止 bash 用绝对路径读其它目录。本地开发不要设 `SANDBOX_MODE`（或显式 `off`）。
+说明：这是**应用层**隔离。Bash / PowerShell 仍可用绝对路径读其它目录，直到 shell 单独设门。不要用 File deny 当成租户隔离的全部。
 
-可选：`SANDBOX_EXTRA_READ_ROOTS=/opt/shared-templates`（逗号分隔）在 strict 下额外允许只读根。
+可选：`SANDBOX_EXTRA_READ_ROOTS=/opt/shared-templates`（逗号分隔）额外允许只读根（共享模板等）。
 
 ---
 

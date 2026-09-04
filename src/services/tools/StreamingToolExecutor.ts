@@ -254,6 +254,7 @@ export class StreamingToolExecutor {
       const permission = await this.#canUseTool(
         tool.call.toolName,
         tool.call.input,
+        { toolUseId: tool.call.toolCallId },
       )
       if (permission.behavior === 'deny') {
         const result = permission.message
@@ -273,9 +274,12 @@ export class StreamingToolExecutor {
         return
       }
 
-      const input =
-        permission.behavior === 'allow' && permission.updatedInput
-          ? permission.updatedInput
+      const input: Record<string, unknown> =
+        permission.behavior === 'allow' &&
+        permission.updatedInput &&
+        typeof permission.updatedInput === 'object' &&
+        !Array.isArray(permission.updatedInput)
+          ? (permission.updatedInput as Record<string, unknown>)
           : tool.call.input
 
       const toolAbort = createChildAbortController(this.#siblingAbortController)

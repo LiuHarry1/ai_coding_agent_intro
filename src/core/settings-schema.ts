@@ -56,16 +56,19 @@ const McpServerHttpSchema = z.object({
 
 const McpServerSchema = z.union([McpServerStdioSchema, McpServerHttpSchema])
 
-const LspServerSchema = z.object({
-  command: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  extensionToLanguage: z.record(z.string(), z.string()),
-  env: z.record(z.string(), z.string()).optional(),
-  initializationOptions: z.unknown().optional(),
-  workspaceFolder: z.string().optional(),
-  startupTimeout: z.number().int().positive().optional(),
-  maxRestarts: z.number().int().nonnegative().optional(),
-})
+const LspServerSchema = z
+  .object({
+    command: z.string().min(1),
+    args: z.array(z.string()).optional(),
+    /** Omit (or use `_extensionToLanguage`) to keep a server definition disabled. */
+    extensionToLanguage: z.record(z.string(), z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    initializationOptions: z.unknown().optional(),
+    workspaceFolder: z.string().optional(),
+    startupTimeout: z.number().int().positive().optional(),
+    maxRestarts: z.number().int().nonnegative().optional(),
+  })
+  .passthrough()
 
 const AutoMemoryNestedSchema = z.object({
   enabled: z.boolean().optional(),
@@ -116,6 +119,23 @@ const AgentsConfigSchema = z.object({
   default: AgentsDefaultSchema.optional(),
 })
 
+const PermissionsSchema = z.object({
+  /** Directories auto-allowed for File tools (CC Always allow / working dirs). */
+  additionalDirectories: z.array(z.string()).optional(),
+  /** CC `Tool` / `Tool(pattern)` rules that auto-allow (desktop only). */
+  allow: z.array(z.string()).optional(),
+  /** CC `Tool` / `Tool(pattern)` rules that always deny (deny wins). */
+  deny: z.array(z.string()).optional(),
+  /**
+   * CC `permissions.defaultMode`.
+   * `default` / `acceptEdits` / `plan` → ask outside the workspace;
+   * `dontAsk` → deny outside; `bypassPermissions` → allow outside (deny still wins).
+   */
+  defaultMode: z
+    .enum(['default', 'acceptEdits', 'plan', 'dontAsk', 'bypassPermissions'])
+    .optional(),
+})
+
 /** Parsed settings layer before merge into AppConfig. */
 export const SettingsFileSchema = z.object({
   models: ModelsSchema.optional(),
@@ -131,6 +151,7 @@ export const SettingsFileSchema = z.object({
   disabledTools: z.array(z.string()).optional(),
   browser: BrowserConfigSchema.optional(),
   agents: AgentsConfigSchema.optional(),
+  permissions: PermissionsSchema.optional(),
   environments: z
     .object({
       ssh: z.array(SshHostSchema).optional(),

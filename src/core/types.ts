@@ -80,10 +80,10 @@ export interface ToolContext {
   /** Workspace cwd for plan file resolution. */
   cwd?: string
   /**
-   * Request-scoped filesystem sandbox (SSO: pinned to userWorkspace).
-   * When set, File tools enforce read/write boundaries via core/sandbox.ts.
+   * Request-scoped filesystem permission context (SSO: pinned userWorkspace,
+   * mode `dontAsk`). Desktop is `default` (outside → ask).
    */
-  sandbox?: import('./sandbox.js').SandboxPolicy
+  sandbox?: import('../utils/permissions/filesystem.js').FilesystemPermissionContext
   /**
    * Tool execution via isomorphic Agent Worker (RuntimePort RPC).
    * Always set for both local and SSH workspaces.
@@ -165,6 +165,23 @@ export interface ToolDefinition {
    * until it finishes ('block'). Mutating tools default to block.
    */
   interruptBehavior?: () => 'cancel' | 'block'
+  /**
+   * Filesystem permission check (CC `checkPermissions`). Read/Write tools
+   * return allow / ask / deny; `createCanUseTool` maps ask under `dontAsk`.
+   */
+  checkPermissions?: (
+    input: unknown,
+    ctx: {
+      cwd: string
+      sandbox?: import('../utils/permissions/filesystem.js').FilesystemPermissionContext
+    },
+  ) =>
+    | import('../utils/permissions/filesystem.js').FsPermissionDecision
+    | Promise<
+        import('../utils/permissions/filesystem.js').FsPermissionDecision
+      >
+  /** Path argument used for Always-allow working-dir grants. */
+  getPath?: (input: unknown) => string | undefined
   /**
    * CC-style: map structured `data` → model-facing tool_result text.
    * Required on built-in dual-channel tools; framework calls after execute.
@@ -458,6 +475,11 @@ export interface AgentOptions {
    */
   getToolDefinition?: (name: string) => ToolDefinition | undefined
   /**
+   * Main-agent filesystem / tool permission gate. Forked agents pass a
+   * tighter gate of their own; omitted → allow-all in the streaming executor.
+   */
+  canUseTool?: import('./can-use-tool.js').CanUseToolFn
+  /**
    * Per-tool concurrency policy for manual tool orchestration. When omitted,
    * all tools run serially (safe default).
    */
@@ -584,6 +606,11 @@ export interface Session {
    * Local is also a WorkspaceHandle (`environmentId: "local"`).
    */
   workspace?: import('../execution/types.js').WorkspaceHandle
+  /**
+   * Session “Always allow” directories (CC additionalWorkingDirectories).
+   * Later Reads/Writes under these trees auto-allow for this session.
+   */
+  additionalWorkingDirectories?: string[]
 }
 
 export interface SessionInfo {
@@ -885,6 +912,18 @@ export interface AppConfig {
     }
   }
   /**
+   * Filesystem permission rules (CC `permissions`).
+   * `additionalDirectories` / `allow` are desktop Always-allow; SSO ignores them.
+   * `deny` always applies and wins over allow / working dirs.
+   */
+  permissions?: {
+    additionalDirectories?: string[]
+    allow?: string[]
+    deny?: string[]
+    /** CC `permissions.defaultMode`. */
+    defaultMode?: 'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
+  }
+  /**
    * Extra SSH hosts for the execution EnvironmentRegistry (merged with ~/.ssh/config).
    */
   environments?: {
@@ -906,7 +945,7 @@ export type { ModelProfiles, ModelRegistry, ModelTier }
 export interface LspServerConfig {
   command: string
   args?: string[]
-  extensionToLanguage: Record<string, string>
+  extensionToLanguage?: Record<string, string>
   env?: Record<string, string>
   initializationOptions?: unknown
   workspaceFolder?: string

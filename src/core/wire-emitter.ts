@@ -4,6 +4,7 @@ import type { ProtocolSink } from './protocol-sink.js'
 import {
   approvePlanRequest,
   askUserQuestionRequest,
+  canUseToolRequest,
   interruptedMessage,
   modeChangedMessage,
   reasoningDeltaMessage,
@@ -18,7 +19,7 @@ import {
 } from './protocol-messages.js'
 
 /**
- * Typed wire emitter ù?
+ * Typed wire emitter ??
  * boundary instead of stringly eventBus pairs translated at transport time.
  */
 export class WireEmitter {
@@ -172,6 +173,17 @@ export class WireEmitter {
     this.emit(askUserQuestionRequest({ request_id: requestId, questions }))
   }
 
+  canUseTool(input: {
+    request_id: string
+    tool_name: string
+    tool_use_id: string
+    input: Record<string, unknown>
+    title?: string
+    description?: string
+  }): void {
+    this.emit(canUseToolRequest(input))
+  }
+
   skillStart(input: {
     skill: string
     agent_type?: string
@@ -248,7 +260,7 @@ export class WireEmitter {
     this.emit(resultErrorMessage(message, this.#env))
   }
 
-  /** CC Esc/Stop ó UI shows Interrupted; transcript has the user marker. */
+  /** CC Esc/Stop ? UI shows Interrupted; transcript has the user marker. */
   interrupted(input: { tool_use?: boolean; text?: string }): void {
     this.emit(interruptedMessage(input, this.#env))
   }

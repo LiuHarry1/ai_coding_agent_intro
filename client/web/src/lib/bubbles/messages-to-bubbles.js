@@ -7,6 +7,7 @@ import {
   askBubbleId,
   compactionBubbleId,
   errorBubbleId,
+  permBubbleId,
   planBubbleId,
   reasoningBubbleId,
   textBubbleId,
@@ -51,6 +52,16 @@ export function bubbleToPart(b) {
         questions: b.questions,
         status: b.status,
         answers: b.answers,
+      }
+    case 'perm':
+      return {
+        type: 'can_use_tool',
+        id: b.requestId,
+        toolName: b.toolName,
+        title: b.title,
+        description: b.description,
+        status: b.status,
+        decision: b.decision,
       }
     case 'plan':
       return {
@@ -255,6 +266,18 @@ export function messagesToBubbles(messages) {
           status: part.status,
           answers: part.answers,
         })
+      } else if (part.type === 'can_use_tool') {
+        state = appendBubble(state, {
+          id: permBubbleId(part.id),
+          kind: 'perm',
+          turnId,
+          requestId: part.id,
+          toolName: part.toolName,
+          title: part.title,
+          description: part.description,
+          status: part.status,
+          decision: part.decision,
+        })
       } else if (part.type === 'plan_approval') {
         state = appendBubble(state, {
           id: planBubbleId(part.requestId),
@@ -313,6 +336,7 @@ export {
   askBubbleId,
   compactionBubbleId,
   errorBubbleId,
+  permBubbleId,
   planBubbleId,
   reasoningBubbleId,
   textBubbleId,

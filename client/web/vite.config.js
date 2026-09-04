@@ -39,6 +39,7 @@ export default defineConfig({
       "/settings": "http://localhost:4567",
       "/mcp": "http://localhost:4567",
       "/ask_user_question": "http://localhost:4567",
+      "/can_use_tool": "http://localhost:4567",
       "/skills": "http://localhost:4567",
       "/agents": "http://localhost:4567",
       "/plugins": "http://localhost:4567",

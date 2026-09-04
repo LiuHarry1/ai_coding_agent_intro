@@ -13,12 +13,9 @@ import { getAgentHome } from '../utils/request-scope.js'
  * Per-request `workspace` body fields (see server/router.ts) override this
  * default; this is purely the floor.
  *
- * Boundary semantics (see `isPathInWorkspace` / `core/sandbox.ts`):
- *   - When SANDBOX_MODE=off: reading outside is allowed for grep/bash;
- *     write_file / edit_file still refuse paths outside the workspace,
- *     except trusted carve-outs in extraWriteRoots (e.g. auto-memory).
- *   - When SANDBOX_MODE=strict (SSO): read and write tools refuse paths
- *     outside the request workspace (symlink realpath checked too).
+ * Boundary semantics (see `isPathInWorkspace` / filesystem permissions):
+ *   - Desktop (`default`): in-workspace auto-allow; outside File tools ask.
+ *   - Cloud (`dontAsk`, AUTH_ENABLED): outside the pinned working dir is deny.
  *   - Bash is not OS-sandboxed by this module.
  */
 

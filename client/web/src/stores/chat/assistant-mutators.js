@@ -22,6 +22,7 @@ import {
   askBubbleId,
   compactionBubbleId,
   errorBubbleId,
+  permBubbleId,
   planBubbleId,
   textBubbleId,
   thinkingBubbleId,
@@ -170,6 +171,17 @@ export function createAssistantMutators(set, get) {
             turnId,
             questionId: part.id,
             questions: part.questions,
+            status: part.status || 'pending',
+          })
+        } else if (part.type === 'can_use_tool') {
+          next = appendBubble(next, {
+            id: permBubbleId(part.id),
+            kind: 'perm',
+            turnId,
+            requestId: part.id,
+            toolName: part.toolName,
+            title: part.title,
+            description: part.description,
             status: part.status || 'pending',
           })
         } else if (part.type === 'compaction_start') {

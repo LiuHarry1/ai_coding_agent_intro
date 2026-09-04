@@ -19,6 +19,14 @@ import type {
 import { LSP_TOOL_NAME } from '../../constants/tool_names.js'
 import { getLspManager } from '../../services/lsp/manager.js'
 import { resolvePath } from '../utils.js'
+import {
+  checkReadPermissionForTool,
+  filePathFromInput,
+} from '../../utils/permissions/filesystem.js'
+import {
+  assertAccessibleResolved,
+  policyFromContext,
+} from '../../core/sandbox.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
 export type LspToolOutput = {
@@ -62,6 +70,19 @@ export const definition: ToolDefinition = {
   shouldDefer: true,
   isConcurrencySafe: () => true,
   outputSchema: LspToolOutputSchema,
+  checkPermissions(input, ctx) {
+    return checkReadPermissionForTool(
+      ctx.cwd,
+      ctx.sandbox,
+      input,
+      ['file_path'],
+      undefined,
+      LSP_TOOL_NAME,
+    )
+  },
+  getPath(input) {
+    return filePathFromInput(input, ['file_path'])
+  },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return {
       tool_use_id: toolUseID,
@@ -127,6 +148,16 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
           const resolved = resolvePath(cwd, input.file_path)
           if ('error' in resolved) return `Error: ${resolved.error}`
           absolutePath = resolved.abs
+        }
+
+        try {
+          assertAccessibleResolved(
+            absolutePath,
+            policyFromContext(cwd, context.sandbox),
+            'read',
+          )
+        } catch (err) {
+          return `Error: ${err instanceof Error ? err.message : String(err)}`
         }
 
         const methodAndParams = getMethodAndParams(input, absolutePath)

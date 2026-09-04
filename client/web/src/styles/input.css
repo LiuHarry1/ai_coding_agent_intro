@@ -641,6 +641,16 @@
 
 .ask-card__submit:disabled { opacity: 0.5; cursor: not-allowed; }
 .ask-card--done { padding: 10px 14px; color: var(--text-muted); font-size: 13px; }
+
+.perm-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: stretch;
+}
+.perm-card__actions .ask-option { flex: 1; min-width: 120px; }
+.perm-card__reject .ask-option__label { color: var(--danger, #c44); }
 .ask-card__answers {
   margin: 8px 0 0;
   padding: 0;

@@ -8,9 +8,16 @@ import { methods } from '@agentclientprotocol/sdk'
 import type { ControlRequest } from '../../protocol/src/control.js'
 import { answerPlanApproval } from '../core/brokers/plan-approval-broker.js'
 import { answerQuestion } from '../core/brokers/question-broker.js'
+import { answerPermission } from '../core/brokers/permission-broker.js'
 
 const DEFAULT_OPTIONS: PermissionOption[] = [
   { optionId: 'allow-once', name: 'Allow', kind: 'allow_once' },
+  { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+]
+
+const TOOL_PERMISSION_OPTIONS: PermissionOption[] = [
+  { optionId: 'allow-once', name: 'Allow', kind: 'allow_once' },
+  { optionId: 'allow-always', name: 'Always allow', kind: 'allow_once' },
   { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
 ]
 
@@ -172,12 +179,17 @@ export async function handleControlRequest(
               ]
             : undefined,
         },
-        options: DEFAULT_OPTIONS,
+        options: TOOL_PERMISSION_OPTIONS,
       },
     )
 
     if (outcomeApproved(response)) {
-      // Reserved for future engine-side can_use_tool gating.
+      const optionId = selectedOptionId(response)
+      answerPermission(requestId, {
+        behavior: optionId === 'allow-always' ? 'always' : 'allow',
+      })
+    } else {
+      answerPermission(requestId, { behavior: 'deny' })
     }
   }
 }

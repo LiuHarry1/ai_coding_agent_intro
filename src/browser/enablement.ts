@@ -7,10 +7,12 @@
 import {
   BASH_TOOL_NAME,
   BROWSER_TOOL_NAMES,
+  EDIT_FILE_TOOL_NAME,
   FILE_READ_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
   SKILL_TOOL_NAME,
+  WRITE_FILE_TOOL_NAME,
 } from '../constants/tool_names.js'
 import type { BrowserConfig } from './types.js'
 
@@ -27,6 +29,8 @@ export const BROWSER_AGENT_SUPPORT_TOOLS: readonly string[] = [
   BASH_TOOL_NAME,
   SKILL_TOOL_NAME,
   FILE_READ_TOOL_NAME,
+  WRITE_FILE_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
 ]

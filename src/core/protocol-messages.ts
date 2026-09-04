@@ -170,6 +170,28 @@ export function askUserQuestionRequest(input: {
   }
 }
 
+export function canUseToolRequest(input: {
+  request_id: string
+  tool_name: string
+  tool_use_id: string
+  input: Record<string, unknown>
+  title?: string
+  description?: string
+}): ControlRequest {
+  return {
+    type: 'control_request',
+    request_id: input.request_id,
+    request: {
+      subtype: 'can_use_tool',
+      tool_name: input.tool_name,
+      tool_use_id: input.tool_use_id,
+      input: input.input,
+      title: input.title,
+      description: input.description,
+    },
+  }
+}
+
 export function approvePlanRequest(input: {
   request_id: string
   plan: string

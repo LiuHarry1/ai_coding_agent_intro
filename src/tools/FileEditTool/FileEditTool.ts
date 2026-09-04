@@ -3,6 +3,10 @@ import { z } from 'zod'
 import * as fs from 'fs'
 import { resolvePath } from '../utils.js'
 import {
+  checkWritePermissionForTool,
+  filePathFromInput,
+} from '../../utils/permissions/filesystem.js'
+import {
   assertAccessibleResolved,
   policyFromContext,
 } from '../../core/sandbox.js'
@@ -41,6 +45,19 @@ export const definition: ToolDefinition = {
   isConcurrencySafe: () => false,
   // Mode B — ACK for model; before/after for UI
   outputSchema: EditFileOutputSchema,
+  checkPermissions(input, ctx) {
+    return checkWritePermissionForTool(
+      ctx.cwd,
+      ctx.sandbox,
+      input,
+      ['file_path'],
+      undefined,
+      EDIT_FILE_TOOL_NAME,
+    )
+  },
+  getPath(input) {
+    return filePathFromInput(input, ['file_path'])
+  },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const o = output as EditFileOutput
     return {

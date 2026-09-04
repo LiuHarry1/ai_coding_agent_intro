@@ -11,6 +11,10 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { buildGlobRgArgs, glob as runGlob } from '../../utils/glob.js'
 import { resolvePath } from '../utils.js'
+import {
+  checkReadPermissionForTool,
+  filePathFromInput,
+} from '../../utils/permissions/filesystem.js'
 import type {
   DualChannelToolResult,
   ToolDefinition,
@@ -126,6 +130,19 @@ export const definition: ToolDefinition = {
   description: 'Fast file pattern matching with glob syntax',
   isConcurrencySafe: () => true,
   outputSchema: GlobOutputSchema,
+  checkPermissions(input, ctx) {
+    return checkReadPermissionForTool(
+      ctx.cwd,
+      ctx.sandbox,
+      input,
+      ['path'],
+      ctx.cwd,
+      GLOB_TOOL_NAME,
+    )
+  },
+  getPath(input) {
+    return filePathFromInput(input, ['path'])
+  },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return mapGlobOutput(output as GlobOutput, toolUseID)
   },

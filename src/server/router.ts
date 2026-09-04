@@ -10,6 +10,7 @@ import { registerBuiltinSubagents } from '../tools/AgentTool/index.js'
 import { listSlashCommands } from '../commands/dispatcher.js'
 import { loadPluginsOverview } from '../commands/slashRegistry.js'
 import { answerQuestion } from '../core/brokers/question-broker.js'
+import { answerPermission } from '../core/brokers/permission-broker.js'
 import { answerPlanApproval } from '../core/brokers/plan-approval-broker.js'
 import { getPlanFilePath } from '../utils/plans.js'
 import { readBody, sendJSON, setCORS } from './http.js'
@@ -840,6 +841,31 @@ export function createRouter({ staticDir }: RouterOptions) {
           res,
           ok ? 200 : 404,
           ok ? { ok: true } : { error: 'No pending question with that id' },
+        )
+      } catch {
+        sendJSON(res, 400, { error: 'Invalid JSON' })
+      }
+      return
+    }
+
+    if (method === 'POST' && url === '/can_use_tool/answer') {
+      try {
+        const body = await readBody(req)
+        const id = body.id as string
+        const raw = body.decision as string | undefined
+        const decision =
+          raw === 'always' || raw === 'allow' || raw === 'reject' ? raw : null
+        if (!id || !decision) {
+          sendJSON(res, 400, { error: "Missing 'id' or 'decision'" })
+          return
+        }
+        const ok = answerPermission(id, {
+          behavior: decision === 'reject' ? 'deny' : decision,
+        })
+        sendJSON(
+          res,
+          ok ? 200 : 404,
+          ok ? { ok: true } : { error: 'No pending permission with that id' },
         )
       } catch {
         sendJSON(res, 400, { error: 'Invalid JSON' })

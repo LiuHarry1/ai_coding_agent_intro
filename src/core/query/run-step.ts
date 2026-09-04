@@ -36,7 +36,7 @@ import type { WireEmitter } from '../wire-emitter.js'
 import { stripToolExecute } from '../agent/prepareTools.js'
 import { buildToolMessage } from '../../services/tools/tool_execution.js'
 import { StreamingToolExecutor } from '../../services/tools/StreamingToolExecutor.js'
-import { allowAllTools } from '../can-use-tool.js'
+import { allowAllTools, type CanUseToolFn } from '../can-use-tool.js'
 import type { ToolUseContext } from '../agent/tool-use-context.js'
 import { createAbortController } from '../../utils/abortController.js'
 import {
@@ -77,6 +77,7 @@ export interface RunStepArgs {
   currentTodos: TodoItem[]
   concurrencyPolicy: ConcurrencyPolicyFn
   getToolDefinition?: AgentOptions['getToolDefinition']
+  canUseTool?: CanUseToolFn
   cwd?: string
   compaction?: AgentOptions['compaction']
   sessionMemory?: AgentOptions['sessionMemory']
@@ -107,6 +108,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
     stepStart,
     concurrencyPolicy,
     getToolDefinition,
+    canUseTool,
     cwd,
     compaction,
     sessionMemory,
@@ -148,7 +150,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
       abortController: toolAbortController,
       concurrencyPolicy,
     }
-    return new StreamingToolExecutor(allowAllTools, toolUseContext)
+    return new StreamingToolExecutor(canUseTool ?? allowAllTools, toolUseContext)
   }
   streamingExecutor = createStreamingExecutor()
 

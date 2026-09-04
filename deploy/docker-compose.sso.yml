@@ -26,8 +26,9 @@
 #     to the auth-service directly at AUTH_BASE for login.
 #   • Each user is PINNED to /workspace/users/<slug(email)>, enforced
 #     server-side. The workspace switcher is hidden; client-sent paths ignored.
-#   • SANDBOX_MODE=strict: File tools + /workspace HTTP refuse paths outside
-#     the pinned user dir (application-layer; bash is not OS-isolated).
+#   • SSO filesystem policy is dontAsk + pinned working dir: File tools and
+#     /workspace HTTP refuse paths outside the user dir (application-layer;
+#     bash is not OS-isolated).
 #
 # Required setup (split-origin):
 #   • JWT_SECRET MUST equal the secret your auth-service signs with — that is
@@ -99,9 +100,8 @@ services:
       JWT_ALGORITHM: "HS256"
       USERS_ROOT: /workspace/users
       WORKSPACE_SEED_DIR: "/opt/workspace-seed"
-      # Application-layer FS sandbox: File tools (read/grep/glob/write/edit)
-      # refuse paths outside the pinned user workspace. Bash is NOT OS-isolated.
-      SANDBOX_MODE: "strict"
+      # SSO isolation is AUTH_ENABLED + pinned user workspace (dontAsk).
+      # File tools refuse paths outside the pinned dir. Bash is NOT OS-isolated.
       # ── Analytics + daily token quota (optional) ─────────────────────────
       QUOTA_ENABLED: "${QUOTA_ENABLED:-false}"
       ANALYTICS_URL: "${ANALYTICS_URL:-http://analytics:8200}"

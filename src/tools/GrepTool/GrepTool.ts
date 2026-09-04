@@ -14,6 +14,10 @@ import { stat } from 'fs/promises'
 import * as path from 'path'
 import { ripGrep } from '../../utils/ripgrep.js'
 import { resolvePath } from '../utils.js'
+import {
+  checkReadPermissionForTool,
+  filePathFromInput,
+} from '../../utils/permissions/filesystem.js'
 import type {
   DualChannelToolResult,
   ToolDefinition,
@@ -357,6 +361,19 @@ export const definition: ToolDefinition = {
   description: 'Regex search across files (ripgrep)',
   isConcurrencySafe: () => true,
   outputSchema: GrepOutputSchema,
+  checkPermissions(input, ctx) {
+    return checkReadPermissionForTool(
+      ctx.cwd,
+      ctx.sandbox,
+      input,
+      ['path'],
+      ctx.cwd,
+      GREP_TOOL_NAME,
+    )
+  },
+  getPath(input) {
+    return filePathFromInput(input, ['path'])
+  },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return mapGrepOutputToToolResult(output as GrepOutput, toolUseID)
   },

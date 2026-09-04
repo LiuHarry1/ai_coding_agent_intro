@@ -85,6 +85,13 @@ export const agentApi = {
       body: JSON.stringify(body),
     }),
 
+  answerCanUseTool: body =>
+    fetchJSON('/can_use_tool/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
   approvePlan: body =>
     fetchJSON('/plan/approve', {
       method: 'POST',

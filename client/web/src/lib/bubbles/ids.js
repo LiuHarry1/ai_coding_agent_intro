@@ -22,6 +22,10 @@ export function askBubbleId(questionId) {
   return `ask:${questionId}`
 }
 
+export function permBubbleId(requestId) {
+  return `perm:${requestId}`
+}
+
 export function planBubbleId(requestId) {
   return `plan:${requestId}`
 }

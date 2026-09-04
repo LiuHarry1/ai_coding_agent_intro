@@ -3,6 +3,7 @@
  * Run: npx tsx src/scripts/test-bash-tasks.ts
  */
 import assert from 'assert'
+import * as os from 'os'
 import * as path from 'path'
 import {
   generateTaskId,
@@ -49,9 +50,12 @@ async function main() {
   if (!('error' in resolved)) {
     assert.equal(resolved.abs, path.normalize(outPath))
   }
-  const blocked = resolveFileInCwd(foreignCwd, '/etc/passwd')
-  assert.ok('error' in blocked)
-  assert.ok(String(blocked.error).includes('escapes workspace'))
+  const absOutside = path.resolve(os.tmpdir(), 'not-agent-passwd.txt')
+  const blocked = resolveFileInCwd(foreignCwd, absOutside)
+  assert.ok(!('error' in blocked), 'resolve never fails for paths outside cwd')
+  if (!('error' in blocked)) {
+    assert.equal(blocked.abs, path.normalize(absOutside))
+  }
   assert.equal(isReadableInternalPath(SESSION_DIR), true)
 
   const big = 'x'.repeat(40_000)

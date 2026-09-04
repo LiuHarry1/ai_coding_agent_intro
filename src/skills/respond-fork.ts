@@ -6,7 +6,7 @@ import type { ServerResponse } from 'http'
 import { EventBus } from '../core/event-bus.js'
 import { createSSETransport } from '../server/sse-transport.js'
 import { createWireEmitter } from '../core/wire-emitter.js'
-import { createSandboxPolicy } from '../core/sandbox.js'
+import { createSandboxPolicy, settingsPermissionOpts } from '../core/sandbox.js'
 import { registerSubagents } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools.js'
 import type {
@@ -93,7 +93,7 @@ export async function respondSkillFork(
     models,
     compaction: config.compaction,
     sessionId,
-    sandbox: createSandboxPolicy(cwd),
+    sandbox: createSandboxPolicy(cwd, settingsPermissionOpts(config.permissions)),
   }
 
   if (wantsStream) {

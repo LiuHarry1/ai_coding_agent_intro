@@ -350,6 +350,9 @@ function deepMergeSettingsLayer(
     if (!mergedPicker) delete out.agents.picker
     if (!mergedDefault) delete out.agents.default
   }
+  if (base.permissions || overlay.permissions) {
+    out.permissions = mergePermissionsConfig(base.permissions, overlay.permissions)
+  }
   if (base.disabledTools || overlay.disabledTools) {
     out.disabledTools = [
       ...new Set([
@@ -451,6 +454,37 @@ function readSettingsFile(filePath: string): ParsedSettingsFile {
 export function resetSettingsCache(): void {
   parseFileCache.clear()
   resolvedCache.clear()
+}
+
+function mergePermissionsConfig(
+  base?: AppConfig['permissions'],
+  overlay?: AppConfig['permissions'],
+): AppConfig['permissions'] | undefined {
+  if (!base && !overlay) return undefined
+  const additionalDirectories = [
+    ...new Set([
+      ...(base?.additionalDirectories ?? []),
+      ...(overlay?.additionalDirectories ?? []),
+    ]),
+  ]
+  const allow = [...new Set([...(base?.allow ?? []), ...(overlay?.allow ?? [])])]
+  const deny = [...new Set([...(base?.deny ?? []), ...(overlay?.deny ?? [])])]
+  const out: NonNullable<AppConfig['permissions']> = {
+    ...(base ?? {}),
+    ...(overlay ?? {}),
+  }
+  if (overlay?.defaultMode) out.defaultMode = overlay.defaultMode
+  else if (base?.defaultMode) out.defaultMode = base.defaultMode
+  if (additionalDirectories.length > 0) {
+    out.additionalDirectories = additionalDirectories
+  } else {
+    delete out.additionalDirectories
+  }
+  if (allow.length > 0) out.allow = allow
+  else delete out.allow
+  if (deny.length > 0) out.deny = deny
+  else delete out.deny
+  return out
 }
 
 function mergeStringArray(
@@ -600,6 +634,13 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
     }
     if (!nextPicker) delete config.agents.picker
     if (!nextDefault) delete config.agents.default
+  }
+
+  if (layer.permissions) {
+    config.permissions = mergePermissionsConfig(
+      config.permissions,
+      layer.permissions,
+    )
   }
 
   if (Array.isArray(layer.disabledTools)) {
@@ -807,9 +848,20 @@ function pathForScope(cwd: string, scope: WritableSettingsScope): string {
 }
 
 function readWritableSettings(filePath: string): Record<string, unknown> {
-  const { settings, error } = readSettingsFile(filePath)
-  if (error) throw new Error(`Failed to read ${filePath}: ${error}`)
-  return settings ? structuredClone(settings) : {}
+  try {
+    const text = fs.readFileSync(filePath, 'utf-8')
+    if (text.trim() === '') return {}
+    const json = JSON.parse(text)
+    if (!json || typeof json !== 'object' || Array.isArray(json)) {
+      throw new Error('settings file must contain a JSON object')
+    }
+    return structuredClone(json) as Record<string, unknown>
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw new Error(
+      `Failed to read ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
 }
 
 function writeSettingsFile(
@@ -890,6 +942,12 @@ function mergePatch(
       patch.disabledTools,
     )
   }
+  if (patch.permissions) {
+    const existing = isRecord(next.permissions)
+      ? (next.permissions as AppConfig['permissions'])
+      : undefined
+    next.permissions = mergePermissionsConfig(existing, patch.permissions)
+  }
   return next
 }
 
@@ -902,6 +960,16 @@ export function patchSettings(
   const existing = readWritableSettings(filePath)
   writeSettingsFile(filePath, mergePatch(existing, patch))
   return resolveSettings(cwd)
+}
+
+/** Persist Always-allow to user `settings.json` (CC `permissions.additionalDirectories`). */
+export function persistAlwaysAllowDirectory(
+  cwd: string,
+  absDir: string,
+): void {
+  patchSettings(cwd, 'user', {
+    permissions: { additionalDirectories: [path.resolve(absDir)] },
+  })
 }
 
 export function setMCPServer(

@@ -104,12 +104,12 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
     if (!url || !url.startsWith('/workspace')) return false
 
     // Per-request root: when the auth gate pinned a user workspace
-    // (req.userWorkspace), use it. Sandbox policy also turns on for
-    // SANDBOX_MODE=strict (SSO) even if we only have opts.root.
+    // (req.userWorkspace), use it. Cloud (`dontAsk`) denies paths outside
+    // that root with no UI. Desktop (`default`) leaves the folder picker open.
     const pinned = (req as { userWorkspace?: string }).userWorkspace
     const root = pinned ?? opts.root
     const policy = createSandboxPolicy(root)
-    const enforceSandbox = Boolean(pinned) || policy.mode === 'strict'
+    const enforceSandbox = Boolean(pinned) || policy.mode === 'dontAsk'
     const safe = (input: string, access: 'read' | 'write' = 'read'): string => {
       const abs = resolvePath(input, root)
       if (enforceSandbox) {

@@ -3,6 +3,7 @@ import type { ClientMessage } from '../../protocol/src/client.js'
 import { ClientMessageSchema } from '../../protocol/src/client.js'
 import type { ControlResponse } from '../../protocol/src/control.js'
 import { answerQuestion } from '../core/brokers/question-broker.js'
+import { answerPermission } from '../core/brokers/permission-broker.js'
 import { answerPlanApproval } from '../core/brokers/plan-approval-broker.js'
 
 export type UserTurnMessage = Extract<ClientMessage, { type: 'user' }>
@@ -14,6 +15,29 @@ export function dispatchControlResponse(msg: ControlResponse): boolean {
 
   const requestId = inner.request_id
   const payload = inner.response ?? {}
+
+  if (
+    payload.decision === 'allow' ||
+    payload.decision === 'always' ||
+    payload.decision === 'reject' ||
+    payload.behavior === 'allow' ||
+    payload.behavior === 'always' ||
+    payload.behavior === 'deny'
+  ) {
+    const raw =
+      typeof payload.decision === 'string'
+        ? payload.decision
+        : typeof payload.behavior === 'string'
+          ? payload.behavior
+          : ''
+    const behavior =
+      raw === 'always'
+        ? 'always'
+        : raw === 'allow'
+          ? 'allow'
+          : 'deny'
+    return answerPermission(requestId, { behavior })
+  }
 
   if (typeof payload.approved === 'boolean') {
     return answerPlanApproval(requestId, {

@@ -13,6 +13,7 @@ import brand from '../brand.json' with { type: 'json' }
 import {
   buildAgentSpawnEnv,
   resolveAgentLaunch,
+  resolveDefaultDesktopWorkspace,
 } from './agent-launch.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -45,12 +46,13 @@ function getAgentLogPath() {
   }
 }
 
-function pipeAgentLogs(proc) {
+function pipeAgentLogs(proc, extraHeader) {
   const logPath = getAgentLogPath()
   let logStream = null
   try {
     logStream = fs.createWriteStream(logPath, { flags: 'a' })
     logStream.write(`\n---- agent start ${new Date().toISOString()} ----\n`)
+    if (extraHeader) logStream.write(`${extraHeader}\n`)
   } catch {
     logStream = null
   }
@@ -68,9 +70,19 @@ function pipeAgentLogs(proc) {
 
 function startAgent() {
   const appRoot = getAppRoot()
+  const workspace = resolveDefaultDesktopWorkspace({
+    packaged: app.isPackaged,
+    documentsDir: app.getPath('documents'),
+    productName: APP_NAME,
+  })
+  if (workspace) {
+    fs.mkdirSync(workspace, { recursive: true })
+  }
+
   const env = buildAgentSpawnEnv(appRoot, agentPort, process.env, {
     packaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
+    workspace,
   })
 
   const launch = resolveAgentLaunch(appRoot, SLUG, {
@@ -81,6 +93,17 @@ function startAgent() {
     app.quit()
     return
   }
+
+  const launchEntry =
+    launch.kind === 'native'
+      ? launch.entry
+      : launch.kind === 'bundle'
+        ? launch.entry
+        : launch.startScript
+  const launchHeader =
+    `[desktop] agent launch kind=${launch.kind} entry=${launchEntry}` +
+    (workspace ? ` workspace=${workspace}` : '')
+  process.stderr.write(`${launchHeader}\n`)
 
   if (launch.kind === 'native') {
     agentProc = spawn(launch.entry, [], {
@@ -105,7 +128,7 @@ function startAgent() {
     })
   }
 
-  pipeAgentLogs(agentProc)
+  pipeAgentLogs(agentProc, launchHeader)
 
   agentProc.on('exit', (code, signal) => {
     if (!app.isQuitting && code !== 0 && code !== null) {

@@ -304,6 +304,21 @@ export const useChatStore = create((set, get) => {
       })
     },
 
+    answerCanUseTool: async (id, decision) => {
+      await agentApi.answerCanUseTool({ id, decision })
+      set(s => {
+        const bid = `perm:${id}`
+        if (s.bubblesById[bid]?.kind !== 'perm') {
+          return { isAwaitingInteraction: false }
+        }
+        return {
+          ...patchBubble(s, bid, { status: 'answered', decision }),
+          bubbleOrder: s.bubbleOrder,
+          isAwaitingInteraction: false,
+        }
+      })
+    },
+
     approvePlan: async (requestId, opts) => {
       await agentApi.approvePlan({
         request_id: requestId,

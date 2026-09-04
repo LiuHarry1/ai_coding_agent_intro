@@ -33,6 +33,7 @@ import {
   assertAccessible,
   createSandboxPolicy,
 } from '../core/sandbox.js'
+import { checkWritePermission } from '../utils/permissions/filesystem.js'
 import {
   DEFAULTS,
   resolveAutoMemoryConfig,
@@ -226,13 +227,29 @@ function assistantWrite(filePath: string): Message {
     extraReadRoots: [mem],
   })
   assertAccessible(path.join(mem, 'MEMORY.md'), policy, 'write')
-  let refused = false
+  const outside = path.join(root, '..', 'nope.txt')
+  assert(
+    checkWritePermission(outside, policy).behavior === 'ask',
+    'unrelated outside writes should ask (desktop default)',
+  )
+  const prevAuth = process.env.AUTH_ENABLED
+  process.env.AUTH_ENABLED = 'true'
   try {
-    assertAccessible(path.join(root, '..', 'nope.txt'), policy, 'write')
-  } catch {
-    refused = true
+    const cloud = createSandboxPolicy(root, {
+      extraWriteRoots: [mem],
+      extraReadRoots: [mem],
+    })
+    let refused = false
+    try {
+      assertAccessible(outside, cloud, 'write')
+    } catch {
+      refused = true
+    }
+    assert(refused, 'dontAsk still refuses unrelated outside writes')
+  } finally {
+    if (prevAuth === undefined) delete process.env.AUTH_ENABLED
+    else process.env.AUTH_ENABLED = prevAuth
   }
-  assert(refused, 'still refuses unrelated outside writes')
   fs.rmSync(root, { recursive: true, force: true })
   fs.rmSync(mem, { recursive: true, force: true })
 }

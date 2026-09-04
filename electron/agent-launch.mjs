@@ -34,16 +34,33 @@ export function resolveWorkspaceSeedDir(
   return null
 }
 
+/**
+ * Packaged desktop workspace lives under Documents, not Program Files.
+ * Dev leaves WORKSPACE unset so cwd stays the repo.
+ */
+export function resolveDefaultDesktopWorkspace({
+  packaged = false,
+  documentsDir,
+  productName,
+} = {}) {
+  if (!packaged || !documentsDir) return null
+  const name = (productName && String(productName).trim()) || 'BaiX'
+  return path.join(documentsDir, name)
+}
+
 export function buildAgentSpawnEnv(
   appRoot,
   port,
   baseEnv = process.env,
-  { packaged = false, resourcesPath } = {},
+  { packaged = false, resourcesPath, workspace } = {},
 ) {
   const env = {
     ...baseEnv,
     PORT: String(port),
     AGENT_ROOT: appRoot,
+  }
+  if (workspace && env.WORKSPACE == null) {
+    env.WORKSPACE = workspace
   }
   const seedDir = resolveWorkspaceSeedDir(appRoot, { packaged, resourcesPath })
   if (seedDir && env.WORKSPACE_SEED_DIR == null) {
@@ -65,7 +82,16 @@ export function resolveTsxCli(appRoot) {
   return path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 }
 
-/** HTTP/ACP agent: packaged → native → CJS bundle; dev → tsx (same as npm start). */
+/**
+ * HTTP/ACP agent launch.
+ *
+ * Packaged desktop always uses the CJS bundle under Electron's
+ * ELECTRON_RUN_AS_NODE (real Node `ws`). The Bun `--compile` exe is kept for
+ * CLI, but Playwright connectOverCDP hangs against the in-process CDP
+ * WebSocket when the agent itself is that native binary.
+ *
+ * Dev uses tsx + start.js, same as `npm start`.
+ */
 export function resolveAgentLaunch(appRoot, slug, { packaged = false } = {}) {
   if (!packaged) {
     const tsxCli = resolveTsxCli(appRoot)
@@ -73,11 +99,6 @@ export function resolveAgentLaunch(appRoot, slug, { packaged = false } = {}) {
     if (fs.existsSync(tsxCli) && fs.existsSync(startScript)) {
       return { kind: 'tsx', tsxCli, startScript }
     }
-  }
-
-  const native = agentNativePath(appRoot, slug)
-  if (fs.existsSync(native)) {
-    return { kind: 'native', entry: native }
   }
 
   const bundled = agentBundlePath(appRoot, slug)
@@ -91,6 +112,11 @@ export function resolveAgentLaunch(appRoot, slug, { packaged = false } = {}) {
       }
     }
     return { kind: 'bundle', entry: bundled }
+  }
+
+  const native = agentNativePath(appRoot, slug)
+  if (fs.existsSync(native)) {
+    return { kind: 'native', entry: native }
   }
 
   const tsxCli = resolveTsxCli(appRoot)

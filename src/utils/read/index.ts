@@ -8,8 +8,8 @@ import {
   PDF_AT_MENTION_INLINE_THRESHOLD,
   PDF_MAX_PAGES_PER_READ,
 } from '../../constants/api_limits.js'
-import { isReadableInternalPath } from '../../core/session-paths.js'
 import type { Message, UserContentPart } from '../../core/types.js'
+import { resolvePath } from '../../tools/utils.js'
 import { formatTextReadBoundaryReminder } from './boundary-reminders.js'
 import { FILE_UNCHANGED_STUB } from './read-file-state.js'
 import { fileExtension, formatTextReadForModel, readTextFile } from './read-text.js'
@@ -49,21 +49,23 @@ export interface ReadFileResult {
   followUpMessages?: Message[]
 }
 
+/**
+ * Expand a tool path the way Claude Code `expandPath` does: relative to
+ * `cwd`, `~`, or an already-absolute path. Never fails because the result
+ * is outside the workspace — permission checks happen afterwards.
+ */
 export function resolveFileInCwd(
   cwd: string,
   filePath: string,
 ): { abs: string; displayPath: string } | { error: string } {
-  const abs = path.isAbsolute(filePath)
-    ? path.normalize(filePath)
-    : path.resolve(cwd, filePath)
-  const rel = path.relative(cwd, abs)
+  const resolved = resolvePath(cwd, filePath)
+  if ('error' in resolved) {
+    return { error: resolved.error || 'Invalid path' }
+  }
+  const abs = resolved.abs
+  const rel = path.relative(path.resolve(cwd), abs)
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    // Claude Code: task output / tool-results live outside project cwd but
-    // are auto-allowed for Read (checkReadableInternalPath / project temp).
-    if (isReadableInternalPath(abs)) {
-      return { abs, displayPath: path.basename(abs) }
-    }
-    return { error: `Path escapes workspace: ${filePath}` }
+    return { abs, displayPath: filePath }
   }
   const displayPath = rel.split(path.sep).join('/') || path.basename(abs)
   return { abs, displayPath }

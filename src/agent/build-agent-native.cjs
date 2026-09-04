@@ -1,5 +1,7 @@
 /**
- * Compile the unified agent to a native executable with Bun (optional desktop artifact).
+ * Compile the unified agent to a native executable with Bun (optional CLI artifact).
+ * Desktop Electron does not launch this file — Playwright connectOverCDP hangs
+ * inside the compiled binary. Packaged desktop uses the CJS bundle instead.
  * Requires Bun on the build machine. Falls back gracefully when bun is missing.
  */
 const fs = require('fs')

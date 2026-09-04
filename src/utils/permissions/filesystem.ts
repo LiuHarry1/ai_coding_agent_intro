@@ -1,0 +1,436 @@
+/**
+ * Claude Code–style filesystem permission check.
+ *
+ * Resolve is separate (always succeeds for valid paths). This module decides
+ * allow / ask / deny. `dontAsk` (SSO) maps remaining ask → deny in canUseTool.
+ */
+import * as fs from 'fs'
+import * as path from 'path'
+import {
+  EDIT_FILE_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
+} from '../../constants/tool_names.js'
+import { isReadableInternalPath, SESSION_DIR } from '../../core/session-paths.js'
+import { isPathInWorkspace } from '../../core/workspace.js'
+import { normalizeWorkspacePath } from '../../core/workspace-path.js'
+import { resolvePath } from '../../tools/utils.js'
+import { matchingPermissionRule } from './permission-rules.js'
+
+export const PERMISSION_DEFAULT_MODES = [
+  'default',
+  'acceptEdits',
+  'plan',
+  'dontAsk',
+  'bypassPermissions',
+] as const
+
+/** CC `permissions.defaultMode` (settings.json). */
+export type PermissionDefaultMode = (typeof PERMISSION_DEFAULT_MODES)[number]
+
+/** Runtime File-tool path policy derived from AUTH + defaultMode. */
+export type FilesystemPermissionMode = 'default' | 'dontAsk' | 'bypassPermissions'
+
+export type FsPermissionDecision =
+  | { behavior: 'allow' }
+  | { behavior: 'ask'; message: string; path: string }
+  | { behavior: 'deny'; message: string }
+
+export interface FilesystemPermissionContext {
+  mode: FilesystemPermissionMode
+  /** Primary working directory (project cwd / pinned user workspace). */
+  root: string
+  extraReadRoots: string[]
+  extraWriteRoots: string[]
+  /** Session “Always allow” directories (CC additionalWorkingDirectories). */
+  additionalWorkingDirectories: string[]
+  /** CC `permissions.allow` — File-tool rules. Ignored under dontAsk. */
+  allow: string[]
+  /** CC `permissions.deny` — File-tool rules. Always applied. */
+  deny: string[]
+}
+
+function isAuthEnabledEnv(): boolean {
+  return (
+    String(process.env.AUTH_ENABLED ?? '')
+      .trim()
+      .toLowerCase() === 'true'
+  )
+}
+
+function parseExtraReadRoots(): string[] {
+  const raw = process.env.SANDBOX_EXTRA_READ_ROOTS?.trim()
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(p => path.resolve(p))
+}
+
+export function resolveFilesystemPermissionMode(): FilesystemPermissionMode {
+  return isAuthEnabledEnv() ? 'dontAsk' : 'default'
+}
+
+export function filesystemModeFromDefaultMode(
+  defaultMode?: PermissionDefaultMode,
+): FilesystemPermissionMode {
+  if (isAuthEnabledEnv()) return 'dontAsk'
+  if (defaultMode === 'dontAsk') return 'dontAsk'
+  if (defaultMode === 'bypassPermissions') return 'bypassPermissions'
+  return 'default'
+}
+
+export type CreateFilesystemPermissionContextOptions = {
+  extraReadRoots?: string[]
+  extraWriteRoots?: string[]
+  additionalWorkingDirectories?: string[]
+  allow?: string[]
+  deny?: string[]
+  /** Override AUTH-derived mode (e.g. `permissions.defaultMode`). */
+  mode?: FilesystemPermissionMode
+}
+
+export type SettingsPermissions = {
+  additionalDirectories?: string[]
+  allow?: string[]
+  deny?: string[]
+  defaultMode?: PermissionDefaultMode
+}
+
+/**
+ * Settings → context opts.
+ * SSO (`AUTH_ENABLED`) ignores additionalDirectories and allow.
+ * Desktop `defaultMode: dontAsk` keeps additionalDirectories (extra working
+ * trees) but still maps remaining outside paths to deny.
+ */
+export function settingsPermissionOpts(permissions?: SettingsPermissions): Pick<
+  CreateFilesystemPermissionContextOptions,
+  'additionalWorkingDirectories' | 'allow' | 'deny' | 'mode'
+> {
+  const auth = isAuthEnabledEnv()
+  const mode = filesystemModeFromDefaultMode(permissions?.defaultMode)
+  return {
+    mode,
+    additionalWorkingDirectories: auth
+      ? []
+      : (permissions?.additionalDirectories ?? []),
+    allow: mode === 'dontAsk' ? [] : (permissions?.allow ?? []),
+    deny: permissions?.deny ?? [],
+  }
+}
+
+export function createFilesystemPermissionContext(
+  root: string,
+  opts?: CreateFilesystemPermissionContextOptions,
+): FilesystemPermissionContext {
+  const extraReads = [
+    path.resolve(SESSION_DIR),
+    ...parseExtraReadRoots(),
+    ...(opts?.extraReadRoots ?? []).map(p => path.resolve(p)),
+  ]
+  return {
+    mode: opts?.mode ?? resolveFilesystemPermissionMode(),
+    root: path.resolve(root),
+    extraReadRoots: extraReads,
+    extraWriteRoots: (opts?.extraWriteRoots ?? []).map(p => path.resolve(p)),
+    additionalWorkingDirectories: (
+      opts?.additionalWorkingDirectories ?? []
+    ).map(p => {
+      const resolved = resolvePath(root, p)
+      return 'error' in resolved ? path.resolve(p) : resolved.abs
+    }),
+    allow: [...(opts?.allow ?? [])],
+    deny: [...(opts?.deny ?? [])],
+  }
+}
+
+export function workingDirectories(
+  ctx: FilesystemPermissionContext,
+): string[] {
+  return [ctx.root, ...ctx.additionalWorkingDirectories]
+}
+
+function isUnderAnyRoot(absPath: string, roots: string[]): boolean {
+  return roots.some(r => isPathInWorkspace(absPath, r))
+}
+
+/**
+ * Original path plus symlink-resolved path (and nearest existing ancestor
+ * when the leaf does not exist yet).
+ */
+export function getPathsForPermissionCheck(absPath: string): string[] {
+  const resolved = path.resolve(absPath)
+  const out = new Set<string>([resolved])
+  try {
+    out.add(path.resolve(fs.realpathSync(resolved)))
+    return [...out]
+  } catch {
+    let dir = path.dirname(resolved)
+    for (let i = 0; i < 32; i++) {
+      try {
+        const realDir = fs.realpathSync(dir)
+        const rest = path.relative(dir, resolved)
+        out.add(path.resolve(realDir, rest))
+        break
+      } catch {
+        const parent = path.dirname(dir)
+        if (parent === dir) break
+        dir = parent
+      }
+    }
+    return [...out]
+  }
+}
+
+function allowRoots(
+  ctx: FilesystemPermissionContext,
+  access: 'read' | 'write',
+): string[] {
+  const extras =
+    access === 'read' ? ctx.extraReadRoots : ctx.extraWriteRoots
+  return [...workingDirectories(ctx), ...extras]
+}
+
+function allPathsAllowed(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  access: 'read' | 'write',
+): boolean {
+  const roots = allowRoots(ctx, access)
+  return getPathsForPermissionCheck(absPath).every(p => {
+    if (isUnderAnyRoot(p, roots)) return true
+    return access === 'read' && isReadableInternalPath(p)
+  })
+}
+
+function askMessage(absPath: string, access: 'read' | 'write'): string {
+  const verb = access === 'read' ? 'read from' : 'write to'
+  return `Claude requested permissions to ${verb} ${absPath}, but you haven't granted it yet.`
+}
+
+function denyMessage(absPath: string, access: 'read' | 'write'): string {
+  const verb = access === 'read' ? 'read' : 'write'
+  return `Permission to ${verb} ${absPath} has been denied.`
+}
+
+function ruleRelativeRoots(ctx: FilesystemPermissionContext): string[] {
+  return [...new Set(workingDirectories(ctx))]
+}
+
+function deniedByRule(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  access: 'read' | 'write',
+  toolName: string,
+): boolean {
+  const roots = ruleRelativeRoots(ctx)
+  return getPathsForPermissionCheck(absPath).some(
+    p => matchingPermissionRule(p, ctx.deny, toolName, access, roots) !== null,
+  )
+}
+
+function allowedByRule(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  access: 'read' | 'write',
+  toolName: string,
+): boolean {
+  if (ctx.mode === 'dontAsk') return false
+  if (ctx.allow.length === 0) return false
+  const roots = [ctx.root]
+  return getPathsForPermissionCheck(absPath).some(
+    p => matchingPermissionRule(p, ctx.allow, toolName, access, roots) !== null,
+  )
+}
+
+export function checkReadPermission(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  toolName: string = FILE_READ_TOOL_NAME,
+): FsPermissionDecision {
+  const abs = path.resolve(absPath)
+  if (deniedByRule(abs, ctx, 'read', toolName)) {
+    return { behavior: 'deny', message: denyMessage(abs, 'read') }
+  }
+  if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
+  if (allPathsAllowed(abs, ctx, 'read')) return { behavior: 'allow' }
+  if (allowedByRule(abs, ctx, 'read', toolName)) return { behavior: 'allow' }
+  return { behavior: 'ask', message: askMessage(abs, 'read'), path: abs }
+}
+
+export function checkWritePermission(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  toolName: string = EDIT_FILE_TOOL_NAME,
+): FsPermissionDecision {
+  const abs = path.resolve(absPath)
+  if (deniedByRule(abs, ctx, 'write', toolName)) {
+    return { behavior: 'deny', message: denyMessage(abs, 'write') }
+  }
+  if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
+  if (allPathsAllowed(abs, ctx, 'write')) return { behavior: 'allow' }
+  if (allowedByRule(abs, ctx, 'write', toolName)) return { behavior: 'allow' }
+  return { behavior: 'ask', message: askMessage(abs, 'write'), path: abs }
+}
+
+function refusalMessage(
+  absPath: string,
+  root: string,
+  access: 'read' | 'write',
+): string {
+  const verb = access === 'read' ? 'Access' : 'Writes'
+  return (
+    `Refused: "${absPath}" is outside the workspace "${root}". ` +
+    `${verb} are limited to your workspace.`
+  )
+}
+
+/**
+ * HTTP / leftover execute-time gate. Desktop (`default`) does not enforce.
+ * Cloud (`dontAsk`) denies unless the path is auto-allowed.
+ */
+export function assertAccessible(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  access: 'read' | 'write',
+): void {
+  if (ctx.mode !== 'dontAsk') return
+  const abs = path.resolve(absPath)
+  const decision =
+    access === 'read'
+      ? checkReadPermission(abs, ctx)
+      : checkWritePermission(abs, ctx)
+  if (decision.behavior === 'allow') return
+  if (decision.behavior === 'deny') throw new Error(decision.message)
+  throw new Error(refusalMessage(abs, ctx.root, access))
+}
+
+export function assertAccessibleResolved(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  access: 'read' | 'write',
+): void {
+  const resolved = path.resolve(absPath)
+  assertAccessible(resolved, ctx, access)
+  for (const p of getPathsForPermissionCheck(resolved)) {
+    if (p !== resolved) assertAccessible(p, ctx, access)
+  }
+}
+
+export function policyFromContext(
+  cwd: string,
+  sandbox?: FilesystemPermissionContext,
+): FilesystemPermissionContext {
+  return sandbox ?? createFilesystemPermissionContext(cwd)
+}
+
+export function workspaceBoundaryPromptSection(
+  cwd: string,
+  mode: FilesystemPermissionMode = resolveFilesystemPermissionMode(),
+): string {
+  if (mode !== 'dontAsk') return ''
+  const root = normalizeWorkspacePath(cwd)
+  return `
+# Workspace boundary (enforced)
+ - Your only project directory is: ${root}
+ - Do NOT list, read, search, or modify files outside this directory (including sibling directories under the parent path, or other users' workspaces).
+ - If a path is outside this directory, stop and work only within ${root}.
+ - System binaries (git, python, npm, etc.) may still be executed via the shell; only file data outside the workspace is off-limits.
+`
+}
+
+export function addAlwaysAllowDirectory(
+  ctx: FilesystemPermissionContext,
+  absPath: string,
+): string {
+  let dir = path.resolve(absPath)
+  try {
+    if (fs.existsSync(dir) && fs.statSync(dir).isFile()) {
+      dir = path.dirname(dir)
+    }
+  } catch {
+    dir = path.dirname(dir)
+  }
+  if (!ctx.additionalWorkingDirectories.some(r => isPathInWorkspace(dir, r))) {
+    ctx.additionalWorkingDirectories.push(dir)
+  }
+  return dir
+}
+
+export function filePathFromInput(
+  input: unknown,
+  keys: string[] = ['file_path', 'path'],
+): string | undefined {
+  if (!input || typeof input !== 'object') return undefined
+  const rec = input as Record<string, unknown>
+  for (const k of keys) {
+    const v = rec[k]
+    if (typeof v === 'string' && v.trim()) return v
+  }
+  return undefined
+}
+
+function resolveInputPath(
+  cwd: string,
+  input: unknown,
+  pathKeys: string[],
+  defaultPath?: string,
+): { abs: string } | { error: string } | { skip: true } {
+  const raw = filePathFromInput(input, pathKeys) ?? defaultPath
+  if (raw === undefined) return { skip: true }
+  const resolved = resolvePath(cwd, raw)
+  if ('error' in resolved) {
+    return { error: resolved.error || 'Invalid path' }
+  }
+  return { abs: resolved.abs }
+}
+
+/** CC `checkReadPermissionForTool` — resolve then checkRead. */
+export function checkReadPermissionForTool(
+  cwd: string,
+  sandbox: FilesystemPermissionContext | undefined,
+  input: unknown,
+  pathKeys: string[] = ['file_path', 'path'],
+  defaultPath?: string,
+  toolName: string = FILE_READ_TOOL_NAME,
+): FsPermissionDecision {
+  const resolved = resolveInputPath(cwd, input, pathKeys, defaultPath)
+  if ('skip' in resolved) return { behavior: 'allow' }
+  if ('error' in resolved) {
+    return { behavior: 'deny', message: resolved.error }
+  }
+  return checkReadPermission(
+    resolved.abs,
+    policyFromContext(cwd, sandbox),
+    toolName,
+  )
+}
+
+/** CC `checkWritePermissionForTool` — resolve then checkWrite. */
+export function checkWritePermissionForTool(
+  cwd: string,
+  sandbox: FilesystemPermissionContext | undefined,
+  input: unknown,
+  pathKeys: string[] = ['file_path', 'path'],
+  defaultPath?: string,
+  toolName: string = EDIT_FILE_TOOL_NAME,
+): FsPermissionDecision {
+  const resolved = resolveInputPath(cwd, input, pathKeys, defaultPath)
+  if ('skip' in resolved) return { behavior: 'allow' }
+  if ('error' in resolved) {
+    return { behavior: 'deny', message: resolved.error }
+  }
+  return checkWritePermission(
+    resolved.abs,
+    policyFromContext(cwd, sandbox),
+    toolName,
+  )
+}
+
+export function denyOutsideMessage(
+  absPath: string,
+  root: string,
+  access: 'read' | 'write',
+): string {
+  return refusalMessage(absPath, root, access)
+}

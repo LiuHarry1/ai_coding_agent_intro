@@ -15,12 +15,13 @@ const ChatActionsContext = createContext(null)
 
 export function ChatActionsProvider({ children }) {
   const answerQuestion = useChatStore(s => s.answerQuestion)
+  const answerCanUseTool = useChatStore(s => s.answerCanUseTool)
   const approvePlan = useChatStore(s => s.approvePlan)
   const stopTool = useChatStore(s => s.stopSubagent)
 
   const value = useMemo(
-    () => ({ answerQuestion, approvePlan, stopTool }),
-    [answerQuestion, approvePlan, stopTool],
+    () => ({ answerQuestion, answerCanUseTool, approvePlan, stopTool }),
+    [answerQuestion, answerCanUseTool, approvePlan, stopTool],
   )
 
   return (
@@ -33,6 +34,7 @@ export function ChatActionsProvider({ children }) {
 /**
  * @returns {{
  *   answerQuestion: (id: string, answers: object, extra?: object) => Promise<void>,
+ *   answerCanUseTool: (id: string, decision: 'allow' | 'always' | 'reject') => Promise<void>,
  *   approvePlan: (requestId: string, opts: object) => Promise<void>,
  *   stopTool: (toolCallId: string) => Promise<void>,
  * }}
