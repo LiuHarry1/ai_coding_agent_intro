@@ -118,6 +118,21 @@
   "mcpServers": {},
   "disabledTools": [],
 
+  "scheduledTasks": {
+    "enabled": true
+  },
+
+  "agents": {
+    "picker": {
+      "modes": ["agent"],
+      "primaries": ["browser"]
+    },
+    "default": {
+      "mode": "agent",
+      "agentType": "browser"
+    }
+  },
+
   "permissions": {
     "defaultMode": "dontAsk",
     "allow": ["Read(docs/**)"],

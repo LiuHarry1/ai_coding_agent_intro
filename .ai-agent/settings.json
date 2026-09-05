@@ -80,12 +80,16 @@
   },
   "mcpServers": {},
 
+  "scheduledTasks": {
+    "enabled": true
+  },
+
   "browser": {
     "mode": "extension",
     "enabled": false
   },
 
-  "disabledTools": [],
+  "disabledTools": [],  
   "agents": {
     "picker": {
       "modes": ["agent"],
