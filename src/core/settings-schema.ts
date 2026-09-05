@@ -99,6 +99,14 @@ const BrowserConfigSchema = z.object({
   profile: z.enum(['fresh', 'persist']).optional(),
 })
 
+const ScheduledTasksConfigSchema = z.object({
+  /**
+   * When false, CronCreate/List/Delete are hidden and due tasks do not fire.
+   * Default true when the key is omitted.
+   */
+  enabled: z.boolean().optional(),
+})
+
 const ExternalModeSchema = z.enum(['agent', 'ask', 'plan'])
 
 const AgentsPickerSchema = z.object({
@@ -157,6 +165,7 @@ export const SettingsFileSchema = z.object({
   lspServers: z.record(z.string(), LspServerSchema).optional(),
   disabledTools: z.array(z.string()).optional(),
   browser: BrowserConfigSchema.optional(),
+  scheduledTasks: ScheduledTasksConfigSchema.optional(),
   agents: AgentsConfigSchema.optional(),
   permissions: PermissionsSchema.optional(),
   environments: z

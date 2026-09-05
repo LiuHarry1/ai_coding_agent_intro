@@ -15,7 +15,9 @@ export default function App() {
   const theme = useChatStore(s => s.theme)
   const syncHljs = useChatStore(s => s.syncHljs)
   const currentSessionId = useChatStore(s => s.currentSessionId)
+  const liveNeeded = useChatStore(s => s.liveNeeded)
   const switchSession = useChatStore(s => s.switchSession)
+  const connectSessionLive = useChatStore(s => s.connectSessionLive)
   const chatWorkspace = useChatStore(s => s.workspace)
   const workspaceEnvId = useChatStore(
     s => s.workspaceHandle?.environmentId || 'local',
@@ -30,6 +32,11 @@ export default function App() {
   useEffect(() => {
     if (currentSessionId) switchSession(currentSessionId)
   }, [])
+
+  useEffect(() => {
+    if (!currentSessionId || !liveNeeded) return
+    return connectSessionLive(currentSessionId)
+  }, [currentSessionId, liveNeeded, connectSessionLive])
 
   // Bridge: chat owns cwd + environment; IDE stores both so FS calls can
   // route local vs remote without importing chat-store.

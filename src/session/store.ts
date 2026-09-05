@@ -4,6 +4,7 @@ import type { Session, SessionInfo, Message } from '../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import { createDefaultPermissionMode } from '../core/permission-mode.js'
 import { resetSessionMemoryState } from '../services/session-memory/state.js'
+import { removeTasksForSession } from '../services/cron/store.js'
 import {
   SESSION_DIR,
   getSessionDataDir,
@@ -182,6 +183,13 @@ export function deleteSession(id: string): void {
     fs.rmSync(memoryDir, { recursive: true, force: true })
   }
   resetSessionMemoryState(id)
+  try {
+    removeTasksForSession(id)
+  } catch (err) {
+    console.warn(
+      `[session] failed to drop scheduled tasks for ${id}: ${err instanceof Error ? err.message : err}`,
+    )
+  }
 }
 
 export function appendMessage(sessionId: string, message: Message): void {

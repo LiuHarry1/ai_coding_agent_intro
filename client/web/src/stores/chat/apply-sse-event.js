@@ -166,6 +166,9 @@ export function applySseEvent(data, { set, get, mutators: m }) {
           case 'interrupted':
             m._onInterrupted(data)
             break
+          case 'scheduled_turn':
+            m._beginScheduledTurn(data.prompt || '')
+            break
         }
         break
       case 'stream_event':

@@ -81,6 +81,8 @@ export interface RunChatTurnInput {
   /** Protocol sink -- use noop transport when the client wants buffered JSON. */
   transport: SSETransport
   images?: string[]
+  /** System-generated turn (scheduled tasks). */
+  isMeta?: boolean
   mode?: string
   /** When false, skip system/init (multi-turn stdio). Default true. */
   emitHandshake?: boolean
@@ -184,6 +186,7 @@ export async function runChatTurn(
     runAgent,
     transport,
     images,
+    isMeta,
     mode,
     emitHandshake = true,
     http,
@@ -490,7 +493,11 @@ export async function runChatTurn(
   let persistFrom = messagesBefore
   let finalText = ''
   let runError: Error | null = null
-  const userTurnForDisplay: UserMessage = buildUserMessage(message, imageRefs)
+  const userTurnForDisplay: UserMessage = buildUserMessage(
+    message,
+    imageRefs,
+    isMeta,
+  )
 
   const systemPrompt = await resolveTurnSystemPrompt(
     session,
@@ -599,6 +606,7 @@ export async function runChatTurn(
         sessionMemory: resolvedSettings.config.sessionMemory,
         messages: session.messages,
         images: imageRefs,
+        isMeta,
         subagentNames: prepared.subagentNames,
         deferredToolPool: prepared.deferredToolPool,
         getToolDefinition: prepared.getToolDefinition,

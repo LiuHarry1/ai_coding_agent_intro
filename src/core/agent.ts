@@ -27,7 +27,7 @@ export async function runAgent(
       messages.push(ensureMessageUuid(att))
     }
   }
-  messages.push(buildUserMessage(userMessage, opts.images))
+  messages.push(buildUserMessage(userMessage, opts.images, opts.isMeta))
   ensureMessageUuids(messages)
 
   const result = await query({ ...opts, messages })

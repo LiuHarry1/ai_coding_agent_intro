@@ -17,6 +17,10 @@ import { runWithRequestScope } from '../utils/request-scope.js'
 import { initBrowserLifecycle } from '../browser/manager.js'
 import { preconnectModelApis } from '../utils/apiPreconnect.js'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
+import {
+  startCronScheduler,
+  stopCronScheduler,
+} from '../services/cron/scheduler.js'
 
 export function startServer(_opts: ServerOptions = {}): void {
   const PORT = parseInt(process.env.PORT || '4567', 10)
@@ -63,6 +67,7 @@ export function startServer(_opts: ServerOptions = {}): void {
     if (shuttingDown) return
     shuttingDown = true
     console.log(`[server] ${signal}: shutting down`)
+    stopCronScheduler()
     server.close(() => {
       void shutdownExecutionPlane()
         .catch(() => {})
@@ -114,9 +119,11 @@ export function startServer(_opts: ServerOptions = {}): void {
       console.log(`[server]   POST /chat/cancel  -- stop in-flight turn`)
       console.log(`[server]   POST /tool/abort   -- abort one tool/subagent`)
       console.log(`[server]   GET  /environments -- list execution environments`)
+      console.log(`[server]   GET/POST /scheduled-tasks -- UI timers (settings-gated)`)
       if (staticDir) {
         console.log(`[server]   Static files from: ${distDir}`)
       }
+      startCronScheduler()
     })
   })()
 

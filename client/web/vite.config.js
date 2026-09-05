@@ -28,7 +28,11 @@ export default defineConfig({
     },
     proxy: {
       "/chat": "http://localhost:4567",
-      "/sessions": "http://localhost:4567",
+      "/sessions": {
+        target: "http://localhost:4567",
+        timeout: 0,
+        proxyTimeout: 0,
+      },
       "/workspace": "http://localhost:4567",
       "/environments": "http://localhost:4567",
       "/lsp": "http://localhost:4567",
@@ -44,6 +48,7 @@ export default defineConfig({
       "/agents": "http://localhost:4567",
       "/plugins": "http://localhost:4567",
       "/tool": "http://localhost:4567",
+      "/scheduled-tasks": "http://localhost:4567",
       // SSO mode (dev): forward auth-service routes to localhost:8010.
       // Override the target with DEV_AUTH_BACKEND_URL if it runs elsewhere.
       "/sso": process.env.DEV_AUTH_BACKEND_URL || "http://localhost:8010",

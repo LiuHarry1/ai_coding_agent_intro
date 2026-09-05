@@ -60,6 +60,24 @@ withTempDir(dir => {
 withTempDir(dir => {
   const settingsDir = path.join(dir, '.ai-agent')
   fs.mkdirSync(settingsDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(settingsDir, 'settings.json'),
+    JSON.stringify({
+      scheduledTasks: { enabled: false },
+    }),
+  )
+  const resolved = resolveSettings(dir)
+  const projectErrors = resolved.validationErrors.filter(e =>
+    e.file.includes(dir),
+  )
+  assert.equal(projectErrors.length, 0)
+  assert.equal(resolved.config.scheduledTasks?.enabled, false)
+  console.log('[ok] scheduledTasks.enabled=false applied')
+})
+
+withTempDir(dir => {
+  const settingsDir = path.join(dir, '.ai-agent')
+  fs.mkdirSync(settingsDir, { recursive: true })
   const extra = path.join(os.tmpdir(), 'always-allow-extra')
   fs.writeFileSync(
     path.join(settingsDir, 'settings.json'),

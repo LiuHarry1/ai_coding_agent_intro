@@ -403,6 +403,8 @@ export interface AgentOptions {
   wire: import('./wire-emitter.js').WireEmitter
   messages?: Message[]
   images?: string[]
+  /** System-generated user turn (scheduled tasks). Hidden from some prefetch paths. */
+  isMeta?: boolean
   /**
    * Optional step budget (`maxSteps` / maxTurns). When omitted, the loop runs until
    * the model stops calling tools (or errors) �?no artificial cap.
@@ -894,6 +896,13 @@ export interface AppConfig {
   disabledTools?: string[]
   /** Browser automation (`browser_*` tools). See src/browser/types.ts. */
   browser?: import('../browser/types.js').BrowserConfig
+  /**
+   * In-process cron scheduler (HTTP/Electron). When `enabled` is false,
+   * tools are hidden and due tasks do not fire. Omitted = enabled.
+   */
+  scheduledTasks?: {
+    enabled?: boolean
+  }
   /**
    * ModePicker visibility + new-session defaults for permission modes and
    * primary agent profiles. See agents.picker / agents.default in settings.

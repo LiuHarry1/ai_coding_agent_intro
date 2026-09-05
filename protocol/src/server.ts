@@ -227,6 +227,14 @@ export const InterruptedMessageSchema = z.object({
   ...envelopeFields,
 })
 
+/** A scheduled-task fire is about to run in this session (no local composer submit). */
+export const ScheduledTurnMessageSchema = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('scheduled_turn'),
+  prompt: z.string(),
+  ...envelopeFields,
+})
+
 /** Live shell/process output (`tool_progress`). */
 export const ToolProgressMessageSchema = z.object({
   type: z.literal('tool_progress'),
@@ -269,6 +277,7 @@ export const ServerMessageSchema = z.union([
   CompactionDoneMessageSchema,
   ToolTimingMessageSchema,
   InterruptedMessageSchema,
+  ScheduledTurnMessageSchema,
   ToolProgressMessageSchema,
   // The engine can also reach back to the client (permission, plan, …).
   ControlRequestSchema,

@@ -22,6 +22,15 @@ export const ENTER_PLAN_MODE_TOOL_NAME = 'EnterPlanMode'
 export const EXIT_PLAN_MODE_TOOL_NAME = 'ExitPlanMode'
 export const TASK_OUTPUT_TOOL_NAME = 'TaskOutput'
 export const TASK_STOP_TOOL_NAME = 'TaskStop'
+export const CRON_CREATE_TOOL_NAME = 'CronCreate'
+export const CRON_LIST_TOOL_NAME = 'CronList'
+export const CRON_DELETE_TOOL_NAME = 'CronDelete'
+
+export const CRON_TOOL_NAMES: readonly string[] = [
+  CRON_CREATE_TOOL_NAME,
+  CRON_LIST_TOOL_NAME,
+  CRON_DELETE_TOOL_NAME,
+]
 
 export const BROWSER_NAVIGATE_TOOL_NAME = 'browser_navigate'
 export const BROWSER_SNAPSHOT_TOOL_NAME = 'browser_snapshot'

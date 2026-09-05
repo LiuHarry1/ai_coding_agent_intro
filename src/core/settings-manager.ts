@@ -65,6 +65,7 @@ export const DEFAULTS: AppConfig = {
   lspServers: {},
   disabledTools: [],
   environments: { ssh: [] },
+  scheduledTasks: { enabled: true },
 }
 
 /** Code defaults for extract/prefetch (throttle default = 1). */
@@ -325,6 +326,12 @@ function deepMergeSettingsLayer(
   }
   if (base.browser || overlay.browser) {
     out.browser = { ...(base.browser ?? {}), ...(overlay.browser ?? {}) }
+  }
+  if (base.scheduledTasks || overlay.scheduledTasks) {
+    out.scheduledTasks = {
+      ...(base.scheduledTasks ?? {}),
+      ...(overlay.scheduledTasks ?? {}),
+    }
   }
   if (base.agents || overlay.agents) {
     const mergedPicker =
@@ -609,6 +616,13 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
 
   if (layer.browser && typeof layer.browser === 'object') {
     config.browser = { ...(config.browser ?? {}), ...layer.browser }
+  }
+
+  if (layer.scheduledTasks && typeof layer.scheduledTasks === 'object') {
+    config.scheduledTasks = {
+      ...(config.scheduledTasks ?? {}),
+      ...layer.scheduledTasks,
+    }
   }
 
   if (layer.agents && typeof layer.agents === 'object') {
@@ -941,6 +955,12 @@ function mergePatch(
       Array.isArray(next.disabledTools) ? (next.disabledTools as string[]) : [],
       patch.disabledTools,
     )
+  }
+  if (patch.scheduledTasks) {
+    next.scheduledTasks = {
+      ...((next.scheduledTasks as Record<string, unknown> | undefined) ?? {}),
+      ...patch.scheduledTasks,
+    }
   }
   if (patch.permissions) {
     const existing = isRecord(next.permissions)

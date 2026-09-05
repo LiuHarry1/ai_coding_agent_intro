@@ -59,6 +59,12 @@ export const agentApi = {
       }),
     ),
 
+  streamSessionLive: (sessionId, signal) =>
+    fetch(
+      apiUrl(`/sessions/${encodeURIComponent(sessionId)}/live`),
+      withAuth({ signal }),
+    ),
+
   /**
    * Upload composer images before /chat (OpenClaw claim-check).
    * Creates a session when sessionId is null. Returns durable /sessions/.../uploads URLs.
@@ -128,6 +134,27 @@ export const agentApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
     }),
+
+  getScheduledTasks: (sessionId, workspace) => {
+    const params = new URLSearchParams()
+    if (sessionId) params.set('session_id', sessionId)
+    if (workspace) params.set('workspace', workspace)
+    const qs = params.toString()
+    return fetchJSON(`/scheduled-tasks${qs ? `?${qs}` : ''}`)
+  },
+  createScheduledTask: body =>
+    fetchJSON('/scheduled-tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteScheduledTask: (id, sessionId, workspace) => {
+    const params = new URLSearchParams({ session_id: sessionId })
+    if (workspace) params.set('workspace', workspace)
+    return fetchJSON(`/scheduled-tasks/${encodeURIComponent(id)}?${params}`, {
+      method: 'DELETE',
+    })
+  },
 
   getBrowserLock: sessionId =>
     fetchJSON(

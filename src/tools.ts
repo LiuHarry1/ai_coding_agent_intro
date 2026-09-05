@@ -14,6 +14,9 @@ import { definition as lspTool } from './tools/LSPTool/LSPTool.js'
 import { definition as askUserQuestion } from './tools/AskUserQuestionTool/AskUserQuestionTool.js'
 import { definition as taskOutput } from './tools/TaskOutputTool/TaskOutputTool.js'
 import { definition as taskStop } from './tools/TaskStopTool/TaskStopTool.js'
+import { definition as cronCreate } from './tools/ScheduleCronTool/CronCreateTool.js'
+import { definition as cronList } from './tools/ScheduleCronTool/CronListTool.js'
+import { definition as cronDelete } from './tools/ScheduleCronTool/CronDeleteTool.js'
 import { browserToolDefinitions } from './tools/BrowserTool/BrowserTool.js'
 
 // Default: bash always; powershell additionally on Windows.
@@ -23,6 +26,9 @@ const shellTools = [bash, ...(isPowerShellToolEnabled() ? [powershell] : [])]
   ...shellTools,
   taskOutput,
   taskStop,
+  cronCreate,
+  cronList,
+  cronDelete,
   readFile,
   writeFile,
   editFile,

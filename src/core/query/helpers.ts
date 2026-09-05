@@ -53,9 +53,14 @@ export function capMaxOutputTokens(
  *
  * Parts store short string refs — bytes are hydrated in `projectMessagesForApi`.
  */
-export function buildUserMessage(text: string, images?: string[]): UserMessage {
+export function buildUserMessage(
+  text: string,
+  images?: string[],
+  isMeta?: boolean,
+): UserMessage {
+  const meta = isMeta ? { isMeta: true as const } : {}
   if (!images || images.length === 0) {
-    return ensureMessageUuid({ role: 'user', content: text })
+    return ensureMessageUuid({ role: 'user', content: text, ...meta })
   }
   const parts: UserContentPart[] = [{ type: 'text', text }]
   for (const ref of images) {
@@ -76,7 +81,7 @@ export function buildUserMessage(text: string, images?: string[]): UserMessage {
     }
     throw new Error('Unsupported image ref in buildUserMessage')
   }
-  return ensureMessageUuid({ role: 'user', content: parts })
+  return ensureMessageUuid({ role: 'user', content: parts, ...meta })
 }
 
 export function autoCompleteTodos(

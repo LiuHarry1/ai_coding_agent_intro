@@ -11,6 +11,7 @@ import {
 import { createToolSearchDefinition } from './ToolSearchTool/ToolSearchTool.js'
 import {
   BROWSER_TOOL_NAMES,
+  CRON_TOOL_NAMES,
   ENTER_PLAN_MODE_TOOL_NAME,
   READ_ONLY_TOOLS,
   TOOL_SEARCH_TOOL_NAME,
@@ -35,6 +36,7 @@ import type {
 import type { ToolRegistry } from '../core/tool-registry.js'
 import type { ToolEnablementSource } from '../core/tool-enablement.js'
 import type { BrowserConfig } from '../browser/types.js'
+import { isScheduledTasksEnabled } from '../services/cron/settings.js'
 
 export interface AssembleToolPoolInput {
   registry: ToolRegistry
@@ -91,6 +93,7 @@ export function assembleToolPool(
   const denyGlobs = [
     ...browserDenyGlobsForMainThread(mainAgentType, browserConfig),
     ...(mainThreadProfile?.disallowedTools ?? []),
+    ...(!isScheduledTasksEnabled(cwd) ? CRON_TOOL_NAMES : []),
   ]
   if (denyGlobs.length > 0) {
     active = filterToolsRecordByDisallowedGlobs(active, denyGlobs)

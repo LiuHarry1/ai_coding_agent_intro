@@ -41,6 +41,18 @@ export type WireEnvelope = {
   parent_tool_use_id?: string
 }
 
+export function scheduledTurnMessage(
+  prompt: string,
+  env: WireEnvelope,
+): ServerMessage {
+  return {
+    type: 'system',
+    subtype: 'scheduled_turn',
+    prompt,
+    ...env,
+  }
+}
+
 export function modeChangedMessage(
   mode: string,
   env: WireEnvelope,

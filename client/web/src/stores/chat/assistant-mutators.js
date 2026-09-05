@@ -653,6 +653,29 @@ export function createAssistantMutators(set, get) {
         }
       })
     },
+
+    _beginScheduledTurn: prompt => {
+      if (get().isStreaming) return
+      const text = typeof prompt === 'string' ? prompt : ''
+      if (!text.trim()) return
+      const userMsgId = newId()
+      const assistantMsgId = newId()
+      set(s => {
+        const next = appendBubble(s, {
+          id: userMsgId,
+          kind: 'user',
+          content: text,
+        })
+        return {
+          ...transcriptPatch(next),
+          isStreaming: true,
+          currentStep: 0,
+          activeTurnId: assistantMsgId,
+          scheduledTurnActive: true,
+        }
+      })
+      get()._setThinking()
+    },
   }
 
   const batcher = createStreamBatcher({

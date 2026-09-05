@@ -93,3 +93,35 @@ export async function streamChatTurn({
 
   return meta
 }
+
+/**
+ * Open GET /sessions/:id/live and yield protocol messages until aborted.
+ *
+ * @param {{
+ *   sessionId: string,
+ *   signal: AbortSignal,
+ *   onEvent: (data: object) => void,
+ * }} opts
+ */
+export async function streamSessionLive({ sessionId, signal, onEvent }) {
+  const res = await agentApi.streamSessionLive(sessionId, signal)
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`)
+    err.status = res.status
+    throw err
+  }
+  if (!res.body) {
+    const err = new Error('Empty response body')
+    err.status = res.status
+    throw err
+  }
+  for await (const data of parseSSE(res.body, signal)) {
+    if (!data || typeof data !== 'object' || !data.type) continue
+    if (data.type === 'unknown' || data.type === 'keep_alive') continue
+    try {
+      onEvent(data)
+    } catch (e) {
+      console.error('[SSE live] handler error:', data.type, e)
+    }
+  }
+}

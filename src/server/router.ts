@@ -53,6 +53,8 @@ import { getExecutionPlane } from '../execution/bootstrap.js'
 import { WorkerExecutionBackend } from '../execution/worker-execution-backend.js'
 import { initCodePlugins } from '../core/plugins/index.js'
 import { handleChat } from './routes/chat.js'
+import { handleScheduledTasks } from './routes/scheduled-tasks.js'
+import { handleSessionLive } from './session-live.js'
 import { getRunAgent } from '../agent-lazy.js'
 import { abortTool } from '../core/tool-abort-registry.js'
 import { abortTurn } from '../core/turn-abort-registry.js'
@@ -223,6 +225,7 @@ export function createRouter({ staticDir }: RouterOptions) {
       return
     }
 
+    if (await handleScheduledTasks(req, res)) return
     if (await workspaceRouter(req, res)) return
     if (await skillsApi(req, res)) return
     if (await executionRouter(req, res)) return
@@ -297,6 +300,7 @@ export function createRouter({ staticDir }: RouterOptions) {
       sendJSON(res, 200, { deleted: id })
       return
     }
+    if (handleSessionLive(req, res)) return
     if (method === 'GET' && url?.match(/^\/sessions\/[^/]+\/messages$/)) {
       const id = url.split('/sessions/')[1].split('/messages')[0]
       const session = getSession(id)

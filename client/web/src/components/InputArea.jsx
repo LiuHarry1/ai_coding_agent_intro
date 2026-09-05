@@ -1,6 +1,7 @@
 import React, { useRef, useCallback, useState, useEffect, useMemo } from 'react'
 import { useChatStore } from '../stores/chat-store.js'
 import ModePicker from './ModePicker.jsx'
+import SchedulePicker from './SchedulePicker.jsx'
 import { agentApi } from '../lib/api/agent.js'
 import { workspaceApi } from '../lib/api/workspace.js'
 import {
@@ -659,6 +660,7 @@ export default function InputArea() {
             style={{ display: 'none' }}
             onChange={handleFileChange}
           />
+          <SchedulePicker />
           <textarea
             ref={textareaRef}
             className='input-textarea'

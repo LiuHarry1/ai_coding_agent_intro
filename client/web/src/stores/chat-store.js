@@ -27,7 +27,7 @@ import {
 import { applySseEvent } from './chat/apply-sse-event.js'
 import { createAssistantMutators } from './chat/assistant-mutators.js'
 import { refreshIdeAfterAgentTurn } from './chat/ide-bridge.js'
-import { streamChatTurn } from './chat/stream-chat.js'
+import { streamChatTurn, streamSessionLive } from './chat/stream-chat.js'
 
 function syncSessionPickerSelection(get, { mode, agentType }) {
   const { currentSessionId, workspace } = get()
@@ -93,6 +93,10 @@ export const useChatStore = create((set, get) => {
     isStreaming: false,
     currentStep: 0,
     abortController: null,
+    /** True while a scheduled-task turn is rendering from /sessions/:id/live. */
+    scheduledTurnActive: false,
+    /** Open live SSE only when this session has (or just got) a timer. */
+    liveNeeded: false,
 
     // ── UI state ────────────────────────────────
     workspace: '',
@@ -395,6 +399,83 @@ export const useChatStore = create((set, get) => {
 
     setSessions: sessions => set({ sessions }),
 
+    setLiveNeeded: liveNeeded => set({ liveNeeded: Boolean(liveNeeded) }),
+
+    refreshSessions: async () => {
+      try {
+        const data = await agentApi.listSessions()
+        set({ sessions: data.sessions || [] })
+      } catch {
+        /* list is best-effort */
+      }
+    },
+
+    /**
+     * Subscribe to GET /sessions/:id/live so scheduled fires appear without
+     * a reload. Returns an unsubscribe that aborts the EventSource-like fetch.
+     * @param {string} sessionId
+     */
+    connectSessionLive: sessionId => {
+      const abortController = new AbortController()
+      let stopped = false
+
+      const settleScheduledTurn = () => {
+        if (!get().scheduledTurnActive) return
+        get()._finalizeAssistant()
+        const planPatch =
+          get().planState?.status === 'building'
+            ? {
+                planState: {
+                  ...get().planState,
+                  status: 'idle',
+                },
+              }
+            : {}
+        set({
+          isStreaming: false,
+          isAwaitingInteraction: false,
+          activeTurnId: null,
+          scheduledTurnActive: false,
+          ...planPatch,
+        })
+        refreshIdeAfterAgentTurn()
+        void get().refreshSessions()
+      }
+
+      const run = async () => {
+        let delay = 1000
+        while (!stopped && !abortController.signal.aborted) {
+          try {
+            await streamSessionLive({
+              sessionId,
+              signal: abortController.signal,
+              onEvent: data => {
+                if (stopped || get().currentSessionId !== sessionId) return
+                handleSse(data)
+                if (data.type === 'system' && data.subtype === 'scheduled_turn') {
+                  void get().refreshSessions()
+                }
+                if (data.type === 'result') settleScheduledTurn()
+              },
+            })
+            delay = 1000
+          } catch (err) {
+            if (stopped || abortController.signal.aborted) return
+            if (err?.name === 'AbortError') return
+            if (err?.status === 404) return
+          }
+          if (stopped || abortController.signal.aborted) return
+          await new Promise(resolve => setTimeout(resolve, delay))
+          delay = Math.min(delay * 2, 15_000)
+        }
+      }
+      void run()
+      return () => {
+        stopped = true
+        abortController.abort()
+      }
+    },
+
     switchSession: async id => {
       if (!id) {
         get().clearSession()
@@ -407,10 +488,15 @@ export const useChatStore = create((set, get) => {
         todos: [],
         sessionLoading: true,
         isAwaitingInteraction: false,
+        liveNeeded: false,
+        scheduledTurnActive: false,
         planState: { status: 'idle', content: '', filePath: null },
       })
       try {
-        const data = await agentApi.getSessionMessages(id)
+        const [data, scheduled] = await Promise.all([
+          agentApi.getSessionMessages(id),
+          agentApi.getScheduledTasks(id).catch(() => ({ tasks: [] })),
+        ])
         if (get().currentSessionId !== id) return
         const msgs = sanitizeMessagesForUi(
           (data.messages || []).map(m =>
@@ -418,11 +504,13 @@ export const useChatStore = create((set, get) => {
           ),
         )
         const next = messagesToBubbles(msgs)
+        const tasks = Array.isArray(scheduled?.tasks) ? scheduled.tasks : []
         set({
           bubbleOrder: next.bubbleOrder,
           bubblesById: next.bubblesById,
           activeTurnId: null,
           sessionLoading: false,
+          liveNeeded: tasks.length > 0,
         })
       } catch (err) {
         if (get().currentSessionId !== id) return
@@ -446,6 +534,8 @@ export const useChatStore = create((set, get) => {
         todos: [],
         sessionLoading: false,
         isAwaitingInteraction: false,
+        liveNeeded: false,
+        scheduledTurnActive: false,
         planState: { status: 'idle', content: '', filePath: null },
       })
     },
