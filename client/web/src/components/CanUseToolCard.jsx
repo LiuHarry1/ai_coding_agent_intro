@@ -1,16 +1,32 @@
 import React, { useState } from 'react'
 import { useChatActions } from '../lib/chat-actions.jsx'
 
-function resultHint(description, choice) {
+function parentDir(filePath) {
+  const normalized = filePath.replace(/[/\\]+$/, '')
+  const idx = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
+  if (idx <= 0) return normalized
+  return normalized.slice(0, idx) || normalized
+}
+
+/** Parse path from ask message (supports current + legacy Claude-branded copy). */
+function parseAskTarget(description) {
   if (typeof description !== 'string' || !description.trim()) return null
   const match = description.match(
-    /permissions to (?:read from|write to) (.+), but you haven't granted it yet\.$/i,
+    /(?:Permission needed to|permissions to) (?:read from|write to) (.+?)(?:, but you haven't granted it yet)?\.?\s*$/i,
   )
-  const target = match?.[1]
+  return match?.[1]?.trim() || null
+}
+
+function resultHint(description, choice) {
+  const target = parseAskTarget(description)
   if (!target) return null
-  if (choice === 'always') return `Always allow ${target}`
-  if (choice === 'allow') return target
+  // Always allow grants the parent directory, not a single file.
+  if (choice === 'always') return parentDir(target)
   return target
+}
+
+function isOutsideAsk(description) {
+  return parseAskTarget(description) != null
 }
 
 export default function CanUseToolCard({ part }) {
@@ -35,6 +51,10 @@ export default function CanUseToolCard({ part }) {
     }
   }
 
+  const target = parseAskTarget(part.description)
+  const outside = isOutsideAsk(part.description)
+  const toolLabel = part.title || part.toolName || 'File permission'
+
   if (done) {
     const label =
       choice === 'always'
@@ -43,29 +63,40 @@ export default function CanUseToolCard({ part }) {
           ? 'Allowed'
           : 'Rejected'
     const hint = resultHint(part.description, choice)
+    const tone =
+      choice === 'reject' ? 'perm-card--rejected' : 'perm-card--allowed'
     return (
-      <div className='ask-card ask-card--done'>
-        <span className='ask-card__title'>{label}</span>
-        {hint && <p className='ask-card__hint'>{hint}</p>}
+      <div className={`ask-card perm-card perm-card--done ${tone}`}>
+        <div className='perm-card__done-row'>
+          <span className='perm-card__status'>{label}</span>
+          {choice === 'always' && hint && (
+            <span className='perm-card__badge'>Directory</span>
+          )}
+        </div>
+        {hint && <code className='perm-card__path'>{hint}</code>}
       </div>
     )
   }
 
   return (
-    <div className='ask-card'>
-      <div className='ask-card__header'>
-        <span className='ask-card__title'>
-          {part.title || part.toolName || 'File permission'}
-        </span>
-        <span className='ask-card__hint'>Outside the workspace</span>
+    <div className='ask-card perm-card'>
+      <div className='perm-card__header'>
+        <span className='perm-card__title'>{toolLabel}</span>
+        {outside && (
+          <span className='perm-card__badge'>Outside workspace</span>
+        )}
       </div>
-      {part.description && (
-        <p className='ask-question__text'>{part.description}</p>
+      {target ? (
+        <code className='perm-card__path'>{target}</code>
+      ) : (
+        part.description && (
+          <p className='perm-card__fallback'>{part.description}</p>
+        )
       )}
       <div className='perm-card__actions'>
         <button
           type='button'
-          className='ask-card__submit'
+          className='perm-card__btn perm-card__btn--primary'
           disabled={submitting}
           onClick={() => handle('allow')}
         >
@@ -73,19 +104,19 @@ export default function CanUseToolCard({ part }) {
         </button>
         <button
           type='button'
-          className='ask-option'
+          className='perm-card__btn'
           disabled={submitting}
           onClick={() => handle('always')}
         >
-          <span className='ask-option__label'>Always allow</span>
+          Always allow
         </button>
         <button
           type='button'
-          className='ask-option perm-card__reject'
+          className='perm-card__btn perm-card__btn--reject'
           disabled={submitting}
           onClick={() => handle('reject')}
         >
-          <span className='ask-option__label'>Reject</span>
+          Reject
         </button>
       </div>
     </div>

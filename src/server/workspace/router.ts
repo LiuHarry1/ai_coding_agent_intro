@@ -141,14 +141,14 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
 
       // POST /workspace/upload  (multipart/form-data: dir + file[])
       if (method === 'POST' && url.startsWith('/workspace/upload')) {
-        await handleUpload(req, res, root)
+        await handleUpload(req, res, root, safe)
         return true
       }
 
       // GET /workspace/download?path=  (file → attachment, dir → zip)
       if (method === 'GET' && url.startsWith('/workspace/download')) {
         const params = new URL(url, `http://${req.headers.host}`).searchParams
-        await handleDownload(res, root, params.get('path'))
+        await handleDownload(res, root, params.get('path'), safe)
         return true
       }
 

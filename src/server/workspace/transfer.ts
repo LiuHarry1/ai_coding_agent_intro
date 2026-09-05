@@ -31,11 +31,9 @@ const ZipArchive = (
  *   - POST /workspace/upload    multipart/form-data, fields: `dir` + `file`(s)
  *   - GET  /workspace/download?path=   streams a file, or zips a directory
  *
- * Both resolve paths with the same `resolvePath` the rest of the module uses,
- * so they inherit the module's "not a sandbox" semantics (local single-user
- * tool). Uploads stream to a temp file first, then move into place, so a huge
- * upload never sits in memory and the target dir never sees a half-written
- * file.
+ * Callers should pass `resolveSafe` (router `safe()`) so paths honor the same
+ * workspace / dontAsk boundary as list/read/write. Without it, paths fall
+ * back to unsandboxed `resolvePath` (local single-user only).
  */
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024 // 100 MB per file
@@ -114,10 +112,16 @@ interface MulterFile {
   size: number
 }
 
+export type ResolveSafePath = (
+  input: string,
+  access?: 'read' | 'write',
+) => string
+
 export async function handleUpload(
   req: IncomingMessage,
   res: ServerResponse,
   root: string,
+  resolveSafe?: ResolveSafePath,
 ): Promise<void> {
   // Parse the multipart body into temp files. multer is connect-style
   // middleware; it works directly on the raw http req/res.
@@ -131,6 +135,9 @@ export async function handleUpload(
   const cleanup = () =>
     Promise.allSettled(files.map(f => fs.promises.unlink(f.path)))
 
+  const resolveTarget = (input: string, access: 'read' | 'write') =>
+    resolveSafe ? resolveSafe(input, access) : resolvePath(input, root)
+
   try {
     const dirField = (req as any).body?.dir as string | undefined
     if (!dirField) {
@@ -143,7 +150,7 @@ export async function handleUpload(
       return
     }
 
-    const targetDir = resolvePath(dirField, root)
+    const targetDir = resolveTarget(dirField, 'write')
     if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
       await cleanup()
       sendJSON(res, 404, { error: `Target directory not found: ${targetDir}` })
@@ -169,7 +176,14 @@ export async function handleUpload(
   } catch (err) {
     await cleanup()
     if (!res.headersSent) {
-      sendJSON(res, 500, {
+      const status =
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as { code?: string }).code === 'EACCES'
+          ? 403
+          : 500
+      sendJSON(res, status, {
         error: err instanceof Error ? err.message : String(err),
       })
     }
@@ -180,12 +194,30 @@ export async function handleDownload(
   res: ServerResponse,
   root: string,
   pathParam: string | null,
+  resolveSafe?: ResolveSafePath,
 ): Promise<void> {
   if (!pathParam) {
     sendJSON(res, 400, { error: "Missing 'path'" })
     return
   }
-  const target = resolvePath(pathParam, root)
+  let target: string
+  try {
+    target = resolveSafe
+      ? resolveSafe(pathParam, 'read')
+      : resolvePath(pathParam, root)
+  } catch (err) {
+    const status =
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code?: string }).code === 'EACCES'
+        ? 403
+        : 400
+    sendJSON(res, status, {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return
+  }
   if (!fs.existsSync(target)) {
     sendJSON(res, 404, { error: `Not found: ${target}` })
     return

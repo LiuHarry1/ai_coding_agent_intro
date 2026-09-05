@@ -118,6 +118,30 @@ try {
     throw new Error('tool-wide / absolute allow should grant outside path on desktop')
   }
 
+  // Relative allow rules use all working dirs (same as deny).
+  const withRelAllow = createFilesystemPermissionContext(root, {
+    additionalWorkingDirectories: [extraDir],
+    allow: ['Read(ok.txt)'],
+  })
+  if (checkReadPermission(extraFile, withRelAllow).behavior !== 'allow') {
+    throw new Error('relative allow should match under additionalWorkingDirectories')
+  }
+
+  // CC: leading `/` is project-root-relative, not filesystem-absolute.
+  const nestedDir = path.join(root, 'nested')
+  const nestedFile = path.join(nestedDir, 'a.txt')
+  fs.mkdirSync(nestedDir, { recursive: true })
+  fs.writeFileSync(nestedFile, 'nested')
+  const withSlashAllow = createFilesystemPermissionContext(root, {
+    allow: ['Read(/nested/**)'],
+  })
+  if (checkReadPermission(nestedFile, withSlashAllow).behavior !== 'allow') {
+    throw new Error('Read(/nested/**) should allow under project root')
+  }
+  if (checkReadPermission(outside, withSlashAllow).behavior !== 'ask') {
+    throw new Error('Read(/nested/**) must not treat pattern as FS-absolute')
+  }
+
   const lockedOpts = settingsPermissionOpts({
     defaultMode: 'dontAsk',
     additionalDirectories: [extraDir],
@@ -158,9 +182,17 @@ try {
     throw new Error('defaultMode dontAsk should deny File tools outside workspace')
   }
 
-  const planOpts = settingsPermissionOpts({ defaultMode: 'plan' })
+  const planOpts = settingsPermissionOpts({
+    defaultMode: 'plan' as 'default',
+  })
   if (planOpts.mode !== 'default') {
-    throw new Error('defaultMode plan should be filesystem default (ask outside)')
+    throw new Error('legacy defaultMode plan should map to filesystem default')
+  }
+  const acceptOpts = settingsPermissionOpts({
+    defaultMode: 'acceptEdits' as 'default',
+  })
+  if (acceptOpts.mode !== 'default') {
+    throw new Error('legacy defaultMode acceptEdits should map to filesystem default')
   }
   const bypassOpts = settingsPermissionOpts({
     defaultMode: 'bypassPermissions',

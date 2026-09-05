@@ -920,8 +920,8 @@ export interface AppConfig {
     additionalDirectories?: string[]
     allow?: string[]
     deny?: string[]
-    /** CC `permissions.defaultMode`. */
-    defaultMode?: 'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'bypassPermissions'
+    /** Filesystem `permissions.defaultMode` (implemented subset). */
+    defaultMode?: 'default' | 'dontAsk' | 'bypassPermissions'
   }
   /**
    * Extra SSH hosts for the execution EnvironmentRegistry (merged with ~/.ssh/config).

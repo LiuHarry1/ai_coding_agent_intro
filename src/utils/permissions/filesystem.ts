@@ -16,15 +16,14 @@ import { normalizeWorkspacePath } from '../../core/workspace-path.js'
 import { resolvePath } from '../../tools/utils.js'
 import { matchingPermissionRule } from './permission-rules.js'
 
+/** Settings values that actually change filesystem behavior. */
 export const PERMISSION_DEFAULT_MODES = [
   'default',
-  'acceptEdits',
-  'plan',
   'dontAsk',
   'bypassPermissions',
 ] as const
 
-/** CC `permissions.defaultMode` (settings.json). */
+/** CC `permissions.defaultMode` (settings.json) — implemented subset. */
 export type PermissionDefaultMode = (typeof PERMISSION_DEFAULT_MODES)[number]
 
 /** Runtime File-tool path policy derived from AUTH + defaultMode. */
@@ -57,8 +56,17 @@ function isAuthEnabledEnv(): boolean {
   )
 }
 
+/**
+ * Extra roots readable outside the workspace.
+ * Prefers `PERMISSION_EXTRA_READ_ROOTS`; falls back to deprecated
+ * `SANDBOX_EXTRA_READ_ROOTS`.
+ */
 function parseExtraReadRoots(): string[] {
-  const raw = process.env.SANDBOX_EXTRA_READ_ROOTS?.trim()
+  const raw = (
+    process.env.PERMISSION_EXTRA_READ_ROOTS?.trim() ||
+    process.env.SANDBOX_EXTRA_READ_ROOTS?.trim() ||
+    ''
+  )
   if (!raw) return []
   return raw
     .split(',')
@@ -72,11 +80,12 @@ export function resolveFilesystemPermissionMode(): FilesystemPermissionMode {
 }
 
 export function filesystemModeFromDefaultMode(
-  defaultMode?: PermissionDefaultMode,
+  defaultMode?: PermissionDefaultMode | string,
 ): FilesystemPermissionMode {
   if (isAuthEnabledEnv()) return 'dontAsk'
   if (defaultMode === 'dontAsk') return 'dontAsk'
   if (defaultMode === 'bypassPermissions') return 'bypassPermissions'
+  // Legacy acceptEdits / plan (and anything else) → default
   return 'default'
 }
 
@@ -192,12 +201,12 @@ function allowRoots(
 }
 
 function allPathsAllowed(
-  absPath: string,
+  pathsToCheck: string[],
   ctx: FilesystemPermissionContext,
   access: 'read' | 'write',
 ): boolean {
   const roots = allowRoots(ctx, access)
-  return getPathsForPermissionCheck(absPath).every(p => {
+  return pathsToCheck.every(p => {
     if (isUnderAnyRoot(p, roots)) return true
     return access === 'read' && isReadableInternalPath(p)
   })
@@ -205,7 +214,7 @@ function allPathsAllowed(
 
 function askMessage(absPath: string, access: 'read' | 'write'): string {
   const verb = access === 'read' ? 'read from' : 'write to'
-  return `Claude requested permissions to ${verb} ${absPath}, but you haven't granted it yet.`
+  return `Permission needed to ${verb} ${absPath}.`
 }
 
 function denyMessage(absPath: string, access: 'read' | 'write'): string {
@@ -218,27 +227,27 @@ function ruleRelativeRoots(ctx: FilesystemPermissionContext): string[] {
 }
 
 function deniedByRule(
-  absPath: string,
+  pathsToCheck: string[],
   ctx: FilesystemPermissionContext,
   access: 'read' | 'write',
   toolName: string,
 ): boolean {
   const roots = ruleRelativeRoots(ctx)
-  return getPathsForPermissionCheck(absPath).some(
+  return pathsToCheck.some(
     p => matchingPermissionRule(p, ctx.deny, toolName, access, roots) !== null,
   )
 }
 
 function allowedByRule(
-  absPath: string,
+  pathsToCheck: string[],
   ctx: FilesystemPermissionContext,
   access: 'read' | 'write',
   toolName: string,
 ): boolean {
   if (ctx.mode === 'dontAsk') return false
   if (ctx.allow.length === 0) return false
-  const roots = [ctx.root]
-  return getPathsForPermissionCheck(absPath).some(
+  const roots = ruleRelativeRoots(ctx)
+  return pathsToCheck.some(
     p => matchingPermissionRule(p, ctx.allow, toolName, access, roots) !== null,
   )
 }
@@ -249,12 +258,15 @@ export function checkReadPermission(
   toolName: string = FILE_READ_TOOL_NAME,
 ): FsPermissionDecision {
   const abs = path.resolve(absPath)
-  if (deniedByRule(abs, ctx, 'read', toolName)) {
+  const pathsToCheck = getPathsForPermissionCheck(abs)
+  if (deniedByRule(pathsToCheck, ctx, 'read', toolName)) {
     return { behavior: 'deny', message: denyMessage(abs, 'read') }
   }
   if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
-  if (allPathsAllowed(abs, ctx, 'read')) return { behavior: 'allow' }
-  if (allowedByRule(abs, ctx, 'read', toolName)) return { behavior: 'allow' }
+  if (allPathsAllowed(pathsToCheck, ctx, 'read')) return { behavior: 'allow' }
+  if (allowedByRule(pathsToCheck, ctx, 'read', toolName)) {
+    return { behavior: 'allow' }
+  }
   return { behavior: 'ask', message: askMessage(abs, 'read'), path: abs }
 }
 
@@ -264,12 +276,15 @@ export function checkWritePermission(
   toolName: string = EDIT_FILE_TOOL_NAME,
 ): FsPermissionDecision {
   const abs = path.resolve(absPath)
-  if (deniedByRule(abs, ctx, 'write', toolName)) {
+  const pathsToCheck = getPathsForPermissionCheck(abs)
+  if (deniedByRule(pathsToCheck, ctx, 'write', toolName)) {
     return { behavior: 'deny', message: denyMessage(abs, 'write') }
   }
   if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
-  if (allPathsAllowed(abs, ctx, 'write')) return { behavior: 'allow' }
-  if (allowedByRule(abs, ctx, 'write', toolName)) return { behavior: 'allow' }
+  if (allPathsAllowed(pathsToCheck, ctx, 'write')) return { behavior: 'allow' }
+  if (allowedByRule(pathsToCheck, ctx, 'write', toolName)) {
+    return { behavior: 'allow' }
+  }
   return { behavior: 'ask', message: askMessage(abs, 'write'), path: abs }
 }
 
@@ -286,23 +301,37 @@ function refusalMessage(
 }
 
 /**
- * HTTP / leftover execute-time gate. Desktop (`default`) does not enforce.
- * Cloud (`dontAsk`) denies unless the path is auto-allowed.
+ * Execute-time / HTTP gate.
+ * - deny → always refuse
+ * - ask → refuse only in `dontAsk` (desktop may have just Allow'd via UI)
+ * - allow → ok
  */
+export function enforcePermissionAtExecute(
+  absPath: string,
+  ctx: FilesystemPermissionContext,
+  access: 'read' | 'write',
+): void {
+  const abs = path.resolve(absPath)
+  for (const p of getPathsForPermissionCheck(abs)) {
+    const decision =
+      access === 'read'
+        ? checkReadPermission(p, ctx)
+        : checkWritePermission(p, ctx)
+    if (decision.behavior === 'allow') continue
+    if (decision.behavior === 'deny') throw new Error(decision.message)
+    if (ctx.mode === 'dontAsk') {
+      throw new Error(refusalMessage(p, ctx.root, access))
+    }
+  }
+}
+
+/** @deprecated Prefer enforcePermissionAtExecute — same behavior. */
 export function assertAccessible(
   absPath: string,
   ctx: FilesystemPermissionContext,
   access: 'read' | 'write',
 ): void {
-  if (ctx.mode !== 'dontAsk') return
-  const abs = path.resolve(absPath)
-  const decision =
-    access === 'read'
-      ? checkReadPermission(abs, ctx)
-      : checkWritePermission(abs, ctx)
-  if (decision.behavior === 'allow') return
-  if (decision.behavior === 'deny') throw new Error(decision.message)
-  throw new Error(refusalMessage(abs, ctx.root, access))
+  enforcePermissionAtExecute(absPath, ctx, access)
 }
 
 export function assertAccessibleResolved(
@@ -310,11 +339,7 @@ export function assertAccessibleResolved(
   ctx: FilesystemPermissionContext,
   access: 'read' | 'write',
 ): void {
-  const resolved = path.resolve(absPath)
-  assertAccessible(resolved, ctx, access)
-  for (const p of getPathsForPermissionCheck(resolved)) {
-    if (p !== resolved) assertAccessible(p, ctx, access)
-  }
+  enforcePermissionAtExecute(absPath, ctx, access)
 }
 
 export function policyFromContext(

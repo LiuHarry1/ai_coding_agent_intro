@@ -134,7 +134,7 @@ SSO 请求里 **逻辑 HOME = 用户 workspace**（`USERS_ROOT/<slug>`），不�
 
 SSO（`AUTH_ENABLED=true`）下 File 工具与 HTTP `/workspace/*` 使用 Claude Code 的 **dontAsk**：工作区外的路径直接拒绝，没有 Allow UI。工作目录固定为用户 pinned `userWorkspace`，Alice 不能批准 Bob 的文件。
 
-桌面（无 AUTH）`permissions.defaultMode`：`default` / `acceptEdits` / `plan` 工作区外询问；`dontAsk` 工作区外拒绝；`bypassPermissions` 工作区外也放行（仍尊重 `deny`）。SSO AUTH 强制 `dontAsk`。Always allow 会写入用户 `~/.ai-agent/settings.json` 的 `permissions.additionalDirectories`；也可以手工预填，例如 `"C:\\Users\\Harry"`。`permissions.allow` 用 `Read(docs/**)` 这类规则自动允许匹配路径；`permissions.deny` 用 `Read(.env)` / `Edit(.env)` 永久拒绝（**deny 优先于 allow 和 Always allow**）。SSO 忽略 `allow` 和 `additionalDirectories`，但仍执行 `deny`。
+桌面（无 AUTH）`permissions.defaultMode`：`default` 工作区外询问；`dontAsk` 工作区外拒绝；`bypassPermissions` 工作区外也放行（仍尊重 `deny`）。旧值 `acceptEdits` / `plan` 会警告并当作 `default`。SSO AUTH 强制 `dontAsk`。Always allow 会写入用户 `~/.ai-agent/settings.json` 的 `permissions.additionalDirectories`；也可以手工预填，例如 `"C:\\Users\\Harry"`。`permissions.allow` 用 `Read(docs/**)` 这类规则自动允许匹配路径；`permissions.deny` 用 `Read(.env)` / `Edit(.env)` 永久拒绝（**deny 优先于 allow 和 Always allow**）。SSO 忽略 `allow` 和 `additionalDirectories`，但仍执行 `deny`。
 
 说明：这是**应用层**隔离。Bash / PowerShell 仍可用绝对路径读其它目录，直到 shell 单独设门。不要用 File deny 当成租户隔离的全部。
 

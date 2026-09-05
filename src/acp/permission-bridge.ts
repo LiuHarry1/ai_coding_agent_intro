@@ -17,7 +17,7 @@ const DEFAULT_OPTIONS: PermissionOption[] = [
 
 const TOOL_PERMISSION_OPTIONS: PermissionOption[] = [
   { optionId: 'allow-once', name: 'Allow', kind: 'allow_once' },
-  { optionId: 'allow-always', name: 'Always allow', kind: 'allow_once' },
+  { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
   { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
 ]
 

@@ -122,9 +122,6 @@ export function createCanUseTool(opts: CreateCanUseToolOptions): CanUseToolFn {
     if (decision.behavior === 'deny') {
       return { behavior: 'deny', message: decision.message }
     }
-    if (permissionContext.mode === 'bypassPermissions') {
-      return { behavior: 'allow' }
-    }
 
     const access = WRITE_TOOLS.has(toolName) ? 'write' : 'read'
     if (permissionContext.mode === 'dontAsk') {

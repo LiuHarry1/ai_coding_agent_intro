@@ -31,6 +31,9 @@ const READ_FAMILY = new Set([
 
 const WRITE_FAMILY = new Set([EDIT_FILE_TOOL_NAME, WRITE_FILE_TOOL_NAME])
 
+/** Cache ignore instances by normalized pattern string. */
+const ignoreCache = new Map<string, ReturnType<typeof ignore>>()
+
 function unescapeRuleContent(raw: string): string {
   return raw
     .replace(/\\\(/g, '(')
@@ -118,13 +121,23 @@ function posixRelative(from: string, to: string): string | null {
   return posix
 }
 
-function ignoreMatches(relativePosix: string, pattern: string): boolean {
+function normalizeIgnorePattern(pattern: string): string | null {
   let pat = toPosix(pattern)
   if (pat.startsWith('./')) pat = pat.slice(2)
   if (pat.endsWith('/**')) pat = pat.slice(0, -3)
+  return pat || null
+}
+
+function ignoreMatches(relativePosix: string, pattern: string): boolean {
+  const pat = normalizeIgnorePattern(pattern)
   if (!pat || !relativePosix) return false
   try {
-    return ignore().add(pat).ignores(relativePosix)
+    let ig = ignoreCache.get(pat)
+    if (!ig) {
+      ig = ignore().add(pat)
+      ignoreCache.set(pat, ig)
+    }
+    return ig.ignores(relativePosix)
   } catch {
     return false
   }
@@ -142,19 +155,39 @@ function absolutePatternMatches(absPath: string, pattern: string): boolean {
   return isPathInWorkspace(resolvedFile, resolvedPat)
 }
 
+/**
+ * CC: a single leading `/` is relative to the settings/project root
+ * (`Read(/src/**)`), not the filesystem root. True absolutes: `~/`,
+ * Windows drive (`C:\`), UNC (`//` / `\\`).
+ */
+export function isFilesystemAbsolutePattern(pattern: string): boolean {
+  const expanded = expandUserPath(pattern)
+  if (expanded.startsWith('~/') || expanded === '~') return true
+  if (expanded.startsWith('//') || expanded.startsWith('\\\\')) return true
+  if (/^[a-zA-Z]:[\\/]/.test(expanded)) return true
+  // Lone leading `/foo` is project-relative (CC), not FS-absolute.
+  if (expanded.startsWith('/') && !expanded.startsWith('//')) return false
+  return path.isAbsolute(expanded)
+}
+
 export function patternMatchesPath(
   absPath: string,
   pattern: string,
   relativeRoots: string[],
 ): boolean {
   const expanded = expandUserPath(pattern)
-  if (path.isAbsolute(expanded)) {
+  if (isFilesystemAbsolutePattern(expanded)) {
     return absolutePatternMatches(absPath, expanded)
+  }
+  // Project-root-relative: strip one leading slash for ignore matching.
+  let relativePat = expanded
+  if (relativePat.startsWith('/') && !relativePat.startsWith('//')) {
+    relativePat = relativePat.slice(1)
   }
   const resolvedFile = path.resolve(absPath)
   for (const root of relativeRoots) {
     const rel = posixRelative(root, resolvedFile)
-    if (rel && ignoreMatches(rel, pattern)) return true
+    if (rel && ignoreMatches(rel, relativePat)) return true
   }
   return false
 }

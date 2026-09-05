@@ -127,13 +127,20 @@ const PermissionsSchema = z.object({
   /** CC `Tool` / `Tool(pattern)` rules that always deny (deny wins). */
   deny: z.array(z.string()).optional(),
   /**
-   * CC `permissions.defaultMode`.
-   * `default` / `acceptEdits` / `plan` → ask outside the workspace;
-   * `dontAsk` → deny outside; `bypassPermissions` → allow outside (deny still wins).
+   * Filesystem defaultMode (implemented subset of CC).
+   * `default` → ask outside; `dontAsk` → deny outside;
+   * `bypassPermissions` → allow outside (deny still wins).
+   * Legacy `acceptEdits` / `plan` coerce to `default`.
    */
-  defaultMode: z
-    .enum(['default', 'acceptEdits', 'plan', 'dontAsk', 'bypassPermissions'])
-    .optional(),
+  defaultMode: z.preprocess((value) => {
+    if (value === 'acceptEdits' || value === 'plan') {
+      console.warn(
+        `[settings] permissions.defaultMode "${value}" is not implemented; using "default"`,
+      )
+      return 'default'
+    }
+    return value
+  }, z.enum(['default', 'dontAsk', 'bypassPermissions']).optional()),
 })
 
 /** Parsed settings layer before merge into AppConfig. */

@@ -99,6 +99,28 @@ withTempDir(dir => {
   fs.writeFileSync(
     path.join(settingsDir, 'settings.json'),
     JSON.stringify({
+      permissions: { defaultMode: 'acceptEdits' },
+    }),
+  )
+  const resolved = resolveSettings(dir)
+  const projectErrors = resolved.validationErrors.filter(e =>
+    e.file.includes(dir),
+  )
+  assert.equal(projectErrors.length, 0, 'legacy acceptEdits should coerce')
+  assert.equal(
+    resolved.config.permissions?.defaultMode,
+    'default',
+    'acceptEdits coerces to default',
+  )
+  console.log('[ok] permissions.defaultMode acceptEdits coerces to default')
+})
+
+withTempDir(dir => {
+  const settingsDir = path.join(dir, '.ai-agent')
+  fs.mkdirSync(settingsDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(settingsDir, 'settings.json'),
+    JSON.stringify({
       disabledTools: ['Bash'],
       lspServers: {
         jdtls: {

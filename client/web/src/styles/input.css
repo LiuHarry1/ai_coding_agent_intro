@@ -642,15 +642,140 @@
 .ask-card__submit:disabled { opacity: 0.5; cursor: not-allowed; }
 .ask-card--done { padding: 10px 14px; color: var(--text-muted); font-size: 13px; }
 
+/* ── File permission card ─────────────────── */
+.perm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-secondary));
+}
+
+.perm-card__header,
+.perm-card__done-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+
+.perm-card__title,
+.perm-card__status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.perm-card__badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.perm-card__path {
+  display: block;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.perm-card__fallback {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, var(--text-muted));
+  line-height: 1.45;
+}
+
 .perm-card__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  margin: 0;
   align-items: stretch;
 }
-.perm-card__actions .ask-option { flex: 1; min-width: 120px; }
-.perm-card__reject .ask-option__label { color: var(--danger, #c44); }
+
+.perm-card__btn {
+  flex: 1;
+  min-width: 96px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.perm-card__btn:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 8%, var(--bg-input));
+}
+
+.perm-card__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.perm-card__btn--primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.perm-card__btn--primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  border-color: transparent;
+  background: var(--accent);
+}
+
+.perm-card__btn--reject {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 35%, var(--border));
+}
+
+.perm-card__btn--reject:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 10%, var(--bg-input));
+  border-color: color-mix(in srgb, var(--red) 55%, var(--border));
+}
+
+.perm-card--done {
+  gap: 6px;
+  padding: 10px 12px;
+  border-color: var(--border);
+  background: var(--bg-secondary);
+}
+
+.perm-card--allowed .perm-card__status {
+  color: var(--accent);
+}
+
+.perm-card--rejected .perm-card__status {
+  color: var(--red);
+}
+
+.perm-card--done .perm-card__path {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
 .ask-card__answers {
   margin: 8px 0 0;
   padding: 0;
