@@ -17,8 +17,8 @@ import { getPreviewBaseUrl, handlePreview } from './preview.js'
 import { isPathInWorkspace } from '../../core/workspace.js'
 import {
   assertAccessibleResolved,
-  createSandboxPolicy,
-} from '../../core/sandbox.js'
+  createFilesystemPermissionContext,
+} from '../../utils/permissions/filesystem.js'
 
 /**
  * Self-contained workspace HTTP module.
@@ -108,11 +108,11 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
     // that root with no UI. Desktop (`default`) leaves the folder picker open.
     const pinned = (req as { userWorkspace?: string }).userWorkspace
     const root = pinned ?? opts.root
-    const policy = createSandboxPolicy(root)
-    const enforceSandbox = Boolean(pinned) || policy.mode === 'dontAsk'
+    const policy = createFilesystemPermissionContext(root)
+    const enforceDontAsk = Boolean(pinned) || policy.mode === 'dontAsk'
     const safe = (input: string, access: 'read' | 'write' = 'read'): string => {
       const abs = resolvePath(input, root)
-      if (enforceSandbox) {
+      if (enforceDontAsk) {
         try {
           assertAccessibleResolved(abs, policy, access)
         } catch (err) {

@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { definition as writeFileDefinition } from '../tools/FileWriteTool/FileWriteTool.js'
-import { createSandboxPolicy } from '../core/sandbox.js'
+import { createFilesystemPermissionContext } from '../utils/permissions/filesystem.js'
 import { resolvePath } from '../tools/utils.js'
 
 const root = 'C:\\Users\\harry.liu\\cursor_workspace\\ai_coding_agent_intro'
@@ -13,7 +13,7 @@ console.log('joined', joined)
 console.log('resolved', resolvePath(root, joined))
 
 const tool = writeFileDefinition.create(root, {
-  sandbox: createSandboxPolicy(root, { extraWriteRoots: [mem] }),
+  permissionContext: createFilesystemPermissionContext(root, { extraWriteRoots: [mem] }),
 })
 const out = await (
   tool as { execute: (a: unknown) => Promise<unknown> }

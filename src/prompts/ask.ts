@@ -7,7 +7,7 @@ import {
 } from '../constants/tool_names.js'
 import { computeSimpleEnvInfo } from '../constants/prompts.js'
 import { setCwd } from '../utils/cwd.js'
-import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
+import { workspaceBoundaryPromptSection } from '../utils/permissions/workspace-boundary-prompt.js'
 
 /**
  * Ask mode system prompt — read-only exploration, no code changes.

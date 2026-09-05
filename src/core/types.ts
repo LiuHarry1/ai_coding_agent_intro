@@ -83,7 +83,7 @@ export interface ToolContext {
    * Request-scoped filesystem permission context (SSO: pinned userWorkspace,
    * mode `dontAsk`). Desktop is `default` (outside → ask).
    */
-  sandbox?: import('../utils/permissions/filesystem.js').FilesystemPermissionContext
+  permissionContext?: import('../utils/permissions/filesystem.js').FilesystemPermissionContext
   /**
    * Tool execution via isomorphic Agent Worker (RuntimePort RPC).
    * Always set for both local and SSH workspaces.
@@ -173,7 +173,7 @@ export interface ToolDefinition {
     input: unknown,
     ctx: {
       cwd: string
-      sandbox?: import('../utils/permissions/filesystem.js').FilesystemPermissionContext
+      permissionContext?: import('../utils/permissions/filesystem.js').FilesystemPermissionContext
     },
   ) =>
     | import('../utils/permissions/filesystem.js').FsPermissionDecision

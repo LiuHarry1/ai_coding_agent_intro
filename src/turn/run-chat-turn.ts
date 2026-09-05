@@ -605,7 +605,7 @@ export async function runChatTurn(
         canUseTool: createCanUseTool({
           cwd,
           getDefinition: prepared.getToolDefinition,
-          sandbox: prepared.toolContext.sandbox,
+          permissionContext: prepared.toolContext.permissionContext,
           session,
           wire,
           abortSignal: turnAbort.signal,

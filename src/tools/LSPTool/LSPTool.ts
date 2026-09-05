@@ -20,13 +20,11 @@ import { LSP_TOOL_NAME } from '../../constants/tool_names.js'
 import { getLspManager } from '../../services/lsp/manager.js'
 import { resolvePath } from '../utils.js'
 import {
+  assertAccessibleResolved,
   checkReadPermissionForTool,
   filePathFromInput,
-} from '../../utils/permissions/filesystem.js'
-import {
-  assertAccessibleResolved,
   policyFromContext,
-} from '../../core/sandbox.js'
+} from '../../utils/permissions/filesystem.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 
 export type LspToolOutput = {
@@ -73,7 +71,7 @@ export const definition: ToolDefinition = {
   checkPermissions(input, ctx) {
     return checkReadPermissionForTool(
       ctx.cwd,
-      ctx.sandbox,
+      ctx.permissionContext,
       input,
       ['file_path'],
       undefined,
@@ -153,7 +151,7 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
         try {
           assertAccessibleResolved(
             absolutePath,
-            policyFromContext(cwd, context.sandbox),
+            policyFromContext(cwd, context.permissionContext),
             'read',
           )
         } catch (err) {

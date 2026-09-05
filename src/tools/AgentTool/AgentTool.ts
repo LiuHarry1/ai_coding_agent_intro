@@ -226,7 +226,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             models,
             compaction,
             sessionId: context.sessionId,
-            sandbox: context.sandbox,
+            permissionContext: context.permissionContext,
             cwd: context.cwd ?? cwd,
           }
 

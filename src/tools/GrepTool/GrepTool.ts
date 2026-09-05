@@ -15,18 +15,16 @@ import * as path from 'path'
 import { ripGrep } from '../../utils/ripgrep.js'
 import { resolvePath } from '../utils.js'
 import {
+  assertAccessibleResolved,
   checkReadPermissionForTool,
   filePathFromInput,
+  policyFromContext,
 } from '../../utils/permissions/filesystem.js'
 import type {
   DualChannelToolResult,
   ToolDefinition,
   ToolResultBlockParam,
 } from '../../core/types.js'
-import {
-  assertAccessibleResolved,
-  policyFromContext,
-} from '../../core/sandbox.js'
 import {
   AGENT_TOOL_NAME,
   BASH_TOOL_NAME,
@@ -364,7 +362,7 @@ export const definition: ToolDefinition = {
   checkPermissions(input, ctx) {
     return checkReadPermissionForTool(
       ctx.cwd,
-      ctx.sandbox,
+      ctx.permissionContext,
       input,
       ['path'],
       ctx.cwd,
@@ -570,7 +568,7 @@ export const definition: ToolDefinition = {
         try {
           assertAccessibleResolved(
             absolutePath,
-            policyFromContext(cwd, toolContext.sandbox),
+            policyFromContext(cwd, toolContext.permissionContext),
             'read',
           )
         } catch (err) {

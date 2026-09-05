@@ -43,9 +43,9 @@ import { mergeMCPServers } from '../../core/settings-manager.js'
 import { noopWireEmitter } from '../../core/wire-emitter.js'
 import { getMCPManagerForServers } from '../../core/mcp-lifecycle.js'
 import {
-  createSandboxPolicy,
+  createFilesystemPermissionContext,
   settingsPermissionOpts,
-} from '../../core/sandbox.js'
+} from '../permissions/filesystem.js'
 import { resolveAutoMemoryConfig } from '../../core/settings-manager.js'
 import {
   buildAutoMemorySystemAppend,
@@ -278,15 +278,18 @@ export async function prepareChatTurn(
     sessionId: session.id,
     session,
     cwd,
-    sandbox: createSandboxPolicy(remote ? pluginCwd : cwd, {
-      extraReadRoots: autoMemPath ? [autoMemPath] : undefined,
-      extraWriteRoots: autoMemPath ? [autoMemPath] : undefined,
-      ...permOpts,
-      additionalWorkingDirectories: [
-        ...(permOpts.additionalWorkingDirectories ?? []),
-        ...(session.additionalWorkingDirectories ?? []),
-      ],
-    }),
+    permissionContext: createFilesystemPermissionContext(
+      remote ? pluginCwd : cwd,
+      {
+        extraReadRoots: autoMemPath ? [autoMemPath] : undefined,
+        extraWriteRoots: autoMemPath ? [autoMemPath] : undefined,
+        ...permOpts,
+        additionalWorkingDirectories: [
+          ...(permOpts.additionalWorkingDirectories ?? []),
+          ...(session.additionalWorkingDirectories ?? []),
+        ],
+      },
+    ),
     execution,
   }
 

@@ -40,7 +40,7 @@ export interface RunSkillForkOptions {
   models?: ModelRegistry
   compaction?: CompactionConfig
   sessionId?: string
-  sandbox?: ToolContext['sandbox']
+  permissionContext?: ToolContext['permissionContext']
 }
 
 export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
@@ -58,7 +58,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     models,
     compaction,
     sessionId,
-    sandbox,
+    permissionContext,
   } = opts
 
   const targetAgentType = skill.agent ?? 'general_purpose'
@@ -91,7 +91,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     models,
     compaction,
     sessionId,
-    sandbox,
+    permissionContext,
     cwd,
   }
 

@@ -225,7 +225,7 @@ src/services/auto-memory/
   inject.ts         # non-empty MEMORY.md → context slice (after AGENTS)
   index.ts
 
-core/sandbox.ts                 # memdir write carve-out
+utils/permissions/filesystem.ts # memdir write carve-out (extraWriteRoots)
 core/agent.ts                   # turn-end hook only (tool_calls===0)
 services/…/extractQueue.ts      # 泛化：lockKey = memdir path（Auto）或 sessionId（SM）
 prepare_chat_turn / prompts     # memory guide + index inject

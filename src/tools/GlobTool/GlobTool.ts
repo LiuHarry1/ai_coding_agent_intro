@@ -12,18 +12,16 @@ import * as path from 'path'
 import { buildGlobRgArgs, glob as runGlob } from '../../utils/glob.js'
 import { resolvePath } from '../utils.js'
 import {
+  assertAccessibleResolved,
   checkReadPermissionForTool,
   filePathFromInput,
+  policyFromContext,
 } from '../../utils/permissions/filesystem.js'
 import type {
   DualChannelToolResult,
   ToolDefinition,
   ToolResultBlockParam,
 } from '../../core/types.js'
-import {
-  assertAccessibleResolved,
-  policyFromContext,
-} from '../../core/sandbox.js'
 import { GLOB_TOOL_NAME } from '../../constants/tool_names.js'
 import { AGENT_TOOL_NAME } from '../../constants/tool_names.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
@@ -133,7 +131,7 @@ export const definition: ToolDefinition = {
   checkPermissions(input, ctx) {
     return checkReadPermissionForTool(
       ctx.cwd,
-      ctx.sandbox,
+      ctx.permissionContext,
       input,
       ['path'],
       ctx.cwd,
@@ -231,7 +229,7 @@ export const definition: ToolDefinition = {
         try {
           assertAccessibleResolved(
             searchDir,
-            policyFromContext(cwd, context.sandbox),
+            policyFromContext(cwd, context.permissionContext),
             'read',
           )
         } catch (err) {

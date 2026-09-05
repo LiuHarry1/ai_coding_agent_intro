@@ -21,7 +21,7 @@ import {
 import { PLAN_PHASE4_SECTION } from './plan-phase4.js'
 import { computeSimpleEnvInfo } from '../constants/prompts.js'
 import { setCwd } from '../utils/cwd.js'
-import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
+import { workspaceBoundaryPromptSection } from '../utils/permissions/workspace-boundary-prompt.js'
 
 export interface PlanPromptOptions {
   planFilePath: string

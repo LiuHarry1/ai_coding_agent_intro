@@ -100,8 +100,8 @@ services:
       JWT_ALGORITHM: "HS256"
       USERS_ROOT: /workspace/users
       WORKSPACE_SEED_DIR: "/opt/workspace-seed"
-      # SSO isolation is AUTH_ENABLED + pinned user workspace (dontAsk).
-      # File tools refuse paths outside the pinned dir. Bash is NOT OS-isolated.
+      # AUTH_ENABLED: JWT gate + pin per-user workspace. File boundary uses
+      # derived mode dontAsk (outside path → deny, no Allow UI). Bash is NOT OS-isolated.
       # ── Analytics + daily token quota (optional) ─────────────────────────
       QUOTA_ENABLED: "${QUOTA_ENABLED:-false}"
       ANALYTICS_URL: "${ANALYTICS_URL:-http://analytics:8200}"

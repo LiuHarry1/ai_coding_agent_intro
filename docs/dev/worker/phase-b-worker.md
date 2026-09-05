@@ -114,7 +114,7 @@
 
 ```ts
 // C → W
-{ type: 'bind', workspace: WorkspaceHandle, lspServers?: LspConfigMap, sandbox?: SandboxPolicy }
+{ type: 'bind', workspace: WorkspaceHandle, lspServers?: LspConfigMap, permissionContext?: FilesystemPermissionContext }
 // W → C
 { type: 'ready', workspace, workerVersion, capabilities }
 ```

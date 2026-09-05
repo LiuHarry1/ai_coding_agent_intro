@@ -50,7 +50,7 @@ const WRITE_TOOLS = new Set([WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME])
 export type CreateCanUseToolOptions = {
   cwd: string
   getDefinition?: (name: string) => ToolDefinition | undefined
-  sandbox?: FilesystemPermissionContext
+  permissionContext?: FilesystemPermissionContext
   session?: Session
   wire: WireEmitter
   abortSignal?: AbortSignal
@@ -77,11 +77,11 @@ function grantPath(
 
 function applyAlwaysAllow(
   absPath: string,
-  sandbox: FilesystemPermissionContext,
+  permissionContext: FilesystemPermissionContext,
   session: Session | undefined,
   cwd: string,
 ): void {
-  const dir = addAlwaysAllowDirectory(sandbox, absPath)
+  const dir = addAlwaysAllowDirectory(permissionContext, absPath)
   if (session) {
     if (!session.additionalWorkingDirectories) {
       session.additionalWorkingDirectories = []
@@ -90,7 +90,7 @@ function applyAlwaysAllow(
       session.additionalWorkingDirectories.push(dir)
     }
   }
-  if (sandbox.mode === 'dontAsk') return
+  if (permissionContext.mode === 'dontAsk') return
   try {
     persistAlwaysAllowDirectory(cwd, dir)
   } catch (err) {
@@ -108,24 +108,33 @@ function applyAlwaysAllow(
  */
 export function createCanUseTool(opts: CreateCanUseToolOptions): CanUseToolFn {
   const { cwd, getDefinition, session, wire, abortSignal } = opts
-  const sandbox = opts.sandbox ?? policyFromContext(cwd)
+  const permissionContext = opts.permissionContext ?? policyFromContext(cwd)
 
   return async (toolName, input, meta) => {
     const def = getDefinition?.(toolName)
     if (!def?.checkPermissions) return { behavior: 'allow' }
 
-    const decision = await def.checkPermissions(input, { cwd, sandbox })
+    const decision = await def.checkPermissions(input, {
+      cwd,
+      permissionContext,
+    })
     if (decision.behavior === 'allow') return { behavior: 'allow' }
     if (decision.behavior === 'deny') {
       return { behavior: 'deny', message: decision.message }
     }
-    if (sandbox.mode === 'bypassPermissions') return { behavior: 'allow' }
+    if (permissionContext.mode === 'bypassPermissions') {
+      return { behavior: 'allow' }
+    }
 
     const access = WRITE_TOOLS.has(toolName) ? 'write' : 'read'
-    if (sandbox.mode === 'dontAsk') {
+    if (permissionContext.mode === 'dontAsk') {
       return {
         behavior: 'deny',
-        message: denyOutsideMessage(decision.path, sandbox.root, access),
+        message: denyOutsideMessage(
+          decision.path,
+          permissionContext.root,
+          access,
+        ),
       }
     }
 
@@ -164,7 +173,12 @@ export function createCanUseTool(opts: CreateCanUseToolOptions): CanUseToolFn {
     }
 
     if (answer.behavior === 'always') {
-      applyAlwaysAllow(grantPath(cwd, def, input, decision), sandbox, session, cwd)
+      applyAlwaysAllow(
+        grantPath(cwd, def, input, decision),
+        permissionContext,
+        session,
+        cwd,
+      )
     }
 
     return { behavior: 'allow' }

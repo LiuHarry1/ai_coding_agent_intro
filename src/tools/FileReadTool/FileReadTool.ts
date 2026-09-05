@@ -20,13 +20,11 @@ import {
 } from '../../utils/read/index.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 import {
+  assertAccessibleResolved,
   checkReadPermissionForTool,
   filePathFromInput,
-} from '../../utils/permissions/filesystem.js'
-import {
-  assertAccessibleResolved,
   policyFromContext,
-} from '../../core/sandbox.js'
+} from '../../utils/permissions/filesystem.js'
 
 function sessionReadFileState(
   context: { session?: { readFileState?: ReadFileState } },
@@ -51,7 +49,7 @@ export const definition: ToolDefinition = {
   checkPermissions(input, ctx) {
     return checkReadPermissionForTool(
       ctx.cwd,
-      ctx.sandbox,
+      ctx.permissionContext,
       input,
       ['file_path'],
       undefined,
@@ -137,7 +135,7 @@ export const definition: ToolDefinition = {
         try {
           assertAccessibleResolved(
             resolved.abs,
-            policyFromContext(cwd, context.sandbox),
+            policyFromContext(cwd, context.permissionContext),
             'read',
           )
         } catch (err) {

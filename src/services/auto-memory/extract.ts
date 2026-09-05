@@ -17,9 +17,9 @@ import type {
 } from '../../core/types.js'
 import { isRoleMessage } from '../../core/types.js'
 import {
-  createSandboxPolicy,
-  type SandboxPolicy,
-} from '../../core/sandbox.js'
+  createFilesystemPermissionContext,
+  type FilesystemPermissionContext,
+} from '../../utils/permissions/filesystem.js'
 import {
   resolveToolFilePath,
   runForkedAgent,
@@ -193,8 +193,8 @@ export function createAutoMemCanUseTool(
   }
 }
 
-function sandboxWithMemdir(cwd: string, memPath: string): SandboxPolicy {
-  const base = createSandboxPolicy(cwd)
+function permissionContextWithMemdir(cwd: string, memPath: string): FilesystemPermissionContext {
+  const base = createFilesystemPermissionContext(cwd)
   return {
     ...base,
     extraReadRoots: [
@@ -348,7 +348,7 @@ async function runAutoMemoryExtract(
   })
 
   const canUseTool = createAutoMemCanUseTool(memPath, cwd)
-  const sandbox = sandboxWithMemdir(cwd, memPath)
+  const permissionContext = permissionContextWithMemdir(cwd, memPath)
   const forkMessages = messages.slice()
   const useCacheSafe = config.cacheSafe !== false && !!cacheSafeParams
 
@@ -366,7 +366,7 @@ async function runAutoMemoryExtract(
         maxSteps: AUTO_MEMORY_MAX_STEPS,
         cwd,
         sessionId,
-        contextOverrides: { sandbox },
+        contextOverrides: { permissionContext },
       })
     } else {
       // Restricted: only Read + Edit + Write schemas from parent tools if any.
@@ -402,7 +402,7 @@ async function runAutoMemoryExtract(
         maxSteps: AUTO_MEMORY_MAX_STEPS,
         cwd,
         sessionId,
-        contextOverrides: { sandbox },
+        contextOverrides: { permissionContext },
       })
     }
 

@@ -319,9 +319,9 @@ export function assertAccessibleResolved(
 
 export function policyFromContext(
   cwd: string,
-  sandbox?: FilesystemPermissionContext,
+  permissionContext?: FilesystemPermissionContext,
 ): FilesystemPermissionContext {
-  return sandbox ?? createFilesystemPermissionContext(cwd)
+  return permissionContext ?? createFilesystemPermissionContext(cwd)
 }
 
 export function workspaceBoundaryPromptSection(
@@ -388,7 +388,7 @@ function resolveInputPath(
 /** CC `checkReadPermissionForTool` — resolve then checkRead. */
 export function checkReadPermissionForTool(
   cwd: string,
-  sandbox: FilesystemPermissionContext | undefined,
+  permissionContext: FilesystemPermissionContext | undefined,
   input: unknown,
   pathKeys: string[] = ['file_path', 'path'],
   defaultPath?: string,
@@ -401,7 +401,7 @@ export function checkReadPermissionForTool(
   }
   return checkReadPermission(
     resolved.abs,
-    policyFromContext(cwd, sandbox),
+    policyFromContext(cwd, permissionContext),
     toolName,
   )
 }
@@ -409,7 +409,7 @@ export function checkReadPermissionForTool(
 /** CC `checkWritePermissionForTool` — resolve then checkWrite. */
 export function checkWritePermissionForTool(
   cwd: string,
-  sandbox: FilesystemPermissionContext | undefined,
+  permissionContext: FilesystemPermissionContext | undefined,
   input: unknown,
   pathKeys: string[] = ['file_path', 'path'],
   defaultPath?: string,
@@ -422,7 +422,7 @@ export function checkWritePermissionForTool(
   }
   return checkWritePermission(
     resolved.abs,
-    policyFromContext(cwd, sandbox),
+    policyFromContext(cwd, permissionContext),
     toolName,
   )
 }

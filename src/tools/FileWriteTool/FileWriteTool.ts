@@ -4,13 +4,11 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { resolvePath } from '../utils.js'
 import {
+  assertAccessibleResolved,
   checkWritePermissionForTool,
   filePathFromInput,
-} from '../../utils/permissions/filesystem.js'
-import {
-  assertAccessibleResolved,
   policyFromContext,
-} from '../../core/sandbox.js'
+} from '../../utils/permissions/filesystem.js'
 import type {
   DualChannelToolResult,
   ToolDefinition,
@@ -44,7 +42,7 @@ export const definition: ToolDefinition = {
   checkPermissions(input, ctx) {
     return checkWritePermissionForTool(
       ctx.cwd,
-      ctx.sandbox,
+      ctx.permissionContext,
       input,
       ['file_path'],
       undefined,
@@ -155,7 +153,7 @@ export const definition: ToolDefinition = {
         try {
           assertAccessibleResolved(
             abs,
-            policyFromContext(cwd, context.sandbox),
+            policyFromContext(cwd, context.permissionContext),
             'write',
           )
         } catch (err) {

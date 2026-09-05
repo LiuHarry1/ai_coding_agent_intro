@@ -16,7 +16,7 @@ import {
 import { SKILL_TOOL_NAME } from '../tools/SkillTool/SkillTool.js'
 import { computeSimpleEnvInfo } from '../constants/prompts.js'
 import { setCwd } from '../utils/cwd.js'
-import { workspaceBoundaryPromptSection } from '../core/sandbox.js'
+import { workspaceBoundaryPromptSection } from '../utils/permissions/workspace-boundary-prompt.js'
 
 // Static system prompt sections. Uses tool/agent names via constants.
 

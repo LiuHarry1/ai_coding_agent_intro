@@ -31,8 +31,8 @@ import {
 } from '../services/session-memory/messageUuid.js'
 import {
   assertAccessible,
-  createSandboxPolicy,
-} from '../core/sandbox.js'
+  createFilesystemPermissionContext,
+} from '../utils/permissions/filesystem.js'
 import { checkWritePermission } from '../utils/permissions/filesystem.js'
 import {
   DEFAULTS,
@@ -222,7 +222,7 @@ function assistantWrite(filePath: string): Message {
 {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-am-'))
   const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-mem-'))
-  const policy = createSandboxPolicy(root, {
+  const policy = createFilesystemPermissionContext(root, {
     extraWriteRoots: [mem],
     extraReadRoots: [mem],
   })
@@ -235,7 +235,7 @@ function assistantWrite(filePath: string): Message {
   const prevAuth = process.env.AUTH_ENABLED
   process.env.AUTH_ENABLED = 'true'
   try {
-    const cloud = createSandboxPolicy(root, {
+    const cloud = createFilesystemPermissionContext(root, {
       extraWriteRoots: [mem],
       extraReadRoots: [mem],
     })
@@ -356,7 +356,7 @@ async function testWriteCarveOut(): Promise<void> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'am-write-root-'))
   const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'am-write-mem-'))
   const tool = writeFileDefinition.create(root, {
-    sandbox: createSandboxPolicy(root, { extraWriteRoots: [mem] }),
+    permissionContext: createFilesystemPermissionContext(root, { extraWriteRoots: [mem] }),
     // Local Worker stub: previously assertInWorkspace blocked memdir.
     execution: { kind: 'worker', environmentId: 'local' } as never,
   })

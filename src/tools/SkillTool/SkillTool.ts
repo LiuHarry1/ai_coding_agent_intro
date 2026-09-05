@@ -163,7 +163,7 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
               models: context.models,
               compaction: context.compaction,
               sessionId: context.sessionId,
-              sandbox: context.sandbox,
+              permissionContext: context.permissionContext,
             })
             return {
               data: {

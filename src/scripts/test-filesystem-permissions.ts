@@ -1,6 +1,6 @@
 /**
  * Unit checks for CC-aligned filesystem permissions.
- * Run: npx tsx src/scripts/test-sandbox.ts
+ * Run: npx tsx src/scripts/test-filesystem-permissions.ts
  */
 import * as fs from 'fs'
 import * as os from 'os'
@@ -32,10 +32,8 @@ function expectThrow(fn: () => void, label: string) {
 }
 
 const prevAuth = process.env.AUTH_ENABLED
-const prevMode = process.env.SANDBOX_MODE
 
 try {
-  delete process.env.SANDBOX_MODE
   process.env.AUTH_ENABLED = ''
   if (resolveFilesystemPermissionMode() !== 'default') {
     throw new Error('desktop AUTH unset should be default')
@@ -148,7 +146,7 @@ try {
   )
   const lockedCanUse = createCanUseTool({
     cwd: root,
-    sandbox: locked,
+    permissionContext: locked,
     getDefinition: name =>
       name === FILE_READ_TOOL_NAME ? fileReadDef : undefined,
     wire: noopWireEmitter,
@@ -208,7 +206,7 @@ try {
 
   const canUse = createCanUseTool({
     cwd: root,
-    sandbox: cloud,
+    permissionContext: cloud,
     getDefinition: name => (name === FILE_READ_TOOL_NAME ? fileReadDef : undefined),
     wire: noopWireEmitter,
   })
@@ -287,6 +285,4 @@ try {
 } finally {
   if (prevAuth === undefined) delete process.env.AUTH_ENABLED
   else process.env.AUTH_ENABLED = prevAuth
-  if (prevMode === undefined) delete process.env.SANDBOX_MODE
-  else process.env.SANDBOX_MODE = prevMode
 }

@@ -110,7 +110,7 @@ export function createSubagentContext(
     sessionId: fieldOverrides.sessionId ?? parent?.sessionId,
     session: fieldOverrides.session,
     cwd: fieldOverrides.cwd ?? parent?.cwd,
-    sandbox: fieldOverrides.sandbox ?? parent?.sandbox,
+    permissionContext: fieldOverrides.permissionContext ?? parent?.permissionContext,
   }
 }
 
