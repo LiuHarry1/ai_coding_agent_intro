@@ -2,21 +2,21 @@
   "models": {
     "large": {
       "provider": "openai-compatible",
-      "baseURL": "http://10.150.10.54:4000",
-      "apiKey": "sk-bogXNqNWjKviSeRIEpY6Kw",
-      "model": "qwen3.6-35b-a3b"
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "gpt-5.6-luna"
     },
     "medium": {
       "provider": "openai-compatible",
-      "baseURL": "http://10.150.10.54:4000",
-      "apiKey": "sk-bogXNqNWjKviSeRIEpY6Kw",
-      "model": "qwen3.6-35b-a3b"
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "gpt-5.6-luna"
     },
     "small": {
       "provider": "openai-compatible",
-      "baseURL": "http://10.150.10.54:4000",
-      "apiKey": "sk-bogXNqNWjKviSeRIEpY6Kw",
-      "model": "qwen3.6-35b-a3b"
+      "baseURL": "http://localhost:4141/v1",
+      "apiKey": "sk-xxx",
+      "model": "gpt-4"
     }
   },
   "compaction": {
