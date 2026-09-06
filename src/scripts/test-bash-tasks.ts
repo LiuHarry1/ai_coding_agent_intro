@@ -19,7 +19,8 @@ import {
 } from '../utils/task/diskOutput.js'
 import { formatTaskOutput } from '../utils/task/outputFormatting.js'
 import { resolveFileInCwd } from '../utils/read/index.js'
-import { isReadableInternalPath, SESSION_DIR } from '../core/session-paths.js'
+import { isReadableInternalPath, getProjectsRoot, registerSessionLocation, computeProjectKey } from '../core/session-paths.js'
+import { resolveAgentHome } from '../utils/request-scope.js'
 import { spawnShellTask } from '../tasks/LocalShellTask/LocalShellTask.js'
 import { stopTask } from '../tasks/stopTask.js'
 import { getTask, clearSessionTasks } from '../utils/task/framework.js'
@@ -27,8 +28,13 @@ import { drainTaskNotifications } from '../utils/task/pendingNotifications.js'
 
 async function main() {
   _resetTaskOutputDirForTest()
-  setTaskSessionId('test-session-tasks')
-  clearSessionTasks('test-session-tasks')
+  const sid = 'test-session-tasks'
+  registerSessionLocation(sid, {
+    projectKey: computeProjectKey(undefined, process.cwd()),
+    agentHome: resolveAgentHome(),
+  })
+  setTaskSessionId(sid)
+  clearSessionTasks(sid)
 
   const id = generateTaskId('local_bash')
   assert.match(id, /^b[0-9a-z]{8}$/)
@@ -56,7 +62,7 @@ async function main() {
   if (!('error' in blocked)) {
     assert.equal(blocked.abs, path.normalize(absOutside))
   }
-  assert.equal(isReadableInternalPath(SESSION_DIR), true)
+  assert.equal(isReadableInternalPath(getProjectsRoot()), true)
 
   const big = 'x'.repeat(40_000)
   const fmt = formatTaskOutput(big, id)

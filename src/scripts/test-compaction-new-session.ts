@@ -6,10 +6,12 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { resolveSessionJsonlPath } from './session-jsonl-path.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
-const SESSION_DIR = path.join(REPO_ROOT, '.sessions')
+process.chdir(REPO_ROOT)
+
 const SERVER = process.env.SERVER_URL ?? 'http://localhost:4567'
 const WORKSPACE = '/Users/harry/cursor_workspace/test9'
 
@@ -48,7 +50,7 @@ async function getUiMessages(sessionId: string): Promise<UiMessage[]> {
 }
 
 function replayCount(sessionId: string): number {
-  const p = path.join(SESSION_DIR, `${sessionId}.jsonl`)
+  const p = resolveSessionJsonlPath(sessionId)
   if (!fs.existsSync(p)) return 0
   const lines = fs.readFileSync(p, 'utf8').trim().split('\n').filter(Boolean)
   let count = 0
@@ -64,7 +66,7 @@ function replayCount(sessionId: string): number {
 }
 
 function hasCompactedLine(sessionId: string): boolean {
-  const p = path.join(SESSION_DIR, `${sessionId}.jsonl`)
+  const p = resolveSessionJsonlPath(sessionId)
   return fs
     .readFileSync(p, 'utf8')
     .split('\n')

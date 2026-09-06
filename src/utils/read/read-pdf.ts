@@ -17,7 +17,7 @@ import {
   PDF_MAX_PAGES_PER_READ,
   PDF_TARGET_RAW_SIZE,
 } from '../../constants/api_limits.js'
-import { SESSION_DIR } from '../../core/session-paths.js'
+import { getSessionDataDir } from '../../core/session-paths.js'
 import type { ReadPdfOutput, ReadPdfPartsOutput } from './types.js'
 
 const execFileAsync = promisify(execFile)
@@ -225,7 +225,7 @@ export function popplerInstallHint(): string {
 
 function pdfExtractOutputRoot(sessionId?: string): string {
   if (sessionId) {
-    return path.join(SESSION_DIR, sessionId, 'pdf-extract')
+    return path.join(getSessionDataDir(sessionId), 'pdf-extract')
   }
   return path.join(os.tmpdir(), 'ai-agent-pdf-extract')
 }

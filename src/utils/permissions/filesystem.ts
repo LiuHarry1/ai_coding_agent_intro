@@ -10,7 +10,8 @@ import {
   EDIT_FILE_TOOL_NAME,
   FILE_READ_TOOL_NAME,
 } from '../../constants/tool_names.js'
-import { isReadableInternalPath, SESSION_DIR } from '../../core/session-paths.js'
+import { isReadableInternalPath, getProjectsRoot } from '../../core/session-paths.js'
+import { getDefaultPlansDirectory } from '../plans.js'
 import { isPathInWorkspace } from '../../core/workspace.js'
 import { normalizeWorkspacePath } from '../../core/workspace-path.js'
 import { resolvePath } from '../../tools/utils.js'
@@ -132,8 +133,10 @@ export function createFilesystemPermissionContext(
   root: string,
   opts?: CreateFilesystemPermissionContextOptions,
 ): FilesystemPermissionContext {
+  const plansRoot = path.resolve(getDefaultPlansDirectory())
   const extraReads = [
-    path.resolve(SESSION_DIR),
+    path.resolve(getProjectsRoot()),
+    plansRoot,
     ...parseExtraReadRoots(),
     ...(opts?.extraReadRoots ?? []).map(p => path.resolve(p)),
   ]
@@ -141,7 +144,10 @@ export function createFilesystemPermissionContext(
     mode: opts?.mode ?? resolveFilesystemPermissionMode(),
     root: path.resolve(root),
     extraReadRoots: extraReads,
-    extraWriteRoots: (opts?.extraWriteRoots ?? []).map(p => path.resolve(p)),
+    extraWriteRoots: [
+      plansRoot,
+      ...(opts?.extraWriteRoots ?? []).map(p => path.resolve(p)),
+    ],
     additionalWorkingDirectories: (
       opts?.additionalWorkingDirectories ?? []
     ).map(p => {

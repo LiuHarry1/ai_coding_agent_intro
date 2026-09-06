@@ -6,7 +6,6 @@ import type { Session } from '../core/types.js'
 import { isAuthEnabled, isSuperRole } from './auth/identity.js'
 
 export {
-  SESSION_DIR,
   getToolResultFilePath,
   tryBeginTurn,
   endTurn,
@@ -20,6 +19,7 @@ export {
   appendCompaction,
   appendModeChange,
   appendAgentChange,
+  getSessionTranscriptPath,
 } from '../session/index.js'
 
 /**

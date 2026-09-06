@@ -100,6 +100,8 @@ services:
       JWT_ALGORITHM: "HS256"
       USERS_ROOT: /workspace/users
       WORKSPACE_SEED_DIR: "/opt/workspace-seed"
+      # Process-scoped cron store (sessions live under each user's .ai-agent/projects).
+      AI_AGENT_DATA_DIR: /app/.ai-agent
       # AUTH_ENABLED: JWT gate + pin per-user workspace. File boundary uses
       # derived mode dontAsk (outside path → deny, no Allow UI). Bash is NOT OS-isolated.
       # ── Analytics + daily token quota (optional) ─────────────────────────
@@ -116,8 +118,9 @@ services:
       WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
     volumes:
       - ./workspaces:/workspace:rw
-      # Chat history (.sessions/*.jsonl) — survives container recreate/redeploy.
-      - ./sessions:/app/.sessions:rw
+      # Process data (cron scheduled_tasks.json). Chat transcripts live under
+      # each user workspace: /workspace/users/<email>/.ai-agent/projects/
+      - ./agent-data:/app/.ai-agent:rw
     depends_on:
       analytics:
         condition: service_healthy

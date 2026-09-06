@@ -52,6 +52,10 @@ services:
       NODE_ENV: production
       PORT: "4567"
       WORKSPACE: /workspace
+      # Persist ~/.ai-agent/projects (sessions) on the workspaces volume.
+      HOME: /workspace
+      # Process-scoped cron store (separate from user session trees).
+      AI_AGENT_DATA_DIR: /app/.ai-agent
       # ── UTF-8 locale: log lines contain CJK user text; without a UTF-8
       #    locale, shells/pagers inside the container render them as <E4><BD>…
       LANG: "C.UTF-8"
@@ -72,8 +76,8 @@ services:
       WEB_SEARCH_PROVIDER: "${WEB_SEARCH_PROVIDER:-exa}"
     volumes:
       - ./workspaces:/workspace:rw
-      # Chat history (.sessions/*.jsonl) — survives container recreate.
-      - ./sessions:/app/.sessions:rw
+      # Process data (cron). Transcripts: {agentHome}/.ai-agent/projects/
+      - ./agent-data:/app/.ai-agent:rw
     restart: unless-stopped
     healthcheck:
       test:

@@ -1,5 +1,4 @@
 export {
-  SESSION_DIR,
   getToolResultFilePath,
   tryBeginTurn,
   endTurn,
@@ -13,4 +12,7 @@ export {
   appendCompaction,
   appendModeChange,
   appendAgentChange,
+  getSessionTranscriptPath,
+  getSessionDataDirFor,
 } from './store.js'
+export type { CreateSessionOptions, GetSessionOptions } from './store.js'

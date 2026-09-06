@@ -35,17 +35,27 @@ export function resolveWorkspaceSeedDir(
 }
 
 /**
- * Packaged desktop workspace lives under Documents, not Program Files.
- * Dev leaves WORKSPACE unset so cwd stays the repo.
+ * App-dir basename for user state (mirrors src/utils/app-dir.ts).
+ * Override with AI_AGENT_DIR (leading dot added if missing).
+ */
+export function resolveAppDirName(env = process.env) {
+  const raw = env.AI_AGENT_DIR?.trim()
+  if (!raw) return '.ai-agent'
+  return raw.startsWith('.') ? raw : `.${raw}`
+}
+
+/**
+ * Packaged desktop default workspace: ~/.ai-agent/workspace (OpenClaw-style).
+ * Not the install dir / Program Files. Dev leaves WORKSPACE unset so cwd stays
+ * the repo; UI-picked folders override via the agent API.
  */
 export function resolveDefaultDesktopWorkspace({
   packaged = false,
-  documentsDir,
-  productName,
+  homeDir,
+  env = process.env,
 } = {}) {
-  if (!packaged || !documentsDir) return null
-  const name = (productName && String(productName).trim()) || 'BaiX'
-  return path.join(documentsDir, name)
+  if (!packaged || !homeDir) return null
+  return path.join(homeDir, resolveAppDirName(env), 'workspace')
 }
 
 export function buildAgentSpawnEnv(

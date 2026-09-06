@@ -1,12 +1,14 @@
 /**
- * Plan file management. Plans live under {workspace}/.ai-agent/plans/{slug}.md
+ * Plan file management — aligned with Claude Code `utils/plans.ts`.
+ *
+ * Default: `{agentHome}/.ai-agent/plans/{slug}.md` (NOT the project cwd).
  */
 import * as fs from 'fs'
 import * as path from 'path'
 import { randomBytes } from 'crypto'
 import type { Session } from '../core/types.js'
-
-const PLANS_SUBDIR = '.ai-agent/plans'
+import { getAppDirName } from './app-dir.js'
+import { resolveAgentHome } from './request-scope.js'
 
 const ADJECTIVES = [
   'brave',
@@ -51,18 +53,23 @@ function generateWordSlug(): string {
   return `${pick(ADJECTIVES)}-${pick(NOUNS)}`
 }
 
-export function getPlansDirectory(cwd: string): string {
-  const dir = path.join(cwd, PLANS_SUBDIR)
-  fs.mkdirSync(dir, { recursive: true })
-  return dir
+/** Default home plans root: `~/.ai-agent/plans` (CC: `~/.claude/plans`). */
+export function getDefaultPlansDirectory(): string {
+  return path.join(resolveAgentHome(), getAppDirName(), 'plans')
 }
 
-export function ensurePlanSlug(session: Session, cwd: string): string {
+export function getPlansDirectory(): string {
+  const plansPath = getDefaultPlansDirectory()
+  fs.mkdirSync(plansPath, { recursive: true })
+  return plansPath
+}
+
+export function ensurePlanSlug(session: Session): string {
   if (session.permissionMode.planSlug) {
     return session.permissionMode.planSlug
   }
 
-  const plansDir = getPlansDirectory(cwd)
+  const plansDir = getPlansDirectory()
   let slug = generateWordSlug()
   let attempts = 0
   while (fs.existsSync(path.join(plansDir, `${slug}.md`)) && attempts < 10) {
@@ -77,24 +84,24 @@ export function ensurePlanSlug(session: Session, cwd: string): string {
   return slug
 }
 
-export function getPlanFilePath(session: Session, cwd: string): string {
-  const slug = ensurePlanSlug(session, cwd)
-  return path.join(getPlansDirectory(cwd), `${slug}.md`)
+export function getPlanFilePath(session: Session, _cwd?: string): string {
+  const slug = ensurePlanSlug(session)
+  return path.join(getPlansDirectory(), `${slug}.md`)
 }
 
 export function isSessionPlanFile(
   absolutePath: string,
   session: Session,
-  cwd: string,
+  _cwd?: string,
 ): boolean {
   if (!session.permissionMode.planSlug) return false
-  const expected = path.resolve(getPlanFilePath(session, cwd))
+  const expected = path.resolve(getPlanFilePath(session))
   const normalized = path.resolve(absolutePath)
   return normalized === expected && normalized.endsWith('.md')
 }
 
-export function getPlan(session: Session, cwd: string): string | null {
-  const filePath = getPlanFilePath(session, cwd)
+export function getPlan(session: Session, _cwd?: string): string | null {
+  const filePath = getPlanFilePath(session)
   try {
     return fs.readFileSync(filePath, 'utf-8')
   } catch (err) {
@@ -103,16 +110,16 @@ export function getPlan(session: Session, cwd: string): string | null {
   }
 }
 
-export function planExists(session: Session, cwd: string): boolean {
-  return getPlan(session, cwd) !== null
+export function planExists(session: Session, _cwd?: string): boolean {
+  return getPlan(session) !== null
 }
 
 export function writePlan(
   session: Session,
-  cwd: string,
+  _cwd: string | undefined,
   content: string,
 ): string {
-  const filePath = getPlanFilePath(session, cwd)
+  const filePath = getPlanFilePath(session)
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, content, 'utf-8')
   return filePath

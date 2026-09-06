@@ -1,4 +1,3 @@
-import * as os from 'os'
 import { randomUUID } from 'crypto'
 import { getRunAgent } from '../../agent-lazy.js'
 import { EventBus } from '../../core/event-bus.js'
@@ -6,10 +5,6 @@ import { scheduledTurnMessage } from '../../core/protocol-messages.js'
 import { runChatTurn } from '../../turn/run-chat-turn.js'
 import { runWithRequestScope } from '../../utils/request-scope.js'
 import { createSessionLiveTransport } from '../session-live-hub.js'
-import {
-  isAuthEnabled,
-  resolveUserWorkspace,
-} from '../../server/auth/identity.js'
 import {
   checkQuota,
   commitQuota,
@@ -22,6 +17,7 @@ import {
   getSession,
   tryBeginTurn,
 } from '../../session/store.js'
+import { findSessionLocation } from '../../session/session-index.js'
 import { isScheduledTasksEnabled } from './settings.js'
 import {
   computeNextRunAtMs,
@@ -51,20 +47,23 @@ export function formatScheduledPrompt(task: ScheduledTask, now: Date): string {
   return `[Scheduled task · ${formatFireTime(now)}]\n\n${task.prompt}`
 }
 
-function agentHomeForSession(ownerEmail: string | undefined): string {
-  if (isAuthEnabled() && ownerEmail) {
-    return resolveUserWorkspace(ownerEmail)
-  }
-  return os.homedir()
-}
-
 export async function fireScheduledTask(
   task: ScheduledTask,
   nowMs = Date.now(),
 ): Promise<FireResult> {
   if (!isScheduledTasksEnabled(task.cwd)) return 'disabled'
 
-  const session = getSession(task.sessionId)
+  const loc = findSessionLocation(task.sessionId)
+  if (!loc) {
+    removeCronTasks([task.id])
+    return 'missing'
+  }
+
+  const agentHome = loc.agentHome
+  const session = runWithRequestScope(
+    { agentHome, cwd: task.cwd },
+    () => getSession(task.sessionId, { agentHome }),
+  )
   if (!session) {
     removeCronTasks([task.id])
     return 'missing'
@@ -119,19 +118,17 @@ export async function fireScheduledTask(
     transport.emit(
       scheduledTurnMessage(prompt, { session_id: session.id }),
     )
-    await runWithRequestScope(
-      { agentHome: agentHomeForSession(session.ownerEmail), cwd },
-      () =>
-        runChatTurn({
-          message: prompt,
-          session,
-          cwd,
-          runAgent,
-          transport,
-          emitHandshake: false,
-          isMeta: true,
-          eventBus,
-        }),
+    await runWithRequestScope({ agentHome, cwd }, () =>
+      runChatTurn({
+        message: prompt,
+        session,
+        cwd,
+        runAgent,
+        transport,
+        emitHandshake: false,
+        isMeta: true,
+        eventBus,
+      }),
     )
   } catch (err) {
     console.warn(

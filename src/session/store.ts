@@ -1,4 +1,5 @@
 import * as fs from 'fs'
+import * as path from 'path'
 import { randomUUID } from 'crypto'
 import type { Session, SessionInfo, Message } from '../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
@@ -6,12 +7,26 @@ import { createDefaultPermissionMode } from '../core/permission-mode.js'
 import { resetSessionMemoryState } from '../services/session-memory/state.js'
 import { removeTasksForSession } from '../services/cron/store.js'
 import {
-  SESSION_DIR,
+  computeProjectKey,
+  getCachedSessionLocation,
+  getProjectSessionDir,
   getSessionDataDir,
   getSessionJsonlPath,
   getToolResultFilePath,
+  registerSessionLocation,
+  unregisterSessionLocation,
+  type SessionLocation,
 } from '../core/session-paths.js'
+import { getDefaultWorkspace } from '../core/workspace.js'
 import { normalizeWorkspacePath } from '../core/workspace-path.js'
+import { resolveAgentHome } from '../utils/request-scope.js'
+import {
+  findSessionLocation,
+  listSessionAgentHomes,
+  readSessionIndex,
+  removeSessionIndexEntry,
+  upsertSessionIndexEntry,
+} from './session-index.js'
 import {
   parseSessionJsonLine,
   reviveBuffersInMessages,
@@ -23,21 +38,34 @@ import { projectMessageForDisk } from './persist-project.js'
 
 const sessions = new Map<string, Session>()
 
-export { SESSION_DIR, getToolResultFilePath }
+export { getToolResultFilePath }
+
+/** Resolve location from cache or index; never invent. */
+function locationFor(sessionId: string): SessionLocation {
+  const cached = getCachedSessionLocation(sessionId)
+  if (cached) return cached
+  const found = findSessionLocation(sessionId)
+  if (found) {
+    registerSessionLocation(sessionId, found)
+    return found
+  }
+  throw new Error(
+    `No session location for ${sessionId}; create/getSession first`,
+  )
+}
 
 function sessionPath(id: string): string {
-  return getSessionJsonlPath(id)
+  const loc = locationFor(id)
+  return getSessionJsonlPath(id, loc.projectKey, loc.agentHome)
+}
+
+function ensureProjectDir(loc: SessionLocation): void {
+  fs.mkdirSync(getProjectSessionDir(loc.projectKey, loc.agentHome), {
+    recursive: true,
+  })
 }
 
 // ── In-flight turn mutex ────────────────────────
-//
-// One running turn per session. Without this, a user resending a message
-// while a slow step (e.g. a ~30s full compaction) is still running spawns a
-// CONCURRENT turn over the same messages array: both turns compact the same
-// oversized history, checkpoints race, and the transcript accumulates one
-// compact boundary per resend. An interactive single-threaded REPL avoids this
-// by queueing input; for an HTTP server the equivalent is rejecting concurrent
-// turns on the same session.
 
 const activeTurns = new Set<string>()
 
@@ -52,13 +80,33 @@ export function endTurn(sessionId: string): void {
   activeTurns.delete(sessionId)
 }
 
-export function createSession(ownerEmail?: string): Session {
+export type CreateSessionOptions = {
+  ownerEmail?: string
+  /** Override agent home (cron / tests). Default: getAgentHome(). */
+  agentHome?: string
+  /** Initial project key cwd (before workspace_bound). */
+  cwd?: string
+}
+
+export function createSession(
+  ownerEmailOrOpts?: string | CreateSessionOptions,
+): Session {
+  const opts: CreateSessionOptions =
+    typeof ownerEmailOrOpts === 'string' || ownerEmailOrOpts === undefined
+      ? { ownerEmail: ownerEmailOrOpts }
+      : ownerEmailOrOpts
+
   const id = randomUUID()
+  const agentHome = resolveAgentHome(opts.agentHome)
+  const projectKey = computeProjectKey(undefined, opts.cwd ?? getDefaultWorkspace())
+  const loc: SessionLocation = { projectKey, agentHome }
+  registerSessionLocation(id, loc)
+
   const session: Session = {
     id,
     messages: [],
     createdAt: Date.now(),
-    ownerEmail,
+    ownerEmail: opts.ownerEmail,
     readFileState: new Map(),
     permissionMode: createDefaultPermissionMode(),
     additionalWorkingDirectories: [],
@@ -67,22 +115,42 @@ export function createSession(ownerEmail?: string): Session {
     needsPlanModeExitAttachment: false,
   }
   sessions.set(id, session)
-  fs.mkdirSync(SESSION_DIR, { recursive: true })
+  ensureProjectDir(loc)
+  upsertSessionIndexEntry(
+    id,
+    {
+      projectKey,
+      createdAt: session.createdAt,
+      ownerEmail: opts.ownerEmail,
+    },
+    agentHome,
+  )
   appendLine(id, {
     type: 'session_created',
     id,
     createdAt: session.createdAt,
-    ownerEmail: ownerEmail ?? null,
+    ownerEmail: opts.ownerEmail ?? null,
     permissionMode: session.permissionMode,
     agentType: session.agentType,
   })
   return session
 }
 
-export function getSession(id: string): Session | null {
+export type GetSessionOptions = {
+  agentHome?: string
+}
+
+export function getSession(
+  id: string,
+  opts?: GetSessionOptions,
+): Session | null {
   if (sessions.has(id)) return sessions.get(id)!
 
-  const filePath = sessionPath(id)
+  const found = findSessionLocation(id, opts?.agentHome)
+  if (!found) return null
+  registerSessionLocation(id, found)
+
+  const filePath = getSessionJsonlPath(id, found.projectKey, found.agentHome)
   if (!fs.existsSync(filePath)) return null
 
   const session = restoreFromDisk(id)
@@ -121,6 +189,36 @@ export function setSessionTitle(sessionId: string, title: string): void {
   })
 }
 
+function relocateSessionFiles(
+  sessionId: string,
+  from: SessionLocation,
+  to: SessionLocation,
+): void {
+  if (
+    from.projectKey === to.projectKey &&
+    path.resolve(from.agentHome) === path.resolve(to.agentHome)
+  ) {
+    return
+  }
+  ensureProjectDir(to)
+  const oldJsonl = getSessionJsonlPath(sessionId, from.projectKey, from.agentHome)
+  const newJsonl = getSessionJsonlPath(sessionId, to.projectKey, to.agentHome)
+  const oldData = getSessionDataDir(sessionId, from.projectKey, from.agentHome)
+  const newData = getSessionDataDir(sessionId, to.projectKey, to.agentHome)
+
+  if (fs.existsSync(oldJsonl)) {
+    fs.renameSync(oldJsonl, newJsonl)
+  }
+  if (fs.existsSync(oldData)) {
+    fs.renameSync(oldData, newData)
+  }
+
+  if (path.resolve(from.agentHome) !== path.resolve(to.agentHome)) {
+    removeSessionIndexEntry(sessionId, from.agentHome)
+  }
+  registerSessionLocation(sessionId, to)
+}
+
 /** Bind a WorkspaceHandle to the session (persisted in jsonl). */
 export function setSessionWorkspace(
   sessionId: string,
@@ -128,10 +226,32 @@ export function setSessionWorkspace(
 ): void {
   const session = getSession(sessionId)
   if (!session) return
-  session.workspace = {
+
+  const bound = {
     environmentId: workspace.environmentId,
     cwd: normalizeWorkspacePath(workspace.cwd),
   }
+  session.workspace = bound
+
+  const from = locationFor(sessionId)
+  const newKey = computeProjectKey(bound)
+  const to: SessionLocation = {
+    projectKey: newKey,
+    agentHome: from.agentHome,
+  }
+  if (from.projectKey !== to.projectKey) {
+    relocateSessionFiles(sessionId, from, to)
+    upsertSessionIndexEntry(
+      sessionId,
+      {
+        projectKey: to.projectKey,
+        createdAt: session.createdAt,
+        ownerEmail: session.ownerEmail,
+      },
+      to.agentHome,
+    )
+  }
+
   appendLine(sessionId, {
     type: 'workspace_bound',
     workspace: session.workspace,
@@ -144,14 +264,23 @@ export function setSessionWorkspace(
  * user's sessions; omit it (or run without auth) to list everything.
  */
 export function listSessions(ownerEmail?: string): SessionInfo[] {
-  if (!fs.existsSync(SESSION_DIR)) return []
-  return fs
-    .readdirSync(SESSION_DIR)
-    .filter((f: string) => f.endsWith('.jsonl'))
-    .map((f: string) => {
-      const id = f.replace('.jsonl', '')
-      return getSession(id)
-    })
+  const homes = listSessionAgentHomes()
+
+  const ids = new Set<string>()
+  for (const home of homes) {
+    const index = readSessionIndex(home)
+    for (const [id, entry] of Object.entries(index.sessions)) {
+      if (ownerEmail !== undefined && entry.ownerEmail !== ownerEmail) continue
+      ids.add(id)
+      registerSessionLocation(id, {
+        projectKey: entry.projectKey,
+        agentHome: home,
+      })
+    }
+  }
+
+  return [...ids]
+    .map(id => getSession(id))
     .filter((session: Session | null): session is Session => {
       if (!session) return false
       if (ownerEmail === undefined) return true
@@ -173,15 +302,19 @@ export function listSessions(ownerEmail?: string): SessionInfo[] {
 }
 
 export function deleteSession(id: string): void {
+  const loc = getCachedSessionLocation(id) ?? findSessionLocation(id)
   sessions.delete(id)
-  const filePath = sessionPath(id)
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath)
+
+  if (loc) {
+    const filePath = getSessionJsonlPath(id, loc.projectKey, loc.agentHome)
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    const memoryDir = getSessionDataDir(id, loc.projectKey, loc.agentHome)
+    if (fs.existsSync(memoryDir)) {
+      fs.rmSync(memoryDir, { recursive: true, force: true })
+    }
+    removeSessionIndexEntry(id, loc.agentHome)
   }
-  const memoryDir = getSessionDataDir(id)
-  if (fs.existsSync(memoryDir)) {
-    fs.rmSync(memoryDir, { recursive: true, force: true })
-  }
+  unregisterSessionLocation(id)
   resetSessionMemoryState(id)
   try {
     removeTasksForSession(id)
@@ -210,8 +343,6 @@ export function appendMessage(sessionId: string, message: Message): void {
  * messages to this snapshot when it replays the line.
  */
 export function appendCompaction(sessionId: string, messages: Message[]): void {
-  // Snapshot so later in-memory mutations (new assistant/tool msgs) don't
-  // alter the on-disk checkpoint.
   const snapshot = JSON.parse(
     JSON.stringify(messages, sessionJsonReplacer),
     sessionJsonReviver,
@@ -245,7 +376,8 @@ export function appendAgentChange(sessionId: string, session: Session): void {
 }
 
 function appendLine(sessionId: string, data: Record<string, unknown>): void {
-  fs.mkdirSync(SESSION_DIR, { recursive: true })
+  const loc = locationFor(sessionId)
+  ensureProjectDir(loc)
   fs.appendFileSync(sessionPath(sessionId), stringifySessionJsonLine(data) + '\n')
 }
 
@@ -267,7 +399,9 @@ function restoreFromDisk(id: string): Session {
 
   for (const line of lines) {
     if (line.type === 'session_created') {
-      session.createdAt = line.createdAt
+      if (typeof line.createdAt === 'number') {
+        session.createdAt = line.createdAt
+      }
       if (typeof line.ownerEmail === 'string') {
         session.ownerEmail = line.ownerEmail
       }
@@ -305,7 +439,9 @@ function restoreFromDisk(id: string): Session {
         session.title = line.title.trim()
       }
     } else if (line.type === 'workspace_bound') {
-      const w = line.workspace
+      const w = line.workspace as
+        | { environmentId?: unknown; cwd?: unknown }
+        | undefined
       if (
         w &&
         typeof w.environmentId === 'string' &&
@@ -317,21 +453,31 @@ function restoreFromDisk(id: string): Session {
         }
       }
     } else if (line.type === 'compacted') {
-      // Checkpoint: discard everything accumulated so far and adopt the
-      // post-compaction snapshot. Subsequent `message` lines append normally.
       session.messages = Array.isArray(line.messages)
         ? reviveBuffersInMessages(line.messages as Message[])
         : []
     } else if (line.type === 'message') {
       const { type: _, timestamp: __, ...msg } = line
       session.messages.push(
-        ...reviveBuffersInMessages([msg as Message]),
+        ...reviveBuffersInMessages([msg as unknown as Message]),
       )
     } else if (line.type === 'attachment') {
       const { timestamp: _, ...msg } = line
-      session.messages.push(msg as Message)
+      session.messages.push(msg as unknown as Message)
     }
   }
 
   return session
+}
+
+/** Absolute jsonl path for UI / tests (resolves via index). */
+export function getSessionTranscriptPath(sessionId: string): string | null {
+  const loc = getCachedSessionLocation(sessionId) ?? findSessionLocation(sessionId)
+  if (!loc) return null
+  registerSessionLocation(sessionId, loc)
+  return getSessionJsonlPath(sessionId, loc.projectKey, loc.agentHome)
+}
+
+export function getSessionDataDirFor(sessionId: string): string {
+  return getSessionDataDir(sessionId)
 }

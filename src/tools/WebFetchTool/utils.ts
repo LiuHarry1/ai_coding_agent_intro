@@ -14,7 +14,10 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { generateText } from 'ai'
 import { LRUCache } from 'lru-cache'
-import { SESSION_DIR } from '../../core/session-paths.js'
+import {
+  getScratchDataDir,
+  getSessionDataDir,
+} from '../../core/session-paths.js'
 import type { IProvider } from '../../core/llm/types.js'
 import { isPreapprovedHost } from './preapproved.js'
 import { makeSecondaryModelPrompt } from './prompt.js'
@@ -273,7 +276,7 @@ export function isBinaryContentType(contentType: string): boolean {
 
 /**
  * Save raw bytes under the session dir with a mime-derived extension so the
- * model can Read the file later (`.sessions/` is a readable internal path).
+ * model can Read the file later (projects/ is a readable internal path).
  */
 function persistBinaryContent(
   buffer: Buffer,
@@ -283,7 +286,10 @@ function persistBinaryContent(
 ): { filepath: string; size: number } | { error: string } {
   try {
     const ext = binaryExtension(contentType) ?? 'bin'
-    const dir = path.join(SESSION_DIR, sessionId || 'webfetch', 'web-fetch')
+    const dir = path.join(
+      sessionId ? getSessionDataDir(sessionId) : getScratchDataDir('webfetch'),
+      'web-fetch',
+    )
     fs.mkdirSync(dir, { recursive: true })
     const filepath = path.join(dir, `${persistId}.${ext}`)
     fs.writeFileSync(filepath, buffer)

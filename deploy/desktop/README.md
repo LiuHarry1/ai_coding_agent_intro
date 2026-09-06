@@ -61,6 +61,8 @@
 
 [`electron-builder.config.cjs`](../../electron-builder.config.cjs) 通过 `extraResources` 把 `workspace-seed` 打进安装目录的 `resources/workspace-seed`。
 
+Packaged Electron 默认 `WORKSPACE=~/.ai-agent/workspace`（启动时 `mkdir`；可用 `AI_AGENT_DIR` 改 basename）。开发态不设 `WORKSPACE`，沿用仓库根。UI 选目录后由请求覆盖。
+
 Electron 在 packaged / 开发态会设置 `WORKSPACE_SEED_DIR`；agent 首次发现该工作区（`loadWorkspaceContributions`）时落盘，与 SSO 共用同一套 seed 逻辑。
 
 ```bash

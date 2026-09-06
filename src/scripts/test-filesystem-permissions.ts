@@ -6,7 +6,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { resolveFileInCwd } from '../utils/read/index.js'
-import { SESSION_DIR } from '../core/session-paths.js'
+import { getProjectsRoot } from '../core/session-paths.js'
 import { FILE_READ_TOOL_NAME } from '../constants/tool_names.js'
 import { definition as fileReadDef } from '../tools/FileReadTool/FileReadTool.js'
 import { createCanUseTool } from '../core/can-use-tool.js'
@@ -209,12 +209,13 @@ try {
     throw new Error('bypassPermissions should still honor deny')
   }
 
-  const sessionsPath = path.join(SESSION_DIR, 'perm-test.txt')
-  fs.mkdirSync(SESSION_DIR, { recursive: true })
+  const projectsRoot = getProjectsRoot()
+  const sessionsPath = path.join(projectsRoot, 'perm-test.txt')
+  fs.mkdirSync(projectsRoot, { recursive: true })
   fs.writeFileSync(sessionsPath, 'task-out')
   try {
     if (checkReadPermission(sessionsPath, desktop).behavior !== 'allow') {
-      throw new Error('.sessions internal path should allow read')
+      throw new Error('projects/ internal path should allow read')
     }
   } finally {
     try {

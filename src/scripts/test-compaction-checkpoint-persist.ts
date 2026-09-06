@@ -10,21 +10,23 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { resolveSessionJsonlPath } from './session-jsonl-path.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
-const SESSION_DIR = path.join(REPO_ROOT, '.sessions')
+process.chdir(REPO_ROOT)
+
 const SESSION_ID = '9f94986d-2d38-47ef-bfe7-f8826447af9c'
 const SERVER = process.env.SERVER_URL ?? 'http://localhost:4567'
 const WORKSPACE = '/Users/harry/cursor_workspace/test9'
 
 function countJsonlLines(sessionId: string): number {
-  const p = path.join(SESSION_DIR, `${sessionId}.jsonl`)
+  const p = resolveSessionJsonlPath(sessionId)
   return fs.readFileSync(p, 'utf8').trim().split('\n').length
 }
 
 function hasCompactedCheckpoint(sessionId: string): boolean {
-  const p = path.join(SESSION_DIR, `${sessionId}.jsonl`)
+  const p = resolveSessionJsonlPath(sessionId)
   const lines = fs.readFileSync(p, 'utf8').trim().split('\n')
   return lines.some(
     l => (JSON.parse(l) as { type?: string }).type === 'compacted',
@@ -32,7 +34,7 @@ function hasCompactedCheckpoint(sessionId: string): boolean {
 }
 
 function reloadedMessageCount(sessionId: string): number {
-  const p = path.join(SESSION_DIR, `${sessionId}.jsonl`)
+  const p = resolveSessionJsonlPath(sessionId)
   const lines = fs
     .readFileSync(p, 'utf8')
     .trim()

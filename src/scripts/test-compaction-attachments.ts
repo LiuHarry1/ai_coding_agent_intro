@@ -14,15 +14,16 @@ import { resolveSettings } from '../core/settings-manager.js'
 import { compactIfNeeded } from '../services/compact/index.js'
 import { tokenCountWithEstimation } from '../services/compact/tokens.js'
 import { readTextFile } from '../utils/read/read-text.js'
+import { resolveSessionJsonlPath } from './session-jsonl-path.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
-const SESSION_DIR = path.join(REPO_ROOT, '.sessions')
+process.chdir(REPO_ROOT)
 const WORKSPACE = '/Users/harry/cursor_workspace/test9'
 const SESSION_ID = '9f94986d-2d38-47ef-bfe7-f8826447af9c'
 
 function restoreMessagesFromJsonl(id: string): Message[] {
-  const filePath = path.join(SESSION_DIR, `${id}.jsonl`)
+  const filePath = resolveSessionJsonlPath(id)
   const lines = fs
     .readFileSync(filePath, 'utf8')
     .trim()
@@ -139,7 +140,7 @@ async function main(): Promise<void> {
   // Manually apply compacted snapshot as restoreFromDisk would
   const simulated: Message[] = []
   for (const line of fs
-    .readFileSync(path.join(SESSION_DIR, `${SESSION_ID}.jsonl`), 'utf8')
+    .readFileSync(resolveSessionJsonlPath(SESSION_ID), 'utf8')
     .trim()
     .split('\n')
     .map(l => JSON.parse(l))) {

@@ -15,7 +15,7 @@
 |------|--------------|------|--------|
 | **admin** | `docker-compose.admin.yml` | web 源一个共享密码(Basic Auth);agent 源不鉴权,靠内网保护 | 自由切换 |
 | **sso** | `docker-compose.sso.yml` | 外部 auth-service 签发 JWT,agent 逐请求校验 | 按用户锁定 |
-| **desktop** | 见 [`desktop/README.md`](desktop/README.md) | Electron 本机 agent | 首次打开时从 `desktop/workspace-seed` 落盘 |
+| **desktop** | 见 [`desktop/README.md`](desktop/README.md) | Electron 本机 agent | 默认 `~/.ai-agent/workspace`；首次从 `desktop/workspace-seed` 落盘 |
 
 ---
 
@@ -122,9 +122,9 @@ SSO 请求里 **逻辑 HOME = 用户 workspace**（`USERS_ROOT/<slug>`），不�
 
 | 路径 | 含义 |
 |------|------|
-| `<userWorkspace>/.ai-agent` | 用户 settings / skills / memory 默认根（seed 写入） |
+| `<userWorkspace>/.ai-agent` | 用户 settings / skills / memory / **sessions**（`projects/<key>/`）默认根（seed 写入） |
 | `/etc/ai-agent` | 平台 managed/policy（镜像 bake；**不**跟 ALS） |
-| `.sessions`（全局挂载） | 会话历史；super 可 `GET /sessions` 看全部 |
+| `/app/.ai-agent`（进程挂载） | cron `scheduled_tasks.json` 等进程级数据 |
 
 - Bash / 本地 worker 的 `$HOME`（Windows：`USERPROFILE`）在请求内指向用户 workspace；**不是** OS 级隔离，仍可用绝对路径摸到别人目录。
 - Seed 只放用户可见模板；敏感默认（模型 key、强制禁用工具等）进 `/etc/ai-agent`，不要进 seed。
@@ -149,7 +149,7 @@ SSO（`AUTH_ENABLED=true`）下 File 工具与 HTTP `/workspace/*` 使用 Claude
 ```yaml
 volumes:
   - ./workspaces:/workspace:rw   # ← 换成你的路径
-  - ./sessions:/app/.sessions:rw
+  - ./agent-data:/app/.ai-agent:rw  # cron 等进程数据；会话在用户 .ai-agent/projects/
 ```
 
 ---

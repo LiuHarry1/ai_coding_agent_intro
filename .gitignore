@@ -12,6 +12,7 @@ protocol/node_modules/
 # Local agent / session state
 .ai-agent/settings.local.json
 .managed-demo/
+# Legacy session dir (pre ~/.ai-agent/projects); ignore if leftover.
 .sessions/
 sessions/
 

@@ -15,10 +15,11 @@ import {
 import { isAttachmentMessage } from '../core/types.js'
 import type { Message } from '../core/types.js'
 import type { ReadFileState } from '../utils/read/types.js'
+import { resolveSessionJsonlPath } from './session-jsonl-path.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '../..')
-const SESSION_DIR = path.join(REPO_ROOT, '.sessions')
+process.chdir(REPO_ROOT)
 const WORKSPACE = '/Users/harry/cursor_workspace/test9'
 const SESSION_ID = '9f94986d-2d38-47ef-bfe7-f8826447af9c'
 
@@ -33,7 +34,7 @@ function record(name: string, ok: boolean, detail: string): void {
 }
 
 function restoreMessagesFromJsonl(id: string): Message[] {
-  const filePath = path.join(SESSION_DIR, `${id}.jsonl`)
+  const filePath = resolveSessionJsonlPath(id)
   const lines = fs
     .readFileSync(filePath, 'utf8')
     .trim()
@@ -145,9 +146,9 @@ async function chatOnce(
   sessionId: string,
   message: string,
 ): Promise<{ ok: boolean; detail: string; newLines: number }> {
-  const before = fs.existsSync(path.join(SESSION_DIR, `${sessionId}.jsonl`))
+  const before = fs.existsSync(resolveSessionJsonlPath(sessionId))
     ? fs
-        .readFileSync(path.join(SESSION_DIR, `${sessionId}.jsonl`), 'utf8')
+        .readFileSync(resolveSessionJsonlPath(sessionId), 'utf8')
         .split('\n').length
     : 0
 
@@ -172,7 +173,7 @@ async function chatOnce(
   const text = await res.text()
   const done = text.includes('event: done') || text.includes('"done"')
   const after = fs
-    .readFileSync(path.join(SESSION_DIR, `${sessionId}.jsonl`), 'utf8')
+    .readFileSync(resolveSessionJsonlPath(sessionId), 'utf8')
     .split('\n').length
   return {
     ok: done && !text.includes('event: error'),
@@ -185,7 +186,7 @@ async function chatOnce(
 
 function tailJsonlTypes(sessionId: string, n = 8): string {
   const lines = fs
-    .readFileSync(path.join(SESSION_DIR, `${sessionId}.jsonl`), 'utf8')
+    .readFileSync(resolveSessionJsonlPath(sessionId), 'utf8')
     .trim()
     .split('\n')
     .slice(-n)
@@ -220,7 +221,7 @@ async function runApiTests(): Promise<void> {
   )
   const reloadJson = (await reloadRes.json()) as { messages?: unknown[] }
   const jsonlLines = fs
-    .readFileSync(path.join(SESSION_DIR, `${SESSION_ID}.jsonl`), 'utf8')
+    .readFileSync(resolveSessionJsonlPath(SESSION_ID), 'utf8')
     .trim()
     .split('\n').length
   record(
@@ -255,7 +256,7 @@ async function runApiTests(): Promise<void> {
   const r3 = await chatOnce(SESSION_ID, '@huge_file.txt 只读前10行内容')
   const tail3 = tailJsonlTypes(SESSION_ID)
   const jsonl = fs.readFileSync(
-    path.join(SESSION_DIR, `${SESSION_ID}.jsonl`),
+    resolveSessionJsonlPath(SESSION_ID),
     'utf8',
   )
   const hasHugeFileAtt =

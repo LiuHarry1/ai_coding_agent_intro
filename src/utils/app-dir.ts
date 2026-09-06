@@ -48,6 +48,16 @@ export function getUserAppDir(): string {
   return path.join(getAgentHome(), getAppDirName())
 }
 
+/**
+ * Process-scoped app data (cron store, not per-user sessions).
+ * `AI_AGENT_DATA_DIR` or `{cwd}/.ai-agent`.
+ */
+export function getProcessAppDir(): string {
+  const fromEnv = process.env.AI_AGENT_DATA_DIR?.trim()
+  if (fromEnv) return path.resolve(fromEnv)
+  return path.join(process.cwd(), getAppDirName())
+}
+
 /** User-scope subdir, e.g. `~/.ai-agent/skills`. */
 export function getUserSubdir(kind: AppSubdir): string {
   return path.join(getUserAppDir(), kind)
@@ -86,3 +96,4 @@ export function getProjectAppDirsUpToHome(cwd: string): string[] {
 
   return dirs
 }
+

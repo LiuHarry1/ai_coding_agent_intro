@@ -7,7 +7,7 @@
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 
-// SESSION_DIR is cwd-relative in session.ts; server runs from repo root.
+// Resolve transcripts via session-index under ~/.ai-agent/projects/.
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../..',

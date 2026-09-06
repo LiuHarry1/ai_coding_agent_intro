@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { SESSION_DIR } from '../../core/session-paths.js'
+import { getProcessAppDir } from '../../core/session-paths.js'
 import {
   MAX_CRON_JOBS,
   RECURRING_JITTER_CAP_MS,
@@ -22,7 +22,9 @@ export class CronStoreCorruptError extends Error {
 }
 
 export function getCronStorePath(): string {
-  return storePathOverride ?? path.join(SESSION_DIR, 'scheduled_tasks.json')
+  return (
+    storePathOverride ?? path.join(getProcessAppDir(), 'scheduled_tasks.json')
+  )
 }
 
 export function _setCronStorePathForTest(p: string | null): void {

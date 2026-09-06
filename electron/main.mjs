@@ -72,8 +72,7 @@ function startAgent() {
   const appRoot = getAppRoot()
   const workspace = resolveDefaultDesktopWorkspace({
     packaged: app.isPackaged,
-    documentsDir: app.getPath('documents'),
-    productName: APP_NAME,
+    homeDir: app.getPath('home'),
   })
   if (workspace) {
     fs.mkdirSync(workspace, { recursive: true })

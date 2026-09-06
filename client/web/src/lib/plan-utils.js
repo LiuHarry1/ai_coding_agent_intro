@@ -1,6 +1,6 @@
 import { WRITE, EDIT } from './tool-names.js'
 
-/** Plan files live under `.ai-agent/plans/{slug}.md`. */
+/** Plan files live under `~/.ai-agent/plans/{slug}.md` (or optional project override). */
 export function isPlanFilePath(filePath) {
   if (!filePath) return false
   const norm = String(filePath).replace(/\\/g, '/')

@@ -1,9 +1,8 @@
 import type { Message, ToolResultOutput } from '../core/types.js'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
-import * as path from 'path'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
-import { SESSION_DIR } from '../session/index.js'
+import { getSessionTranscriptPath } from '../session/index.js'
 import { getSubagentNames } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools.js'
 import { isSystemReminderContent } from '../utils/system-reminder.js'
@@ -253,8 +252,8 @@ type JsonlReplayItem =
  * wrote cleared tool payloads to disk; full-compact pre-checkpoint lines remain).
  */
 function replaySessionJsonl(sessionId: string): JsonlReplayItem[] {
-  const filePath = path.join(SESSION_DIR, `${sessionId}.jsonl`)
-  if (!fs.existsSync(filePath)) return []
+  const filePath = getSessionTranscriptPath(sessionId)
+  if (!filePath || !fs.existsSync(filePath)) return []
 
   const raw = fs.readFileSync(filePath, 'utf-8').trim()
   if (!raw) return []

@@ -65,6 +65,19 @@ export function getAgentHome(): string {
 }
 
 /**
+ * Resolve agent home for path layout. Explicit override wins; else getAgentHome();
+ * AUTH-off / no ALS falls back to os.homedir() without throwing.
+ */
+export function resolveAgentHome(explicit?: string): string {
+  if (explicit) return path.resolve(explicit)
+  try {
+    return getAgentHome()
+  } catch {
+    return os.homedir()
+  }
+}
+
+/**
  * Request cwd from ALS. AUTH on → scope.cwd or throw.
  * AUTH off → throw unless a scope was explicitly entered (e.g. tests/boot).
  */
