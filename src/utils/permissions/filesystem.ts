@@ -10,7 +10,11 @@ import {
   EDIT_FILE_TOOL_NAME,
   FILE_READ_TOOL_NAME,
 } from '../../constants/tool_names.js'
-import { isReadableInternalPath, getProjectsRoot } from '../../core/session-paths.js'
+import {
+  isReadableInternalPath,
+  getProjectsRoot,
+  getBrowserLogsDir,
+} from '../../core/session-paths.js'
 import { getDefaultPlansDirectory } from '../plans.js'
 import { isPathInWorkspace } from '../../core/workspace.js'
 import { normalizeWorkspacePath } from '../../core/workspace-path.js'
@@ -136,6 +140,7 @@ export function createFilesystemPermissionContext(
   const plansRoot = path.resolve(getDefaultPlansDirectory())
   const extraReads = [
     path.resolve(getProjectsRoot()),
+    path.resolve(getBrowserLogsDir()),
     plansRoot,
     ...parseExtraReadRoots(),
     ...(opts?.extraReadRoots ?? []).map(p => path.resolve(p)),

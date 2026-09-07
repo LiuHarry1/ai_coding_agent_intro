@@ -80,6 +80,11 @@ export function setCORS(res: ServerResponse, req?: IncomingMessage): void {
     'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   )
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  // Chrome Private / Local Network Access preflight (split-origin :8090 → :4567).
+  const pna = req?.headers['access-control-request-private-network']
+  if (pna === 'true') {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true')
+  }
 }
 
 export function wantsStreamingResponse(

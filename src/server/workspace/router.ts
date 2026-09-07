@@ -37,6 +37,11 @@ export interface WorkspaceRouterOptions {
    * directory picker can pick or create a new workspace folder.
    */
   root: string
+  /**
+   * Per-request override (SSO). Super users typically get USERS_ROOT so the
+   * IDE can list every tenant folder; regular users stay pinned to their dir.
+   */
+  resolveRoot?: (req: IncomingMessage) => string | undefined
 }
 
 const MAX_BODY = 6 * 1024 * 1024
@@ -106,7 +111,10 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
     // Per-request root: when the auth gate pinned a user workspace
     // (req.userWorkspace), use it. Cloud (`dontAsk`) denies paths outside
     // that root with no UI. Desktop (`default`) leaves the folder picker open.
-    const pinned = (req as { userWorkspace?: string }).userWorkspace
+    // `resolveRoot` lets super list USERS_ROOT without changing agent HOME.
+    const pinned =
+      opts.resolveRoot?.(req) ??
+      (req as { userWorkspace?: string }).userWorkspace
     const root = pinned ?? opts.root
     const policy = createFilesystemPermissionContext(root)
     const enforceDontAsk = Boolean(pinned) || policy.mode === 'dontAsk'

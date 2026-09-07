@@ -164,6 +164,20 @@ export function getScratchDataDir(kind: string): string {
   return path.join(resolveAgentHome(), getAppDirName(), 'scratch', safe)
 }
 
+/** `{agentHome}/.ai-agent/browser-logs` — Cursor-style spill (not under projects/). */
+export function getBrowserLogsDir(agentHome?: string): string {
+  return path.join(resolveAgentHome(agentHome), getAppDirName(), 'browser-logs')
+}
+
+/** `{agentHome}/.ai-agent/browser-logs/<sessionId>` */
+export function getBrowserLogsSessionDir(
+  sessionId: string,
+  agentHome?: string,
+): string {
+  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_') || 'session'
+  return path.join(getBrowserLogsDir(agentHome), safe)
+}
+
 function isUnderRoot(absPath: string, root: string): boolean {
   const normalized = path.normalize(path.resolve(absPath))
   const r = path.normalize(path.resolve(root))
@@ -173,7 +187,7 @@ function isUnderRoot(absPath: string, root: string): boolean {
 
 /**
  * Internal readable roots for the current agent home only
- * (projects + plans under that home). No substring matching across tenants.
+ * (projects + plans + scratch + browser-logs). No substring matching across tenants.
  */
 export function isReadableInternalPath(absPath: string): boolean {
   const normalized = path.normalize(path.resolve(absPath))
@@ -182,10 +196,12 @@ export function isReadableInternalPath(absPath: string): boolean {
     const projects = getProjectsRoot(home)
     const plans = path.join(home, getAppDirName(), 'plans')
     const scratch = path.join(home, getAppDirName(), 'scratch')
+    const browserLogs = getBrowserLogsDir(home)
     return (
       isUnderRoot(normalized, projects) ||
       isUnderRoot(normalized, plans) ||
-      isUnderRoot(normalized, scratch)
+      isUnderRoot(normalized, scratch) ||
+      isUnderRoot(normalized, browserLogs)
     )
   } catch {
     return false

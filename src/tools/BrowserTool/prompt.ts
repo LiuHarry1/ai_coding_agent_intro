@@ -14,7 +14,7 @@ http(s) only — no file: or javascript: URLs. If a modal is covering the curren
 
 export const SNAPSHOT_DESCRIPTION = `Capture an accessibility snapshot of the current page, this is better than screenshot.
 
-Click \`[ref=eN]\` from the latest tree; bare \`text:\` is not clickable. Default maxDepth 20 / \`mode=full\` (complete tree, like Cursor). If the YAML is large, Read the Snapshot File path exactly (do not retype the session id) — the middle of the tree is there, not omitted. If a named control is missing from the latest tree, call again. Do not call in parallel.
+Click \`[ref=eN]\` from the latest tree; bare \`text:\` is not clickable. Default maxDepth 30 / \`mode=full\` (complete tree, like Cursor). If the YAML is large, Read the Snapshot File path exactly — the middle of the tree is there, not omitted. If a named control is missing from the latest tree, call again. Do not call in parallel.
 
 \`selector\` is CSS, not a ref. Passing \`[ref=eN]\` is rejected. Omit selector for the page tree. Prose → ${'`browser_get_text`'}. In-page Yes/No → click snapshot refs, not ${'`browser_handle_dialog`'}. Timeout (PDF/iframe): do not loop snapshot or screenshot.`
 

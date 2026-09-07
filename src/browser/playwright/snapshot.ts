@@ -397,7 +397,7 @@ async function snapshotInner(
       const dialog = await snapshotBlockingDialog(page)
       if (dialog) return finish(await packDialog(dialog))
     }
-    // Cursor default maxDepth is 20. Depth 6 on compact trees dropped nested
+    // Cursor default maxDepth is 30. Depth 6 on compact trees dropped nested
     // ExtJS comboboxes (and open dialogs became Close + title) without setting
     // truncated. Selector-scoped still uses the same default unless overridden.
     const depth = opts.depth ?? DEFAULT_SNAPSHOT_DEPTH

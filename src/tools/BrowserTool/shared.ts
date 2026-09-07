@@ -19,6 +19,7 @@ import {
   EFFICIENT_MAX_CHARS,
   POST_ACTION_MAX_NODES,
   SCREENSHOT_TOKEN_BUDGET,
+  SNAPSHOT_DIFF_INLINE_MAX_BYTES,
   SNAPSHOT_INLINE_MAX_BYTES,
   SNAPSHOT_PREVIEW_LINES,
   WIRE_CONSOLE_MAX,
@@ -30,7 +31,6 @@ import { getLastSnapshot, isSnapshotDegraded } from '../../browser/session-flags
 import { snapshotDiff } from '../../browser/snapshot-index.js'
 import {
   formatSnapshotFileLine,
-  snapshotFileDisplayPath,
   snapshotPreviewLines,
 } from '../../browser/distill-snapshot.js'
 import * as pw from '../../browser/playwright/index.js'
@@ -40,7 +40,7 @@ import {
   type NetworkEntry,
   type SnapshotMode,
 } from '../../browser/types.js'
-import { getSessionDataDir } from '../../core/session-paths.js'
+import { getBrowserLogsSessionDir } from '../../core/session-paths.js'
 import type {
   ImageMediaType,
   ToolResultBlockParam,
@@ -257,9 +257,9 @@ export async function maybePersistSnapshotArtifact(
   if (bytes <= SNAPSHOT_INLINE_MAX_BYTES) return
   if (out.snapshotArtifactPath) return
 
-  const dir = path.join(getSessionDataDir(sessionId), 'browser')
+  const dir = getBrowserLogsSessionDir(sessionId)
   await fs.mkdir(dir, { recursive: true })
-  const name = `snapshot-${toolCallId.replace(/[^a-zA-Z0-9_-]/g, '_')}.txt`
+  const name = `snapshot-${toolCallId.replace(/[^a-zA-Z0-9_-]/g, '_')}.log`
   const filePath = path.join(dir, name)
   await fs.writeFile(filePath, full, 'utf8')
   out.snapshotArtifactPath = filePath
@@ -468,10 +468,18 @@ export async function observe(
     })
     out.url = snap.url
     out.title = snap.title
-    out.snapshot =
-      opts.includeDiff && previous
-        ? snapshotDiff(previous, snap.text)
-        : snap.text
+    if (opts.includeDiff && previous) {
+      const diff = snapshotDiff(previous, snap.text)
+      const diffBytes = Buffer.byteLength(diff, 'utf8')
+      if (diffBytes > SNAPSHOT_DIFF_INLINE_MAX_BYTES) {
+        out.snapshot = snap.text
+        out.message = `${out.message} (snapshot diff too large to include inline (${diffBytes} bytes))`
+      } else {
+        out.snapshot = diff
+      }
+    } else {
+      out.snapshot = snap.text
+    }
     out.snapshotTruncated = snap.truncated
     if (opts.sessionId && opts.toolCallId) {
       await maybePersistSnapshotArtifact(out, opts.sessionId, opts.toolCallId)
@@ -531,7 +539,7 @@ export async function attachScreenshot(
   // Full-fidelity copy on disk for the UI card; the model gets a downsampled
   // one so a 3MB retina PNG can't eat the context window.
   if (sessionId) {
-    const dir = path.join(getSessionDataDir(sessionId), 'browser')
+    const dir = getBrowserLogsSessionDir(sessionId)
     await fs.mkdir(dir, { recursive: true })
     const name = `${toolCallId.replace(/[^a-zA-Z0-9_-]/g, '_')}.${shot.format}`
     await fs.writeFile(path.join(dir, name), shot.buffer)
@@ -632,25 +640,16 @@ function renderText(out: BrowserToolOutput): string {
 
   if (out.snapshotArtifactPath) {
     lines.push('')
-    if (
-      out.snapshotTruncated &&
-      (out.snapshotFullBytes ?? 0) > SNAPSHOT_INLINE_MAX_BYTES
-    ) {
-      const bytes = out.snapshotFullBytes ?? 0
-      const total = out.snapshotTotalLines ?? 0
-      const previewLines = (out.snapshot ?? '').split('\n').length
-      lines.push(
-        `Page Snapshot: Large snapshot (${bytes} bytes, ${total} lines) written to file`,
-      )
-      lines.push(formatSnapshotFileLine(out.snapshotArtifactPath))
-      lines.push(
-        `Preview (first ${previewLines} lines). Read the Snapshot File path exactly. Middle form fields are in the file, not missing.`,
-      )
-    } else {
-      lines.push(
-        `Full snapshot saved to ${snapshotFileDisplayPath(out.snapshotArtifactPath)}`,
-      )
-    }
+    const bytes = out.snapshotFullBytes ?? 0
+    const total = out.snapshotTotalLines ?? 0
+    const previewLines = (out.snapshot ?? '').split('\n').length
+    lines.push(
+      `Page Snapshot: Large snapshot (${bytes} bytes, ${total} lines) written to file`,
+    )
+    lines.push(formatSnapshotFileLine(out.snapshotArtifactPath))
+    lines.push(
+      `Preview (first ${previewLines} lines). Read the Snapshot File path exactly. Middle form fields are in the file, not missing.`,
+    )
   }
 
   if (out.snapshot !== undefined) {

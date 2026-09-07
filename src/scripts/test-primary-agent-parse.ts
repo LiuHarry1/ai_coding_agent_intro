@@ -137,8 +137,8 @@ assert(
   'wait_for does not repeat the snapshot primer',
 )
 assert(
-  SNAPSHOT_DESCRIPTION.includes('maxDepth 20'),
-  'snapshot defaults match Cursor maxDepth 20',
+  SNAPSHOT_DESCRIPTION.includes('maxDepth 30'),
+  'snapshot defaults match Cursor maxDepth 30',
 )
 assert(
   SNAPSHOT_DESCRIPTION.includes('mode=full'),
@@ -169,7 +169,7 @@ assert(
   'browser.md omits AGENTS.md / project rules',
 )
 assert(
-  browserMd.includes('maxDepth 20'),
+  browserMd.includes('maxDepth 30'),
   'browser.md matches Cursor snapshot depth',
 )
 assert(

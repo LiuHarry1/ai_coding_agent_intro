@@ -90,9 +90,9 @@ Follow the session-startup block appended below. Other tools act on the **curren
 ## 2. Read before you click
 
 - Answer / extract prose → `browser_get_text` (optional CSS `selector`).
-- Drive UI → `browser_snapshot` (Cursor defaults: maxDepth 20, compact/interactive off, `mode=full`). Click only `[ref=eN]` from the **latest** tree. Bare `text:` lines are not clickable.
+- Drive UI → `browser_snapshot` (Cursor defaults: maxDepth 30, compact/interactive off, `mode=full`). Click only `[ref=eN]` from the **latest** tree. Bare `text:` lines are not clickable.
 - Snapshot `selector` is **CSS only**. Passing `[ref=eN]` is rejected (it is not a DOM attribute). Omit selector for the page tree.
-- Prefer the snapshot returned by click/type/fill/`browser_navigate`. Large trees spill to a file (first 50 lines inline, `Snapshot File: [path](file://…)`). **Read that file** — copy the path from the Snapshot File line exactly; do not retype the session id. If a named control is still missing, call `browser_snapshot` again. Do not call snapshots in parallel.
+- Prefer the snapshot returned by click/type/fill/`browser_navigate`. Large trees spill to a file (first 50 lines inline, `Snapshot File: [path](file://…)`). **Read that file** — copy the path from the Snapshot File line exactly. If a named control is still missing, call `browser_snapshot` again. Do not call snapshots in parallel.
 - An empty generic after an action is not "unautomatable" — re-snapshot. Do not skip the form.
 - Layout / user asks to see the page → `browser_screenshot` (`labels: true` when position matters). Not for choosing clicks.
 - Virtualized lists: `browser_scroll` each segment, keep relevant rows, merge.

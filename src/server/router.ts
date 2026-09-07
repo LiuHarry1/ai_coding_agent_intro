@@ -36,6 +36,7 @@ import {
 } from '../core/permission-mode.js'
 import {
   authenticateRequest,
+  getUsersRoot,
   isAuthEnabled,
   isSuperUser,
   AuthError,
@@ -99,7 +100,14 @@ async function getMCPStatusForCwd(
 
 
 export function createRouter({ staticDir }: RouterOptions) {
-  const workspaceRouter = createWorkspaceRouter({ root: getDefaultWorkspace() })
+  const workspaceRouter = createWorkspaceRouter({
+    root: getDefaultWorkspace(),
+    resolveRoot: req => {
+      const authed = req as AuthedRequest
+      if (isSuperUser(authed.user)) return getUsersRoot()
+      return authed.userWorkspace
+    },
+  })
   const lazyRunAgent: RunAgentFn = async (...args) => {
     const runAgent = await getRunAgent()
     return runAgent(...args)
@@ -331,11 +339,11 @@ export function createRouter({ staticDir }: RouterOptions) {
         sendJSON(res, 404, { error: 'Not found' })
         return
       }
-      const { getSessionDataDir } = await import('../core/session-paths.js')
+      const { getBrowserLogsSessionDir } = await import('../core/session-paths.js')
       const fsp = await import('fs/promises')
       try {
         const buf = await fsp.readFile(
-          path.join(getSessionDataDir(id), 'browser', file),
+          path.join(getBrowserLogsSessionDir(id), file),
         )
         res.writeHead(200, {
           'content-type': file.endsWith('.png') ? 'image/png' : 'image/jpeg',

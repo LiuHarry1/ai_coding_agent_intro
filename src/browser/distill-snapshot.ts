@@ -54,19 +54,6 @@ export function snapshotPreviewLines(
   return { preview: lines.slice(0, n).join('\n'), totalLines: lines.length }
 }
 
-/** Workspace-relative posix path when the file is under cwd (easier to Read). */
-export function snapshotFileDisplayPath(
-  absPath: string,
-  cwd = process.cwd(),
-): string {
-  const resolved = path.resolve(absPath)
-  const rel = path.relative(cwd, resolved)
-  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
-    return rel.split(path.sep).join('/')
-  }
-  return resolved
-}
-
 /** Cursor: `Snapshot File: [absPath](file://…)` — label is the on-disk path. */
 export function formatSnapshotFileLine(absPath: string): string {
   const resolved = path.resolve(absPath)

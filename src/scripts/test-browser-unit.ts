@@ -34,6 +34,7 @@ import {
   BrowserOutputSchema,
   browserErrorText,
   mapBrowserOutput,
+  maybePersistSnapshotArtifact,
   type BrowserToolOutput,
 } from '../tools/BrowserTool/shared.js'
 import { PAGE_SCRIPT, PAGE_SCRIPT_VERSION } from '../browser/page-script.js'
@@ -46,7 +47,6 @@ import {
   groupBadgeLabels,
   isBlockingMessageBox,
   prioritizeAriaSnapshot,
-  snapshotFileDisplayPath,
   snapshotPreviewLines,
 } from '../browser/distill-snapshot.js'
 import {
@@ -66,7 +66,12 @@ import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../browser/heavy-media.j
 import { assertNavigateUrl } from '../browser/navigate-policy.js'
 import { denyCdpMethod } from '../browser/cdp-policy.js'
 import { sendCdpCommand } from '../browser/cdp-command.js'
-import { CDP_INLINE_MAX_CHARS } from '../browser/limits.js'
+import { getBrowserLogsSessionDir } from '../core/session-paths.js'
+import {
+  CDP_INLINE_MAX_CHARS,
+  DEFAULT_SNAPSHOT_DEPTH,
+  SNAPSHOT_INLINE_MAX_BYTES,
+} from '../browser/limits.js'
 import {
   planAnnotations,
   scaleAnnotations,
@@ -1204,6 +1209,37 @@ await withRelay(async relay => {
     'ref selector error tells the model to omit selector',
   )
   ok('snapshot selector rejects [ref=eN]')
+}
+
+{
+  eq(DEFAULT_SNAPSHOT_DEPTH, 30, 'Cursor injected default maxDepth is 30')
+  const sid = 'cccccccc-cccc-cccc-dddd-eeeeeeeeeeee'
+  const huge = 'x'.repeat(SNAPSHOT_INLINE_MAX_BYTES + 50)
+  const out: BrowserToolOutput = {
+    action: 'snapshot',
+    message: 'ok',
+    url: 'https://example.com/',
+    title: 'Example',
+    snapshot: huge,
+  }
+  await maybePersistSnapshotArtifact(out, sid, 'call_spill')
+  const dir = getBrowserLogsSessionDir(sid)
+  try {
+    assert(out.snapshotArtifactPath, 'large YAML spills to a file')
+    assert(
+      out.snapshotArtifactPath!.startsWith(dir),
+      `spill under browser-logs, got ${out.snapshotArtifactPath}`,
+    )
+    assert(
+      out.snapshotArtifactPath!.endsWith('.log'),
+      'Cursor-style snapshot extension is .log',
+    )
+    assert(!out.snapshotArtifactPath!.includes(`${path.sep}projects${path.sep}`), 'not under projects/')
+    assert(fs.existsSync(out.snapshotArtifactPath!), 'spill file exists')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+  ok('large snapshot spills under .ai-agent/browser-logs/<sessionId>/')
 }
 
 // ── Playwright page matching: never pages[0] ─────────────

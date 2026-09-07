@@ -8,7 +8,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { CDP_INLINE_MAX_CHARS } from './limits.js'
 import { denyCdpMethod } from './cdp-policy.js'
-import { getSessionDataDir } from '../core/session-paths.js'
+import { getBrowserLogsSessionDir } from '../core/session-paths.js'
 import { BrowserError, type BrowserBackend } from './types.js'
 
 export type CdpCommandResult =
@@ -28,7 +28,7 @@ async function writeCdpFile(
   sessionId?: string,
 ): Promise<{ filePath: string; sizeBytes: number }> {
   const dir = sessionId
-    ? path.join(getSessionDataDir(sessionId), 'browser')
+    ? getBrowserLogsSessionDir(sessionId)
     : path.join(os.tmpdir(), 'ai-agent-cdp')
   await fs.mkdir(dir, { recursive: true })
   const filePath = path.join(dir, cdpFileName(method))

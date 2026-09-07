@@ -6,7 +6,11 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { resolveFileInCwd } from '../utils/read/index.js'
-import { getProjectsRoot } from '../core/session-paths.js'
+import {
+  getBrowserLogsDir,
+  getProjectsRoot,
+  isReadableInternalPath,
+} from '../core/session-paths.js'
 import { FILE_READ_TOOL_NAME } from '../constants/tool_names.js'
 import { definition as fileReadDef } from '../tools/FileReadTool/FileReadTool.js'
 import { createCanUseTool } from '../core/can-use-tool.js'
@@ -220,6 +224,26 @@ try {
   } finally {
     try {
       fs.unlinkSync(sessionsPath)
+    } catch {}
+  }
+
+  const logsRoot = getBrowserLogsDir()
+  if (logsRoot.split(path.sep).includes('projects')) {
+    throw new Error('browser-logs must not live under projects/')
+  }
+  const logPath = path.join(logsRoot, 'perm-test.log')
+  fs.mkdirSync(logsRoot, { recursive: true })
+  fs.writeFileSync(logPath, 'snap')
+  try {
+    if (checkReadPermission(logPath, desktop).behavior !== 'allow') {
+      throw new Error('browser-logs/ internal path should allow read')
+    }
+    if (!isReadableInternalPath(logPath)) {
+      throw new Error('isReadableInternalPath should cover browser-logs')
+    }
+  } finally {
+    try {
+      fs.unlinkSync(logPath)
     } catch {}
   }
 

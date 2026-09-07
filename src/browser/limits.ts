@@ -1,9 +1,10 @@
 /**
  * Every bound the browser tools wait on or spend, in one place.
  *
- * Capture follows Cursor: full tree (maxDepth 20), no middle-omit. Over
- * SNAPSHOT_INLINE_MAX_BYTES the complete YAML is spilled to disk and the
- * model sees a short preview + path. `mode=efficient` is the opt-in clip.
+ * Capture follows Cursor: full tree (maxDepth 30), no middle-omit. Over
+ * SNAPSHOT_INLINE_MAX_BYTES the complete YAML is spilled to
+ * `{agentHome}/.ai-agent/browser-logs/<sessionId>/` and the model sees a
+ * short preview + path. `mode=efficient` is the opt-in clip.
  * Wire/UI: WIRE_DETAIL_* caps so SSE/session never carry raw trees.
  */
 
@@ -52,13 +53,12 @@ export const DEFAULT_MAX_CHARS = 40_000
 /** `mode=efficient` character budget (interactive clip). */
 export const EFFICIENT_MAX_CHARS = 8_000
 /**
- * Cursor `browser_snapshot` default `maxDepth`. Nested ExtJS / iframe forms
+ * Cursor `browser_snapshot` default `maxDepth` (injected buildPageSnapshot
+ * uses `options.maxDepth || 30`). Nested ExtJS / iframe forms
  * (Concur XpresswayTA) sit below depth 6 — clipping there drops comboboxes
  * and reports truncated=false.
  */
-export const DEFAULT_SNAPSHOT_DEPTH = 20
-/** Compact/efficient depth; same as Cursor maxDepth, not a shallow 6. */
-export const EFFICIENT_DEPTH = DEFAULT_SNAPSHOT_DEPTH
+export const DEFAULT_SNAPSHOT_DEPTH = 30
 
 /** Screenshots compete with the snapshot for context; cap them hard. */
 export const SCREENSHOT_TOKEN_BUDGET = 1500
@@ -69,10 +69,16 @@ export const ACT_MAX_VIEWPORT_DIMENSION = 8192
 export const SNAPSHOT_TTL_MS = 10_000
 
 /**
- * CDP JSON inline cap. Larger responses (and Profiler.stop) spill to a file
- * under `.sessions/{id}/browser/`.
+ * Cursor snapshot-diff inline cap. Larger diffs stay off the model text;
+ * the full current tree is kept (and may still spill above 25.6KB).
  */
-export const CDP_INLINE_MAX_CHARS = 8_000
+export const SNAPSHOT_DIFF_INLINE_MAX_BYTES = 20_480
+
+/**
+ * CDP JSON inline cap. Larger responses (and Profiler.stop) spill to a file
+ * under `{agentHome}/.ai-agent/browser-logs/<sessionId>/`.
+ */
+export const CDP_INLINE_MAX_CHARS = 25_000
 
 /** Hard wrap for non-browser tool text. */
 export const MODEL_TOOL_RESULT_MAX_CHARS = 16_000

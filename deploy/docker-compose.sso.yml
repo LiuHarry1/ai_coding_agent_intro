@@ -19,13 +19,12 @@
 #             ${AUTH_PUBLIC_URL}   │  (external)  │   └───────────┘
 #                                  └──────────────┘
 #
-#   • The web image serves ONLY the built SPA (nginx.static.conf — no agent
-#     upstream, no /sso proxy). It can be deployed/scaled on its own host/CDN.
-#   • The browser calls the agent directly at API_BASE (cross-origin → the
-#     agent must allow ${FRONTEND_ORIGIN} via ALLOWED_ORIGINS) and redirects
-#     to the auth-service directly at AUTH_BASE for login.
-#   • Each user is PINNED to /workspace/users/<slug(email)>, enforced
-#     server-side. The workspace switcher is hidden; client-sent paths ignored.
+#   • The web image serves the SPA and (nginx.sso-proxy.conf) reverse-proxies
+#     agent APIs on the same origin. Chrome Local Network Access otherwise
+#     stalls browser → :4567 with no console error ("Select workspace").
+#   • Set API_BASE empty. SSO login still redirects to AUTH_BASE.
+#   • Regular users are PINNED to /workspace/users/<slug(email)>. Super's
+#     /workspace HTTP root is USERS_ROOT so the IDE can list every tenant.
 #   • SSO filesystem policy is dontAsk + pinned working dir: File tools and
 #     /workspace HTTP refuse paths outside the user dir (application-layer;
 #     bash is not OS-isolated).
@@ -136,9 +135,9 @@ services:
 
   web:
     image: ai-agent-web:latest
-    # The image serves the SPA as a static site (nginx.static.conf is baked
-    # in) — no agent upstream and no /sso proxy, so this container is fully
-    # independent of the agent and starts even if the agent is unreachable.
+    # Static SPA + same-origin proxy to `agent` (nginx.sso-proxy.conf).
+    # Chrome Local Network Access blocks browser → :4567 from :8090; the
+    # proxy keeps /workspace /sessions /chat on the web origin.
     # RHEL7/CentOS7 (kernel 3.10) + nginx 1.31+: default seccomp blocks
     # pwrite(/run/nginx.pid). Prefer rebuilding with nginx:1.25-alpine
     # (Dockerfile.web); this is a runtime fallback.
@@ -149,14 +148,20 @@ services:
       AUTH_ENABLED: "true"
       # Hide Remote SSH picker in tenant SSO deploys.
       REMOTE_ENABLED: "false"
-      # Browser → agent API origin (cross-origin). Baked into app-config.js.
-      API_BASE: "${AGENT_PUBLIC_URL:-http://localhost:4567}"
+      # Empty = same-origin (nginx proxies agent APIs). Do not point this at
+      # :4567 on a LAN IP — Chrome will stall GET /workspace with no console error.
+      API_BASE: ""
       # Browser → auth-service origin for /sso/authorize + /sso/logout.
       # NOTE: the static web image's web-runtime-config.sh reads AUTH_BASE
       # (NOT AUTH_SERVICE_URL — that's the single-origin admin proxy's var).
       # If left empty the SPA redirects SSO to its own origin and loops.
       AUTH_BASE: "${AUTH_BASE:-http://localhost:52320}"
       # WEB_PASSWORD intentionally unset → Basic Auth OFF (login = auth-service).
+    volumes:
+      - ./nginx.sso-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      agent:
+        condition: service_healthy
     ports:
       - "${WEB_PORT:-8090}:80"
     restart: unless-stopped

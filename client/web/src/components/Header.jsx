@@ -3,7 +3,13 @@ import { useChatStore } from '../stores/chat-store.js'
 import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 import { workspaceApi } from '../lib/api/workspace.js'
 import { isDesktop, pickWorkspaceDir } from '../lib/desktop.js'
-import { authEnabled, getUser, logout, remoteEnabled } from '../lib/auth.js'
+import {
+  authEnabled,
+  getUser,
+  isSuperUser,
+  logout,
+  remoteEnabled,
+} from '../lib/auth.js'
 import SessionSwitcher from './SessionSwitcher.jsx'
 import BaizeLogo from './BaizeLogo.jsx'
 import WorkspacePanel from './WorkspacePanel.jsx'
@@ -12,11 +18,11 @@ import { APP_NAME } from '../lib/brand.js'
 import { shortDisplayPath } from '../lib/utils.js'
 
 export default function Header() {
-  // SSO mode: the workspace is pinned server-side to the logged-in user, so
-  // the switcher/browser is hidden and shown read-only instead.
-  const locked = authEnabled()
+  // SSO mode: regular users are pinned server-side, so the folder picker is
+  // read-only. Super may browse USERS_ROOT (all tenant workspaces).
+  const locked = authEnabled() && !isSuperUser()
   const showRemote = remoteEnabled()
-  const user = locked ? getUser() : null
+  const user = authEnabled() ? getUser() : null
 
   const workspace = useChatStore(s => s.workspace)
   const setWorkspace = useChatStore(s => s.setWorkspace)
@@ -333,7 +339,7 @@ export default function Header() {
       </div>
 
       <div className='header-right'>
-        {locked && user && (
+        {user && (
           <span className='auth-user' title={user.email}>
             {user.username || user.email}
           </span>

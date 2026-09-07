@@ -13,7 +13,7 @@ import { toolResultOutputToText } from '../utils/tool-result-content.js'
 
 /**
  * Before appendMessage: drop image-data from tool outputs (bytes live under
- * `.sessions/{id}/browser/*.png` via screenshotPath).
+ * `.ai-agent/browser-logs/{id}/*.png` via screenshotPath).
  */
 export function projectMessageForDisk(message: Message): Message {
   if (!isRoleMessage(message) || message.role !== 'tool') return message
