@@ -2,9 +2,18 @@
 
 const brand = require('./brand.json')
 
+// GitHub electron releases often stall in CN (got request timeout). Override with ELECTRON_MIRROR.
+const electronMirror =
+  process.env.ELECTRON_MIRROR ||
+  process.env.npm_config_electron_mirror ||
+  'https://npmmirror.com/mirrors/electron/'
+
 module.exports = {
   appId: 'com.baize.desktop',
   productName: brand.name,
+  electronDownload: {
+    mirror: electronMirror,
+  },
   directories: {
     output: 'dist-desktop',
   },
