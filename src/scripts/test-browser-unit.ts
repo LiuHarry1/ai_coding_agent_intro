@@ -68,8 +68,10 @@ import { denyCdpMethod } from '../browser/cdp-policy.js'
 import { sendCdpCommand } from '../browser/cdp-command.js'
 import { getBrowserLogsSessionDir } from '../core/session-paths.js'
 import {
+  ACTION_TIMEOUT_MS,
   CDP_INLINE_MAX_CHARS,
   DEFAULT_SNAPSHOT_DEPTH,
+  SCREENSHOT_TIMEOUT_MS,
   SNAPSHOT_INLINE_MAX_BYTES,
 } from '../browser/limits.js'
 import {
@@ -1213,6 +1215,11 @@ await withRelay(async relay => {
 
 {
   eq(DEFAULT_SNAPSHOT_DEPTH, 30, 'Cursor injected default maxDepth is 30')
+  eq(SCREENSHOT_TIMEOUT_MS, 20_000, 'screenshot capture has its own 20s budget')
+  assert(
+    SCREENSHOT_TIMEOUT_MS > ACTION_TIMEOUT_MS,
+    'screenshot timeout is longer than a click',
+  )
   const sid = 'cccccccc-cccc-cccc-dddd-eeeeeeeeeeee'
   const huge = 'x'.repeat(SNAPSHOT_INLINE_MAX_BYTES + 50)
   const out: BrowserToolOutput = {

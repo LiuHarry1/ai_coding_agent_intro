@@ -36,6 +36,7 @@ tools:
   - browser_get_bounding_box
   - browser_lock
   - browser_wait_for_download
+  - browser_cdp
   - Bash
   - Skill
   - Read

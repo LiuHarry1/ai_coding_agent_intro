@@ -15,6 +15,7 @@ import {
   ACT_MAX_VIEWPORT_DIMENSION,
   NAVIGATE_SETTLE_MS,
   NAVIGATE_TIMEOUT_MS,
+  SCREENSHOT_TIMEOUT_MS,
 } from '../limits.js'
 import { BrowserError, type BrowserBackend, type ResolvedElement } from '../types.js'
 import { DATE_RANGE_CALENDAR_MSG, isTypedDateRange } from './fields.js'
@@ -501,13 +502,13 @@ export async function screenshot(
             await targetLocator(page, { ref: opts.ref, element: opts.element })
           ).screenshot({
             type: format,
-            timeout: ACTION_TIMEOUT_MS,
+            timeout: SCREENSHOT_TIMEOUT_MS,
             ...quality,
           })
         : await page.screenshot({
             type: format,
             fullPage: Boolean(opts.fullPage),
-            timeout: ACTION_TIMEOUT_MS,
+            timeout: SCREENSHOT_TIMEOUT_MS,
             ...quality,
           })
     const shot = await take()

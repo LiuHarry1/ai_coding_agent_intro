@@ -176,6 +176,10 @@ assert(
   !browserMd.includes('never full'),
   'browser.md does not forbid repeated snapshots',
 )
+assert(
+  /^  - browser_cdp$/m.test(browserMd),
+  'browser.md allowlists browser_cdp',
+)
 
 const browserProfile = parseAgentFromMarkdown({
   filePath: 'x/browser.md',

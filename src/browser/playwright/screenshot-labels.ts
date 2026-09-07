@@ -11,7 +11,7 @@ import {
 } from '../screenshot-annotate.js'
 import type { BrowserBackend } from '../types.js'
 import { listRefMeta } from '../session-flags.js'
-import { ACTION_TIMEOUT_MS } from '../limits.js'
+import { SCREENSHOT_TIMEOUT_MS } from '../limits.js'
 import { getPageForTarget } from './connect.js'
 import { refLocator } from './locator.js'
 
@@ -107,7 +107,7 @@ export async function screenshotWithLabels(
     maxLabels,
   })
 
-  const timeoutMs = opts.timeoutMs ?? ACTION_TIMEOUT_MS
+  const timeoutMs = opts.timeoutMs ?? SCREENSHOT_TIMEOUT_MS
   try {
     if (plan.overlayItems.length > 0) {
       const captureY =

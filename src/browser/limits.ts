@@ -22,6 +22,12 @@ export const ERROR_SNAPSHOT_TIMEOUT_MS = 8_000
 
 export const ACTION_TIMEOUT_MS = 8_000
 export const SNAPSHOT_TIMEOUT_MS = 8_000
+/**
+ * Capture is slower than a click: cold isolated Chrome and labeled full-page
+ * shots regularly exceed ACTION_TIMEOUT_MS. Still well under CALL_TIMEOUT_MS
+ * so encode/write can finish.
+ */
+export const SCREENSHOT_TIMEOUT_MS = 20_000
 
 /** Wait after an action so late XHR/DOM can land. */
 export const ACTION_SETTLE_MS = 500
