@@ -277,12 +277,16 @@ export function spawnPreparedShell(opts: SpawnPreparedShellOpts): ChildProcess {
       ? ['pipe', outputFd, outputFd]
       : ['pipe', 'pipe', 'pipe']
 
+  // CC bashProvider.detached = true: new process group, and on Windows a GUI
+  // parent (Electron / no console) will not block Git Bash on an inherited tty.
+  const useDetached = detached ?? prepared.shellKind === 'bash'
+
   return spawn(prepared.command, prepared.args, {
     cwd,
     env: prepared.env,
     stdio,
     windowsHide: true,
-    ...(detached !== undefined ? { detached } : {}),
+    detached: useDetached,
   })
 }
 

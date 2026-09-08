@@ -30,6 +30,7 @@ import {
 import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
 import {
   getLastSnapshot,
+  isSnapshotDegraded,
   isSnapshotStale,
   rememberSnapshot,
   setSnapshotDegraded,
@@ -92,60 +93,136 @@ const HIDE_EVAL_MS = 1_500
 const FRAMES_OMITTED_PREFIX =
   'Embedded frames omitted (they stalled the accessibility tree). Capture a new snapshot when the page is usable.\n\n'
 
+/**
+ * Playwright AI snapshots recurse into every iframe (`enter-frame`). display:none
+ * does not stop that, so a PDF viewer still hangs the tree. Cursor never enters
+ * iframes. Detach heavy (or all) embeds for the duration of the capture.
+ */
+function collectSnapshotFrames(page: Page): Frame[] {
+  const seen = new Set<Frame>()
+  const out: Frame[] = []
+  for (const frame of [page.mainFrame(), ...page.frames()]) {
+    if (seen.has(frame)) continue
+    seen.add(frame)
+    if (isHeavyMediaFrame(frame.url())) continue
+    out.push(frame)
+  }
+  return out
+}
+
 async function hideByAttr(page: Page, attr: string, all: boolean): Promise<void> {
-  await raceMs(
-    HIDE_EVAL_MS,
-    page
-      .evaluate(
-        ({ attr, all }) => {
-          const nodes = document.querySelectorAll('iframe, embed, object')
-          for (let i = 0; i < nodes.length; i++) {
-            const el = nodes[i] as HTMLElement
-            const src =
-              el.getAttribute('src') || el.getAttribute('data') || ''
-            const type = el.getAttribute('type') || ''
-            const label = `${el.getAttribute('title') || ''} ${el.getAttribute('name') || ''} ${el.getAttribute('aria-label') || ''}`
-            const s = src.toLowerCase()
-            const t = type.toLowerCase()
-            const heavy =
-              all ||
-              t.includes('pdf') ||
-              s.includes('application/pdf') ||
-              /\.pdf(\b|$|\?|#)/.test(s) ||
-              s.startsWith('blob:') ||
-              s.startsWith('data:application/pdf') ||
-              s.includes('pdf.js') ||
-              (s.startsWith('chrome-extension://') &&
-                (s.includes('pdf') ||
-                  s.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai'))) ||
-              ((s === '' || s === 'about:blank') &&
-                /pdf|preview|viewer|document/i.test(label))
-            if (!heavy) continue
-            el.setAttribute(attr, '1')
-            el.style.setProperty('display', 'none', 'important')
-          }
-        },
-        { attr, all },
-      )
-      .then(() => undefined),
-    undefined,
+  await Promise.all(
+    collectSnapshotFrames(page).map(frame =>
+      raceMs(
+        HIDE_EVAL_MS,
+        frame
+          .evaluate(
+            ({ attr, all }) => {
+              const storeKey = `__snapDetach_${attr}`
+              const w = window as unknown as Record<string, unknown>
+              type Slot = { el: Element; parent: Node; next: Node | null }
+              const slots: Slot[] = []
+              const visit = (root: ParentNode) => {
+                const kids = root.querySelectorAll('iframe, embed, object')
+                for (let i = 0; i < kids.length; i++) {
+                  const el = kids[i]
+                  const src =
+                    el.getAttribute('src') || el.getAttribute('data') || ''
+                  const type = el.getAttribute('type') || ''
+                  const label = `${el.getAttribute('title') || ''} ${el.getAttribute('name') || ''} ${el.getAttribute('aria-label') || ''}`
+                  const s = src.toLowerCase()
+                  const t = type.toLowerCase()
+                  const dialog = el.closest(
+                    '[role="dialog"], [role="alertdialog"], [aria-modal="true"]',
+                  )
+                  const heavy =
+                    all ||
+                    t.includes('pdf') ||
+                    s.includes('application/pdf') ||
+                    /\.pdf(\b|$|\?|#)/.test(s) ||
+                    s.startsWith('blob:') ||
+                    s.startsWith('data:application/pdf') ||
+                    s.includes('pdf.js') ||
+                    s.includes('/pdfjs/') ||
+                    /receiptimage|receipt-preview|\/receipts?\/|attachmentpreview|filepreview/.test(
+                      s,
+                    ) ||
+                    (s.startsWith('chrome-extension://') &&
+                      (s.includes('pdf') ||
+                        s.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai'))) ||
+                    /pdf|preview|viewer|receipt|attachment/i.test(label) ||
+                    (dialog &&
+                      (s === '' ||
+                        s === 'about:blank' ||
+                        /attach|receipt|preview|pdf/i.test(
+                          dialog.textContent?.slice(0, 240) || '',
+                        )))
+                  if (!heavy) continue
+                  if (!el.parentNode) continue
+                  slots.push({
+                    el,
+                    parent: el.parentNode,
+                    next: el.nextSibling,
+                  })
+                }
+                const allEls = root.querySelectorAll('*')
+                for (let i = 0; i < allEls.length; i++) {
+                  const sr = (allEls[i] as HTMLElement).shadowRoot
+                  if (sr) visit(sr)
+                }
+              }
+              visit(document)
+              for (const slot of slots) {
+                try {
+                  slot.parent.removeChild(slot.el)
+                } catch {
+                  /* already gone */
+                }
+              }
+              w[storeKey] = slots
+            },
+            { attr, all },
+          )
+          .then(() => undefined)
+          .catch(() => undefined),
+        undefined,
+      ),
+    ),
   )
 }
 
 async function unhideByAttr(page: Page, attr: string): Promise<void> {
-  await raceMs(
-    HIDE_EVAL_MS,
-    page
-      .evaluate(attr => {
-        const nodes = document.querySelectorAll(`[${attr}]`)
-        for (let i = 0; i < nodes.length; i++) {
-          const el = nodes[i] as HTMLElement
-          el.removeAttribute(attr)
-          el.style.removeProperty('display')
-        }
-      }, attr)
-      .then(() => undefined),
-    undefined,
+  await Promise.all(
+    collectSnapshotFrames(page).map(frame =>
+      raceMs(
+        HIDE_EVAL_MS,
+        frame
+          .evaluate(attr => {
+            const storeKey = `__snapDetach_${attr}`
+            const w = window as unknown as Record<string, unknown>
+            const slots = w[storeKey] as
+              | { el: Element; parent: Node; next: Node | null }[]
+              | undefined
+            if (!Array.isArray(slots)) return
+            for (let i = slots.length - 1; i >= 0; i--) {
+              const slot = slots[i]
+              try {
+                if (slot.next && slot.next.parentNode === slot.parent) {
+                  slot.parent.insertBefore(slot.el, slot.next)
+                } else {
+                  slot.parent.appendChild(slot.el)
+                }
+              } catch {
+                /* parent gone */
+              }
+            }
+            delete w[storeKey]
+          }, attr)
+          .then(() => undefined)
+          .catch(() => undefined),
+        undefined,
+      ),
+    ),
   )
 }
 
@@ -410,19 +487,23 @@ async function snapshotInner(
         truncated: false,
       })
     }
-    let raw = opts.selector
-      ? await scopedLocatorSnapshot(page, opts.selector, SNAPSHOT_TIMEOUT_MS)
-      : await raceMs(
-          SNAPSHOT_TIMEOUT_MS + 500,
-          withHeavyMediaHidden(page, () =>
-            ariaSnapshotPage(page, SNAPSHOT_TIMEOUT_MS, depth),
-          ),
-          '',
-        )
-    let omittedFrames = false
+    const skipIframeWalk = isSnapshotDegraded(targetId)
+    let raw = ''
+    let omittedFrames = skipIframeWalk
+    if (opts.selector) {
+      raw = await scopedLocatorSnapshot(page, opts.selector, SNAPSHOT_TIMEOUT_MS)
+    } else if (!skipIframeWalk) {
+      // Detach PDF/receipt iframes first. Playwright AI mode still enter-frames
+      // display:none iframes; Cursor never snapshots iframe contents.
+      raw = await raceMs(
+        SNAPSHOT_TIMEOUT_MS + 500,
+        withHeavyMediaHidden(page, () =>
+          ariaSnapshotPage(page, SNAPSHOT_TIMEOUT_MS, depth),
+        ),
+        '',
+      )
+    }
     if (!raw && !opts.selector) {
-      // A hung PDF/viewer iframe can stall the whole tree.
-      // frame never returns. Omit embeds and snapshot the host page.
       omittedFrames = true
       raw = await raceMs(
         EMBEDDED_FRAME_OMIT_MS,

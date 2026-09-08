@@ -105,14 +105,19 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
         return false
       }
     }
-    case 'exec':
+    case 'exec': {
+      const shell = (op.shell ?? 'bash') as ShellKind
+      logErr(
+        `exec shell=${shell} cwd=${op.cwd} cmd=${JSON.stringify(op.command.slice(0, 120))}`,
+      )
       return runShellCommand({
-        shell: (op.shell ?? 'bash') as ShellKind,
+        shell,
         command: op.command,
         cwd: op.cwd,
         timeoutMs: op.timeoutMs ?? 120_000,
         cwdFilePrefix: WORKER_CWD_FILE_PREFIX,
       })
+    }
     case 'exec_bg_start': {
       await fs.promises.mkdir(path.dirname(op.outputPath), { recursive: true })
       // Truncate/create; openShellOutputHandle uses 'w' on Windows (MSYS-safe).
@@ -128,7 +133,6 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
           prepared,
           cwd: op.cwd,
           outputFd: outputHandle.fd,
-          detached: process.platform !== 'win32',
         })
       } catch (err) {
         await closeShellOutputHandle(outputHandle)

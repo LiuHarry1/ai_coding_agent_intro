@@ -28,5 +28,13 @@ export {
   countPostCompactAgentListing,
 } from './post-compact-attachments.js'
 
-export { compactIfNeeded, resetCompactionFailures } from './autoCompact.js'
-export type { CompactOptions } from './autoCompact.js'
+export {
+  compactIfNeeded,
+  resetCompactionFailures,
+  isSummarizingCompactSource,
+} from './autoCompact.js'
+export type {
+  CompactOptions,
+  CompactOutcome,
+  CompactSource,
+} from './autoCompact.js'

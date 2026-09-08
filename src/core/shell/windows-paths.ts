@@ -55,30 +55,24 @@ export function posixPathToWindowsPath(posixPath: string): string {
 let cachedGitBash: string | null | undefined
 
 /**
- * Locate Git for Windows bash.exe.
- * Order: GIT_BASH_PATH → CLAUDE_CODE_GIT_BASH_PATH → Program Files → where git.
- * Returns null if missing — never fall back to System32/WSL bash.
+ * CC `pathWin32.join(gitPath, '..', '..', 'bin', 'bash.exe')`.
+ * `gitExe` must include the filename (`Git\cmd\git.exe`), not its dirname —
+ * an extra `path.dirname` would resolve AppData installs to `Programs\bin`.
  */
-export function findGitBashPath(): string | null {
-  if (!isWindows) return null
-  if (cachedGitBash !== undefined) return cachedGitBash
+export function bashExeFromGitExe(gitExe: string): string {
+  return path.win32.join(gitExe, '..', '..', 'bin', 'bash.exe')
+}
 
-  for (const envKey of ['GIT_BASH_PATH', 'CLAUDE_CODE_GIT_BASH_PATH']) {
-    const fromEnv = process.env[envKey]?.trim()
-    if (fromEnv && existsSync(fromEnv)) {
-      cachedGitBash = fromEnv
-      return cachedGitBash
-    }
-  }
-
-  for (const p of [
-    'C:\\Program Files\\Git\\bin\\bash.exe',
-    'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+/**
+ * Locate `git.exe` (CC `findExecutable('git')`).
+ * Prefers `Git\cmd\git.exe` (env-wrapped), never `mingw64\bin\git.exe`.
+ */
+function findGitExecutable(): string | null {
+  for (const location of [
+    'C:\\Program Files\\Git\\cmd\\git.exe',
+    'C:\\Program Files (x86)\\Git\\cmd\\git.exe',
   ]) {
-    if (existsSync(p)) {
-      cachedGitBash = p
-      return cachedGitBash
-    }
+    if (existsSync(location)) return location
   }
 
   try {
@@ -86,28 +80,46 @@ export function findGitBashPath(): string | null {
       encoding: 'utf8',
       windowsHide: true,
     })
-    const cwdNorm = process.cwd().toLowerCase()
+    const cwd = path.resolve(process.cwd()).toLowerCase()
     const sep = path.sep.toLowerCase()
     for (const gitExe of (r.stdout ?? '')
       .trim()
       .split(/\r?\n/)
       .map(l => l.trim())
       .filter(Boolean)) {
-      if (gitExe.toLowerCase().startsWith(cwdNorm + sep)) continue
-      const bashPath = path.join(
-        path.dirname(gitExe),
-        '..',
-        '..',
-        'bin',
-        'bash.exe',
-      )
-      if (existsSync(bashPath)) {
-        cachedGitBash = bashPath
-        return cachedGitBash
-      }
+      const normalized = path.resolve(gitExe).toLowerCase()
+      const pathDir = path.dirname(normalized)
+      if (pathDir === cwd || normalized.startsWith(cwd + sep)) continue
+      return gitExe
     }
   } catch {
     // where.exe / git missing
+  }
+  return null
+}
+
+/**
+ * Locate Git for Windows bash.exe (CC `findGitBashPath`).
+ * Order: GIT_BASH_PATH → Program Files `cmd\git.exe` → where git.
+ * Returns null if missing — never fall back to System32/WSL bash.
+ */
+export function findGitBashPath(): string | null {
+  if (!isWindows) return null
+  if (cachedGitBash !== undefined) return cachedGitBash
+
+  const fromEnv = process.env.GIT_BASH_PATH?.trim()
+  if (fromEnv && existsSync(fromEnv)) {
+    cachedGitBash = fromEnv
+    return cachedGitBash
+  }
+
+  const gitPath = findGitExecutable()
+  if (gitPath) {
+    const bashPath = bashExeFromGitExe(gitPath)
+    if (existsSync(bashPath)) {
+      cachedGitBash = bashPath
+      return cachedGitBash
+    }
   }
 
   cachedGitBash = null
@@ -130,8 +142,7 @@ export function resolveBashExecutable(): string {
   if (!gitBash) {
     throw new Error(
       'Git Bash not found. Install Git for Windows (https://git-scm.com/downloads/win) ' +
-        'or set GIT_BASH_PATH (or CLAUDE_CODE_GIT_BASH_PATH) to bash.exe. ' +
-        'Alternatively use the PowerShell tool.',
+        'or set GIT_BASH_PATH to bash.exe. Alternatively use the PowerShell tool.',
     )
   }
   return gitBash

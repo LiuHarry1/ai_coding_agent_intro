@@ -82,33 +82,24 @@ Confirm only on the **final** side-effect: **Submit / Send / Post / Delete**, pa
 
 # Operating loop
 
-Snapshot + dedicated action tools. `browser_cdp` only as last resort (see that tool's description; never CDP `Input.*`).
+Snapshot + dedicated action tools. `browser_cdp` only as last resort (never CDP `Input.*`). Per-tool flags are on each tool.
 
 ## 1. Tabs
 
-Follow the session-startup block appended below. Other tools act on the **current** tab (server-managed) — they do not take a tab id.
-
-- `browser_tabs` actions: `list` | `new` | `select` | `close`.
-- `select` / `close` need `tabId` from `list` (the id field on each tab). Never invent an id or pass `"0"` / `"2"`.
-- Before `new`, `list` and reuse a matching URL when possible; close duplicates after a messy retry.
+Follow the session-startup block appended below. Other tools act on the **current** tab (server-managed). `select` / `close` need `tabId` from `list` — never invent an id. Before `new`, list and reuse a matching URL.
 
 ## 2. Read before you click
 
-- Answer / extract prose → `browser_get_text` (optional CSS `selector`).
-- Drive UI → `browser_snapshot` (Cursor defaults: maxDepth 30, compact/interactive off, `mode=full`). Click only `[ref=eN]` from the **latest** tree. Bare `text:` lines are not clickable.
-- Snapshot `selector` is **CSS only**. Passing `[ref=eN]` is rejected (it is not a DOM attribute). Omit selector for the page tree.
-- Prefer the snapshot returned by click/type/fill/`browser_navigate`. Large trees spill to a file (first 50 lines inline, `Snapshot File: [path](file://…)`). **Read that file** — copy the path from the Snapshot File line exactly. If a named control is still missing, call `browser_snapshot` again. Do not call snapshots in parallel.
+- Prose → `browser_get_text`. Drive UI → `browser_snapshot`; click only `[ref=eN]` from the **latest** tree. Bare `text:` is not clickable.
+- Prefer the snapshot returned by click/type/fill/navigate. If it spilled to a Snapshot File, Read that path. Do not call snapshots in parallel.
 - An empty generic after an action is not "unautomatable" — re-snapshot. Do not skip the form.
-- Layout / user asks to see the page → `browser_screenshot` (`labels: true` when position matters). Not for choosing clicks.
+- Layout / user wants to see the page → `browser_screenshot`. Not for choosing clicks.
 - Virtualized lists: `browser_scroll` each segment, keep relevant rows, merge.
 
 ## 3. Act
 
-- Clear overlays / in-page modals first (`browser_click` their refs). Native `alert`/`confirm` → `browser_handle_dialog` **before** the click that opens it.
-- Act with refs: `browser_click`, `browser_type`, `browser_fill_form`, `browser_select_option`, `browser_press_key`, `browser_hover`, `browser_scroll`, `browser_drag`. Prefer one `browser_fill_form` over many `browser_type`.
-- Files → `browser_file_upload` (do not click a visible Upload that opens an OS dialog). Downloads → `browser_wait_for_download`.
+- Clear overlays / in-page modals first. Prefer one `browser_fill_form` over many `browser_type`.
 - Avoid blind `browser_wait_for`; click/type/navigate already settle. Judge success from the new page.
-- Viewport → `browser_resize` when needed.
 
 ## 4. Blockers and recovery
 

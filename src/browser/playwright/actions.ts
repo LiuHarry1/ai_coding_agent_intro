@@ -33,7 +33,7 @@ import { getPageForTarget } from './connect.js'
 import { clearTabMemory, setTabPoisoned } from '../session-flags.js'
 import { assertNavigateUrl } from '../navigate-policy.js'
 import { SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
-import { ensureSnapshotFresh } from './snapshot.js'
+import { ensureSnapshotFresh, withHeavyMediaHidden } from './snapshot.js'
 import {
   clickLocatorRobust,
   ensureInView,
@@ -511,7 +511,8 @@ export async function screenshot(
             timeout: SCREENSHOT_TIMEOUT_MS,
             ...quality,
           })
-    const shot = await take()
+    // Same as snapshot: PDF/receipt iframes stall Chrome's compositor.
+    const shot = await withHeavyMediaHidden(page, take)
     return { buffer: Buffer.from(shot), format }
   } catch (err) {
     if (!opts.ref && /Timeout|waiting/i.test(err instanceof Error ? err.message : String(err))) {

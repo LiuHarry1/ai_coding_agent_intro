@@ -70,7 +70,6 @@ export function spawnInProcessBackground(opts: {
       prepared,
       cwd: opts.cwd,
       outputFd,
-      detached: process.platform !== 'win32',
     })
   } catch (err) {
     closeShellOutputFdSync(outputFd)

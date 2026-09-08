@@ -1,6 +1,8 @@
 /**
  * Frames that stall Playwright's accessibility snapshot (PDF viewers, blob
- * previews). Pure URL/type check so the snapshot path can hide them first.
+ * previews). Playwright `ariaSnapshot({ mode: "ai" })` recursively
+ * `enter-frame`s every iframe; Cursor's browser does not (iframe content is
+ * not accessible). Detach these before snapshot/screenshot.
  */
 
 export function isHeavyMediaFrame(src: string, type = ''): boolean {
@@ -14,6 +16,14 @@ export function isHeavyMediaFrame(src: string, type = ''): boolean {
   if (
     s.startsWith('chrome-extension://') &&
     (s.includes('pdf') || s.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai'))
+  ) {
+    return true
+  }
+  // Concur / SAP receipt preview often has no .pdf suffix.
+  if (
+    /receiptimage|receipt-preview|\/receipts?\/|attachmentpreview|filepreview/.test(
+      s,
+    )
   ) {
     return true
   }

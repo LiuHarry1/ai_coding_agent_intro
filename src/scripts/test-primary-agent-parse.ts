@@ -121,12 +121,12 @@ assert(
 assert(LOCK_DESCRIPTION.includes('unlock'), 'lock prompt names unlock')
 assert(LOCK_DESCRIPTION.includes('lock'), 'lock prompt names lock')
 assert(
-  FILL_FORM_DESCRIPTION.includes('Runtime.evaluate'),
-  'fill_form points unlabeled fields at CDP',
+  FILL_FORM_DESCRIPTION.includes('filled, skipped, or failed'),
+  'fill_form reports per-field status',
 )
 assert(
-  CLICK_DESCRIPTION.includes('stale ref fails'),
-  'click matches fail-then-one-recovery',
+  CLICK_DESCRIPTION.includes('x/y'),
+  'click documents canvas coordinates',
 )
 assert(
   !TYPE_DESCRIPTION.includes('do not reuse old refs'),
@@ -138,15 +138,15 @@ assert(
 )
 assert(
   SNAPSHOT_DESCRIPTION.includes('maxDepth 30'),
-  'snapshot defaults match Cursor maxDepth 30',
+  'snapshot default maxDepth is 30',
 )
 assert(
   SNAPSHOT_DESCRIPTION.includes('mode=full'),
   'snapshot default mode is full',
 )
 assert(
-  SNAPSHOT_DESCRIPTION.includes('Passing `[ref=eN]` is rejected'),
-  'snapshot rejects [ref=eN] as CSS selector',
+  SNAPSHOT_DESCRIPTION.includes('selector is CSS, not a ref'),
+  'snapshot selector is CSS, not a ref',
 )
 assert(
   !SNAPSHOT_DESCRIPTION.includes('never full'),
@@ -169,8 +169,12 @@ assert(
   'browser.md omits AGENTS.md / project rules',
 )
 assert(
-  browserMd.includes('maxDepth 30'),
-  'browser.md matches Cursor snapshot depth',
+  browserMd.includes('[ref=eN]'),
+  'browser.md tells the agent to click latest snapshot refs',
+)
+assert(
+  !browserMd.includes('Cursor'),
+  'browser.md is not Cursor-branded',
 )
 assert(
   !browserMd.includes('never full'),

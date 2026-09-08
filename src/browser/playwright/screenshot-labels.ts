@@ -14,6 +14,7 @@ import { listRefMeta } from '../session-flags.js'
 import { SCREENSHOT_TIMEOUT_MS } from '../limits.js'
 import { getPageForTarget } from './connect.js'
 import { refLocator } from './locator.js'
+import { withHeavyMediaHidden } from './snapshot.js'
 
 export async function screenshotWithLabels(
   backend: BrowserBackend,
@@ -120,14 +121,15 @@ export async function screenshotWithLabels(
         buildOverlayInjectionScript({ items: plan.overlayItems, captureY }),
       )
     }
-    const buffer =
+    const buffer = await withHeavyMediaHidden(page, async () =>
       space === 'element'
         ? await captureElementScreenshotForLabels(page, refKey, type, timeoutMs)
         : await page.screenshot({
             type,
             fullPage: Boolean(opts.fullPage),
             timeout: timeoutMs,
-          })
+          }),
+    )
     return {
       buffer: Buffer.from(buffer),
       labels: plan.overlayItems.length,

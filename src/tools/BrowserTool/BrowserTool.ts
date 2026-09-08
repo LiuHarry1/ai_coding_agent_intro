@@ -24,7 +24,6 @@ import {
   ERROR_SNAPSHOT_TIMEOUT_MS,
   POST_ACTION_MAX_NODES,
   POST_ACTION_SNAPSHOT_MS,
-  SNAPSHOT_INLINE_MAX_BYTES,
 } from '../../browser/limits.js'
 import { SNAPSHOT_STALL_NEXT } from '../../browser/heavy-media.js'
 import {
@@ -122,7 +121,7 @@ async function observeAfterAction(
       observe(backend, targetId, {
         ...opts,
         skipIfDegraded,
-        // Cursor: post-action is a full tree (spill to disk if huge), not an 8k clip.
+        // Post-action is a full tree (spill to disk if huge), not an 8k clip.
         mode: opts.mode ?? 'full',
         sessionId: ctx?.sessionId ?? opts.sessionId,
         toolCallId: ctx?.toolCallId ?? opts.toolCallId,
@@ -433,7 +432,7 @@ export const snapshotTool = defineBrowserTool({
       .enum(['efficient', 'full'])
       .optional()
       .describe(
-        `full (default, Cursor): complete tree, maxDepth ${DEFAULT_SNAPSHOT_DEPTH}. Over ${SNAPSHOT_INLINE_MAX_BYTES} bytes the YAML is written to disk (Read the file). efficient: interactive clip, ~${EFFICIENT_MAX_CHARS} chars.`,
+        `full (default): complete tree. efficient: interactive clip (~${EFFICIENT_MAX_CHARS} chars).`,
       ),
     maxDepth: z
       .number()
@@ -441,7 +440,7 @@ export const snapshotTool = defineBrowserTool({
       .positive()
       .optional()
       .describe(
-        `Maximum snapshot tree depth. Defaults to ${DEFAULT_SNAPSHOT_DEPTH} (Cursor). Raise if nested comboboxes / iframe forms are missing.`,
+        `Maximum snapshot tree depth. Defaults to ${DEFAULT_SNAPSHOT_DEPTH}.`,
       ),
     maxNodes: z
       .number()
@@ -449,7 +448,7 @@ export const snapshotTool = defineBrowserTool({
       .positive()
       .optional()
       .describe(
-        `Cap on ref-bearing nodes for mode=efficient (default ${POST_ACTION_MAX_NODES}). Full trees are not node-capped; huge YAML spills to a file.`,
+        `Ref-bearing node cap for mode=efficient (default ${POST_ACTION_MAX_NODES}).`,
       ),
     maxChars: z
       .number()
@@ -457,25 +456,23 @@ export const snapshotTool = defineBrowserTool({
       .positive()
       .optional()
       .describe(
-        `Character budget for mode=efficient only (capped at ${DEFAULT_MAX_CHARS}). Full snapshots are not clipped; they spill to disk above ${SNAPSHOT_INLINE_MAX_BYTES} bytes.`,
+        `Character budget for mode=efficient only (max ${DEFAULT_MAX_CHARS}).`,
       ),
     selector: z
       .string()
       .optional()
-      .describe(
-        'CSS selector for one subtree (e.g. [role=dialog]). Not a snapshot ref — use omit selector for the full tree.',
-      ),
+      .describe('CSS selector for one subtree, e.g. [role=dialog]'),
     compact: z
       .boolean()
       .optional()
       .describe(
-        'When true, more compact snapshot format. Defaults to false (Cursor). Does not use a shallow depth-6 clip.',
+        'When true, more compact snapshot format. Defaults to false.',
       ),
     interactive: z
       .boolean()
       .optional()
       .describe(
-        'When true, only include interactive elements. Defaults to false (Cursor).',
+        'When true, only include interactive elements. Defaults to false.',
       ),
     includeDiff: z
       .boolean()
@@ -579,7 +576,7 @@ export const clickTool = defineBrowserTool({
       .string()
       .optional()
       .describe(
-        'Human-readable element description used to obtain permission to interact with the element; must match the resolved ref',
+        'Human-readable element description; must match the resolved ref',
       ),
     doubleClick: z.boolean().optional().describe('Send a double click'),
     button: z
@@ -610,7 +607,7 @@ export const clickTool = defineBrowserTool({
     force: z
       .boolean()
       .optional()
-      .describe('Skip Playwright actionability checks'),
+      .describe('Skip actionability checks'),
   }),
   async run(args, ctx) {
     const el = await pw.click(ctx.backend, ctx.targetId, {
@@ -812,9 +809,9 @@ export const fileUploadTool = defineBrowserTool({
       action: 'file_upload',
       message: res.cancelled
         ? 'Cancelled the file chooser'
-        : `Uploaded ${n} file${n === 1 ? '' : 's'}. Skip full snapshot/screenshot until the next form action — keep filling the expense form if it is still visible.`,
+        : `Uploaded ${n} file${n === 1 ? '' : 's'}. PDF/receipt preview iframes are omitted from this snapshot (iframe contents are not entered). Click Close / Save from these refs — do not screenshot or wait_for the preview.`,
       compact: true,
-      withSnapshot: false,
+      mode: 'efficient',
     })
   },
 })
@@ -898,7 +895,7 @@ export const waitForTool = defineBrowserTool({
     url: z
       .string()
       .optional()
-      .describe('URL glob to wait for (Playwright waitForURL)'),
+      .describe('URL glob to wait for'),
   }),
   async run(args, ctx) {
     await pw.waitFor(ctx.backend, ctx.targetId, {
@@ -1354,7 +1351,7 @@ export const cdpTool = defineBrowserTool({
     method: z
       .string()
       .describe(
-        'CDP method name, for example Runtime.evaluate, Profiler.start, or Performance.getMetrics. Do not use DOM.getDocument.',
+        'CDP method, e.g. Runtime.evaluate',
       ),
     params: z
       .record(z.string(), z.unknown())

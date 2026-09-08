@@ -500,9 +500,9 @@ export interface AgentOptions {
   /** Inject plan-exit reminders when transitioning out of plan mode mid-turn. */
   onPermissionModeChange?: () => Message[]
   /**
-   * Called after a full LLM compaction replaces the in-memory history.
-   * Host (chat route) uses this to write a `compacted` JSONL checkpoint when
-   * the first message uuid changes.
+   * Called after session-memory or full LLM compaction replaces in-memory
+   * history. Host writes a `compacted` JSONL checkpoint. Not invoked for
+   * microcompact (cleared tool payloads are API-view only).
    */
   onFullCompaction?: (messages: readonly Message[]) => void
   /**

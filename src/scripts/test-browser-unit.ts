@@ -1320,6 +1320,10 @@ await withRelay(async relay => {
   )
   assert(!isHeavyMediaFrame('https://app.example/nui/expense'), 'app frame is not heavy')
   assert(
+    isHeavyMediaFrame('https://us2.concursolutions.com/receiptimages/abc'),
+    'concur receipt preview url is heavy',
+  )
+  assert(
     SNAPSHOT_STALL_NEXT.includes('snapshot'),
     'stall hint tells the model to capture a new snapshot',
   )

@@ -1,8 +1,12 @@
 import {
   compactIfNeeded,
+  isSummarizingCompactSource,
   tokenCountWithEstimation,
 } from '../../services/compact/index.js'
-import type { CompactEnrichment } from '../../services/compact/index.js'
+import type {
+  CompactEnrichment,
+  CompactOutcome,
+} from '../../services/compact/index.js'
 import type { AgentOptions, Message, TodoItem } from '../types.js'
 import type { IProvider } from '../llm/types.js'
 import type { WireEmitter } from '../wire-emitter.js'
@@ -12,16 +16,45 @@ import {
   attachTodoReminderAfterCompaction,
 } from './helpers.js'
 
+function replaceMessages(target: Message[], next: Message[]): void {
+  if (target === next) return
+  target.length = 0
+  target.push(...next)
+}
+
 export function applyFullCompaction(
   messages: Message[],
   managed: Message[],
   currentTodos: TodoItem[],
   onFullCompaction?: AgentOptions['onFullCompaction'],
 ): void {
-  messages.length = 0
-  messages.push(...managed)
+  replaceMessages(messages, managed)
   attachTodoReminderAfterCompaction(messages, currentTodos)
   onFullCompaction?.(messages)
+}
+
+/**
+ * Apply compactIfNeeded's outcome. Microcompact only swaps in-memory tool
+ * payloads (no checkpoint). Session-memory / full compact replace history
+ * and fire onFullCompaction for JSONL persist.
+ */
+export function applyCompactOutcome(
+  messages: Message[],
+  outcome: CompactOutcome,
+  currentTodos: TodoItem[],
+  onFullCompaction?: AgentOptions['onFullCompaction'],
+): void {
+  if (outcome.source === 'none') return
+  if (outcome.source === 'micro') {
+    replaceMessages(messages, outcome.messages)
+    return
+  }
+  applyFullCompaction(
+    messages,
+    outcome.messages,
+    currentTodos,
+    onFullCompaction,
+  )
 }
 
 export async function preTurn(input: {
@@ -42,7 +75,7 @@ export async function preTurn(input: {
   readFileState?: import('../../utils/read/types.js').ReadFileState
 }): Promise<void> {
   const compactStart = Date.now()
-  const managed = await compactIfNeeded(
+  const outcome = await compactIfNeeded(
     input.messages,
     input.eventBus,
     input.wire,
@@ -58,6 +91,12 @@ export async function preTurn(input: {
     input.provider,
     input.sessionId,
   )
+  applyCompactOutcome(
+    input.messages,
+    outcome,
+    input.currentTodos,
+    input.onFullCompaction,
+  )
   const compactMs = Date.now() - compactStart
 
   const counted = tokenCountWithEstimation(input.messages)
@@ -67,18 +106,15 @@ export async function preTurn(input: {
         `(${counted.realBaseline?.toLocaleString()} real + ${counted.estimatedDelta?.toLocaleString()} est)`
       : `~${counted.total.toLocaleString()} tokens (est, no usage cached yet)`
   const tag = agentLogTag(input.logLabel)
+  const compactNote =
+    outcome.source === 'none'
+      ? ''
+      : isSummarizingCompactSource(outcome.source)
+        ? `, compaction=${compactMs}ms source=${outcome.source}`
+        : `, microcompact=${compactMs}ms`
   console.log(
     `[${tag}] step ${input.step} start -- ${input.messages.length} msgs, ${tokenLabel}, ` +
       `model=${input.resolvedModel}, llm=${input.provider.describe()}` +
-      (compactMs > 50 ? `, compaction=${compactMs}ms` : ''),
+      (compactMs > 50 || outcome.source !== 'none' ? compactNote : ''),
   )
-
-  if (managed !== input.messages) {
-    applyFullCompaction(
-      input.messages,
-      managed,
-      input.currentTodos,
-      input.onFullCompaction,
-    )
-  }
 }

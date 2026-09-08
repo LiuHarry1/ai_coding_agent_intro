@@ -89,7 +89,7 @@ async function main(): Promise<void> {
     `COMPACT_THRESHOLD_OVERRIDE=${process.env.COMPACT_THRESHOLD_OVERRIDE}`,
   )
 
-  const compacted = await compactIfNeeded(
+  const outcome = await compactIfNeeded(
     [...messages],
     eventBus,
     noopWireEmitter,
@@ -101,6 +101,7 @@ async function main(): Promise<void> {
     provider,
     SESSION_ID,
   )
+  const compacted = outcome.messages
 
   const attAfter = compacted.filter(isAttachmentMessage).length
   const tokensAfter = tokenCountWithEstimation(compacted).total

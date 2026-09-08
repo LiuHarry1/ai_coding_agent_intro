@@ -170,15 +170,40 @@ export interface CompactOptions {
   readFileState?: ReadFileState
 }
 
+/** What `compactIfNeeded` did. Callers persist a checkpoint only for summarizing sources. */
+export type CompactSource = 'none' | 'micro' | 'session_memory' | 'full'
+
+export type CompactOutcome = {
+  messages: Message[]
+  source: CompactSource
+}
+
+export function isSummarizingCompactSource(
+  source: CompactSource,
+): source is 'session_memory' | 'full' {
+  return source === 'session_memory' || source === 'full'
+}
+
+function none(messages: Message[]): CompactOutcome {
+  return { messages, source: 'none' }
+}
+
+function afterMicro(
+  original: Message[],
+  working: Message[],
+): CompactOutcome {
+  return {
+    messages: working,
+    source: working !== original ? 'micro' : 'none',
+  }
+}
+
 /**
  * Main compaction entry point. Called before each agent step.
  *
- * Flow:
- *   1. Check enabled + circuit breaker
- *   2. Emit warning if approaching threshold
- *   3. Micro-compact (clear old tool payloads, no LLM)
- *   4. If still over threshold -> session-memory compact, else full LLM
- *   5. Post-compact: re-inject files, todos, skill refs (both paths)
+ * Flow (Claude Code query.ts): microcompact first (API-view only), then
+ * session-memory / full LLM if still over threshold. Callers must persist
+ * a `compacted` checkpoint only when `source` is `session_memory` or `full`.
  */
 export async function compactIfNeeded(
   messages: Message[],
@@ -191,21 +216,21 @@ export async function compactIfNeeded(
   compaction?: CompactionConfig,
   provider?: IProvider,
   sessionId?: string,
-): Promise<Message[]> {
+): Promise<CompactOutcome> {
   const cfg = getCompactionConfig(compaction)
   const force = !!opts.force
   const aggressive = !!opts.aggressive
   const smConfig = opts.sessionMemory ?? DEFAULTS.sessionMemory
 
-  if (messages.length === 0) return messages
+  if (messages.length === 0) return none(messages)
   ensureMessageUuids(messages)
 
   if (!force && !aggressive && !cfg.enabled) {
-    return messages
+    return none(messages)
   }
 
   if (!force && consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-    return messages
+    return none(messages)
   }
 
   const threshold = getAutoCompactThreshold(
@@ -283,7 +308,7 @@ export async function compactIfNeeded(
 
   // STEP 2 -- SM or full summarization
   if (!force && !aggressive && tokens < threshold) {
-    return working
+    return afterMicro(messages, working)
   }
 
   const msgsBeforeFull = working.length
@@ -362,7 +387,7 @@ export async function compactIfNeeded(
             `tokens~${tokensBeforeFull.toLocaleString()} -> ${tokensAfter.toLocaleString()}, ` +
             `kept=${sm.messagesToKeep.length}`,
         )
-        return sm.messages
+        return { messages: sm.messages, source: 'session_memory' }
       }
       console.log(
         `[compact] session-memory compact skipped -- falling back to full LLM`,
@@ -404,7 +429,7 @@ export async function compactIfNeeded(
           `msgs=${msgsBeforeFull}, tokens~${tokensBeforeFull.toLocaleString()}`,
       )
       wire.compactionDone({ status: 'noop' })
-      return working
+      return afterMicro(messages, working)
     }
 
     consecutiveFailures = 0
@@ -440,7 +465,7 @@ export async function compactIfNeeded(
         `summaryChars=${result.summaryLength.toLocaleString()}, kept=${result.messagesToKeep.length}` +
         (willRetriggerNextTurn ? ', WILL-RETRIGGER' : ''),
     )
-    return result.messages
+    return { messages: result.messages, source: 'full' }
   } catch (error) {
     consecutiveFailures++
     const msg = error instanceof Error ? error.message : String(error)
@@ -449,6 +474,6 @@ export async function compactIfNeeded(
     )
     eventBus.emit('compaction_error', { error: msg })
     wire.compactionDone({ status: 'error' })
-    return working
+    return afterMicro(messages, working)
   }
 }

@@ -7,11 +7,9 @@ import type {
   Session,
   RunAgentFn,
   Message,
-  UserMessage,
   IEventBus,
   AgentDefinition,
 } from '../core/types.js'
-import { buildUserMessage } from '../core/query/helpers.js'
 import { offloadChatImageRefs } from '../utils/chat-uploads.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import type { ModelRegistry } from '../core/llm/index.js'
@@ -42,6 +40,7 @@ import {
 } from '../services/auto-memory/index.js'
 import {
   compactIfNeeded,
+  isSummarizingCompactSource,
   tokenCountWithEstimation,
 } from '../services/compact/index.js'
 import {
@@ -356,7 +355,7 @@ export async function runChatTurn(
     let replyText: string
     try {
       const model = provider.defaultModelId()
-      const managed = await compactIfNeeded(
+      const outcome = await compactIfNeeded(
         session.messages,
         eventBus,
         wire,
@@ -375,9 +374,12 @@ export async function runChatTurn(
         provider,
         session.id,
       )
-      if (managed !== session.messages && managed.length > 0) {
+      if (
+        isSummarizingCompactSource(outcome.source) &&
+        outcome.messages.length > 0
+      ) {
         session.messages.length = 0
-        session.messages.push(...managed)
+        session.messages.push(...outcome.messages)
         appendCompaction(session.id, session.messages)
         const tokensAfter = tokenCountWithEstimation(session.messages).total
         const tokenLine = `~${tokensBefore.toLocaleString()} -> ~${tokensAfter.toLocaleString()} tokens`
@@ -493,11 +495,6 @@ export async function runChatTurn(
   let persistFrom = messagesBefore
   let finalText = ''
   let runError: Error | null = null
-  const userTurnForDisplay: UserMessage = buildUserMessage(
-    message,
-    imageRefs,
-    isMeta,
-  )
 
   const systemPrompt = await resolveTurnSystemPrompt(
     session,
@@ -632,8 +629,6 @@ export async function runChatTurn(
             m => !isAttachmentMessage(m),
           )
           appendCompaction(session.id, checkpoint)
-          session.messages.push(userTurnForDisplay)
-          appendMessage(session.id, userTurnForDisplay)
           persistFrom = session.messages.length
         },
       })

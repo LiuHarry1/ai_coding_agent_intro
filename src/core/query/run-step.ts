@@ -60,7 +60,7 @@ import {
   capMaxOutputTokens,
   MAX_TRANSIENT_RETRIES,
 } from './helpers.js'
-import { applyFullCompaction } from './pre-turn.js'
+import { applyCompactOutcome } from './pre-turn.js'
 
 export interface RunStepArgs {
   messages: Message[]
@@ -354,14 +354,12 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
           provider,
           sessionId,
         )
-        if (recompacted !== messages) {
-          applyFullCompaction(
-            messages,
-            recompacted,
-            args.currentTodos,
-            args.onFullCompaction,
-          )
-        }
+        applyCompactOutcome(
+          messages,
+          recompacted,
+          args.currentTodos,
+          args.onFullCompaction,
+        )
         ctxLengthAttempt++
         reactiveCompacted = true
         requestStart = Date.now()
