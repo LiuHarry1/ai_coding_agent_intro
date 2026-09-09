@@ -35,11 +35,13 @@ import {
   browserErrorText,
   mapBrowserOutput,
   maybePersistSnapshotArtifact,
+  recoverySuffixForError,
   type BrowserToolOutput,
 } from '../tools/BrowserTool/shared.js'
 import { PAGE_SCRIPT, PAGE_SCRIPT_VERSION } from '../browser/page-script.js'
 import { BrowserError } from '../browser/types.js'
-import { normalizeRef } from '../browser/playwright/index.js'
+import { normalizeRef } from '../browser/playwright/locator.js'
+import { formatClickIntercept } from '../browser/playwright/robust-click.js'
 import {
   keepInteractive,
   countRefs,
@@ -84,7 +86,9 @@ import { writeExternalFileWithinOutputRoot } from '../browser/output-files.js'
 import {
   elementMatchesHint,
   namesOverlap,
+  parseExpectedDescription,
   parseRefMeta,
+  pickRecoveredRef,
   snapshotDiff,
 } from '../browser/snapshot-index.js'
 import {
@@ -781,22 +785,58 @@ await withRelay(async relay => {
 // ── error funnel ─────────────────────────────────────────
 
 {
+  const stale = browserErrorText(new BrowserError('Ref e3 is stale.'), 'click')
+  assert(stale.startsWith('Error: Ref e3 is stale.'), stale)
+  assert(stale.includes('Recovery action: browser_snapshot'), stale)
+  assert(!stale.includes('Current page snapshot'), 'Cursor-style: no YAML dump')
+  const unexpected = browserErrorText(new Error('socket hang up'), 'click')
+  assert(unexpected.startsWith('Error: click failed: socket hang up'), unexpected)
+  assert(unexpected.includes('Recovery action:'), unexpected)
+  const weird = browserErrorText('weird', 'scroll')
+  assert(weird.startsWith('Error: scroll failed: weird'), weird)
   eq(
-    browserErrorText(new BrowserError('Ref e3 is stale.'), 'click'),
-    'Error: Ref e3 is stale.',
-    'BrowserError messages are already actionable and pass through',
+    recoverySuffixForError('Error: Recovery action: browser_snapshot already'),
+    '',
+    'do not duplicate Recovery action',
+  )
+  const intercept = browserErrorText(
+    new BrowserError(
+      'Click would hit a modal/dialog instead of the target element.\nClose it first.\nRecovery action: browser_click with ref "e9"',
+    ),
+    'click',
   )
   eq(
-    browserErrorText(new Error('socket hang up'), 'click'),
-    'Error: click failed: socket hang up',
-    'unexpected errors name the action that failed',
+    intercept.match(/Recovery action:/g)?.length,
+    1,
+    'pre-formatted intercept keeps a single Recovery action',
   )
-  eq(
-    browserErrorText('weird', 'scroll'),
-    'Error: scroll failed: weird',
-    'non-Error throws are still reported',
+  ok('error funnel keeps messages actionable without dumping the tree')
+}
+
+{
+  const noFile = browserErrorText(
+    new BrowserError('No <input type=file> on this page (checked frames).'),
+    'file_upload',
   )
-  ok('error funnel keeps messages actionable')
+  assert(
+    noFile.includes('Recovery action: browser_file_upload with paths only (omit ref)'),
+    noFile,
+  )
+  assert(!noFile.includes('Current page snapshot'), 'no YAML dump on upload miss')
+  ok('file_upload miss points at omit-ref, not a snapshot dump')
+}
+
+{
+  const formatted = formatClickIntercept({
+    blockingType: 'modal',
+    interceptedBy: 'dialog "Alert"',
+    interceptedRef: 'e44',
+    error: 'Click would hit a modal/dialog instead of the target element.',
+    suggestion: 'Close the modal first.',
+  })
+  assert(formatted.includes('Recovery action: browser_click with ref "e44"'), formatted)
+  assert(formatted.includes('[ref=e44]'), formatted)
+  ok('click intercept diagnosis names the covering ref')
 }
 
 {
@@ -1410,6 +1450,33 @@ await withRelay(async relay => {
     elementMatchesHint({ role: 'table', name: 'Save' }, 'Save'),
     'Cursor: table Save matches element "Save" (no button word)',
   )
+  eq(
+    parseExpectedDescription('button "Save Itemization"').role,
+    'button',
+    'parse role from hint prefix',
+  )
+  eq(
+    parseExpectedDescription('button "Save Itemization"').name,
+    'Save Itemization',
+    'parse quoted name',
+  )
+  eq(
+    parseExpectedDescription('Save Itemization').name,
+    'Save Itemization',
+    'bare name hint',
+  )
+  const recovered = pickRecoveredRef(
+    parseRefMeta(
+      '- button "Cancel" [ref=e1]\n- button "Save Itemization" [ref=e9]\n- heading "Save Itemization" [ref=e2]',
+    ),
+    { oldRef: 'e3', role: 'button', name: 'Save Itemization' },
+  )
+  eq(recovered, 'e9', 'recover prefers same-role exact name, not the heading')
+  const notBob = pickRecoveredRef(
+    parseRefMeta('- button "Delete Bob" [ref=e12]'),
+    { oldRef: 'e3', role: 'button', name: 'Delete Alice' },
+  )
+  eq(notBob, undefined, 'do not rematch Delete Alice onto Delete Bob')
   const diff = snapshotDiff(
     '- button "Save" [ref=e1]',
     '- button "Save" [ref=e1]\n- button "Cancel" [ref=e2]',

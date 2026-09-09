@@ -136,14 +136,16 @@ async function main() {
     )
     console.log('ok [playwright] locator(aria-ref).click() mutates the page')
 
+    const afterClick = yamlFromObserve(clicked)
+    const liveCounter = refFor(afterClick, 'button', 'Clicked 1 times')
     const wrongHint = await run(
       clickTool,
-      { ref: counterRef, element: 'Delete Alice' },
+      { ref: liveCounter, element: 'Delete Alice' },
       sessionId,
     )
     assert.ok(
-      typeof wrongHint === 'string' && /does not match|snapshot/i.test(wrongHint),
-      `element hint mismatch must fail:\n${wrongHint}`,
+      typeof wrongHint === 'string' && /does not match/i.test(wrongHint),
+      `element hint mismatch on a live ref must fail, not rematch:\n${wrongHint}`,
     )
     console.log('ok [playwright] element hint mismatch fails before click')
 
@@ -245,16 +247,16 @@ async function main() {
     const lazy = expectData(
       await run(navigateTool, { url: `${server.url}dialog-lazy` }, sessionId),
     )
-    const lazySnap = String(lazy.snapshot)
+    const lazySnap = yamlFromObserve(lazy)
     assert.ok(
       lazySnap.includes('Hiring home') || lazySnap.includes('有新消息'),
-      lazySnap,
+      lazySnap.slice(-800),
     )
     const inboxRef = refNear(lazySnap, '有新消息')
     const opened = expectData(
       await run(clickTool, { ref: inboxRef }, sessionId),
     )
-    const openedSnap = String(opened.snapshot)
+    const openedSnap = yamlFromObserve(opened)
     assert.ok(
       openedSnap.includes('8月') && openedSnap.includes('蒋先生'),
       `click must wait for the lazy dialog list:\n${openedSnap}`,
@@ -500,12 +502,79 @@ async function main() {
     )
     console.log('ok [playwright] file_upload sets an input type=file')
 
+    const nearbyFile = path.join(profile, 'nearby.txt')
+    const clipFile = path.join(profile, 'clip.txt')
+    fs.writeFileSync(nearbyFile, 'nearby')
+    fs.writeFileSync(clipFile, 'clip')
+    const hiddenNav = expectData(
+      await run(navigateTool, { url: `${server.url}hidden-upload` }, sessionId),
+    )
+    const hiddenSnap = yamlFromObserve(hiddenNav)
+    const nearbyUpload = expectData(
+      await run(
+        fileUploadTool,
+        {
+          ref: refNear(hiddenSnap, 'Choose files'),
+          paths: [nearbyFile],
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(nearbyUpload.message), /Uploaded 1 file/)
+    assert.match(
+      yamlFromObserve(nearbyUpload),
+      /nearby\.txt/,
+      `widget button ref must set the nearby hidden input:\n${yamlFromObserve(nearbyUpload)}`,
+    )
+    assert.ok(
+      !yamlFromObserve(nearbyUpload).includes('clip.txt'),
+      'nearby upload must not use the disconnected global input',
+    )
+    console.log('ok [playwright] file_upload recovers a widget button ref to a nearby hidden input')
+
+    const afterNearby = expectData(await run(snapshotTool, {}, sessionId))
+    const clipUpload = expectData(
+      await run(
+        fileUploadTool,
+        {
+          ref: refNear(yamlFromObserve(afterNearby), 'Add and manage sources'),
+          paths: [clipFile],
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(clipUpload.message), /Uploaded 1 file/)
+    assert.match(
+      yamlFromObserve(clipUpload),
+      /clip\.txt/,
+      `toolbar/paperclip ref must fall through to a page file input:\n${yamlFromObserve(clipUpload)}`,
+    )
+    console.log('ok [playwright] file_upload ignores a non-file ref and uses a hidden input')
+
+    const noRefFile = path.join(profile, 'noref.txt')
+    fs.writeFileSync(noRefFile, 'noref')
+    expectData(
+      await run(navigateTool, { url: `${server.url}hidden-upload` }, sessionId),
+    )
+    const noRefUpload = expectData(
+      await run(fileUploadTool, { paths: [noRefFile] }, sessionId),
+    )
+    assert.match(String(noRefUpload.message), /Uploaded 1 file/)
+    assert.match(
+      yamlFromObserve(noRefUpload),
+      /noref\.txt/,
+      `omitting ref must still set a hidden input:\n${yamlFromObserve(noRefUpload)}`,
+    )
+    console.log('ok [playwright] file_upload without ref sets a hidden input')
+
     const pdfNav = expectData(
       await run(navigateTool, { url: `${server.url}pdf-preview` }, sessionId),
     )
-    const pdfSnap = String(pdfNav.snapshot)
+    const pdfSnap = String(pdfNav.snapshot ?? pdfNav.message ?? '')
     assert.ok(
-      pdfSnap.includes('button "Save"') || pdfSnap.includes('Embedded frames omitted'),
+      pdfSnap.includes('button "Save"') ||
+        pdfSnap.includes('Embedded frames omitted') ||
+        pdfSnap.includes('Full-page snapshot timed out'),
       `a hung viewer iframe must not eat the host-page Save button:\n${pdfSnap.slice(0, 500)}`,
     )
     console.log('ok [playwright] hung iframe snapshot still returns the host page')

@@ -33,7 +33,11 @@ import { getPageForTarget } from './connect.js'
 import { clearTabMemory, setTabPoisoned } from '../session-flags.js'
 import { assertNavigateUrl } from '../navigate-policy.js'
 import { SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
-import { ensureSnapshotFresh, withHeavyMediaHidden } from './snapshot.js'
+import {
+  ensureSnapshotFresh,
+  forceRefreshSnapshot,
+  withHeavyMediaHidden,
+} from './snapshot.js'
 import {
   clickLocatorRobust,
   ensureInView,
@@ -45,6 +49,17 @@ import {
   withInputFocus,
   withReadBoost,
 } from './focus.js'
+
+function staleRecovery(
+  backend: BrowserBackend,
+  targetId: string,
+  retryOnStaleRef?: boolean,
+) {
+  return {
+    retryOnStaleRef: retryOnStaleRef !== false,
+    refreshSnapshot: () => forceRefreshSnapshot(backend, targetId),
+  }
+}
 
 export async function navigate(
   backend: BrowserBackend,
@@ -180,6 +195,7 @@ export async function click(
       targetId,
       opts.ref,
       opts.element,
+      staleRecovery(backend, targetId, opts.retryOnStaleRef),
     )
     const urlBefore = page.url()
     await withActionWait(page, async () => {
@@ -233,6 +249,7 @@ export async function hover(
       targetId,
       opts.ref,
       opts.element,
+      staleRecovery(backend, targetId),
     )
     await withActionWait(page, async () => {
       await ensureInView(loc, page)
@@ -265,6 +282,7 @@ export async function typeText(
       targetId,
       opts.ref,
       opts.element,
+      staleRecovery(backend, targetId),
     )
     // A field the app computes rejects the write anyway. Returning its current
     // value makes the refusal visible instead of looking like a silent no-op.
@@ -312,7 +330,13 @@ export async function selectOption(
   const page = await getPageForTarget(backend, targetId)
   try {
     await ensureSnapshotFresh(backend, targetId)
-    const { loc } = await resolveClickTarget(page, targetId, ref, element)
+    const { loc } = await resolveClickTarget(
+      page,
+      targetId,
+      ref,
+      element,
+      staleRecovery(backend, targetId),
+    )
     const selected = await withActionWait(page, () => pickValue(loc, values))
     throwIfUnarmedDestructiveDialog(page)
     return selected

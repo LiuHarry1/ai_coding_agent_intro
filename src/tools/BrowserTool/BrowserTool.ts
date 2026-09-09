@@ -18,10 +18,8 @@ import * as pw from '../../browser/playwright/index.js'
 import {
   CALL_TIMEOUT_MS,
   DEFAULT_MAX_CHARS,
-  DEFAULT_MAX_NODES,
   DEFAULT_SNAPSHOT_DEPTH,
   EFFICIENT_MAX_CHARS,
-  ERROR_SNAPSHOT_TIMEOUT_MS,
   POST_ACTION_MAX_NODES,
   POST_ACTION_SNAPSHOT_MS,
 } from '../../browser/limits.js'
@@ -216,33 +214,6 @@ function withTimeout<T>(
   })
 }
 
-/**
- * Best-effort current snapshot for an error path. Never throws: if the page is
- * so broken we can't even snapshot it, the underlying error is the story and a
- * missing tree shouldn't bury it.
- */
-async function freshSnapshotText(
-  backend: BrowserBackend,
-  targetId: string,
-): Promise<string | undefined> {
-  try {
-    const snap = await withTimeout(
-      pw.snapshot(backend, targetId, {
-        maxNodes: DEFAULT_MAX_NODES,
-        maxChars: undefined,
-        compact: false,
-        interactive: false,
-        mode: 'full',
-      }),
-      'snapshot',
-      ERROR_SNAPSHOT_TIMEOUT_MS,
-    )
-    return snap.text
-  } catch {
-    return undefined
-  }
-}
-
 const USER_CONTROL_ALLOWED = new Set([
   BROWSER_LOCK_TOOL_NAME,
   BROWSER_SNAPSHOT_TOOL_NAME,
@@ -360,13 +331,7 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
               }
               return { data }
             } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
-              const skipTree = /timed out|Snapshot skipped|PDF\/media/i.test(msg)
-              const fresh =
-                resolved && !skipTree
-                  ? await freshSnapshotText(resolved.backend, resolved.targetId)
-                  : undefined
-              return browserErrorText(err, cfg.name, fresh)
+              return browserErrorText(err, cfg.name)
             }
           } finally {
             untrackActiveBrowserTool(sessionId, toolCallId)
@@ -575,9 +540,7 @@ export const clickTool = defineBrowserTool({
     element: z
       .string()
       .optional()
-      .describe(
-        'Human-readable element description; must match the resolved ref',
-      ),
+      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
     doubleClick: z.boolean().optional().describe('Send a double click'),
     button: z
       .enum(['left', 'right', 'middle'])
@@ -647,9 +610,7 @@ export const typeTool = defineBrowserTool({
     element: z
       .string()
       .optional()
-      .describe(
-        'Human-readable element description; must match the resolved ref',
-      ),
+      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
     submit: z.boolean().optional().describe('Press Enter after typing'),
     slowly: z
       .boolean()
@@ -756,7 +717,7 @@ export const selectOptionTool = defineBrowserTool({
     element: z
       .string()
       .optional()
-      .describe('Human-readable element description; must match the resolved ref'),
+      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
@@ -791,7 +752,11 @@ export const fileUploadTool = defineBrowserTool({
       .describe(
         'File paths to upload (workspace-relative or absolute). Empty list cancels the chooser',
       ),
-    ref: refSchema.optional().describe('<input type=file> ref, if you have one'),
+    ref: refSchema
+      .optional()
+      .describe(
+        'Optional. Use only if the snapshot already shows an <input type=file>. A paperclip/button ref is ignored.',
+      ),
   }),
   async run(args, ctx) {
     const paths = args.paths.map(p =>
@@ -930,9 +895,7 @@ export const hoverTool = defineBrowserTool({
     element: z
       .string()
       .optional()
-      .describe(
-        'Human-readable element description; must match the resolved ref',
-      ),
+      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
@@ -971,7 +934,7 @@ export const scrollTool = defineBrowserTool({
     element: z
       .string()
       .optional()
-      .describe('Human-readable element description; must match the resolved ref'),
+      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
     scrollIntoView: z
       .boolean()
       .optional()
@@ -1295,7 +1258,7 @@ export const highlightTool = defineBrowserTool({
     element: z
       .string()
       .optional()
-      .describe('Human-readable element description; must match the resolved ref'),
+      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
     durationMs: z
       .number()
       .int()
@@ -1326,7 +1289,7 @@ export const getBoundingBoxTool = defineBrowserTool({
     element: z
       .string()
       .optional()
-      .describe('Human-readable element description; must match the resolved ref'),
+      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
   }),
   async run(args, ctx) {
     const box = await pw.getElementBoundingBox(ctx.backend, ctx.targetId, {

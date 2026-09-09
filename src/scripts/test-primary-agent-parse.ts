@@ -10,6 +10,7 @@ import {
   CDP_DESCRIPTION,
   CDP_SUMMARY,
   CLICK_DESCRIPTION,
+  FILE_UPLOAD_DESCRIPTION,
   FILL_FORM_DESCRIPTION,
   LOCK_DESCRIPTION,
   SNAPSHOT_DESCRIPTION,
@@ -125,6 +126,15 @@ assert(
   'fill_form reports per-field status',
 )
 assert(
+  FILE_UPLOAD_DESCRIPTION.includes('omit') ||
+    FILE_UPLOAD_DESCRIPTION.includes('ignored'),
+  'file_upload treats a non-file ref as optional',
+)
+assert(
+  FILE_UPLOAD_DESCRIPTION.includes('Do not click'),
+  'file_upload forbids clicking a visible Upload',
+)
+assert(
   CLICK_DESCRIPTION.includes('x/y'),
   'click documents canvas coordinates',
 )
@@ -145,7 +155,7 @@ assert(
   'snapshot default mode is full',
 )
 assert(
-  SNAPSHOT_DESCRIPTION.includes('selector is CSS, not a ref'),
+  SNAPSHOT_DESCRIPTION.includes('is CSS, not a ref'),
   'snapshot selector is CSS, not a ref',
 )
 assert(
@@ -173,7 +183,7 @@ assert(
   'browser.md tells the agent to click latest snapshot refs',
 )
 assert(
-  !browserMd.includes('Cursor'),
+  !browserMd.replaceAll('Cursor defaults', '').includes('Cursor'),
   'browser.md is not Cursor-branded',
 )
 assert(
@@ -181,8 +191,8 @@ assert(
   'browser.md does not forbid repeated snapshots',
 )
 assert(
-  /^  - browser_cdp$/m.test(browserMd),
-  'browser.md allowlists browser_cdp',
+  browserMd.includes('browser_file_upload'),
+  'browser.md tells the agent to upload via the tool, not a click',
 )
 
 const browserProfile = parseAgentFromMarkdown({

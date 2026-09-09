@@ -8,6 +8,8 @@
  * it by default) inside the listener, and records what happened so the
  * observation can mention it. File choosers do not block JS the same way:
  * click can return with a pending chooser, and `browser_file_upload` drains it.
+ * A snapshot `ref` is only a hint: if it is not a file input, we look next to
+ * it, then drain a pending chooser, then search hidden inputs across frames.
  */
 
 import type { Dialog, FileChooser, Locator, Page } from 'playwright-core'
@@ -145,6 +147,10 @@ export async function handleDialog(
 const FILE_PREFERRED =
   'input[type="file"].upload-file, input[type="file"][class*="upload"]'
 const FILE_ANY = 'input[type="file"]'
+const FILE_WIDGET_MAX_DEPTH = 8
+
+const NO_FILE_INPUT_ERROR =
+  'No <input type=file> on this page (checked frames). Do not click a visible Upload — that opens an OS dialog we cannot drive. Call browser_file_upload with paths only (omit ref). If a Windows Open dialog is already on screen, Cancel it first.\nRecovery action: browser_file_upload with paths only (omit ref)'
 
 async function fileInputOn(root: Page): Promise<Locator | null> {
   for (const frame of root.frames()) {
@@ -156,50 +162,126 @@ async function fileInputOn(root: Page): Promise<Locator | null> {
   return null
 }
 
+async function locatorCount(loc: Locator): Promise<number> {
+  return loc.count().catch(() => 0)
+}
+
+async function isFileInput(loc: Locator): Promise<boolean> {
+  if ((await locatorCount(loc)) === 0) return false
+  return loc
+    .evaluate(
+      el => el instanceof HTMLInputElement && el.type === 'file',
+    )
+    .catch(() => false)
+}
+
+async function fileInputById(page: Page, id: string): Promise<Locator | null> {
+  if (!id) return null
+  const sel = `input[type="file"]#${CSS.escape(id)}`
+  for (const frame of page.frames()) {
+    const loc = frame.locator(sel)
+    if ((await locatorCount(loc)) > 0) return loc.first()
+  }
+  return null
+}
+
+/**
+ * `ref` is a hint, not a hard target. Sites hide the real <input type=file>
+ * behind a paperclip / "Upload" control that is not itself a file input —
+ * Playwright MCP only drains a pending chooser (no ref); Cursor's IDE browser
+ * has no upload tool. We resolve the actual file input so a wrong visible
+ * ref still uploads instead of timing out on setInputFiles.
+ *
+ * Do not click the trigger: that opens a native OS dialog we cannot drive.
+ */
+async function fileInputFromRef(
+  page: Page,
+  ref: string,
+): Promise<Locator | null> {
+  const loc = refLocator(page, ref)
+  if ((await locatorCount(loc)) === 0) return null
+  if (await isFileInput(loc)) return loc
+
+  const nested = loc.locator(FILE_ANY)
+  if ((await locatorCount(nested)) > 0) return nested.last()
+
+  for (let depth = 1; depth <= FILE_WIDGET_MAX_DEPTH; depth++) {
+    const parent = loc.locator(`xpath=ancestor::*[${depth}]`)
+    const tag = await parent
+      .evaluate(el => (el instanceof HTMLElement ? el.tagName : ''))
+      .catch(() => '')
+    if (!tag || tag === 'BODY' || tag === 'HTML') break
+    const found = parent.locator(FILE_ANY)
+    if ((await locatorCount(found)) > 0) return found.last()
+  }
+
+  const forId = await loc
+    .evaluate(el => {
+      const label =
+        el instanceof HTMLLabelElement
+          ? el
+          : el instanceof Element
+            ? el.closest('label')
+            : null
+      return label ? String(label.htmlFor || '') : ''
+    })
+    .catch(() => '')
+  return fileInputById(page, forId)
+}
+
+async function setFilesOnInput(
+  loc: Locator,
+  paths: string[],
+): Promise<void> {
+  await loc.setInputFiles(paths, { timeout: ACTION_TIMEOUT_MS })
+  await loc
+    .evaluate(el => {
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    .catch(() => {})
+}
+
+async function drainChooser(
+  page: Page,
+  paths: string[],
+): Promise<{ files: string[]; cancelled: boolean } | null> {
+  const chooser = pendingChooser.get(page)
+  if (!chooser) return null
+  pendingChooser.delete(page)
+  await chooser.setFiles(paths)
+  return { files: paths, cancelled: paths.length === 0 }
+}
+
 export async function uploadFiles(
   page: Page,
   opts: { paths: string[]; ref?: string },
 ): Promise<{ files: string[]; cancelled: boolean }> {
+  // 1. Snapshot ref that is (or sits next to) a file input.
   if (opts.ref) {
-    const loc = refLocator(page, opts.ref)
-    await loc.setInputFiles(opts.paths, { timeout: ACTION_TIMEOUT_MS })
-    await loc
-      .evaluate(el => {
-        el.dispatchEvent(new Event('input', { bubbles: true }))
-        el.dispatchEvent(new Event('change', { bubbles: true }))
-      })
-      .catch(() => {})
-    return { files: opts.paths, cancelled: opts.paths.length === 0 }
+    const fromRef = await fileInputFromRef(page, opts.ref)
+    if (fromRef) {
+      await setFilesOnInput(fromRef, opts.paths)
+      return { files: opts.paths, cancelled: opts.paths.length === 0 }
+    }
   }
 
-  // Prefer the hidden <input type=file>, including those in child frames.
-  // Clicking a visible Upload button often opens a real OS picker that no
-  // browser_* tool can drive, and the page stays frozen until Cancel.
+  // 2. Playwright MCP path: a prior click already opened a FileChooser.
+  const fromChooser = await drainChooser(page, opts.paths)
+  if (fromChooser) return fromChooser
+
+  // 3. Hidden inputs anywhere, including child frames. Clicking a visible
+  // Upload often opens a real OS picker that no browser_* tool can drive.
   let fileInput = await fileInputOn(page)
   if (!fileInput) {
     await new Promise(r => setTimeout(r, 400))
     fileInput = await fileInputOn(page)
   }
   if (fileInput) {
-    await fileInput.setInputFiles(opts.paths, { timeout: ACTION_TIMEOUT_MS })
-    await fileInput
-      .evaluate(el => {
-        el.dispatchEvent(new Event('input', { bubbles: true }))
-        el.dispatchEvent(new Event('change', { bubbles: true }))
-      })
-      .catch(() => {})
-    return { files: opts.paths, cancelled: opts.paths.length === 0 }
-  }
-
-  const chooser = pendingChooser.get(page)
-  if (chooser) {
-    pendingChooser.delete(page)
-    await chooser.setFiles(opts.paths)
+    await setFilesOnInput(fileInput, opts.paths)
     return { files: opts.paths, cancelled: opts.paths.length === 0 }
   }
 
   armedFiles.set(page, opts.paths)
-  throw new BrowserError(
-    'No <input type=file> on this page (checked frames). Do not click Upload — that opens an OS dialog we cannot drive. Call browser_file_upload again after the drop zone is visible. If a Windows Open dialog is already on screen, Cancel it first.',
-  )
+  throw new BrowserError(NO_FILE_INPUT_ERROR)
 }

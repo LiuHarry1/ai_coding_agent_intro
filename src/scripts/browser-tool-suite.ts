@@ -441,6 +441,30 @@ const COMBOBOX_PAGE = `<!doctype html>
 </body>
 </html>`
 
+const HIDDEN_UPLOAD_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Hidden upload</title></head>
+<body>
+  <h1>Sources</h1>
+  <div class="widget">
+    <button type="button" id="choose">Choose files</button>
+    <input id="widget-file" type="file" hidden>
+    <p id="widget-state">none</p>
+  </div>
+  <button type="button" id="clip" aria-label="Add and manage sources">clip</button>
+  <input id="global-file" type="file" style="display:none;position:absolute;left:-9999px">
+  <p id="global-state">none</p>
+  <script>
+    document.getElementById('widget-file').addEventListener('change', function () {
+      document.getElementById('widget-state').textContent = this.files[0] ? this.files[0].name : 'none';
+    });
+    document.getElementById('global-file').addEventListener('change', function () {
+      document.getElementById('global-state').textContent = this.files[0] ? this.files[0].name : 'none';
+    });
+  </script>
+</body>
+</html>`
+
 const PDF_PREVIEW_PAGE = `<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>PDF Preview</title></head>
@@ -519,6 +543,10 @@ export function startFixtureServer(): Promise<{
     }
     if (route === '/widgets') {
       res.end(COMBOBOX_PAGE)
+      return
+    }
+    if (route === '/hidden-upload') {
+      res.end(HIDDEN_UPLOAD_PAGE)
       return
     }
     if (route === '/pdf-preview') {
@@ -961,8 +989,15 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       typeof staleClick === 'string',
       'clicking a recycled row must fail rather than delete the wrong record',
     )
-    assert.ok(staleClick.includes('Delete Bob'), staleClick)
-    assert.ok(/new snapshot/i.test(staleClick), staleClick)
+    assert.ok(/not found|stale|snapshot/i.test(staleClick), staleClick)
+    assert.ok(
+      /Recovery action:\s*browser_snapshot/i.test(staleClick),
+      `stale ref must tell the model to snapshot, not dump the tree:\n${staleClick}`,
+    )
+    assert.ok(
+      !staleClick.includes('- button "Delete Bob"'),
+      `error must not attach a YAML snapshot:\n${staleClick}`,
+    )
     ok('stale ref caught after DOM recycling')
 
     const rebuilt = String(

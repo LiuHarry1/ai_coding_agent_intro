@@ -1,16 +1,16 @@
 /**
  * Cursor-style click prep: scroll into view, stale-ref recovery, dropdown dismiss,
- * and offset retry when a non-interactive layer blocks the target.
+ * offset retry, and intercept diagnosis when a layer still blocks the target.
  */
 
 import type { Locator, Page } from 'playwright-core'
 import {
-  elementMatchesHint,
+  parseExpectedDescription,
   parseRefMeta,
-  type RefMeta,
+  pickRecoveredRef,
 } from '../snapshot-index.js'
 import { getLastSnapshot, getRefMeta } from '../session-flags.js'
-import { StaleRefError } from '../types.js'
+import { BrowserError, StaleRefError } from '../types.js'
 import {
   assertElementHint,
   describeElement,
@@ -25,27 +25,17 @@ export function recoverRefByHint(
   targetId: string,
   ref: string,
   elementHint?: string,
+  knownRole?: string,
 ): string | undefined {
-  const hint = elementHint?.trim()
-  if (!hint) return undefined
-
   const yaml = getLastSnapshot(targetId)
   if (!yaml) return undefined
-
-  const candidates = parseRefMeta(yaml)
-  const prefer = (list: RefMeta[]) =>
-    list.find(c => c.ref !== ref && elementMatchesHint(c, hint))?.ref
-
+  const parsed = parseExpectedDescription(elementHint)
   const known = getRefMeta(targetId, ref)
-  if (known?.role) {
-    const sameRole = candidates.filter(
-      c => c.ref !== ref && c.role === known.role,
-    )
-    const hit = prefer(sameRole)
-    if (hit) return hit
-  }
-
-  return prefer(candidates)
+  return pickRecoveredRef(parseRefMeta(yaml), {
+    oldRef: ref,
+    role: parsed.role ?? knownRole ?? known?.role ?? null,
+    name: parsed.name ?? known?.name ?? null,
+  })
 }
 
 export async function ensureInView(
@@ -90,15 +80,184 @@ async function pointHitsLocator(
     .catch(() => false)
 }
 
+export interface ClickIntercept {
+  blockingType: string
+  interceptedBy: string
+  interceptedRef?: string
+  error: string
+  suggestion: string
+}
+
+export function formatClickIntercept(hit: ClickIntercept): string {
+  const lines = [hit.error, hit.suggestion]
+  if (hit.interceptedRef) {
+    lines.push(
+      `Intercepted by: ${hit.interceptedBy} [ref=${hit.interceptedRef}]`,
+    )
+    lines.push(
+      `Recovery action: browser_click with ref "${hit.interceptedRef}" if that is the overlay, or browser_snapshot`,
+    )
+  } else {
+    lines.push(`Intercepted by: ${hit.interceptedBy}`)
+    lines.push('Recovery action: browser_snapshot')
+  }
+  return lines.join('\n')
+}
+
+export async function diagnoseClickIntercept(
+  page: Page,
+  loc: Locator,
+  x: number,
+  y: number,
+): Promise<ClickIntercept | undefined> {
+  return loc
+    .evaluate(
+      (target, coords) => {
+        const hit = document.elementFromPoint(coords.x, coords.y) as
+          | HTMLElement
+          | null
+        if (!hit) {
+          return {
+            blockingType: 'outside-viewport',
+            interceptedBy: 'nothing (coordinates outside viewport)',
+            error: 'Click coordinates are outside the visible viewport.',
+            suggestion:
+              'Scroll the target into view, then snapshot and retry.',
+          }
+        }
+        if (target === hit || target.contains(hit)) return null
+
+        let current: HTMLElement | null = hit
+        while (current && current !== target && current !== document.body) {
+          const tag = current.tagName?.toLowerCase() || ''
+          const role = current.getAttribute?.('role') || ''
+          const style = window.getComputedStyle(current)
+          const zIndex = parseInt(style.zIndex, 10)
+          const hasHighZ = !Number.isNaN(zIndex) && zIndex > 100
+          const isFixed =
+            style.position === 'fixed' || style.position === 'absolute'
+          const hitRef =
+            current.getAttribute('aria-ref') ||
+            current.getAttribute('data-cursor-ref') ||
+            undefined
+          const name = (
+            current.getAttribute('aria-label') ||
+            (current.textContent || '')
+          )
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 60)
+          const interceptedBy = role
+            ? `${tag} role=${role}${name ? ` "${name}"` : ''}`
+            : `${tag}${name ? ` "${name}"` : ''}`
+
+          if (tag === 'iframe') {
+            return {
+              blockingType: 'iframe',
+              interceptedBy,
+              interceptedRef: hitRef,
+              error:
+                'Click would hit an iframe instead of the target element.',
+              suggestion:
+                'Snapshot again — iframe controls use refs like f1e5. Click the inner control, not the iframe chrome.',
+            }
+          }
+          if (
+            tag === 'dialog' ||
+            role === 'dialog' ||
+            role === 'alertdialog' ||
+            current.getAttribute('aria-modal') === 'true'
+          ) {
+            return {
+              blockingType: 'modal',
+              interceptedBy,
+              interceptedRef: hitRef,
+              error:
+                'Click would hit a modal/dialog instead of the target element.',
+              suggestion:
+                'Close the modal first by clicking its close button, then snapshot and retry the original control.',
+            }
+          }
+          if (
+            (tag === 'nav' ||
+              tag === 'header' ||
+              role === 'navigation' ||
+              role === 'banner') &&
+            isFixed
+          ) {
+            return {
+              blockingType: 'fixed-header',
+              interceptedBy,
+              interceptedRef: hitRef,
+              error:
+                'Click would hit a fixed header/navigation bar instead of the target.',
+              suggestion:
+                'Scroll so the target is not behind the header, or click the header control if that was the intent.',
+            }
+          }
+          if (hasHighZ && isFixed) {
+            return {
+              blockingType: 'overlay',
+              interceptedBy,
+              interceptedRef: hitRef,
+              error: 'Click would hit an overlay instead of the target element.',
+              suggestion:
+                'Dismiss the overlay (Escape or its close control), then snapshot and retry.',
+            }
+          }
+          current = current.parentElement
+        }
+
+        const otherRef =
+          hit.getAttribute('aria-ref') ||
+          hit.getAttribute('data-cursor-ref') ||
+          undefined
+        const otherName = (
+          hit.getAttribute('aria-label') ||
+          (hit.textContent || '')
+        )
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 60)
+        const otherTag = hit.tagName?.toLowerCase() || 'element'
+        const otherRole = hit.getAttribute('role') || ''
+        return {
+          blockingType: 'other',
+          interceptedBy: otherRole
+            ? `${otherTag} role=${otherRole}${otherName ? ` "${otherName}"` : ''}`
+            : `${otherTag}${otherName ? ` "${otherName}"` : ''}`,
+          interceptedRef: otherRef,
+          error: 'Click would hit a different element than the target.',
+          suggestion:
+            'Snapshot to see what is covering the control, then click that overlay or a new ref.',
+        }
+      },
+      { x, y },
+    )
+    .catch(() => undefined)
+}
+
 export async function resolveClickTarget(
   page: Page,
   targetId: string,
   ref: string,
   element?: string,
+  opts?: {
+    retryOnStaleRef?: boolean
+    refreshSnapshot?: () => Promise<void>
+  },
 ): Promise<{ loc: Locator; ref: string; described: DescribedElement }> {
   const normalized = normalizeRef(ref)
+  const retry = opts?.retryOnStaleRef !== false
+  const knownBefore = getRefMeta(targetId, normalized)
+  const hint =
+    element?.trim() ||
+    (knownBefore?.name
+      ? `${knownBefore.role} "${knownBefore.name}"`
+      : undefined)
+
   const tryRef = async (candidate: string) => {
-    const loc = await targetLocator(page, { ref: candidate, element })
+    const loc = await targetLocator(page, { ref: candidate })
     const described = await describeElement(loc, candidate)
     assertElementHint(described, element, candidate)
     return { loc, ref: candidate, described }
@@ -107,10 +266,19 @@ export async function resolveClickTarget(
   try {
     return await tryRef(normalized)
   } catch (err) {
-    if (!(err instanceof StaleRefError) || !element?.trim()) throw err
-    const known = getRefMeta(targetId, normalized)
-    if (!known || !elementMatchesHint(known, element)) throw err
-    const recovered = recoverRefByHint(targetId, normalized, element)
+    if (!(err instanceof StaleRefError) || !retry) throw err
+    if (opts?.refreshSnapshot) await opts.refreshSnapshot()
+    try {
+      return await tryRef(normalized)
+    } catch (err2) {
+      if (!(err2 instanceof StaleRefError)) throw err2
+    }
+    const recovered = recoverRefByHint(
+      targetId,
+      normalized,
+      hint,
+      knownBefore?.role,
+    )
     if (!recovered || recovered === normalized) throw err
     return tryRef(recovered)
   }
@@ -164,6 +332,11 @@ export async function clickLocatorRobust(
     else await loc.click(clickArgs)
   }
 
+  if (opts.force) {
+    await performClick()
+    return
+  }
+
   if (await pointHitsLocator(loc, viewportX, viewportY)) {
     await performClick()
     return
@@ -195,5 +368,14 @@ export async function clickLocatorRobust(
     }
   }
 
+  const intercept = await diagnoseClickIntercept(
+    page,
+    loc,
+    viewportX,
+    viewportY,
+  )
+  if (intercept) {
+    throw new BrowserError(formatClickIntercept(intercept))
+  }
   await performClick()
 }

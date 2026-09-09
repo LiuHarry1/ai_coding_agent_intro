@@ -648,6 +648,14 @@ export async function ensureSnapshotFresh(
   targetId: string,
 ): Promise<void> {
   if (!isSnapshotStale(targetId)) return
+  await forceRefreshSnapshot(backend, targetId)
+}
+
+/** Always recapture so stale-ref recovery can rematch against live refs. */
+export async function forceRefreshSnapshot(
+  backend: BrowserBackend,
+  targetId: string,
+): Promise<void> {
   await snapshot(backend, targetId, {
     compact: true,
     maxNodes: POST_ACTION_MAX_NODES,

@@ -704,22 +704,79 @@ export function mapBrowserOutput(
 
 /**
  * Browser failures are almost always recoverable by re-observing the page, so
- * they come back as tool text rather than thrown errors — but the message has
- * to say what to do next, otherwise the model retries the same click forever.
+ * they come back as tool text rather than thrown errors. Cursor does not dump
+ * a YAML tree here — a short classified error plus Recovery action forces a
+ * dedicated snapshot so refs stay canonical.
  */
+const RECOVERY_RULES: Array<{
+  patterns: string[]
+  suggestion: string
+  recovery: string
+}> = [
+  {
+    patterns: [
+      'element not found',
+      'cannot find',
+      'not found in the current page snapshot',
+      'stale',
+      'detached',
+    ],
+    suggestion:
+      'The page content has changed since the last snapshot. Take a new snapshot to get updated refs. Do not retry the same ref.',
+    recovery: 'browser_snapshot',
+  },
+  {
+    patterns: ['iframe'],
+    suggestion:
+      'The click hit an iframe. Snapshot again and use the inner control ref (fNeM), not the iframe chrome.',
+    recovery: 'browser_snapshot',
+  },
+  {
+    patterns: ['modal', 'dialog', 'overlay', 'blocked by'],
+    suggestion:
+      'Close the overlay first, then snapshot and retry the original control.',
+    recovery: 'browser_snapshot to refresh refs',
+  },
+  {
+    patterns: ['no <input type=file>', 'not an <input type=file>'],
+    suggestion:
+      'Do not click a visible Upload. Call browser_file_upload with paths only (omit ref).',
+    recovery: 'browser_file_upload with paths only (omit ref)',
+  },
+  {
+    patterns: ['timeout', 'timed out'],
+    suggestion:
+      'The page might be slow. Snapshot to check the current state rather than waiting again.',
+    recovery: 'browser_snapshot',
+  },
+  {
+    patterns: ['no browser tab', 'navigate to a page first'],
+    suggestion: 'Open or select a tab before interacting.',
+    recovery: 'browser_tabs with action "list", then browser_navigate',
+  },
+]
+
+export function recoverySuffixForError(message: string): string {
+  if (/Recovery action:/i.test(message)) return ''
+  const lower = message.toLowerCase()
+  const rule = RECOVERY_RULES.find(r =>
+    r.patterns.some(p => lower.includes(p)),
+  )
+  const suggestion = rule?.suggestion
+    ?? 'Take a snapshot to see the current page, then retry with a fresh ref.'
+  const recovery = rule?.recovery ?? 'browser_snapshot'
+  return `${suggestion}\nRecovery action: ${recovery}`
+}
+
 export function browserErrorText(
   err: unknown,
   action: string,
-  freshSnapshot?: string,
+  _freshSnapshot?: string,
 ): string {
   const head =
     err instanceof BrowserError
       ? `Error: ${err.message}`
       : `Error: ${action} failed: ${err instanceof Error ? err.message : String(err)}`
-  if (!freshSnapshot) return wrapModelToolText(head)
-  return wrapModelToolText(
-    `${head}\n\nCurrent page snapshot (use these refs, the old ones are stale):\n${
-      freshSnapshot || '(no visible content)'
-    }`,
-  )
+  const suffix = recoverySuffixForError(head)
+  return wrapModelToolText(suffix ? `${head}\n\n${suffix}` : head)
 }

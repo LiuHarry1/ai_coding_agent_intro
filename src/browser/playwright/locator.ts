@@ -40,7 +40,7 @@ export async function targetLocator(
     await locator.normalize()
   } catch {
     throw new StaleRefError(
-      `Ref ${ref} not found in the current page snapshot. Try capturing new snapshot.`,
+      `Element not found: ${ref}. Take a snapshot to get updated refs.`,
     )
   }
   return locator
@@ -81,7 +81,7 @@ export function toAIFriendlyMessage(error: unknown, selector: string): string {
     message.includes('Stale aria-ref') ||
     /aria-ref=e\d+.*not found/i.test(message)
   ) {
-    return `Ref ${selector} not found in the current page snapshot. Try capturing new snapshot.`
+    return `Element not found: ${selector}. Take a snapshot to get updated refs.`
   }
 
   if (
@@ -93,6 +93,15 @@ export function toAIFriendlyMessage(error: unknown, selector: string): string {
     return (
       `Element "${selector}" not found or not visible. ` +
       `Try capturing new snapshot.`
+    )
+  }
+
+  if (
+    message.includes('not an HTMLInputElement') ||
+    message.includes('Node is not an HTMLInputElement')
+  ) {
+    return (
+      `Ref is not an <input type=file>. Call browser_file_upload with paths only (omit ref) — do not click Upload.`
     )
   }
 
@@ -111,6 +120,7 @@ export function toAIFriendlyMessage(error: unknown, selector: string): string {
 }
 
 export function mapPlaywrightError(err: unknown, ref?: string): never {
+  if (err instanceof BrowserError) throw err
   throw new BrowserError(toAIFriendlyMessage(err, ref || 'element'))
 }
 

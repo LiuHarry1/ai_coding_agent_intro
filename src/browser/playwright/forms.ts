@@ -91,6 +91,16 @@ async function fillOneField(
       return { ...base, value: String(on), status: 'filled' }
     }
 
+    if (kind === 'combobox' && el.tag !== 'select') {
+      return {
+        ...base,
+        value: el.value,
+        status: 'skipped',
+        reason:
+          'custom combobox: click the option ref from a snapshot; fill_form only writes native <select> and textboxes',
+      }
+    }
+
     if (kind === 'combobox' && el.tag === 'select') {
       const { selected } = await pickValue(loc, [field.value])
       return { ...base, value: selected.join(', '), status: 'filled' }
