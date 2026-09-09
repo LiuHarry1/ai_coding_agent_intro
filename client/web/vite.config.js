@@ -8,6 +8,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
 
 export default defineConfig({
+  // Relative asset URLs so one build works at `/` (local, Electron, docker
+  // web image) and under a reverse-proxy prefix such as `/code/`
+  // (KnowBot nginx → this agent on another port). Override with VITE_BASE
+  // if you need an absolute public path, e.g. VITE_BASE=/code/
+  base: process.env.VITE_BASE || "./",
   plugins: [
     react(),
     {

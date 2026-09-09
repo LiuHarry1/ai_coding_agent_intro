@@ -44,6 +44,7 @@ import {
 } from './auth/identity.js'
 import { runWithRequestScope } from '../utils/request-scope.js'
 import { serveStaticFile } from './static.js'
+import { stripMountPath } from './public-base.js'
 import {
   getMCPManagerForServers,
   initMcpLifecycle,
@@ -118,6 +119,7 @@ export function createRouter({ staticDir }: RouterOptions) {
   return async (req: IncomingMessage, res: ServerResponse) => {
     setCORS(res, req)
 
+    req.url = stripMountPath(req.url)
     const { method, url } = req
     if (method === 'OPTIONS') {
       res.writeHead(204)

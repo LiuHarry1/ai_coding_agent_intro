@@ -8,6 +8,23 @@
 import { authHeader, handleUnauthorized } from '../auth.js'
 
 /**
+ * Reverse-proxy mount used by KnowBot nginx (`/code/` → this agent).
+ * Keep in sync with src/server/public-base.ts.
+ */
+const PUBLIC_MOUNT = '/code'
+
+/**
+ * When the SPA is opened under PUBLIC_MOUNT, API calls must stay on that
+ * prefix (the gateway strips it before forwarding). Direct :8090 / Vite
+ * dev stay at origin root.
+ */
+function inferredPublicBase() {
+  const p = globalThis.location?.pathname || ''
+  if (p === PUBLIC_MOUNT || p.startsWith(`${PUBLIC_MOUNT}/`)) return PUBLIC_MOUNT
+  return ''
+}
+
+/**
  * Resolve the agent backend base URL. Empty string = same-origin (the
  * default, identical to the old hard-coded relative paths). This is what
  * lets the frontend be deployed independently of the backend:
@@ -15,6 +32,7 @@ import { authHeader, handleUnauthorized } from '../auth.js'
  *   - runtime  : window.__APP_CONFIG__.apiBase (set by app-config.js, so
  *                ONE web image can point at any backend without a rebuild)
  *   - build    : import.meta.env.VITE_API_BASE (handy for `npm run dev`)
+ *   - inferred : /code when the page URL is under that prefix
  *   - fallback : "" → same-origin
  */
 function apiBase() {
@@ -22,7 +40,7 @@ function apiBase() {
   if (typeof runtime === 'string' && runtime) return runtime.replace(/\/$/, '')
   const build = import.meta.env?.VITE_API_BASE
   if (typeof build === 'string' && build) return build.replace(/\/$/, '')
-  return ''
+  return inferredPublicBase()
 }
 
 /** Prefix an absolute API path (e.g. "/chat") with the backend base URL. */
