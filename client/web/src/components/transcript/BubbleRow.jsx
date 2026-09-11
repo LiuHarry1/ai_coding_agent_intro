@@ -3,9 +3,13 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { useChatStore } from '../../stores/chat-store.js'
-import { bubbleToPart, toolBubbleToPart } from '../../lib/bubbles/messages-to-bubbles.js'
+import {
+  bubbleToPart,
+  toolBubbleToPart,
+} from '../../lib/bubbles/messages-to-bubbles.js'
 import { useAuthedImage } from '../../hooks/useAuthedImage.js'
 import { pickCard } from '../pickToolCard.js'
+import { SUPPRESSED_TOOL_CARDS } from '../../lib/tool-names.js'
 import { getMdComponents } from '../../lib/markdown-components.jsx'
 import CompactionRow from '../CompactionRow.jsx'
 import PartRenderer from '../PartRenderer.jsx'
@@ -83,6 +87,7 @@ function BubbleRow({ bubbleId, streamingTail = false, embedded = false }) {
 
   if (bubble.kind === 'tool') {
     const part = toolBubbleToPart(bubble)
+    if (SUPPRESSED_TOOL_CARDS.has(part.name)) return null
     const Card = pickCard(part)
     return wrap(<Card part={part} />)
   }

@@ -112,14 +112,20 @@ function TodoStatusIcon({ status }) {
 
 export default function TodoListCard({ part }) {
   const { todos = [] } = part
+  const [manualToggle, setManualToggle] = useState(null)
   if (todos.length === 0) return null
 
   const total = todos.length
-  const [manualToggle, setManualToggle] = useState(null)
-  const open = manualToggle !== null ? manualToggle : true
+  const completed = todos.filter(t => t.status === 'completed').length
+  const settled = todos.filter(
+    t => t.status === 'completed' || t.status === 'cancelled',
+  ).length
+  const allSettled = settled === total
+  const allCompleted = completed === total
+  const open = manualToggle !== null ? manualToggle : !allSettled
 
   return (
-    <div className='todo-card'>
+    <div className={`todo-card ${allSettled ? 'todo-card-complete' : ''}`}>
       <button
         className='todo-header'
         onClick={() => setManualToggle(v => (v === null ? !open : !v))}
@@ -127,7 +133,14 @@ export default function TodoListCard({ part }) {
       >
         <TodoListIcon />
         <span className='todo-title'>
-          To-dos <span className='todo-count'>{total}</span>
+          {allCompleted
+            ? 'Tasks complete'
+            : allSettled
+              ? 'Tasks finished'
+              : 'Tasks'}
+          <span className='todo-count'>
+            {allSettled ? settled : completed}/{total}
+          </span>
         </span>
         <svg
           className={`todo-arrow ${open ? 'open' : ''}`}
