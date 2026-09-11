@@ -66,6 +66,12 @@ export async function handlePreview(
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': String(stat.size),
     'Content-Disposition': contentDispositionInline(path.basename(target)),
+    // Previewed HTML is workspace-controlled. Keep scripts functional for
+    // offline charts while forcing an opaque origin so direct navigation
+    // cannot read the Coding Agent SPA's localStorage/JWT.
+    'Content-Security-Policy': 'sandbox allow-scripts allow-downloads',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
   })
   const stream = fs.createReadStream(target)
   stream.on('error', () => res.destroy())

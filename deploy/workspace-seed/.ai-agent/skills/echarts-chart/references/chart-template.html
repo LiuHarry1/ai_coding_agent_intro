@@ -3,93 +3,247 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Chart</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<title>Offline data chart</title>
 <style>
-  body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;padding:12px;background:#fafaf7;color:#222}
-  #controls{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:13px;color:#444}
-  #controls label{display:flex;gap:4px;align-items:center}
-  #controls select,#controls input{font-size:13px;padding:3px 6px;border:1px solid #d9d9d9;border-radius:6px}
-  #chart{width:720px;height:420px;max-width:100%}
+  :root{color-scheme:light;--bg:#f4f0e8;--paper:#fffdf8;--ink:#17324d;--muted:#66737e;--line:#d8d1c5;--accent:#176b87;--shadow:0 18px 50px rgba(23,50,77,.12)}
+  *{box-sizing:border-box}
+  body{font-family:"Aptos","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;margin:0;padding:24px;background:radial-gradient(circle at 8% 5%,#fff8e8 0,transparent 28%),var(--bg);color:var(--ink)}
+  body[data-theme="dark"]{color-scheme:dark;--bg:#101820;--paper:#17232d;--ink:#edf3f4;--muted:#a9bac2;--line:#32434d;--accent:#79c1d4;--shadow:0 18px 50px rgba(0,0,0,.32)}
+  main{max-width:1500px;margin:0 auto;background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+  header{padding:20px 24px 15px;border-bottom:1px solid var(--line)}
+  h1{font-family:Georgia,"Noto Serif SC",serif;font-size:clamp(22px,3vw,34px);line-height:1.14;letter-spacing:-.02em;margin:0 0 7px}
+  #description{color:var(--muted);font-size:14px;line-height:1.55;margin:0}
+  #controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:12px 24px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+  #controls label{display:flex;gap:6px;align-items:center}
+  #controls select,#controls button{font:inherit;color:var(--ink);background:var(--paper);padding:6px 9px;border:1px solid var(--line);border-radius:8px}
+  #controls button{cursor:pointer;margin-left:auto}
+  #controls button:hover{border-color:var(--accent);color:var(--accent)}
+  #chart{width:1200px;height:720px;max-width:100%;margin:0 auto}
+  #table-wrap{padding:20px 24px;overflow:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border-bottom:1px solid var(--line);padding:9px 11px;text-align:left;white-space:nowrap}
+  th{color:var(--muted);font-weight:650}
+  footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:14px 24px 18px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.45}
+  footer strong{display:block;color:var(--ink);font-weight:650;margin-bottom:2px}
+  .hidden{display:none!important}
+  @media(max-width:680px){body{padding:8px}main{border-radius:12px}header,#controls,footer{padding-left:14px;padding-right:14px}#controls button{margin-left:0}}
 </style>
 </head>
 <body>
-<div id="controls">
-  <label>类型
-    <select id="type">
-      <option value="bar">柱状图</option>
-      <option value="line">折线图</option>
-      <option value="pie">饼图</option>
-    </select>
-  </label>
-  <label>配色
-    <select id="palette">
-      <option value="default">默认</option>
-      <option value="warm">暖色</option>
-      <option value="cool">冷色</option>
-      <option value="business">商务</option>
-    </select>
-  </label>
-  <label>宽 <input id="w" type="number" min="320" max="1600" step="10" /></label>
-  <label>高 <input id="h" type="number" min="240" max="1200" step="10" /></label>
-</div>
-<div id="chart"></div>
+<main>
+  <header>
+    <h1 id="title"></h1>
+    <p id="description"></p>
+  </header>
+  <div id="controls">
+    <label>View <select id="type"></select></label>
+    <label>Palette
+      <select id="palette">
+        <option value="default">Editorial</option>
+        <option value="warm">Warm</option>
+        <option value="cool">Cool</option>
+        <option value="business">Business</option>
+      </select>
+    </label>
+    <button id="download" type="button">Download cleaned data</button>
+  </div>
+  <div id="chart" role="img" aria-label="Interactive data chart"></div>
+  <div id="table-wrap" class="hidden"></div>
+  <footer>
+    <div id="source"></div>
+    <div id="period"></div>
+    <div id="unit"></div>
+    <div id="quality"></div>
+  </footer>
+</main>
+<script>/*__ECHARTS_RUNTIME__*/</script>
 <script>
-// Agent: replace the D object below (search2chart-mcp lib/html.js payload shape).
-const D={
-  "title":"示例图表",
-  "categories":["北京","上海","广州"],
-  "seriesList":[{"name":"销量","data":[120,200,150]}],
-  "palettes":{
-    "default":["#5470c6","#91cc75","#fac858","#ee6666","#73c0de","#3ba272","#fc8452","#9a60b4"],
-    "warm":["#ee6666","#fac858","#fc8452","#ff9f7f","#ffd666","#e86f3a"],
-    "cool":["#5470c6","#73c0de","#3ba272","#9ad0ec","#5b8ff9","#2ca9b9"],
-    "business":["#1f4e79","#2e75b6","#9dc3e6","#c55a11","#ed7d31","#a5a5a5"]
-  },
-  "defaultType":"bar",
-  "defaultPalette":"default",
-  "width":720,
-  "height":420
-};
-const PAL=D.palettes;
+const D=/*__CHART_PAYLOAD__*/null;
+const records=D.data;
+const yFields=Array.isArray(D.fields.y)?D.fields.y:[D.fields.y];
 let chart=null;
+
+function unitFor(field){
+  if(typeof D.unit==='string')return D.unit;
+  return D.unit&&D.unit[field]?D.unit[field]:'';
+}
+function formatValue(value,field){
+  if(value==null)return '—';
+  const abs=Math.abs(value);
+  const digits=abs!==0&&abs<1?2:abs<100?1:0;
+  return Number(value).toLocaleString(undefined,{maximumFractionDigits:digits})+(unitFor(field)?' '+unitFor(field):'');
+}
+function baseOption(colors){
+  const dark=D.theme==='dark';
+  return {
+    backgroundColor:'transparent',
+    color:colors,
+    animationDuration:450,
+    textStyle:{color:dark?'#edf3f4':'#17324d',fontFamily:'Aptos, Segoe UI, sans-serif'},
+    aria:{enabled:true,decal:{show:true}},
+    tooltip:{confine:true},
+    legend:{bottom:4,type:'scroll',textStyle:{color:dark?'#a9bac2':'#66737e'}},
+    grid:{left:72,right:34,top:36,bottom:76,containLabel:true}
+  };
+}
+function annotationLines(){
+  return D.annotations.length?{
+    silent:true,symbol:['none','none'],
+    label:{formatter:p=>p.name},
+    lineStyle:{type:'dashed',width:1},
+    data:D.annotations.map(a=>({name:a.label,xAxis:String(a.x)}))
+  }:undefined;
+}
+function axisOption(type,colors){
+  const option=baseOption(colors);
+  const cats=records.map(r=>String(r[D.fields.x]));
+  const commonSeries=yFields.map((field,index)=>({
+    name:field,
+    type:type==='area'?'line':type==='stacked_bar'?'bar':type,
+    data:records.map(r=>r[field]),
+    smooth:type==='line'||type==='area',
+    connectNulls:false,
+    stack:type==='stacked_bar'?'total':undefined,
+    areaStyle:type==='area'?{opacity:.16}:undefined,
+    emphasis:{focus:'series'},
+    markLine:index===0?annotationLines():undefined
+  }));
+  const ranking=D.goal==='ranking'&&type==='bar';
+  return Object.assign(option,{
+    tooltip:{trigger:'axis',confine:true,valueFormatter:v=>formatValue(v,yFields[0])},
+    xAxis:ranking?{type:'value'}:{type:'category',data:cats,axisLabel:{hideOverlap:true,rotate:cats.length>10?28:0}},
+    yAxis:ranking?{type:'category',data:cats,inverse:true}:{type:'value',name:typeof D.unit==='string'?D.unit:''},
+    series:ranking?commonSeries.map(s=>Object.assign(s,{data:s.data})):commonSeries
+  });
+}
+function pieOption(type,colors){
+  const field=yFields[0];
+  const option=baseOption(colors);
+  option.tooltip={trigger:'item',formatter:p=>p.name+'<br>'+formatValue(p.value,field)+' ('+p.percent+'%)'};
+  option.series=[{
+    name:field,type:'pie',radius:type==='donut'?['42%','70%']:'70%',
+    center:['50%','46%'],
+    data:records.map(r=>({name:String(r[D.fields.x]),value:r[field]})),
+    label:{formatter:'{b}\n{d}%'},itemStyle:{borderWidth:2,borderColor:D.theme==='dark'?'#17232d':'#fffdf8'}
+  }];
+  return option;
+}
+function scatterOption(colors){
+  const option=baseOption(colors);
+  option.tooltip={trigger:'item',formatter:p=>p.seriesName+'<br>'+D.fields.x+': '+formatValue(p.value[0],D.fields.x)+'<br>'+formatValue(p.value[1],p.seriesName)};
+  option.xAxis={type:'value',name:D.fields.x};
+  option.yAxis={type:'value',name:typeof D.unit==='string'?D.unit:''};
+  option.series=yFields.map(field=>({name:field,type:'scatter',symbolSize:10,data:records.map(r=>[r[D.fields.x],r[field]])}));
+  return option;
+}
+function heatmapOption(colors){
+  const option=baseOption(colors);
+  const xs=[...new Set(records.map(r=>String(r[D.fields.x])))];
+  const yField=yFields[0],ys=[...new Set(records.map(r=>String(r[yField])))];
+  const values=records.map(r=>r[D.fields.value]);
+  option.grid={left:80,right:70,top:30,bottom:80,containLabel:true};
+  option.tooltip={position:'top',formatter:p=>xs[p.value[0]]+' / '+ys[p.value[1]]+'<br>'+formatValue(p.value[2],D.fields.value)};
+  option.xAxis={type:'category',data:xs,splitArea:{show:true}};
+  option.yAxis={type:'category',data:ys,splitArea:{show:true}};
+  option.visualMap={min:Math.min(...values),max:Math.max(...values),calculable:true,orient:'vertical',right:4,top:'middle'};
+  option.series=[{name:D.fields.value,type:'heatmap',data:records.map(r=>[xs.indexOf(String(r[D.fields.x])),ys.indexOf(String(r[yField])),r[D.fields.value]]),label:{show:records.length<=36}}];
+  return option;
+}
+function boxplotOption(colors){
+  const option=baseOption(colors);
+  option.tooltip={trigger:'item'};
+  option.xAxis={type:'category',data:records.map(r=>String(r[D.fields.x])),boundaryGap:true};
+  option.yAxis={type:'value',name:typeof D.unit==='string'?D.unit:''};
+  option.series=[{name:'Five-number summary',type:'boxplot',data:records.map(r=>yFields.map(f=>r[f]))}];
+  return option;
+}
+function paretoOption(colors){
+  const option=baseOption(colors),field=yFields[0];
+  const values=records.map(r=>r[field]),total=values.reduce((a,b)=>a+b,0);
+  let running=0;
+  const cumulative=values.map(v=>{running+=v;return total?running/total*100:0});
+  option.tooltip={trigger:'axis'};
+  option.xAxis={type:'category',data:records.map(r=>String(r[D.fields.x])),axisLabel:{hideOverlap:true,rotate:records.length>10?28:0}};
+  option.yAxis=[{type:'value',name:unitFor(field)},{type:'value',name:'Cumulative %',min:0,max:100,axisLabel:{formatter:'{value}%'}}];
+  option.series=[
+    {name:field,type:'bar',data:values},
+    {name:'Cumulative %',type:'line',yAxisIndex:1,data:cumulative,smooth:false}
+  ];
+  return option;
+}
 function buildOption(type,palette){
-  const colors=PAL[palette]||PAL.default;
-  const cats=D.categories, sl=D.seriesList;
-  if(type==='pie'){
-    const s=sl[0];
-    return { backgroundColor:'transparent', title:{text:D.title,left:'center'},
-      tooltip:{trigger:'item'}, legend:{bottom:0},
-      series:[{ type:'pie', radius:['35%','65%'], data:cats.map((c,i)=>({name:c,value:s.data[i]})),
-        itemStyle:{borderColor:'#fff',borderWidth:1}, color:colors }] };
-  }
-  const series=sl.map((s,i)=>({ name:s.name, type:type, data:s.data,
-    itemStyle: colors?{color:colors[i%colors.length]}:undefined,
-    areaStyle: type==='line'?{opacity:0.12}:undefined, smooth: type==='line' }));
-  return { backgroundColor:'transparent', title:{text:D.title,left:'center'},
-    tooltip:{trigger:'axis'}, legend:{bottom:0},
-    grid:{left:48,right:24,top:48,bottom:48},
-    xAxis:{type:'category',data:cats,axisLabel:{interval:0,rotate:cats.length>8?30:0}},
-    yAxis:{type:'value'}, series:series };
+  const colors=D.palettes[palette]||D.palettes.default;
+  if(type==='pie'||type==='donut')return pieOption(type,colors);
+  if(type==='scatter')return scatterOption(colors);
+  if(type==='heatmap')return heatmapOption(colors);
+  if(type==='boxplot')return boxplotOption(colors);
+  if(type==='pareto')return paretoOption(colors);
+  return axisOption(type,colors);
+}
+function compatibleTypes(){
+  if(D.chartType==='table')return ['table'];
+  if(D.chartType==='pie'||D.chartType==='donut')return ['donut','pie','bar'];
+  if(D.chartType==='line'||D.chartType==='area')return ['line','area','bar'];
+  if(D.chartType==='bar'||D.chartType==='stacked_bar'||D.chartType==='histogram')return yFields.length>1?['bar','stacked_bar','line']:['bar','line','area'];
+  return [D.chartType];
+}
+function renderTable(){
+  document.getElementById('chart').classList.add('hidden');
+  const wrap=document.getElementById('table-wrap');
+  wrap.classList.remove('hidden');
+  const fields=[...new Set(records.flatMap(Object.keys))];
+  const table=document.createElement('table');
+  const head=document.createElement('thead'),hr=document.createElement('tr');
+  fields.forEach(f=>{const th=document.createElement('th');th.textContent=f;hr.appendChild(th);});
+  head.appendChild(hr);table.appendChild(head);
+  const body=document.createElement('tbody');
+  records.forEach(r=>{const tr=document.createElement('tr');fields.forEach(f=>{const td=document.createElement('td');td.textContent=r[f]==null?'':String(r[f]);tr.appendChild(td);});body.appendChild(tr);});
+  table.appendChild(body);wrap.replaceChildren(table);
 }
 function render(){
-  const t=document.getElementById('type').value;
-  const p=document.getElementById('palette').value;
-  chart.setOption(buildOption(t,p),true);
-  chart.resize({width:+document.getElementById('w').value,height:+document.getElementById('h').value});
+  const type=document.getElementById('type').value;
+  if(type==='table'){if(chart){chart.dispose();chart=null;}renderTable();document.body.dataset.chartReady='true';return;}
+  document.getElementById('table-wrap').classList.add('hidden');
+  document.getElementById('chart').classList.remove('hidden');
+  if(!chart)chart=echarts.init(document.getElementById('chart'),D.theme);
+  chart.setOption(buildOption(type,document.getElementById('palette').value),true);
+  chart.resize({width:D.width,height:D.height});
+  chart.on('finished',()=>{document.body.dataset.chartReady='true';});
 }
-window.addEventListener('DOMContentLoaded',function(){
-  chart=echarts.init(document.getElementById('chart'));
-  document.getElementById('type').value=D.defaultType;
-  document.getElementById('palette').value=D.defaultPalette;
-  document.getElementById('w').value=D.width;
-  document.getElementById('h').value=D.height;
-  ['type','palette','w','h'].forEach(function(id){
-    document.getElementById(id).addEventListener('change',render);
+function meta(id,label,value){
+  const el=document.getElementById(id);
+  if(value==null||value===''||(Array.isArray(value)&&!value.length)){el.classList.add('hidden');return;}
+  const strong=document.createElement('strong');strong.textContent=label;
+  el.append(strong,document.createTextNode(Array.isArray(value)?value.join(' · '):String(value)));
+}
+function init(){
+  document.body.dataset.theme=D.theme;
+  document.title=D.title;
+  document.getElementById('title').textContent=D.title;
+  const description=document.getElementById('description');
+  description.textContent=D.description||'';
+  if(!D.description)description.classList.add('hidden');
+  const select=document.getElementById('type');
+  compatibleTypes().forEach(type=>{const option=document.createElement('option');option.value=type;option.textContent=type.replace('_',' ');select.appendChild(option);});
+  select.value=D.chartType;
+  meta('source','Source',D.source);
+  meta('period','Time range',D.timeRange?D.timeRange.start+' — '+D.timeRange.end+(D.timeRange.timezone?' · '+D.timeRange.timezone:''):'');
+  meta('unit','Unit',typeof D.unit==='string'?D.unit:D.unit?Object.entries(D.unit).map(([k,v])=>k+': '+v):'');
+  const quality=[D.missingValuePolicy+' missing-value policy'];
+  if(D.incompletePeriod)quality.push(D.incompletePeriod.label+(D.incompletePeriod.note?' — '+D.incompletePeriod.note:''));
+  if(D.topN)quality.push('Top '+D.topN+(D.includeOther?' + Other':''));
+  meta('quality','Data notes',quality);
+  select.addEventListener('change',render);
+  document.getElementById('palette').addEventListener('change',render);
+  document.getElementById('download').addEventListener('click',()=>{
+    const blob=new Blob([JSON.stringify({title:D.title,fields:D.fields,unit:D.unit,records:D.data},null,2)+'\n'],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=D.downloadName;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   });
   render();
-  window.addEventListener('resize',function(){ chart.resize(); });
-});
+  window.addEventListener('resize',()=>{if(chart)chart.resize();});
+}
+window.addEventListener('DOMContentLoaded',init);
 </script>
 </body>
 </html>

@@ -9,6 +9,15 @@ export const IMAGE_TARGET_RAW_SIZE = (API_IMAGE_MAX_BASE64_SIZE * 3) / 4
 export const IMAGE_MAX_WIDTH = 2000
 export const IMAGE_MAX_HEIGHT = 2000
 
+/**
+ * Model-facing Read images (matplotlib charts, diagrams, PDF pages).
+ * Preserve more detail than browser screenshots, where the DOM snapshot is
+ * the primary signal, but keep repeated multimodal turns bounded.
+ */
+export const READ_IMAGE_MAX_WIDTH = 1600
+export const READ_IMAGE_MAX_HEIGHT = 1600
+export const READ_IMAGE_TOKEN_BUDGET = 2500
+
 export const PDF_TARGET_RAW_SIZE = 20 * 1024 * 1024
 export const PDF_AT_MENTION_INLINE_THRESHOLD = 10
 export const PDF_MAX_PAGES_PER_READ = 20

@@ -461,6 +461,10 @@
 .read-file-shot {
   margin: 4px 0 6px 18px;
 }
+.read-file-shot--loading {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
 .read-file-shot img {
   display: block;
   max-width: 100%;

@@ -1,10 +1,14 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import ToolChrome from './ToolChrome.jsx'
 import { fileName } from '../lib/utils.js'
 import { liveToolSubtitle } from '../lib/tool-density.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
+import {
+  fetchAuthenticatedBlobUrl,
+  fetchAuthenticatedResourceBlobUrl,
+} from '../lib/api/workspace.js'
 
 /**
  * Read row — Cursor default-chat density:
@@ -43,12 +47,13 @@ function fromToolUseResult(tur) {
     const file = tur.file || {}
     const mediaType = file.mediaType || 'image/png'
     const base64 = typeof file.base64 === 'string' ? file.base64 : ''
-    const src =
-      base64.length > 0 ? `data:${mediaType};base64,${base64}` : null
+    const src = base64.length > 0 ? `data:${mediaType};base64,${base64}` : null
     return {
       kind: 'image',
       label: `[Image: ${file.filePath || ''}, ${mediaType}]`,
       src,
+      filePath: file.filePath || null,
+      previewUrl: file.previewUrl || null,
       mediaType,
       sizeLabel: formatBytes(file.originalSize),
     }
@@ -74,6 +79,61 @@ function fromToolUseResult(tur) {
   return null
 }
 
+/**
+ * Wire `tool_use_result` strips image base64 so SSE/JSONL stay small.
+ * Prefer an inline data URL when present (legacy sessions); otherwise
+ * fetch the workspace file the same way the IDE binary preview does.
+ */
+function useReadImageSrc(previewUrl, filePath, inlineSrc) {
+  const [src, setSrc] = useState(inlineSrc || null)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!previewUrl && inlineSrc) {
+      setSrc(inlineSrc)
+      setError(null)
+      return
+    }
+    if (!previewUrl && !filePath) {
+      setSrc(null)
+      setError(null)
+      return
+    }
+    let revoked = false
+    let objectUrl = null
+    setSrc(null)
+    setError(null)
+    const load = async () => {
+      if (previewUrl) {
+        try {
+          return await fetchAuthenticatedResourceBlobUrl(previewUrl)
+        } catch (previewError) {
+          if (!filePath) throw previewError
+        }
+      }
+      return fetchAuthenticatedBlobUrl(filePath)
+    }
+    load()
+      .then(url => {
+        if (revoked) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        objectUrl = url
+        setSrc(url)
+      })
+      .catch(err => {
+        if (!revoked) setError(err.message || 'Failed to load image')
+      })
+    return () => {
+      revoked = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [previewUrl, filePath, inlineSrc])
+
+  return { src, error }
+}
+
 export default function ReadFileCard({ part, nested = false }) {
   const [lightbox, setLightbox] = useState(null)
   const openFile = useWorkspaceIdeStore(s => s.openFile)
@@ -91,15 +151,23 @@ export default function ReadFileCard({ part, nested = false }) {
     () => fromToolUseResult(part.toolUseResult),
     [part.toolUseResult],
   )
-
-  const hasImage = Boolean(header?.kind === 'image' && header.src)
+  const imagePath =
+    header?.kind === 'image' ? filePath || header.filePath || null : null
+  const { src: imageSrc, error: imageLoadError } = useReadImageSrc(
+    header?.kind === 'image' ? header.previewUrl : null,
+    imagePath,
+    header?.kind === 'image' ? header.src : null,
+  )
+  const isImageKind = header?.kind === 'image'
+  const hasImage = Boolean(isImageKind && imageSrc)
+  const imageLoading = Boolean(
+    isDone && !isError && isImageKind && !imageSrc && !imageLoadError,
+  )
   // Success text/unchanged: header-only. Body only for error / image / misc.
   const headerOnly =
     isDone &&
     !isError &&
-    (header?.kind === 'text' ||
-      header?.kind === 'unchanged' ||
-      !header)
+    (header?.kind === 'text' || header?.kind === 'unchanged' || !header)
 
   let rangeLabel = ''
   if (header?.kind === 'text') {
@@ -114,9 +182,7 @@ export default function ReadFileCard({ part, nested = false }) {
       }
     }
   } else if (header?.kind === 'image') {
-    rangeLabel = header.sizeLabel
-      ? `image · ${header.sizeLabel}`
-      : 'image'
+    rangeLabel = header.sizeLabel ? `image · ${header.sizeLabel}` : 'image'
   } else if (header?.kind === 'unchanged') {
     rangeLabel = 'unchanged'
   } else if (header?.kind === 'pdf') {
@@ -138,12 +204,15 @@ export default function ReadFileCard({ part, nested = false }) {
       ? header.content || header.label || ''
       : ''
   const imageFallbackLabel =
-    isDone && !isError && header?.kind === 'image' && !header.src
-      ? header.label
+    isDone && !isError && isImageKind && !imageSrc && !imageLoading
+      ? imageLoadError || header.label
       : ''
 
   const liveSub = !isDone ? liveToolSubtitle(part) : null
-  const action = toolActionLabel('read', { loading: !isDone, hasError: isError })
+  const action = toolActionLabel('read', {
+    loading: !isDone,
+    hasError: isError,
+  })
   const title = isError ? toolErrorDetails(fName, true) : fName
 
   const hasBody =
@@ -151,6 +220,7 @@ export default function ReadFileCard({ part, nested = false }) {
     (Boolean(summaryBody) ||
       Boolean(imageFallbackLabel) ||
       hasImage ||
+      imageLoading ||
       isError)
 
   const [expanded, toggleExpanded, chevron] = useToolDensityExpand('read', {
@@ -159,7 +229,7 @@ export default function ReadFileCard({ part, nested = false }) {
     nested,
     hasBody,
     headerOnly,
-    forceExpandOnce: isDone && !isError && hasImage,
+    forceExpandOnce: isDone && !isError && isImageKind,
   })
 
   const handleOpen = () => {
@@ -199,12 +269,17 @@ export default function ReadFileCard({ part, nested = false }) {
       {isDone && !isError && summaryBody && (
         <pre className='tool-row-body'>{summaryBody}</pre>
       )}
+      {isDone && !isError && imageLoading && (
+        <div className='read-file-shot read-file-shot--loading'>
+          Loading preview…
+        </div>
+      )}
       {isDone && !isError && hasImage && (
         <div className='read-file-shot'>
           <img
-            src={header.src}
+            src={imageSrc}
             alt={fName}
-            onClick={() => setLightbox(header.src)}
+            onClick={() => setLightbox(imageSrc)}
           />
         </div>
       )}

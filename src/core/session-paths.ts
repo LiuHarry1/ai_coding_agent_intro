@@ -178,6 +178,47 @@ export function getBrowserLogsSessionDir(
   return path.join(getBrowserLogsDir(agentHome), safe)
 }
 
+const SESSION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Models often rebuild `{agentHome}/.ai-agent/projects/<key>/…` from cwd
+ * (memory / tool-result spill paths) and keep characters `sanitizePath`
+ * would strip (e.g. `harry.liu` vs `harry-liu`), or split the key into
+ * folders (`projects/C--Users/harry.liu/.ai-agent/workspace/<uuid>/…`).
+ * Rewrite the project-key segment(s); return null when it would not change.
+ *
+ * Pure rewrite — callers must exists-gate (see FileRead `resolveFileInCwd`).
+ * Does not consult the session location cache (that would be an IDOR if a
+ * request included another session's UUID).
+ */
+export function coerceSanitizedProjectsPath(absPath: string): string | null {
+  const normalized = path.normalize(path.resolve(absPath))
+  const parts = normalized.split(path.sep)
+  const app = getAppDirName()
+  const i = parts.findIndex(
+    (p, idx) => p === app && parts[idx + 1] === 'projects',
+  )
+  if (i < 0 || i + 2 >= parts.length) return null
+  const after = parts.slice(i + 2)
+  const uuidIdx = after.findIndex(p => SESSION_ID_RE.test(p))
+  let next: string[]
+  if (uuidIdx > 1) {
+    const key = sanitizePath(after.slice(0, uuidIdx).join(path.sep))
+    next = [...parts.slice(0, i + 2), key, ...after.slice(uuidIdx)]
+  } else {
+    const key = parts[i + 2]
+    if (!key) return null
+    const sanitized = sanitizePath(key)
+    if (sanitized === key) return null
+    next = parts.slice()
+    next[i + 2] = sanitized
+  }
+  const out = next.join(path.sep)
+  if (out === normalized) return null
+  return out
+}
+
 function isUnderRoot(absPath: string, root: string): boolean {
   const normalized = path.normalize(path.resolve(absPath))
   const r = path.normalize(path.resolve(root))

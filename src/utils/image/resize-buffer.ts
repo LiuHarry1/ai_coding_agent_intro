@@ -19,7 +19,8 @@ import { buildImageBlock } from '../tool-result-content.js'
 /** Base64 chars per token, matching CC's `base64.length * 0.125` estimate. */
 const TOKENS_PER_BASE64_CHAR = 0.125
 
-const JPEG_QUALITY_LADDER = [80, 60, 40, 20] as const
+const JPEG_QUALITY_LADDER = [75, 55, 35, 20] as const
+const RESIZE_WIDTH_LADDER = [1600, 1280, 1024, 768, 512, 384, 256] as const
 
 export class ImageResizeError extends Error {
   constructor(message: string) {
@@ -50,23 +51,48 @@ async function compressToBytes(
   buffer: Buffer,
   maxBytes: number,
   mediaType: ImageMediaType,
+  options?: { preferLossless?: boolean },
 ): Promise<{ buffer: Buffer; mediaType: ImageMediaType } | null> {
   const sharp = await loadSharp()
   if (!sharp) return null
 
-  if (mediaType === 'image/png') {
-    const palette = await sharp(buffer)
-      .png({ palette: true, compressionLevel: 9 })
-      .toBuffer()
-    if (palette.length <= maxBytes) {
-      return { buffer: palette, mediaType: 'image/png' }
-    }
-  }
+  const metadata = await sharp(buffer).metadata()
+  const sourceWidth = metadata.width ?? IMAGE_MAX_WIDTH
+  const widths = [
+    sourceWidth,
+    ...RESIZE_WIDTH_LADDER.filter(width => width < sourceWidth),
+  ]
 
-  for (const quality of JPEG_QUALITY_LADDER) {
-    const jpeg = await sharp(buffer).jpeg({ quality }).toBuffer()
-    if (jpeg.length <= maxBytes) {
-      return { buffer: jpeg, mediaType: 'image/jpeg' }
+  for (const width of widths) {
+    const pipeline = () => {
+      const image = sharp(buffer)
+      return width < sourceWidth
+        ? image.resize(width, undefined, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+        : image
+    }
+
+    // Charts and diagrams retain labels/lines better as palette PNG. Retry
+    // after each downscale before falling back to lossy JPEG.
+    if (mediaType === 'image/png' && options?.preferLossless) {
+      const palette = await pipeline()
+        .png({ palette: true, compressionLevel: 9 })
+        .toBuffer()
+      if (palette.length <= maxBytes) {
+        return { buffer: palette, mediaType: 'image/png' }
+      }
+    }
+
+    for (const quality of JPEG_QUALITY_LADDER) {
+      const jpeg = await pipeline()
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality })
+        .toBuffer()
+      if (jpeg.length <= maxBytes) {
+        return { buffer: jpeg, mediaType: 'image/jpeg' }
+      }
     }
   }
   return null
@@ -79,6 +105,7 @@ async function compressToBytes(
 export async function maybeResizeAndDownsampleImageBuffer(
   buffer: Buffer,
   mediaType: ImageMediaType,
+  options?: { maxWidth?: number; maxHeight?: number },
 ): Promise<{ buffer: Buffer; mediaType: ImageMediaType }> {
   if (buffer.length === 0) {
     throw new ImageResizeError('Image is empty (0 bytes)')
@@ -98,9 +125,10 @@ export async function maybeResizeAndDownsampleImageBuffer(
 
   const metadata = await sharp(buffer).metadata()
   const withinBytes = buffer.length <= IMAGE_TARGET_RAW_SIZE
+  const maxWidth = options?.maxWidth ?? IMAGE_MAX_WIDTH
+  const maxHeight = options?.maxHeight ?? IMAGE_MAX_HEIGHT
   const withinDims =
-    (metadata.width ?? 0) <= IMAGE_MAX_WIDTH &&
-    (metadata.height ?? 0) <= IMAGE_MAX_HEIGHT
+    (metadata.width ?? 0) <= maxWidth && (metadata.height ?? 0) <= maxHeight
   if (withinBytes && withinDims) {
     return { buffer, mediaType }
   }
@@ -110,7 +138,7 @@ export async function maybeResizeAndDownsampleImageBuffer(
 
   if (!withinDims) {
     working = await sharp(buffer)
-      .resize(IMAGE_MAX_WIDTH, IMAGE_MAX_HEIGHT, {
+      .resize(maxWidth, maxHeight, {
         fit: 'inside',
         withoutEnlargement: true,
       })
@@ -149,13 +177,21 @@ export async function compressImageBufferWithTokenLimit(
   buffer: Buffer,
   maxTokens: number,
   mediaType: ImageMediaType,
+  options?: { preferLossless?: boolean; strict?: boolean },
 ): Promise<{ buffer: Buffer; mediaType: ImageMediaType }> {
+  if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+    throw new ImageResizeError(`Invalid image token budget: ${maxTokens}`)
+  }
   const maxBase64Chars = Math.floor(maxTokens / TOKENS_PER_BASE64_CHAR)
   const maxBytes = Math.floor(maxBase64Chars * 0.75)
   if (buffer.length <= maxBytes) return { buffer, mediaType }
 
-  const compressed = await compressToBytes(buffer, maxBytes, mediaType)
-  return compressed ?? { buffer, mediaType }
+  const compressed = await compressToBytes(buffer, maxBytes, mediaType, options)
+  if (compressed) return compressed
+  if (!options?.strict) return { buffer, mediaType }
+  throw new ImageResizeError(
+    `Unable to compress image below ${maxTokens} estimated tokens (${maxBytes} bytes)`,
+  )
 }
 
 /**
@@ -165,14 +201,27 @@ export async function compressImageBufferWithTokenLimit(
 export async function toolResultImageBlockFromBuffer(
   buffer: Buffer,
   mediaType: ImageMediaType,
-  options?: { maxTokens?: number },
+  options?: {
+    maxTokens?: number
+    maxWidth?: number
+    maxHeight?: number
+    preferLossless?: boolean
+    strictBudget?: boolean
+  },
 ): Promise<ImageBlockParam> {
-  let result = await maybeResizeAndDownsampleImageBuffer(buffer, mediaType)
+  let result = await maybeResizeAndDownsampleImageBuffer(buffer, mediaType, {
+    maxWidth: options?.maxWidth,
+    maxHeight: options?.maxHeight,
+  })
   if (options?.maxTokens !== undefined) {
     result = await compressImageBufferWithTokenLimit(
       result.buffer,
       options.maxTokens,
       result.mediaType,
+      {
+        preferLossless: options.preferLossless,
+        strict: options.strictBudget,
+      },
     )
   }
   return buildImageBlock(result.buffer.toString('base64'), result.mediaType)

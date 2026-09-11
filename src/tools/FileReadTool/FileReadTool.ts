@@ -129,7 +129,9 @@ export const definition: ToolDefinition = {
           }
         }
 
-        const resolved = resolveFileInCwd(cwd, file_path)
+        const resolved = resolveFileInCwd(cwd, file_path, {
+          allowOutsideWorkspace: true,
+        })
         if ('error' in resolved) return `Error: ${resolved.error}`
 
         try {
@@ -164,6 +166,7 @@ export const definition: ToolDefinition = {
               pages,
               sessionId: context.sessionId,
               supportsNativePdf: context.provider?.supportsNativePdf?.() === true,
+              allowOutsideWorkspace: true,
             },
           )
           if (output.type === 'text') {

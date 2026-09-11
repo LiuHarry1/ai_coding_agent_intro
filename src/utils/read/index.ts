@@ -10,9 +10,16 @@ import {
 } from '../../constants/api_limits.js'
 import type { Message, UserContentPart } from '../../core/types.js'
 import { resolvePath } from '../../tools/utils.js'
+import { coerceSanitizedProjectsPath } from '../../core/session-paths.js'
+import { maybeResizeAndDownsampleImageBuffer } from '../image/resize-buffer.js'
+import { mediaTypeForExt, saveChatUpload } from '../chat-uploads.js'
 import { formatTextReadBoundaryReminder } from './boundary-reminders.js'
 import { FILE_UNCHANGED_STUB } from './read-file-state.js'
-import { fileExtension, formatTextReadForModel, readTextFile } from './read-text.js'
+import {
+  fileExtension,
+  formatTextReadForModel,
+  readTextFile,
+} from './read-text.js'
 import { readImageFile } from './read-image.js'
 import { readNotebookFile } from './read-notebook.js'
 import {
@@ -41,6 +48,10 @@ export interface ReadFileOptions {
    * When false (e.g. openai-compatible Qwen), default Read renders pages via pdftoppm.
    */
   supportsNativePdf?: boolean
+  /**
+   * FileReadTool: allow absolute paths outside cwd; sandbox still gates access.
+   */
+  allowOutsideWorkspace?: boolean
 }
 
 export interface ReadFileResult {
@@ -54,15 +65,33 @@ export interface ReadFileResult {
  * `cwd`, `~`, or an already-absolute path. Never fails because the result
  * is outside the workspace — permission checks happen afterwards.
  */
+export type ResolveFileInCwdOptions = {
+  /**
+   * When true, absolute paths outside cwd are returned and the caller must
+   * enforce sandbox. Default false keeps Claude Code-style workspace-only
+   * resolution (except session task-output internals).
+   */
+  allowOutsideWorkspace?: boolean
+}
+
 export function resolveFileInCwd(
   cwd: string,
   filePath: string,
+  _opts?: ResolveFileInCwdOptions,
 ): { abs: string; displayPath: string } | { error: string } {
   const resolved = resolvePath(cwd, filePath)
   if ('error' in resolved) {
     return { error: resolved.error || 'Invalid path' }
   }
-  const abs = resolved.abs
+  let abs = resolved.abs
+  const coerced = coerceSanitizedProjectsPath(abs)
+  if (coerced && coerced !== abs) {
+    try {
+      if (!fs.existsSync(abs) && fs.existsSync(coerced)) abs = coerced
+    } catch {
+      /* keep original */
+    }
+  }
   const rel = path.relative(path.resolve(cwd), abs)
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
     return { abs, displayPath: filePath }
@@ -115,7 +144,9 @@ export async function readFileCore(
   filePath: string,
   options?: ReadFileOptions,
 ): Promise<ReadFileResult> {
-  const resolved = resolveFileInCwd(cwd, filePath)
+  const resolved = resolveFileInCwd(cwd, filePath, {
+    allowOutsideWorkspace: options?.allowOutsideWorkspace,
+  })
   if ('error' in resolved) throw new Error(resolved.error)
   const { abs, displayPath } = resolved
   const ext = fileExtension(abs)
@@ -125,11 +156,7 @@ export async function readFileCore(
   }
   if (isImageExtension(ext)) {
     const output = await readImageFile(abs, displayPath)
-    const followUp = await buildImageFollowUp(
-      output,
-      abs,
-      options?.sessionId,
-    )
+    const followUp = await buildImageFollowUp(output, abs, options?.sessionId)
     return { output, followUpMessages: followUp ? [followUp] : undefined }
   }
   if (isPdfExtension(ext)) {
@@ -247,13 +274,38 @@ export async function buildImageFollowUp(
 ): Promise<Message | null> {
   let imageRef: string
   if (sessionId) {
-    const { saveChatUpload } = await import('../chat-uploads.js')
-    const saved = await saveChatUpload(
+    const modelBuffer = Buffer.from(output.file.base64, 'base64')
+    const modelSaved = await saveChatUpload(
       sessionId,
-      Buffer.from(output.file.base64, 'base64'),
+      modelBuffer,
       output.file.mediaType,
     )
-    imageRef = saved.url
+    imageRef = modelSaved.url
+
+    // Keep a separate, higher-detail UI copy. The model attachment above is
+    // intentionally constrained by token budget; the UI copy is constrained
+    // by dimensions/API bytes and remains replayable after the workspace file
+    // is removed.
+    const raw = fs.readFileSync(absPath)
+    const originalMediaType = mediaTypeForExt(path.extname(absPath))
+    const preview = await maybeResizeAndDownsampleImageBuffer(
+      raw,
+      originalMediaType,
+      { maxWidth: 2000, maxHeight: 2000 },
+    )
+    if (
+      preview.mediaType === output.file.mediaType &&
+      preview.buffer.equals(modelBuffer)
+    ) {
+      output.file.previewUrl = modelSaved.url
+    } else {
+      const previewSaved = await saveChatUpload(
+        sessionId,
+        preview.buffer,
+        preview.mediaType,
+      )
+      output.file.previewUrl = previewSaved.url
+    }
   } else {
     // file:// keeps bytes on disk; hydrateImageBytes loads at API projection.
     imageRef = pathToFileURL(absPath).href

@@ -36,6 +36,7 @@ export function projectReadWireDetails(output: unknown): ReadOutput | unknown {
           base64: '',
           mediaType: out.file.mediaType,
           originalSize: out.file.originalSize,
+          previewUrl: out.file.previewUrl,
         },
       }
     case 'pdf':

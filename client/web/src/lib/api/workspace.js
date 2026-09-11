@@ -186,3 +186,21 @@ export async function fetchAuthenticatedBlobUrl(path) {
   const { blob } = await fetchDownloadBlob(path)
   return URL.createObjectURL(blob)
 }
+
+/**
+ * Fetch an authenticated API resource (session upload/browser artifact or
+ * workspace preview) and expose it as a short-lived object URL.
+ */
+export async function fetchAuthenticatedResourceBlobUrl(resourcePath) {
+  const res = await fetch(apiUrl(resourcePath), withAuth())
+  if (res.status === 401) {
+    handleUnauthorized()
+    throw new Error('Unauthorized')
+  }
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`)
+    err.status = res.status
+    throw err
+  }
+  return URL.createObjectURL(await res.blob())
+}

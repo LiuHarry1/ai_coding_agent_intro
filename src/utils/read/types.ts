@@ -18,6 +18,8 @@ export type ReadImageOutput = {
     base64: string
     mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
     originalSize: number
+    /** Authenticated session-scoped UI preview; never contains image bytes. */
+    previewUrl?: string
   }
 }
 
@@ -95,6 +97,7 @@ export const ReadOutputSchema = z.discriminatedUnion('type', [
       base64: z.string(),
       mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
       originalSize: z.number(),
+      previewUrl: z.string().optional(),
     }),
   }),
   z.object({

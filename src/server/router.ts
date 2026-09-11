@@ -132,13 +132,6 @@ export function createRouter({ staticDir }: RouterOptions) {
       return
     }
 
-    // ECharts / HTML chart preview — allow unauthenticated GET so SSO users can
-    // open markdown preview links in a new tab (Bearer JWT lives in SPA storage).
-    // Still .html-only + workspace path checks inside workspaceRouter.
-    if (method === 'GET' && url?.startsWith('/workspace/preview')) {
-      if (await workspaceRouter(req, res)) return
-    }
-
     // ── Auth gate (only when AUTH_ENABLED=true) ──────────────────────────
     // Verifies the bearer token and pins `req.userWorkspace`. Everything
     // below this line is protected; `/health` and OPTIONS above are not.
@@ -341,11 +334,15 @@ export function createRouter({ staticDir }: RouterOptions) {
         sendJSON(res, 404, { error: 'Not found' })
         return
       }
-      const { getBrowserLogsSessionDir } = await import('../core/session-paths.js')
+      const {
+        getBrowserLogsSessionDir,
+        requireSessionLocation,
+      } = await import('../core/session-paths.js')
       const fsp = await import('fs/promises')
       try {
+        const location = requireSessionLocation(id)
         const buf = await fsp.readFile(
-          path.join(getBrowserLogsSessionDir(id), file),
+          path.join(getBrowserLogsSessionDir(id, location.agentHome), file),
         )
         res.writeHead(200, {
           'content-type': file.endsWith('.png') ? 'image/png' : 'image/jpeg',

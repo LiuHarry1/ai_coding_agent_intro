@@ -1,10 +1,11 @@
 import * as fs from 'fs'
 import {
-  IMAGE_MAX_HEIGHT,
-  IMAGE_MAX_WIDTH,
-  IMAGE_TARGET_RAW_SIZE,
+  READ_IMAGE_MAX_HEIGHT,
+  READ_IMAGE_MAX_WIDTH,
+  READ_IMAGE_TOKEN_BUDGET,
 } from '../../constants/api_limits.js'
 import type { ReadImageOutput } from './types.js'
+import { toolResultImageBlockFromBuffer } from '../image/resize-buffer.js'
 
 const MEDIA_BY_EXT: Record<string, ReadImageOutput['file']['mediaType']> = {
   png: 'image/png',
@@ -16,49 +17,6 @@ const MEDIA_BY_EXT: Record<string, ReadImageOutput['file']['mediaType']> = {
 
 function detectMediaType(ext: string): ReadImageOutput['file']['mediaType'] {
   return MEDIA_BY_EXT[ext.toLowerCase()] ?? 'image/png'
-}
-
-/**
- * Resize image buffer if over API limits. Uses sharp when available (optional dep).
- */
-async function maybeResizeImageBuffer(
-  buffer: Buffer,
-  ext: string,
-): Promise<{
-  buffer: Buffer
-  mediaType: ReadImageOutput['file']['mediaType']
-}> {
-  const mediaType = detectMediaType(ext)
-  if (buffer.length <= IMAGE_TARGET_RAW_SIZE) {
-    return { buffer, mediaType }
-  }
-
-  try {
-    const sharp = (await import('sharp')).default
-    const resized = await sharp(buffer)
-      .resize(IMAGE_MAX_WIDTH, IMAGE_MAX_HEIGHT, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .toFormat(
-        ext === 'jpg' || ext === 'jpeg'
-          ? 'jpeg'
-          : ext === 'webp'
-            ? 'webp'
-            : ext === 'gif'
-              ? 'gif'
-              : 'png',
-      )
-      .toBuffer()
-    return { buffer: resized, mediaType }
-  } catch {
-    if (buffer.length > IMAGE_TARGET_RAW_SIZE * 1.33) {
-      throw new Error(
-        `Image is ${(buffer.length / 1024 / 1024).toFixed(1)} MB after encoding — exceeds API limit. Install sharp for auto-resize or use a smaller image.`,
-      )
-    }
-    return { buffer, mediaType }
-  }
 }
 
 export async function readImageFile(
@@ -77,14 +35,21 @@ export async function readImageFile(
     ? displayPath.slice(displayPath.lastIndexOf('.') + 1)
     : 'png'
   const raw = fs.readFileSync(absPath)
-  const { buffer, mediaType } = await maybeResizeImageBuffer(raw, ext)
+  const mediaType = detectMediaType(ext)
+  const image = await toolResultImageBlockFromBuffer(raw, mediaType, {
+    maxTokens: READ_IMAGE_TOKEN_BUDGET,
+    maxWidth: READ_IMAGE_MAX_WIDTH,
+    maxHeight: READ_IMAGE_MAX_HEIGHT,
+    preferLossless: mediaType === 'image/png',
+    strictBudget: true,
+  })
 
   return {
     type: 'image',
     file: {
       filePath: displayPath,
-      base64: buffer.toString('base64'),
-      mediaType,
+      base64: image.source.data,
+      mediaType: image.source.media_type,
       originalSize: stat.size,
     },
   }

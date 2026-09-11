@@ -547,11 +547,19 @@ export async function attachScreenshot(
     out.screenshotUrl = `/sessions/${encodeURIComponent(sessionId)}/browser/${name}`
   }
 
-  const block = await toolResultImageBlockFromBuffer(shot.buffer, mediaType, {
-    maxTokens: SCREENSHOT_TOKEN_BUDGET,
-  })
-  out.screenshotBase64 = block.source.data
-  out.screenshotMediaType = block.source.media_type
+  try {
+    const block = await toolResultImageBlockFromBuffer(shot.buffer, mediaType, {
+      maxTokens: SCREENSHOT_TOKEN_BUDGET,
+      strictBudget: true,
+    })
+    out.screenshotBase64 = block.source.data
+    out.screenshotMediaType = block.source.media_type
+  } catch (err) {
+    // The full-fidelity file/URL remains available to the UI. Never exceed
+    // the model budget just because the optional image codec is unavailable.
+    const reason = err instanceof Error ? err.message : String(err)
+    out.message = `${out.message} (model image omitted: ${reason})`
+  }
 }
 
 /**

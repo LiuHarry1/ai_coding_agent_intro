@@ -52,3 +52,25 @@ extension.crx
 extension.pem
 chrome-extension.crx
 chrome-extension.pem
+deploy
+.ai-agent/
+
+# Version the chart skill's deterministic generator and vendored runtime while
+# keeping other local/deployment state ignored.
+!.ai-agent/
+.ai-agent/*
+!.ai-agent/skills/
+.ai-agent/skills/*
+!.ai-agent/skills/echarts-chart/
+!.ai-agent/skills/echarts-chart/**
+
+!deploy/
+deploy/*
+!deploy/workspace-seed/
+deploy/workspace-seed/*
+!deploy/workspace-seed/.ai-agent/
+deploy/workspace-seed/.ai-agent/*
+!deploy/workspace-seed/.ai-agent/skills/
+deploy/workspace-seed/.ai-agent/skills/*
+!deploy/workspace-seed/.ai-agent/skills/echarts-chart/
+!deploy/workspace-seed/.ai-agent/skills/echarts-chart/**
