@@ -5,6 +5,7 @@ import type { Session, SessionInfo, Message } from '../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import { createDefaultPermissionMode } from '../core/permission-mode.js'
 import { resetSessionMemoryState } from '../services/session-memory/state.js'
+import { resetAutoMemoryState } from '../services/auto-memory/state.js'
 import { removeTasksForSession } from '../services/cron/store.js'
 import {
   computeProjectKey,
@@ -98,7 +99,10 @@ export function createSession(
 
   const id = randomUUID()
   const agentHome = resolveAgentHome(opts.agentHome)
-  const projectKey = computeProjectKey(undefined, opts.cwd ?? getDefaultWorkspace())
+  const projectKey = computeProjectKey(
+    undefined,
+    opts.cwd ?? getDefaultWorkspace(),
+  )
   const loc: SessionLocation = { projectKey, agentHome }
   registerSessionLocation(id, loc)
 
@@ -201,7 +205,11 @@ function relocateSessionFiles(
     return
   }
   ensureProjectDir(to)
-  const oldJsonl = getSessionJsonlPath(sessionId, from.projectKey, from.agentHome)
+  const oldJsonl = getSessionJsonlPath(
+    sessionId,
+    from.projectKey,
+    from.agentHome,
+  )
   const newJsonl = getSessionJsonlPath(sessionId, to.projectKey, to.agentHome)
   const oldData = getSessionDataDir(sessionId, from.projectKey, from.agentHome)
   const newData = getSessionDataDir(sessionId, to.projectKey, to.agentHome)
@@ -316,6 +324,7 @@ export function deleteSession(id: string): void {
   }
   unregisterSessionLocation(id)
   resetSessionMemoryState(id)
+  resetAutoMemoryState(id)
   try {
     removeTasksForSession(id)
   } catch (err) {
@@ -378,7 +387,10 @@ export function appendAgentChange(sessionId: string, session: Session): void {
 function appendLine(sessionId: string, data: Record<string, unknown>): void {
   const loc = locationFor(sessionId)
   ensureProjectDir(loc)
-  fs.appendFileSync(sessionPath(sessionId), stringifySessionJsonLine(data) + '\n')
+  fs.appendFileSync(
+    sessionPath(sessionId),
+    stringifySessionJsonLine(data) + '\n',
+  )
 }
 
 function restoreFromDisk(id: string): Session {
@@ -440,8 +452,7 @@ function restoreFromDisk(id: string): Session {
       }
     } else if (line.type === 'workspace_bound') {
       const w = line.workspace as
-        | { environmentId?: unknown; cwd?: unknown }
-        | undefined
+        { environmentId?: unknown; cwd?: unknown } | undefined
       if (
         w &&
         typeof w.environmentId === 'string' &&
@@ -472,7 +483,8 @@ function restoreFromDisk(id: string): Session {
 
 /** Absolute jsonl path for UI / tests (resolves via index). */
 export function getSessionTranscriptPath(sessionId: string): string | null {
-  const loc = getCachedSessionLocation(sessionId) ?? findSessionLocation(sessionId)
+  const loc =
+    getCachedSessionLocation(sessionId) ?? findSessionLocation(sessionId)
   if (!loc) return null
   registerSessionLocation(sessionId, loc)
   return getSessionJsonlPath(sessionId, loc.projectKey, loc.agentHome)

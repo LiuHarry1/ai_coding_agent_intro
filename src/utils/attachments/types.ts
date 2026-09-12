@@ -107,6 +107,16 @@ export type RelevantMemoriesAttachment = {
   }>
 }
 
+export type ConditionalRulesAttachment = {
+  type: 'conditional_rules'
+  rules: Array<{
+    path: string
+    label: string
+    content: string
+    patterns: string[]
+  }>
+}
+
 export type Attachment =
   | FileAttachment
   | PdfReferenceAttachment
@@ -120,3 +130,4 @@ export type Attachment =
   | AgentListingDeltaAttachment
   | TaskNotificationAttachment
   | RelevantMemoriesAttachment
+  | ConditionalRulesAttachment

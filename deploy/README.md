@@ -122,13 +122,18 @@ SSO 请求里 **逻辑 HOME = 用户 workspace**（`USERS_ROOT/<slug>`），不�
 
 | 路径 | 含义 |
 |------|------|
-| `<userWorkspace>/.ai-agent` | 用户 settings / skills / memory / **sessions**（`projects/<key>/`）默认根（seed 写入） |
+| `<userWorkspace>/.ai-agent/projects/<key>/memory` | 主 Agent Auto Memory（按项目） |
+| `<userWorkspace>/.ai-agent/agent-memory/<agent>` | 自定义 Agent `memory: user`（按租户用户） |
+| `<workspace>/.ai-agent/agent-memory[-local]/<agent>` | 自定义 Agent project / local memory |
+| `<userWorkspace>/.ai-agent/projects/<key>/` | transcript、tool results、Session Memory `summary.md` / `state.json` |
 | `/etc/ai-agent` | 平台 managed/policy（镜像 bake；**不**跟 ALS） |
 | `/app/.ai-agent`（进程挂载） | cron `scheduled_tasks.json` 等进程级数据 |
 
 - Bash / 本地 worker 的 `$HOME`（Windows：`USERPROFILE`）在请求内指向用户 workspace；**不是** OS 级隔离，仍可用绝对路径摸到别人目录。
 - Seed 只放用户可见模板；敏感默认（模型 key、强制禁用工具等）进 `/etc/ai-agent`，不要进 seed。
 - Super 看别人的 session ≠ 代操对方 HOME；工具仍在**请求者** workspace 下跑。
+- `state.json` 让 Session Memory 的游标和 generation 在容器/Electron 进程重启后恢复；它不保存 `inFlight` 等进程瞬时状态。
+- Remote SSH 的代码工具在远端 Worker 执行，控制面本机的 Rules、Auto Memory 与 Persistent Agent Memory 不注入。
 
 ### 工作区权限 (SSO = dontAsk + pinned working dir)
 

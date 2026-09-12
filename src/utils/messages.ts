@@ -186,15 +186,22 @@ You have exited plan mode. You can now make edits, run tools, and take actions.$
         )
       }
       if (parts.length === 0) return []
-      return wrapMessagesInSystemReminder([
-        metaUserMessage(parts.join('\n\n')),
-      ])
+      return wrapMessagesInSystemReminder([metaUserMessage(parts.join('\n\n'))])
     }
 
     case 'task_notification': {
-      return wrapMessagesInSystemReminder([
-        metaUserMessage(attachment.rawXml),
-      ])
+      return wrapMessagesInSystemReminder([metaUserMessage(attachment.rawXml)])
+    }
+
+    case 'conditional_rules': {
+      return wrapMessagesInSystemReminder(
+        attachment.rules.map(rule =>
+          metaUserMessage(
+            `Conditional instructions from ${rule.path} ` +
+              `(matched paths: ${rule.patterns.join(', ')}):\n\n${rule.content}`,
+          ),
+        ),
+      )
     }
 
     case 'relevant_memories': {

@@ -2,10 +2,11 @@
  * Attachment API — unified getAttachments / getAttachmentMessages.
  */
 import { randomUUID } from 'crypto'
-import type {
-  AttachmentMessage,
-  Message,
-  ToolUseContext,
+import {
+  isAttachmentMessage,
+  type AttachmentMessage,
+  type Message,
+  type ToolUseContext,
 } from '../core/types.js'
 import type { Attachment } from './attachments/types.js'
 import { processAtMentionedFiles } from './attachments/generate-file-attachment.js'
@@ -21,6 +22,7 @@ import { getLspWorkspaceKey, hasLspServers } from '../services/lsp/manager.js'
 import { BASH_TOOL_NAME } from '../constants/tool_names.js'
 import { getAgentListingDeltaAttachments } from '../tools/AgentTool/agentListing.js'
 import { drainTaskNotifications } from '../utils/task/pendingNotifications.js'
+import { loadConditionalRulesForPaths } from './rules-loader.js'
 
 function getSkillListingAttachments(ctx: ToolUseContext): Attachment[] {
   const content = ctx.skillListingContent?.trim()
@@ -40,6 +42,28 @@ function getTaskNotificationAttachments(ctx: ToolUseContext): Attachment[] {
     toolUseId: n.toolUseId,
     rawXml: n.rawXml,
   }))
+}
+
+function getConditionalRulesAttachments(
+  ctx: ToolUseContext,
+  messages: readonly Message[] = [],
+): Attachment[] {
+  if (!ctx.conditionalRulesEnabled || ctx.readFileState.size === 0) return []
+
+  const surfaced = new Set<string>()
+  for (const message of messages) {
+    if (
+      isAttachmentMessage(message) &&
+      message.attachment.type === 'conditional_rules'
+    ) {
+      for (const rule of message.attachment.rules) surfaced.add(rule.path)
+    }
+  }
+
+  const rules = loadConditionalRulesForPaths(ctx.cwd, [
+    ...ctx.readFileState.keys(),
+  ]).filter(rule => !surfaced.has(rule.path))
+  return rules.length > 0 ? [{ type: 'conditional_rules', rules }] : []
 }
 
 async function maybe<A>(label: string, f: () => Promise<A[]>): Promise<A[]> {
@@ -116,6 +140,9 @@ export async function getAttachments(
   ]
 
   const mainThreadAttachments = [
+    maybe('conditional_rules', () =>
+      Promise.resolve(getConditionalRulesAttachments(toolUseContext, messages)),
+    ),
     maybe('lsp_diagnostics', () => getLSPDiagnosticAttachments(toolUseContext)),
     maybe('task_notifications', () =>
       Promise.resolve(getTaskNotificationAttachments(toolUseContext)),

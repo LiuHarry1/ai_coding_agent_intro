@@ -120,6 +120,7 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'agent_listing_delta':
     case 'task_notification':
     case 'relevant_memories':
+    case 'conditional_rules':
       // Handled in messages.normalizeAttachmentForAPI (system-reminder path).
       return []
     default: {
