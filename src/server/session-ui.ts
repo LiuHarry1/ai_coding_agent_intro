@@ -2,7 +2,10 @@ import type { Message, ToolResultOutput } from '../core/types.js'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
+import { isCompactBoundaryMessage } from '../core/messages/compact-boundary.js'
 import { getSessionTranscriptPath } from '../session/index.js'
+import { parseSessionJsonLine } from '../session/json-serialize.js'
+import { replayTranscriptMessages } from '../session/compact-replay.js'
 import { getSubagentNames } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools.js'
 import { isSystemReminderContent } from '../utils/system-reminder.js'
@@ -152,10 +155,23 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
   const uiMessages: unknown[] = []
   const subagentNames = getSubagentNames(defaultRegistry)
   let currentAssistant: UIAssistantMessage | null = null
+  let currentBoundary: UICompactBoundaryMessage | null = null
 
   for (const msg of messages) {
     if (isAttachmentMessage(msg)) continue
-    if (msg.role === 'user') {
+    if (isCompactBoundaryMessage(msg)) {
+      currentAssistant = null
+      currentBoundary = {
+        type: 'compact_boundary',
+        id: msg.uuid,
+        summary: '',
+        summaryLength: 0,
+        messagesBefore: msg.compactMetadata.messagesSummarized,
+      }
+      uiMessages.push(currentBoundary)
+      continue
+    }
+    if (isRoleMessage(msg) && msg.role === 'user') {
       currentAssistant = null
       const content = userMessageText(msg)
       if (isSystemReminderContent(content)) continue
@@ -170,14 +186,21 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
       }
       if (isCompactSummaryMessage(msg)) {
         const summary = extractCompactSummaryBody(content)
-        uiMessages.push({
-          type: 'compact_boundary',
-          id: randomUUID(),
-          summary,
-          summaryLength: summary.length,
-        } satisfies UICompactBoundaryMessage)
+        if (currentBoundary) {
+          currentBoundary.summary = summary
+          currentBoundary.summaryLength = summary.length
+        } else {
+          uiMessages.push({
+            type: 'compact_boundary',
+            id: randomUUID(),
+            summary,
+            summaryLength: summary.length,
+          } satisfies UICompactBoundaryMessage)
+        }
+        currentBoundary = null
         continue
       }
+      currentBoundary = null
       const images = userMessageImageUrls(msg)
       uiMessages.push({
         type: 'user',
@@ -185,7 +208,8 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
         content,
         ...(images ? { images } : {}),
       })
-    } else if (msg.role === 'assistant') {
+    } else if (isRoleMessage(msg) && msg.role === 'assistant') {
+      currentBoundary = null
       if (!currentAssistant) {
         currentAssistant = {
           type: 'assistant',
@@ -206,7 +230,8 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
         }>,
         subagentNames,
       )
-    } else if (msg.role === 'tool') {
+    } else if (isRoleMessage(msg) && msg.role === 'tool') {
+      currentBoundary = null
       if (currentAssistant) {
         for (const tr of msg.content as Array<{
           type: string
@@ -237,90 +262,18 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
   return uiMessages
 }
 
-type JsonlReplayItem =
-  | { kind: 'message'; message: Message }
-  | {
-      kind: 'compact_boundary'
-      summary: string
-      messagesBefore: number
-    }
-
-/**
- * Replay the append-only JSONL without collapsing at
- * `compacted` checkpoints. Agent restore still uses restoreFromDisk(); UI uses
- * this path so Cursor-style chat shows the full scrollback (micro-compact never
- * wrote cleared tool payloads to disk; full-compact pre-checkpoint lines remain).
- */
-function replaySessionJsonl(sessionId: string): JsonlReplayItem[] {
+function replaySessionJsonl(sessionId: string): Message[] {
   const filePath = getSessionTranscriptPath(sessionId)
   if (!filePath || !fs.existsSync(filePath)) return []
 
   const raw = fs.readFileSync(filePath, 'utf-8').trim()
   if (!raw) return []
-
-  const items: JsonlReplayItem[] = []
-  let transcriptLineCount = 0
-
-  for (const line of raw
-    .split('\n')
-    .map(l => JSON.parse(l) as Record<string, unknown>)) {
-    if (line.type === 'message') {
-      const { type: _, timestamp: __, ...msg } = line
-      items.push({ kind: 'message', message: msg as unknown as Message })
-      transcriptLineCount++
-    } else if (line.type === 'attachment') {
-      const { timestamp: _, ...msg } = line
-      items.push({ kind: 'message', message: msg as unknown as Message })
-      transcriptLineCount++
-    } else if (line.type === 'compacted') {
-      const checkpoint = Array.isArray(line.messages)
-        ? (line.messages as Message[])
-        : []
-      const summaryMsg = checkpoint.find(m => isCompactSummaryMessage(m))
-      const summary = summaryMsg
-        ? extractCompactSummaryBody(userMessageText(summaryMsg))
-        : ''
-      items.push({
-        kind: 'compact_boundary',
-        summary,
-        messagesBefore: transcriptLineCount,
-      })
-      // Lines up to here were consumed by THIS compaction. Reset so the next
-      // boundary reports its own span, not a session-lifetime running total
-      // (which showed ever-growing "(N messages summarized)" counts).
-      transcriptLineCount = 0
-    }
-  }
-
-  return items
+  return replayTranscriptMessages(
+    raw.split('\n').map(line => parseSessionJsonLine(line)),
+  ).messages
 }
 
 /** Full session transcript for the web UI (reads `.sessions/{id}.jsonl`). */
 export function sessionJsonlToUIMessages(sessionId: string): unknown[] {
-  const items = replaySessionJsonl(sessionId)
-  const ui: unknown[] = []
-  let batch: Message[] = []
-
-  const flushBatch = (): void => {
-    if (batch.length === 0) return
-    ui.push(...sessionToUIMessages(batch))
-    batch = []
-  }
-
-  for (const item of items) {
-    if (item.kind === 'compact_boundary') {
-      flushBatch()
-      ui.push({
-        type: 'compact_boundary',
-        id: randomUUID(),
-        summary: item.summary,
-        summaryLength: item.summary.length,
-        messagesBefore: item.messagesBefore,
-      } satisfies UICompactBoundaryMessage)
-      continue
-    }
-    batch.push(item.message)
-  }
-  flushBatch()
-  return ui
+  return sessionToUIMessages(replaySessionJsonl(sessionId))
 }

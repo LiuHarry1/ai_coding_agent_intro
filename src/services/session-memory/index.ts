@@ -30,6 +30,7 @@ export {
   calculateMessagesToKeepIndex,
   sliceMessagesToKeep,
   adjustIndexToPreserveToolPairs,
+  adjustIndexToPreserveAssistantResponse,
   hasTextBlocks,
 } from './keepIndex.js'
 export {

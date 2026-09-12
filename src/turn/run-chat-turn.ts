@@ -25,7 +25,6 @@ import { generateSessionTitle } from '../services/sessionTitle.js'
 import {
   setSessionTitle,
   appendMessage,
-  appendCompaction,
   appendModeChange,
 } from '../session/index.js'
 import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
@@ -46,6 +45,7 @@ import {
 } from '../services/auto-memory/index.js'
 import {
   compactIfNeeded,
+  getActiveModelMessages,
   isSummarizingCompactSource,
   tokenCountWithEstimation,
 } from '../services/compact/index.js'
@@ -359,12 +359,33 @@ export async function runChatTurn(
   if (prepared.manualCompact) {
     const instructions = prepared.manualCompact.instructions.trim()
     const msgsBefore = session.messages.length
-    const tokensBefore = tokenCountWithEstimation(session.messages).total
+    const manualActiveMessages = getActiveModelMessages(
+      session.messages,
+      session.id,
+    )
+    const tokensBefore = tokenCountWithEstimation(manualActiveMessages).total
     let replyText: string
     try {
-      const model = provider.defaultModelId()
+      const model = models.profile('large').model
+      const compactSystemPrompt = await resolveTurnSystemPrompt(
+        session,
+        cwd,
+        prepared.projectRules || undefined,
+        prepared.mainThreadProfile,
+        {
+          planFilePath: prepared.planFilePath,
+          planExists: planExists(session, cwd),
+        },
+      )
+      const cacheSafeParams = createCacheSafeParams({
+        systemPrompt: compactSystemPrompt,
+        tools: prepared.tools,
+        provider,
+        model,
+        messages: manualActiveMessages,
+      })
       const outcome = await compactIfNeeded(
-        session.messages,
+        manualActiveMessages,
         eventBus,
         wire,
         model,
@@ -372,10 +393,13 @@ export async function runChatTurn(
         [],
         {
           force: true,
+          trigger: 'manual',
           instructions: instructions || undefined,
           sessionMemory: resolvedSettings.config.sessionMemory,
           readFileState: session.readFileState as
             import('../utils/read/types.js').ReadFileState | undefined,
+          runAgent,
+          cacheSafeParams,
         },
         resolvedSettings.config.compaction,
         provider,
@@ -383,18 +407,23 @@ export async function runChatTurn(
       )
       if (
         isSummarizingCompactSource(outcome.source) &&
-        outcome.messages.length > 0
+        outcome.appendMessages?.length
       ) {
-        session.messages.length = 0
-        session.messages.push(...outcome.messages)
-        appendCompaction(session.id, session.messages)
-        const tokensAfter = tokenCountWithEstimation(session.messages).total
+        session.messages.push(...outcome.appendMessages)
+        for (const message of outcome.appendMessages) {
+          appendMessage(session.id, message)
+        }
+        const activeMessages = getActiveModelMessages(
+          session.messages,
+          session.id,
+        )
+        const tokensAfter = tokenCountWithEstimation(activeMessages).total
         const tokenLine = `~${tokensBefore.toLocaleString()} -> ~${tokensAfter.toLocaleString()} tokens`
-        const kept = session.messages.filter(
+        const kept = activeMessages.filter(
           m => !(isRoleMessage(m) && m.role === 'user' && m.isCompactSummary),
         ).length
         replyText =
-          `Compacted: ${msgsBefore} -> ${session.messages.length} messages` +
+          `Compacted: ${msgsBefore} transcript messages, ${activeMessages.length} active messages` +
           ` (kept ${kept} recent), ${tokenLine}.` +
           (instructions ? `\nFocus: ${instructions}` : '')
       } else {
@@ -440,17 +469,21 @@ export async function runChatTurn(
         mainProvider: provider,
         mainModelId,
       })
+      const activeMemoryMessages = getActiveModelMessages(
+        session.messages,
+        session.id,
+      )
       const cacheSafeParams = side.cacheSafe
         ? createCacheSafeParams({
             systemPrompt,
             tools: prepared.tools,
             provider: side.provider,
             model: side.modelId,
-            messages: session.messages,
+            messages: activeMemoryMessages,
           })
         : undefined
       const result = await extractSessionMemory({
-        messages: session.messages,
+        messages: activeMemoryMessages,
         sessionId: session.id,
         provider: side.provider,
         modelId: side.modelId,
@@ -589,15 +622,19 @@ export async function runChatTurn(
 
     const memoryPrefetch =
       memPath != null
-        ? startRelevantMemoryPrefetch(session.messages, {
-            config: autoMemoryConfig,
-            memPath,
-            provider: prefetchSide.provider,
-            modelId: prefetchSide.modelId,
-            readFileState: prepared.toolUseContext.readFileState,
-            queryText: prepared.effectiveMessage,
-            abortSignal: turnAbort.signal,
-          })
+        ? startRelevantMemoryPrefetch(
+            getActiveModelMessages(session.messages, session.id),
+            {
+              config: autoMemoryConfig,
+              memPath,
+              provider: prefetchSide.provider,
+              modelId: prefetchSide.modelId,
+              readFileState: prepared.toolUseContext.readFileState,
+              queryText: prepared.effectiveMessage,
+              abortSignal: turnAbort.signal,
+              sessionId: session.id,
+            },
+          )
         : undefined
 
     try {
@@ -671,10 +708,17 @@ export async function runChatTurn(
         onAfterStep: memoryHooks.onAfterStep,
         onTurnEnd: memoryHooks.onTurnEnd,
         onFullCompaction: compactedMessages => {
-          const checkpoint = compactedMessages.filter(
-            m => !isAttachmentMessage(m),
-          )
-          appendCompaction(session.id, checkpoint)
+          const compactStart =
+            session.messages.length - compactedMessages.length
+          for (const message of session.messages.slice(
+            persistFrom,
+            compactStart,
+          )) {
+            appendMessage(session.id, message)
+          }
+          for (const message of compactedMessages) {
+            appendMessage(session.id, message)
+          }
           persistFrom = session.messages.length
         },
       })

@@ -14,6 +14,10 @@ import {
   resetCompactionFailures,
 } from '../services/compact/index.js'
 import { attachTokenUsage } from '../services/compact/tokens.js'
+import {
+  createCompactBoundaryMessage,
+  getMessagesAfterCompactBoundary,
+} from '../core/messages/compact-boundary.js'
 
 const USER_TEXT = '开始填'
 const BIG = 'x'.repeat(2500)
@@ -102,39 +106,50 @@ async function main(): Promise<void> {
 
     let persistCalls = 0
     const live = [...seed]
-    applyCompactOutcome(live, outcome, [], () => {
+    const microView = applyCompactOutcome(live, outcome, [], () => {
       persistCalls++
     })
     assert.equal(persistCalls, 0, 'onFullCompaction must not run for micro')
     assert.equal(countUserTurns(live, USER_TEXT), 1)
+    assert.equal(microView, outcome.messages)
     console.log('[ok] applyCompactOutcome(micro) does not checkpoint')
 
     persistCalls = 0
     const already = [{ role: 'user' as const, content: USER_TEXT }]
-    const summary: Message[] = [
+    const appendMessages: Message[] = [
+      createCompactBoundaryMessage('auto', 123),
       {
         role: 'user',
         content: '[Previous conversation compacted]\nContinue.',
         isCompactSummary: true,
       },
-      { role: 'user', content: USER_TEXT },
     ]
-    applyCompactOutcome(
+    const active = applyCompactOutcome(
       already,
-      { messages: summary, source: 'full' },
+      {
+        messages: appendMessages,
+        appendMessages,
+        source: 'full',
+      },
       [],
       compacted => {
         persistCalls++
         assert.equal(
           countUserTurns([...compacted], USER_TEXT),
-          1,
-          'full compact persist must not duplicate the user turn',
+          0,
+          'append events must not physically copy the verbatim tail',
         )
       },
     )
     assert.equal(persistCalls, 1, 'onFullCompaction must run for full')
     assert.equal(countUserTurns(already, USER_TEXT), 1)
-    console.log('[ok] applyCompactOutcome(full) checkpoints once, user once')
+    assert.deepEqual(active, getMessagesAfterCompactBoundary(already))
+    assert.equal(
+      countUserTurns(active, USER_TEXT),
+      0,
+      'full compact active view has no verbatim tail',
+    )
+    console.log('[ok] full compact appends boundary without replacing transcript')
   } finally {
     if (prevOverride === undefined) delete process.env.COMPACT_THRESHOLD_OVERRIDE
     else process.env.COMPACT_THRESHOLD_OVERRIDE = prevOverride

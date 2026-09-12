@@ -1,5 +1,6 @@
 import type { Message } from '../../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
+import { findLastCompactBoundaryIndex } from '../../core/messages/compact-boundary.js'
 import { estimateMessageTokens } from '../compact/tokens.js'
 import { findMessageIndexByUuid } from './messageUuid.js'
 
@@ -11,6 +12,7 @@ export type KeepIndexConfig = {
 
 export function hasTextBlocks(message: Message): boolean {
   if (isAttachmentMessage(message)) return false
+  if (!isRoleMessage(message)) return false
   if (message.role === 'assistant') {
     return message.content.some(b => b.type === 'text' && b.text.trim())
   }
@@ -39,12 +41,15 @@ export function adjustIndexToPreserveToolPairs(
   startIndex: number,
 ): number {
   if (startIndex <= 0 || startIndex >= messages.length) return startIndex
+  const floor = Math.max(0, findLastCompactBoundaryIndex(messages) + 1)
   let adjusted = startIndex
   const needed = new Set<string>()
   for (let i = startIndex; i < messages.length; i++) {
     for (const id of toolResultIds(messages[i]!)) needed.add(id)
   }
-  if (needed.size === 0) return adjusted
+  if (needed.size === 0) {
+    return adjustIndexToPreserveAssistantResponse(messages, adjusted, floor)
+  }
 
   const present = new Set<string>()
   for (let i = adjusted; i < messages.length; i++) {
@@ -57,7 +62,7 @@ export function adjustIndexToPreserveToolPairs(
   }
   for (const id of present) needed.delete(id)
 
-  for (let i = adjusted - 1; i >= 0 && needed.size > 0; i--) {
+  for (let i = adjusted - 1; i >= floor && needed.size > 0; i--) {
     if (hasToolUseIds(messages[i]!, needed)) {
       adjusted = i
       const m = messages[i]!
@@ -68,17 +73,46 @@ export function adjustIndexToPreserveToolPairs(
       }
     }
   }
-  return adjusted
+  return adjustIndexToPreserveAssistantResponse(messages, adjusted, floor)
 }
 
-function lastCompactBoundaryIndex(messages: Message[]): number {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]!
-    if (isRoleMessage(m) && m.role === 'user' && m.isCompactSummary) {
-      return i
+/**
+ * Assistant reasoning/text/tool-call fragments with one provider response id
+ * form one API round and must remain on the same side of the keep boundary.
+ */
+export function adjustIndexToPreserveAssistantResponse(
+  messages: Message[],
+  startIndex: number,
+  floor = Math.max(0, findLastCompactBoundaryIndex(messages) + 1),
+): number {
+  if (startIndex <= floor || startIndex >= messages.length) return startIndex
+
+  const responseIds = new Set<string>()
+  for (let i = startIndex; i < messages.length; i++) {
+    const message = messages[i]!
+    if (
+      isRoleMessage(message) &&
+      message.role === 'assistant' &&
+      message.id
+    ) {
+      responseIds.add(message.id)
     }
   }
-  return -1
+  if (responseIds.size === 0) return startIndex
+
+  let adjusted = startIndex
+  for (let i = startIndex - 1; i >= floor; i--) {
+    const message = messages[i]!
+    if (
+      isRoleMessage(message) &&
+      message.role === 'assistant' &&
+      message.id &&
+      responseIds.has(message.id)
+    ) {
+      adjusted = i
+    }
+  }
+  return adjusted
 }
 
 /**
@@ -93,6 +127,7 @@ export function calculateMessagesToKeepIndex(
   config: KeepIndexConfig,
 ): number {
   if (messages.length === 0) return 0
+  const floor = Math.max(0, findLastCompactBoundaryIndex(messages) + 1)
 
   let lastSummarizedIndex: number
   if (lastSummarizedMessageId) {
@@ -105,8 +140,10 @@ export function calculateMessagesToKeepIndex(
     lastSummarizedIndex = messages.length - 1
   }
 
-  let startIndex =
-    lastSummarizedIndex >= 0 ? lastSummarizedIndex + 1 : messages.length
+  let startIndex = Math.max(
+    floor,
+    lastSummarizedIndex >= 0 ? lastSummarizedIndex + 1 : messages.length,
+  )
 
   let totalTokens = 0
   let textCount = 0
@@ -134,7 +171,6 @@ export function calculateMessagesToKeepIndex(
     return adjustIndexToPreserveToolPairs(messages, startIndex)
   }
 
-  const floor = Math.max(0, lastCompactBoundaryIndex(messages) + 1)
   for (let i = startIndex - 1; i >= floor; i--) {
     const msg = messages[i]!
     totalTokens += estimateMessageTokens(msg)

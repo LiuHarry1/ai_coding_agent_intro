@@ -3,35 +3,39 @@
  * and the main compactIfNeeded entry point.
  *
  * Order after micro: wait session-memory extraction → try SM compact →
- * else full LLM compact. Both produce summary + messagesToKeep + attachments.
+ * else full LLM compact. Both append boundary + summary + attachments;
+ * session-memory additionally references a preserved tail through metadata.
  */
 import type {
   CompactionConfig,
   IEventBus,
   IProvider,
   Message,
+  RunAgentFn,
   SessionMemoryConfig,
   TodoItem,
 } from '../../core/types.js'
+import type { CacheSafeParams } from '../../core/forked-agent.js'
 import type { WireEmitter } from '../../core/wire-emitter.js'
 import { isRoleMessage } from '../../core/types.js'
 import { DEFAULTS } from '../../core/settings-manager.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 import { clearReadFileState } from '../../utils/read/read-file-state.js'
 import { tokenCountWithEstimation } from './tokens.js'
-import { microCompact } from './microCompact.js'
+import {
+  applyMicroCompactProjection,
+  microCompact,
+  rebaseMicroCompactState,
+  resetMicroCompactState,
+} from './microCompact.js'
 import {
   compactConversation,
   type CompactContext,
   type CompactEnrichment,
 } from './compact.js'
 import { buildPostCompactAttachmentMessages } from './post-compact-attachments.js'
+import { extractRecentlyReadFiles, restoreRecentFiles } from './fileRestore.js'
 import {
-  extractRecentlyReadFiles,
-  restoreRecentFiles,
-} from './fileRestore.js'
-import {
-  calculateMessagesToKeepIndex,
   clearLastSummarizedMessageId,
   ensureMessageUuids,
   trySessionMemoryCompaction,
@@ -160,6 +164,7 @@ export function resetCompactionFailures(): void {
 export interface CompactOptions {
   force?: boolean
   aggressive?: boolean
+  trigger?: 'manual' | 'auto'
   /** Steering text for a manual `/compact <instructions>` summarization. */
   instructions?: string
   /** Re-announce agent/skill listings after full compact. */
@@ -168,13 +173,20 @@ export interface CompactOptions {
   sessionMemory?: SessionMemoryConfig
   /** Session Read cache — invalidated when Read tool_results are micro-cleared / full-compacted. */
   readFileState?: ReadFileState
+  /** Main-loop runner for a cache-safe full-compact fork. */
+  runAgent?: RunAgentFn
+  /** Cache-critical main-loop params; the orchestrator refreshes its message prefix after microcompact. */
+  cacheSafeParams?: CacheSafeParams
 }
 
 /** What `compactIfNeeded` did. Callers persist a checkpoint only for summarizing sources. */
 export type CompactSource = 'none' | 'micro' | 'session_memory' | 'full'
 
 export type CompactOutcome = {
+  /** Active model view after compaction. */
   messages: Message[]
+  /** Events to append to the complete transcript for summarizing compacts. */
+  appendMessages?: Message[]
   source: CompactSource
 }
 
@@ -188,10 +200,7 @@ function none(messages: Message[]): CompactOutcome {
   return { messages, source: 'none' }
 }
 
-function afterMicro(
-  original: Message[],
-  working: Message[],
-): CompactOutcome {
+function afterMicro(original: Message[], working: Message[]): CompactOutcome {
   return {
     messages: working,
     source: working !== original ? 'micro' : 'none',
@@ -202,8 +211,8 @@ function afterMicro(
  * Main compaction entry point. Called before each agent step.
  *
  * Flow (Claude Code query.ts): microcompact first (API-view only), then
- * session-memory / full LLM if still over threshold. Callers must persist
- * a `compacted` checkpoint only when `source` is `session_memory` or `full`.
+ * session-memory / full LLM if still over threshold. Summarizing outcomes
+ * expose append-only compact events; microcompact remains an API-view only.
  */
 export async function compactIfNeeded(
   messages: Message[],
@@ -224,6 +233,7 @@ export async function compactIfNeeded(
 
   if (messages.length === 0) return none(messages)
   ensureMessageUuids(messages)
+  messages = applyMicroCompactProjection(messages, sessionId)
 
   if (!force && !aggressive && !cfg.enabled) {
     return none(messages)
@@ -339,19 +349,14 @@ export async function compactIfNeeded(
   const skipFileRestore = aggressive
   const fileSection = skipFileRestore
     ? ''
-    : restoreRecentFiles(
-        extractRecentlyReadFiles(working),
-        cwd,
-        fileRestore,
-      )
+    : restoreRecentFiles(extractRecentlyReadFiles(working), cwd, fileRestore)
 
   const attachmentMessages = opts.enrichment
     ? await buildPostCompactAttachmentMessages(cwd, opts.enrichment)
     : []
 
   // Prefer session-memory notes unless the user steered summarization.
-  const preferSm =
-    !!sessionId && smConfig.enabled && !opts.instructions?.trim()
+  const preferSm = !!sessionId && smConfig.enabled && !opts.instructions?.trim()
 
   if (preferSm) {
     try {
@@ -363,10 +368,13 @@ export async function compactIfNeeded(
         attachmentMessages,
         todos: currentTodos,
         fileSection,
+        trigger: opts.trigger ?? 'auto',
+        preTokens: tokensBeforeFull,
         estimateTokens: msgs => tokenCountWithEstimation(msgs).total,
       })
       if (sm) {
         consecutiveFailures = 0
+        rebaseMicroCompactState(sessionId, sm.messagesToKeep, sm.messages)
         clearLastSummarizedMessageId(sessionId)
         clearReadFileState(opts.readFileState)
         eventBus.emit('compaction_done', {
@@ -387,7 +395,11 @@ export async function compactIfNeeded(
             `tokens~${tokensBeforeFull.toLocaleString()} -> ${tokensAfter.toLocaleString()}, ` +
             `kept=${sm.messagesToKeep.length}`,
         )
-        return { messages: sm.messages, source: 'session_memory' }
+        return {
+          messages: sm.messages,
+          appendMessages: sm.appendMessages,
+          source: 'session_memory',
+        }
       }
       console.log(
         `[compact] session-memory compact skipped -- falling back to full LLM`,
@@ -406,23 +418,26 @@ export async function compactIfNeeded(
     provider,
     enrichment: opts.enrichment,
     skipFileRestore,
+    trigger: opts.trigger ?? 'auto',
+    preTokens: tokensBeforeFull,
+    runAgent: opts.runAgent,
+    cacheSafeParams: opts.cacheSafeParams
+      ? {
+          ...opts.cacheSafeParams,
+          forkContextMessages: working.slice(),
+        }
+      : undefined,
+    preserveRecentTail: aggressive
+      ? {
+          minTokens: 10_000,
+          maxTokens: 40_000,
+          minTextMessages: 5,
+        }
+      : undefined,
   }
 
-  // Compute keep boundary from end (SM miss / no cursor — expand for mins).
-  let keepStart = calculateMessagesToKeepIndex(working, undefined, {
-    minTokens: smConfig.compactMinTokens,
-    maxTokens: smConfig.compactMaxTokens,
-    minTextMessages: smConfig.compactMinTextMessages,
-  })
-  if (keepStart < 0) keepStart = 0
-
   try {
-    const result = await compactConversation(
-      working,
-      mainModel,
-      ctx,
-      keepStart,
-    )
+    const result = await compactConversation(working, mainModel, ctx)
     if (!result) {
       console.log(
         `[compact] full-compact DONE -- no change (summarizer returned empty), ` +
@@ -433,6 +448,11 @@ export async function compactIfNeeded(
     }
 
     consecutiveFailures = 0
+    if (result.messagesToKeep.length > 0) {
+      rebaseMicroCompactState(sessionId, result.messagesToKeep, result.messages)
+    } else {
+      resetMicroCompactState(sessionId)
+    }
     if (sessionId) clearLastSummarizedMessageId(sessionId)
     clearReadFileState(opts.readFileState)
     eventBus.emit('compaction_done', {
@@ -465,7 +485,11 @@ export async function compactIfNeeded(
         `summaryChars=${result.summaryLength.toLocaleString()}, kept=${result.messagesToKeep.length}` +
         (willRetriggerNextTurn ? ', WILL-RETRIGGER' : ''),
     )
-    return { messages: result.messages, source: 'full' }
+    return {
+      messages: result.messages,
+      appendMessages: result.appendMessages,
+      source: 'full',
+    }
   } catch (error) {
     consecutiveFailures++
     const msg = error instanceof Error ? error.message : String(error)

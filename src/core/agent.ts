@@ -30,6 +30,6 @@ export async function runAgent(
   messages.push(buildUserMessage(userMessage, opts.images, opts.isMeta))
   ensureMessageUuids(messages)
 
-  const result = await query({ ...opts, messages })
+  const result = await query({ ...opts, runAgent, messages })
   return result.finalText
 }

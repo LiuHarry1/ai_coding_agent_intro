@@ -361,8 +361,48 @@ export interface ToolMessage {
   uuid?: string
 }
 
+export interface PreservedCompactSegment {
+  /** First message in the preserved pre-compact tail. */
+  headUuid: string
+  /** Message after which the preserved tail is logically inserted. */
+  anchorUuid: string
+  /** Last message in the preserved pre-compact tail. */
+  tailUuid: string
+  /** Exact legacy snapshot order when the tail was not a contiguous range. */
+  preservedUuids?: string[]
+}
+
+export interface CompactMetadata {
+  trigger: 'manual' | 'auto'
+  preTokens: number
+  userContext?: string
+  messagesSummarized?: number
+  preCompactDiscoveredTools?: string[]
+  preservedSegment?: PreservedCompactSegment
+}
+
+/** Persisted marker separating compacted history from its model summary. */
+export interface SystemCompactBoundaryMessage {
+  type: 'system'
+  subtype: 'compact_boundary'
+  /** Keeps role-discriminated message consumers exhaustively type-safe. */
+  role?: never
+  content: string
+  isMeta: false
+  timestamp: string
+  uuid: string
+  level: 'info'
+  /** Last message before compaction in the logical transcript chain. */
+  logicalParentUuid?: string
+  compactMetadata: CompactMetadata
+}
+
 export type Message =
-  UserMessage | AssistantMessage | ToolMessage | AttachmentMessage
+  | UserMessage
+  | AssistantMessage
+  | ToolMessage
+  | AttachmentMessage
+  | SystemCompactBoundaryMessage
 
 /**
  * Dual-channel tool execute return (CC `ToolResult<T>`).
@@ -380,7 +420,7 @@ export function isAttachmentMessage(msg: Message): msg is AttachmentMessage {
 export type RoleMessage = UserMessage | AssistantMessage | ToolMessage
 
 export function isRoleMessage(msg: Message): msg is RoleMessage {
-  return !isAttachmentMessage(msg)
+  return 'role' in msg
 }
 
 /** minimal fields for attachment collection. */
@@ -401,6 +441,8 @@ export interface ToolUseContext {
 // ── Agent ───────────────────────────────────────
 
 export interface AgentOptions {
+  /** Current agent-loop entry, injected for cache-safe side-path forks. */
+  runAgent?: RunAgentFn
   tools: Record<string, AnyTool>
   systemPrompt: string
   eventBus: IEventBus
@@ -507,9 +549,9 @@ export interface AgentOptions {
   /** Inject plan-exit reminders when transitioning out of plan mode mid-turn. */
   onPermissionModeChange?: () => Message[]
   /**
-   * Called after session-memory or full LLM compaction replaces in-memory
-   * history. Host writes a `compacted` JSONL checkpoint. Not invoked for
-   * microcompact (cleared tool payloads are API-view only).
+   * Called with boundary/summary/attachment events appended by a
+   * session-memory or full compact. The in-memory transcript is never
+   * replaced. Not invoked for microcompact (API-view only).
    */
   onFullCompaction?: (messages: readonly Message[]) => void
   /**

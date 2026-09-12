@@ -14,6 +14,7 @@ import type { WireEmitter } from '../wire-emitter.js'
 import type { StreamResult } from '../agent/streamConsumer.js'
 import { agentLogTag, activateDeferredTools } from './helpers.js'
 import type { QueryStopReason } from './types.js'
+import { getActiveModelMessages } from '../../services/compact/index.js'
 
 export async function postTurn(input: {
   step: number
@@ -74,9 +75,9 @@ export async function postTurn(input: {
 
   if (sessionId && onAfterStep) {
     onAfterStep({
-      messages,
+      messages: getActiveModelMessages(messages, sessionId),
       systemPrompt: activeSystemPrompt,
-      tools: activeTools,
+      tools: { ...activeTools },
       provider,
       model: resolvedModel,
       sessionId,

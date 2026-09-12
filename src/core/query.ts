@@ -29,6 +29,7 @@ import {
   TODO_WRITE_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
 } from '../constants/tool_names.js'
+import { getActiveModelMessages } from '../services/compact/index.js'
 
 /** Plan approved — any of these in the same turn counts as implementation started. */
 const PLAN_IMPLEMENTATION_TOOLS = new Set([
@@ -70,6 +71,7 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
     logLabel,
     abortSignal,
     memoryPrefetch,
+    runAgent,
   } = opts
 
   if (!configuredProvider) {
@@ -143,9 +145,9 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
       sessionId,
       onTurnEnd,
       {
-        messages,
+        messages: getActiveModelMessages(messages, sessionId),
         systemPrompt: activeSystemPrompt,
-        tools: activeTools,
+        tools: { ...activeTools },
         provider,
         model: resolvedModel,
         sessionId,
@@ -169,7 +171,7 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
       wire.stepStart(step)
       const stepStart = Date.now()
 
-      await preTurn({
+      const activeMessages = await preTurn({
         messages,
         eventBus,
         wire,
@@ -185,6 +187,9 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
         compactEnrichment,
         logLabel,
         readFileState: toolUseContext?.readFileState,
+        runAgent,
+        systemPrompt: activeSystemPrompt,
+        tools: activeTools,
       })
 
       if (abortSignal?.aborted) {
@@ -198,6 +203,7 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
 
       const stepResult = await runStep({
         messages,
+        modelMessages: activeMessages,
         tools: activeTools,
         systemPrompt: activeSystemPrompt,
         provider,
@@ -221,6 +227,7 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
         abortSignal,
         readFileState: toolUseContext?.readFileState,
         dumpPrompts,
+        runAgent,
       })
 
       if (stepResult === null) {

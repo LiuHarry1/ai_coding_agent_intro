@@ -19,11 +19,14 @@ import {
   waitForSessionMemoryExtraction,
 } from './state.js'
 import { isEmptySessionMemoryTemplate } from './template.js'
-import { clearTokenUsages } from '../compact/tokens.js'
+import { createCompactBoundaryMessage } from '../../core/messages/compact-boundary.js'
 
 export type SessionMemoryCompactResult = {
   source: 'session_memory'
+  /** Active model view after the boundary is applied. */
   messages: Message[]
+  /** Boundary, summary, and attachments appended to the full transcript. */
+  appendMessages: Message[]
   messagesToKeep: Message[]
   summaryText: string
 }
@@ -36,6 +39,8 @@ export async function trySessionMemoryCompaction(input: {
   attachmentMessages?: Message[]
   todos?: TodoItem[]
   fileSection?: string
+  trigger?: 'manual' | 'auto'
+  preTokens?: number
   estimateTokens: (msgs: Message[]) => number
 }): Promise<SessionMemoryCompactResult | null> {
   const { messages, sessionId, config } = input
@@ -100,15 +105,43 @@ export async function trySessionMemoryCompaction(input: {
     memoryPath: wasTruncated ? memoryPath : undefined,
   })
 
-  const summaryMsg = ensureMessageUuid({
+  const summaryMsg: Message = ensureMessageUuid({
     role: 'user' as const,
     content,
     isCompactSummary: true,
   })
 
-  clearTokenUsages(messages)
+  const lastMessage = messages[messages.length - 1]
+  const lastUuid =
+    lastMessage && 'uuid' in lastMessage ? lastMessage.uuid : undefined
+  const firstKept = messagesToKeep[0]
+  const lastKept = messagesToKeep[messagesToKeep.length - 1]
+  const firstKeptUuid =
+    firstKept && 'uuid' in firstKept ? firstKept.uuid : undefined
+  const lastKeptUuid =
+    lastKept && 'uuid' in lastKept ? lastKept.uuid : undefined
+  const boundary = createCompactBoundaryMessage(
+    input.trigger ?? 'auto',
+    input.preTokens ?? input.estimateTokens(messages),
+    lastUuid,
+    undefined,
+    startIndex,
+  )
+  if (firstKeptUuid && lastKeptUuid && summaryMsg.uuid) {
+    boundary.compactMetadata.preservedSegment = {
+      headUuid: firstKeptUuid,
+      anchorUuid: summaryMsg.uuid,
+      tailUuid: lastKeptUuid,
+    }
+  }
 
+  const appendMessages: Message[] = [
+    boundary,
+    summaryMsg,
+    ...(input.attachmentMessages ?? []),
+  ]
   const built = [
+    boundary,
     summaryMsg,
     ...messagesToKeep,
     ...(input.attachmentMessages ?? []),
@@ -124,6 +157,7 @@ export async function trySessionMemoryCompaction(input: {
   return {
     source: 'session_memory',
     messages: built,
+    appendMessages,
     messagesToKeep,
     summaryText: truncatedContent,
   }

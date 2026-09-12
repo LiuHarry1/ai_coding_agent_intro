@@ -12,6 +12,7 @@ import type { AutoMemoryConfig } from '../../core/types.js'
 import type { Attachment } from '../../utils/attachments/types.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 import { createAttachmentMessage } from '../../utils/attachments.js'
+import { getActiveModelMessages } from '../compact/index.js'
 import {
   findFastRelevantMemories,
   findRelevantMemories,
@@ -183,6 +184,7 @@ export type StartPrefetchOpts = {
   selectFn?: SelectRelevantFn
   /** Override query text (defaults to last non-meta user message). */
   queryText?: string
+  sessionId?: string
 }
 
 /**
@@ -195,6 +197,7 @@ export function startRelevantMemoryPrefetch(
   if (!opts.config.enabled || opts.config.prefetchEnabled === false) {
     return undefined
   }
+  messages = getActiveModelMessages(messages, opts.sessionId)
 
   let input = opts.queryText
   let lastUser: Message | undefined

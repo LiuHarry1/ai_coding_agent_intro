@@ -10,6 +10,7 @@ import type { IProvider } from '../llm/types.js'
 import { toolResultOutputToText } from '../../utils/tool-result-content.js'
 import { reviveBuffersInMessages } from '../../session/json-serialize.js'
 import { hydrateToolResultImagesFromDisk } from '../../session/persist-project.js'
+import { isCompactBoundaryMessage } from '../messages/compact-boundary.js'
 
 /**
  * Move images out of `tool_result` content and into a meta user message that
@@ -79,6 +80,7 @@ export function projectMessagesForApi(
   provider?: IProvider,
 ): RoleMessage[] {
   const projected = reviveBuffersInMessages(messages)
+    .filter(m => !isCompactBoundaryMessage(m))
     .filter(isRoleMessage)
     .map(m => {
       if (m.role !== 'tool' || !Array.isArray(m.content)) return m

@@ -332,6 +332,7 @@ export async function runForkedAgent(
       maxSteps: params.maxSteps,
       model,
       provider,
+      canUseTool: params.canUseTool,
       cwd: isolated.cwd ?? process.cwd(),
       compaction: isolated.compaction,
       // Explicitly omit sessionMemory / sessionMemoryModelId — no nested extract.

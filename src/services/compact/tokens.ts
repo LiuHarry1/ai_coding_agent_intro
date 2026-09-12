@@ -8,6 +8,11 @@ import {
   countOutputImages,
   toolResultOutputToText,
 } from '../../utils/tool-result-content.js'
+import {
+  findLastCompactBoundaryIndex,
+  getMessagesAfterCompactBoundary,
+  isCompactBoundaryMessage,
+} from '../../core/messages/compact-boundary.js'
 
 // ── Pure estimation ─────────────────────────────────────
 
@@ -21,6 +26,7 @@ export function estimateMessageTokens(msg: Message): number {
   if (isAttachmentMessage(msg)) {
     return Math.ceil(JSON.stringify(msg.attachment).length / 4)
   }
+  if (!isRoleMessage(msg)) return 0
   let total = 0
   if (msg.role === 'user') {
     if (typeof msg.content === 'string') return estStr(msg.content)
@@ -151,8 +157,28 @@ export function tokenCountWithEstimation(messages: Message[]): {
   realBaseline?: number
   estimatedDelta?: number
 } {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const usage = readTokenUsage(messages[i])
+  const active = getMessagesAfterCompactBoundary(messages)
+  const boundaryIndex = findLastCompactBoundaryIndex(active)
+  let usageFloor = boundaryIndex + 1
+  if (boundaryIndex >= 0) {
+    const boundary = active[boundaryIndex]!
+    if (isCompactBoundaryMessage(boundary)) {
+      const preservedTailUuid =
+        boundary.compactMetadata.preservedSegment?.tailUuid
+      if (preservedTailUuid) {
+        const preservedTailIndex = active.findIndex(
+          (message, index) =>
+            index > boundaryIndex &&
+            'uuid' in message &&
+            message.uuid === preservedTailUuid,
+        )
+        if (preservedTailIndex >= 0) usageFloor = preservedTailIndex + 1
+      }
+    }
+  }
+
+  for (let i = active.length - 1; i >= usageFloor; i--) {
+    const usage = readTokenUsage(active[i])
     if (!usage) continue
 
     // Walk back past sibling assistant messages from the same API round
@@ -164,14 +190,14 @@ export function tokenCountWithEstimation(messages: Message[]): {
     // only same-id siblings (the true parallel-tool group) and stop at the
     // previous round. Without an id (older sessions), fall back to the
     // heuristic of "all assistants since the last user message".
-    const usageMsg = messages[i]
+    const usageMsg = active[i]
     const usageRoundId =
       isRoleMessage(usageMsg) && usageMsg.role === 'assistant'
         ? usageMsg.id
         : undefined
     let anchor = i
-    for (let j = i - 1; j >= 0; j--) {
-      const mj = messages[j]
+    for (let j = i - 1; j >= usageFloor; j--) {
+      const mj = active[j]
       if (isRoleMessage(mj) && mj.role === 'user') {
         break
       }
@@ -188,9 +214,9 @@ export function tokenCountWithEstimation(messages: Message[]): {
 
     const realBaseline = tokenCountFromUsage(usage)
     let estimatedDelta = 0
-    for (let j = anchor + 1; j < messages.length; j++) {
+    for (let j = anchor + 1; j < active.length; j++) {
       if (j === i) continue // skip the usage-bearing message itself
-      estimatedDelta += estimateMessageTokens(messages[j])
+      estimatedDelta += estimateMessageTokens(active[j])
     }
     estimatedDelta = padEstimate(estimatedDelta)
     return {
@@ -201,7 +227,7 @@ export function tokenCountWithEstimation(messages: Message[]): {
     }
   }
   return {
-    total: padEstimate(estimateConversationTokens(messages)),
+    total: padEstimate(estimateConversationTokens(active)),
     source: 'est',
   }
 }

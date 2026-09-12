@@ -1,25 +1,49 @@
 /**
  * LLM summarization engine for full compaction.
- * Summarizes messages BEFORE keepStartIndex, then builds:
- *   summaryMsg + messagesToKeep + attachments
- * (same shape as session-memory compact).
+ * Summarizes the complete active projection, then emits append-only
+ * boundary + summary + attachment events. Full compact keeps no verbatim tail.
  */
 import { generateText } from 'ai'
-import type { IProvider, Message, TodoItem } from '../../core/types.js'
-import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
-import { estimateConversationTokens, clearTokenUsages } from './tokens.js'
+import type {
+  IProvider,
+  Message,
+  RoleMessage,
+  RunAgentFn,
+  TodoItem,
+} from '../../core/types.js'
+import { isRoleMessage } from '../../core/types.js'
+import {
+  runForkedAgent,
+  type CacheSafeParams,
+} from '../../core/forked-agent.js'
+import {
+  estimateConversationTokens,
+  tokenCountWithEstimation,
+} from './tokens.js'
 import {
   buildPostCompactAttachmentMessages,
   type CompactEnrichment,
 } from './post-compact-attachments.js'
-import {
-  extractRecentlyReadFiles,
-  restoreRecentFiles,
-} from './fileRestore.js'
+import { extractRecentlyReadFiles, restoreRecentFiles } from './fileRestore.js'
 import { ensureMessageUuid } from '../session-memory/messageUuid.js'
-import { sliceMessagesToKeep } from '../session-memory/keepIndex.js'
 import { formatCompactSummaryMessage } from '../session-memory/prompts.js'
-import { toolResultOutputToText } from '../../utils/tool-result-content.js'
+import { createCompactBoundaryMessage } from '../../core/messages/compact-boundary.js'
+import {
+  calculateMessagesToKeepIndex,
+  sliceMessagesToKeep,
+  type KeepIndexConfig,
+} from '../session-memory/keepIndex.js'
+import {
+  ensureToolResultPairing,
+  inlineReasoningAsText,
+  projectMessagesForApi,
+  regroupToolResults,
+} from '../../core/agent/messageSanitize.js'
+import {
+  expandAttachmentMessagesForAPI,
+  mergeAdjacentUserMessages,
+  smooshSystemReminderSiblings,
+} from '../../utils/messages.js'
 
 export type { CompactEnrichment } from './post-compact-attachments.js'
 
@@ -158,7 +182,10 @@ export interface FileRestoreConfig {
 // ── Public API ──────────────────────────────────────────
 
 export interface CompactResult {
+  /** Active model view after appending `appendMessages` to the transcript. */
   messages: Message[]
+  /** Events appended to the complete transcript; never includes a verbatim tail. */
+  appendMessages: Message[]
   /** Raw summary text (without restored files/todos) -- for UI display. */
   summary: string
   summaryLength: number
@@ -182,6 +209,17 @@ export interface CompactContext {
    * compaction -- the context just overflowed; don't re-inflate it).
    */
   skipFileRestore?: boolean
+  trigger?: 'manual' | 'auto'
+  preTokens?: number
+  /** Main-loop runner used by the cache-safe summarizer fork. */
+  runAgent?: RunAgentFn
+  /** Main-loop cache prefix and cache-critical request parameters. */
+  cacheSafeParams?: CacheSafeParams
+  /**
+   * Reactive-only fallback: summarize the head and reference a recent
+   * verbatim tail from the append-only transcript.
+   */
+  preserveRecentTail?: KeepIndexConfig
 }
 
 // MAX_PTL_RETRIES = 3. If the summarizer call itself overflows,
@@ -215,7 +253,15 @@ function dropOldestApiRound(messages: Message[]): Message[] {
         m.id !== undefined &&
         m.id !== firstId
       ) {
-        return messages.slice(i)
+        // Keep the real user prompt that initiated this next API round. An
+        // assistant-first retry can be rejected or semantically detached.
+        for (let userIndex = i - 1; userIndex >= 0; userIndex--) {
+          const candidate = messages[userIndex]!
+          if (isRoleMessage(candidate) && candidate.role === 'user') {
+            return [candidate, ...messages.slice(i)]
+          }
+        }
+        break
       }
     }
     // Only one round carries an id -- fall through to coarser strategies.
@@ -252,69 +298,42 @@ function firstAssistantRoundId(messages: Message[]): string | undefined {
 }
 
 /**
- * Summarize messages BEFORE keepStartIndex via LLM, then build:
- *   summaryMsg + messages[keepStartIndex…] + attachments
+ * Summarize the active projection (or only its head for reactive fallback),
+ * then build append-only compact events. Ordinary full compact has no tail.
  *
- * When keepStartIndex is 0, summarizes nothing useful — caller should avoid that.
+ * `keepStartIndex` is accepted temporarily for source compatibility but is
+ * intentionally ignored.
  * Returns null if summarization fails.
  */
 export async function compactConversation(
   messages: Message[],
   model: string,
   ctx: CompactContext,
-  keepStartIndex?: number,
+  _keepStartIndex?: number,
 ): Promise<CompactResult | null> {
   if (messages.length < 2) return null
 
-  const start =
-    keepStartIndex === undefined
-      ? messages.length
-      : Math.max(0, Math.min(keepStartIndex, messages.length))
-
-  // Head to summarize; tail to keep verbatim.
-  let pending = messages.slice(0, start)
-  const messagesToKeep = sliceMessagesToKeep(messages, start)
-
-  // Need something to summarize; if head is tiny, summarize everything except keep.
-  if (pending.length < 2 && messagesToKeep.length === 0) {
-    pending = messages
-  } else if (pending.length < 1) {
-    // Nothing older than keep — still produce a minimal continue marker + keep.
-    const summary =
-      'Session compacted; recent messages preserved. Continue the current task.'
-    clearTokenUsages(messages)
-    const recentFiles = ctx.skipFileRestore
-      ? []
-      : extractRecentlyReadFiles(messages)
-    const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore)
-    const summaryMessages = buildPostCompactMessages(
-      summary,
-      fileSection,
-      ctx.todos,
-      true,
+  let messagesToKeep: Message[] = []
+  let messagesToSummarize = messages
+  if (ctx.preserveRecentTail) {
+    const keepStart = calculateMessagesToKeepIndex(
+      messages,
+      undefined,
+      ctx.preserveRecentTail,
     )
-    const attachmentMessages = ctx.enrichment
-      ? await buildPostCompactAttachmentMessages(ctx.cwd, ctx.enrichment)
-      : []
-    const built = [
-      ...summaryMessages,
-      ...messagesToKeep,
-      ...attachmentMessages,
-    ]
-    return {
-      messages: built,
-      summary,
-      summaryLength: summary.length,
-      estimatedTokensAfter: estimateConversationTokens(built),
-      source: 'full',
-      messagesToKeep,
-    }
+    // Reactive fallback must never silently degrade to ordinary full wipe.
+    // If there is no useful head/tail split, leave the transcript untouched.
+    if (keepStart <= 0 || keepStart >= messages.length) return null
+    messagesToKeep = sliceMessagesToKeep(messages, keepStart)
+    messagesToSummarize = messages.slice(0, keepStart)
   }
+  if (messagesToSummarize.length < 2) return null
+
+  let pending = messagesToSummarize.slice()
 
   let summary: string | undefined
 
   for (let attempt = 0; attempt <= MAX_SUMMARIZE_RETRIES; attempt++) {
-    const formatted = pending.map(formatForSummary).join('\n\n---\n\n')
     try {
       if (!ctx.provider) {
         throw new Error(
@@ -322,17 +341,50 @@ export async function compactConversation(
         )
       }
       const provider = ctx.provider
-      const result = await generateText({
-        model: provider.chatModel(model),
-        system: buildSummarySystem(ctx.instructions),
-        messages: [
-          {
-            role: 'user',
-            content: `Compact the following agent conversation into a structured summary:\n\n${formatted}`,
-          },
-        ],
-      })
-      summary = formatCompactSummary(result.text)
+      const prompt = buildSummarySystem(ctx.instructions)
+      let rawSummary: string
+
+      if (ctx.runAgent && ctx.cacheSafeParams) {
+        try {
+          const result = await runForkedAgent({
+            prompt,
+            runAgent: ctx.runAgent,
+            cacheSafeParams: {
+              ...ctx.cacheSafeParams,
+              forkContextMessages: pending.slice(),
+            },
+            canUseTool: () => ({
+              behavior: 'deny',
+              message: 'Tools are disabled during conversation compaction.',
+            }),
+            forkLabel: 'full_compact',
+            maxSteps: 1,
+            cwd: ctx.cwd,
+          })
+          rawSummary = result.text
+        } catch (forkError) {
+          const message =
+            forkError instanceof Error ? forkError.message : String(forkError)
+          console.warn(
+            `[compact] cache-safe fork failed; using generateText fallback: ${message}`,
+          )
+          rawSummary = await generateSummaryFallback(
+            pending,
+            model,
+            provider,
+            prompt,
+          )
+        }
+      } else {
+        rawSummary = await generateSummaryFallback(
+          pending,
+          model,
+          provider,
+          prompt,
+        )
+      }
+
+      summary = formatCompactSummary(rawSummary)
       break
     } catch (error) {
       if (attempt < MAX_SUMMARIZE_RETRIES && isLikelyTooLong(error)) {
@@ -352,8 +404,6 @@ export async function compactConversation(
 
   if (!summary) return null
 
-  clearTokenUsages(messages)
-
   const recentFiles = ctx.skipFileRestore
     ? []
     : extractRecentlyReadFiles(messages)
@@ -367,20 +417,96 @@ export async function compactConversation(
   const attachmentMessages = ctx.enrichment
     ? await buildPostCompactAttachmentMessages(ctx.cwd, ctx.enrichment)
     : []
-  const built = [
+  const lastMessage = messages[messages.length - 1]
+  const lastUuid =
+    lastMessage && 'uuid' in lastMessage ? lastMessage.uuid : undefined
+  const boundary = createCompactBoundaryMessage(
+    ctx.trigger ?? 'auto',
+    ctx.preTokens ?? estimateConversationTokens(messages),
+    lastUuid,
+    ctx.instructions,
+    messagesToSummarize.length,
+  )
+  const summaryAnchor = summaryMessages[0]?.uuid
+  const firstKeptUuid = messagesToKeep[0]?.uuid
+  const lastKeptUuid = messagesToKeep.at(-1)?.uuid
+  if (
+    summaryAnchor &&
+    firstKeptUuid &&
+    lastKeptUuid &&
+    messagesToKeep.length > 0
+  ) {
+    boundary.compactMetadata.preservedSegment = {
+      headUuid: firstKeptUuid,
+      anchorUuid: summaryAnchor,
+      tailUuid: lastKeptUuid,
+    }
+  }
+  const appendMessages: Message[] = [
+    boundary,
     ...summaryMessages,
-    ...messagesToKeep,
     ...attachmentMessages,
   ]
 
   return {
-    messages: built,
+    messages: [
+      boundary,
+      ...summaryMessages,
+      ...messagesToKeep,
+      ...attachmentMessages,
+    ],
+    appendMessages,
     summary,
     summaryLength: summary.length,
-    estimatedTokensAfter: estimateConversationTokens(built),
+    estimatedTokensAfter: tokenCountWithEstimation([
+      boundary,
+      ...summaryMessages,
+      ...messagesToKeep,
+      ...attachmentMessages,
+    ]).total,
     source: 'full',
     messagesToKeep,
   }
+}
+
+async function generateSummaryFallback(
+  messages: Message[],
+  model: string,
+  provider: IProvider,
+  system: string,
+): Promise<string> {
+  const conversation = prepareSummaryMessages(messages, provider)
+  const result = await generateText({
+    model: provider.chatModel(model),
+    system,
+    messages: [
+      ...conversation,
+      {
+        role: 'user',
+        content:
+          'Compact the complete agent conversation above into the requested structured summary.',
+      },
+    ],
+  })
+  return result.text
+}
+
+function prepareSummaryMessages(
+  messages: Message[],
+  provider: IProvider,
+): RoleMessage[] {
+  return projectMessagesForApi(
+    ensureToolResultPairing(
+      smooshSystemReminderSiblings(
+        mergeAdjacentUserMessages(
+          regroupToolResults(
+            expandAttachmentMessagesForAPI(inlineReasoningAsText(messages)),
+          ),
+        ),
+      ),
+    ),
+    provider,
+  )
 }
 
 // ── Post-compact message construction ───────────────────
@@ -422,46 +548,6 @@ function formatCompactSummary(raw: string): string {
   }
   result = result.replace(/\n\n\n+/g, '\n\n')
   return result.trim()
-}
-
-// ── Formatting helpers ──────────────────────────────────
-
-function formatForSummary(msg: Message): string {
-  if (isAttachmentMessage(msg)) {
-    return `ATTACHMENT: ${msg.attachment.type}`
-  }
-  if (msg.role === 'user') {
-    if (typeof msg.content === 'string') return `USER: ${msg.content}`
-    const text = msg.content
-      .map(p => (p.type === 'text' ? p.text : '[image]'))
-      .filter(Boolean)
-      .join('\n')
-    return `USER: ${text}`
-  }
-
-  if (msg.role === 'assistant') {
-    const formatted = msg.content
-      .map(p => {
-        if (p.type === 'text') return p.text
-        if (p.type === 'reasoning') return ''
-        if (p.type === 'tool-call') {
-          const args = JSON.stringify(p.input || {})
-          const short = args.length > 300 ? args.slice(0, 300) + '...' : args
-          return `[Called ${p.toolName}(${short})]`
-        }
-        return ''
-      })
-      .filter(Boolean)
-    return `ASSISTANT: ${formatted.join('\n')}`
-  }
-
-  return msg.content
-    .map(p => {
-      const text = toolResultOutputToText(p.output)
-      const short = text.length > 500 ? text.slice(0, 500) + '...' : text
-      return `[${p.toolName} result]: ${short}`
-    })
-    .join('\n')
 }
 
 function isLikelyTooLong(err: unknown): boolean {

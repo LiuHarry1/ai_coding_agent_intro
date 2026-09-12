@@ -64,9 +64,17 @@ flowchart TB
   SEM --> ATTACH
 
   PROFILE --> LOOP["runAgent / query loop"]
-  ATTACH --> LOOP
+  ATTACH --> TRANSCRIPT
   CR --> CATTACH["conditional_rules attachment"]
-  CATTACH --> LOOP
+  CATTACH --> TRANSCRIPT
+
+  subgraph HISTORY["Session 消息的两种视图"]
+    TRANSCRIPT[("完整 append-only transcript<br/>持久化并供 UI scrollback")]
+    BOUNDARY["system compact_boundary<br/>含 preservedSegment 引用"]
+    PROJECT["活跃模型投影<br/>最后 boundary + summary + preserved tail + 新消息"]
+    TRANSCRIPT -->|"按最后 boundary 重建"| PROJECT
+    BOUNDARY --> TRANSCRIPT
+  end
 
   subgraph STEP["每个 Agent Step"]
     BEFORE["step 前：compactIfNeeded"]
@@ -75,8 +83,9 @@ flowchart TB
     BEFORE --> MODEL --> AFTER
   end
 
-  LOOP --> BEFORE
-  AFTER --> LOOP
+  LOOP --> TRANSCRIPT
+  PROJECT --> BEFORE
+  AFTER --> TRANSCRIPT
   AFTER --> LATE["消费已完成的 semantic prefetch"]
   AFTER --> SMEX["onAfterStep<br/>Session Memory extract"]
 
@@ -89,20 +98,20 @@ flowchart TB
   end
 
   subgraph COMPACT["Compaction"]
-    MICRO["Micro：清旧 tool payload"]
-    SMC["Session Memory Compact"]
-    FULL["Full LLM Compact"]
-    CHECK["compacted checkpoint"]
+    MICRO["Micro：进程内模型投影<br/>清旧 tool payload"]
+    SMC["Session Memory Compact<br/>summary + preserved tail"]
+    FULL["Full LLM Compact<br/>全部活跃消息，无 tail"]
+    FALLBACK["cache-safe fork<br/>失败后 generateText fallback"]
     BEFORE --> MICRO
     MICRO -->|"仍超阈值"| SMC
     SUMMARY --> SMC
     STATE --> SMC
     SMC -->|"不可用或仍过大"| FULL
-    SMC -->|"成功"| CHECK
-    FULL --> CHECK
+    FULL --> FALLBACK
+    SMC --> BOUNDARY
+    FULL --> BOUNDARY
   end
 
-  CHECK --> JSONL[("session JSONL")]
   LOOP -->|"completed 或 max_steps"| END
 
   REMOTE{{"Remote SSH"}} -.->|"关闭 Rules 与 Auto Memory"| ALL
@@ -113,6 +122,10 @@ flowchart TB
 
 - `relevant_memories` 来自 Auto Memory prefetch。
 - `conditional_rules` 来自带 `paths:` frontmatter 的规则，在工具成功读写匹配文件后注入。
+
+同一 session 有两个用途不同的消息视图：JSONL 与 UI 保留完整 append-only
+transcript；模型、token 计算和 Session Memory 只消费最后一个
+`compact_boundary` 之后重建出的活跃投影。
 
 ## 3. 一次完整 turn 的时序
 
@@ -359,6 +372,11 @@ Session Memory 是单 session 的工作进度账本，主要消费者是 Session
 
 抽取 fork 最多 5 steps。默认 `cacheSafe: true`；非 cache-safe 模式使用 medium tier。受限模式基本只允许 Edit `summary.md`。
 
+Session Memory 抽取看到的是
+`getMessagesAfterCompactBoundary()` 生成的活跃消息，而不是供 UI scrollback
+使用的完整 transcript。因此已被 boundary 总结的旧消息仍可在 UI 查看，但不会在
+后续 notes 更新时反复进入模型。
+
 ### 6.4 state.json
 
 持久化字段：
@@ -381,9 +399,10 @@ Compact 最多等待进行中的抽取 15 秒。超过 15 秒但未达到 stale 
 
 Compaction 在每个 agent step 前执行，顺序是：
 
-1. Micro-compaction。
-2. 如果仍超阈值，优先 Session Memory Compact。
-3. Session Memory 不可用时回退 Full LLM Compact。
+1. 从完整 transcript 取最后一个 system compact boundary，重建活跃模型投影。
+2. 在活跃投影上应用进程内 Micro-compaction。
+3. 如果仍超阈值，优先 Session Memory Compact。
+4. Session Memory 不可用时回退 Full LLM Compact。
 
 ### 7.1 Token 阈值
 
@@ -423,7 +442,9 @@ Micro 不调用模型：
 [Old tool result content cleared to save context]
 ```
 
-Micro 只改变内存消息，不写 `compacted` checkpoint。
+Micro 只改变进程内模型投影，不写 transcript。清理状态按 session 保存；下一
+step 从完整 transcript 重建活跃视图后会重新应用，出现新的 compact boundary 后
+该状态失效。
 
 ### 7.3 Session Memory Compact
 
@@ -447,41 +468,64 @@ SM compact 的前提是：
 
 ```text
 [一条 role=user、isCompactSummary=true 的摘要消息]
-[原样保留的最近消息]
+[由 boundary.preservedSegment 从旧 transcript 重建的最近消息]
 [重新生成的 agent / skill attachments]
 ```
 
 摘要正文还可带 Active Todo List、最近读文件内容；如果 Session Memory 被截断，会附上完整 `summary.md` 路径。
 
 如果构建出的消息仍达到 auto compact 阈值，SM compact 放弃并回退 Full LLM Compact。
+持久化时只追加 boundary、摘要与重建的 attachments；最近消息不复制到 boundary
+后面，避免 transcript 出现重复事件。
 
 ### 7.4 Full LLM Compact
 
-Full compact 调用模型总结旧消息，并保留最近一段原始消息。以下情况会走 full：
+普通 Full compact 调用模型总结当前全部活跃消息，不保留原样 tail。以下情况会走 full：
 
 - Session Memory 不可用或不可信。
 - SM compact 后仍过大。
 - `/compact <instructions>` 明确提供了总结 steering。
 - 没有 sessionId 或 Session Memory 被关闭。
 
-Full compact 会恢复有限数量的最近读文件、todos、agent / skill listing。aggressive reactive compact 会跳过文件恢复。
+默认 cache-safe 路径通过 `runForkedAgent()` 复用主循环的 system prompt、工具
+schema、provider/model 与消息前缀，但 compact fork 禁用全部工具且最多运行一步。
+cache-safe fork 失败或不可用时，回退到同一 request-scoped provider 的
+`generateText()`；prompt-too-long 时最多逐轮裁掉最旧 API round 后重试。
+
+Full compact 会把有限数量的最近读文件和 todos 写入摘要，并重新生成 agent /
+skill listing attachment。普通 Full 的 append 结果只有 boundary、摘要和这些新
+attachments，不包含旧消息副本。
+
+只有 context-length error 触发的 aggressive/reactive Full 例外：它跳过文件恢复，
+总结较旧 head，并通过 `preservedSegment` 引用一段满足 token、文本消息和工具配对
+约束的最近 tail。
 
 连续 3 次 full 失败会阻止后续普通 proactive compact；`force` 或 `aggressive` 仍可继续尝试。
 
 ### 7.5 持久化与恢复
 
-只有 `session_memory` 和 `full` 两种总结型结果会调用 `appendCompaction()` 写 `type: compacted` 的 JSONL checkpoint。
+新实现的 `session_memory` 和 `full` 都把以下普通事件追加到 JSONL：
 
-恢复 session 时，遇到 `compacted` 行会用 checkpoint 整体替换此前消息，而不是继续追加。临时 attachment 在 checkpoint 前被过滤，恢复后按当前 agent / skill 状态重新生成。
+1. `type: system, subtype: compact_boundary`
+2. `role: user, isCompactSummary: true` 的模型摘要
+3. 当前状态重新生成的 attachments
 
-Micro 没有 checkpoint，所以它的清理主要服务当前进程中的 API 上下文。
+旧消息从不被替换或删除，所以 UI 重启后仍能显示完整 scrollback；compact summary
+在 UI 中显示成 boundary 标记，而不是普通用户气泡。模型恢复时只取最后一个
+boundary，并按 `preservedSegment` 的 UUID 区间从此前活跃投影重建 tail；连续多次
+compact 不会复活更早的 boundary 或摘要。
+
+旧版本写出的 `type: compacted` snapshot 仍可读取。恢复逻辑把它转换成兼容
+boundary，保留 checkpoint 前的 UI 历史，并通过引用恢复 legacy tail；新代码不再
+写这种 replace/checkpoint 行。Micro 始终不落盘。
 
 ### 7.6 手动与 reactive 路径
 
 - `/summary`：强制更新 Session Memory，不压缩消息。
 - `/compact`：强制压缩；没有 instructions 时仍可优先 SM compact。
 - `/compact <instructions>`：跳过 SM compact，使用 Full LLM Compact。
-- 模型返回 context-length error：`run-step.ts` 触发 force + aggressive compact 后重试。
+- 模型返回 context-length error：`run-step.ts` 只触发一次 force + aggressive
+  compact 后重试；该 reactive Full 保留配对安全的近期 tail。
 
 ## 8. Primary Agent、Browser 与子 Agent
 
@@ -622,6 +666,19 @@ npm run test:memory
 - `src/scripts/test-rules-loader.ts`
 - `src/scripts/test-managed-extensions.ts`
 
+纯本地 compact 回归（不启动 server，不调用真实模型）：
+
+```powershell
+npm run test:compact
+```
+
+它覆盖 compact boundary/多次模型投影、Full cache-safe fork 与 fallback、
+Micro/reactive、手动 compact 语义、Session Memory 与 SM→Full fallback、
+append-only 重启及 legacy checkpoint、attachment/agent listing 恢复和 Read
+去重状态失效。需要真实 server、固定外部 workspace 或真实 provider 的旧 E2E
+脚本不在默认聚合中，例如 `test-compaction-new-session.ts`、
+`test-compaction-checkpoint-persist.ts` 和 `test-compaction-attachments.ts`。
+
 ## 13. 代码地图
 
 Turn 编排：
@@ -631,7 +688,9 @@ Turn 编排：
 - `src/turn/memory-lifecycle.ts`
 - `src/core/query.ts`
 - `src/core/query/pre-turn.ts`
+- `src/core/query/run-step.ts`
 - `src/core/query/post-turn.ts`
+- `src/core/messages/compact-boundary.ts`
 
 Project Rules：
 
@@ -673,6 +732,8 @@ Compaction：
 - `src/core/types.ts`
 - `src/core/session-paths.ts`
 - `src/session/store.ts`
+- `src/session/json-serialize.ts`
+- `src/server/session-ui.ts`
 
 ## 14. 设计原则
 
@@ -683,4 +744,5 @@ Compaction：
 3. 是当前 session 的进度、错误现场或下一步吗？放 Session Memory。
 4. 是为了降低当前上下文 token 吗？交给 Compaction。
 
-不要创建额外的 `MEMORY.md` 体系，也不要按 Primary Agent 再复制一套记忆。跨会话共享由统一 Auto Memory 负责；单会话连续性由 Session Memory 与 compaction checkpoint 负责。
+不要创建额外的 `MEMORY.md` 体系，也不要按 Primary Agent 再复制一套记忆。跨会话共享由统一 Auto Memory 负责；单会话连续性由 Session Memory、append-only
+compact boundary 与模型投影共同负责。

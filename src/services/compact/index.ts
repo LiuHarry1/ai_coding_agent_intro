@@ -12,7 +12,13 @@ export {
 } from './tokens.js'
 export type { AttachedTokenUsage } from './tokens.js'
 
-export { microCompact } from './microCompact.js'
+export {
+  applyMicroCompactProjection,
+  getActiveModelMessages,
+  microCompact,
+  rebaseMicroCompactState,
+  resetMicroCompactState,
+} from './microCompact.js'
 export type { MicroCompactResult } from './microCompact.js'
 
 export { compactConversation } from './compact.js'

@@ -13,6 +13,7 @@ import { createCacheSafeParams } from '../core/forked-agent.js'
 import { extractSessionMemoryInBackground } from '../services/session-memory/index.js'
 import { extractAutoMemoriesInBackground } from '../services/auto-memory/index.js'
 import { getRequestScope, runWithRequestScope } from '../utils/request-scope.js'
+import { getActiveModelMessages } from '../services/compact/index.js'
 
 export function createMemoryLifecycleHooks(opts: {
   sessionMemory?: SessionMemoryConfig
@@ -43,14 +44,16 @@ export function createMemoryLifecycleHooks(opts: {
       ) {
         return
       }
+      const messages = getActiveModelMessages(snap.messages, snap.sessionId)
+      const tools = { ...snap.tools }
       const cacheSafeParams =
         sessionMemory.cacheSafe !== false
           ? createCacheSafeParams({
               systemPrompt: snap.systemPrompt,
-              tools: snap.tools,
+              tools,
               provider: snap.provider,
               model: snap.model,
-              messages: snap.messages,
+              messages,
             })
           : undefined
       // Capture scope now; re-enter ALS so background extract keeps tenant
@@ -58,7 +61,7 @@ export function createMemoryLifecycleHooks(opts: {
       const scope = getRequestScope()
       const reenter = () => {
         extractSessionMemoryInBackground({
-          messages: snap.messages,
+          messages,
           sessionId: snap.sessionId!,
           provider: sessionMemoryProvider ?? snap.provider,
           modelId: sessionMemoryModelId ?? snap.model,
@@ -81,20 +84,22 @@ export function createMemoryLifecycleHooks(opts: {
       ) {
         return
       }
+      const messages = getActiveModelMessages(snap.messages, snap.sessionId)
+      const tools = { ...snap.tools }
       const cacheSafeParams =
         autoMemory.cacheSafe !== false
           ? createCacheSafeParams({
               systemPrompt: snap.systemPrompt,
-              tools: snap.tools,
+              tools,
               provider: snap.provider,
               model: snap.model,
-              messages: snap.messages,
+              messages,
             })
           : undefined
       const scope = getRequestScope()
       const reenter = () => {
         extractAutoMemoriesInBackground({
-          messages: snap.messages,
+          messages,
           sessionId: snap.sessionId!,
           provider: autoMemoryProvider ?? snap.provider,
           modelId: autoMemoryModelId ?? snap.model,

@@ -6,10 +6,19 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { randomUUID } from 'crypto'
-import type { Message } from '../core/types.js'
+import type {
+  AnyTool,
+  IProvider,
+  Message,
+  RunAgentFn,
+  SessionMemoryConfig,
+} from '../core/types.js'
 import { isRoleMessage } from '../core/types.js'
+import { EventBus } from '../core/event-bus.js'
+import { noopWireEmitter } from '../core/wire-emitter.js'
 import {
   adjustIndexToPreserveToolPairs,
+  adjustIndexToPreserveAssistantResponse,
   calculateMessagesToKeepIndex,
   ensureMessageUuid,
   evictSessionMemoryState,
@@ -19,6 +28,10 @@ import {
   trySessionMemoryCompaction,
   DEFAULT_SESSION_MEMORY_TEMPLATE,
 } from '../services/session-memory/index.js'
+import {
+  createCompactBoundaryMessage,
+  isCompactBoundaryMessage,
+} from '../core/messages/compact-boundary.js'
 import { getSessionMemoryState } from '../services/session-memory/state.js'
 import {
   repairSessionMemoryStructure,
@@ -30,9 +43,21 @@ import {
   unregisterSessionLocation,
 } from '../core/session-paths.js'
 import { resolveAgentHome } from '../utils/request-scope.js'
+import { compactIfNeeded } from '../services/compact/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SESSION_ID = `sm-test-${randomUUID()}`
+const SM_CONFIG: SessionMemoryConfig = {
+  enabled: true,
+  minimumTokensToInit: 1,
+  minimumTokensBetweenUpdate: 1,
+  toolCallsBetweenUpdates: 1,
+  cacheSafe: true,
+  modelTier: 'medium',
+  compactMinTokens: 1,
+  compactMaxTokens: 100_000,
+  compactMinTextMessages: 1,
+}
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) {
@@ -101,6 +126,36 @@ async function main(): Promise<void> {
     `adjustIndex pulls back to tool-call (got ${adjusted})`,
   )
 
+  const fragmented: Message[] = [
+    ensureMessageUuid({
+      role: 'assistant',
+      id: 'response-1',
+      content: [{ type: 'reasoning', text: 'thinking' }],
+    }),
+    ensureMessageUuid({
+      role: 'assistant',
+      id: 'response-1',
+      content: [{ type: 'text', text: 'answer' }],
+    }),
+    user('next'),
+  ]
+  assert(
+    adjustIndexToPreserveAssistantResponse(fragmented, 1) === 0,
+    'keep boundary does not split assistant response fragments',
+  )
+
+  const oldCall = assistantTool('before-boundary')
+  const compactBoundary = createCompactBoundaryMessage('auto', 100)
+  const crossBoundary: Message[] = [
+    oldCall,
+    compactBoundary,
+    toolResult('before-boundary'),
+  ]
+  assert(
+    adjustIndexToPreserveToolPairs(crossBoundary, 2) === 2,
+    'tool-pair adjustment never crosses the latest compact boundary',
+  )
+
   const keepCfg = {
     minTokens: 1,
     maxTokens: 100_000,
@@ -166,17 +221,7 @@ async function main(): Promise<void> {
   const sm = await trySessionMemoryCompaction({
     messages: msgs,
     sessionId: SESSION_ID,
-    config: {
-      enabled: true,
-      minimumTokensToInit: 1,
-      minimumTokensBetweenUpdate: 1,
-      toolCallsBetweenUpdates: 1,
-      cacheSafe: true,
-      modelTier: 'medium',
-      compactMinTokens: 1,
-      compactMaxTokens: 100_000,
-      compactMinTextMessages: 1,
-    },
+    config: SM_CONFIG,
     estimateTokens: () => 100,
   })
   assert(!!sm, 'SM compact succeeds with notes file')
@@ -192,6 +237,113 @@ async function main(): Promise<void> {
     'includes compact summary message',
   )
   assert(sm!.messagesToKeep.length > 0, 'preserves messagesToKeep')
+  const smBoundary = sm!.appendMessages.find(isCompactBoundaryMessage)
+  assert(!!smBoundary, 'SM compact appends a compact boundary')
+  assert(
+    !!smBoundary!.compactMetadata.preservedSegment,
+    'SM boundary references the preserved pre-boundary tail',
+  )
+  const keptUuids = new Set(
+    sm!.messagesToKeep.map(message =>
+      'uuid' in message ? message.uuid : undefined,
+    ),
+  )
+  assert(
+    !sm!.appendMessages.some(
+      message => 'uuid' in message && keptUuids.has(message.uuid),
+    ),
+    'SM append events do not physically duplicate preserved messages',
+  )
+
+  // Manual semantics: plain /compact may use SM; steering forces Full.
+  state.lastSummarizedMessageId = (msgs[2] as { uuid?: string }).uuid
+  const provider: IProvider = {
+    chatModel: () => ({}) as ReturnType<IProvider['chatModel']>,
+    streamTextExtras: () => ({}),
+    defaultModelId: () => 'test-model',
+    describe: () => 'test',
+  }
+  const runAgent: RunAgentFn = async () =>
+    '<summary>manually steered full summary</summary>'
+  const compactTools = { Bash: {} as AnyTool }
+  const plainManual = await compactIfNeeded(
+    [...msgs],
+    new EventBus(),
+    noopWireEmitter,
+    'test-model',
+    process.cwd(),
+    [],
+    { force: true, trigger: 'manual', sessionMemory: SM_CONFIG },
+    undefined,
+    provider,
+    SESSION_ID,
+  )
+  assert(
+    plainManual.source === 'session_memory',
+    'plain manual compact prefers Session Memory',
+  )
+
+  state.lastSummarizedMessageId = (msgs[2] as { uuid?: string }).uuid
+  const steeredManual = await compactIfNeeded(
+    [...msgs],
+    new EventBus(),
+    noopWireEmitter,
+    'test-model',
+    process.cwd(),
+    [],
+    {
+      force: true,
+      trigger: 'manual',
+      instructions: 'focus on failures',
+      sessionMemory: SM_CONFIG,
+      runAgent,
+      cacheSafeParams: {
+        systemPrompt: 'main',
+        tools: compactTools,
+        provider,
+        model: 'test-model',
+        forkContextMessages: msgs,
+      },
+    },
+    undefined,
+    provider,
+    SESSION_ID,
+  )
+  assert(
+    steeredManual.source === 'full',
+    'manual compact with instructions bypasses Session Memory',
+  )
+
+  fs.rmSync(memPath)
+  const smFallback = await compactIfNeeded(
+    [...msgs],
+    new EventBus(),
+    noopWireEmitter,
+    'test-model',
+    process.cwd(),
+    [],
+    {
+      force: true,
+      trigger: 'manual',
+      sessionMemory: SM_CONFIG,
+      runAgent,
+      cacheSafeParams: {
+        systemPrompt: 'main',
+        tools: compactTools,
+        provider,
+        model: 'test-model',
+        forkContextMessages: msgs,
+      },
+    },
+    undefined,
+    provider,
+    SESSION_ID,
+  )
+  assert(
+    smFallback.source === 'full',
+    'missing Session Memory falls back to Full compact',
+  )
+  fs.writeFileSync(memPath, filled)
 
   // Memory Edit tool path lock
   const { createMemoryFileEditTool } =

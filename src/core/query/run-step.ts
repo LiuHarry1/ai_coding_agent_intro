@@ -1,5 +1,6 @@
 import { streamText } from 'ai'
 import {
+  applyMicroCompactProjection,
   attachTokenUsage,
   compactIfNeeded,
   tokenCountWithEstimation,
@@ -15,8 +16,10 @@ import type {
   AssistantMessage,
   Message,
   RoleMessage,
+  RunAgentFn,
   TodoItem,
 } from '../types.js'
+import { createCacheSafeParams } from '../forked-agent.js'
 import type { IProvider } from '../llm/types.js'
 import {
   ensureToolResultPairing,
@@ -61,9 +64,13 @@ import {
   MAX_TRANSIENT_RETRIES,
 } from './helpers.js'
 import { applyCompactOutcome } from './pre-turn.js'
+import { getMessagesAfterCompactBoundary } from '../messages/compact-boundary.js'
 
 export interface RunStepArgs {
+  /** Complete transcript. New assistant/tool messages are appended here. */
   messages: Message[]
+  /** Optional precomputed active projection for this request. */
+  modelMessages?: Message[]
   tools: Record<string, AnyTool>
   toolChoice?: 'auto' | 'none' | 'required'
   systemPrompt: string
@@ -88,6 +95,14 @@ export interface RunStepArgs {
   abortSignal?: AbortSignal
   readFileState?: import('../../utils/read/types.js').ReadFileState
   dumpPrompts?: DumpPromptsRecorder
+  runAgent?: RunAgentFn
+}
+
+export function shouldAttemptReactiveCompaction(
+  contextLengthAttempts: number,
+  error: unknown,
+): boolean {
+  return contextLengthAttempts === 0 && isContextLengthError(error)
 }
 
 /**
@@ -125,6 +140,12 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
   let transientAttempt = 0
   let reactiveCompacted = false
   let requestStart = Date.now()
+  let activeModelMessages =
+    args.modelMessages ??
+    applyMicroCompactProjection(
+      getMessagesAfterCompactBoundary(messages),
+      sessionId,
+    )
 
   const toolAbortController = createAbortController()
   if (abortSignal) {
@@ -163,7 +184,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
               mergeAdjacentUserMessages(
                 regroupToolResults(
                   expandAttachmentMessagesForAPI(
-                    inlineReasoningAsText(messages),
+                    inlineReasoningAsText(activeModelMessages),
                   ),
                 ),
               ),
@@ -192,7 +213,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
         tools: apiTools,
         ...(toolChoice !== undefined ? { toolChoice } : {}),
         maxOutputTokens: capMaxOutputTokens(
-          tokenCountWithEstimation(messages).total,
+          tokenCountWithEstimation(activeModelMessages).total,
           compaction?.contextWindow,
         ),
         maxRetries: 3,
@@ -330,14 +351,23 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
           aborted: true,
         }
       }
-      if (ctxLengthAttempt === 0 && isContextLengthError(err)) {
+      if (shouldAttemptReactiveCompaction(ctxLengthAttempt, err)) {
         const errMsg = err instanceof Error ? err.message : String(err)
         console.warn(
           `[${agentLogTag(logLabel)}] step ${step} hit context-length error -> reactive aggressive compaction. ${errMsg}`,
         )
         eventBus.emit('compaction_reactive', { error: errMsg })
+        const cacheSafeParams = args.runAgent
+          ? createCacheSafeParams({
+              systemPrompt,
+              tools,
+              provider,
+              model: resolvedModel,
+              messages: activeModelMessages,
+            })
+          : undefined
         const recompacted = await compactIfNeeded(
-          messages,
+          activeModelMessages,
           eventBus,
           wire,
           resolvedModel,
@@ -349,12 +379,14 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
             enrichment: args.compactEnrichment,
             sessionMemory: args.sessionMemory,
             readFileState: args.readFileState,
+            runAgent: args.runAgent,
+            cacheSafeParams,
           },
           compaction,
           provider,
           sessionId,
         )
-        applyCompactOutcome(
+        activeModelMessages = applyCompactOutcome(
           messages,
           recompacted,
           args.currentTodos,

@@ -3,9 +3,11 @@ import * as path from 'path'
 import { randomUUID } from 'crypto'
 import type { Session, SessionInfo, Message } from '../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
+import { isCompactBoundaryMessage } from '../core/messages/compact-boundary.js'
 import { createDefaultPermissionMode } from '../core/permission-mode.js'
 import { resetSessionMemoryState } from '../services/session-memory/state.js'
 import { resetAutoMemoryState } from '../services/auto-memory/state.js'
+import { resetMicroCompactState } from '../services/compact/microCompact.js'
 import { removeTasksForSession } from '../services/cron/store.js'
 import {
   computeProjectKey,
@@ -30,12 +32,10 @@ import {
 } from './session-index.js'
 import {
   parseSessionJsonLine,
-  reviveBuffersInMessages,
-  sessionJsonReplacer,
-  sessionJsonReviver,
   stringifySessionJsonLine,
 } from './json-serialize.js'
 import { projectMessageForDisk } from './persist-project.js'
+import { replayTranscriptMessages } from './compact-replay.js'
 
 const sessions = new Map<string, Session>()
 
@@ -325,6 +325,7 @@ export function deleteSession(id: string): void {
   unregisterSessionLocation(id)
   resetSessionMemoryState(id)
   resetAutoMemoryState(id)
+  resetMicroCompactState(id)
   try {
     removeTasksForSession(id)
   } catch (err) {
@@ -337,30 +338,32 @@ export function deleteSession(id: string): void {
 export function appendMessage(sessionId: string, message: Message): void {
   const timestamp = Date.now()
   if (isAttachmentMessage(message)) {
-    appendLine(sessionId, { ...message, timestamp })
+    const { timestamp: messageTimestamp, ...rest } = message
+    appendLine(sessionId, { ...rest, messageTimestamp, timestamp })
     return
   }
   const forDisk = projectMessageForDisk(message)
+  if (isCompactBoundaryMessage(forDisk)) {
+    const { type: messageType, timestamp: messageTimestamp, ...rest } = forDisk
+    appendLine(sessionId, {
+      type: 'message',
+      messageType,
+      ...rest,
+      messageTimestamp,
+      timestamp,
+    })
+    return
+  }
   appendLine(sessionId, { type: 'message', ...forDisk, timestamp })
 }
 
 /**
- * Record a compaction in the append-only log. Compaction REPLACES the whole
- * message list (with a summary + restored context), so a plain append would
- * leave the pre-compaction messages in the log and resurrect them on restore.
- * We write a `compacted` checkpoint; restoreFromDisk resets the in-memory
- * messages to this snapshot when it replays the line.
+ * Compatibility helper for callers outside the turn host. New compactions are
+ * ordinary append-only message/attachment rows; `compacted` is read-only
+ * legacy format.
  */
 export function appendCompaction(sessionId: string, messages: Message[]): void {
-  const snapshot = JSON.parse(
-    JSON.stringify(messages, sessionJsonReplacer),
-    sessionJsonReviver,
-  ) as Message[]
-  appendLine(sessionId, {
-    type: 'compacted',
-    messages: snapshot,
-    timestamp: Date.now(),
-  })
+  for (const message of messages) appendMessage(sessionId, message)
 }
 
 export function appendModeChange(sessionId: string, session: Session): void {
@@ -408,6 +411,9 @@ function restoreFromDisk(id: string): Session {
     hasExitedPlanMode: false,
     needsPlanModeExitAttachment: false,
   }
+
+  const replayed = replayTranscriptMessages(lines)
+  session.messages = replayed.messages
 
   for (const line of lines) {
     if (line.type === 'session_created') {
@@ -463,19 +469,16 @@ function restoreFromDisk(id: string): Session {
           cwd: w.cwd,
         }
       }
-    } else if (line.type === 'compacted') {
-      session.messages = Array.isArray(line.messages)
-        ? reviveBuffersInMessages(line.messages as Message[])
-        : []
-    } else if (line.type === 'message') {
-      const { type: _, timestamp: __, ...msg } = line
-      session.messages.push(
-        ...reviveBuffersInMessages([msg as unknown as Message]),
-      )
-    } else if (line.type === 'attachment') {
-      const { timestamp: _, ...msg } = line
-      session.messages.push(msg as unknown as Message)
     }
+  }
+
+  for (const migration of replayed.migrations) {
+    appendLine(id, {
+      type: 'message_uuid_migrated',
+      eventIndex: migration.eventIndex,
+      uuid: migration.uuid,
+      timestamp: Date.now(),
+    })
   }
 
   return session

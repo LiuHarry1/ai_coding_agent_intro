@@ -1,4 +1,5 @@
 import {
+  applyMicroCompactProjection,
   compactIfNeeded,
   isSummarizingCompactSource,
   tokenCountWithEstimation,
@@ -7,51 +8,56 @@ import type {
   CompactEnrichment,
   CompactOutcome,
 } from '../../services/compact/index.js'
-import type { AgentOptions, Message, TodoItem } from '../types.js'
+import type {
+  AgentOptions,
+  AnyTool,
+  Message,
+  RunAgentFn,
+  TodoItem,
+} from '../types.js'
 import type { IProvider } from '../llm/types.js'
+import { createCacheSafeParams } from '../forked-agent.js'
 import type { WireEmitter } from '../wire-emitter.js'
 import type { CompactionConfig, SessionMemoryConfig } from '../types.js'
 import {
   agentLogTag,
   attachTodoReminderAfterCompaction,
 } from './helpers.js'
-
-function replaceMessages(target: Message[], next: Message[]): void {
-  if (target === next) return
-  target.length = 0
-  target.push(...next)
-}
+import { getMessagesAfterCompactBoundary } from '../messages/compact-boundary.js'
 
 export function applyFullCompaction(
   messages: Message[],
-  managed: Message[],
+  appendMessages: Message[],
   currentTodos: TodoItem[],
   onFullCompaction?: AgentOptions['onFullCompaction'],
-): void {
-  replaceMessages(messages, managed)
+): Message[] {
+  const appendStart = messages.length
+  messages.push(...appendMessages)
   attachTodoReminderAfterCompaction(messages, currentTodos)
-  onFullCompaction?.(messages)
+  onFullCompaction?.(messages.slice(appendStart))
+  return getMessagesAfterCompactBoundary(messages)
 }
 
 /**
- * Apply compactIfNeeded's outcome. Microcompact only swaps in-memory tool
- * payloads (no checkpoint). Session-memory / full compact replace history
- * and fire onFullCompaction for JSONL persist.
+ * Apply compactIfNeeded's outcome. Microcompact returns an ephemeral model
+ * view. Session-memory / full compact append events to the complete
+ * transcript and return its newly projected active view.
  */
 export function applyCompactOutcome(
   messages: Message[],
   outcome: CompactOutcome,
   currentTodos: TodoItem[],
   onFullCompaction?: AgentOptions['onFullCompaction'],
-): void {
-  if (outcome.source === 'none') return
-  if (outcome.source === 'micro') {
-    replaceMessages(messages, outcome.messages)
-    return
+): Message[] {
+  if (outcome.source === 'none') {
+    return outcome.messages
   }
-  applyFullCompaction(
+  if (outcome.source === 'micro') {
+    return outcome.messages
+  }
+  return applyFullCompaction(
     messages,
-    outcome.messages,
+    outcome.appendMessages ?? outcome.messages,
     currentTodos,
     onFullCompaction,
   )
@@ -73,10 +79,26 @@ export async function preTurn(input: {
   compactEnrichment?: CompactEnrichment
   logLabel?: string
   readFileState?: import('../../utils/read/types.js').ReadFileState
-}): Promise<void> {
+  runAgent?: RunAgentFn
+  systemPrompt: string
+  tools: Record<string, AnyTool>
+}): Promise<Message[]> {
+  const activeMessages = applyMicroCompactProjection(
+    getMessagesAfterCompactBoundary(input.messages),
+    input.sessionId,
+  )
+  const cacheSafeParams = input.runAgent
+    ? createCacheSafeParams({
+        systemPrompt: input.systemPrompt,
+        tools: input.tools,
+        provider: input.provider,
+        model: input.resolvedModel,
+        messages: activeMessages,
+      })
+    : undefined
   const compactStart = Date.now()
   const outcome = await compactIfNeeded(
-    input.messages,
+    activeMessages,
     input.eventBus,
     input.wire,
     input.resolvedModel,
@@ -86,12 +108,14 @@ export async function preTurn(input: {
       enrichment: input.compactEnrichment,
       sessionMemory: input.sessionMemory,
       readFileState: input.readFileState,
+      runAgent: input.runAgent,
+      cacheSafeParams,
     },
     input.compaction,
     input.provider,
     input.sessionId,
   )
-  applyCompactOutcome(
+  const managed = applyCompactOutcome(
     input.messages,
     outcome,
     input.currentTodos,
@@ -99,7 +123,7 @@ export async function preTurn(input: {
   )
   const compactMs = Date.now() - compactStart
 
-  const counted = tokenCountWithEstimation(input.messages)
+  const counted = tokenCountWithEstimation(managed)
   const tokenLabel =
     counted.source === 'real+est'
       ? `${counted.total.toLocaleString()} tokens ` +
@@ -113,8 +137,9 @@ export async function preTurn(input: {
         ? `, compaction=${compactMs}ms source=${outcome.source}`
         : `, microcompact=${compactMs}ms`
   console.log(
-    `[${tag}] step ${input.step} start -- ${input.messages.length} msgs, ${tokenLabel}, ` +
+    `[${tag}] step ${input.step} start -- ${managed.length} active msgs (${input.messages.length} transcript), ${tokenLabel}, ` +
       `model=${input.resolvedModel}, llm=${input.provider.describe()}` +
       (compactMs > 50 || outcome.source !== 'none' ? compactNote : ''),
   )
+  return managed
 }

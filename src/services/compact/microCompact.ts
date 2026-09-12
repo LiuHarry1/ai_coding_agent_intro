@@ -37,6 +37,10 @@ import {
   offloadReferenceForCompact,
 } from '../tool-storage/index.js'
 import { toolResultOutputToText } from '../../utils/tool-result-content.js'
+import {
+  findLastCompactBoundaryIndex,
+  getMessagesAfterCompactBoundary,
+} from '../../core/messages/compact-boundary.js'
 
 const MICRO_COMPACT_MARKER = '[Old tool result content cleared to save context]'
 
@@ -82,6 +86,140 @@ export interface MicroCompactResult {
   cleared: number
   /** Absolute paths whose Read results were cleared (for readFileState sync). */
   clearedReadAbsPaths: string[]
+}
+
+type ClearedToolResult = {
+  messageUuid: string
+  toolCallId: string
+  replacement: string
+}
+
+type ClearedToolInput = {
+  messageUuid: string
+  toolCallId: string
+}
+
+type MicroCompactState = {
+  boundaryUuid?: string
+  results: Map<string, ClearedToolResult>
+  inputs: Map<string, ClearedToolInput>
+}
+
+const sessionMicroCompactState = new Map<string, MicroCompactState>()
+
+function currentBoundaryUuid(messages: readonly Message[]): string | undefined {
+  const index = findLastCompactBoundaryIndex(messages)
+  return index >= 0 ? messages[index]!.uuid : undefined
+}
+
+function stateKey(messageUuid: string, toolCallId: string): string {
+  return `${messageUuid}\0${toolCallId}`
+}
+
+/** Drop a session's ephemeral micro-compaction model projection. */
+export function resetMicroCompactState(sessionId?: string): void {
+  if (sessionId) sessionMicroCompactState.delete(sessionId)
+}
+
+/**
+ * Move clears that belong to a preserved compact tail onto its new boundary.
+ * Clears outside the tail are discarded with the summarized head.
+ */
+export function rebaseMicroCompactState(
+  sessionId: string | undefined,
+  preservedTail: readonly Message[],
+  compactedMessages: readonly Message[],
+): void {
+  if (!sessionId) return
+  const state = sessionMicroCompactState.get(sessionId)
+  if (!state) return
+  if (preservedTail.length === 0) {
+    sessionMicroCompactState.delete(sessionId)
+    return
+  }
+  const kept = new Set(
+    preservedTail.map(message => message.uuid).filter(Boolean) as string[],
+  )
+  for (const [key, value] of state.results) {
+    if (!kept.has(value.messageUuid)) state.results.delete(key)
+  }
+  for (const [key, value] of state.inputs) {
+    if (!kept.has(value.messageUuid)) state.inputs.delete(key)
+  }
+  state.boundaryUuid = currentBoundaryUuid(compactedMessages)
+  if (state.results.size === 0 && state.inputs.size === 0) {
+    sessionMicroCompactState.delete(sessionId)
+  }
+}
+
+/**
+ * Reapply prior micro-clears to a freshly reconstructed active model view.
+ * A new compact boundary ends the projection lifetime.
+ */
+export function applyMicroCompactProjection(
+  messages: Message[],
+  sessionId?: string,
+): Message[] {
+  if (!sessionId) return messages
+  const state = sessionMicroCompactState.get(sessionId)
+  if (!state) return messages
+  if (state.boundaryUuid !== currentBoundaryUuid(messages)) {
+    sessionMicroCompactState.delete(sessionId)
+    return messages
+  }
+
+  let changed = false
+  const projected = messages.map(message => {
+    if (!isRoleMessage(message) || !message.uuid) return message
+    if (message.role === 'tool') {
+      let touched = false
+      const content = message.content.map(part => {
+        const cleared = state.results.get(
+          stateKey(message.uuid!, part.toolCallId),
+        )
+        if (!cleared) return part
+        touched = true
+        return {
+          ...part,
+          output: { type: 'text' as const, value: cleared.replacement },
+        }
+      })
+      if (touched) {
+        changed = true
+        return { ...message, content } as ToolMessage
+      }
+    }
+    if (message.role === 'assistant') {
+      let touched = false
+      const content = message.content.map(part => {
+        if (
+          part.type !== 'tool-call' ||
+          !state.inputs.has(stateKey(message.uuid!, part.toolCallId))
+        ) {
+          return part
+        }
+        touched = true
+        return { ...part, input: { ...MICRO_COMPACT_INPUT_MARKER } }
+      })
+      if (touched) {
+        changed = true
+        return { ...message, content } as AssistantMessage
+      }
+    }
+    return message
+  })
+  return changed ? projected : messages
+}
+
+/** Canonical active model/lifecycle view: latest boundary plus micro clears. */
+export function getActiveModelMessages(
+  messages: readonly Message[],
+  sessionId?: string,
+): Message[] {
+  return applyMicroCompactProjection(
+    getMessagesAfterCompactBoundary(messages),
+    sessionId,
+  )
 }
 
 function collectReadAbsByToolCallId(
@@ -169,11 +307,74 @@ export function microCompact(
     invalidateReadPaths(opts?.readFileState, clearedReadAbsPaths)
   }
 
+  if (sessionId && cleared > 0) {
+    rememberMicroCompactProjection(sessionId, messages, out)
+  }
+
   return {
     messages: out,
     tokensFreed,
     cleared,
     clearedReadAbsPaths: [...clearedReadAbsPaths],
+  }
+}
+
+function rememberMicroCompactProjection(
+  sessionId: string,
+  original: Message[],
+  projected: Message[],
+): void {
+  const boundaryUuid = currentBoundaryUuid(original)
+  let state = sessionMicroCompactState.get(sessionId)
+  if (!state || state.boundaryUuid !== boundaryUuid) {
+    state = {
+      boundaryUuid,
+      results: new Map(),
+      inputs: new Map(),
+    }
+    sessionMicroCompactState.set(sessionId, state)
+  }
+
+  for (let i = 0; i < original.length; i++) {
+    const before = original[i]
+    const after = projected[i]
+    if (
+      !before ||
+      !after ||
+      !isRoleMessage(before) ||
+      !isRoleMessage(after) ||
+      !before.uuid
+    ) {
+      continue
+    }
+    if (before.role === 'tool' && after.role === 'tool') {
+      for (let j = 0; j < before.content.length; j++) {
+        const priorPart = before.content[j]
+        const nextPart = after.content[j]
+        if (!priorPart || !nextPart || priorPart === nextPart) continue
+        state.results.set(stateKey(before.uuid, priorPart.toolCallId), {
+          messageUuid: before.uuid,
+          toolCallId: priorPart.toolCallId,
+          replacement: toolResultOutputToText(nextPart.output),
+        })
+      }
+    } else if (before.role === 'assistant' && after.role === 'assistant') {
+      for (let j = 0; j < before.content.length; j++) {
+        const priorPart = before.content[j]
+        const nextPart = after.content[j]
+        if (
+          priorPart?.type !== 'tool-call' ||
+          nextPart?.type !== 'tool-call' ||
+          priorPart === nextPart
+        ) {
+          continue
+        }
+        state.inputs.set(stateKey(before.uuid, priorPart.toolCallId), {
+          messageUuid: before.uuid,
+          toolCallId: priorPart.toolCallId,
+        })
+      }
+    }
   }
 }
 
