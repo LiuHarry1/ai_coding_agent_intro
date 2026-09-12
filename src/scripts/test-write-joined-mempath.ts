@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { definition as writeFileDefinition } from '../tools/FileWriteTool/FileWriteTool.js'
+import type { ToolContext } from '../core/types.js'
 import { createFilesystemPermissionContext } from '../utils/permissions/filesystem.js'
 import { resolvePath } from '../tools/utils.js'
 
@@ -12,11 +13,14 @@ const joined = path.join(root, target)
 console.log('joined', joined)
 console.log('resolved', resolvePath(root, joined))
 
-const tool = writeFileDefinition.create(root, {
-  permissionContext: createFilesystemPermissionContext(root, { extraWriteRoots: [mem] }),
-})
+const toolContext = {
+  permissionContext: createFilesystemPermissionContext(root, {
+    extraWriteRoots: [mem],
+  }),
+} as unknown as ToolContext
+const tool = writeFileDefinition.create(root, toolContext)
 const out = await (
-  tool as { execute: (a: unknown) => Promise<unknown> }
+  tool as unknown as { execute: (a: unknown) => Promise<unknown> }
 ).execute({
   file_path: joined,
   content: '---\nname: Concur\ntype: reference\n---\nok\n',
@@ -25,7 +29,7 @@ console.log(
   'result',
   typeof out === 'string'
     ? out
-    : (out as { data?: { message?: string } })?.data?.message ?? out,
+    : ((out as { data?: { message?: string } })?.data?.message ?? out),
 )
 console.log('exists', fs.existsSync(target))
 fs.rmSync(mem, { recursive: true, force: true })

@@ -57,4 +57,6 @@ export interface ExecutionBackend {
     opts?: { timeoutMs?: number },
   ): Promise<string[]>
   fsPort?: FsPort
+  /** Release per-consumer runtime listeners; does not stop the shared worker. */
+  dispose?(): void
 }
