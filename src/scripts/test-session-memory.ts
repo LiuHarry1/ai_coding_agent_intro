@@ -12,11 +12,24 @@ import {
   adjustIndexToPreserveToolPairs,
   calculateMessagesToKeepIndex,
   ensureMessageUuid,
+  evictSessionMemoryState,
   getSessionMemoryPath,
+  getSessionMemoryStatePath,
+  persistSessionMemoryState,
   trySessionMemoryCompaction,
   DEFAULT_SESSION_MEMORY_TEMPLATE,
 } from '../services/session-memory/index.js'
 import { getSessionMemoryState } from '../services/session-memory/state.js'
+import {
+  repairSessionMemoryStructure,
+  validateSessionMemoryStructure,
+} from '../services/session-memory/template.js'
+import {
+  computeProjectKey,
+  registerSessionLocation,
+  unregisterSessionLocation,
+} from '../core/session-paths.js'
+import { resolveAgentHome } from '../utils/request-scope.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SESSION_ID = `sm-test-${randomUUID()}`
@@ -69,6 +82,11 @@ function toolResult(id: string, name = 'Bash'): Message {
 }
 
 async function main(): Promise<void> {
+  registerSessionLocation(SESSION_ID, {
+    projectKey: computeProjectKey(undefined, process.cwd()),
+    agentHome: resolveAgentHome(),
+  })
+
   // Tool-pair preservation: keep must not start mid tool-result without call.
   const msgs: Message[] = [
     user('hi'),
@@ -78,7 +96,10 @@ async function main(): Promise<void> {
     assistantText('done'),
   ]
   const adjusted = adjustIndexToPreserveToolPairs(msgs, 2)
-  assert(adjusted === 1, `adjustIndex pulls back to tool-call (got ${adjusted})`)
+  assert(
+    adjusted === 1,
+    `adjustIndex pulls back to tool-call (got ${adjusted})`,
+  )
 
   const keepCfg = {
     minTokens: 1,
@@ -127,6 +148,18 @@ async function main(): Promise<void> {
   )
   fs.writeFileSync(memPath, filled)
 
+  const malformed = filled.replace('# Key results', 'undefined')
+  const repaired = repairSessionMemoryStructure(malformed, filled)
+  assert(!!repaired, 'repairs a model edit with a missing section header')
+  assert(
+    validateSessionMemoryStructure(repaired!),
+    'repaired Session Memory preserves required structure',
+  )
+  assert(
+    !repaired!.split('\n').some(line => line.trim() === 'undefined'),
+    'repair removes a bare undefined edit artifact',
+  )
+
   const state = getSessionMemoryState(SESSION_ID)
   state.lastSummarizedMessageId = (msgs[2] as { uuid?: string }).uuid
 
@@ -161,9 +194,8 @@ async function main(): Promise<void> {
   assert(sm!.messagesToKeep.length > 0, 'preserves messagesToKeep')
 
   // Memory Edit tool path lock
-  const { createMemoryFileEditTool } = await import(
-    '../services/session-memory/memoryEditTool.js'
-  )
+  const { createMemoryFileEditTool } =
+    await import('../services/session-memory/memoryEditTool.js')
   const edit = createMemoryFileEditTool(memPath)
   const denied = await (
     edit as unknown as { execute: (a: unknown) => Promise<string> }
@@ -194,9 +226,8 @@ async function main(): Promise<void> {
   )
 
   // Extract queue: sequential + latest-wins coalesce
-  const { enqueueSessionExtract, resetExtractQueues } = await import(
-    '../services/session-memory/extractQueue.js'
-  )
+  const { enqueueSessionExtract, resetExtractQueues } =
+    await import('../services/session-memory/extractQueue.js')
   resetExtractQueues()
   const order: string[] = []
   let release!: () => void
@@ -241,6 +272,40 @@ async function main(): Promise<void> {
   )
   resetExtractQueues()
 
+  // Runtime cursor survives process/cache restart; transient locks do not.
+  state.initialized = true
+  state.tokensAtLastExtraction = 4321
+  state.lastTriggerMessageId = (msgs[1] as { uuid?: string }).uuid
+  state.lastSummarizedMessageId = (msgs[2] as { uuid?: string }).uuid
+  state.notesGeneration = 7
+  state.inFlight = true
+  state.extractionEpoch = 9
+  persistSessionMemoryState(SESSION_ID)
+  assert(
+    fs.existsSync(getSessionMemoryStatePath(SESSION_ID)),
+    'writes persistent session-memory state',
+  )
+  evictSessionMemoryState(SESSION_ID)
+  const restored = getSessionMemoryState(SESSION_ID)
+  assert(restored.initialized, 'restores initialized state')
+  assert(
+    restored.tokensAtLastExtraction === 4321,
+    'restores token extraction baseline',
+  )
+  assert(
+    restored.lastTriggerMessageId === state.lastTriggerMessageId,
+    'restores extraction trigger cursor',
+  )
+  assert(
+    restored.lastSummarizedMessageId === state.lastSummarizedMessageId,
+    'restores compaction cursor',
+  )
+  assert(restored.notesGeneration === 7, 'restores notes generation')
+  assert(
+    !restored.inFlight && restored.extractionEpoch === 0,
+    'does not restore stale process-local extraction lock',
+  )
+
   // Cleanup
   try {
     fs.rmSync(path.join(path.dirname(memPath), '..'), {
@@ -250,6 +315,7 @@ async function main(): Promise<void> {
   } catch {
     // ignore
   }
+  unregisterSessionLocation(SESSION_ID)
   console.log('\nAll session-memory unit checks passed.')
 }
 

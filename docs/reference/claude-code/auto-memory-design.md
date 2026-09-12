@@ -13,17 +13,17 @@
 
 补上 **跨会话** 的结构化记忆（与「人工指令」和「单会话笔记」正交）：
 
-| 层 | 生命周期 | 存什么 |
-|----|----------|--------|
-| Instructions | 跨会话，人工 | 仓库规范 → `AGENTS.md` |
-| Session Memory | 单会话 | 当前任务进度 → compact |
+| 层              | 生命周期                | 存什么                             |
+| --------------- | ----------------------- | ---------------------------------- |
+| Instructions    | 跨会话，人工            | 仓库规范 → `AGENTS.md`             |
+| Session Memory  | 单会话                  | 当前任务进度 → compact             |
 | **Auto Memory** | **跨会话，自动/半自动** | 用户偏好、纠错、项目事实、外部指针 |
 
 闭环：
 
-1. 系统提示教会主 agent **何时写** memory  
-2. **整轮收尾**（无后续 tool）若本轮没写 → **fork extract** 补抽  
-3. 启动时把 **`MEMORY.md` 索引** 注入上下文（空索引不注入）
+1. 系统提示教会主 agent **何时写** memory
+2. **整轮收尾**（无后续 tool）若本轮没写 → **fork extract** 补抽
+3. 默认异步 prefetch 最多 5 篇相关主题；关闭 prefetch 时才把 **`MEMORY.md` 索引** 注入上下文
 
 ### 非目标（本阶段不做）
 
@@ -35,12 +35,12 @@
 
 ### 与 Session Memory 的硬边界
 
-| | Session Memory | Auto Memory |
-|--|----------------|-------------|
-| 路径 | `.sessions/{id}/session-memory/summary.md` | `~/.ai-agent/projects/<sanitized-git-root>/memory/` |
-| 用途 | compact 续接、当前 State | 下次打开仓库仍有用 |
-| 不要混写 | 临时任务进度 | 代码里能推出来的架构 |
-| 触发 | 采样后，按 token / tool 阈值 | **仅 turn 收尾**（`tool_calls=0`），与 SM **分钩子** |
+|          | Session Memory                             | Auto Memory                                          |
+| -------- | ------------------------------------------ | ---------------------------------------------------- |
+| 路径     | `.sessions/{id}/session-memory/summary.md` | `~/.ai-agent/projects/<sanitized-git-root>/memory/`  |
+| 用途     | compact 续接、当前 State                   | 下次打开仓库仍有用                                   |
+| 不要混写 | 临时任务进度                               | 代码里能推出来的架构                                 |
+| 触发     | 采样后，按 token / tool 阈值               | **仅 turn 收尾**（`tool_calls=0`），与 SM **分钩子** |
 
 ---
 
@@ -50,7 +50,7 @@
 会话启动
   ├─ loadProjectRules()              ← AGENTS.md（已有）
   ├─ loadAutoMemoryPrompt()          ← 「如何读写 memory」指南 → system
-  └─ inject MEMORY.md (truncated)    ← 非空才注入；排在 AGENTS 之后
+  └─ prefetch relevant topics        ← 不阻塞首轮；关闭时回退为 MEMORY.md
 
 主 agent 回合中
   └─ 可直接 Write/Edit memdir（sandbox carve-out + 审计日志）
@@ -82,7 +82,7 @@
 
 ```
 ~/.ai-agent/projects/<sanitize(canonicalGitRoot|cwd)>/memory/
-├── MEMORY.md           # 索引（入口，注入上下文）
+├── MEMORY.md           # 兼容索引（关闭 prefetch 时注入）
 ├── prefer-concise.md   # 主题文件（文件名任意；type 在 frontmatter）
 └── …
 ```
@@ -112,18 +112,20 @@ type: feedback
 ---
 
 ## Why
+
 …
 
 ## How to apply
+
 …
 ```
 
-| `type` | 存什么 | 勿存 |
-|--------|--------|------|
-| `user` | 角色、背景、协作偏好 | — |
-| `feedback` | 纠正 / 确认的工作方式 | — |
-| `project` | 无法从代码推导的事实、截止日期 | 目录结构、git 历史、可从代码推的架构 |
-| `reference` | Linear / Slack / Dashboard 指针 | 大段粘贴 |
+| `type`      | 存什么                          | 勿存                                 |
+| ----------- | ------------------------------- | ------------------------------------ |
+| `user`      | 角色、背景、协作偏好            | —                                    |
+| `feedback`  | 纠正 / 确认的工作方式           | —                                    |
+| `project`   | 无法从代码推导的事实、截止日期  | 目录结构、git 历史、可从代码推的架构 |
+| `reference` | Linear / Slack / Dashboard 指针 | 大段粘贴                             |
 
 **去重规则（写进 extract prompt）：** 同主题优先 **Edit 已有文件**；禁止平行新建近义条目。验收：重复 feedback 应合并。
 
@@ -131,7 +133,7 @@ type: feedback
 
 - 无 frontmatter；`- [Title](file.md) — one-line hook`
 - 硬上限：约 **200 行 / 25KB**（截断；注入时再可只取最近 N 条作预算）
-- 两步写入：① topic ② 索引行  
+- 两步写入：① topic ② 索引行
 - **写后校验**：新/改 topic 若索引缺失 → 自动补一行或 `console.warn`；P1 提供 `rebuildIndex()`
 
 ---
@@ -148,20 +150,20 @@ type: feedback
 
 对齐 CC `extractMemories` + 本 repo review：
 
-| 项 | 行为 |
-|----|------|
-| 触发 | **仅**主线程 turn 收尾：`tool_calls === 0`；`autoMemoryEnabled`；非 SM/Auto 自身 fork |
-| Skip | `hasMemoryWritesSince(lastAutoMemoryMessageUuid)` 为 true |
-| 节流 | 默认 **每 1 个** eligible turn（对齐 CC `tengu_bramble_lintel` default）；非 settings 字段 |
-| 错峰 | SM extract in-flight 时 Auto 进入 memdir 队列延后（不 drop；latest-wins coalesce） |
-| Fork | `runForkedAgent` + `cacheSafeParams`（默认 cacheSafe） |
-| 工具 | Read/Grep/Glob：**workspace cwd ∪ memdir**；Edit/Write：**仅 memdir**；Bash 写否认 |
-| maxSteps | 5 |
-| 预注入 | memory manifest（path + description），避免先 ls |
-| 队列锁 | **按 memdir 绝对路径** 串行（多 tab 同 repo 安全） |
-| 收尾 | 校验索引；日志 `skipped\|ran\|wrote N\|indexLines` |
+| 项       | 行为                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------ |
+| 触发     | **仅**主线程 turn 收尾：`tool_calls === 0`；`autoMemoryEnabled`；非 SM/Auto 自身 fork      |
+| Skip     | `hasMemoryWritesSince(lastAutoMemoryMessageUuid)` 为 true                                  |
+| 节流     | 默认 **每 1 个** eligible turn（对齐 CC `tengu_bramble_lintel` default）；非 settings 字段 |
+| 错峰     | SM extract in-flight 时 Auto 进入 memdir 队列延后（不 drop；latest-wins coalesce）         |
+| Fork     | `runForkedAgent` + `cacheSafeParams`（默认 cacheSafe）                                     |
+| 工具     | Read/Grep/Glob：**workspace cwd ∪ memdir**；Edit/Write：**仅 memdir**；Bash 写否认         |
+| maxSteps | 5                                                                                          |
+| 预注入   | memory manifest（path + description），避免先 ls                                           |
+| 队列锁   | **按 memdir 绝对路径** 串行（多 tab 同 repo 安全）                                         |
+| 收尾     | 校验索引；日志 `skipped\|ran\|wrote N\|indexLines`                                         |
 
-游标：`lastAutoMemoryMessageUuid`（进程内；P1 持久化到 session meta）。  
+游标：`lastAutoMemoryMessageUuid`（当前仍为进程内状态；Session Memory 游标已独立持久化到 `state.json`）。
 语义：自该 uuid **之后** 的消息里是否出现过 memdir 写入——不是「session 历史上写过一次就永远 skip」。
 
 ### 4.3 手动（P1）
@@ -171,11 +173,11 @@ type: feedback
 
 ---
 
-## 5. 读取 / 召回（MVP）
+## 5. 读取 / 召回
 
-1. 启动读 `MEMORY.md`；**空 / 仅空白 → 不注入**。  
-2. 注入位置：与 AGENTS 同级 user/instructions 区，标题 `## Auto memory`，**排在 AGENTS.md 之后**（人工规范优先）。  
-3. 可选预算：注入最近 N 条索引行（默认 N=50 或 25KB 截断，先到先限）。  
+1. 默认在收到用户请求后异步 prefetch，选择最多 5 篇相关主题文件；不等待它来阻塞首轮模型调用。
+2. prefetch 完成后在后续 step 作为 `relevant_memories` attachment 注入。
+3. `prefetchEnabled: false` 时回退到截断后的 `MEMORY.md` 索引；空索引不注入。
 4. 细节：主 agent 按路径 Read topic（prompt 写明 memdir）。
 
 **P2：** 关闭常驻索引 + Sonnet 选 ≤5 条 attachment；`memoryAge` 新鲜度提示。
@@ -202,13 +204,13 @@ interface AutoMemoryConfig {
 
 Env：
 
-- `AI_AGENT_DISABLE_AUTO_MEMORY=1` → 关  
+- `AI_AGENT_DISABLE_AUTO_MEMORY=1` → 关
 - `AI_AGENT_MEMORY_PATH=/abs/path` → 覆盖目录（trusted）
 
 Settings：
 
-- Project `.ai-agent/settings.json` 可设 `autoMemoryEnabled`  
-- **不可**用 project settings 设 `autoMemoryDirectory`（防指到 `~/.ssh`）  
+- Project `.ai-agent/settings.json` 可设 `autoMemoryEnabled`
+- **不可**用 project settings 设 `autoMemoryDirectory`（防指到 `~/.ssh`）
 - User/local settings 可设 `autoMemoryDirectory`
 
 ---
@@ -238,57 +240,57 @@ settings-manager / types        # AutoMemoryConfig
 
 ### MVP
 
-1. paths + types + scan + truncate / 空索引不注入  
-2. system 指南 + AGENTS 之后注入索引  
-3. sandbox 写放行 + 简单审计 log  
-4. turn-end extract + skip-if-wrote + 节流默认 3 + memdir 锁队列  
-5. 写后索引校验  
+1. paths + types + scan + truncate / 空索引不注入
+2. system 指南 + AGENTS 之后注入索引
+3. sandbox 写放行 + 简单审计 log
+4. turn-end extract + skip-if-wrote + 节流默认 3 + memdir 锁队列
+5. 写后索引校验
 6. settings / env（**默认 autoMemoryEnabled: true**，节流每 turn）
 
 ### P1
 
-- `/memory` 状态命令  
-- `rebuildIndex()`  
-- 游标持久化  
-- SM in-flight 错峰  
+- `/memory` 状态命令
+- `rebuildIndex()`
+- 游标持久化
+- SM in-flight 错峰
 
 ### P2
 
-- Relevant memory prefetch  
-- Team / Dream  
-- 主 agent 写路径更严的 canUseTool 门闸  
+- Relevant memory prefetch
+- Team / Dream
+- 主 agent 写路径更严的 canUseTool 门闸
 
 ---
 
 ## 9. 验收标准
 
-- 用户说「以后回复短一点」→ 收尾 extract 或主 agent 写出 topic + 索引有条目  
-- 重复说同一偏好 → **Edit 已有文件**，不新增平行条目  
-- 新会话：非空索引出现在 AGENTS **之后**；空索引无 Auto memory 段  
-- 本轮已 Write memdir → 日志 `extract skipped (direct write)`  
-- project settings 配置 `autoMemoryDirectory: ~/.ssh` → **忽略/拒绝**  
-- 同 repo 两 session 并发 extract → 串行，无交叉写坏 `MEMORY.md`  
-- SM 与 Auto **不同钩子**；tool 风暴中途不跑 Auto extract  
+- 用户说「以后回复短一点」→ 收尾 extract 或主 agent 写出 topic + 索引有条目
+- 重复说同一偏好 → **Edit 已有文件**，不新增平行条目
+- 新会话：非空索引出现在 AGENTS **之后**；空索引无 Auto memory 段
+- 本轮已 Write memdir → 日志 `extract skipped (direct write)`
+- project settings 配置 `autoMemoryDirectory: ~/.ssh` → **忽略/拒绝**
+- 同 repo 两 session 并发 extract → 串行，无交叉写坏 `MEMORY.md`
+- SM 与 Auto **不同钩子**；tool 风暴中途不跑 Auto extract
 - Session Memory 目录与 Auto memdir **互不写入**
 
 ---
 
 ## 10. 关键决策
 
-| 决策 | 选择 | 理由 |
-|------|------|------|
-| 存储根 | `~/.ai-agent/projects/<sanitize>/memory/` | 对齐 CC；不污染仓库 |
-| 召回 MVP | 非空 MEMORY.md 注入（限行） | 无额外模型成本 |
-| Extract 模型 | cacheSafe 主模型 | 与 SM / CC 一致 |
-| 索引 | 两步 + 写后校验 | 防漂移 |
-| 触发 | **仅 turn 收尾** | 对齐 CC stopHooks |
-| 默认开关 | **`autoMemoryEnabled: true`** | 对齐 CC |
-| 节流 | **每 1 个 eligible turn** | 对齐 CC `tengu_bramble_lintel` |
-| 读工具范围 | workspace ∪ memdir | 多租户安全 |
-| 写工具范围 | 仅 memdir | 同 CC |
-| 队列锁 | **memdir 路径** | 多 session 同 repo |
-| 文件名 | 任意 + frontmatter type | 对齐 CC，非强制前缀 |
-| 注入顺序 | AGENTS → Auto memory | 人工规范优先 |
+| 决策         | 选择                                                  | 理由                           |
+| ------------ | ----------------------------------------------------- | ------------------------------ |
+| 存储根       | `~/.ai-agent/projects/<sanitize>/memory/`             | 对齐 CC；不污染仓库            |
+| 召回         | 默认 prefetch ≤5 篇；关闭时注入非空 MEMORY.md（限长） | 相关性优先，首轮不阻塞         |
+| Extract 模型 | cacheSafe 主模型                                      | 与 SM / CC 一致                |
+| 索引         | 两步 + 写后校验                                       | 防漂移                         |
+| 触发         | **仅 turn 收尾**                                      | 对齐 CC stopHooks              |
+| 默认开关     | **`autoMemoryEnabled: true`**                         | 对齐 CC                        |
+| 节流         | **每 1 个 eligible turn**                             | 对齐 CC `tengu_bramble_lintel` |
+| 读工具范围   | workspace ∪ memdir                                    | 多租户安全                     |
+| 写工具范围   | 仅 memdir                                             | 同 CC                          |
+| 队列锁       | **memdir 路径**                                       | 多 session 同 repo             |
+| 文件名       | 任意 + frontmatter type                               | 对齐 CC，非强制前缀            |
+| 注入顺序     | AGENTS → Auto memory                                  | 人工规范优先                   |
 
 ---
 

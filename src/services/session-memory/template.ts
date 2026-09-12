@@ -59,3 +59,55 @@ export function validateSessionMemoryStructure(content: string): boolean {
   }
   return true
 }
+
+function splitKnownSections(content: string): Map<string, string> {
+  const sections = new Map<string, string>()
+  const lines = content.split('\n')
+  let header: string | undefined
+  let body: string[] = []
+
+  const flush = () => {
+    if (header && !sections.has(header)) {
+      sections.set(
+        header,
+        [header, ...body.filter(line => line.trim() !== 'undefined')]
+          .join('\n')
+          .trimEnd(),
+      )
+    }
+  }
+
+  for (const line of lines) {
+    if ((SESSION_MEMORY_SECTION_HEADERS as readonly string[]).includes(line)) {
+      flush()
+      header = line
+      body = []
+    } else if (header) {
+      body.push(line)
+    }
+  }
+  flush()
+  return sections
+}
+
+/**
+ * Rebuild a malformed model edit from known sections. Candidate sections win;
+ * missing sections fall back to the last valid notes so one bad edit cannot
+ * corrupt Session Memory or stall its generation cursor.
+ */
+export function repairSessionMemoryStructure(
+  candidate: string,
+  fallback: string,
+): string | undefined {
+  const candidateSections = splitKnownSections(candidate)
+  const fallbackSections = splitKnownSections(fallback)
+  const repaired: string[] = []
+
+  for (const header of SESSION_MEMORY_SECTION_HEADERS) {
+    const section = candidateSections.get(header) ?? fallbackSections.get(header)
+    if (!section) return undefined
+    repaired.push(section)
+  }
+  const result = `${repaired.join('\n\n')}\n`
+  return validateSessionMemoryStructure(result) ? result : undefined
+}

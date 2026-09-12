@@ -12,10 +12,7 @@ import type { IProvider } from '../core/llm/types.js'
 import { createCacheSafeParams } from '../core/forked-agent.js'
 import { extractSessionMemoryInBackground } from '../services/session-memory/index.js'
 import { extractAutoMemoriesInBackground } from '../services/auto-memory/index.js'
-import {
-  getRequestScope,
-  runWithRequestScope,
-} from '../utils/request-scope.js'
+import { getRequestScope, runWithRequestScope } from '../utils/request-scope.js'
 
 export function createMemoryLifecycleHooks(opts: {
   sessionMemory?: SessionMemoryConfig
@@ -24,7 +21,6 @@ export function createMemoryLifecycleHooks(opts: {
   autoMemory?: AutoMemoryConfig
   autoMemoryModelId?: string
   autoMemoryProvider?: IProvider
-  compactionEnabled: boolean
   runAgent: RunAgentFn
 }) {
   const {
@@ -34,7 +30,6 @@ export function createMemoryLifecycleHooks(opts: {
     autoMemory,
     autoMemoryModelId,
     autoMemoryProvider,
-    compactionEnabled,
     runAgent,
   } = opts
 
@@ -44,7 +39,6 @@ export function createMemoryLifecycleHooks(opts: {
       if (
         !snap.sessionId ||
         !sessionMemory?.enabled ||
-        !compactionEnabled ||
         (sessionMemory.cacheSafe === false && !sessionMemoryModelId)
       ) {
         return
@@ -78,7 +72,7 @@ export function createMemoryLifecycleHooks(opts: {
       else reenter()
     },
 
-    /** Natural turn end (no more tools) — fire-and-forget auto-memory extract. */
+    /** Successful turn finalization — fire-and-forget auto-memory extract. */
     onTurnEnd(snap: AgentLifecycleSnapshot): void {
       if (
         !snap.sessionId ||

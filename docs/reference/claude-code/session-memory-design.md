@@ -52,10 +52,10 @@ step 前 / 手动 compact
               [boundary][summaryMsg][messagesToKeep][attachments…]
 ```
 
-| 名称 | 位置 |
-|------|------|
-| Session Memory 文件 | `.sessions/{sessionId}/session-memory/summary.md` |
-| Compact summary | **仅**消息链内（`role` + `isCompactSummary`）；full **不写**磁盘 md |
+| 名称                | 位置                                                                |
+| ------------------- | ------------------------------------------------------------------- |
+| Session Memory 文件 | `.sessions/{sessionId}/session-memory/summary.md`                   |
+| Compact summary     | **仅**消息链内（`role` + `isCompactSummary`）；full **不写**磁盘 md |
 
 ---
 
@@ -74,8 +74,8 @@ step 前 / 手动 compact
 `Session Title` / `Current State` / `Task specification` / `Files and Functions` /  
 `Errors & Corrections` / `Learnings` / `Key results` / `Worklog`
 
-- 单节软上限 ~2k tokens；整文件 ~12k  
-- Compact 注入前按节硬截断  
+- 单节软上限 ~2k tokens；整文件 ~12k
+- Compact 注入前按节硬截断
 - 自定义模板：`.ai-agent/session-memory/{template,prompt}.md`（可与实现同期做，无旧格式包袱）
 
 ---
@@ -85,7 +85,8 @@ step 前 / 手动 compact
 所有进入 agent loop 的消息 **必须有** `id: string`（创建时 `randomUUID()`）。  
 jsonl / resume 无 id 的旧记录：**丢弃或拒绝加载**，不做迁移。
 
-Session 内存状态（进程内，按 `sessionId`）：
+Session 状态按 `sessionId` 缓存在进程内，并持久化到
+`.sessions/{sessionId}/session-memory/state.json`：
 
 ```ts
 {
@@ -93,13 +94,14 @@ Session 内存状态（进程内，按 `sessionId`）：
   tokensAtLastExtraction: number
   lastTriggerMessageId?: string      // 阈值用：上次触发抽取时的末消息
   lastSummarizedMessageId?: string   // compact 边界：笔记覆盖到哪
-  extractionStartedAt?: number
-  inFlight: boolean
+  notesGeneration: number
 }
 ```
 
-- 抽取成功且末条 assistant **无** tool_call → 写 `lastSummarizedMessageId`  
-- 任意成功 compact 后 → `lastSummarizedMessageId = undefined`  
+`inFlight`、`extractionStartedAt`、`extractionEpoch` 只属于当前进程，不写入磁盘。状态文件采用临时文件 + rename；进程重启或 session cache eviction 后恢复游标、token 基线与 generation。这是本项目面向 Cloud/Electron 重启的增强，Claude Code 对应状态仍只在进程内。
+
+- 抽取成功且末条 assistant **无** tool_call → 写 `lastSummarizedMessageId`
+- 任意成功 compact 后 → `lastSummarizedMessageId = undefined`
 - Compact 用 `lastSummarizedMessageId` 算 `messagesToKeep`；找不到 id → **直接 FullCompact**（不做弱 cursor）
 
 ---
@@ -115,7 +117,7 @@ Subagent / skill fork 不跑。
 
 ```ts
 sessionMemory: {
-  enabled: true,                    // 默认开；仅当 compaction.enabled===false 时整体不跑
+  enabled: true,                    // 默认开；与 compaction 总开关独立
   minimumTokensToInit: 10_000,
   minimumTokensBetweenUpdate: 5_000,
   toolCallsBetweenUpdates: 3,
@@ -132,9 +134,9 @@ sessionMemory: {
 
 `tokenCountWithEstimation` 与 autoCompact 同口径：
 
-- 未 init：`< minimumTokensToInit` 不抽  
+- 未 init：`< minimumTokensToInit` 不抽
 - 之后：上下文再涨 `≥ minimumTokensBetweenUpdate`，且  
-  `(tool_calls ≥ N) OR (上轮 assistant 无 tool_call)`  
+  `(tool_calls ≥ N) OR (上轮 assistant 无 tool_call)`
 
 `inFlight` 时丢弃新请求（或只保留最新一次；实现选一种即可）。
 
@@ -161,7 +163,7 @@ sessionMemory: {
 ```ts
 type CompactOutcome = {
   source: 'session_memory' | 'full'
-  messages: Message[]  // boundary + summary + keep + attachments
+  messages: Message[] // boundary + summary + keep + attachments
   messagesToKeep: Message[]
   summaryText: string
 }
@@ -169,9 +171,9 @@ type CompactOutcome = {
 
 **FullCompact 与 SessionMemoryCompact 都保留尾部**（废除「full 无 tail」）：
 
-- 有 `lastSummarizedMessageId`：从其后开始扩 keep  
-- 无（full 现场总结 / resume）：从末尾向前扩到 minTokens / minTextMessages，cap 在 maxTokens  
-- 必须：不拆 tool_call/tool_result；去掉旧 boundary  
+- 有 `lastSummarizedMessageId`：从其后开始扩 keep
+- 无（full 现场总结 / resume）：从末尾向前扩到 minTokens / minTextMessages，cap 在 maxTokens
+- 必须：不拆 tool_call/tool_result；去掉旧 boundary
 
 FullCompact：LLM 只总结 **keep 之前** 的历史（或整段减去 keep，实现时选清晰一种）；summary 消息壳与 SM 共用同一 `formatCompactSummaryMessage()`。
 
@@ -194,8 +196,8 @@ SM 失败条件：无文件 / 空模板 / cursor 丢失 / 拼完仍 ≥ threshol
 
 ### 与 session / UI
 
-- 成功 compact 一律 `appendCompaction` + 现有 wire；带上 `source`  
-- post-compact attachments（files/todos/skills）**两条路径都跑**  
+- 成功 compact 一律 `appendCompaction` + 现有 wire；带上 `source`
+- post-compact attachments（files/todos/skills）**两条路径都跑**
 - 删除 session 时 rm `session-memory/`
 
 ---
@@ -222,43 +224,43 @@ services/compact/
 
 ### P0 — 类型与路径
 
-- Message 强制 `id`；创建/反序列化路径改完  
-- `session-memory/` 路径 + 模板 + state  
+- Message 强制 `id`；创建/反序列化路径改完
+- `session-memory/` 路径 + 模板 + state
 - keep-index 单测（含 tool pair）
 
 ### P1 — 闭环
 
-- Edit-only 抽取 + 阈值 + `void` 挂载  
-- SM compact + **FullCompact 统一带 keep**  
-- `/summary`、`/compact`  
-- 配置默认 `enabled: true`  
+- Edit-only 抽取 + 阈值 + `void` 挂载
+- SM compact + **FullCompact 统一带 keep**
+- `/summary`、`/compact`
+- 配置默认 `enabled: true`
 - 测试：mock 抽取后 force compact → 不走 full summarizer；SM 空 → 走 full 且仍有 keep
 
 ### P2 — 抛光
 
-- 自定义 template/prompt  
-- wire/UI 展示 source  
-- 抽取与 compact 竞态压测  
+- 自定义 template/prompt
+- wire/UI 展示 source
+- 抽取与 compact 竞态压测
 
 ---
 
 ## 9. 风险（在无兼容前提下）
 
-| 风险 | 处理 |
-|------|------|
-| 抽取费用 | medium + 阈值；可 settings 关 `sessionMemory.enabled` |
-| Edit agent 跑飞 | 硬沙箱只允许一个 path；maxTurns 小（如 3–5） |
-| 旧 jsonl 挂掉 | 接受；文档写明需新 session |
+| 风险                | 处理                                                    |
+| ------------------- | ------------------------------------------------------- |
+| 抽取费用            | medium + 阈值；可 settings 关 `sessionMemory.enabled`   |
+| Edit agent 跑飞     | 硬沙箱只允许一个 path；maxTurns 小（如 3–5）            |
+| 旧 jsonl 挂掉       | 接受；文档写明需新 session                              |
 | Full 与 SM 行为接近 | **有意为之**：差别只在 summary 来源（文件 vs 现场 LLM） |
 
 ---
 
 ## 10. 成功标准
 
-1. Compact 默认路径：有笔记则 **无** 现场 summarizer 调用  
-2. 任意 compact 后上下文 = summary + recent keep + attachments  
-3. 主回复不因抽取 await 变慢  
-4. 关掉 `sessionMemory.enabled` 时仍能 FullCompact（带 keep）正常工作  
+1. Compact 默认路径：有笔记则 **无** 现场 summarizer 调用
+2. 任意 compact 后上下文 = summary + recent keep + attachments
+3. 主回复不因抽取 await 变慢
+4. 关掉 `sessionMemory.enabled` 时仍能 FullCompact（带 keep）正常工作
 
 ---
 

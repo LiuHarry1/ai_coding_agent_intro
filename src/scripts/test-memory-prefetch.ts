@@ -12,10 +12,15 @@ import {
   memoryHeader,
   formatMemoryManifest,
   scanMemoryFiles,
+  findFastRelevantMemories,
   findRelevantMemories,
   readMemoriesForSurfacing,
   collectSurfacedMemories,
   startRelevantMemoryPrefetch,
+  hasRecallIntent,
+  resolveMemoryRecallDecision,
+  consumeImmediateMemoryPrefetch,
+  consumeMemoryPrefetchWithTimeout,
   consumeMemoryPrefetchIfReady,
   ensureAutoMemDir,
   MAX_MEMORY_BYTES,
@@ -47,6 +52,43 @@ const baseConfig: AutoMemoryConfig = {
 }
 
 async function main(): Promise<void> {
+  for (const query of [
+    'what did I ask you to remember last time?',
+    'Do you remember what we decided?',
+    'Which database did we choose previously?',
+    '桌面版跨会话校验码是什么？',
+    '上次我们决定用哪个数据库？',
+    '之前那个 issue 后来怎样了？',
+    '帮我找一下之前的聊天记录',
+  ]) {
+    assert(hasRecallIntent(query), `recall intent expected: ${query}`)
+  }
+  for (const query of [
+    'please refactor this parser',
+    'Remember to run tests',
+    'Remember that we use PostgreSQL',
+    '记住这个配置',
+    '帮我记一下这个路径',
+    '记得明天发送报告',
+    '部署之前先运行测试',
+  ]) {
+    assert(!hasRecallIntent(query), `non-recall intent expected: ${query}`)
+  }
+  assert(
+    resolveMemoryRecallDecision('ordinary request', true) === 'strong-fast-hit',
+    'strong fast hit takes precedence',
+  )
+  assert(
+    resolveMemoryRecallDecision('what did we decide last time?', false) ===
+      'recall',
+    'recall decision waits for semantic lane',
+  )
+  assert(
+    resolveMemoryRecallDecision('run tests', false) === 'no-recall-intent',
+    'ordinary request remains asynchronous',
+  )
+  console.log('ok recall intent')
+
   // memoryAge
   {
     const now = Date.now()
@@ -121,8 +163,14 @@ async function main(): Promise<void> {
     const surfaced = await readMemoriesForSurfacing(selected)
     assert(surfaced.length === 2, 'surfaced both')
     assert(surfaced[0]!.content.includes('Alpha body'), 'content a')
-    assert(typeof surfaced[0]!.header === 'string', `header type ${typeof surfaced[0]!.header}`)
-    assert(surfaced[0]!.header.length > 0, `header empty: ${JSON.stringify(surfaced[0])}`)
+    assert(
+      typeof surfaced[0]!.header === 'string',
+      `header type ${typeof surfaced[0]!.header}`,
+    )
+    assert(
+      surfaced[0]!.header.length > 0,
+      `header empty: ${JSON.stringify(surfaced[0])}`,
+    )
 
     const skipped = await findRelevantMemories(
       'what are my prefs again',
@@ -205,15 +253,191 @@ async function main(): Promise<void> {
       path.join(mem, 'c.md'),
       `---\nname: C\ndescription: concise style\ntype: feedback\n---\n\nBe brief\n`,
     )
+    fs.writeFileSync(
+      path.join(mem, 'auth.ts.md'),
+      `---\nname: Auth implementation\ndescription: authentication source file\ntype: project\n---\n\nUse auth.ts\n`,
+    )
+    fs.writeFileSync(
+      path.join(mem, 'desktop-code.md'),
+      `---\nname: 桌面版跨会话校验码\ndescription: Electron memory verification\ntype: project\n---\n\nBAIZE-42\n`,
+    )
+    fs.writeFileSync(
+      path.join(mem, 'style-a.md'),
+      `---\nname: Response format\ndescription: concise response style\ntype: feedback\n---\n\nA\n`,
+    )
+    fs.writeFileSync(
+      path.join(mem, 'style-b.md'),
+      `---\nname: Review format\ndescription: concise review style\ntype: feedback\n---\n\nB\n`,
+    )
 
-    const none = startRelevantMemoryPrefetch([{ role: 'user', content: 'hi' }], {
-      config: baseConfig,
-      memPath: mem,
-      provider: stubProvider,
-      modelId: 'stub',
-      queryText: 'hi',
-    })
+    const authFast = findFastRelevantMemories('auth.ts', mem)
+    assert(authFast.strong, 'short filename is a strong fast hit')
+    assert(
+      authFast.matches[0]?.path.endsWith('auth.ts.md'),
+      'filename fast hit selects exact memory',
+    )
+    const surfacedAuthFast = findFastRelevantMemories(
+      'auth.ts',
+      mem,
+      new Set([path.join(mem, 'auth.ts.md')]),
+    )
+    assert(
+      !surfacedAuthFast.strong && surfacedAuthFast.matches.length === 0,
+      'fast lane excludes already surfaced memories',
+    )
+    const cjkFast = findFastRelevantMemories('桌面版跨会话校验码是什么？', mem)
+    assert(cjkFast.strong, 'Chinese name phrase is a strong fast hit')
+    assert(
+      cjkFast.matches[0]?.path.endsWith('desktop-code.md'),
+      'Chinese fast hit selects exact memory',
+    )
+    const ambiguousFast = findFastRelevantMemories(
+      'please use concise style',
+      mem,
+    )
+    assert(
+      !ambiguousFast.strong && ambiguousFast.matches.length === 0,
+      'broad metadata overlap is not a strong fast hit',
+    )
+
+    const none = startRelevantMemoryPrefetch(
+      [{ role: 'user', content: 'hi' }],
+      {
+        config: baseConfig,
+        memPath: mem,
+        provider: stubProvider,
+        modelId: 'stub',
+        queryText: 'hi',
+      },
+    )
     assert(none === undefined, 'single word skipped')
+
+    let fastSelectorCalls = 0
+    const shortFast = startRelevantMemoryPrefetch(
+      [{ role: 'user', content: 'auth.ts' }],
+      {
+        config: baseConfig,
+        memPath: mem,
+        provider: stubProvider,
+        modelId: 'stub',
+        queryText: 'auth.ts',
+        selectFn: async () => {
+          fastSelectorCalls += 1
+          return ['c.md']
+        },
+      },
+    )
+    assert(shortFast, 'short exact query starts fast prefetch')
+    const shortFastAtts = consumeImmediateMemoryPrefetch(
+      shortFast,
+      undefined,
+      0,
+    )
+    assert(shortFastAtts.length === 1, 'fast hit attaches before step zero')
+    assert(fastSelectorCalls === 0, 'strong fast hit skips Qwen selector')
+    const shortFastAgain = consumeImmediateMemoryPrefetch(
+      shortFast,
+      undefined,
+      1,
+    )
+    assert(shortFastAgain.length === 0, 'fast hit is consumed only once')
+    await shortFast.promise
+    assert(fastSelectorCalls === 0, 'Qwen selector remains skipped')
+    shortFast.dispose()
+
+    let releaseSelector!: () => void
+    const selectorGate = new Promise<void>(resolve => {
+      releaseSelector = resolve
+    })
+    const pending = startRelevantMemoryPrefetch(
+      [{ role: 'user', content: 'please remember my concise preference' }],
+      {
+        config: baseConfig,
+        memPath: mem,
+        provider: stubProvider,
+        modelId: 'stub',
+        queryText: 'please remember my concise preference',
+        selectFn: async () => {
+          await selectorGate
+          return ['c.md']
+        },
+      },
+    )
+    assert(pending, 'delayed prefetch started')
+    const zeroWait = await consumeMemoryPrefetchIfReady(pending, undefined, 0)
+    assert(zeroWait.length === 0, 'unsettled prefetch consumes without waiting')
+    releaseSelector()
+    await pending.promise
+    const delayedAtts = await consumeMemoryPrefetchIfReady(
+      pending,
+      undefined,
+      1,
+    )
+    assert(delayedAtts.length === 1, 'settled prefetch consumed next iteration')
+    pending.dispose()
+
+    const blocking = startRelevantMemoryPrefetch(
+      [{ role: 'user', content: 'what do you remember about my style?' }],
+      {
+        config: baseConfig,
+        memPath: mem,
+        provider: stubProvider,
+        modelId: 'stub',
+        queryText: 'what do you remember about my style?',
+        selectFn: async () => ['c.md'],
+      },
+    )
+    assert(blocking, 'blocking prefetch started')
+    const blockingResult = await consumeMemoryPrefetchWithTimeout(
+      blocking,
+      undefined,
+      0,
+      100,
+    )
+    assert(
+      !blockingResult.timedOut && blockingResult.attachments.length === 1,
+      'explicit recall consumes before first model step',
+    )
+    blocking.dispose()
+
+    let releaseTimedSelector!: () => void
+    const timedSelectorGate = new Promise<void>(resolve => {
+      releaseTimedSelector = resolve
+    })
+    const timed = startRelevantMemoryPrefetch(
+      [{ role: 'user', content: 'what did we decide last time?' }],
+      {
+        config: baseConfig,
+        memPath: mem,
+        provider: stubProvider,
+        modelId: 'stub',
+        queryText: 'what did we decide last time?',
+        selectFn: async () => {
+          await timedSelectorGate
+          return ['c.md']
+        },
+      },
+    )
+    assert(timed, 'explicit recall starts semantic prefetch')
+    const timeoutResult = await consumeMemoryPrefetchWithTimeout(
+      timed,
+      undefined,
+      0,
+      5,
+    )
+    assert(timeoutResult.timedOut, 'explicit recall wait is bounded')
+    assert(
+      timed.consumedOnIteration === -1,
+      'timeout leaves semantic lane unconsumed',
+    )
+    releaseTimedSelector()
+    await timed.promise
+    const lateAtts = await consumeMemoryPrefetchIfReady(timed, undefined, 1)
+    assert(
+      lateAtts.length === 1,
+      'late semantic result attaches next iteration',
+    )
+    timed.dispose()
 
     const handle = startRelevantMemoryPrefetch(
       [{ role: 'user', content: 'please be concise in replies' }],

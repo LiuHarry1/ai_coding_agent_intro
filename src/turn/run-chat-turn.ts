@@ -15,7 +15,10 @@ import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import type { ModelRegistry } from '../core/llm/index.js'
 import { EventBus } from '../core/event-bus.js'
 import { createModelRegistry, resolveSidePathModel } from '../core/llm/index.js'
-import { resolveSettings, resolveAutoMemoryConfig } from '../core/settings-manager.js'
+import {
+  resolveSettings,
+  resolveAutoMemoryConfig,
+} from '../core/settings-manager.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
 import { isRemoteWorkspace } from '../execution/index.js'
 import { generateSessionTitle } from '../services/sessionTitle.js'
@@ -35,7 +38,10 @@ import { filterToolsRecordByDisallowedGlobs } from '../tools/AgentTool/toolGlob.
 import { planExists } from '../utils/plans.js'
 import { createMemoryLifecycleHooks } from './memory-lifecycle.js'
 import {
+  consumeImmediateMemoryPrefetch,
+  consumeMemoryPrefetchWithTimeout,
   getAutoMemPath,
+  resolveMemoryRecallDecision,
   startRelevantMemoryPrefetch,
 } from '../services/auto-memory/index.js'
 import {
@@ -44,6 +50,7 @@ import {
   tokenCountWithEstimation,
 } from '../services/compact/index.js'
 import {
+  ensureMessageUuid,
   extractSessionMemory,
   getSessionMemoryPath,
 } from '../services/session-memory/index.js'
@@ -122,6 +129,7 @@ async function resolveTurnSystemPrompt(
   projectRules: string | undefined,
   profile: AgentDefinition | null,
   planOpts: { planFilePath: string; planExists: boolean },
+  agentMemoryEnabled = true,
 ): Promise<string> {
   if (session.permissionMode.mode === 'agent' && profile) {
     return getSystemPromptForAgentProfile(
@@ -129,6 +137,8 @@ async function resolveTurnSystemPrompt(
       cwd,
       projectRules,
       session.id,
+      '',
+      agentMemoryEnabled && !isRemoteWorkspace(session.workspace),
     )
   }
   return getSystemPromptForMode(
@@ -367,8 +377,7 @@ export async function runChatTurn(
           instructions: instructions || undefined,
           sessionMemory: resolvedSettings.config.sessionMemory,
           readFileState: session.readFileState as
-            | import('../utils/read/types.js').ReadFileState
-            | undefined,
+            import('../utils/read/types.js').ReadFileState | undefined,
         },
         resolvedSettings.config.compaction,
         provider,
@@ -424,6 +433,7 @@ export async function runChatTurn(
           planFilePath: prepared.planFilePath,
           planExists: planExists(session, cwd),
         },
+        prepared.toolContext.autoMemory?.enabled !== false,
       )
       const mainModelId = models.profile('large').model
       const side = resolveSidePathModel({
@@ -505,6 +515,7 @@ export async function runChatTurn(
       planFilePath: prepared.planFilePath,
       planExists: planExists(session, cwd),
     },
+    prepared.toolContext.autoMemory?.enabled !== false,
   )
 
   const refreshTools = () => {
@@ -529,6 +540,7 @@ export async function runChatTurn(
         planFilePath: prepared.planFilePath,
         planExists: planExists(session, cwd),
       },
+      prepared.toolContext.autoMemory?.enabled !== false,
     )
 
   try {
@@ -557,18 +569,19 @@ export async function runChatTurn(
       mainModelId,
       defaultTier: 'small',
     })
+    const remote = isRemoteWorkspace(session.workspace)
     const memoryHooks = createMemoryLifecycleHooks({
       sessionMemory: resolvedSettings.config.sessionMemory,
       sessionMemoryModelId: sessionMemorySide.modelId,
       sessionMemoryProvider: sessionMemorySide.provider,
-      autoMemory: autoMemoryConfig,
+      autoMemory: remote
+        ? { ...autoMemoryConfig, enabled: false }
+        : autoMemoryConfig,
       autoMemoryModelId: autoMemorySide.modelId,
       autoMemoryProvider: autoMemorySide.provider,
-      compactionEnabled: resolvedSettings.config.compaction?.enabled !== false,
       runAgent,
     })
 
-    const remote = isRemoteWorkspace(session.workspace)
     const memPath =
       autoMemoryConfig.enabled &&
       !remote &&
@@ -588,10 +601,48 @@ export async function runChatTurn(
             modelId: prefetchSide.modelId,
             readFileState: prepared.toolUseContext.readFileState,
             queryText: prepared.effectiveMessage,
+            abortSignal: turnAbort.signal,
           })
         : undefined
 
     try {
+      if (memoryPrefetch) {
+        const recallDecision = resolveMemoryRecallDecision(
+          prepared.effectiveMessage,
+          memoryPrefetch.immediateStrong,
+        )
+        const immediateAttachments = consumeImmediateMemoryPrefetch(
+          memoryPrefetch,
+          prepared.toolUseContext.readFileState,
+          0,
+        )
+        for (const attachment of immediateAttachments) {
+          session.messages.push(ensureMessageUuid(attachment))
+        }
+        if (immediateAttachments.length > 0) {
+          console.log(
+            `[agent:main] memory recall decision=fast-hit attached=${immediateAttachments.length} before=step0`,
+          )
+        } else if (recallDecision === 'recall') {
+          const semantic = await consumeMemoryPrefetchWithTimeout(
+            memoryPrefetch,
+            prepared.toolUseContext.readFileState,
+            0,
+          )
+          for (const attachment of semantic.attachments) {
+            session.messages.push(ensureMessageUuid(attachment))
+          }
+          console.log(
+            semantic.timedOut
+              ? '[agent:main] memory recall decision=semantic-timeout before=step0'
+              : `[agent:main] memory recall decision=semantic-ready attached=${semantic.attachments.length} before=step0`,
+          )
+        } else {
+          console.log(
+            '[agent:main] memory recall decision=no-intent semantic=async',
+          )
+        }
+      }
       finalText = await runAgent(prepared.effectiveMessage, {
         tools: prepared.tools,
         systemPrompt,
@@ -641,6 +692,7 @@ export async function runChatTurn(
     unsubDiscover()
     unsubMode()
     unsubTelemetry?.()
+    prepared.toolContext.execution?.dispose?.()
     void flushUsage()
   }
 

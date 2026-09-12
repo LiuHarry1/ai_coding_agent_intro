@@ -23,6 +23,7 @@ export type { MemoryType } from './types.js'
 
 export {
   scanMemoryFiles,
+  repairMemoryFrontmatterFiles,
   formatMemoryManifest,
   truncateEntrypointContent,
   readEntrypointRaw,
@@ -30,7 +31,7 @@ export {
   rebuildIndex,
   readFileCapped,
 } from './scan.js'
-export type { MemoryFileMeta } from './scan.js'
+export type { MemoryFileMeta, MemoryFrontmatterRepairResult } from './scan.js'
 
 export {
   memoryAgeDays,
@@ -40,14 +41,18 @@ export {
 } from './memoryAge.js'
 
 export {
+  findFastRelevantMemories,
   findRelevantMemories,
   createSelectRelevantMemories,
   readMemoriesForSurfacing,
+  readMemoriesForSurfacingSync,
   MAX_MEMORY_LINES,
   MAX_MEMORY_BYTES,
   MAX_SESSION_BYTES,
 } from './findRelevant.js'
 export type {
+  FastRelevantMemory,
+  FastRelevantResult,
   RelevantMemory,
   SurfacedMemory,
   FindRelevantOpts,
@@ -56,12 +61,22 @@ export type {
 
 export {
   startRelevantMemoryPrefetch,
+  hasRecallIntent,
+  resolveMemoryRecallDecision,
+  consumeImmediateMemoryPrefetch,
+  consumeMemoryPrefetchWithTimeout,
   consumeMemoryPrefetchIfReady,
   collectSurfacedMemories,
   collectRecentSuccessfulTools,
   RELEVANT_MEMORIES_CONFIG,
+  EXPLICIT_RECALL_TIMEOUT_MS,
 } from './prefetch.js'
-export type { MemoryPrefetch, StartPrefetchOpts } from './prefetch.js'
+export type {
+  MemoryPrefetch,
+  MemoryRecallDecision,
+  StartPrefetchOpts,
+  TimedMemoryPrefetchResult,
+} from './prefetch.js'
 
 export {
   sideQueryJson,
@@ -83,7 +98,7 @@ export {
 export {
   extractAutoMemories,
   extractAutoMemoriesInBackground,
-  hasMemoryWritesSince,
+  getSuccessfulMemoryWritePathsSince,
   shouldExtractAutoMemory,
   createAutoMemCanUseTool,
   verifyAndRepairIndex,

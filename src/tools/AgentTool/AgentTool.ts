@@ -19,6 +19,7 @@ import { setCwd } from '../../utils/cwd.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { createSubagentWire } from '../../core/brokers/subagent-wire.js'
 import { randomUUID } from 'crypto'
+import { loadAgentMemoryPrompt } from './agentMemory.js'
 
 import { buildAgentListSection } from './agentListing.js'
 import { SUBAGENT_NO_OUTPUT_MARKER } from './finalizeAgentTool.js'
@@ -214,7 +215,35 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             )
           }
           const subModel =
-            def.model ?? models?.profile(tier).model ?? subProvider.defaultModelId()
+            def.model ??
+            models?.profile(tier).model ??
+            subProvider.defaultModelId()
+
+          const remote =
+            context.execution != null &&
+            context.execution.environmentId !== 'local'
+          const agentMemory =
+            def.memory && !remote && context.autoMemory?.enabled !== false
+              ? loadAgentMemoryPrompt(def.agentType, def.memory, cwd)
+              : undefined
+          const permissionContext =
+            agentMemory && context.permissionContext
+              ? {
+                  ...context.permissionContext,
+                  extraReadRoots: Array.from(
+                    new Set([
+                      ...context.permissionContext.extraReadRoots,
+                      agentMemory.memoryDir,
+                    ]),
+                  ),
+                  extraWriteRoots: Array.from(
+                    new Set([
+                      ...context.permissionContext.extraWriteRoots,
+                      agentMemory.memoryDir,
+                    ]),
+                  ),
+                }
+              : context.permissionContext
 
           const subContext: ToolContext = {
             eventBus,
@@ -226,8 +255,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             models,
             compaction,
             sessionId: context.sessionId,
-            permissionContext: context.permissionContext,
+            permissionContext,
             cwd: context.cwd ?? cwd,
+            execution: context.execution,
           }
 
           let subTools: Record<string, AnyTool>
@@ -237,10 +267,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             subTools = registry.createAll(cwd, subContext)
             const patterns = def.disallowedTools ?? []
             for (const n of Object.keys(subTools)) {
-              if (
-                n === AGENT_TOOL_NAME ||
-                isToolNameDisallowed(n, patterns)
-              ) {
+              if (n === AGENT_TOOL_NAME || isToolNameDisallowed(n, patterns)) {
                 delete subTools[n]
               }
             }
@@ -250,15 +277,15 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           const projectRules = def.omitProjectRules
             ? ''
             : loadAllAgentRules(cwd)
-          const withRules = projectRules
-            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded (user ~/.ai-agent/AGENTS.md, project AGENTS.md / .ai-agent/AGENTS.md / .ai-agent/rules/*.md, and AGENTS.local.md). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+          const basePrompt = agentMemory
+            ? `${def.systemPrompt}\n\n${agentMemory.prompt}`
             : def.systemPrompt
+          const withRules = projectRules
+            ? `${basePrompt}\n\n<project_rules>\nThe following rules were auto-loaded (user ~/.ai-agent/AGENTS.md, project AGENTS.md / .ai-agent/AGENTS.md / .ai-agent/rules/*.md, and AGENTS.local.md). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+            : basePrompt
           setCwd(cwd)
           const subSystemPrompt = (
-            await enhanceSystemPromptWithEnvDetails(
-              [withRules],
-              subModel ?? '',
-            )
+            await enhanceSystemPromptWithEnvDetails([withRules], subModel ?? '')
           ).join('\n\n')
 
           const sessionId = context.sessionId ?? ''

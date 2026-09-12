@@ -22,6 +22,17 @@ import {
 } from '../core/settings-manager.js'
 import { canAccessSession, listSessions } from '../server/session.js'
 import type { Session } from '../core/types.js'
+import {
+  computeProjectKey,
+  registerSessionLocation,
+  unregisterSessionLocation,
+} from '../core/session-paths.js'
+import {
+  getSessionMemoryState,
+  getSessionMemoryStatePath,
+  persistSessionMemoryState,
+  resetSessionMemoryState,
+} from '../services/session-memory/index.js'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)
@@ -29,10 +40,7 @@ function assert(cond: unknown, msg: string): asserts cond {
 
 /** SSO-style pin: agentHome === cwd. */
 function withTenant<T>(workspace: string, fn: () => T): T {
-  return runWithRequestScope(
-    { agentHome: workspace, cwd: workspace },
-    fn,
-  )
+  return runWithRequestScope({ agentHome: workspace, cwd: workspace }, fn)
 }
 
 const prevAuth = process.env.AUTH_ENABLED
@@ -54,26 +62,23 @@ try {
   // ── AUTH off: home ≠ cwd when scope is explicit (boot-like) ─────────────
   const projectCwd = path.join(tmpRoot, 'project')
   fs.mkdirSync(projectCwd, { recursive: true })
-  runWithRequestScope(
-    { agentHome: os.homedir(), cwd: projectCwd },
-    () => {
-      assert(
-        getAgentHome() === os.homedir(),
-        'AUTH off: getAgentHome stays os.homedir()',
-      )
-      assert(
-        getRequestCwd() === path.resolve(projectCwd),
-        `AUTH off: getRequestCwd should be project, got ${getRequestCwd()}`,
-      )
-      assert(
-        getAgentHome() !== getRequestCwd(),
-        'AUTH off: agentHome and cwd may differ',
-      )
-      const scope = getRequestScope()
-      assert(scope?.agentHome === path.resolve(os.homedir()), 'scope.agentHome')
-      assert(scope?.cwd === path.resolve(projectCwd), 'scope.cwd')
-    },
-  )
+  runWithRequestScope({ agentHome: os.homedir(), cwd: projectCwd }, () => {
+    assert(
+      getAgentHome() === os.homedir(),
+      'AUTH off: getAgentHome stays os.homedir()',
+    )
+    assert(
+      getRequestCwd() === path.resolve(projectCwd),
+      `AUTH off: getRequestCwd should be project, got ${getRequestCwd()}`,
+    )
+    assert(
+      getAgentHome() !== getRequestCwd(),
+      'AUTH off: agentHome and cwd may differ',
+    )
+    const scope = getRequestScope()
+    assert(scope?.agentHome === path.resolve(os.homedir()), 'scope.agentHome')
+    assert(scope?.cwd === path.resolve(projectCwd), 'scope.cwd')
+  })
   console.log('ok: AUTH off dual fields (home ≠ cwd)')
 
   // ── AUTH on + no ALS: fail-closed ──────────────────────────────────────
@@ -136,6 +141,28 @@ try {
   assert(bobMem.startsWith(bobApp), 'bob memory under bob app')
   assert(aliceMem !== bobMem, 'memory paths must not cross')
 
+  const aliceOwnOverride = withTenant(alice, () =>
+    getAutoMemPath({
+      cwd: alice,
+      trustedDirectory: path.join(alice, 'memory-custom'),
+    }),
+  )
+  assert(
+    aliceOwnOverride === path.join(alice, 'memory-custom'),
+    'SSO user may override memory within own tenant home',
+  )
+  const aliceCrossTenantOverride = withTenant(alice, () =>
+    getAutoMemPath({
+      cwd: alice,
+      trustedDirectory: path.join(bob, 'memory-stolen'),
+    }),
+  )
+  assert(
+    aliceCrossTenantOverride.startsWith(aliceApp) &&
+      !aliceCrossTenantOverride.startsWith(bob),
+    'SSO user must not grant memory access to another tenant home',
+  )
+
   const aliceHomeEnv = withTenant(alice, () => {
     const prepared = prepareShellSpawn({
       shell: 'bash',
@@ -193,10 +220,7 @@ try {
     fileSources.length === 1 && fileSources[0]!.scope === 'user',
     `expected single user source, got ${fileSources.map(s => s.scope).join(',')}`,
   )
-  assert(
-    fileSources[0]!.applied,
-    'collapsed user source should be applied',
-  )
+  assert(fileSources[0]!.applied, 'collapsed user source should be applied')
   assert(
     resolved.config.autoMemoryDirectory === path.join(alice, 'mem-custom'),
     'user-scope autoMemory.directory must not be stripped',
@@ -206,6 +230,32 @@ try {
     'SSO may write user scope',
   )
   console.log('ok: settings path collapse + SSO user writable')
+
+  // ── Persistent Session Memory state stays in each tenant volume ────────
+  const aliceSessionId = 'request-scope-alice-memory'
+  const bobSessionId = 'request-scope-bob-memory'
+  registerSessionLocation(aliceSessionId, {
+    projectKey: computeProjectKey(undefined, alice),
+    agentHome: alice,
+  })
+  registerSessionLocation(bobSessionId, {
+    projectKey: computeProjectKey(undefined, bob),
+    agentHome: bob,
+  })
+  getSessionMemoryState(aliceSessionId).notesGeneration = 1
+  getSessionMemoryState(bobSessionId).notesGeneration = 2
+  persistSessionMemoryState(aliceSessionId)
+  persistSessionMemoryState(bobSessionId)
+  const aliceStatePath = getSessionMemoryStatePath(aliceSessionId)
+  const bobStatePath = getSessionMemoryStatePath(bobSessionId)
+  assert(aliceStatePath.startsWith(alice), `alice state=${aliceStatePath}`)
+  assert(bobStatePath.startsWith(bob), `bob state=${bobStatePath}`)
+  assert(aliceStatePath !== bobStatePath, 'tenant states must not share path')
+  resetSessionMemoryState(aliceSessionId)
+  resetSessionMemoryState(bobSessionId)
+  unregisterSessionLocation(aliceSessionId)
+  unregisterSessionLocation(bobSessionId)
+  console.log('ok: persistent session-memory state is tenant-isolated')
 
   // ── getShellHome worker fallback (AUTH + pinned env HOME, no ALS) ─────
   const prevHome = process.env.HOME

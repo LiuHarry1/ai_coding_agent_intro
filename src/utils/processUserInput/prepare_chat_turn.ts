@@ -52,11 +52,10 @@ import {
   getAutoMemPath,
 } from '../../services/auto-memory/index.js'
 import { assembleToolPool } from '../../tools/assembleToolPool.js'
-import {
-  isBrowserEnabledForMainThread,
-} from '../../browser/enablement.js'
+import { isBrowserEnabledForMainThread } from '../../browser/enablement.js'
 import { warmExtensionRelay } from '../../browser/manager.js'
 import { profileSpan } from '../startupProfiler.js'
+import { getAgentMemoryDir } from '../../tools/AgentTool/agentMemory.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -123,7 +122,13 @@ export async function resolveSlashCommand(
     forkSkill = slashResult as ForkSkillSlashResult
   }
 
-  return { effectiveMessage, immediateReply, forkSkill, manualCompact, forceSummary }
+  return {
+    effectiveMessage,
+    immediateReply,
+    forkSkill,
+    manualCompact,
+    forceSummary,
+  }
 }
 
 export interface PreparedChatTurn {
@@ -221,10 +226,12 @@ export async function prepareChatTurn(
 
   const projectRulesRaw = remote ? '' : loadAllAgentRules(cwd)
   const autoMemory = resolveAutoMemoryConfig(config)
-  const autoMemoryAppend = buildAutoMemorySystemAppend({
-    cwd: pluginCwd,
-    config: autoMemory,
-  })
+  const autoMemoryAppend = remote
+    ? ''
+    : buildAutoMemorySystemAppend({
+        cwd: pluginCwd,
+        config: autoMemory,
+      })
   const projectRules = [projectRulesRaw, autoMemoryAppend]
     .filter(s => s.trim())
     .join('\n\n')
@@ -274,6 +281,7 @@ export async function prepareChatTurn(
     models,
     compaction: config.compaction,
     sessionMemory: config.sessionMemory,
+    autoMemory,
     lspServers: config.lspServers,
     sessionId: session.id,
     session,
@@ -303,6 +311,22 @@ export async function prepareChatTurn(
     toolEnablement,
     browserConfig: config.browser,
   })
+  if (pool.mainThreadProfile?.memory && autoMemory.enabled && !remote) {
+    const memoryDir = getAgentMemoryDir(
+      pool.mainThreadProfile.agentType,
+      pool.mainThreadProfile.memory,
+      cwd,
+    )
+    const permissionContext = toolContext.permissionContext
+    if (permissionContext) {
+      permissionContext.extraReadRoots = Array.from(
+        new Set([...permissionContext.extraReadRoots, memoryDir]),
+      )
+      permissionContext.extraWriteRoots = Array.from(
+        new Set([...permissionContext.extraWriteRoots, memoryDir]),
+      )
+    }
+  }
 
   if (
     isBrowserEnabledForMainThread(
@@ -350,6 +374,8 @@ export async function prepareChatTurn(
     skillListingContent:
       reminderParts.length > 0 ? reminderParts.join('\n\n') : undefined,
     agentDefinitions: { activeAgents },
+    conditionalRulesEnabled:
+      !remote && pool.mainThreadProfile?.omitProjectRules !== true,
   }
 
   const planFilePath = getPlanFilePath(session, cwd)

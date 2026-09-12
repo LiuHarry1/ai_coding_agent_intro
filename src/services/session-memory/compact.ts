@@ -1,5 +1,9 @@
 import * as fs from 'fs'
-import type { Message, SessionMemoryConfig, TodoItem } from '../../core/types.js'
+import type {
+  Message,
+  SessionMemoryConfig,
+  TodoItem,
+} from '../../core/types.js'
 import { ensureMessageUuid } from './messageUuid.js'
 import {
   calculateMessagesToKeepIndex,
@@ -58,9 +62,16 @@ export async function trySessionMemoryCompaction(input: {
   if (!raw.trim() || isEmptySessionMemoryTemplate(raw)) return null
 
   const state = getSessionMemoryState(sessionId)
+  if (state.inFlight || state.notesGeneration !== wait.notesGeneration) {
+    console.log(
+      '[compact] session-memory compact skipped — notes changed while reading',
+    )
+    return null
+  }
+  const lastSummarizedMessageId = state.lastSummarizedMessageId
   const startIndex = calculateMessagesToKeepIndex(
     messages,
-    state.lastSummarizedMessageId,
+    lastSummarizedMessageId,
     {
       minTokens: config.compactMinTokens,
       maxTokens: config.compactMaxTokens,

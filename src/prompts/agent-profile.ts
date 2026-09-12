@@ -10,6 +10,7 @@ import { workspaceBoundaryPromptSection } from '../utils/permissions/workspace-b
 import { resolveSettings } from '../core/settings-manager.js'
 import { getBrowserHandoff } from '../browser/manager.js'
 import { browserAgentSessionSection } from './browser-agent-session.js'
+import { loadAgentMemoryPrompt } from '../tools/AgentTool/agentMemory.js'
 
 function resolveBrowserMode(cwd: string): 'isolated' | 'extension' {
   try {
@@ -32,11 +33,11 @@ export async function getSystemPromptForAgentProfile(
   projectRules?: string,
   sessionId?: string,
   modelId = '',
+  agentMemoryEnabled = true,
 ): Promise<string> {
   setCwd(cwd)
   const env =
-    (await computeSimpleEnvInfo(modelId)) +
-    workspaceBoundaryPromptSection(cwd)
+    (await computeSimpleEnvInfo(modelId)) + workspaceBoundaryPromptSection(cwd)
 
   const session =
     profile.agentType === 'browser'
@@ -48,6 +49,10 @@ export async function getSystemPromptForAgentProfile(
 
   const rulesAppend =
     !profile.omitProjectRules && projectRules ? `\n\n${projectRules}` : ''
+  const agentMemory =
+    profile.memory && agentMemoryEnabled
+      ? `\n\n${loadAgentMemoryPrompt(profile.agentType, profile.memory, cwd).prompt}`
+      : ''
 
-  return `${profile.systemPrompt}${session}\n\n${env}${rulesAppend}`
+  return `${profile.systemPrompt}${agentMemory}${session}\n\n${env}${rulesAppend}`
 }

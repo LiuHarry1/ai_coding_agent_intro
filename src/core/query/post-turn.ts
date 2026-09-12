@@ -13,6 +13,7 @@ import type { IProvider } from '../llm/types.js'
 import type { WireEmitter } from '../wire-emitter.js'
 import type { StreamResult } from '../agent/streamConsumer.js'
 import { agentLogTag, activateDeferredTools } from './helpers.js'
+import type { QueryStopReason } from './types.js'
 
 export async function postTurn(input: {
   step: number
@@ -113,8 +114,15 @@ export function emitTurnEnd(
   sessionId: string | undefined,
   onTurnEnd: AgentOptions['onTurnEnd'] | undefined,
   snapshot: AgentLifecycleSnapshot,
+  reason: QueryStopReason,
 ): void {
-  if (sessionId && onTurnEnd) {
+  // A cancelled/error turn stays behind the extraction cursor. The next
+  // successfully finalized turn can still extract the useful complete range.
+  if (
+    sessionId &&
+    onTurnEnd &&
+    (reason === 'completed' || reason === 'max_steps')
+  ) {
     onTurnEnd(snapshot)
   }
 }

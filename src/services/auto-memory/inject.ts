@@ -1,6 +1,6 @@
 /**
- * Auto-memory system append (guide only — MEMORY.md index is not injected).
- * Relevant topic files are surfaced via prefetch attachments.
+ * Auto-memory system append. Prefetch mode injects guidance only; legacy
+ * index mode injects the bounded MEMORY.md entrypoint as its recall fallback.
  */
 import type { AutoMemoryConfig } from '../../core/types.js'
 import { loadAutoMemoryPrompt } from './prompts.js'
@@ -9,7 +9,12 @@ import {
   getAutoMemPath,
   type AutoMemPathOptions,
 } from './paths.js'
-import { formatMemoryManifest, scanMemoryFiles } from './scan.js'
+import {
+  formatMemoryManifest,
+  readEntrypointRaw,
+  scanMemoryFiles,
+  truncateEntrypointContent,
+} from './scan.js'
 
 export type BuildAutoMemoryAppendOpts = {
   cwd: string
@@ -20,7 +25,8 @@ export type BuildAutoMemoryAppendOpts = {
 
 /**
  * Behavioral guide for system prompt (AGENTS already applied).
- * Never injects MEMORY.md body — prefetch handles recall.
+ * With prefetch disabled, include the bounded MEMORY.md index so disabling
+ * the selector does not disable recall entirely.
  */
 export function buildAutoMemorySystemAppend(
   opts: BuildAutoMemoryAppendOpts,
@@ -36,7 +42,12 @@ export function buildAutoMemorySystemAppend(
   ensureAutoMemDir(memPath)
 
   const skipIndex = config.prefetchEnabled !== false
-  return loadAutoMemoryPrompt(memPath, skipIndex)
+  const guide = loadAutoMemoryPrompt(memPath, skipIndex)
+  if (skipIndex) return guide
+
+  const { content } = truncateEntrypointContent(readEntrypointRaw(memPath))
+  if (!content.trim()) return guide
+  return `${guide}\n\n## Auto memory index\n\n${content}`
 }
 
 /** Pre-inject manifest string for extract forks. */

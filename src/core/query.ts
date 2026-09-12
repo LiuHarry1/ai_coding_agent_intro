@@ -1,12 +1,18 @@
 import type { CompactEnrichment } from '../services/compact/index.js'
-import { ensureMessageUuid, ensureMessageUuids } from '../services/session-memory/index.js'
-import { consumeMemoryPrefetchIfReady } from '../services/auto-memory/prefetch.js'
+import {
+  ensureMessageUuid,
+  ensureMessageUuids,
+} from '../services/session-memory/index.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
 import { extractPartialResult } from '../tools/AgentTool/finalizeAgentTool.js'
 import { finalizeInterruptedTurn } from '../utils/interrupt.js'
 import type { AgentOptions, TodoItem } from './types.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
-import type { QueryOptions, QueryResult } from './query/types.js'
+import type {
+  QueryOptions,
+  QueryResult,
+  QueryStopReason,
+} from './query/types.js'
 import {
   agentLogTag,
   autoCompleteTodos,
@@ -129,6 +135,26 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
       : Number.POSITIVE_INFINITY
 
   const dumpPrompts = createDumpRecorder(sessionId, logLabel)
+  const finalizeQuery = (
+    reason: QueryStopReason,
+    text: string,
+  ): QueryResult => {
+    emitTurnEnd(
+      sessionId,
+      onTurnEnd,
+      {
+        messages,
+        systemPrompt: activeSystemPrompt,
+        tools: activeTools,
+        provider,
+        model: resolvedModel,
+        sessionId,
+        cwd,
+      },
+      reason,
+    )
+    return { finalText: text, messages, reason }
+  }
 
   try {
     for (let step = 0; step < stepLimit; step++) {
@@ -138,27 +164,10 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
           finalText,
           signal: abortSignal,
         })
-        return { finalText: text, messages, reason: 'aborted' }
+        return finalizeQuery('aborted', text)
       }
       wire.stepStart(step)
       const stepStart = Date.now()
-
-      if (memoryPrefetch && memoryPrefetch.consumedOnIteration === -1) {
-        await memoryPrefetch.promise
-        const memAtts = await consumeMemoryPrefetchIfReady(
-          memoryPrefetch,
-          toolUseContext?.readFileState,
-          step,
-        )
-        for (const att of memAtts) {
-          messages.push(ensureMessageUuid(att))
-        }
-        if (memAtts.length > 0) {
-          console.log(
-            `[${agentLogTag(logLabel)}] relevant_memories attached count=${memAtts.length} step=${step}`,
-          )
-        }
-      }
 
       await preTurn({
         messages,
@@ -184,7 +193,7 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
           finalText,
           signal: abortSignal,
         })
-        return { finalText: text, messages, reason: 'aborted' }
+        return finalizeQuery('aborted', text)
       }
 
       const stepResult = await runStep({
@@ -221,17 +230,16 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
             finalText,
             signal: abortSignal,
           })
-          return { finalText: text, messages, reason: 'aborted' }
+          return finalizeQuery('aborted', text)
         }
         const text = extractPartialResult(messages) ?? finalText
-        return { finalText: text, messages, reason: 'error' }
+        return finalizeQuery('error', text)
       }
 
       if (stepResult.aborted) {
         const text =
-          extractPartialResult(messages) ??
-          (finalText || stepResult.text || '')
-        return { finalText: text, messages, reason: 'aborted' }
+          extractPartialResult(messages) ?? (finalText || stepResult.text || '')
+        return finalizeQuery('aborted', text)
       }
 
       await postTurn({
@@ -283,19 +291,10 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
           wire.thinking()
           continue
         }
-        emitTurnEnd(sessionId, onTurnEnd, {
-          messages,
-          systemPrompt: activeSystemPrompt,
-          tools: activeTools,
-          provider,
-          model: resolvedModel,
-          sessionId,
-          cwd,
-        })
         autoCompleteTodos(currentTodos, eventBus, wire)
         wire.done()
         const completedText = extractPartialResult(messages) ?? finalText
-        return { finalText: completedText, messages, reason: 'completed' }
+        return finalizeQuery('completed', completedText)
       }
 
       wire.thinking()
@@ -330,10 +329,10 @@ Do not reply with a summary or status update only -- call TodoWrite, Write, Edit
         wire.error(`Reached max steps (${maxSteps})`)
       }
       wire.done()
-      return { finalText: text, messages, reason: 'max_steps' }
+      return finalizeQuery('max_steps', text)
     }
     wire.done()
-    return { finalText: text, messages, reason: 'completed' }
+    return finalizeQuery('completed', text)
   } finally {
     unsubPlanReady()
     unsubMode()

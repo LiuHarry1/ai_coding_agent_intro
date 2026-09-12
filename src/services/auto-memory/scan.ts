@@ -4,7 +4,13 @@
  */
 import * as fs from 'fs'
 import * as path from 'path'
-import { AUTO_MEM_ENTRYPOINT, getAutoMemEntrypoint } from './paths.js'
+import { randomUUID } from 'crypto'
+import matter from 'gray-matter'
+import {
+  AUTO_MEM_ENTRYPOINT,
+  getAutoMemEntrypoint,
+  isAutoMemPath,
+} from './paths.js'
 import { parseMemoryType, type MemoryType } from './types.js'
 
 const MAX_INDEX_LINES = 200
@@ -27,17 +33,86 @@ export type MemoryFileMeta = {
   mtimeMs: number
 }
 
-function parseFrontmatter(content: string): Record<string, string> {
-  if (!content.startsWith('---')) return {}
+type ParsedMemoryFrontmatter = {
+  name?: string
+  description?: string
+  type?: string
+}
+
+const YAML_SPECIAL_VALUE_CHARS = /[{}[\]*&#!|>%@`]|: /
+
+function quoteProblematicMemoryValues(content: string): string {
+  if (!content.startsWith('---')) return content
   const end = content.indexOf('\n---', 3)
-  if (end < 0) return {}
-  const block = content.slice(3, end).trim()
-  const out: Record<string, string> = {}
-  for (const line of block.split('\n')) {
-    const m = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
-    if (m) out[m[1]!] = m[2]!.trim().replace(/^["']|["']$/g, '')
+  if (end < 0) return content
+  const header = content
+    .slice(0, end)
+    .split('\n')
+    .map(line => {
+      const match = line.match(/^(name|description|type):\s+(.+)$/i)
+      if (!match) return line
+      const key = match[1]!
+      const value = match[2]!.trim()
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'")) ||
+        /^(?:[>|][-+]?)$/.test(value) ||
+        !YAML_SPECIAL_VALUE_CHARS.test(value)
+      ) {
+        return line
+      }
+      return `${key}: ${JSON.stringify(value)}`
+    })
+    .join('\n')
+  return header + content.slice(end)
+}
+
+function parseFrontmatter(content: string): ParsedMemoryFrontmatter {
+  let data: Record<string, unknown>
+  try {
+    data = matter(content).data as Record<string, unknown>
+  } catch {
+    try {
+      data = matter(quoteProblematicMemoryValues(content)).data as Record<
+        string,
+        unknown
+      >
+    } catch {
+      return {}
+    }
   }
-  return out
+  return {
+    name: typeof data.name === 'string' ? data.name.trim() : undefined,
+    description:
+      typeof data.description === 'string'
+        ? data.description.trim()
+        : undefined,
+    type: typeof data.type === 'string' ? data.type.trim() : undefined,
+  }
+}
+
+function hasValidMemoryFrontmatter(content: string): boolean {
+  const parsed = parseFrontmatter(content)
+  return (
+    !!parsed.name &&
+    !!parsed.description &&
+    parseMemoryType(parsed.type) !== undefined
+  )
+}
+
+function normalizeIndentedMemoryKeys(content: string): string | undefined {
+  if (!content.startsWith('---')) return undefined
+  const end = content.indexOf('\n---', 3)
+  if (end < 0) return undefined
+  const header = content
+    .slice(0, end)
+    .split('\n')
+    .map(line =>
+      line.replace(/^[ \t]+(name|description|type):[ \t]*/i, '$1: '),
+    )
+    .join('\n')
+  const next = quoteProblematicMemoryValues(header + content.slice(end))
+  return next === content ? undefined : next
 }
 
 /** List topic .md files under memdir (excludes MEMORY.md), newest first. */
@@ -96,6 +171,69 @@ export function scanMemoryFiles(memPath: string): MemoryFileMeta[] {
   return out.slice(0, MAX_SCAN_FILES)
 }
 
+export type MemoryFrontmatterRepairResult = {
+  repaired: number
+  invalid: number
+}
+
+/**
+ * Validate only files actually written during the current memory operation.
+ * Safely dedent known schema keys, then atomically replace the file only when
+ * the repaired header parses as a complete valid memory frontmatter.
+ */
+export function repairMemoryFrontmatterFiles(
+  memPath: string,
+  writtenPaths: readonly string[],
+): MemoryFrontmatterRepairResult {
+  let repaired = 0
+  let invalid = 0
+  const uniquePaths = new Set(
+    writtenPaths.map(filePath => path.resolve(filePath)),
+  )
+  for (const filePath of uniquePaths) {
+    if (
+      path.basename(filePath) === AUTO_MEM_ENTRYPOINT ||
+      !isAutoMemPath(filePath, memPath)
+    ) {
+      continue
+    }
+    let raw: string
+    try {
+      raw = fs.readFileSync(filePath, 'utf-8')
+    } catch {
+      continue
+    }
+    if (hasValidMemoryFrontmatter(raw)) continue
+
+    const next = normalizeIndentedMemoryKeys(raw)
+    if (!next || !hasValidMemoryFrontmatter(next)) {
+      invalid++
+      console.warn(`[auto-memory] invalid frontmatter file=${filePath}`)
+      continue
+    }
+
+    const tmp = `${filePath}.${process.pid}.${randomUUID()}.frontmatter.tmp`
+    try {
+      fs.writeFileSync(tmp, next, { encoding: 'utf-8', mode: 0o600 })
+      // Do not overwrite a concurrent edit made after our validation read.
+      if (fs.readFileSync(filePath, 'utf-8') !== raw) {
+        invalid++
+        continue
+      }
+      fs.renameSync(tmp, filePath)
+      repaired++
+      console.warn(`[auto-memory] repaired frontmatter file=${filePath}`)
+    } finally {
+      try {
+        fs.rmSync(tmp, { force: true })
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
+  }
+  return { repaired, invalid }
+}
+
 /**
  * CC format: `- [type] filename (ISO): description`
  */
@@ -112,7 +250,7 @@ export function formatMemoryManifest(files: MemoryFileMeta[]): string {
     .join('\n')
 }
 
-/** Truncate MEMORY.md to line + byte caps (for tools / UI; not injected). */
+/** Truncate MEMORY.md to line + byte caps (tools/UI and legacy index inject). */
 export function truncateEntrypointContent(raw: string): {
   content: string
   truncated: boolean

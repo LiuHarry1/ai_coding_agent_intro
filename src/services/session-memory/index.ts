@@ -1,4 +1,8 @@
-export { getSessionMemoryDir, getSessionMemoryPath } from './paths.js'
+export {
+  getSessionMemoryDir,
+  getSessionMemoryPath,
+  getSessionMemoryStatePath,
+} from './paths.js'
 export {
   DEFAULT_SESSION_MEMORY_TEMPLATE,
   isEmptySessionMemoryTemplate,
@@ -12,6 +16,8 @@ export {
   beginExtraction,
   endExtraction,
   bumpNotesGeneration,
+  persistSessionMemoryState,
+  evictSessionMemoryState,
 } from './state.js'
 export type { WaitExtractionResult } from './state.js'
 export {

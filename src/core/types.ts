@@ -1,7 +1,11 @@
 import type { Tool } from 'ai'
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
 import type { IProvider, LlmProfile } from './llm/types.js'
-import type { ModelProfiles, ModelRegistry, ModelTier } from './llm/model-registry.js'
+import type {
+  ModelProfiles,
+  ModelRegistry,
+  ModelTier,
+} from './llm/model-registry.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type { ExternalMode, PermissionModeContext } from './permission-mode.js'
 import type {
@@ -71,6 +75,7 @@ export interface ToolContext {
   models?: ModelRegistry
   compaction?: CompactionConfig
   sessionMemory?: SessionMemoryConfig
+  autoMemory?: AutoMemoryConfig
   /** Request-scoped LSP server configs from effective settings. */
   lspServers?: Record<string, LspServerConfig>
   /** Session id for persisting large tool outputs under `.sessions/{id}/`. */
@@ -92,10 +97,7 @@ export interface ToolContext {
 }
 
 export type ImageMediaType =
-  | 'image/jpeg'
-  | 'image/png'
-  | 'image/gif'
-  | 'image/webp'
+  'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
 
 /** CC/Anthropic `Base64ImageSource`. `data` is bare base64, no data: prefix. */
 export interface Base64ImageSource {
@@ -177,9 +179,7 @@ export interface ToolDefinition {
     },
   ) =>
     | import('../utils/permissions/filesystem.js').FsPermissionDecision
-    | Promise<
-        import('../utils/permissions/filesystem.js').FsPermissionDecision
-      >
+    | Promise<import('../utils/permissions/filesystem.js').FsPermissionDecision>
   /** Path argument used for Always-allow working-dir grants. */
   getPath?: (input: unknown) => string | undefined
   /**
@@ -200,9 +200,11 @@ export interface ToolDefinition {
    * Built-in tools should set this; failed parse omits TUR (model text still OK).
    */
   outputSchema?: {
-    safeParse: (
-      value: unknown,
-    ) => { success: boolean; data?: unknown; error?: unknown }
+    safeParse: (value: unknown) => {
+      success: boolean
+      data?: unknown
+      error?: unknown
+    }
   }
   create(cwd: string, context: ToolContext): AnyTool
 }
@@ -392,6 +394,8 @@ export interface ToolUseContext {
   skillListingContent?: string
   /** Active subagent definitions for agent_listing_delta attachments. */
   agentDefinitions?: { activeAgents: AgentDefinition[] }
+  /** Local host can dynamically load `paths:` rules for touched files. */
+  conditionalRulesEnabled?: boolean
 }
 
 // ── Agent ───────────────────────────────────────
@@ -451,6 +455,9 @@ export interface AgentOptions {
    * Shape matches `MemoryPrefetch` in services/auto-memory/prefetch.ts.
    */
   memoryPrefetch?: {
+    immediate: Attachment[]
+    immediateStrong: boolean
+    immediateConsumedOnIteration: number
     promise: Promise<Attachment[]>
     settledAt: number | null
     consumedOnIteration: number
@@ -511,8 +518,9 @@ export interface AgentOptions {
    */
   onAfterStep?: (ctx: AgentLifecycleSnapshot) => void
   /**
-   * Natural turn end (model stopped calling tools). Host may fire auto-memory
-   * extract; the loop never awaits this.
+   * Successfully finalized turn (natural completion or max-step final
+   * response). Host may fire auto-memory extract; the loop never awaits this.
+   * Aborted/error turns remain behind the extraction cursor.
    */
   onTurnEnd?: (ctx: AgentLifecycleSnapshot) => void
   /**
@@ -645,15 +653,11 @@ export interface SSETransport {
 
 // ── Subagent ────────────────────────────────────
 
-export type AgentSource =
-  | 'built-in'
-  | 'plugin'
-  | 'user'
-  | 'project'
-  | 'managed'
+export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project' | 'managed'
 
 /** Whether a disk agent is a ModePicker primary or AgentTool-only subagent. */
 export type AgentMode = 'primary' | 'subagent'
+export type AgentMemoryScope = 'user' | 'project' | 'local'
 
 /**
  * Pure-data definition of a subagent / primary profile. After the single-Task
@@ -713,6 +717,8 @@ export interface AgentDefinition {
    * with full context.
    */
   omitProjectRules?: boolean
+  /** Independent persistent memory enabled only for this custom agent. */
+  memory?: AgentMemoryScope
   /** Where this definition was loaded from (disk agents + plugins). */
   source?: AgentSource
   /** Absolute path to the defining `.md` file, when loaded from disk. */

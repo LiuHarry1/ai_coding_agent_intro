@@ -8,3 +8,7 @@ export function getSessionMemoryDir(sessionId: string): string {
 export function getSessionMemoryPath(sessionId: string): string {
   return path.join(getSessionMemoryDir(sessionId), 'summary.md')
 }
+
+export function getSessionMemoryStatePath(sessionId: string): string {
+  return path.join(getSessionMemoryDir(sessionId), 'state.json')
+}

@@ -96,7 +96,11 @@ export async function respondSkillFork(
     models,
     compaction: config.compaction,
     sessionId,
-    permissionContext: createFilesystemPermissionContext(cwd, settingsPermissionOpts(config.permissions)),
+    autoMemory: config.autoMemory,
+    permissionContext: createFilesystemPermissionContext(
+      cwd,
+      settingsPermissionOpts(config.permissions),
+    ),
   }
 
   if (wantsStream) {

@@ -6,7 +6,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
-import type { Message } from '../core/types.js'
+import type { Message, ToolContext } from '../core/types.js'
 import {
   buildAutoMemorySystemAppend,
   clearAllAutoMemoryState,
@@ -14,8 +14,10 @@ import {
   ensureIndexEntry,
   getAutoMemPath,
   getAutoMemoryState,
-  hasMemoryWritesSince,
+  getSuccessfulMemoryWritePathsSince,
+  isAutoMemPath,
   parseJsonFromModelText,
+  repairMemoryFrontmatterFiles,
   rebuildIndex,
   resetAutoMemoryState,
   sanitizePath,
@@ -35,6 +37,10 @@ import {
 } from '../utils/permissions/filesystem.js'
 import { checkWritePermission } from '../utils/permissions/filesystem.js'
 import {
+  buildExtractAutoMemoryPrompt,
+  loadAutoMemoryPrompt,
+} from '../services/auto-memory/prompts.js'
+import {
   DEFAULTS,
   resolveAutoMemoryConfig,
   resolveSettings,
@@ -49,15 +55,58 @@ function assert(cond: boolean, msg: string): void {
   console.log(`[PASS] ${msg}`)
 }
 
-function assistantWrite(filePath: string): Message {
+{
+  const guide = loadAutoMemoryPrompt('/tmp/memory')
+  const extract = buildExtractAutoMemoryPrompt({
+    newMessageCount: 4,
+    existingMemories: '',
+    memoryDir: '/tmp/memory',
+  })
+  assert(
+    guide.includes('Persistent custom-agent memory isolation'),
+    'main Auto Memory guide separates custom Agent memory',
+  )
+  assert(
+    extract.includes('Do not copy a private Agent-memory value'),
+    'background extractor forbids custom Agent memory leakage',
+  )
+  assert(
+    extract.includes('selected main-thread custom Agent profile is not'),
+    'main-thread Agent profile still permits explicit Auto Memory',
+  )
+  assert(
+    extract.includes('identifiers, codes, and literal values verbatim'),
+    'explicit memory requests preserve exact identifiers',
+  )
+}
+
+function assistantWrite(filePath: string, toolCallId = randomUUID()): Message {
   return ensureMessageUuid({
     role: 'assistant',
     content: [
       {
         type: 'tool-call',
-        toolCallId: randomUUID(),
+        toolCallId,
         toolName: 'Write',
         input: { file_path: filePath, content: 'x' },
+      },
+    ],
+  })
+}
+
+function writeResult(toolCallId: string, isError = false): Message {
+  return ensureMessageUuid({
+    role: 'tool',
+    content: [
+      {
+        type: 'tool-result',
+        toolCallId,
+        toolName: 'Write',
+        output: {
+          type: 'text',
+          value: isError ? 'Error: write denied' : 'File written',
+        },
+        ...(isError ? { isError: true } : {}),
       },
     ],
   })
@@ -82,7 +131,7 @@ function assistantWrite(filePath: string): Message {
     [
       '---',
       'name: Prefer concise',
-      'description: Short replies',
+      'description: Short replies: direct',
       'type: feedback',
       '---',
       '',
@@ -94,14 +143,67 @@ function assistantWrite(filePath: string): Message {
   const files = scanMemoryFiles(mem)
   assert(files.length === 1, 'scan finds topic file')
   assert(files[0]!.type === 'feedback', 'parses type frontmatter')
+  assert(
+    files[0]!.description === 'Short replies: direct',
+    'YAML fallback preserves an unquoted colon in a model-written value',
+  )
+
+  const unrelated = path.join(mem, 'unrelated.md')
+  fs.writeFileSync(
+    unrelated,
+    '---\nname: Unrelated\ndescription: untouched\n type: user\n---\n\nBody\n',
+    'utf-8',
+  )
+  fs.writeFileSync(
+    topic,
+    fs.readFileSync(topic, 'utf-8').replace('type: feedback', ' type: feedback'),
+    'utf-8',
+  )
+  assert(
+    scanMemoryFiles(mem)[0]!.type === undefined,
+    'YAML scan rejects partially indented frontmatter',
+  )
+  const repaired = repairMemoryFrontmatterFiles(mem, [topic])
+  assert(
+    repaired.repaired === 1 && repaired.invalid === 0,
+    'repairs only the specified written memory file',
+  )
+  assert(
+    scanMemoryFiles(mem).find(f => f.absPath === topic)!.type === 'feedback',
+    'repaired frontmatter restores memory type',
+  )
+  assert(
+    fs.readFileSync(topic, 'utf-8').includes('"Short replies: direct"'),
+    'repair canonicalizes problematic YAML values',
+  )
+  assert(
+    fs.readFileSync(unrelated, 'utf-8').includes(' type: user'),
+    'targeted repair leaves unrelated memory files untouched',
+  )
+  const invalid = path.join(mem, 'invalid.md')
+  const invalidRaw = '---\nname: Missing type\ndescription: no type\n---\n\nBody\n'
+  fs.writeFileSync(invalid, invalidRaw, 'utf-8')
+  const invalidResult = repairMemoryFrontmatterFiles(mem, [invalid])
+  assert(
+    invalidResult.repaired === 0 && invalidResult.invalid === 1,
+    'does not infer missing required frontmatter fields',
+  )
+  assert(
+    fs.readFileSync(invalid, 'utf-8') === invalidRaw,
+    'invalid memory content remains unchanged',
+  )
 
   rebuildIndex(mem)
   const entry = fs.readFileSync(path.join(mem, 'MEMORY.md'), 'utf-8')
   assert(entry.includes('prefer-concise.md'), 'rebuildIndex writes pointer')
 
   fs.writeFileSync(path.join(mem, 'MEMORY.md'), '', 'utf-8')
+  const topicCount = scanMemoryFiles(mem).length
   const v = verifyAndRepairIndex(mem)
-  assert(v.repaired === 1, 'verifyAndRepairIndex repairs missing entry')
+  assert(
+    v.repaired === topicCount,
+    'verifyAndRepairIndex repairs every missing entry',
+  )
   assert(
     fs
       .readFileSync(path.join(mem, 'MEMORY.md'), 'utf-8')
@@ -168,6 +270,22 @@ function assistantWrite(filePath: string): Message {
     'index body not in system append',
   )
 
+  const legacyIndexAppend = buildAutoMemorySystemAppend({
+    cwd: process.cwd(),
+    config: {
+      ...enabledCfg,
+      prefetchEnabled: false,
+    },
+  })
+  assert(
+    legacyIndexAppend.includes('## Auto memory index'),
+    'prefetch-disabled mode injects memory index',
+  )
+  assert(
+    legacyIndexAppend.includes('prefer-concise.md'),
+    'prefetch-disabled mode preserves recall',
+  )
+
   const disabled = buildAutoMemorySystemAppend({
     cwd: process.cwd(),
     config: resolveAutoMemoryConfig({
@@ -180,23 +298,58 @@ function assistantWrite(filePath: string): Message {
   fs.rmSync(mem, { recursive: true, force: true })
 }
 
-// ── hasMemoryWritesSince ─────────────────────────
+// ── successful memory write paths ────────────────
 {
   const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mem-hw-'))
   const cursor = ensureMessageUuid({ role: 'user', content: 'hi' })
-  const wrote = assistantWrite(path.join(mem, 'x.md'))
   const cursorUuid = getMessageUuid(cursor)
-  assert(
-    !!cursorUuid && hasMemoryWritesSince([cursor, wrote], cursorUuid, mem),
-    'detects memdir write after cursor',
-  )
+  const successfulId = randomUUID()
+  const wrote = assistantWrite(path.join(mem, 'x.md'), successfulId)
   assert(
     !!cursorUuid &&
-      !hasMemoryWritesSince(
-        [cursor, assistantWrite('/tmp/other.md')],
+      getSuccessfulMemoryWritePathsSince(
+        [cursor, wrote, writeResult(successfulId)],
         cursorUuid,
         mem,
-      ),
+      )[0] === path.join(mem, 'x.md'),
+    'returns successful memdir write path after cursor',
+  )
+  const failedId = randomUUID()
+  assert(
+    !!cursorUuid &&
+      getSuccessfulMemoryWritePathsSince(
+        [
+          cursor,
+          assistantWrite(path.join(mem, 'failed.md'), failedId),
+          writeResult(failedId, true),
+        ],
+        cursorUuid,
+        mem,
+      ).length === 0,
+    'failed memdir write does not suppress extraction',
+  )
+  const missingResultId = randomUUID()
+  assert(
+    !!cursorUuid &&
+      getSuccessfulMemoryWritePathsSince(
+        [cursor, assistantWrite(path.join(mem, 'missing.md'), missingResultId)],
+        cursorUuid,
+        mem,
+      ).length === 0,
+    'unresolved memdir write does not suppress extraction',
+  )
+  const outsideId = randomUUID()
+  assert(
+    !!cursorUuid &&
+      getSuccessfulMemoryWritePathsSince(
+        [
+          cursor,
+          assistantWrite('/tmp/other.md', outsideId),
+          writeResult(outsideId),
+        ],
+        cursorUuid,
+        mem,
+      ).length === 0,
     'ignores writes outside memdir',
   )
   fs.rmSync(mem, { recursive: true, force: true })
@@ -267,11 +420,58 @@ function assistantWrite(filePath: string): Message {
     autoMemoryDirectory: mem,
   })
   assert(
-    getAutoMemPath({ cwd: process.cwd(), trustedDirectory: viaCfg.directory }) ===
-      path.resolve(mem),
+    getAutoMemPath({
+      cwd: process.cwd(),
+      trustedDirectory: viaCfg.directory,
+    }) === path.resolve(mem),
     'resolveAutoMemoryConfig.directory feeds getAutoMemPath',
   )
   fs.rmSync(mem, { recursive: true, force: true })
+}
+
+// ── unsafe directory overrides fall back ──────────
+{
+  const fallback = getAutoMemPath({ cwd: process.cwd() })
+  for (const unsafe of ['/', '~', '~/', '../memory', '//server/share']) {
+    assert(
+      getAutoMemPath({
+        cwd: process.cwd(),
+        trustedDirectory: unsafe,
+      }) === fallback,
+      `rejects unsafe directory override ${JSON.stringify(unsafe)}`,
+    )
+  }
+  assert(
+    getAutoMemPath({
+      cwd: process.cwd(),
+      trustedDirectory: `bad\0path`,
+    }) === fallback,
+    'rejects null byte directory override',
+  )
+}
+
+// ── auto-memory symlink boundary ──────────────────
+{
+  const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mem-link-root-'))
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mem-link-out-'))
+  const outsideFile = path.join(outside, 'outside.md')
+  fs.writeFileSync(outsideFile, 'outside\n', 'utf-8')
+
+  assert(
+    isAutoMemPath(path.join(mem, 'safe.md'), mem),
+    'allows a new file under the real memory directory',
+  )
+  if (process.platform !== 'win32') {
+    const escaped = path.join(mem, 'escaped.md')
+    fs.symlinkSync(outsideFile, escaped)
+    assert(
+      !isAutoMemPath(escaped, mem),
+      'rejects a memory file symlink that escapes the directory',
+    )
+  }
+
+  fs.rmSync(mem, { recursive: true, force: true })
+  fs.rmSync(outside, { recursive: true, force: true })
 }
 
 // ── prefetchEnabled from nested settings ─────────
@@ -355,14 +555,17 @@ function assistantWrite(filePath: string): Message {
 async function testWriteCarveOut(): Promise<void> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'am-write-root-'))
   const mem = fs.mkdtempSync(path.join(os.tmpdir(), 'am-write-mem-'))
-  const tool = writeFileDefinition.create(root, {
-    permissionContext: createFilesystemPermissionContext(root, { extraWriteRoots: [mem] }),
+  const toolContext = {
+    permissionContext: createFilesystemPermissionContext(root, {
+      extraWriteRoots: [mem],
+    }),
     // Local Worker stub: previously assertInWorkspace blocked memdir.
     execution: { kind: 'worker', environmentId: 'local' } as never,
-  })
+  } as unknown as ToolContext
+  const tool = writeFileDefinition.create(root, toolContext)
   const target = path.join(mem, 'extract_ok.md')
   const out = await (
-    tool as { execute: (args: unknown) => Promise<unknown> }
+    tool as unknown as { execute: (args: unknown) => Promise<unknown> }
   ).execute({
     file_path: target,
     content: '---\nname: Ok\ntype: user\n---\nok\n',

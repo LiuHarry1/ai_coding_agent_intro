@@ -13,23 +13,90 @@ import type { Attachment } from '../../utils/attachments/types.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 import { createAttachmentMessage } from '../../utils/attachments.js'
 import {
+  findFastRelevantMemories,
   findRelevantMemories,
   MAX_SESSION_BYTES,
   readMemoriesForSurfacing,
+  readMemoriesForSurfacingSync,
   type SelectRelevantFn,
 } from './findRelevant.js'
 
 export type MemoryPrefetch = {
+  immediate: Attachment[]
+  immediateStrong: boolean
+  /** -1 until the deterministic lane is consumed. */
+  immediateConsumedOnIteration: number
   promise: Promise<Attachment[]>
   settledAt: number | null
-  /** -1 until consumed. */
+  /** -1 until the semantic lane is consumed. */
   consumedOnIteration: number
   dispose: () => void
 }
 
+export type MemoryRecallDecision =
+  'strong-fast-hit' | 'recall' | 'no-recall-intent'
+
+export type TimedMemoryPrefetchResult = {
+  attachments: AttachmentMessage[]
+  timedOut: boolean
+}
+
+export const EXPLICIT_RECALL_TIMEOUT_MS = 2_000
+
 export const RELEVANT_MEMORIES_CONFIG = {
   MAX_SESSION_BYTES,
 } as const
+
+const ENGLISH_RECALL_PATTERNS = [
+  /\b(?:previously|earlier|last time|used to)\b/iu,
+  /\b(?:do|can|could|would)\s+you\s+(?:remember|recall)\b/iu,
+  /\b(?:remember|recall)\s+(?:when|what|which|who|where|why|how)\b/iu,
+  /\b(?:we|you|i)\s+(?:discussed|decided|agreed|said|mentioned|chose)\b/iu,
+  /\bwhat\s+(?:did|have|had)\s+(?:we|you|i)\b/iu,
+  /\b(?:find|search|review|summarize)\b.{0,24}\b(?:past|previous|earlier)\s+(?:conversation|chat|discussion|memory)\b/iu,
+] as const
+
+const CHINESE_RECALL_PATTERNS = [
+  /(?:还|還)?记得.{0,32}(?:吗|嗎|么|麼|？|\?)/u,
+  /(?:上次|之前|以前|此前|过去|過去|曾经|曾經|上周|上週|上个月|上個月).{0,24}(?:讨论|討論|决定|決定|约定|約定|选择|選擇|说|說|提|偏好|方案|配置|记录|記錄|聊天|会话|會話|issue|bug)/iu,
+  /(?:我们|我們|你|我).{0,10}(?:之前|以前|曾经|曾經).{0,20}(?:讨论|討論|决定|決定|约定|約定|说|說|提)/u,
+  /(?:找|搜|搜索|查|翻).{0,12}(?:记忆|記憶|之前|以前|历史|歷史|聊天记录|聊天記錄|会话|會話)/u,
+  /(?:记忆|記憶|跨会话|跨會話).{0,16}(?:什么|什麼|是否|有没有|有沒有|找|搜|查|校验码|校驗碼|偏好|约定|約定)/u,
+] as const
+
+const FUTURE_OR_WRITE_PATTERNS = [
+  /\b(?:remember|remind)\s+(?:me\s+)?(?:to|that)\b/iu,
+  /\b(?:tomorrow|later|tonight|next (?:week|month|year))\b/iu,
+  /(?:记住|記住|记一下|記一下|帮我记|幫我記|不要忘记|不要忘記)/u,
+  /(?:明天|明早|今晚|今后|今後|以后|以後|待会|待會|等会|等會|稍后|稍後|下周|下週|下个月|下個月).{0,20}(?:记得|記得|提醒|发送|發送|执行|執行|运行|運行)/u,
+] as const
+
+const RETROSPECTIVE_MARKERS =
+  /\b(?:previously|earlier|last time|used to|yesterday|ago)\b|(?:上次|之前|以前|此前|过去|過去|曾经|曾經|上周|上週|上个月|上個月|跨会话|跨會話)/iu
+
+export function hasRecallIntent(queryText: string): boolean {
+  const normalized = queryText.normalize('NFKC').trim()
+  if (!normalized) return false
+  const hasRetrospectiveMarker = RETROSPECTIVE_MARKERS.test(normalized)
+  if (
+    !hasRetrospectiveMarker &&
+    FUTURE_OR_WRITE_PATTERNS.some(pattern => pattern.test(normalized))
+  ) {
+    return false
+  }
+  return (
+    ENGLISH_RECALL_PATTERNS.some(pattern => pattern.test(normalized)) ||
+    CHINESE_RECALL_PATTERNS.some(pattern => pattern.test(normalized))
+  )
+}
+
+export function resolveMemoryRecallDecision(
+  queryText: string,
+  hasStrongFastHit: boolean,
+): MemoryRecallDecision {
+  if (hasStrongFastHit) return 'strong-fast-hit'
+  return hasRecallIntent(queryText) ? 'recall' : 'no-recall-intent'
+}
 
 /**
  * Scan transcript for past relevant_memories attachments.
@@ -42,10 +109,7 @@ export function collectSurfacedMemories(messages: ReadonlyArray<Message>): {
   const paths = new Set<string>()
   let totalBytes = 0
   for (const m of messages) {
-    if (
-      isAttachmentMessage(m) &&
-      m.attachment.type === 'relevant_memories'
-    ) {
+    if (isAttachmentMessage(m) && m.attachment.type === 'relevant_memories') {
       for (const mem of m.attachment.memories) {
         paths.add(mem.path)
         totalBytes += mem.content.length
@@ -167,10 +231,6 @@ export function startRelevantMemoryPrefetch(
     return undefined
   }
   const trimmed = input.trim()
-  // CC skips single-word prompts; CJK often has no spaces — use length threshold.
-  if (!/\s/.test(trimmed) && trimmed.length < 10) {
-    return undefined
-  }
 
   const surfaced = collectSurfacedMemories(messages)
   if (surfaced.totalBytes >= MAX_SESSION_BYTES) {
@@ -185,8 +245,32 @@ export function startRelevantMemoryPrefetch(
     ? collectRecentSuccessfulTools(messages, lastUser)
     : []
   const readFileState = opts.readFileState
+  const unavailablePaths = new Set(surfaced.paths)
+  for (const filePath of readFileState?.keys() ?? []) {
+    unavailablePaths.add(filePath)
+  }
+  const fast = findFastRelevantMemories(trimmed, opts.memPath, unavailablePaths)
+  const fastMemories = fast.strong
+    ? readMemoriesForSurfacingSync(fast.matches, controller.signal)
+    : []
+  const immediate: Attachment[] =
+    fastMemories.length > 0
+      ? [{ type: 'relevant_memories' as const, memories: fastMemories }]
+      : []
+  const immediateStrong = immediate.length > 0
+
+  // Keep CC's cheap short-query suppression for the model lane only. Exact
+  // filenames, identifiers, and short CJK prompts still reach the fast lane.
+  const skipSemantic =
+    immediateStrong || (!/\s/.test(trimmed) && trimmed.length < 10)
+  if (skipSemantic && immediate.length === 0) {
+    controller.abort()
+    opts.abortSignal?.removeEventListener('abort', onParentAbort)
+    return undefined
+  }
 
   const promise = (async (): Promise<Attachment[]> => {
+    if (skipSemantic) return []
     try {
       const selected = await findRelevantMemories(
         input!,
@@ -198,7 +282,7 @@ export function startRelevantMemoryPrefetch(
           selectFn: opts.selectFn,
         },
         recentTools,
-        surfaced.paths,
+        unavailablePaths,
       )
       const filtered = selected
         .filter(
@@ -223,6 +307,9 @@ export function startRelevantMemoryPrefetch(
   })()
 
   const handle: MemoryPrefetch = {
+    immediate,
+    immediateStrong,
+    immediateConsumedOnIteration: -1,
     promise,
     settledAt: null,
     consumedOnIteration: -1,
@@ -235,6 +322,38 @@ export function startRelevantMemoryPrefetch(
     handle.settledAt = Date.now()
   })
   return handle
+}
+
+function attachmentMessages(
+  attachments: readonly Attachment[],
+  readFileState: ReadFileState | undefined,
+): AttachmentMessage[] {
+  const out: AttachmentMessage[] = []
+  for (const attachment of attachments) {
+    if (attachment.type !== 'relevant_memories') continue
+    const memories = attachment.memories.filter(
+      memory => !(readFileState && readFileState.has(memory.path)),
+    )
+    if (memories.length === 0) continue
+    out.push(
+      createAttachmentMessage({
+        type: 'relevant_memories',
+        memories,
+      }),
+    )
+  }
+  return out
+}
+
+/** Consume deterministic strong matches independently from the semantic lane. */
+export function consumeImmediateMemoryPrefetch(
+  prefetch: MemoryPrefetch | undefined,
+  readFileState: ReadFileState | undefined,
+  iterationIndex: number,
+): AttachmentMessage[] {
+  if (!prefetch || prefetch.immediateConsumedOnIteration !== -1) return []
+  prefetch.immediateConsumedOnIteration = iterationIndex
+  return attachmentMessages(prefetch.immediate, readFileState)
 }
 
 /** Consume settled prefetch into attachment messages (zero-wait if settled). */
@@ -252,21 +371,39 @@ export async function consumeMemoryPrefetchIfReady(
   }
   const attachments = await prefetch.promise
   prefetch.consumedOnIteration = iterationIndex
-  const out: AttachmentMessage[] = []
-  for (const a of attachments) {
-    if (a.type !== 'relevant_memories') continue
-    const memories = a.memories.filter(
-      m => !(readFileState && readFileState.has(m.path)),
-    )
-    if (memories.length === 0) continue
-    out.push(
-      createAttachmentMessage({
-        type: 'relevant_memories',
-        memories,
-      }),
-    )
+  return attachmentMessages(attachments, readFileState)
+}
+
+/**
+ * Wait a bounded amount for explicit recall. A timeout leaves the semantic
+ * lane unconsumed so post-turn can still attach a late result.
+ */
+export async function consumeMemoryPrefetchWithTimeout(
+  prefetch: MemoryPrefetch | undefined,
+  readFileState: ReadFileState | undefined,
+  iterationIndex: number,
+  timeoutMs: number = EXPLICIT_RECALL_TIMEOUT_MS,
+): Promise<TimedMemoryPrefetchResult> {
+  if (!prefetch || prefetch.consumedOnIteration !== -1) {
+    return { attachments: [], timedOut: false }
   }
-  return out
+  let timer: NodeJS.Timeout | undefined
+  const timedOut = await Promise.race([
+    prefetch.promise.then(() => false),
+    new Promise<true>(resolve => {
+      timer = setTimeout(() => resolve(true), Math.max(0, timeoutMs))
+    }),
+  ])
+  if (timer) clearTimeout(timer)
+  if (timedOut) return { attachments: [], timedOut: true }
+  return {
+    attachments: await consumeMemoryPrefetchIfReady(
+      prefetch,
+      readFileState,
+      iterationIndex,
+    ),
+    timedOut: false,
+  }
 }
 
 /** Helper for tests / ToolUseContext typing. */

@@ -27,10 +27,7 @@ import {
 } from '../../core/forked-agent.js'
 import { EDIT_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { tokenCountWithEstimation } from '../compact/tokens.js'
-import {
-  ensureMessageUuids,
-  getMessageUuid,
-} from './messageUuid.js'
+import { ensureMessageUuids, getMessageUuid } from './messageUuid.js'
 import { createMemoryFileEditTool } from './memoryEditTool.js'
 import { getSessionMemoryDir, getSessionMemoryPath } from './paths.js'
 import {
@@ -43,8 +40,12 @@ import {
   bumpNotesGeneration,
   endExtraction,
   getSessionMemoryState,
+  persistSessionMemoryState,
 } from './state.js'
-import { validateSessionMemoryStructure } from './template.js'
+import {
+  repairSessionMemoryStructure,
+  validateSessionMemoryStructure,
+} from './template.js'
 import { enqueueSessionExtract } from './extractQueue.js'
 
 /** Cap fork agent turns (session memory typically finishes in 1–2 rounds). */
@@ -89,6 +90,7 @@ export function shouldExtractSessionMemory(
   if (!state.initialized) {
     if (total < cfg.minimumTokensToInit) return false
     state.initialized = true
+    persistSessionMemoryState(sessionId)
   }
 
   const growth = total - state.tokensAtLastExtraction
@@ -96,14 +98,16 @@ export function shouldExtractSessionMemory(
 
   const toolCalls = countToolCallsSince(messages, state.lastTriggerMessageId)
   const naturalBreak = !lastAssistantHasToolCalls(messages)
-  const should =
-    toolCalls >= cfg.toolCallsBetweenUpdates || naturalBreak
+  const should = toolCalls >= cfg.toolCallsBetweenUpdates || naturalBreak
 
   if (should) {
     // Update lastMemoryMessageUuid when deciding to extract (before async).
     const last = messages[messages.length - 1]
     const lastUuid = last ? getMessageUuid(last) : undefined
-    if (lastUuid) state.lastTriggerMessageId = lastUuid
+    if (lastUuid) {
+      state.lastTriggerMessageId = lastUuid
+      persistSessionMemoryState(sessionId)
+    }
   }
 
   return should
@@ -180,9 +184,19 @@ async function runSessionMemoryExtract(
       sessionId,
       cwd,
     )
+    const template = loadSessionMemoryTemplate(cwd)
+    const validCurrent = validateSessionMemoryStructure(current)
+      ? current
+      : repairSessionMemoryStructure(current, template) ?? template
+    if (validCurrent !== current) {
+      fs.writeFileSync(memoryPath, validCurrent, 'utf-8')
+      console.warn(
+        '[session-memory] repaired malformed existing notes before extract',
+      )
+    }
     const userPrompt = buildSessionMemoryUpdatePrompt({
       notesPath: memoryPath,
-      currentNotes: current,
+      currentNotes: validCurrent,
       cwd,
     })
 
@@ -237,14 +251,22 @@ async function runSessionMemoryExtract(
       })
     }
 
-    const after = fs.readFileSync(memoryPath, 'utf-8')
+    let after = fs.readFileSync(memoryPath, 'utf-8')
     if (!validateSessionMemoryStructure(after)) {
+      const repaired = repairSessionMemoryStructure(after, validCurrent)
+      if (!repaired) {
+        fs.writeFileSync(memoryPath, validCurrent, 'utf-8')
+        throw new Error(
+          'notes file missing required section headers after Edit; restored prior valid notes',
+        )
+      }
+      after = repaired
+      fs.writeFileSync(memoryPath, after, 'utf-8')
       console.warn(
-        '[session-memory] extract warning: notes file missing required section headers after Edit',
+        '[session-memory] repaired missing section headers after Edit',
       )
-    } else {
-      bumpNotesGeneration(sessionId)
     }
+    bumpNotesGeneration(sessionId)
 
     const total = tokenCountWithEstimation(messages).total
     state.tokensAtLastExtraction = total
@@ -253,6 +275,7 @@ async function runSessionMemoryExtract(
       const lastUuid = last ? getMessageUuid(last) : undefined
       if (lastUuid) state.lastSummarizedMessageId = lastUuid
     }
+    persistSessionMemoryState(sessionId)
 
     console.log(
       `[session-memory] forked Edit update ${path.basename(memoryPath)} ` +
@@ -290,7 +313,10 @@ export async function extractSessionMemory(
     const last = messages[messages.length - 1]
     const lastUuid = last ? getMessageUuid(last) : undefined
     const state = getSessionMemoryState(sessionId)
-    if (lastUuid) state.lastTriggerMessageId = lastUuid
+    if (lastUuid) {
+      state.lastTriggerMessageId = lastUuid
+      persistSessionMemoryState(sessionId)
+    }
   }
 
   // Snapshot messages now — the array may keep growing on the main thread.

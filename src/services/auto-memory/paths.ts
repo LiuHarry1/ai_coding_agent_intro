@@ -14,12 +14,49 @@ export const AUTO_MEM_DIRNAME = 'memory'
 
 export { findCanonicalGitRoot, sanitizePath }
 
-function expandTilde(p: string): string {
-  if (p === '~') return getAgentHome()
-  if (p.startsWith('~/') || p.startsWith('~\\')) {
-    return path.join(getAgentHome(), p.slice(2))
+/**
+ * Validate trusted user/local overrides before they become filesystem
+ * allowlist roots. Mirrors Claude Code's safety contract.
+ */
+function resolveTrustedDirectory(raw: string): string | undefined {
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.includes('\0')) return undefined
+
+  // Reject UNC/network paths before normalize can collapse their prefix.
+  if (trimmed.startsWith('\\\\') || trimmed.startsWith('//')) {
+    return undefined
   }
-  return p
+
+  let candidate = trimmed
+  if (candidate.startsWith('~/') || candidate.startsWith('~\\')) {
+    const rest = candidate.slice(2)
+    const restNorm = path.normalize(rest || '.')
+    // Bare home and paths that collapse to home/an ancestor are too broad.
+    if (restNorm === '.' || restNorm === '..') return undefined
+    candidate = path.join(getAgentHome(), rest)
+  }
+
+  let normalized = path.normalize(candidate)
+  if (!path.isAbsolute(normalized)) return undefined
+  const root = path.parse(normalized).root
+  if (normalized === root || normalized.length < 3) return undefined
+  normalized = normalized.replace(/[/\\]+$/, '')
+  if (!normalized || /^[A-Za-z]:$/.test(normalized)) return undefined
+  normalized = normalized.normalize('NFC')
+
+  // In SSO, user settings are tenant-controlled rather than machine-owner
+  // trusted. Never let one tenant turn another tenant's directory into an
+  // extra read/write root. Local Web, Electron, and admin deployments keep
+  // the regular trusted-user override behavior.
+  const authEnabled =
+    String(process.env.AUTH_ENABLED ?? '')
+      .trim()
+      .toLowerCase() === 'true'
+  if (authEnabled && !isPathInWorkspace(normalized, getAgentHome())) {
+    return undefined
+  }
+
+  return normalized
 }
 
 export type AutoMemPathOptions = {
@@ -38,10 +75,13 @@ export type AutoMemPathOptions = {
  */
 export function getAutoMemPath(opts: AutoMemPathOptions): string {
   if (opts.trustedDirectory?.trim()) {
-    return path.resolve(expandTilde(opts.trustedDirectory.trim()))
+    const trusted = resolveTrustedDirectory(opts.trustedDirectory)
+    if (trusted) return trusted
+    console.warn(
+      '[auto-memory] ignoring unsafe directory override; using project-scoped default',
+    )
   }
-  const base =
-    findCanonicalGitRoot(opts.cwd) ?? path.resolve(opts.cwd)
+  const base = findCanonicalGitRoot(opts.cwd) ?? path.resolve(opts.cwd)
   // Same sanitize as session computeLocalProjectKey / computeProjectKey(local).
   return path.join(
     getUserAppDir(),
@@ -55,9 +95,34 @@ export function getAutoMemEntrypoint(memPath: string): string {
   return path.join(memPath, AUTO_MEM_ENTRYPOINT)
 }
 
+function resolveThroughExistingAncestor(input: string): string | null {
+  let current = path.resolve(input)
+  const missing: string[] = []
+  try {
+    while (!fs.existsSync(current)) {
+      const parent = path.dirname(current)
+      if (parent === current) return null
+      missing.unshift(path.basename(current))
+      current = parent
+    }
+    return path.resolve(fs.realpathSync(current), ...missing)
+  } catch {
+    return null
+  }
+}
+
 /** True when absPath is under the auto-memory directory (or is that dir). */
 export function isAutoMemPath(absPath: string, memPath: string): boolean {
-  return isPathInWorkspace(path.resolve(absPath), path.resolve(memPath))
+  const resolvedPath = path.resolve(absPath)
+  const resolvedRoot = path.resolve(memPath)
+  if (!isPathInWorkspace(resolvedPath, resolvedRoot)) return false
+
+  // Lexical containment is insufficient: an existing symlink inside memdir
+  // may point outside it. Resolve the nearest existing ancestor for both
+  // existing and not-yet-created targets before granting access.
+  const realPath = resolveThroughExistingAncestor(resolvedPath)
+  const realRoot = resolveThroughExistingAncestor(resolvedRoot)
+  return !!realPath && !!realRoot && isPathInWorkspace(realPath, realRoot)
 }
 
 /** Memory dirs are group-readable (755) so Glob/rg and multi-process deploys can traverse them. */

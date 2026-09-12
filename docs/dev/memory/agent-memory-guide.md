@@ -23,12 +23,13 @@ Coding agent 会不断：
 
 所以本项目的「记忆」不是一个单一模块，而是好几层互相配合的机制：
 
-| 层 | 一句话 | 管多久 |
-|----|--------|--------|
-| **Project Rules** | 你写好的项目说明书，开聊就塞进提示词 | 跨会话（人工维护） |
-| **Auto Memory** | 自动记下「下次还会用」的偏好/事实；每轮 **prefetch** 召回 ≤5 篇主题文件 | 跨会话（自动 + 半自动） |
-| **Session Memory** | 当前这次会话的进度笔记 | 单会话 |
-| **Compaction** | 上下文快满时，把旧对话压短 | 运行时（为了继续聊） |
+| 层                          | 一句话                                                           | 管多久                  |
+| --------------------------- | ---------------------------------------------------------------- | ----------------------- |
+| **Project Rules**           | 你写好的项目说明书，开聊就塞进提示词                             | 跨会话（人工维护）      |
+| **Auto Memory**             | 主 Agent 自动记下偏好/事实；每轮 **prefetch** 召回 ≤5 篇主题文件 | 跨会话（自动 + 半自动） |
+| **Persistent Agent Memory** | 显式配置的自定义 Agent 独立维护自己的经验                        | 跨调用                  |
+| **Session Memory**          | 当前这次会话的进度笔记                                           | 单会话                  |
+| **Compaction**              | 上下文快满时，把旧对话压短                                       | 运行时（为了继续聊）    |
 
 可以把它想成人类工作方式：
 
@@ -48,7 +49,7 @@ Coding agent 会不断：
   └─ buildAutoMemorySystemAppend()   ← 只注入「如何写 memory」指南（**不再**塞整份 MEMORY.md）
 
 用户发消息
-  └─ startRelevantMemoryPrefetch()   ← small 模型选 ≤5 个主题文件（不阻塞）
+  └─ startRelevantMemoryPrefetch()   ← small 模型选 ≤5 个主题文件（首轮不阻塞）
 
 每个 agent step 之前
   └─ compactIfNeeded()
@@ -88,7 +89,7 @@ Coding agent 会不断：
 
 1. 目录下的 `AGENTS.md`
 2. `{appDir}/AGENTS.md`（默认 `.ai-agent/AGENTS.md`）
-3. `{appDir}/rules/*.md`（按文件名排序）
+3. `{appDir}/rules/**/*.md`（递归，按路径排序）
 
 规则：
 
@@ -125,10 +126,10 @@ AGENTS.md                 # 或
 
 和 Project Rules 的区别：
 
-| | Project Rules | Auto Memory |
-|--|---------------|-------------|
-| 谁写 | 主要是你 | agent 自动写 / 你也可要求记住 |
-| 性质 | 规范、指令 | 偏好、反馈、冷知识 |
+|      | Project Rules      | Auto Memory                    |
+| ---- | ------------------ | ------------------------------ |
+| 谁写 | 主要是你           | agent 自动写 / 你也可要求记住  |
+| 性质 | 规范、指令         | 偏好、反馈、冷知识             |
 | 位置 | 仓库内（常进 git） | 默认在用户主目录下，避免误提交 |
 
 ### 存在哪里？
@@ -137,7 +138,7 @@ AGENTS.md                 # 或
 
 ```text
 ~/.ai-agent/projects/<仓库路径消毒后的名字>/memory/
-├── MEMORY.md           # 索引（会注入上下文）
+├── MEMORY.md           # 兼容索引（关闭 prefetch 时才注入）
 ├── prefer-concise.md   # 主题文件示例
 └── …
 ```
@@ -178,17 +179,33 @@ AGENTS.md                 # 或
 
 ### 怎么读回来？
 
-会话启动时 `buildAutoMemorySystemAppend()`：
-
-1. 注入「如何使用 auto memory」的指南
-2. 若 `MEMORY.md` 非空，再注入截断后的 **索引**（不是整本笔记）
-
-索引太长会截断；细节要靠模型按需 `Read` memory 目录里的主题文件。  
+会话启动时 `buildAutoMemorySystemAppend()` 注入「如何使用 auto memory」的指南。默认开启 prefetch：用户发出请求后异步选出最多 5 篇相关主题文件，完成后才作为 attachment 注入，不阻塞首轮模型调用。只有显式关闭 `prefetchEnabled` 时才回退为注入截断后的 `MEMORY.md` 索引。
+细节要靠模型按需 `Read` memory 目录里的主题文件。
 注入排在 Project Rules **之后**：人工规范优先。
 
 ---
 
-## 5. Session Memory（会话笔记）
+## 5. 自定义 Agent 的独立记忆
+
+Claude Code 的契约不是把主 Agent 的 Auto Memory 广播给全部子 Agent。本项目同样只对自定义 Agent frontmatter 中显式声明的记忆启用独立目录：
+
+```yaml
+---
+name: reviewer
+description: Review changes
+memory: project # user | project | local
+---
+```
+
+- `user`：`~/.ai-agent/agent-memory/<agent>/`，同一用户跨项目
+- `project`：`<workspace>/.ai-agent/agent-memory/<agent>/`，可随项目共享
+- `local`：`<workspace>/.ai-agent/agent-memory-local/<agent>/`，项目与机器私有
+
+内置 Explore/Plan 不继承主 Agent Auto Memory；后台 Session/Auto Memory extractor 也不递归启动自己的抽取。Remote SSH 暂停 Agent Memory，避免把远端路径错误映射到控制面主机。
+
+---
+
+## 6. Session Memory（会话笔记）
 
 ### 这是什么？
 
@@ -200,6 +217,7 @@ AGENTS.md                 # 或
 
 ```text
 .sessions/{sessionId}/session-memory/summary.md
+.sessions/{sessionId}/session-memory/state.json
 ```
 
 模板固定若干节（实现里约 10 节），例如：
@@ -216,34 +234,34 @@ AGENTS.md                 # 或
 通常还要满足 token / tool-call 间隔阈值，避免每句话都重写一遍。  
 抽取本身是 fork 出去的小任务：默认 cache-safe（尽量复用主循环的模型与 prompt cache），但工具权限收得很紧——基本上只许改 `summary.md`。
 
-注意：Session Memory 的自动抽取还要求 **compaction 总开关是开的**；compaction 关了，这套「为 compact 准备的账」也不会跑。
+`state.json` 持久化抽取游标、token 基线和 notes generation，使 Admin Cloud、SSO Cloud 与 Electron 进程重启后不会从头重复抽取。它是本项目为部署可靠性增加的能力；Claude Code 的对应游标仅保存在进程内。Session Memory 不依赖 compaction 总开关。
 
 ### 和 Auto Memory 别搞混
 
-| | Session Memory | Auto Memory |
-|--|----------------|-------------|
-| 生命周期 | 这次会话 | 跨会话 |
-| 典型内容 | 当前任务进度、刚改的文件、下一步 | 偏好、纠错、长期事实 |
-| 主要消费者 | Compaction | 下次新对话的 system 注入 |
-| 触发时机 | 每个 step 后 | 整轮 turn 结束 |
+|            | Session Memory                   | Auto Memory              |
+| ---------- | -------------------------------- | ------------------------ |
+| 生命周期   | 这次会话                         | 跨会话                   |
+| 典型内容   | 当前任务进度、刚改的文件、下一步 | 偏好、纠错、长期事实     |
+| 主要消费者 | Compaction                       | 下次新对话的 system 注入 |
+| 触发时机   | 每个 step 后                     | 整轮 turn 结束           |
 
 ---
 
-## 6. Compaction（上下文压缩）家族
+## 7. Compaction（上下文压缩）家族
 
 Compaction 解决的是：**窗口快满了，怎么腾出空间继续干活**。  
 入口：`compactIfNeeded`，在每个 agent step **之前**调用。
 
 可以分成三档，从轻到重：
 
-### 6.1 Micro-compaction（微压缩）
+### 7.1 Micro-compaction（微压缩）
 
 - **不调用大模型**，几乎免费
 - 只处理「旧的工具调用内容」：
   - 读类工具（bash / grep / read / web…）：清掉 **输出**
   - 写类工具（write / edit…）：清掉 **输入**
 - 工具调用的「壳」还在，保证 tool_call ↔ tool_result 配对不断裂
-- 被清掉的地方换成简短占位说明（例如 *Old tool result content cleared…*）
+- 被清掉的地方换成简短占位说明（例如 _Old tool result content cleared…_）
 - 默认保留最近 N 条工具结果原文（`microCompactKeepRecent`）
 
 何时触发：
@@ -254,7 +272,7 @@ Compaction 解决的是：**窗口快满了，怎么腾出空间继续干活**�
 
 Micro 做完如果已经低于完整 compact 阈值，就到此为止。
 
-### 6.2 Session Memory Compact（优先的「真压缩」）
+### 7.2 Session Memory Compact（优先的「真压缩」）
 
 若 micro 之后仍超阈值（或手动 `/compact`）：
 
@@ -267,7 +285,7 @@ Micro 做完如果已经低于完整 compact 阈值，就到此为止。
 
 这条路径 **不再额外调用一次「总结全文」的 LLM**，所以更快、也更稳。
 
-### 6.3 Full Compact（完整 LLM 压缩）
+### 7.3 Full Compact（完整 LLM 压缩）
 
 Session Memory 不可用时的后备：再调一次模型，把旧对话收成摘要，形状与上一条相同：
 
@@ -284,19 +302,29 @@ Session Memory 不可用时的后备：再调一次模型，把旧对话收成�
 
 ---
 
-## 7. 一张表：四层各自负责什么
+## 8. 部署形态与隔离边界
 
-| 机制 | 解决什么问题 | 谁触发 | 是否调 LLM | 持久化 |
-|------|--------------|--------|------------|--------|
-| Project Rules | 稳定规范从哪来 | 会话启动加载 | 否（读文件） | 仓库文件 |
-| Auto Memory | 跨会话记住偏好/事实 | 启动注入；turn 结束抽取；或主 agent 当场写 | 抽取时可能 fork | `~/.ai-agent/.../memory/` |
-| Session Memory | 本会话进度账 | 每 step 后抽取 | fork 抽取 | `.sessions/.../summary.md` |
-| Micro-compaction | 便宜地甩掉旧工具大包 | step 前，接近阈值 | 否 | 改内存中的 messages |
-| SM / Full Compact | 真的缩短历史 | step 前超阈值或手动 | SM 否 / Full 是 | 写入会话 transcript |
+- **Local Web/API 与 Electron**：用户级记忆位于本机用户 app dir；项目/本地 Agent Memory 位于 workspace。
+- **Admin Cloud**：记忆随服务端持久卷保存；重启恢复 Session Memory state。
+- **SSO Cloud**：`agentHome`、workspace、Auto Memory、Agent Memory 和 Session Memory 都绑定当前租户；路径与 symlink 越界会拒绝。
+- **Remote SSH**：代码工具在远端 Worker 执行；控制面本机的 Project Rules、Auto Memory、Persistent Agent Memory 均不注入。Session Memory 属于会话控制面状态，单独持久化。
 
 ---
 
-## 8. 小白常见问题
+## 9. 一张表：各层负责什么
+
+| 机制                    | 解决什么问题            | 谁触发                                     | 是否调 LLM              | 持久化                       |
+| ----------------------- | ----------------------- | ------------------------------------------ | ----------------------- | ---------------------------- |
+| Project Rules           | 稳定规范从哪来          | 会话启动加载                               | 否（读文件）            | 仓库文件                     |
+| Auto Memory             | 跨会话记住偏好/事实     | 启动注入；turn 结束抽取；或主 agent 当场写 | 抽取时可能 fork         | `~/.ai-agent/.../memory/`    |
+| Persistent Agent Memory | 自定义 Agent 的专属经验 | Agent 显式读写                             | 否（由 Agent 自己维护） | user / project / local scope |
+| Session Memory          | 本会话进度账            | 每 step 后抽取                             | fork 抽取               | `.sessions/.../summary.md`   |
+| Micro-compaction        | 便宜地甩掉旧工具大包    | step 前，接近阈值                          | 否                      | 改内存中的 messages          |
+| SM / Full Compact       | 真的缩短历史            | step 前超阈值或手动                        | SM 否 / Full 是         | 写入会话 transcript          |
+
+---
+
+## 10. 小白常见问题
 
 **Q：Agent「记住了」是不是把所有聊天都存进了数据库？**  
 A：不是。跨会话主要靠你写的 AGENTS.md + auto-memory 目录里的主题文件；单会话靠消息历史 + summary.md。窗口满了还会主动丢掉细节。
@@ -318,29 +346,30 @@ A：当前实现里 remote 不会加载本地 Project Rules / Auto Memory 注入
 
 ---
 
-## 9. 想继续深入时看这些文件
+## 11. 想继续深入时看这些文件
 
-| 主题 | 代码 / 设计文档 |
-|------|-----------------|
-| 生命周期钩子 | `src/turn/memory-lifecycle.ts` |
-| Project Rules | `src/utils/rules-loader.ts` |
-| Auto Memory | `src/services/auto-memory/`，设计稿 `docs/reference/claude-code/auto-memory-design.md` |
-| Session Memory | `src/services/session-memory/`，设计稿 `docs/reference/claude-code/session-memory-design.md` |
-| Compaction 编排 | `src/services/compact/autoCompact.ts` |
-| Micro-compaction | `src/services/compact/microCompact.ts` |
-| 配置类型 | `src/core/types.ts` 里的 `CompactionConfig` / `SessionMemoryConfig` / `AutoMemoryConfig` |
-| Claude Code 对照长文 | `docs/reference/claude-code/claude-code-memory-systems.md`（上游概念，不完全等于本仓库） |
+| 主题                    | 代码 / 设计文档                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| 生命周期钩子            | `src/turn/memory-lifecycle.ts`                                                               |
+| Project Rules           | `src/utils/rules-loader.ts`                                                                  |
+| Auto Memory             | `src/services/auto-memory/`，设计稿 `docs/reference/claude-code/auto-memory-design.md`       |
+| Persistent Agent Memory | `src/tools/AgentTool/agentMemory.ts`、`mergeAgents.ts`                                       |
+| Session Memory          | `src/services/session-memory/`，设计稿 `docs/reference/claude-code/session-memory-design.md` |
+| Compaction 编排         | `src/services/compact/autoCompact.ts`                                                        |
+| Micro-compaction        | `src/services/compact/microCompact.ts`                                                       |
+| 配置类型                | `src/core/types.ts` 里的 `CompactionConfig` / `SessionMemoryConfig` / `AutoMemoryConfig`     |
+| Claude Code 对照长文    | `docs/reference/claude-code/claude-code-memory-systems.md`（上游概念，不完全等于本仓库）     |
 
 ---
 
-## 10. 一句话收束
+## 12. 一句话收束
 
 把本仓库的 memory 理解成四件事即可：
 
-1. **Project Rules** — 你写的长期说明书  
-2. **Auto Memory** — 跨会话的自动记事本  
-3. **Session Memory** — 本会话进度账，专门喂给 compact  
-4. **Compaction** — 先廉价清工具垃圾（micro），再必要时用账本或 LLM 把历史压短  
+1. **Project Rules** — 你写的长期说明书
+2. **Auto Memory** — 跨会话的自动记事本
+3. **Session Memory** — 本会话进度账，专门喂给 compact
+4. **Compaction** — 先廉价清工具垃圾（micro），再必要时用账本或 LLM 把历史压短
 
 它们一起保证：规范稳定、偏好可延续、长对话还能继续干。
 `)
