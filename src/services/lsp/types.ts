@@ -8,4 +8,5 @@ export type LspServerState =
 export interface ScopedLspServerConfig extends LspServerConfig {
   name: string
   workspaceFolder: string
+  extensionToLanguage: Record<string, string>
 }

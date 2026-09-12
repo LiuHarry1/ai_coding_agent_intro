@@ -34,13 +34,17 @@ function minimalSession(agentType: string | null): Session {
     permissionMode: { mode: 'agent' },
     messages: [],
     discoveredTools: new Set(),
-  } as Session
+  } as unknown as Session
 }
 
 function minimalToolContext(): ToolContext {
   return {
-    eventBus: { emit() {}, on() {}, off() {} } as ToolContext['eventBus'],
-    wire: { emit() {} } as ToolContext['wire'],
+    eventBus: {
+      emit() {},
+      on() {},
+      off() {},
+    } as unknown as ToolContext['eventBus'],
+    wire: { emit() {} } as unknown as ToolContext['wire'],
     cwd: process.cwd(),
   }
 }

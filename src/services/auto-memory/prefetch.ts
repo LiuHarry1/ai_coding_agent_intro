@@ -41,7 +41,7 @@ export type TimedMemoryPrefetchResult = {
   timedOut: boolean
 }
 
-export const EXPLICIT_RECALL_TIMEOUT_MS = 2_000
+export const EXPLICIT_RECALL_TIMEOUT_MS = 4_000
 
 export const RELEVANT_MEMORIES_CONFIG = {
   MAX_SESSION_BYTES,

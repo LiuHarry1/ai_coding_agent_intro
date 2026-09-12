@@ -26,6 +26,7 @@ import {
   type RelayServer,
 } from '../browser/relay/server.js'
 import { startCdpEndpoint } from '../browser/relay/cdp-endpoint.js'
+import type { BrowserBackend } from '../browser/types.js'
 import {
   resetSettingsCache,
   resolveSettings,
@@ -477,7 +478,7 @@ await withRelay(async relay => {
       title: 'Example',
     },
   ]
-  const backend = {
+  const backend: BrowserBackend = {
     kind: 'extension' as const,
     async listTabs() {
       return tabs
@@ -493,7 +494,7 @@ await withRelay(async relay => {
     async getActiveUserTabId() {
       return tabs[0]?.targetId ?? null
     },
-    async send() {
+    async send<T>() {
       return {
         targetInfo: {
           targetId: 'chrome-1',
@@ -501,7 +502,7 @@ await withRelay(async relay => {
           title: 'Example',
           url: 'https://example.com/',
         },
-      }
+      } as T
     },
     async dispose() {},
   }

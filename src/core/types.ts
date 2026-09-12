@@ -657,7 +657,6 @@ export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project' | 'managed'
 
 /** Whether a disk agent is a ModePicker primary or AgentTool-only subagent. */
 export type AgentMode = 'primary' | 'subagent'
-export type AgentMemoryScope = 'user' | 'project' | 'local'
 
 /**
  * Pure-data definition of a subagent / primary profile. After the single-Task
@@ -717,8 +716,6 @@ export interface AgentDefinition {
    * with full context.
    */
   omitProjectRules?: boolean
-  /** Independent persistent memory enabled only for this custom agent. */
-  memory?: AgentMemoryScope
   /** Where this definition was loaded from (disk agents + plugins). */
   source?: AgentSource
   /** Absolute path to the defining `.md` file, when loaded from disk. */

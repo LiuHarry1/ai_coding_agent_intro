@@ -62,9 +62,9 @@ try {
     'managed baseURL should win',
   )
   // disabledTools merges (set-union), both present
+  const disabledTools = resolved.config.disabledTools ?? []
   assert(
-    resolved.config.disabledTools.includes('web_fetch') &&
-      resolved.config.disabledTools.includes('Bash'),
+    disabledTools.includes('web_fetch') && disabledTools.includes('Bash'),
     'disabledTools should merge from project + managed',
   )
   assert(

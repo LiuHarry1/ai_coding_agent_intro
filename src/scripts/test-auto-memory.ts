@@ -63,18 +63,6 @@ function assert(cond: boolean, msg: string): void {
     memoryDir: '/tmp/memory',
   })
   assert(
-    guide.includes('Persistent custom-agent memory isolation'),
-    'main Auto Memory guide separates custom Agent memory',
-  )
-  assert(
-    extract.includes('Do not copy a private Agent-memory value'),
-    'background extractor forbids custom Agent memory leakage',
-  )
-  assert(
-    extract.includes('selected main-thread custom Agent profile is not'),
-    'main-thread Agent profile still permits explicit Auto Memory',
-  )
-  assert(
     extract.includes('identifiers, codes, and literal values verbatim'),
     'explicit memory requests preserve exact identifiers',
   )

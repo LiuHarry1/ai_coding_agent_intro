@@ -110,7 +110,7 @@ export async function diagnoseClickIntercept(
   x: number,
   y: number,
 ): Promise<ClickIntercept | undefined> {
-  return loc
+  const intercept = await loc
     .evaluate(
       (target, coords) => {
         const hit = document.elementFromPoint(coords.x, coords.y) as
@@ -235,6 +235,7 @@ export async function diagnoseClickIntercept(
       { x, y },
     )
     .catch(() => undefined)
+  return intercept ?? undefined
 }
 
 export async function resolveClickTarget(

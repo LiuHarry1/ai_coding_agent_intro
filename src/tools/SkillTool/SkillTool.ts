@@ -165,7 +165,6 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
               sessionId: context.sessionId,
               permissionContext: context.permissionContext,
               execution: context.execution,
-              autoMemory: context.autoMemory,
             })
             return {
               data: {

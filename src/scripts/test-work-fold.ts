@@ -7,13 +7,44 @@ import { buildFlatElements } from '../../client/web/src/lib/bubbles/flat-element
 import { formatWorkedDuration } from '../../client/web/src/lib/timeline.js'
 import { coalesceToolRuns } from '../../client/web/src/lib/tool-density.js'
 
-function flat(bubbles, opts = {}) {
-  const bubbleOrder = bubbles.map(b => b.id)
-  const bubblesById = Object.fromEntries(bubbles.map(b => [b.id, b]))
-  return buildFlatElements(bubbleOrder, bubblesById, opts)
+type Bubble = {
+  id: string
+  kind: string
+  turnId?: string
+  name?: string
+  status?: string
+  startTime?: number
+  endTime?: number
+  content?: string
 }
 
-const tool = (id, extra = {}) => ({
+type FlatOptions = {
+  isStreaming?: boolean
+  activeTurnId?: string | null
+  unfoldLatestTurn?: boolean
+}
+
+type FlatElement = {
+  type: string
+  bubbleId: string
+  state: string
+  memberIds: string[]
+  turnId: string | null
+  defaultOpen: boolean
+  durationMs: number
+}
+
+function flat(bubbles: Bubble[], opts: FlatOptions = {}): FlatElement[] {
+  const bubbleOrder = bubbles.map(b => b.id)
+  const bubblesById = Object.fromEntries(bubbles.map(b => [b.id, b]))
+  return buildFlatElements(
+    bubbleOrder,
+    bubblesById,
+    opts,
+  ) as FlatElement[]
+}
+
+const tool = (id: string, extra: Partial<Bubble> = {}): Bubble => ({
   id,
   kind: 'tool',
   turnId: extra.turnId ?? 't1',
@@ -132,7 +163,7 @@ const tool = (id, extra = {}) => ({
 }
 
 {
-  const turn = (turnId, userId) => [
+  const turn = (turnId: string, userId: string): Bubble[] => [
     { id: userId, kind: 'user', turnId, content: 'go' },
     tool(`${turnId}-a`, { turnId, startTime: 1000, endTime: 2000 }),
     tool(`${turnId}-b`, { turnId, startTime: 2000, endTime: 3000 }),

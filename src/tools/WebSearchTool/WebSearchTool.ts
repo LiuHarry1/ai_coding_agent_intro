@@ -93,7 +93,7 @@ export const definition: ToolDefinition = {
   // Mode A — structured results for UI; prose + reminder for model
   outputSchema: z.object({
     query: z.string(),
-    results: z.array(z.record(z.unknown())).optional(),
+    results: z.array(z.record(z.string(), z.unknown())).optional(),
     answers: z.array(z.string()).optional(),
     suggestions: z.array(z.string()).optional(),
     content: z.string().optional(),

@@ -96,7 +96,6 @@ export async function respondSkillFork(
     models,
     compaction: config.compaction,
     sessionId,
-    autoMemory: config.autoMemory,
     permissionContext: createFilesystemPermissionContext(
       cwd,
       settingsPermissionOpts(config.permissions),

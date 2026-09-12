@@ -129,7 +129,6 @@ async function resolveTurnSystemPrompt(
   projectRules: string | undefined,
   profile: AgentDefinition | null,
   planOpts: { planFilePath: string; planExists: boolean },
-  agentMemoryEnabled = true,
 ): Promise<string> {
   if (session.permissionMode.mode === 'agent' && profile) {
     return getSystemPromptForAgentProfile(
@@ -138,7 +137,6 @@ async function resolveTurnSystemPrompt(
       projectRules,
       session.id,
       '',
-      agentMemoryEnabled && !isRemoteWorkspace(session.workspace),
     )
   }
   return getSystemPromptForMode(
@@ -433,7 +431,6 @@ export async function runChatTurn(
           planFilePath: prepared.planFilePath,
           planExists: planExists(session, cwd),
         },
-        prepared.toolContext.autoMemory?.enabled !== false,
       )
       const mainModelId = models.profile('large').model
       const side = resolveSidePathModel({
@@ -515,7 +512,6 @@ export async function runChatTurn(
       planFilePath: prepared.planFilePath,
       planExists: planExists(session, cwd),
     },
-    prepared.toolContext.autoMemory?.enabled !== false,
   )
 
   const refreshTools = () => {
@@ -540,7 +536,6 @@ export async function runChatTurn(
         planFilePath: prepared.planFilePath,
         planExists: planExists(session, cwd),
       },
-      prepared.toolContext.autoMemory?.enabled !== false,
     )
 
   try {

@@ -169,7 +169,7 @@ export type AskUserQuestionOutput = {
 
 export const AskUserQuestionOutputSchema = z.object({
   text: z.string(),
-  answers: z.record(z.string()).optional(),
+  answers: z.record(z.string(), z.string()).optional(),
   answered: z.boolean(),
 })
 

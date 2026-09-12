@@ -1,375 +1,686 @@
-# Coding Agent 记忆系统入门
+# Coding Agent 记忆系统开发指南
 
-> 面向还不熟悉「agent memory」的读者。  
-> 基于本仓库 `src/` 的实际实现（不是 Claude Code 源码导读）。  
-> 相关代码：`src/utils/rules-loader.ts`、`src/services/auto-memory/`、`src/services/session-memory/`、`src/services/compact/`、`src/turn/memory-lifecycle.ts`。
+> 本文描述本仓库 `src/` 当前实际实现，最后核对日期为 2026-09-12。
+> 这里的“记忆”包括 Project Rules、Auto Memory、Session Memory 与 Compaction。它们不是一套功能的四个名字，而是生命周期、存储位置和消费者都不同的四层机制。
 
----
+## 1. 结论先行
 
-## 1. 先搞清楚：Agent 为什么需要「记忆」？
+当前运行时记忆架构只有四层：
 
-大模型每次对话都有一个 **上下文窗口（context window）**——能塞进模型的文字总量有上限（大约按 token 计）。
+1. **Project Rules**：人工维护的长期规则，每轮准备时重新加载。
+2. **Auto Memory**：同一项目下由所有 Primary Agent 共享的跨会话主题记忆。
+3. **Session Memory**：单个 session 的进度账本，主要供 compaction 使用。
+4. **Compaction**：上下文接近上限时清理或总结历史消息。
 
-Coding agent 会不断：
+当前没有一套按自定义 Agent 隔离的 Persistent Agent Memory：
 
-- 读你的消息
-- 读文件、跑命令、搜代码（工具结果往往很长）
-- 再回复、再调工具……
+- `AgentDefinition` 不再声明 `memory: user | project | local`。
+- Agent markdown frontmatter 不解析 `memory:`。
+- Browser Primary 与 General Primary 使用相同的项目 Auto Memory 目录。
+- 子 Agent 不获得独立的持久化 memory 目录。
+- 原有 `src/tools/AgentTool/agentMemory.ts` 与对应测试已经删除；Claude Code 参考文档中的同名模块只用于上游设计对照。
 
-对话一长，历史消息就会把窗口塞满。满了以后有两个问题：
+Auto Memory 的主题 frontmatter 当前只有 `name`、`description`、`type`。没有 `source: browser` 等来源字段，也没有按来源过滤的实现。
 
-1. **塞不下** → 必须丢掉或压缩旧内容，否则模型报错 / 拒绝继续。
-2. **新开会话时什么都不记得** → 上次聊过的偏好、约定、项目冷知识会丢失。
+## 2. 整体架构图
 
-所以本项目的「记忆」不是一个单一模块，而是好几层互相配合的机制：
+```mermaid
+flowchart TB
+  U["用户请求"] --> PREP["prepareChatTurn"]
 
-| 层                          | 一句话                                                           | 管多久                  |
-| --------------------------- | ---------------------------------------------------------------- | ----------------------- |
-| **Project Rules**           | 你写好的项目说明书，开聊就塞进提示词                             | 跨会话（人工维护）      |
-| **Auto Memory**             | 主 Agent 自动记下偏好/事实；每轮 **prefetch** 召回 ≤5 篇主题文件 | 跨会话（自动 + 半自动） |
-| **Persistent Agent Memory** | 显式配置的自定义 Agent 独立维护自己的经验                        | 跨调用                  |
-| **Session Memory**          | 当前这次会话的进度笔记                                           | 单会话                  |
-| **Compaction**              | 上下文快满时，把旧对话压短                                       | 运行时（为了继续聊）    |
+  subgraph RULES["Project Rules"]
+    MR["Managed Rules"]
+    UR["User Rules"]
+    PR["Project / Local Rules"]
+    CR["paths 条件规则"]
+    MR --> ALL["loadAllAgentRules"]
+    UR --> ALL
+    PR --> ALL
+  end
 
-可以把它想成人类工作方式：
+  subgraph AUTO["Auto Memory：跨会话、项目级共享"]
+    ADIR[("projects / projectKey / memory")]
+    GUIDE["Auto Memory 使用指南"]
+    FAST["Fast lane<br/>元数据确定性匹配"]
+    SEM["Semantic lane<br/>small side query"]
+    END["Turn-end extract fork"]
+    ADIR --> GUIDE
+    ADIR --> FAST
+    ADIR --> SEM
+    END --> ADIR
+  end
 
-- **Project Rules** = 写在墙上的团队规范（AGENTS.md）
-- **Auto Memory** = 你随身带的记事本（偏好、踩坑经验）
-- **Session Memory** = 今天这张草稿纸上的任务进度
-- **Compaction** = 草稿纸写满了，先擦掉旧的大段日志，只留摘要和最近几行
+  ALL --> MERGE["projectRules = Rules + Auto guide"]
+  GUIDE --> MERGE
+  PREP --> ALL
+  PREP --> GUIDE
+  PREP --> PROFILE["Mode / Primary Agent profile<br/>组装 system prompt 与工具池"]
+  MERGE --> PROFILE
 
----
+  U --> PREFETCH["startRelevantMemoryPrefetch"]
+  PREFETCH --> FAST
+  PREFETCH --> SEM
+  FAST --> ATTACH["relevant_memories attachment"]
+  SEM --> ATTACH
 
-## 2. 总览：一次对话里它们怎么串起来
+  PROFILE --> LOOP["runAgent / query loop"]
+  ATTACH --> LOOP
+  CR --> CATTACH["conditional_rules attachment"]
+  CATTACH --> LOOP
 
+  subgraph STEP["每个 Agent Step"]
+    BEFORE["step 前：compactIfNeeded"]
+    MODEL["模型推理与工具调用"]
+    AFTER["step 后：postTurn"]
+    BEFORE --> MODEL --> AFTER
+  end
+
+  LOOP --> BEFORE
+  AFTER --> LOOP
+  AFTER --> LATE["消费已完成的 semantic prefetch"]
+  AFTER --> SMEX["onAfterStep<br/>Session Memory extract"]
+
+  subgraph SESSION["Session Memory：单会话"]
+    SDIR[("projects / projectKey / sessionId / session-memory")]
+    SUMMARY["summary.md"]
+    STATE["state.json"]
+    SMEX --> SUMMARY
+    SMEX --> STATE
+  end
+
+  subgraph COMPACT["Compaction"]
+    MICRO["Micro：清旧 tool payload"]
+    SMC["Session Memory Compact"]
+    FULL["Full LLM Compact"]
+    CHECK["compacted checkpoint"]
+    BEFORE --> MICRO
+    MICRO -->|"仍超阈值"| SMC
+    SUMMARY --> SMC
+    STATE --> SMC
+    SMC -->|"不可用或仍过大"| FULL
+    SMC -->|"成功"| CHECK
+    FULL --> CHECK
+  end
+
+  CHECK --> JSONL[("session JSONL")]
+  LOOP -->|"completed 或 max_steps"| END
+
+  REMOTE{{"Remote SSH"}} -.->|"关闭 Rules 与 Auto Memory"| ALL
+  REMOTE -.->|"Session Memory 仍运行"| SDIR
 ```
-会话启动 / 每轮 prepare
-  │
-  ├─ loadAllAgentRules()             ← user ~/.ai-agent/AGENTS.md + 项目 AGENTS.md / local
-  └─ buildAutoMemorySystemAppend()   ← 只注入「如何写 memory」指南（**不再**塞整份 MEMORY.md）
 
-用户发消息
-  └─ startRelevantMemoryPrefetch()   ← small 模型选 ≤5 个主题文件（首轮不阻塞）
+图里的两条动态 attachment 通道不要和 system prompt 混淆：
 
-每个 agent step 之前
-  └─ compactIfNeeded()
-        ├─ ① micro-compaction（清旧工具结果，不调大模型）
-        └─ ② 仍超阈值？→ Session Memory Compact 或 Full Compact
+- `relevant_memories` 来自 Auto Memory prefetch。
+- `conditional_rules` 来自带 `paths:` frontmatter 的规则，在工具成功读写匹配文件后注入。
 
-每个 step 之后（tools 跑完）
-  ├─ 若 prefetch 已 settled → 注入 relevant_memories attachment（user + isMeta）
-  └─ Session Memory 后台抽取（fire-and-forget）
+## 3. 一次完整 turn 的时序
 
-整轮结束（本轮不再调工具）
-  └─ Auto Memory 后台抽取（fire-and-forget）→ 主题 .md（prefetch 模式下不强制维护 MEMORY.md 索引）
-```
+### 3.1 Turn preparation
 
-挂载点在代码里很清晰：
+`src/utils/processUserInput/prepare_chat_turn.ts` 负责：
 
-- 启动注入：`prepare_chat_turn.ts`
-- 压缩入口：`compactIfNeeded`（`services/compact/autoCompact.ts`）
-- 后台抽取钩子：`createMemoryLifecycleHooks`（`turn/memory-lifecycle.ts`）
-  - `onAfterStep` → Session Memory
-  - `onTurnEnd` → Auto Memory
+1. 解析 slash command。
+2. 加载插件、skills、subagents 和 MCP。
+3. 本地会话调用 `loadAllAgentRules(cwd)`。
+4. 解析 Auto Memory 配置并调用 `buildAutoMemorySystemAppend()`。
+5. 把规则与 Auto Memory 指南合成同一个 `projectRules` 字符串。
+6. 解析 Primary Agent profile、组装工具池。
+7. 把 Auto Memory 目录加入 `extraReadRoots` 和 `extraWriteRoots`。
 
----
+随后 `resolveTurnSystemPrompt()` 选择默认 mode prompt 或 Primary Agent prompt。
 
-## 3. Project Rules（项目规则）
+### 3.2 主循环开始前
 
-### 这是什么？
+`src/turn/run-chat-turn.ts` 在用户消息已进入 session 后：
 
-**人工写的指令**，告诉 agent：这个仓库怎么协作、用什么风格、禁止做什么。  
-它不是「学出来的记忆」，而是「你规定的行为」。冲突时通常优先于模型默认习惯。
+1. 创建 Session Memory 与 Auto Memory 生命周期 hooks。
+2. 启动 Auto Memory fast / semantic prefetch。
+3. 先消费 strong fast hit。
+4. 如果用户明确表达“回忆之前内容”，最多等待 semantic lane 4 秒。
+5. 把成功召回的内容作为 `relevant_memories` meta attachment 放入消息流。
 
-### 从哪里加载？
+### 3.3 每个 step
 
-实现：`src/utils/rules-loader.ts` 的 `loadProjectRules(cwd)`。
+`src/core/query.ts` 的 step machine 按以下顺序运行：
 
-从当前工作目录一路向上走到 git root，收集：
+1. `preTurn` 调用 `compactIfNeeded()`。
+2. 模型推理并执行工具。
+3. `postTurn` 消费已经完成但尚未注入的 semantic prefetch。
+4. `onAfterStep` 异步触发 Session Memory 抽取。
 
-1. 目录下的 `AGENTS.md`
-2. `{appDir}/AGENTS.md`（默认 `.ai-agent/AGENTS.md`）
-3. `{appDir}/rules/**/*.md`（递归，按路径排序）
+### 3.4 整个 turn 结束
 
-规则：
+`emitTurnEnd()` 只在 `completed` 或 `max_steps` 时调用 `onTurnEnd`，异步触发 Auto Memory 抽取。
 
-- **离 cwd 越近的文件越晚加载** → 对模型来说优先级更高（后出现的内容更受关注）
-- 单文件约 40KB 上限，合并后也有总上限
-- 多份规则会带 `<!-- from ... -->` 来源标注
+`aborted` 和 `error` 不触发本轮 Auto Memory 抽取；游标留在原处，让后续成功 turn 有机会覆盖完整范围。
 
-### 怎么进模型？
+## 4. Project Rules
 
-准备一轮聊天时读出原文，放进 system prompt 的 **Project rules** 区域。  
-子 agent 也可以注入；部分内置 agent（如 plan）可设 `omitProjectRules: true` 跳过。
+Project Rules 是人工规定的行为，不是模型自动学习出的事实。
 
-### 你该怎么用？
+### 4.1 加载顺序
 
-在仓库里维护：
+`src/utils/rules-loader.ts` 的 `loadAllAgentRules()` 按以下顺序合并：
+
+1. Managed policy rules。
+2. User rules。
+3. Project 与 local rules。
+
+项目规则从 `cwd` 向 git root 搜索。越靠近 `cwd` 的目录越晚出现，优先级更高。同一目录内顺序为：
+
+1. 根目录 `AGENTS.md`。
+2. `{appDir}/AGENTS.md`，默认是 `.ai-agent/AGENTS.md`。
+3. `{appDir}/rules/**/*.md`。
+4. `{appDir}/AGENTS.local.md`。
+5. 根目录 `AGENTS.local.md`。
+
+规则支持单独一行的 `@relative/path` 文本 include，最多递归 5 层。单文件与合并结果都有约 40 KiB 上限。
+
+### 4.2 条件规则
+
+`.ai-agent/rules/*.md` 如果带有 `paths:` frontmatter，不进入静态 system prompt。
+
+当工具成功读写某个匹配文件后，`loadConditionalRulesForPaths()` 把它包装为 `conditional_rules` attachment。这样只有处理相关路径时才占用上下文。
+
+Remote 会话或 Primary Agent 设置 `omitProjectRules: true` 时，条件规则也关闭。
+
+### 4.3 适合保存的内容
+
+- 构建、测试、格式化命令。
+- 稳定代码规范和安全红线。
+- 必须遵守的仓库工作流。
+- 不应由模型自行猜测的长期项目约束。
+
+临时进度放 Session Memory；跨会话偏好与非代码事实放 Auto Memory。
+
+## 5. Auto Memory
+
+Auto Memory 是项目级、跨会话、所有 Primary Agent 共用的主题文件集合。
+
+### 5.1 默认存储路径
 
 ```text
-AGENTS.md                 # 或
-.ai-agent/AGENTS.md
-.ai-agent/rules/*.md      # 按主题拆分也可以
+{agentHome}/.ai-agent/projects/{projectKey}/memory/
+├── MEMORY.md
+├── <topic-a>.md
+└── <topic-b>.md
 ```
 
-适合写：构建命令、代码风格、测试要求、安全红线、目录约定等 **稳定规范**。  
-不适合写：今天做到哪一步、临时 bug 现场——那些交给 Session / Auto Memory。
+本地 `projectKey` 来自 canonical git root；worktree 会归一到主仓。非 git 工作区使用规范化后的 cwd，再经 `sanitizePath()` 处理。
 
+`autoMemory.directory` / `autoMemoryDirectory` 可以覆盖默认目录，但只信任 user 或 local settings。项目 settings 中的目录覆盖会被剥离，避免仓库把任意系统路径变成读写白名单。
+
+在 SSO 模式中，覆盖路径还必须位于当前 tenant 的 `agentHome` 内。
+
+### 5.2 主题文件格式与四种类型
+
+```markdown
+---
+name: concise-memory-name
+description: 用于未来相关性选择的一行具体描述
+type: user
 ---
 
-## 4. Auto Memory（跨会话自动记忆）
+记忆正文
+```
 
-### 这是什么？
+允许的 `type`：
 
-跨会话的 **结构化主题记忆**：用户偏好、纠错反馈、项目里「代码读不出来」的事实、外部资料指针等。  
-下次你打开同一个仓库再聊，agent 仍能通过索引想起这些事。
+- `user`：用户角色、知识背景、职责和稳定协作偏好。
+- `feedback`：用户纠正或确认过的工作方式，重点记录“以后应该怎么做”。
+- `project`：无法从当前代码或 git 历史推出的项目背景、动机、截止日期或组织事实。
+- `reference`：外部系统中信息所在位置，例如 Linear 项目、Slack 频道或监控面板。
 
-和 Project Rules 的区别：
+分类时优先保存最直接的语义。同一句“以后报告先列失败项”通常应是 `feedback`；只有它同时构成稳定的用户级沟通偏好时才考虑 `user`，不要机械地同时写两份。
 
-|      | Project Rules      | Auto Memory                    |
-| ---- | ------------------ | ------------------------------ |
-| 谁写 | 主要是你           | agent 自动写 / 你也可要求记住  |
-| 性质 | 规范、指令         | 偏好、反馈、冷知识             |
-| 位置 | 仓库内（常进 git） | 默认在用户主目录下，避免误提交 |
+不要保存：
 
-### 存在哪里？
+- 能从当前代码、目录或配置直接读出的内容。
+- git log / blame 已能回答的历史。
+- 已写入 AGENTS.md 的规则。
+- 当前任务的临时状态。
+- credentials、cookies、tokens、个人表单数据。
+- 临时 selector、tab ref、element ref 或一次性页面状态。
 
-默认路径（概念上）：
+记忆会过期。使用文件路径、函数名、开关或当前项目状态前，必须以现有代码或外部权威来源复核。
+
+### 5.3 System prompt 注入
+
+`buildAutoMemorySystemAppend()` 默认只注入“如何使用 Auto Memory”的行为指南，不把整个记忆库或 `MEMORY.md` 正文塞进 system prompt。
+
+默认 `prefetchEnabled: true` 时：
+
+- 指南不要求维护 `MEMORY.md` 索引。
+- 相关主题正文通过 prefetch attachment 进入上下文。
+
+`prefetchEnabled: false` 是兼容模式：
+
+- 不运行每轮相关性选择。
+- system prompt 会附带截断后的 `MEMORY.md`。
+- 写入或抽取后维护索引。
+- 索引最多 200 行、25 KiB。
+
+### 5.4 召回：Fast lane
+
+`findFastRelevantMemories()` 只检查 filename、name 和 description 等元数据，不先读取所有正文。
+
+以下情况视为 strong hit：
+
+- 文件名、stem 或 name 与 query 有精确短语匹配。
+- 第一名分数至少 `0.82`，并且领先第二名至少 `0.12`。
+
+Strong fast hit 最多返回 3 篇，在 step 0 前立即注入。
+
+### 5.5 召回：Semantic lane 与 4 秒显式等待
+
+Semantic lane 使用 `prefetchModelTier: small` 的 side query，从候选 manifest 中最多选择 5 篇。
+
+常规请求不等待 semantic lane；结果完成后由后续 `postTurn` 注入。用户明确询问“上次”“之前讨论过什么”“还记得吗”等历史内容时，`consumeMemoryPrefetchWithTimeout()` 在 step 0 前最多等待：
+
+```ts
+EXPLICIT_RECALL_TIMEOUT_MS = 4_000
+```
+
+4 秒内完成就立即注入；超时不取消任务，也不标记为已消费。结果稍后完成时仍可在某个 step 后 late attach。
+
+无 strong fast hit 且 query 不含空格、长度小于 10 时，会跳过 semantic lane；短文件名和短 CJK query 仍先经过 fast lane。
+
+每篇自动注入最多 200 行或 4096 bytes。同一 session 已 surface 的记忆正文累计达到 60 KiB 后，不再启动新的 prefetch。
+
+### 5.6 两条写入路径
+
+主 Agent 直接写：
+
+- `prepareChatTurn` 把 memdir 加入额外读写根。
+- Agent 可通过 Write / Edit 创建或更新主题文件。
+- 默认 prefetch 模式只需写主题文件，不需要更新 `MEMORY.md`。
+- 如果本轮已经成功直写 memdir，turn-end extract 会跳过，避免重复。
+
+Turn-end side-query 抽取：
+
+- 默认每个 eligible turn 都检查，`extractEveryNTurns` 当前硬编码为 1，尚未暴露为 settings。
+- Extract fork 最多运行 5 steps。
+- Read / Grep / Glob 可访问 workspace 与 memdir；Write / Edit 只能修改 memdir。
+- `cacheSafe: true` 时复用主循环模型与 prompt cache 形状。
+- `cacheSafe: false` 时使用单独的 `modelTier`，默认 medium。
+- 同一 memdir 的任务串行；自动 pending 任务采用 latest-wins coalescing。
+
+写入完成后只修复本次写过文件的 frontmatter。修复逻辑可以纠正缩进和需要 quote 的值，但不会猜测缺失的 `type`。
+
+Auto Memory 抽取游标只保存在进程内，进程重启后会重置；它与 Session Memory 的持久化 `state.json` 不同。
+
+## 6. Session Memory
+
+Session Memory 是单 session 的工作进度账本，主要消费者是 Session Memory Compact。
+
+### 6.1 存储路径
 
 ```text
-~/.ai-agent/projects/<仓库路径消毒后的名字>/memory/
-├── MEMORY.md           # 兼容索引（关闭 prefetch 时才注入）
-├── prefer-concise.md   # 主题文件示例
-└── …
+{agentHome}/.ai-agent/projects/{projectKey}/{sessionId}/session-memory/
+├── summary.md
+└── state.json
 ```
 
-解析优先级大致是：
+这不是旧文档中的 `.sessions/{sessionId}/...`。
 
-1. 受信配置里的 `autoMemory.directory` / `autoMemoryDirectory`（**只允许 user/local settings，禁止项目配置劫持**）
-2. 上面的默认 `~/.ai-agent/projects/.../memory/`
+本地 session 与 Auto Memory 使用相同的项目桶规则。Remote SSH 使用 `sanitize(environmentId:cwd)` 作为 `projectKey`，避免不同远端环境混在一起。
 
-同一 git 仓库的 worktree 会归一到主仓，共享一份 memory。  
-在 settings 里设 `autoMemory.enabled: false` 可关掉整族；`prefetchEnabled: false` 只关每轮召回。SSH Remote 会跳过 memdir / prefetch。
+### 6.2 summary.md
 
-### 记什么 / 不记什么？
+默认模板固定包含 10 个 section：
 
-四种类型（frontmatter 里的 `type`）：
+1. Session Title
+2. Current State
+3. Task specification
+4. Files and Functions
+5. Workflow
+6. Errors & Corrections
+7. Codebase and System Documentation
+8. Learnings
+9. Key results
+10. Worklog
 
-- **user** — 你是谁、怎么协作
-- **feedback** — 「别这样写」「要那样测」
-- **project** — 代码里推不出来的项目事实
-- **reference** — 外部文档/链接指针
+模板和抽取 prompt 可由工作区或 user app dir 下的 `.ai-agent/session-memory/template.md` 与 `prompt.md` 覆盖。
 
-明确 **不要** 记（见 `services/auto-memory/types.ts`）：
+抽取后会校验固定 section 的完整性和顺序；格式损坏时尝试用旧内容补齐结构。
 
-- 当前代码/目录结构里已经能读到的东西
-- git 历史（`git log` 更权威）
-- 已经写在 AGENTS.md 里的规范
-- **仅对当前这次任务有用** 的临时进度（那是 Session Memory / Todo / Plan 的事）
+### 6.3 自动抽取条件
 
-### 怎么写入？
+每个完成的 step 都会调用 `extractSessionMemoryInBackground()`，但只有达到阈值才实际 fork：
 
-两条路径：
+- 第一次总量达到 `minimumTokensToInit`，默认 10,000 tokens。
+- 距上次成功抽取至少增长 `minimumTokensBetweenUpdate`，默认 5,000 tokens。
+- 同时满足以下任意一个条件：
+  - 自上次 trigger 至少有 `toolCallsBetweenUpdates`，默认 3 个工具调用。
+  - 当前处于 natural break，即最后一条 assistant 消息没有 tool call。
 
-1. **主 agent 直接写**：对话中用 Write/Edit 往 memory 目录写主题文件，并更新 `MEMORY.md` 索引。
-2. **回合结束自动抽取**：整轮结束（没有更多 tool calls）时，后台 fork 一个受限子 agent，只允许读搜 + 写 memory 目录，补抽本轮值得记住的内容。
+`/summary` 使用 `force: true`，同步等待一次强制抽取。自动任务按 session 串行，并采用 latest-wins coalescing；强制任务保持 FIFO。
 
-触发钩子：`memory-lifecycle.ts` 的 `onTurnEnd` → `extractAutoMemoriesInBackground`。  
-有节流（例如每 N 个 eligible turn）；若本轮已经写过 memory，会跳过重复抽取。
+抽取 fork 最多 5 steps。默认 `cacheSafe: true`；非 cache-safe 模式使用 medium tier。受限模式基本只允许 Edit `summary.md`。
 
-### 怎么读回来？
+### 6.4 state.json
 
-会话启动时 `buildAutoMemorySystemAppend()` 注入「如何使用 auto memory」的指南。默认开启 prefetch：用户发出请求后异步选出最多 5 篇相关主题文件，完成后才作为 attachment 注入，不阻塞首轮模型调用。只有显式关闭 `prefetchEnabled` 时才回退为注入截断后的 `MEMORY.md` 索引。
-细节要靠模型按需 `Read` memory 目录里的主题文件。
-注入排在 Project Rules **之后**：人工规范优先。
+持久化字段：
 
----
+- `initialized`：是否已越过首次初始化阈值。
+- `tokensAtLastExtraction`：上次成功抽取时的 token 基线。
+- `lastTriggerMessageId`：上次决定触发抽取时的末消息 UUID。
+- `lastSummarizedMessageId`：natural break 抽取覆盖到的末消息 UUID，是 SM compact 的裁剪游标。
+- `notesGeneration`：成功更新 notes 后递增，用于检测 compact 读文件期间的竞态。
 
-## 5. 自定义 Agent 的独立记忆
+只存在于进程内的字段：
 
-Claude Code 的契约不是把主 Agent 的 Auto Memory 广播给全部子 Agent。本项目同样只对自定义 Agent frontmatter 中显式声明的记忆启用独立目录：
+- `inFlight`
+- `extractionStartedAt`
+- `extractionEpoch`
 
-```yaml
----
-name: reviewer
-description: Review changes
-memory: project # user | project | local
----
-```
+Compact 最多等待进行中的抽取 15 秒。超过 15 秒但未达到 stale 条件时跳过 SM compact，避免读取半写文件；超过 60 秒的抽取视为 stale，可放弃其所有权并继续。
 
-- `user`：`~/.ai-agent/agent-memory/<agent>/`，同一用户跨项目
-- `project`：`<workspace>/.ai-agent/agent-memory/<agent>/`，可随项目共享
-- `local`：`<workspace>/.ai-agent/agent-memory-local/<agent>/`，项目与机器私有
+## 7. Compaction
 
-内置 Explore/Plan 不继承主 Agent Auto Memory；后台 Session/Auto Memory extractor 也不递归启动自己的抽取。Remote SSH 暂停 Agent Memory，避免把远端路径错误映射到控制面主机。
+Compaction 在每个 agent step 前执行，顺序是：
 
----
+1. Micro-compaction。
+2. 如果仍超阈值，优先 Session Memory Compact。
+3. Session Memory 不可用时回退 Full LLM Compact。
 
-## 6. Session Memory（会话笔记）
+### 7.1 Token 阈值
 
-### 这是什么？
-
-**当前这一次会话** 的进度账本。平时在后台慢慢记；上下文快满做 compact 时，优先拿这份笔记当摘要，而不是临时再让模型从头总结整段聊天。
-
-口号可以记成：**平时记账，满窗读账**。
-
-### 存在哪里？
+默认 `contextWindow = 200,000`。未配置 `maxOutputTokens` 时预留 20,000：
 
 ```text
-.sessions/{sessionId}/session-memory/summary.md
-.sessions/{sessionId}/session-memory/state.json
+effectiveContextWindow = contextWindow - min(maxOutputTokens, 20,000)
+autoCompactThreshold   = effectiveContextWindow - 13,000
+microCompactThreshold  = autoCompactThreshold - 27,000
+blockingLimit          = effectiveContextWindow - 3,000
 ```
 
-模板固定若干节（实现里约 10 节），例如：
+默认结果：
 
-- Session Title / Current State / Task specification
-- Files and Functions / Workflow / Errors & Corrections
-- Codebase and System Documentation / Learnings / Key results / Worklog
+- effective context window：180,000
+- auto compact：167,000
+- micro compact：140,000
+- blocking limit：177,000
 
-其中 **Current State** 最关键：compact 之后靠它接上「现在做到哪」。
+`tokenCountWithEstimation()` 混合使用真实 usage 与带 padding 的估算，避免只依赖字符数。
 
-### 什么时候更新？
+### 7.2 Micro-compaction
 
-每个 step 结束后后台抽取（`onAfterStep`），不阻塞你看回复。  
-通常还要满足 token / tool-call 间隔阈值，避免每句话都重写一遍。  
-抽取本身是 fork 出去的小任务：默认 cache-safe（尽量复用主循环的模型与 prompt cache），但工具权限收得很紧——基本上只许改 `summary.md`。
+Micro 不调用模型：
 
-`state.json` 持久化抽取游标、token 基线和 notes generation，使 Admin Cloud、SSO Cloud 与 Electron 进程重启后不会从头重复抽取。它是本项目为部署可靠性增加的能力；Claude Code 的对应游标仅保存在进程内。Session Memory 不依赖 compaction 总开关。
+- 对 read / shell / grep / web / browser 等工具清旧 output。
+- 对 write / edit / apply_patch / NotebookEdit 等工具清旧 input。
+- 任意 tool result 超过 2,000 chars 也可以被清理。
+- 保留 tool-call 与 tool-result 外壳，避免破坏 API 配对。
+- 默认保留最近 5 个可清理工具结果。
+- aggressive 模式只保留最近 1 个。
+- Read 结果被清后会失效对应 `readFileState`，必要时把大结果 offload 到 tool storage。
 
-### 和 Auto Memory 别搞混
-
-|            | Session Memory                   | Auto Memory              |
-| ---------- | -------------------------------- | ------------------------ |
-| 生命周期   | 这次会话                         | 跨会话                   |
-| 典型内容   | 当前任务进度、刚改的文件、下一步 | 偏好、纠错、长期事实     |
-| 主要消费者 | Compaction                       | 下次新对话的 system 注入 |
-| 触发时机   | 每个 step 后                     | 整轮 turn 结束           |
-
----
-
-## 7. Compaction（上下文压缩）家族
-
-Compaction 解决的是：**窗口快满了，怎么腾出空间继续干活**。  
-入口：`compactIfNeeded`，在每个 agent step **之前**调用。
-
-可以分成三档，从轻到重：
-
-### 7.1 Micro-compaction（微压缩）
-
-- **不调用大模型**，几乎免费
-- 只处理「旧的工具调用内容」：
-  - 读类工具（bash / grep / read / web…）：清掉 **输出**
-  - 写类工具（write / edit…）：清掉 **输入**
-- 工具调用的「壳」还在，保证 tool_call ↔ tool_result 配对不断裂
-- 被清掉的地方换成简短占位说明（例如 _Old tool result content cleared…_）
-- 默认保留最近 N 条工具结果原文（`microCompactKeepRecent`）
-
-何时触发：
-
-- token 接近「完整 compact」阈值前一段距离（提前量）
-- 或手动 / 激进模式
-- 或（可选）距上次 assistant 回复已过很久——prompt cache 反正冷了，顺手清一下
-
-Micro 做完如果已经低于完整 compact 阈值，就到此为止。
-
-### 7.2 Session Memory Compact（优先的「真压缩」）
-
-若 micro 之后仍超阈值（或手动 `/compact`）：
-
-1. 先等一会儿后台 Session Memory 抽取写完（避免读到半成品）
-2. 若 `summary.md` 可用且游标可信：
-   - 用笔记生成一条 compact summary 消息
-   - 丢掉笔记已覆盖的旧消息
-   - **保留**尾部一段最近对话（`messagesToKeep`）
-   - 再挂上 todos、最近读过的文件片段、attachment 等
-
-这条路径 **不再额外调用一次「总结全文」的 LLM**，所以更快、也更稳。
-
-### 7.3 Full Compact（完整 LLM 压缩）
-
-Session Memory 不可用时的后备：再调一次模型，把旧对话收成摘要，形状与上一条相同：
+占位文案是：
 
 ```text
-[boundary] + [summary 消息] + [messagesToKeep] + [attachments…]
+[Old tool result content cleared to save context]
 ```
 
-连续失败多次会触发简易熔断，避免反复 compact 打挂会话。
+Micro 只改变内存消息，不写 `compacted` checkpoint。
 
-### 阈值直觉（不必背数字）
+### 7.3 Session Memory Compact
 
-配置在 `CompactionConfig`：以 `contextWindow` 为底，减去输出预留和安全 buffer，得到 auto-compact 阈值；micro 阈值再往前挪一截。  
-也可用环境变量覆盖（如 `COMPACT_THRESHOLD_OVERRIDE`、`DISABLE_AUTO_COMPACT` 等）。
+SM compact 的前提是：
 
----
+- `sessionMemory.enabled` 为 true。
+- 没有带 steering instructions 的 `/compact`。
+- 进行中的 extract 已安全结束，或已判定 stale。
+- `summary.md` 存在、非空且不是空模板。
+- 读取期间 `notesGeneration` 没有变化。
+- `lastSummarizedMessageId` 如果存在，必须能在当前消息中找到。
 
-## 8. 部署形态与隔离边界
+裁剪算法从 `lastSummarizedMessageId` 之后开始保留，再向前扩展，满足：
 
-- **Local Web/API 与 Electron**：用户级记忆位于本机用户 app dir；项目/本地 Agent Memory 位于 workspace。
-- **Admin Cloud**：记忆随服务端持久卷保存；重启恢复 Session Memory state。
-- **SSO Cloud**：`agentHome`、workspace、Auto Memory、Agent Memory 和 Session Memory 都绑定当前租户；路径与 symlink 越界会拒绝。
-- **Remote SSH**：代码工具在远端 Worker 执行；控制面本机的 Project Rules、Auto Memory、Persistent Agent Memory 均不注入。Session Memory 属于会话控制面状态，单独持久化。
+- `compactMinTokens`，默认 10,000。
+- `compactMaxTokens`，默认 40,000。
+- `compactMinTextMessages`，默认 5。
+- 不切断 tool-call / tool-result 配对。
 
----
+最终消息形状是：
 
-## 9. 一张表：各层负责什么
+```text
+[一条 role=user、isCompactSummary=true 的摘要消息]
+[原样保留的最近消息]
+[重新生成的 agent / skill attachments]
+```
 
-| 机制                    | 解决什么问题            | 谁触发                                     | 是否调 LLM              | 持久化                       |
-| ----------------------- | ----------------------- | ------------------------------------------ | ----------------------- | ---------------------------- |
-| Project Rules           | 稳定规范从哪来          | 会话启动加载                               | 否（读文件）            | 仓库文件                     |
-| Auto Memory             | 跨会话记住偏好/事实     | 启动注入；turn 结束抽取；或主 agent 当场写 | 抽取时可能 fork         | `~/.ai-agent/.../memory/`    |
-| Persistent Agent Memory | 自定义 Agent 的专属经验 | Agent 显式读写                             | 否（由 Agent 自己维护） | user / project / local scope |
-| Session Memory          | 本会话进度账            | 每 step 后抽取                             | fork 抽取               | `.sessions/.../summary.md`   |
-| Micro-compaction        | 便宜地甩掉旧工具大包    | step 前，接近阈值                          | 否                      | 改内存中的 messages          |
-| SM / Full Compact       | 真的缩短历史            | step 前超阈值或手动                        | SM 否 / Full 是         | 写入会话 transcript          |
+摘要正文还可带 Active Todo List、最近读文件内容；如果 Session Memory 被截断，会附上完整 `summary.md` 路径。
 
----
+如果构建出的消息仍达到 auto compact 阈值，SM compact 放弃并回退 Full LLM Compact。
 
-## 10. 小白常见问题
+### 7.4 Full LLM Compact
 
-**Q：Agent「记住了」是不是把所有聊天都存进了数据库？**  
-A：不是。跨会话主要靠你写的 AGENTS.md + auto-memory 目录里的主题文件；单会话靠消息历史 + summary.md。窗口满了还会主动丢掉细节。
+Full compact 调用模型总结旧消息，并保留最近一段原始消息。以下情况会走 full：
 
-**Q：我改了 AGENTS.md，旧会话会自动更新吗？**  
-A：规则是每轮准备聊天时重新 `loadProjectRules` 的；新 turn 会看到新内容。已经发生过的旧消息不会改写。
+- Session Memory 不可用或不可信。
+- SM compact 后仍过大。
+- `/compact <instructions>` 明确提供了总结 steering。
+- 没有 sessionId 或 Session Memory 被关闭。
 
-**Q：为什么 compact 之后 agent 好像「忘了」中间某次命令的完整输出？**  
-A：正常。Micro 或 Full/SM compact 会清掉或折叠旧工具结果。重要结论应已经进 Session Memory / 你的文件 / Auto Memory。
+Full compact 会恢复有限数量的最近读文件、todos、agent / skill listing。aggressive reactive compact 会跳过文件恢复。
 
-**Q：我想让它永远记住「回复短一点」——写哪？**  
-A：长期偏好 → Auto Memory（或你直接写进 AGENTS.md）。不要塞进 Session Memory。
+连续 3 次 full 失败会阻止后续普通 proactive compact；`force` 或 `aggressive` 仍可继续尝试。
 
-**Q：当前任务做到一半，怕 compact 丢进度——写哪？**  
-A：Session Memory 的 Current State / Todo；重要里程碑也可以写进真正的文件或 Plan。
+### 7.5 持久化与恢复
 
-**Q：远程 SSH 会话呢？**  
-A：当前实现里 remote 不会加载本地 Project Rules / Auto Memory 注入与抽取（避免把本机记忆路径套到远端工作区）。以 `prepare_chat_turn.ts` 为准。
+只有 `session_memory` 和 `full` 两种总结型结果会调用 `appendCompaction()` 写 `type: compacted` 的 JSONL checkpoint。
 
----
+恢复 session 时，遇到 `compacted` 行会用 checkpoint 整体替换此前消息，而不是继续追加。临时 attachment 在 checkpoint 前被过滤，恢复后按当前 agent / skill 状态重新生成。
 
-## 11. 想继续深入时看这些文件
+Micro 没有 checkpoint，所以它的清理主要服务当前进程中的 API 上下文。
 
-| 主题                    | 代码 / 设计文档                                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| 生命周期钩子            | `src/turn/memory-lifecycle.ts`                                                               |
-| Project Rules           | `src/utils/rules-loader.ts`                                                                  |
-| Auto Memory             | `src/services/auto-memory/`，设计稿 `docs/reference/claude-code/auto-memory-design.md`       |
-| Persistent Agent Memory | `src/tools/AgentTool/agentMemory.ts`、`mergeAgents.ts`                                       |
-| Session Memory          | `src/services/session-memory/`，设计稿 `docs/reference/claude-code/session-memory-design.md` |
-| Compaction 编排         | `src/services/compact/autoCompact.ts`                                                        |
-| Micro-compaction        | `src/services/compact/microCompact.ts`                                                       |
-| 配置类型                | `src/core/types.ts` 里的 `CompactionConfig` / `SessionMemoryConfig` / `AutoMemoryConfig`     |
-| Claude Code 对照长文    | `docs/reference/claude-code/claude-code-memory-systems.md`（上游概念，不完全等于本仓库）     |
+### 7.6 手动与 reactive 路径
 
----
+- `/summary`：强制更新 Session Memory，不压缩消息。
+- `/compact`：强制压缩；没有 instructions 时仍可优先 SM compact。
+- `/compact <instructions>`：跳过 SM compact，使用 Full LLM Compact。
+- 模型返回 context-length error：`run-step.ts` 触发 force + aggressive compact 后重试。
 
-## 12. 一句话收束
+## 8. Primary Agent、Browser 与子 Agent
 
-把本仓库的 memory 理解成四件事即可：
+Primary Agent profile 在 agent mode 下替换默认 system prompt，并通过工具 allow-list / deny globs 决定主线程工具池。
 
-1. **Project Rules** — 你写的长期说明书
-2. **Auto Memory** — 跨会话的自动记事本
-3. **Session Memory** — 本会话进度账，专门喂给 compact
-4. **Compaction** — 先廉价清工具垃圾（micro），再必要时用账本或 LLM 把历史压短
+记忆功能与 profile 不是完全绑在一起：
 
-它们一起保证：规范稳定、偏好可延续、长对话还能继续干。
-`)
+- Auto Memory prefetch、turn-end extract、Session Memory extract 和 compaction 在主线程 turn lifecycle 中运行。
+- Project Rules 与 Auto Memory 使用指南先被合并成同一个 `projectRules` 字符串。
+- `omitProjectRules: true` 会把这个完整字符串从 Primary Agent system prompt 中移除，因此既移除 Project Rules，也移除 Auto Memory 使用指南。
+- 这个开关不会自动关闭独立启动的 Auto Memory prefetch 和 turn-end extract。
+
+当前 `.ai-agent/agents/browser.md` 设置了 `omitProjectRules: true`。因此 Browser Primary：
+
+- 与 General Primary 共用 Auto Memory 存储和召回。
+- 仍可获得 `relevant_memories` attachment。
+- 仍会运行 turn-end Auto Memory 抽取。
+- 但不会在自身 system prompt 中看到统一 Auto Memory 写入指南，也不会看到 Project Rules / conditional rules。
+
+子 Agent 走 `AgentTool` fork 路径，不拥有独立 Auto Memory 生命周期。它可以获得项目规则，但不会独立启动主线程的 prefetch / extract，也没有 per-agent memdir。
+
+## 9. 配置默认值
+
+### 9.1 Auto Memory
+
+- `enabled: true`
+- `extractEveryNTurns: 1`，当前硬编码，settings 不可配
+- `cacheSafe: true`
+- `modelTier: medium`，仅 non-cache-safe extract 使用
+- `prefetchEnabled: true`
+- `prefetchModelTier: small`
+
+Settings 同时兼容 flat keys 与 nested `autoMemory`。目录覆盖只能来自受信 user / local scope。
+
+### 9.2 Session Memory
+
+- `enabled: true`
+- `minimumTokensToInit: 10,000`
+- `minimumTokensBetweenUpdate: 5,000`
+- `toolCallsBetweenUpdates: 3`
+- `cacheSafe: true`
+- `modelTier: medium`
+- `compactMinTokens: 10,000`
+- `compactMaxTokens: 40,000`
+- `compactMinTextMessages: 5`
+
+Session Memory 抽取本身不依赖 `compaction.enabled`；该开关控制的是普通 proactive compaction。
+
+### 9.3 Compaction
+
+- `enabled: true`
+- `contextWindow: 200,000`
+- `microCompactKeepRecent: 5`
+- `maxFilesToRestore: 5`
+- `maxTokensPerFile: 5,000`
+- `fileBudget: 50,000`
+- `timeBasedMicroEnabled: false`
+- `timeBasedMicroGapMinutes: 5`
+
+相关环境变量：
+
+- `DISABLE_AUTO_COMPACT=1`
+- `DISABLE_COMPACT=1`
+- `COMPACT_CONTEXT_WINDOW`
+- `COMPACT_MICRO_KEEP`
+- `COMPACT_THRESHOLD_OVERRIDE`
+- `DISABLE_TIME_BASED_MICRO=1`
+- `COMPACT_TIME_GAP_MIN`
+
+## 10. 部署与安全边界
+
+### 10.1 Local Web / Electron
+
+- Project Rules、Auto Memory、Session Memory 与 Compaction 全部启用。
+- `agentHome` 通常是本机用户 home。
+
+### 10.2 Admin Cloud
+
+- 记忆位于服务端持久卷。
+- Session Memory 的 `state.json` 可在进程重启后恢复游标。
+
+### 10.3 SSO Cloud
+
+- RequestScope 通过 `AsyncLocalStorage` 绑定 `{ agentHome, cwd }`。
+- Rules、Auto Memory、Session Memory 与 session JSONL 都按 tenant `agentHome` 隔离。
+- Auto Memory 自定义目录必须位于当前 tenant home 内。
+- 后台 extract 会捕获并重新进入原 request scope。
+
+### 10.4 Remote SSH
+
+- 本地 Project Rules 与 Auto Memory 整族关闭：不注入指南、不 prefetch、不 extract。
+- Session Memory 与 Compaction 仍在控制面运行。
+- Session project key 包含 remote `environmentId` 与 remote cwd。
+- 代码工具通过远端 Worker 执行，不能静默回退到本地文件系统。
+
+### 10.5 文件系统边界
+
+- Auto Memory 通过额外读写根显式授权。
+- Extract fork 的 Write / Edit 被限制在 memdir。
+- 路径检查同时做 lexical containment 与 existing-ancestor realpath 校验，阻止 symlink 逃逸。
+- 项目 settings 不能把任意目录升级为 Auto Memory 写根。
+
+## 11. 故障降级与已知限制
+
+- Semantic prefetch 失败时返回空结果，不应阻断主 turn。
+- 显式 recall 4 秒超时后继续主流程，结果仍可 late attach。
+- Session Memory extract 超过 15 秒时，当前 compact 跳过 SM，转用 full。
+- Auto Memory turn-end 状态仅在进程内；重启会重置 cursor 和 throttle。
+- Auto Memory 扫描最多处理 200 个主题文件。
+- 默认 prefetch 模式下 `MEMORY.md` 通常是空兼容入口，不是主召回索引。
+- 当前 memory schema 没有 `source` 字段，不能按 Browser / General 来源过滤。
+- `omitProjectRules` 同时控制 Rules 和 Auto Memory 指南，粒度较粗。
+- 真实 LLM 端到端质量仍受 selector / extractor 模型和提示词影响；多数单测使用 stub 或 mock。
+
+调试时可重点查看：
+
+- `[auto-memory]`：目录、prefetch、extract、frontmatter repair。
+- `[session-memory]`：阈值、队列、state、等待与 stale extract。
+- `[compact]`：token、micro、SM fallback、full 结果和 circuit breaker。
+- `[agent:main] memory recall decision=...`：step 0 召回时序。
+
+## 12. 测试入口
+
+完整记忆测试：
+
+```powershell
+npm run test:memory
+```
+
+它当前串联：
+
+- `src/scripts/test-auto-memory.ts`
+- `src/scripts/test-memory-prefetch.ts`
+- `src/scripts/test-session-memory.ts`
+- `src/scripts/test-memory-lifecycle.ts`
+- `src/scripts/test-request-scope.ts`
+- `src/scripts/test-memory-deployment.mjs`
+- `src/scripts/test-rules-loader.ts`
+- `src/scripts/test-managed-extensions.ts`
+
+## 13. 代码地图
+
+Turn 编排：
+
+- `src/utils/processUserInput/prepare_chat_turn.ts`
+- `src/turn/run-chat-turn.ts`
+- `src/turn/memory-lifecycle.ts`
+- `src/core/query.ts`
+- `src/core/query/pre-turn.ts`
+- `src/core/query/post-turn.ts`
+
+Project Rules：
+
+- `src/utils/rules-loader.ts`
+- `src/utils/attachments.ts`
+
+Auto Memory：
+
+- `src/services/auto-memory/paths.ts`
+- `src/services/auto-memory/inject.ts`
+- `src/services/auto-memory/prefetch.ts`
+- `src/services/auto-memory/findRelevant.ts`
+- `src/services/auto-memory/extract.ts`
+- `src/services/auto-memory/scan.ts`
+- `src/services/auto-memory/state.ts`
+
+Session Memory：
+
+- `src/services/session-memory/extract.ts`
+- `src/services/session-memory/compact.ts`
+- `src/services/session-memory/state.ts`
+- `src/services/session-memory/keepIndex.ts`
+- `src/services/session-memory/template.ts`
+- `src/services/session-memory/paths.ts`
+
+Compaction：
+
+- `src/services/compact/autoCompact.ts`
+- `src/services/compact/microCompact.ts`
+- `src/services/compact/compact.ts`
+- `src/services/compact/tokens.ts`
+- `src/services/compact/fileRestore.ts`
+- `src/services/compact/post-compact-attachments.ts`
+
+配置与持久化：
+
+- `src/core/settings-manager.ts`
+- `src/core/settings-schema.ts`
+- `src/core/types.ts`
+- `src/core/session-paths.ts`
+- `src/session/store.ts`
+
+## 14. 设计原则
+
+判断一条信息应该去哪一层：
+
+1. 是必须长期遵守的人工作业规范吗？放 Project Rules。
+2. 是跨会话仍有价值、且不能从代码直接读出的偏好或事实吗？放 Auto Memory。
+3. 是当前 session 的进度、错误现场或下一步吗？放 Session Memory。
+4. 是为了降低当前上下文 token 吗？交给 Compaction。
+
+不要创建额外的 `MEMORY.md` 体系，也不要按 Primary Agent 再复制一套记忆。跨会话共享由统一 Auto Memory 负责；单会话连续性由 Session Memory 与 compaction checkpoint 负责。

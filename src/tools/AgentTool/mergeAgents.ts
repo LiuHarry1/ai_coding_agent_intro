@@ -18,10 +18,7 @@ import {
 import { isModelTier } from '../../core/llm/index.js'
 import {
   AGENT_TOOL_NAME,
-  EDIT_FILE_TOOL_NAME,
-  FILE_READ_TOOL_NAME,
   INTERACTIVE_TOOLS,
-  WRITE_FILE_TOOL_NAME,
 } from '../../constants/tool_names.js'
 
 /** Names that must not be used as ModePicker primary agentTypes. */
@@ -98,28 +95,6 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
   if (allowedTools) {
     allowedTools = allowedTools.filter(t => t !== AGENT_TOOL_NAME)
   }
-  const memoryRaw = parseString(fm.memory)?.toLowerCase()
-  const memory =
-    memoryRaw === 'user' || memoryRaw === 'project' || memoryRaw === 'local'
-      ? memoryRaw
-      : undefined
-  if (memoryRaw && !memory) {
-    return {
-      agent: null,
-      filePath: file.filePath,
-      error: `agent '${agentType}': invalid 'memory' scope '${memoryRaw}' (expected user, project, or local)`,
-    }
-  }
-  if (allowedTools && memory) {
-    allowedTools = Array.from(
-      new Set([
-        ...allowedTools,
-        FILE_READ_TOOL_NAME,
-        WRITE_FILE_TOOL_NAME,
-        EDIT_FILE_TOOL_NAME,
-      ]),
-    )
-  }
 
   // Primary stores only explicit frontmatter denies (globs ok).
   // Subagent path keeps auto-deny of Agent + interactive tools.
@@ -161,7 +136,6 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
     ...(parseBool(fm.omitProjectRules) === true
       ? { omitProjectRules: true }
       : {}),
-    ...(memory ? { memory } : {}),
   }
 
   return { agent, filePath: file.filePath }

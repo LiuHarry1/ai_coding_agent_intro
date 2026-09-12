@@ -1017,7 +1017,7 @@ export const screenshotTool = defineBrowserTool({
         : 'viewport'
     const out = await observe(ctx.backend, ctx.targetId, {
       action: 'screenshot',
-      message: args.labels
+      message: 'labels' in shot
         ? `Screenshot of ${scope} with ${shot.labels} labels (${shot.skipped} skipped)`
         : `Screenshot of ${scope}`,
       withSnapshot: false,

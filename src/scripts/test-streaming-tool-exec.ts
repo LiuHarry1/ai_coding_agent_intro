@@ -43,13 +43,13 @@ const tools: Record<string, AnyTool> = {
       order.push(`end-${input.id}`)
       return `read-${input.id}`
     },
-  } as AnyTool,
+  } as unknown as AnyTool,
   Write: {
     execute: async () => {
       order.push('write')
       return 'written'
     },
-  } as AnyTool,
+  } as unknown as AnyTool,
 }
 
 async function main(): Promise<void> {
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
         overlapOrder.push(`end-${input.id}`)
         return `read-${input.id}`
       },
-    } as AnyTool,
+    } as unknown as AnyTool,
   }
   const overlapCtx: ToolUseContext = {
     tools: overlapTools,

@@ -24,7 +24,6 @@ import { isToolNameDisallowed } from '../tools/AgentTool/toolGlob.js'
 import { enhanceSystemPromptWithEnvDetails } from '../constants/prompts.js'
 import { setCwd } from '../utils/cwd.js'
 import type { SkillDefinition } from './types.js'
-import { loadAgentMemoryPrompt } from '../tools/AgentTool/agentMemory.js'
 
 export interface RunSkillForkOptions {
   skill: SkillDefinition
@@ -43,7 +42,6 @@ export interface RunSkillForkOptions {
   sessionId?: string
   permissionContext?: ToolContext['permissionContext']
   execution?: ToolContext['execution']
-  autoMemory?: { enabled?: boolean }
 }
 
 export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
@@ -63,7 +61,6 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     sessionId,
     permissionContext,
     execution,
-    autoMemory,
   } = opts
 
   const targetAgentType = skill.agent ?? 'general_purpose'
@@ -86,30 +83,6 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     models?.profile(tier).model ??
     forkProvider?.defaultModelId()
 
-  const remote = execution != null && execution.environmentId !== 'local'
-  const agentMemory =
-    targetAgent.memory && !remote && autoMemory?.enabled !== false
-      ? loadAgentMemoryPrompt(targetAgent.agentType, targetAgent.memory, cwd)
-      : undefined
-  const scopedPermissionContext =
-    agentMemory && permissionContext
-      ? {
-          ...permissionContext,
-          extraReadRoots: Array.from(
-            new Set([
-              ...permissionContext.extraReadRoots,
-              agentMemory.memoryDir,
-            ]),
-          ),
-          extraWriteRoots: Array.from(
-            new Set([
-              ...permissionContext.extraWriteRoots,
-              agentMemory.memoryDir,
-            ]),
-          ),
-        }
-      : permissionContext
-
   const subContext: ToolContext = {
     eventBus,
     wire,
@@ -120,7 +93,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
     models,
     compaction,
     sessionId,
-    permissionContext: scopedPermissionContext,
+    permissionContext,
     cwd,
     execution,
   }
@@ -151,11 +124,11 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
   }
 
   setCwd(cwd)
-  const basePrompt = agentMemory
-    ? `${targetAgent.systemPrompt}\n\n${agentMemory.prompt}`
-    : targetAgent.systemPrompt
   const systemPrompt = (
-    await enhanceSystemPromptWithEnvDetails([basePrompt], forkModel ?? '')
+    await enhanceSystemPromptWithEnvDetails(
+      [targetAgent.systemPrompt],
+      forkModel ?? '',
+    )
   ).join('\n\n')
 
   const result = await runAgent(combined, {

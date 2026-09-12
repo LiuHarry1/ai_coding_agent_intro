@@ -19,7 +19,6 @@ import { setCwd } from '../../utils/cwd.js'
 import { buildConcurrencyPolicy } from '../../core/concurrency-policy.js'
 import { createSubagentWire } from '../../core/brokers/subagent-wire.js'
 import { randomUUID } from 'crypto'
-import { loadAgentMemoryPrompt } from './agentMemory.js'
 
 import { buildAgentListSection } from './agentListing.js'
 import { SUBAGENT_NO_OUTPUT_MARKER } from './finalizeAgentTool.js'
@@ -219,32 +218,6 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             models?.profile(tier).model ??
             subProvider.defaultModelId()
 
-          const remote =
-            context.execution != null &&
-            context.execution.environmentId !== 'local'
-          const agentMemory =
-            def.memory && !remote && context.autoMemory?.enabled !== false
-              ? loadAgentMemoryPrompt(def.agentType, def.memory, cwd)
-              : undefined
-          const permissionContext =
-            agentMemory && context.permissionContext
-              ? {
-                  ...context.permissionContext,
-                  extraReadRoots: Array.from(
-                    new Set([
-                      ...context.permissionContext.extraReadRoots,
-                      agentMemory.memoryDir,
-                    ]),
-                  ),
-                  extraWriteRoots: Array.from(
-                    new Set([
-                      ...context.permissionContext.extraWriteRoots,
-                      agentMemory.memoryDir,
-                    ]),
-                  ),
-                }
-              : context.permissionContext
-
           const subContext: ToolContext = {
             eventBus,
             wire: subWire,
@@ -255,7 +228,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             models,
             compaction,
             sessionId: context.sessionId,
-            permissionContext,
+            permissionContext: context.permissionContext,
             cwd: context.cwd ?? cwd,
             execution: context.execution,
           }
@@ -277,12 +250,9 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           const projectRules = def.omitProjectRules
             ? ''
             : loadAllAgentRules(cwd)
-          const basePrompt = agentMemory
-            ? `${def.systemPrompt}\n\n${agentMemory.prompt}`
-            : def.systemPrompt
           const withRules = projectRules
-            ? `${basePrompt}\n\n<project_rules>\nThe following rules were auto-loaded (user ~/.ai-agent/AGENTS.md, project AGENTS.md / .ai-agent/AGENTS.md / .ai-agent/rules/*.md, and AGENTS.local.md). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
-            : basePrompt
+            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded (user ~/.ai-agent/AGENTS.md, project AGENTS.md / .ai-agent/AGENTS.md / .ai-agent/rules/*.md, and AGENTS.local.md). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+            : def.systemPrompt
           setCwd(cwd)
           const subSystemPrompt = (
             await enhanceSystemPromptWithEnvDetails([withRules], subModel ?? '')

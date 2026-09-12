@@ -55,7 +55,6 @@ import { assembleToolPool } from '../../tools/assembleToolPool.js'
 import { isBrowserEnabledForMainThread } from '../../browser/enablement.js'
 import { warmExtensionRelay } from '../../browser/manager.js'
 import { profileSpan } from '../startupProfiler.js'
-import { getAgentMemoryDir } from '../../tools/AgentTool/agentMemory.js'
 
 export type ForkSkillSlashResult = {
   kind: 'run'
@@ -311,22 +310,6 @@ export async function prepareChatTurn(
     toolEnablement,
     browserConfig: config.browser,
   })
-  if (pool.mainThreadProfile?.memory && autoMemory.enabled && !remote) {
-    const memoryDir = getAgentMemoryDir(
-      pool.mainThreadProfile.agentType,
-      pool.mainThreadProfile.memory,
-      cwd,
-    )
-    const permissionContext = toolContext.permissionContext
-    if (permissionContext) {
-      permissionContext.extraReadRoots = Array.from(
-        new Set([...permissionContext.extraReadRoots, memoryDir]),
-      )
-      permissionContext.extraWriteRoots = Array.from(
-        new Set([...permissionContext.extraWriteRoots, memoryDir]),
-      )
-    }
-  }
 
   if (
     isBrowserEnabledForMainThread(
