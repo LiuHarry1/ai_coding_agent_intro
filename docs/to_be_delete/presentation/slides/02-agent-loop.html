@@ -1,0 +1,26 @@
+<section class="slide-content slide-loop" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">②</span><h2>Core Agent Loop — Not a Chat, but a Loop</h2></div>
+  <p class="subtitle">The essence of Coding Agent: <strong>the loop you implement</strong> drives multi-step LLM decisions until there are no tool calls or the limit is reached.</p>
+  <div class="cols">
+    <div>
+      <h3>Chat vs Agent</h3>
+      <table class="vs-table">
+        <tr><td>Standard chat</td><td>One request, one response, then stop</td></tr>
+        <tr><td>Coding Agent</td><td>A <code>for (step…)</code> loop inside <code>query()</code></td></tr>
+        <tr><td>Stop condition</td><td><code>toolCalls.length === 0</code></td></tr>
+      </table>
+      <img class="mini-diagram" src="assets/agent-loop.svg" alt="Agent loop flowchart" />
+    </div>
+    <div>
+      <h3>One runStep Iteration</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><span class="card-icon">📝</span><strong>sanitize</strong>Normalize messages → API format</div>
+        <div class="card card-indigo"><span class="card-icon">🤖</span><strong>streamText</strong>Call the LLM (AI SDK)</div>
+        <div class="card card-green"><span class="card-icon">🔧</span><strong>execute</strong>Run StreamingToolExecutor</div>
+        <div class="card card-green"><span class="card-icon">📡</span><strong>wire</strong>tool_call / tool_result → UI</div>
+      </div>
+      <div class="callout"><strong>Implementation principle:</strong> The loop lives in <code>query()</code>, not in the model. Transports only call <code>runChatTurn()</code>.</div>
+      <span class="path-tag">src/core/query.ts · run-step.ts · turn/run-chat-turn.ts</span>
+    </div>
+  </div>
+</section>

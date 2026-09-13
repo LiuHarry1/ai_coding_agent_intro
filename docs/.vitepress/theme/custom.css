@@ -1,0 +1,55 @@
+:root {
+  --vp-c-brand-1: #2563eb;
+  --vp-c-brand-2: #1d4ed8;
+  --vp-c-brand-3: #1e40af;
+}
+
+.vp-doc img[src$='.svg'] {
+  box-sizing: border-box;
+  max-height: 78vh;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.vp-doc .mermaid {
+  box-sizing: border-box;
+  margin: 1.25rem 0 1.75rem;
+  padding: 1rem;
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+}
+
+.vp-doc .mermaid svg {
+  display: block;
+  min-width: 560px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.VPHome .VPFeature {
+  height: 100%;
+}
+
+.vp-doc table {
+  width: 100%;
+  display: table;
+}
+
+@media (max-width: 760px) {
+  .vp-doc .mermaid {
+    margin-right: -1rem;
+    margin-left: -1rem;
+    border-radius: 0;
+  }
+
+  .vp-doc table {
+    display: block;
+    overflow-x: auto;
+  }
+}

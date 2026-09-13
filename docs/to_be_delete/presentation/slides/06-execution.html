@@ -1,0 +1,30 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑥</span><h2>Execution Environments — Where Tools Run</h2></div>
+  <p class="subtitle">The control plane is separated from the execution plane; local and remote SSH environments use the same architecture.</p>
+  <div class="cols">
+    <div>
+      <h3>Execution Plane</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><strong>EnvironmentRegistry</strong>local / SSH Provider</div>
+        <div class="card card-indigo"><strong>RuntimeBroker</strong>Manage workers by workspace</div>
+        <div class="card card-green"><strong>Worker</strong>FS · Shell · LSP · rg</div>
+        <div class="card card-green"><strong>CredentialBroker</strong>Runtime authentication</div>
+      </div>
+    </div>
+    <div>
+      <h3>Sessions Bind to Workspaces</h3>
+      <pre class="flow">session.workspace = {
+  environmentId: 'local' | 'ssh:host',
+  cwd: '/path/to/project'
+}
+
+resolveExecutionBackend(session)
+  → Bash/Read/Grep run in the Worker
+
+Remote: plugins load on control host
+        files/commands run in remote Worker</pre>
+      <div class="callout">All tools use <code>ExecutionBackend</code>, so adding remote execution does not require changing every tool.</div>
+      <span class="path-tag">execution/bootstrap.ts · worker/main.ts</span>
+    </div>
+  </div>
+</section>

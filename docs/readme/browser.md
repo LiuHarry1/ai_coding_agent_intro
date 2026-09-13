@@ -1,36 +1,36 @@
-# 浏览器自动化使用指南
+# Browser Automation Guide
 
-> 第一次安装和 Pair？先看 [快速开始](getting-started.md)。
+> Installing and pairing for the first time? Start with the [Quick Start](getting-started.md).
 
-让 coding agent 打开网页、点击、填表、截图,并把页面上看到的东西读回来。典型用途是改完前端后让它自己验证效果,或者去某个后台页面把数据捞出来。
+Coding Agent can open web pages, click elements, fill in forms, take screenshots, and report what it sees. Typical uses include verifying frontend changes and retrieving data from an admin page.
 
-## 两种模式,先选一个
+## Choose one of two modes
 
-| | `isolated`(默认) | `extension` |
-|---|---|---|
-| 用哪个浏览器 | agent 自己拉起的 Chrome,独立 profile | **你自己的 Chrome** |
-| 登录态 | 没有,每次都是全新浏览器 | 你已登录的账号全都能用 |
-| 需要装东西 | 不用 | 要装一个本地扩展(一次) |
-| 默认可见性 | 无头,你看不见 | 就在你眼前的浏览器窗口里 |
-| 适合 | 验证 localhost、公开页面 | 需要登录的站点、内网后台、会拦机器人的站点 |
+|                    | `isolated` (default)                                           | `extension`                                                                |
+| ------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Browser            | A Chrome instance started by the agent with a separate profile | **Your own Chrome browser**                                                |
+| Signed-in sessions | None; each session starts in a fresh browser                   | All accounts already signed in to your browser are available               |
+| Installation       | Nothing required                                               | One local extension, installed once                                        |
+| Default visibility | Headless; the browser is not visible                           | Runs in the browser window in front of you                                 |
+| Best for           | Verifying localhost and public pages                           | Sites requiring sign-in, intranet admin systems, and sites that block bots |
 
-判断很简单:**页面要不要登录**。不要就用 `isolated`,零配置;要就用 `extension`。
+The choice is simple: **does the page require sign-in?** If not, use `isolated` with no configuration. If it does, use `extension`.
 
-工具行为两种模式完全一致,切换模式不用改任何提示词。
+Tool behavior is identical in both modes, so switching modes does not require changing your prompts.
 
 ---
 
-## 方式一:isolated 模式(默认,零配置)
+## Option 1: `isolated` mode (default, no configuration)
 
-启动后端就能用:
+Start the backend:
 
 ```bash
 npm start
 ```
 
-然后直接跟 agent 说「打开 http://localhost:5173,看看登录按钮渲染对不对」即可。
+Then tell Coding Agent, “Open http://localhost:5173 and check whether the sign-in button renders correctly.”
 
-默认是**无头**的,你什么都看不到。想看着它操作,在 `.ai-agent/settings.json` 里加:
+The browser is **headless** by default, so it is not visible. To watch the agent work, add the following to `.ai-agent/settings.json`:
 
 ```json
 {
@@ -41,17 +41,17 @@ npm start
 }
 ```
 
-改完**重启 agent** 生效。之后会弹出一个独立的 Chrome 窗口,里面是 agent 的操作过程。
+**Restart the agent** after making the change. A separate Chrome window will then display the agent's actions.
 
-> 这个浏览器用的是 `~/.ai-agent/browser/profile`,和你日常 Chrome 完全隔离:没有你的 cookie、扩展和历史。所以百度、Google 这类站点可能会给它弹验证码——这不是 bug,是它看起来确实像个全新的机器人。遇到这种情况就换 `extension` 模式。
+> This browser uses `~/.ai-agent/browser/profile` and is completely isolated from your everyday Chrome profile. It has none of your cookies, extensions, or history. Sites such as Baidu and Google may therefore present a CAPTCHA because the browser looks like a new automated client. This is not a bug. Switch to `extension` mode when this occurs.
 
 ---
 
-## 方式二:extension 模式(用你自己的 Chrome)
+## Option 2: `extension` mode (use your own Chrome browser)
 
-页面带着你的真实登录态加载,agent 不需要你写任何登录脚本。
+Pages load with your actual signed-in session, without requiring a login script.
 
-### 1. 改配置
+### 1. Update the configuration
 
 `.ai-agent/settings.json`:
 
@@ -63,159 +63,164 @@ npm start
 }
 ```
 
-### 2. 重启 agent
+### 2. Restart the agent
 
 ```bash
 npm start
 ```
 
-**这一步不能省。** 中继服务在 **Browser Automation 专家**（或 `browser.enabled: true`）且 `mode: extension` 时才会监听；默认 coding agent 不会拉起中继。启动日志里应该出现:
+**This step is required.** The relay service listens only when the **Browser Automation** expert is selected (or `browser.enabled: true`) and `mode: extension` is configured. The default Coding Agent does not start the relay. The startup log should contain:
 
 ```
 [browser] extension relay listening on 127.0.0.1:8766
 ```
 
-### 3. 取配对令牌
+### 3. Get the pairing token
 
 ```bash
 npm run browser:pair
 ```
 
-会打印端口和令牌。令牌存在 `~/.ai-agent/browser/relay.json`(权限 0600),**不会变**,所以配对只需要做一次,以后重启 agent 扩展会自己重连。
+This prints the port and token. The token is stored in `~/.ai-agent/browser/relay.json` with permissions `0600` and **does not change**. Pairing is therefore required only once; the extension reconnects automatically after subsequent agent restarts.
 
-### 4. 装扩展
+### 4. Install the extension
 
-你日常的 Chrome **不需要重启**:
+Your everyday Chrome browser **does not need to be restarted**:
 
-1. 打开 `chrome://extensions`,右上角开启 **开发者模式**
-2. 点 **加载已解压的扩展程序**,选仓库里的 `chrome-extension/` 目录
-3. 点工具栏上新出现的扩展图标,粘贴令牌,点 **Pair**
+1. Open `chrome://extensions` and enable **Developer mode** in the upper-right corner.
+2. Click **Load unpacked** and select the repository's `chrome-extension/` directory.
+3. Click the new extension icon in the toolbar, paste the token, and click **Pair**.
 
-圆点变绿即接通。
+The connection is active when the dot turns green.
 
-> 不要用旁边的「打包扩展程序」按钮。它生成的 `.crx` 在现代 Chrome 里没法拖拽安装(非商店来源会被拒),同时生成的 `.pem` 是签名私钥,别提交进仓库(已加进 `.gitignore`)。装本地扩展就用「加载已解压的扩展程序」。
+> Do not use the adjacent **Pack extension** button. The generated `.crx` cannot be installed by dragging it into modern Chrome because non-store sources are rejected. The generated `.pem` is also a private signing key; do not commit it to the repository (it is already included in `.gitignore`). Use **Load unpacked** to install the local extension.
 
-### 5. 验证
+### 5. Verify the connection
 
-跟 agent 说「打开 <某个你已登录的页面>,告诉我当前登录的是谁」。它应该直接读到你的账号,而不是登录页。
-
----
-
-## agent 能看到什么,不能看到什么
-
-这是 extension 模式最需要先讲清楚的一点:
-
-- **能看**:它自己开的标签页,以及你在扩展弹窗里点了 **Share this tab** 主动分享的标签页
-- **不能看**:你其余的标签页。它连列都列不出来,更读不到内容
-
-所以如果你想让它看一个你已经打开的页面,得先在弹窗里分享一下。弹窗里会列出当前共享给 agent 的所有标签页,随时可以撤销。agent 操作过的标签页会被自动归到一个叫 **Agent** 的标签组里,方便你一眼看出哪些被动过。
-
-关掉扩展或者点撤销,agent 立刻失去访问权。
-
-**不抢你的窗口焦点。** extension 模式不会调用 `Page.bringToFront`，也不会 `windows.focus` 把你的 Chrome 窗口拉到最前。读页面（打开、抓快照、截图）全程在后台 agent 标签上跑，**不会切你的标签条**。只有点击、输入等写操作才会用 `tabs.update({ active: true })` 把 agent 标签切到标签条上（L1），且**默认不会**在操作后再切回你原来的标签。若你希望连续操作结束后自动回到之前的标签，可在 settings 里设 `restoreTabAfterInput: true`。若连标签条都不想被碰，请用 **isolated** 模式（独立 Chrome 窗口，你看不到就不会被打扰）。
+Tell Coding Agent, “Open `<a-page-where-you-are-signed-in>` and tell me which
+account is currently signed in.” It should identify your account instead of
+showing the sign-in page.
 
 ---
 
-## 23 个工具
+## What Coding Agent can and cannot see
 
-一般不用记,直接用自然语言描述目标就行。列出来是方便你看懂对话里的工具卡片:
+This access boundary is the most important aspect of `extension` mode:
 
-| 工具 | 作用 |
-|---|---|
-| `browser_navigate` | 打开 http(s) URL,或后退 / 前进 / 刷新 |
-| `browser_snapshot` | 抓页面结构;可选 `includeDiff` / `urls` |
-| `browser_click` | 按 snapshot ref 点击,或 `x`/`y` 点画布 |
-| `browser_drag` | 把一个 ref 拖到另一个 ref |
-| `browser_type` | 输入文本,可选回车提交 |
-| `browser_fill_form` | 一次填多个字段(文本框、复选框、单选、下拉),逐个报结果 |
-| `browser_select_option` | 原生 `<select>` 按可见文案选；自定义下拉先 snapshot 再点选项 ref |
-| `browser_file_upload` | 拦截文件选择框并上传,不弹系统对话框 |
-| `browser_handle_dialog` | 接受或取消原生 alert/confirm/prompt |
-| `browser_press_key` | 按键,支持组合键 |
-| `browser_wait_for` | 等待文字出现/消失,或等一小段时间 |
-| `browser_hover` | 悬停 |
-| `browser_scroll` | 滚动页面或某个元素 |
-| `browser_screenshot` | 整页或单个元素截图; `labels` 叠 ref 标注 |
-| `browser_resize` | 改视口尺寸 |
-| `browser_wait_for_download` | 等下一次下载并保存 |
-| `browser_console` | 读控制台输出和未捕获异常 |
-| `browser_network` | 列出页面发的 fetch/XHR 请求,带状态码和耗时 |
-| `browser_highlight` | 在页面上高亮一个 ref（视觉对齐） |
-| `browser_get_bounding_box` | 读取 ref 的视口坐标框 |
-| `browser_cdp` | 发一条 CDP 命令（逃生口）。`Runtime.evaluate` 用于 snapshot 找不到的控件；禁止 `Input.*` |
-| `browser_tabs` | 列出/新建/切换/关闭标签页 |
-| `browser_lock` | 把控制权交给用户(`unlock`)或收回(`lock`) |
+- **Visible**: tabs opened by the agent and tabs you explicitly share by clicking **Share this tab** in the extension popup
+- **Not visible**: all your other tabs. The agent cannot list them or read their content
 
-浏览器一旦拉起,聊天区顶部会出现一条横幅:**Take control** 暂停 agent,你自己操作页面;**Resume agent** 交还。暂停期间只能读（快照、截图、控制台、网络、列标签页），不能点击、输入。extension 模式的弹窗里有同样的按钮。
+To let Coding Agent access a page that is already open, share it from the popup first. The popup lists every tab currently shared with the agent, and you can revoke access at any time. Tabs used by the agent are automatically placed in an **Agent** tab group so you can identify them easily.
 
-工具卡片上的 **Show page structure** 按钮会展开当次快照,也就是 agent 当时"看到"的页面。排查它为什么点错元素时看这个。
+If you disable the extension or revoke access, the agent immediately loses access.
 
-### 调接口问题时最有用的一条
-
-`browser_network` 区分两种在界面上长得一模一样的失败:
-
-- **请求到了服务器但被拒**——有状态码,比如 `500 POST /api/order/save`
-- **请求压根没发出去**——显示 `never sent`,附带原因(地址写错、服务没起、CORS、被取消)
-
-这两种的修法完全不同,靠肉眼看页面是分不出来的。
-
-而且**不用专门去问**:任何动作(点击、输入、导航)如果引发了失败的请求,那次动作的工具卡片会直接把它带回来,和控制台报错一样。所以典型的"点了没反应"一轮就能定位:
-
-> 点"保存"没反应,帮我看看为什么
-
-agent 点一下,就能看到 `500 POST /api/order/save`,再读页面脚本发现 `catch(() => {})` 把错误吞了。
-
-只能看见 fetch 和 XMLHttpRequest,看不到文档导航本身和图片/脚本/样式表这些子资源——那需要 CDP 的事件通道,当前架构刻意没有(见[对比文档](../dev/browser/automation-comparison.md)的落地复盘)。
+**It does not take focus from your window.** Extension mode does not call `Page.bringToFront` or use `windows.focus` to bring Chrome to the foreground. Read operations—opening pages, capturing snapshots, and taking screenshots—run entirely in background agent tabs and **do not switch the active tab**. Only write operations such as clicking and typing use `tabs.update({ active: true })` to activate an agent tab (L1), and by default the extension **does not** switch back to your original tab afterward. To return automatically to the previous tab after a sequence of operations, set `restoreTabAfterInput: true` in the settings. If you do not want the active tab to change at all, use **isolated** mode, which runs in a separate Chrome window.
 
 ---
 
-## 配置项
+## 23 tools
 
-全部放在 `.ai-agent/settings.json` 的 `browser` 下:
+You generally do not need to memorize these tools; describe your goal in natural language. This list helps you understand the tool cards shown in the conversation:
 
-| 字段 | 默认 | 说明 |
-|---|---|---|
-| `mode` | `isolated` | `isolated` 或 `extension` |
-| `enabled` | `false` | 默认 coding / 其它 primary 无 `browser_*`；`true` 时恢复 deferred；**Browser Automation 专家始终有 browser 工具** |
-| `headless` | `true` | 仅 isolated 模式;设 `false` 可看见窗口 |
-| `relayPort` | `8766` | 仅 extension 模式;改了要在弹窗里同步改 |
-| `channel` | `chrome` | 仅 isolated 模式,指定 Chrome 渠道 |
-| `viewportWidth` | `1280` | 仅 isolated 模式 |
-| `viewportHeight` | `800` | 仅 isolated 模式 |
-| `idleTimeoutMinutes` | `30` | 闲置多久后关掉浏览器 |
-| `restoreTabAfterInput` | `false` | 仅 extension：点击/输入后是否切回你之前的标签 |
+| Tool                        | Purpose                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `browser_navigate`          | Open an HTTP(S) URL, or navigate back, forward, or refresh                                                                  |
+| `browser_snapshot`          | Capture the page structure; optionally use `includeDiff` / `urls`                                                           |
+| `browser_click`             | Click a snapshot ref or an `x`/`y` canvas coordinate                                                                        |
+| `browser_drag`              | Drag one ref to another                                                                                                     |
+| `browser_type`              | Enter text, optionally pressing Enter to submit                                                                             |
+| `browser_fill_form`         | Fill multiple fields at once—text fields, checkboxes, radio buttons, and selects—and report each result                     |
+| `browser_select_option`     | Select a native `<select>` option by visible text; for a custom dropdown, take a snapshot and click the option ref          |
+| `browser_file_upload`       | Intercept a file picker and upload a file without opening a system dialog                                                   |
+| `browser_handle_dialog`     | Accept or dismiss a native alert, confirm, or prompt dialog                                                                 |
+| `browser_press_key`         | Press a key or key combination                                                                                              |
+| `browser_wait_for`          | Wait for text to appear or disappear, or wait briefly                                                                       |
+| `browser_hover`             | Hover over an element                                                                                                       |
+| `browser_scroll`            | Scroll the page or an element                                                                                               |
+| `browser_screenshot`        | Capture the full page or one element; `labels` overlays ref annotations                                                     |
+| `browser_resize`            | Change the viewport dimensions                                                                                              |
+| `browser_wait_for_download` | Wait for the next download and save it                                                                                      |
+| `browser_console`           | Read console output and uncaught exceptions                                                                                 |
+| `browser_network`           | List fetch/XHR requests made by the page, including status codes and durations                                              |
+| `browser_highlight`         | Highlight a ref on the page for visual alignment                                                                            |
+| `browser_get_bounding_box`  | Read the viewport bounding box of a ref                                                                                     |
+| `browser_cdp`               | Send one CDP command as an escape hatch. Use `Runtime.evaluate` for controls absent from snapshots; `Input.*` is prohibited |
+| `browser_tabs`              | List, create, switch, or close tabs                                                                                         |
+| `browser_lock`              | Give control to the user (`unlock`) or return it to the agent (`lock`)                                                      |
 
-改任何一项都要重启 agent。
+After the browser starts, a banner appears at the top of the chat. Click **Take control** to pause the agent and operate the page yourself; click **Resume agent** to return control. While paused, the agent can perform only read operations—snapshots, screenshots, console and network inspection, and tab listing. It cannot click or type. The extension-mode popup provides the same controls.
+
+The **Show page structure** button on a tool card expands the snapshot representing what the agent could “see” at that time. Use it to investigate why the agent clicked the wrong element.
+
+### The most useful tool for API debugging
+
+`browser_network` distinguishes two failures that look identical in the interface:
+
+- **The request reached the server but was rejected**—a status code is present, such as `500 POST /api/order/save`.
+- **The request was never sent**—the tool displays `never sent` and a reason, such as an incorrect address, an unavailable service, CORS, or cancellation.
+
+These failures require completely different fixes and cannot be distinguished by visually inspecting the page.
+
+You also **do not need to ask explicitly**. If any action—clicking, typing, or navigation—triggers a failed request, its tool card includes that failure automatically, just like a console error. A typical “nothing happened when I clicked” problem can therefore be diagnosed in one pass:
+
+> Clicking “Save” does nothing. Find out why.
+
+After clicking, the agent can see `500 POST /api/order/save`, inspect the page script, and discover that `catch(() => {})` swallowed the error.
+
+Only fetch and XMLHttpRequest traffic is visible. Document navigation and
+subresources such as images, scripts, and stylesheets are not visible because
+they require a CDP event channel, which the current architecture intentionally
+omits.
 
 ---
 
-## 故障排查
+## Configuration
 
-| 现象 | 原因和处理 |
-|---|---|
-| 「我没看见它动我的浏览器」 | 多半还在默认的 isolated 无头模式。查中继端口:`nc -z 127.0.0.1 8766`,不通就说明不是 extension 模式 |
-| `No browser extension is connected on 127.0.0.1:8766` | 扩展没装、没配对,或改完 `mode` 没重启 agent |
-| 弹窗里点 Pair 没反应 | agent 没起来或不在 extension 模式,中继没在监听 |
-| 百度/Google 弹验证码 | isolated 模式的空白 profile 像机器人。换 extension 模式用你的真实会话 |
-| `Ref e3 is stale` | 页面变了,快照过期。让它重新抓一次快照即可,通常它会自己处理 |
-| 「它一操作就把我的标签页切过去」 | extension 写操作需要 L1 激活 agent 标签才能输入；读操作不会切标签。默认不会切回；设 `restoreTabAfterInput: true` 可在约 0.6s 无操作后切回。要零打扰请用 isolated 模式 |
-| `The page is still hidden after being brought to front` | 旧版行为；当前 extension 不再 bringToFront。若仍出现，重启 agent 并 reload 扩展 |
-| 端口 8766 被占 | 另一个 agent 实例在跑,或改 `relayPort`(弹窗里也要同步改) |
-| 重装扩展后连不上 | 令牌不变,重新在弹窗粘一次即可 |
+Place all fields under `browser` in `.ai-agent/settings.json`:
+
+| Field                  | Default    | Description                                                                                                                                                                    |
+| ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`                 | `isolated` | `isolated` or `extension`                                                                                                                                                      |
+| `enabled`              | `false`    | By default, Coding Agent and other primary agents have no `browser_*` tools; `true` restores deferred availability. The **Browser Automation** expert always has browser tools |
+| `headless`             | `true`     | `isolated` mode only; set to `false` to show the window                                                                                                                        |
+| `relayPort`            | `8766`     | `extension` mode only; if changed, update the popup to match                                                                                                                   |
+| `channel`              | `chrome`   | `isolated` mode only; specifies the Chrome channel                                                                                                                             |
+| `viewportWidth`        | `1280`     | `isolated` mode only                                                                                                                                                           |
+| `viewportHeight`       | `800`      | `isolated` mode only                                                                                                                                                           |
+| `idleTimeoutMinutes`   | `30`       | Number of idle minutes before the browser closes                                                                                                                               |
+| `restoreTabAfterInput` | `false`    | `extension` mode only; whether to return to your previous tab after clicking or typing                                                                                         |
+
+Restart the agent after changing any field.
 
 ---
 
-## 相关命令
+## Troubleshooting
 
-| 命令 | 说明 |
-|---|---|
-| `npm run browser:pair` | 打印配对端口和令牌 |
-| `npm run browser:dev-chrome` | 起一个已装好扩展并配对的独立 Chrome,用来试 extension 模式而不动你日常浏览器 |
-| `npm run test:browser:unit` | 浏览器相关单元测试,约 1 秒,不需要 Chrome |
-| `npm run test:browser` | 全量:单元 + 边界 + 隔离后端 + 中继 + 真实扩展端到端 |
+| Symptom                                                 | Cause and resolution                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| “I cannot see it operating my browser”                  | It is probably still using the default headless `isolated` mode. Check the relay port with `nc -z 127.0.0.1 8766`; if the connection fails, the agent is not in `extension` mode                                                                                                          |
+| `No browser extension is connected on 127.0.0.1:8766`   | The extension is not installed or paired, or the agent was not restarted after changing `mode`                                                                                                                                                                                            |
+| Clicking Pair in the popup does nothing                 | The agent is not running or is not in `extension` mode, so the relay is not listening                                                                                                                                                                                                     |
+| Baidu or Google displays a CAPTCHA                      | The empty profile in `isolated` mode looks automated. Switch to `extension` mode to use your real session                                                                                                                                                                                 |
+| `Ref e3 is stale`                                       | The page changed and the snapshot expired. Capture a new snapshot; the agent normally handles this automatically                                                                                                                                                                          |
+| “It switches to its tab whenever it performs an action” | Write operations in extension mode require L1 activation of the agent tab for input; read operations do not switch tabs. By default, it does not switch back. Set `restoreTabAfterInput: true` to return after about 0.6 seconds without activity. For no disruption, use `isolated` mode |
+| `The page is still hidden after being brought to front` | This is legacy behavior; the current extension no longer calls `bringToFront`. If it still occurs, restart the agent and reload the extension                                                                                                                                             |
+| Port 8766 is in use                                     | Another agent instance is running. Alternatively, change `relayPort` and update the popup to match                                                                                                                                                                                        |
+| The extension cannot connect after reinstallation       | The token has not changed; paste it into the popup again                                                                                                                                                                                                                                  |
 
-## 延伸阅读
+---
 
-- 扩展本身的说明:[`chrome-extension/README.md`](../../chrome-extension/README.md)
-- 各家方案的架构对比:[`automation-comparison.md`](../dev/browser/automation-comparison.md)
-- 让 agent 自己做前端验证的技能:[`../../.ai-agent/skills/verify-in-browser/SKILL.md`](../../.ai-agent/skills/verify-in-browser/SKILL.md)
+## Related commands
+
+| Command                      | Description                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run browser:pair`       | Print the pairing port and token                                                                                                                      |
+| `npm run browser:dev-chrome` | Start a separate Chrome instance with the extension installed and paired, allowing you to test extension mode without affecting your everyday browser |
+| `npm run test:browser:unit`  | Run browser unit tests; takes about one second and does not require Chrome                                                                            |
+| `npm run test:browser`       | Run the complete suite: unit, boundary, isolated backend, relay, and real-extension end-to-end tests                                                  |
+
+## Further reading
+
+- Extension source: `chrome-extension/`
+- Architecture overview: [`../architecture/browser.md`](../architecture/browser.md)
+- Architecture overview: [`../architecture/browser.md`](../architecture/browser.md)

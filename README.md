@@ -1,141 +1,145 @@
-# Baize（白泽）— AI Coding Agent
+# Coding Agent
 
-> **第一次使用？** 请先看 [快速开始](docs/readme/getting-started.md)（下载代码 → 安装环境 → 运行桌面版 → 配对浏览器）。
+> Formerly known as Baize (白泽).
+>
+> **First time here?** Start with the [Quick Start](docs/readme/getting-started.md) (download the code → install dependencies → run the desktop app → pair a browser).
 
-可本地运行的 AI 编程助手：聊天、读写代码、调用工具、浏览器自动化。支持 **桌面版**、**Web UI**、**VS Code / Cursor / IntelliJ** 集成。
+A locally runnable AI coding assistant for chat, reading and editing code, tool use, and browser automation. Supports the **desktop app**, **Web UI**, and **VS Code / Cursor / IntelliJ** integrations.
 
 ---
 
-## 你想怎么用？
+## How do you want to use it?
 
-| 我是… | 从这里开始 |
+| I want to… | Start here |
 |--------|------------|
-| 新用户，只想跑起来试试浏览器自动化 | [快速开始](docs/readme/getting-started.md) |
-| 开发者，本地改前端 / 调试 agent | [本地开发](docs/readme/development.md) |
-| 想在 VS Code / Cursor 里用 | [VS Code 集成](docs/readme/integrations/vscode-acp.md) |
-| 想在 IntelliJ 里用 | [IntelliJ 集成](docs/readme/integrations/intellij-acp.md) |
-| 运维，部署到公司内网 | [Docker 部署](deploy/README.md) |
-| 二次开发 / 加工具 | [Agent 源码说明](src/README.md) |
+| Get started and try browser automation | [Quick Start](docs/readme/getting-started.md) |
+| Develop the frontend locally or debug the agent | [Local Development](docs/readme/development.md) |
+| Use Coding Agent in VS Code or Cursor | [VS Code Integration](docs/readme/integrations/vscode-acp.md) |
+| Use Coding Agent in IntelliJ | [IntelliJ Integration](docs/readme/integrations/intellij-acp.md) |
+| Deploy Coding Agent to a private network | [Docker Deployment](deploy/README.md) |
+| Extend Coding Agent or add tools | [Agent Source Guide](src/README.md) |
 
 ---
 
-## 核心能力
+## Core capabilities
 
-- **编程助手** — 读改文件、跑 Shell、搜索代码库、子代理并行探索
-- **浏览器自动化** — 打开网页、点击填表、截图读页面；可驱动你自己的 Chrome（需登录站点）
-- **可扩展** — Skills、Commands、Plugins、MCP、自定义 Subagent
-- **多入口** — Electron 桌面、Web UI、ACP（IDE 侧边栏）、HTTP API / SDK
-- **记忆与压缩** — Session memory、Auto memory、上下文自动压缩
+- **Coding assistance** — Read and edit files, run shell commands, search the codebase, and explore in parallel with subagents
+- **Browser automation** — Open web pages, click controls, fill forms, take screenshots, and read page content; can control your own Chrome profile for sites that require authentication
+- **Extensibility** — Skills, Commands, Plugins, MCP, and custom Subagents
+- **Multiple interfaces** — Electron desktop app, Web UI, ACP (IDE sidebar), and HTTP API / SDK
+- **Memory and compaction** — Session memory, Auto memory, and automatic context compaction
 
 ---
 
-## 5 分钟快速体验（桌面版）
+## Five-minute desktop quick start
 
-**前置**：Node.js 20+、团队提供的 API 配置（见 `.ai-agent/settings.json`）
+**Prerequisites:** Node.js 20+ and API configuration supplied by your team (see `.ai-agent/settings.json`)
 
 ```bash
-git clone <你的仓库地址>
-cd ai_coding_agent_intro
+git clone <your-repository-url>
+cd coding-agent
 npm install && cd client/web && npm install && cd ../..
-cp .ai-agent/settings.example.json .ai-agent/settings.json   # 填写 API
+cp .ai-agent/settings.example.json .ai-agent/settings.json   # Add your API configuration
 npm run desktop:dev
 ```
 
-弹出桌面窗口后，选择 **Browser Automation**，输入例如：
+When the desktop window opens, select **Browser Automation** and enter a prompt such as:
 
-> 打开 https://example.com ，告诉我页面标题
+> Open https://example.com and tell me the page title.
 
-需要登录的网站？见 [浏览器自动化指南](docs/readme/browser.md) 中的 extension 模式与 Pair。
+For sites that require authentication, see extension mode and pairing in the [Browser Automation Guide](docs/readme/browser.md).
 
 ---
 
-## 配置速查
+## Configuration quick reference
 
-| 配置什么 | 放哪里 |
+| Configuration | Location |
 |----------|--------|
-| 大模型 API（baseURL、apiKey、model） | `.ai-agent/settings.json` |
-| 端口、工作区路径等运行时 | `.env`（可选，见 `.env.example`） |
-| 浏览器模式（isolated / extension） | `.ai-agent/settings.json` 的 `browser` |
+| Model API (`baseURL`, `apiKey`, `model`) | `.ai-agent/settings.json` |
+| Runtime settings such as the port and workspace path | `.env` (optional; see `.env.example`) |
+| Browser mode (`isolated` / `extension`) | `browser` in `.ai-agent/settings.json` |
 
-用户级配置：`~/.ai-agent/settings.json`。项目级：`<workspace>/.ai-agent/settings.json`，优先级更高。
+User-level configuration: `~/.ai-agent/settings.json`. Project-level configuration: `<workspace>/.ai-agent/settings.json`, which takes precedence.
 
 ---
 
-## 常用命令
+## Common commands
 
-| 命令 | 说明 |
+| Command | Description |
 |------|------|
-| `npm run desktop:dev` | 启动桌面版（推荐新用户） |
-| `npm start` | 仅启动 agent 后端（:4567） |
-| `npm run dev:web` | Web UI 开发模式（需另开终端 `npm start`） |
-| `npm run browser:pair` | 获取 Chrome 扩展配对令牌 |
-| `npm run desktop:pack` | 打包桌面安装包 |
-| `npm run desktop:pack:win` | 打包 Windows 安装包 |
-| `npm run build:web` | 构建前端到 `client/web/dist` |
-| `npm run typecheck` | TypeScript 类型检查 |
-| `npm run format` | Prettier 格式化 |
+| `npm run desktop:dev` | Start the desktop app (recommended for new users) |
+| `npm start` | Start only the agent backend (`:4567`) |
+| `npm run dev:web` | Start the Web UI in development mode (run `npm start` in another terminal) |
+| `npm run browser:pair` | Get a pairing token for the Chrome extension |
+| `npm run desktop:pack` | Package the desktop installer |
+| `npm run desktop:pack:win` | Package the Windows installer |
+| `npm run build:web` | Build the frontend into `client/web/dist` |
+| `npm run docs:dev` | Start the documentation site in development mode |
+| `npm run docs:build` | Build the documentation site |
+| `npm run typecheck` | Run TypeScript type checking |
+| `npm run format` | Format the code with Prettier |
 
 ---
 
-## 浏览器自动化
+## Browser automation
 
-让 agent 打开网页、点击填表、截图并读回页面内容。默认用它自己拉起的浏览器（零配置）；也可以让它驱动**你自己的 Chrome**，这样需要登录的站点无需任何登录脚本即可访问。
+Coding Agent can open web pages, click controls, fill forms, take screenshots, and read page content. By default, it launches an isolated browser with no configuration required. It can also control **your own Chrome profile**, allowing access to authenticated sites without login scripts.
 
 ```bash
-npm start                 # isolated 模式开箱即用
-npm run browser:pair      # 想用自己的 Chrome 时，取配对令牌
+npm start                 # Isolated mode works out of the box
+npm run browser:pair      # Get a pairing token to use your own Chrome profile
 ```
 
-完整说明见 [docs/readme/browser.md](docs/readme/browser.md)。
+For complete instructions, see [docs/readme/browser.md](docs/readme/browser.md).
 
 ---
 
-## 生产部署
+## Production deployment
 
-使用 Docker 一键部署 Web 版，详见 [deploy/README.md](deploy/README.md)。
+Deploy the Web UI with Docker. See [deploy/README.md](deploy/README.md) for details.
 
 ```bash
 docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
-# 访问 http://localhost:9999（账号/密码：WEB_USERNAME / WEB_PASSWORD）
+# Open http://localhost:9999 (credentials: WEB_USERNAME / WEB_PASSWORD)
 ```
 
 ---
 
-## 项目结构
+## Project structure
 
 ```
-├── start.js              # 统一启动入口
-├── src/                  # Agent 实现（tools / core / services）
-├── client/web/           # React 前端
-├── electron/             # Electron 桌面壳
-├── chrome-extension/     # 浏览器扩展（extension 模式）
-├── client-sdk/           # TypeScript 客户端 SDK
-├── deploy/               # Docker 部署配置
-└── .ai-agent/            # 项目级 skills / commands / config
+├── start.js              # Unified entry point
+├── src/                  # Agent implementation (tools / core / services)
+├── client/web/           # React frontend
+├── electron/             # Electron desktop shell
+├── chrome-extension/     # Browser extension (extension mode)
+├── client-sdk/           # TypeScript client SDK
+├── deploy/               # Docker deployment configuration
+└── .ai-agent/            # Project-level skills / commands / configuration
 ```
 
 ---
 
-## 文档索引
+## Documentation index
 
-### 用户指南
+### User guides
 
-| 主题 | 文档 |
+| Topic | Documentation |
 |------|------|
-| 零基础安装运行 | [docs/readme/getting-started.md](docs/readme/getting-started.md) |
-| 浏览器自动化 | [docs/readme/browser.md](docs/readme/browser.md) |
-| 本地 Web 开发 | [docs/readme/development.md](docs/readme/development.md) |
+| Installation and first run | [docs/readme/getting-started.md](docs/readme/getting-started.md) |
+| Browser automation | [docs/readme/browser.md](docs/readme/browser.md) |
+| Local Web development | [docs/readme/development.md](docs/readme/development.md) |
 | VS Code / Cursor | [docs/readme/integrations/vscode-acp.md](docs/readme/integrations/vscode-acp.md) |
 | IntelliJ IDEA | [docs/readme/integrations/intellij-acp.md](docs/readme/integrations/intellij-acp.md) |
-| Docker 部署 | [deploy/README.md](deploy/README.md) |
-| 客户端 SDK | [client-sdk/](client-sdk/) |
+| Docker deployment | [deploy/README.md](deploy/README.md) |
+| Client SDK | [client-sdk/](client-sdk/) |
 
-### 开发与架构
+### Development and architecture
 
-| 主题 | 文档 |
+| Topic | Documentation |
 |------|------|
-| 文档总览 | [docs/README.md](docs/README.md) |
-| Agent 源码与扩展 | [src/README.md](src/README.md) |
-| 开发文档索引 | [docs/dev/README.md](docs/dev/README.md) |
-| 记忆系统 | [docs/dev/memory/agent-memory-guide.md](docs/dev/memory/agent-memory-guide.md) |
-| 远程 SSH 执行 | [docs/dev/remote/ssh-architecture.md](docs/dev/remote/ssh-architecture.md) |
+| Documentation overview | [docs/README.md](docs/README.md) |
+| Agent source and extensions | [src/README.md](src/README.md) |
+| System architecture | [docs/architecture/](docs/architecture/) |
+| Memory system | [docs/architecture/memory-guide.md](docs/architecture/memory-guide.md) |
+| Execution architecture | [docs/architecture/execution.md](docs/architecture/execution.md) |

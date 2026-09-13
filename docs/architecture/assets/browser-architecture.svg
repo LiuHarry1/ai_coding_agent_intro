@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1040 650" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="High-level Browser Automation Agent architecture">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#059669"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#0284c7"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-8%" width="110%" height="116%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <linearGradient id="agent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1040" height="650" rx="18" fill="#f8fafc"/>
+
+  <text x="40" y="42" font-size="22" font-weight="700" fill="#0f172a">Browser Automation Agent</text>
+  <text x="40" y="65" font-size="12" fill="#64748b">High-level architecture</text>
+
+  <!-- Request -->
+  <rect x="40" y="96" width="180" height="58" rx="12" fill="#ffffff" stroke="#cbd5e1" filter="url(#shadow)"/>
+  <text x="130" y="131" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">User request</text>
+
+  <path d="M220 125 L278 125" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Agent -->
+  <rect x="290" y="86" width="300" height="78" rx="14" fill="url(#agent)" filter="url(#shadow)"/>
+  <text x="440" y="118" text-anchor="middle" font-size="16" font-weight="700" fill="#ffffff">Browser primary agent</text>
+  <text x="440" y="141" text-anchor="middle" font-size="11" fill="#e0e7ff">Plans the next browser action</text>
+
+  <path d="M590 125 L648 125" stroke="#4f46e5" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Tools -->
+  <rect x="660" y="86" width="340" height="78" rx="14" fill="#eef2ff" stroke="#818cf8" filter="url(#shadow)"/>
+  <text x="830" y="116" text-anchor="middle" font-size="16" font-weight="700" fill="#3730a3">Browser tools</text>
+  <text x="830" y="140" text-anchor="middle" font-size="11" fill="#4f46e5">Observe | Act | Inspect | Handoff</text>
+
+  <path d="M830 164 L830 207 L520 207 L520 232" fill="none" stroke="#4f46e5" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Runtime -->
+  <rect x="40" y="236" width="960" height="174" rx="16" fill="#ffffff" stroke="#cbd5e1" filter="url(#shadow)"/>
+  <text x="62" y="265" font-size="12" font-weight="700" fill="#475569">BROWSER RUNTIME</text>
+
+  <rect x="70" y="286" width="260" height="88" rx="12" fill="#fef3c7" stroke="#d97706"/>
+  <text x="200" y="320" text-anchor="middle" font-size="15" font-weight="700" fill="#92400e">BrowserManager</text>
+  <text x="200" y="345" text-anchor="middle" font-size="11" fill="#a16207">Session | Tab | Control</text>
+
+  <path d="M330 330 L388 330" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="400" y="286" width="260" height="88" rx="12" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="530" y="320" text-anchor="middle" font-size="15" font-weight="700" fill="#047857">Playwright Core</text>
+  <text x="530" y="345" text-anchor="middle" font-size="11" fill="#059669">Page | Locator | Snapshot</text>
+
+  <path d="M660 330 L718 330" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="730" y="286" width="240" height="88" rx="12" fill="#eff6ff" stroke="#3b82f6"/>
+  <text x="850" y="320" text-anchor="middle" font-size="15" font-weight="700" fill="#1d4ed8">BrowserBackend</text>
+  <text x="850" y="345" text-anchor="middle" font-size="11" fill="#2563eb">Tabs | CDP</text>
+
+  <!-- Backend branches -->
+  <path d="M850 374 L850 444 L290 444 L290 470" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <path d="M850 374 L850 470" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <rect x="90" y="474" width="400" height="104" rx="14" fill="#d1fae5" stroke="#059669" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="290" y="510" text-anchor="middle" font-size="16" font-weight="700" fill="#047857">Isolated mode</text>
+  <text x="290" y="537" text-anchor="middle" font-size="12" fill="#059669">Agent-owned Chrome</text>
+  <text x="290" y="558" text-anchor="middle" font-size="10.5" fill="#047857">Fresh or persistent profile</text>
+
+  <rect x="550" y="474" width="400" height="104" rx="14" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="750" y="510" text-anchor="middle" font-size="16" font-weight="700" fill="#0369a1">Extension mode</text>
+  <text x="750" y="537" text-anchor="middle" font-size="12" fill="#0284c7">Relay - MV3 Extension - User Chrome</text>
+  <text x="750" y="558" text-anchor="middle" font-size="10.5" fill="#0369a1">Existing cookies and signed-in sessions</text>
+
+  <!-- Core loop -->
+  <rect x="170" y="606" width="700" height="30" rx="15" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="520" y="626" text-anchor="middle" font-size="11.5" font-weight="700" fill="#475569">Snapshot - ref - action - fresh snapshot</text>
+</svg>

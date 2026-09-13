@@ -1,0 +1,32 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑤</span><h2>Protocol and Multiple Entry Points — Decoupling the Engine from the UI</h2></div>
+  <p class="subtitle">Define the wire message schema first, then implement the HTTP, stdio, and ACP adapters.</p>
+  <div class="cols">
+    <div>
+      <h3>Three Startup Modes</h3>
+      <div class="card-grid" style="grid-template-columns:1fr">
+        <div class="card card-indigo"><strong>HTTP + SSE</strong><code>npm start</code> · Web chat</div>
+        <div class="card card-sky"><strong>stdio NDJSON</strong><code>npm run cli</code> · Script integration</div>
+        <div class="card card-green"><strong>ACP</strong><code>npm run acp</code> · IDE extensions</div>
+      </div>
+      <h3 style="margin-top:0.4em">protocol/ as the Single Source of Truth</h3>
+      <ul>
+        <li><code>OutgoingMessage</code> — stream_event · tool_call · tool_result</li>
+        <li><code>WireEmitter</code> — transports only serialize messages</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Unified Turn Host</h3>
+      <pre class="flow">runChatTurn({
+  transport,  // SSE | ACP | noop
+  runAgent,   // → query()
+  session, cwd
+})
+
+Session: JSONL · tryBeginTurn()
+  No concurrent turns in one session</pre>
+      <div class="callout"><strong>Implementation sequence:</strong> query + stdio → HTTP SSE → thin ACP adapter</div>
+      <span class="path-tag">protocol/ · turn/run-chat-turn.ts</span>
+    </div>
+  </div>
+</section>

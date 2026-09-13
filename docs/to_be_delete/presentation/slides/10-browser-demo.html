@@ -1,0 +1,51 @@
+<section class="slide-content slide-browser-demo" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑩</span><h2>Browser Automation — Hands-On Demo</h2></div>
+  <p class="subtitle">Driven by a single request · <strong>navigate → snapshot → fill → click → verify</strong></p>
+  <div class="cols">
+    <div>
+      <div class="chat-bubble">Open http://localhost:5173/login, sign in with test@example.com / password123, and verify that login succeeds.</div>
+      <h3 style="margin-top:0.45em">Agent Execution Flow</h3>
+      <div class="timeline">
+        <div class="tl-step">
+          <span class="tl-num">1</span>
+          <div class="tl-body"><span class="tl-tool">browser_navigate</span> Open /login → return snapshot</div>
+        </div>
+        <div class="tl-step">
+          <span class="tl-num">2</span>
+          <div class="tl-body"><span class="tl-tool">browser_fill_form</span> Fill e3 email · e5 password</div>
+        </div>
+        <div class="tl-step">
+          <span class="tl-num">3</span>
+          <div class="tl-body"><span class="tl-tool">browser_click(e7)</span> Click “Sign in” → page navigates</div>
+        </div>
+        <div class="tl-step">
+          <span class="tl-num">4</span>
+          <div class="tl-body">Read new snapshot → <code>heading "Welcome back"</code> ✓</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>Page Visible to the Agent (Snapshot)</h3>
+      <div class="mock-browser">
+        <div class="mock-bar">
+          <span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span>
+          <span class="mock-url">localhost:5173/login</span>
+        </div>
+        <div class="mock-page">
+          <div style="font-weight:700;margin-bottom:0.4em;color:#0f172a">Sign in</div>
+          <div class="mock-field">Email<span class="ref-tag">e3</span></div>
+          <div class="mock-field">Password<span class="ref-tag">e5</span></div>
+          <div class="mock-btn">Sign in<span class="ref-tag">e7</span></div>
+        </div>
+      </div>
+      <h3 style="margin-top:0.4em">Possible Outcomes</h3>
+      <div class="outcome-row">
+        <div class="outcome ok"><strong>✓ Success</strong>Snapshot shows “Welcome back”</div>
+        <div class="outcome err"><strong>✗ 500</strong>network: POST /api/login</div>
+        <div class="outcome warn"><strong>⚠ Hidden error</strong>500 with no UI message</div>
+      </div>
+      <div class="callout" style="margin-top:0.35em"><strong>localhost → isolated with zero configuration</strong> · Authenticated admin sites → extension + paired browser extension</div>
+    </div>
+  </div>
+  <span class="path-tag">docs/readme/browser.md · .ai-agent/skills/verify-in-browser/SKILL.md</span>
+</section>

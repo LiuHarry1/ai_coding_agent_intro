@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1100 650" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Language Server Protocol architecture with explicit queries and passive diagnostics">
+  <defs>
+    <marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#059669"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-8%" width="110%" height="116%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect width="1100" height="650" rx="18" fill="#f8fafc"/>
+
+  <text x="40" y="42" font-size="22" font-weight="700" fill="#0f172a">LSP Architecture</text>
+  <text x="40" y="65" font-size="12" fill="#64748b">Code intelligence on demand, diagnostics automatically</text>
+
+  <!-- Lane headers -->
+  <rect x="40" y="92" width="490" height="50" rx="12" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="285" y="114" text-anchor="middle" font-size="14" font-weight="700" fill="#1d4ed8">1. Explicit LSP query</text>
+  <text x="285" y="132" text-anchor="middle" font-size="10" fill="#2563eb">The agent asks for code intelligence</text>
+
+  <rect x="570" y="92" width="490" height="50" rx="12" fill="#d1fae5" stroke="#10b981"/>
+  <text x="815" y="114" text-anchor="middle" font-size="14" font-weight="700" fill="#047857">2. Passive diagnostics</text>
+  <text x="815" y="132" text-anchor="middle" font-size="10" fill="#059669">Errors return after a file change</text>
+
+  <!-- Explicit lane -->
+  <rect x="100" y="172" width="370" height="54" rx="11" fill="#ffffff" stroke="#93c5fd" filter="url(#shadow)"/>
+  <text x="285" y="194" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1e40af">Agent Step</text>
+  <text x="285" y="213" text-anchor="middle" font-size="10" fill="#64748b">Definition | References | Hover | Symbols</text>
+
+  <path d="M285 226 L285 252" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <rect x="100" y="256" width="370" height="54" rx="11" fill="#eff6ff" stroke="#60a5fa"/>
+  <text x="285" y="278" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d4ed8">LSP Tool</text>
+  <text x="285" y="297" text-anchor="middle" font-size="10" fill="#2563eb">Permission check + method mapping</text>
+
+  <path d="M285 310 L285 336" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="301" y="327" font-size="9" fill="#2563eb">Worker RPC</text>
+
+  <rect x="100" y="340" width="370" height="54" rx="11" fill="#f5f3ff" stroke="#8b5cf6"/>
+  <text x="285" y="362" text-anchor="middle" font-size="12.5" font-weight="700" fill="#5b21b6">Worker LSP Host</text>
+  <text x="285" y="381" text-anchor="middle" font-size="10" fill="#7c3aed">Open file + send LSP request</text>
+
+  <path d="M285 394 L285 420" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <rect x="100" y="424" width="370" height="54" rx="11" fill="#ffffff" stroke="#a78bfa"/>
+  <text x="285" y="446" text-anchor="middle" font-size="12.5" font-weight="700" fill="#5b21b6">Language Server</text>
+  <text x="285" y="465" text-anchor="middle" font-size="10" fill="#64748b">TypeScript | Python | Other configured server</text>
+
+  <path d="M285 478 L285 504" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <rect x="100" y="508" width="370" height="54" rx="11" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="285" y="530" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d4ed8">Structured result</text>
+  <text x="285" y="549" text-anchor="middle" font-size="10" fill="#2563eb">Returned to the current Agent Step</text>
+
+  <!-- Passive lane -->
+  <rect x="630" y="172" width="370" height="54" rx="11" fill="#ffffff" stroke="#6ee7b7" filter="url(#shadow)"/>
+  <text x="815" y="194" text-anchor="middle" font-size="12.5" font-weight="700" fill="#047857">Write / Edit Tool</text>
+  <text x="815" y="213" text-anchor="middle" font-size="10" fill="#64748b">Change a workspace file</text>
+
+  <path d="M815 226 L815 252" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="831" y="243" font-size="9" fill="#059669">Worker RPC</text>
+
+  <rect x="630" y="256" width="370" height="54" rx="11" fill="#ecfdf5" stroke="#34d399"/>
+  <text x="815" y="278" text-anchor="middle" font-size="12.5" font-weight="700" fill="#047857">Worker updates file + LSP document</text>
+  <text x="815" y="297" text-anchor="middle" font-size="10" fill="#059669">changeFile + saveFile</text>
+
+  <path d="M815 310 L815 336" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <rect x="630" y="340" width="370" height="54" rx="11" fill="#ffffff" stroke="#a78bfa"/>
+  <text x="815" y="362" text-anchor="middle" font-size="12.5" font-weight="700" fill="#5b21b6">Language Server</text>
+  <text x="815" y="381" text-anchor="middle" font-size="10" fill="#64748b">publishDiagnostics</text>
+
+  <path d="M815 394 L815 420" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="831" y="411" font-size="9" fill="#059669">lsp_event</text>
+
+  <rect x="630" y="424" width="370" height="54" rx="11" fill="#f0fdf4" stroke="#22c55e"/>
+  <text x="815" y="446" text-anchor="middle" font-size="12.5" font-weight="700" fill="#047857">Diagnostics Registry</text>
+  <text x="815" y="465" text-anchor="middle" font-size="10" fill="#059669">Deduplicate + limit by workspace</text>
+
+  <path d="M815 478 L815 504" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <rect x="630" y="508" width="370" height="54" rx="11" fill="#d1fae5" stroke="#10b981"/>
+  <text x="815" y="530" text-anchor="middle" font-size="12.5" font-weight="700" fill="#047857">Next Agent Step</text>
+  <text x="815" y="549" text-anchor="middle" font-size="10" fill="#059669">Diagnostics attached automatically</text>
+
+  <!-- Plane and lifecycle note -->
+  <rect x="40" y="590" width="1020" height="36" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="550" y="613" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Language servers run beside the workspace in the Local or SSH Worker</text>
+</svg>

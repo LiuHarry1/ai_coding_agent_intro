@@ -1,0 +1,29 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">③</span><h2>Tool System — The Agent's “Hands”</h2></div>
+  <p class="subtitle">The LLM only selects tools; actual file access, command execution, and browser control are handled by <code>ToolDefinition</code> implementations and the executor.</p>
+  <div class="cols">
+    <div>
+      <h3>Registration and Assembly (Every Turn)</h3>
+      <div class="card-grid">
+        <div class="card card-indigo"><strong>defaultRegistry</strong>Built-in tools in <code>tools.ts</code></div>
+        <div class="card card-indigo"><strong>prepareChatTurn</strong>Load MCP tools and skills</div>
+        <div class="card card-sky"><strong>assembleToolPool</strong>Group active and deferred tools</div>
+        <div class="card card-sky"><strong>ToolSearch</strong>Activate deferred tools on demand</div>
+      </div>
+      <pre class="flow" style="margin-top:0.35em">tools/BashTool/
+  BashTool.ts   → definition
+  prompt.ts     → LLM schema</pre>
+    </div>
+    <div>
+      <h3>Execution and Dual-Path Results</h3>
+      <table>
+        <tr><th>Component</th><th>Responsibility</th></tr>
+        <tr><td><code>StreamingToolExecutor</code></td><td>Execute tool calls concurrently</td></tr>
+        <tr><td><code>result</code></td><td>Compact string returned to the LLM</td></tr>
+        <tr><td><code>resultBlocks</code></td><td>Sent to the model when images are present; the UI receives wire messages</td></tr>
+      </table>
+      <div class="callout">Adding a tool requires a <code>ToolDefinition</code> and registration; the <code>query()</code> loop does not need to change.</div>
+      <span class="path-tag">src/tools.ts · assembleToolPool.ts</span>
+    </div>
+  </div>
+</section>

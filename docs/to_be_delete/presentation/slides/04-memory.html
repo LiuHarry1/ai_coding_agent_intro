@@ -1,0 +1,26 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">④</span><h2>Context and Memory — Managing Context Capacity</h2></div>
+  <p class="subtitle">Long tasks can overflow the context window; injected rules, compressed history, and side-channel memory work together.</p>
+  <div class="cols">
+    <div>
+      <h3>Four Complementary Layers</h3>
+      <div class="card-grid" style="grid-template-columns:1fr">
+        <div class="card card-indigo"><strong>Project Rules</strong>Inject <code>AGENTS.md</code> into the system prompt every turn</div>
+        <div class="card card-green"><strong>Auto Memory</strong>Cross-session extraction after each turn plus prefetch</div>
+        <div class="card card-sky"><strong>Session Memory</strong>Per-session notes consumed during compaction</div>
+        <div class="card card-amber"><strong>Compaction</strong>Run <code>compactIfNeeded</code> before each step</div>
+      </div>
+    </div>
+    <div>
+      <h3>Three Model Tiers (Statically Assigned)</h3>
+      <table>
+        <tr><th>Tier</th><th>Typical Uses</th></tr>
+        <tr><td><code>large</code></td><td>Main <code>query()</code> loop · planning · compaction</td></tr>
+        <tr><td><code>medium</code></td><td>Memory extraction</td></tr>
+        <tr><td><code>small</code></td><td>Exploration · titles · prefetch</td></tr>
+      </table>
+      <div class="callout">Compaction triggers: <code>preTurn</code> · <code>/compact</code> · end-of-turn hooks · reactive retry after context overflow</div>
+      <span class="path-tag">services/compact/ · turn/memory-lifecycle.ts</span>
+    </div>
+  </div>
+</section>

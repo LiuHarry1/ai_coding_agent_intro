@@ -1,10 +1,10 @@
-# 本地开发
+# Local Development
 
-本文面向需要**改前端界面**或**调试 Agent 后端**的开发者。若你只想试用产品，请先看 [快速开始](getting-started.md) 里的桌面版路径。
+This guide is for developers who need to **modify the frontend interface** or **debug the Coding Agent backend**. If you only want to try the product, start with the desktop app instructions in the [Quick Start](getting-started.md).
 
 ---
 
-## 安装依赖
+## Install dependencies
 
 ```bash
 npm install
@@ -13,100 +13,100 @@ cd client/web && npm install && cd ../..
 
 ---
 
-## 配置
+## Configuration
 
-### 大模型与 MCP
+### LLM and MCP
 
-用户级配置：`~/.ai-agent/settings.json`（`models`、MCP 等）。
+User-level configuration: `~/.ai-agent/settings.json` (`models`, MCP, and related settings).
 
-项目级配置：`<workspace>/.ai-agent/settings.json`，优先级高于用户级。
+Project-level configuration: `<workspace>/.ai-agent/settings.json`, which takes precedence over user-level configuration.
 
-可从示例复制：
+Copy the example file to get started:
 
 ```bash
 cp .ai-agent/settings.example.json .ai-agent/settings.json
 ```
 
-### 环境变量（可选）
+### Environment variables (optional)
 
 ```bash
 cp .env.example .env
 ```
 
-`.env` 用于端口、工作区路径、dump-prompts 等运行时选项；**大模型 API 主要在 `settings.json`**。
+`.env` contains runtime options such as ports, workspace paths, and `dump-prompts`; **LLM API configuration belongs primarily in `settings.json`**.
 
-| 配置什么 | 放哪里 |
-|----------|--------|
-| 大模型 API（baseURL、apiKey、model） | `.ai-agent/settings.json` |
-| 端口、工作区路径等 | `.env`（可选） |
-| 浏览器模式 | `.ai-agent/settings.json` 的 `browser` 段 |
+| Configuration                                | Location                                           |
+| -------------------------------------------- | -------------------------------------------------- |
+| LLM API (`baseURL`, `apiKey`, and `model`)   | `.ai-agent/settings.json`                          |
+| Ports, workspace paths, and related settings | `.env` (optional)                                  |
+| Browser mode                                 | The `browser` section of `.ai-agent/settings.json` |
 
 ---
 
-## Web UI 开发（双终端）
+## Web UI development (two terminals)
 
-前后端分开跑，**用两个终端**：
+Run the frontend and backend separately in **two terminals**:
 
-### 终端 A — 启动后端
+### Terminal A — Start the backend
 
 ```bash
-npm start              # 加载 src/，监听 http://localhost:4567
+npm start              # Load src/ and listen on http://localhost:4567
 ```
 
-### 终端 B — 启动 Web UI（热更新）
+### Terminal B — Start the Web UI (hot reload)
 
 ```bash
 npm run dev:web        # http://localhost:5173
 ```
 
-浏览器打开 **http://localhost:5173**。前端 dev server 会把 `/chat`、`/workspace` 等 API 代理到后端的 4567，所以本地没有跨域问题（代理配置见 `client/web/vite.config.js`）。
+Open **http://localhost:5173** in a browser. The frontend development server proxies APIs such as `/chat` and `/workspace` to the backend on port 4567, avoiding local cross-origin issues. The proxy configuration is in `client/web/vite.config.js`.
 
 ---
 
-## 调试 LLM prompt / tool 轨迹
+## Debug LLM prompt and tool traces
 
-开启 CC 风格 dump-prompts：
+Enable CC-style prompt dumps:
 
 ```bash
 DUMP_PROMPTS=1 npm start
-# 或
+# or
 DUMP_PROMPTS=1 DUMP_PROMPTS_DIR=/tmp/dump-prompts-live npm start
 ```
 
-默认写入 `~/.ai-agent/dump-prompts/{sessionId}.jsonl`；设置 `DUMP_PROMPTS_DIR` 可覆盖输出目录。
+By default, output is written to `~/.ai-agent/dump-prompts/{sessionId}.jsonl`. Set `DUMP_PROMPTS_DIR` to override the output directory.
 
 ---
 
-## 桌面版
+## Desktop app
 
 ```bash
-npm run desktop:dev      # 构建前端 + 启动 Electron 窗口
-npm run desktop:start    # dist 已存在时直接启动
-npm run desktop:pack     # 打包当前平台安装包（macOS → dmg 等）
-npm run desktop:pack:win # 打包 Windows 安装包
+npm run desktop:dev      # Build the frontend and open the Electron window
+npm run desktop:start    # Start directly when dist already exists
+npm run desktop:pack     # Package an installer for the current platform (macOS → dmg, etc.)
+npm run desktop:pack:win # Package a Windows installer
 ```
 
-Electron 会自动启动 agent 子进程，窗口加载 `http://127.0.0.1:4567`。
+Electron starts the Coding Agent subprocess automatically and loads `http://127.0.0.1:4567` in the window.
 
 ---
 
-## 常用开发命令
+## Common development commands
 
-| 命令 | 说明 |
-|------|------|
-| `npm start` | 启动 agent 后端 |
-| `npm run dev:web` | 启动 Web UI 开发服务器（热更新） |
-| `npm run build:web` | 构建前端到 `client/web/dist` |
-| `npm run desktop:dev` | 启动桌面版 |
-| `npm run typecheck` | TypeScript 类型检查（src + protocol + client-sdk） |
-| `npm run format` | 按项目 Prettier 规则格式化代码 |
-| `npm run acp -- --workspace /path/to/project` | 终端验证 ACP 模式 |
+| Command                                       | Description                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| `npm start`                                   | Start the Coding Agent backend                                     |
+| `npm run dev:web`                             | Start the Web UI development server with hot reload                |
+| `npm run build:web`                           | Build the frontend into `client/web/dist`                          |
+| `npm run desktop:dev`                         | Start the desktop app                                              |
+| `npm run typecheck`                           | Run TypeScript type checks for `src`, `protocol`, and `client-sdk` |
+| `npm run format`                              | Format code using the project's Prettier rules                     |
+| `npm run acp -- --workspace /path/to/project` | Verify ACP mode from the terminal                                  |
 
 ---
 
-## 相关文档
+## Related documentation
 
-- [Agent 源码与扩展](../../src/README.md)
-- [浏览器自动化](browser.md)
-- [VS Code / Cursor 集成](integrations/vscode-acp.md)
-- [IntelliJ 集成](integrations/intellij-acp.md)
+- [Architecture overview](../architecture/)
+- [Browser Automation](browser.md)
+- [VS Code / Cursor Integration](integrations/vscode-acp.md)
+- [IntelliJ Integration](integrations/intellij-acp.md)

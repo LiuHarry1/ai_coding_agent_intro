@@ -1,38 +1,38 @@
-# IntelliJ IDEA（ACP）
+# IntelliJ IDEA (ACP)
 
-通过 **ACP**（Agent Client Protocol）将 JetBrains IDE 连接到白泽（Baize）coding agent，走 stdio 通信，无需在 `:4567` 上启动 HTTP 服务。IDE 会以子进程方式拉起 agent，在 stdin/stdout 上进行 JSON-RPC 对话。
+Connect a JetBrains IDE to Coding Agent through **ACP** (Agent Client Protocol). Communication uses stdio, so no HTTP service needs to run on `:4567`. The IDE starts the agent as a subprocess and exchanges JSON-RPC messages over stdin/stdout.
 
 ---
 
-## 前置条件
+## Prerequisites
 
-- IntelliJ IDEA **2025.3+**（或其他已启用 AI Assistant + ACP 的 JetBrains IDE）
-- 已启用 AI Assistant
-- 本仓库已执行 `npm install`
-- 终端冒烟测试：
+- IntelliJ IDEA **2025.3+**, or another JetBrains IDE with AI Assistant and ACP enabled
+- AI Assistant enabled
+- `npm install` run in this repository
+- A terminal smoke test:
 
 ```bash
-cd /path/to/ai_coding_agent_intro
+cd /path/to/coding-agent
 npm run acp -- --workspace /path/to/your/project
 ```
 
-应看到 `[start] Loading agent from src/` 和 `[acp] workspace=...`，随后进程等待输入（正常）。
+You should see `[start] Loading agent from src/` and `[acp] workspace=...`, after which the process waits for input. This is expected.
 
-> **注意：** `--workspace` 用于设置默认项目根目录。不要把 workspace 路径作为裸位置参数传入，应使用 `--workspace /abs/path`。
+> **Warning:** `--workspace` sets the default project root. Do not pass the workspace path as a bare positional argument; use `--workspace /abs/path`.
 
 ---
 
-## 配置 `acp.json`
+## Configure `acp.json`
 
-注册表中的 agent（Settings → AI Assistant → **Agents** → Install）**不是**自定义 agent 的入口。请通过 **`~/.jetbrains/acp.json`** 添加：
+The agent registry under Settings → AI Assistant → **Agents** → Install is **not** the entry point for custom agents. Add Coding Agent through **`~/.jetbrains/acp.json`**:
 
-1. 打开 **AI Chat** → 右上角 **⚙** → **Add Custom Agent**（会创建/打开 `~/.jetbrains/acp.json`），或手动编辑该文件：
+1. Open **AI Chat** → **⚙** in the upper-right corner → **Add Custom Agent**. This creates or opens `~/.jetbrains/acp.json`. Alternatively, edit the file manually:
 
 ```bash
 mkdir -p ~/.jetbrains
 ```
 
-2. 粘贴以下内容（按实际路径调整）：
+2. Paste the following content and adjust the paths:
 
 ```json
 {
@@ -41,11 +41,11 @@ mkdir -p ~/.jetbrains
     "use_custom_mcp": true
   },
   "agent_servers": {
-    "Baize": {
+    "Coding Agent": {
       "command": "/opt/homebrew/opt/node@22/bin/npx",
       "args": [
         "tsx",
-        "/Users/you/ai_coding_agent_intro/start.js",
+        "/Users/you/coding-agent/start.js",
         "--acp",
         "--workspace",
         "/Users/you/IdeaProjects/my-app"
@@ -56,47 +56,47 @@ mkdir -p ~/.jetbrains
 }
 ```
 
-| 字段 | 含义 |
-|------|------|
-| `command` | `npx` 或 `node` 的**绝对路径**（`which npx`） |
-| `args` | `tsx`、指向 `start.js` 的路径、`--acp`、可选的 `--workspace` |
-| `env` | 可选；若子进程未读取到 `.env`，可在此传入 API Key |
+| Field     | Meaning                                                                      |
+| --------- | ---------------------------------------------------------------------------- |
+| `command` | The **absolute path** to `npx` or `node` (`which npx`)                       |
+| `args`    | `tsx`, the path to `start.js`, `--acp`, and optional `--workspace` arguments |
+| `env`     | Optional; provide the API key here if the subprocess does not read `.env`    |
 
-API Key 通常从仓库根目录的 `.env` 或 `settings.json` 加载。若从 IDE 启动时鉴权失败，可在 `env` 中补充，例如 `"OPENAI_API_KEY": "sk-..."`。
+The API key is normally loaded from `.env` or `settings.json` in the repository root. If authentication fails when launched from the IDE, add the key to `env`, for example `"OPENAI_API_KEY": "sk-..."`.
 
-3. 在 **Settings → AI Assistant → Agents** 中启用 **Pass IntelliJ MCP server** 和 **Pass custom MCP servers**（与上方 `default_mcp_settings` 对应）。
+3. Under **Settings → AI Assistant → Agents**, enable **Pass IntelliJ MCP server** and **Pass custom MCP servers**. These options correspond to `default_mcp_settings` above.
 
-4. 重启 IDE。
-
----
-
-## 在 AI Chat 中使用
-
-1. 在 IntelliJ 中打开你的项目。
-2. 打开 **AI Chat**。
-3. 在 agent 下拉框中选择 **Baize**（不要选 Junie / Claude Agent）。
-4. 发送消息，例如 `/help` 或 `List files in src`。
-
-IntelliJ 还会在 ACP `session/new` 中传入项目目录（`cwd`），因此若你总是先打开目标项目，可在 `args` 中省略 `--workspace`；若需要固定默认目录，则保留 `--workspace`。
+4. Restart the IDE.
 
 ---
 
-## 故障排查
+## Use Coding Agent in AI Chat
 
-| 现象 | 处理 |
-|------|------|
-| 下拉框中没有 agent | 检查 `~/.jetbrains/acp.json` 的 JSON 是否合法；重启 IDE |
-| `Failed to load example "/Users/..."` | 使用 `--workspace /path`，不要在 flag 后写裸路径 |
-| Agent 卡住 / 无回复 | 在终端运行相同的 `npx tsx ... start.js --acp` 命令排查 |
-| `command` not found | 使用 `npx` 的绝对路径；IDE 不会继承 shell 的 `PATH` / nvm |
-| IDE 出现 JSON 解析错误 | stdout 只能输出 ACP 协议；启动日志在 `--acp` 模式下走 stderr |
+1. Open your project in IntelliJ.
+2. Open **AI Chat**.
+3. Select **Coding Agent** from the agent menu, not Junie or Claude Agent.
+4. Send a message such as `/help` or `List files in src`.
 
-更多说明见 [JetBrains ACP 文档](https://www.jetbrains.com/help/ai-assistant/acp.html)。
+IntelliJ also passes the project directory (`cwd`) in ACP `session/new`. If you always open the target project first, you can omit `--workspace` from `args`. Keep `--workspace` if you need a fixed default directory.
 
 ---
 
-## 相关文档
+## Troubleshooting
 
-- [VS Code / Cursor 集成](vscode-acp.md)
-- [本地开发](../development.md)
-- [文档索引](../../../README.md#文档索引)
+| Symptom                               | Resolution                                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| The agent is absent from the menu     | Check that `~/.jetbrains/acp.json` contains valid JSON, then restart the IDE                   |
+| `Failed to load example "/Users/..."` | Use `--workspace /path`; do not place a bare path after the flag                               |
+| The agent hangs or does not respond   | Run the same `npx tsx ... start.js --acp` command in a terminal to investigate                 |
+| `command` not found                   | Use the absolute path to `npx`; the IDE does not inherit the shell's `PATH` or nvm environment |
+| The IDE reports a JSON parsing error  | stdout must contain only the ACP protocol; in `--acp` mode, startup logs are written to stderr |
+
+For more information, see the [JetBrains ACP documentation](https://www.jetbrains.com/help/ai-assistant/acp.html).
+
+---
+
+## Related documentation
+
+- [VS Code / Cursor Integration](vscode-acp.md)
+- [Local Development](../development.md)
+- [Documentation home](../../index.md)

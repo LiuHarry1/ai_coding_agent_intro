@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1100 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Candidate high-level Coding Agent architecture">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-indigo" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#4f46e5"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#059669"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#0284c7"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-8%" width="110%" height="116%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <linearGradient id="core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1100" height="760" rx="18" fill="#f8fafc"/>
+
+  <text x="40" y="42" font-size="22" font-weight="700" fill="#0f172a">Coding Agent Architecture</text>
+  <text x="40" y="65" font-size="12" fill="#64748b">Candidate V2 - runtime view</text>
+
+  <!-- Clients -->
+  <text x="40" y="105" font-size="12" font-weight="700" fill="#475569">CLIENTS</text>
+  <rect x="40" y="118" width="1020" height="72" rx="14" fill="#e0f2fe" stroke="#0284c7" filter="url(#shadow)"/>
+
+  <rect x="64" y="136" width="220" height="36" rx="8" fill="#ffffff" stroke="#7dd3fc"/>
+  <text x="174" y="159" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0369a1">Web / Desktop</text>
+
+  <rect x="312" y="136" width="220" height="36" rx="8" fill="#ffffff" stroke="#7dd3fc"/>
+  <text x="422" y="159" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0369a1">IDE / ACP</text>
+
+  <rect x="560" y="136" width="220" height="36" rx="8" fill="#ffffff" stroke="#7dd3fc"/>
+  <text x="670" y="159" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0369a1">CLI / stdio</text>
+
+  <rect x="808" y="136" width="228" height="36" rx="8" fill="#ffffff" stroke="#7dd3fc"/>
+  <text x="922" y="159" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0369a1">HTTP Clients / SDK</text>
+
+  <path d="M550 190 L550 220" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <!-- Transports -->
+  <text x="40" y="226" font-size="12" font-weight="700" fill="#475569">TRANSPORT ADAPTERS</text>
+  <rect x="150" y="238" width="800" height="58" rx="13" fill="#ffffff" stroke="#94a3b8" filter="url(#shadow)"/>
+
+  <text x="285" y="272" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">HTTP / SSE</text>
+  <path d="M400 250 L400 284" stroke="#cbd5e1"/>
+  <text x="550" y="272" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">stdio / NDJSON</text>
+  <path d="M700 250 L700 284" stroke="#cbd5e1"/>
+  <text x="815" y="272" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">ACP Adapter</text>
+
+  <path d="M550 296 L550 326" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Turn host -->
+  <rect x="90" y="330" width="920" height="150" rx="16" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="116" y="360" font-size="15" font-weight="700" fill="#ffffff">runChatTurn() - Turn Host</text>
+
+  <rect x="118" y="382" width="230" height="68" rx="11" fill="#ffffff" fill-opacity="0.95"/>
+  <text x="233" y="409" text-anchor="middle" font-size="13" font-weight="700" fill="#4338ca">prepareChatTurn()</text>
+  <text x="233" y="431" text-anchor="middle" font-size="10.5" fill="#64748b">Prompt + tools + backend</text>
+
+  <path d="M348 416 L420 416" stroke="#e0e7ff" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="432" y="382" width="230" height="68" rx="11" fill="#ffffff" fill-opacity="0.95"/>
+  <text x="547" y="409" text-anchor="middle" font-size="13" font-weight="700" fill="#4338ca">query() Loop</text>
+  <text x="547" y="431" text-anchor="middle" font-size="10.5" fill="#64748b">Model steps + tool calls</text>
+
+  <path d="M662 416 L734 416" stroke="#e0e7ff" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="746" y="382" width="236" height="68" rx="11" fill="#ffffff" fill-opacity="0.95"/>
+  <text x="864" y="409" text-anchor="middle" font-size="13" font-weight="700" fill="#4338ca">Complete Turn</text>
+  <text x="864" y="431" text-anchor="middle" font-size="10.5" fill="#64748b">Persist + stream result</text>
+
+  <!-- Core services -->
+  <path d="M233 480 L233 515" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#arrow-indigo)"/>
+  <path d="M547 480 L547 515" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#arrow-indigo)"/>
+  <path d="M864 480 L864 515" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#arrow-indigo)"/>
+
+  <text x="40" y="524" font-size="12" font-weight="700" fill="#475569">CORE SERVICES</text>
+
+  <rect x="40" y="536" width="300" height="92" rx="14" fill="#fef3c7" stroke="#d97706" filter="url(#shadow)"/>
+  <text x="190" y="568" text-anchor="middle" font-size="14" font-weight="700" fill="#92400e">Models</text>
+  <text x="190" y="592" text-anchor="middle" font-size="11" fill="#a16207">Large | Medium | Small</text>
+  <text x="190" y="611" text-anchor="middle" font-size="9.5" fill="#a16207">Main reasoning and side paths</text>
+
+  <rect x="400" y="536" width="300" height="92" rx="14" fill="#fce7f3" stroke="#db2777" filter="url(#shadow)"/>
+  <text x="550" y="568" text-anchor="middle" font-size="14" font-weight="700" fill="#9d174d">Memory + Context</text>
+  <text x="550" y="592" text-anchor="middle" font-size="11" fill="#be185d">Rules | Recall | Compaction</text>
+  <text x="550" y="611" text-anchor="middle" font-size="9.5" fill="#be185d">Project, session, and cross-session</text>
+
+  <rect x="760" y="536" width="300" height="92" rx="14" fill="#ede9fe" stroke="#7c3aed" filter="url(#shadow)"/>
+  <text x="910" y="568" text-anchor="middle" font-size="14" font-weight="700" fill="#5b21b6">Tool System</text>
+  <text x="910" y="592" text-anchor="middle" font-size="11" fill="#6d28d9">Built-ins | Agents | Skills | MCP</text>
+  <text x="910" y="611" text-anchor="middle" font-size="9.5" fill="#6d28d9">Active, deferred, permission-checked</text>
+
+  <!-- Execution -->
+  <path d="M910 628 L910 660 L278 660 L278 682" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <path d="M910 628 L910 682" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <rect x="40" y="686" width="476" height="52" rx="12" fill="#d1fae5" stroke="#059669" filter="url(#shadow)"/>
+  <text x="278" y="707" text-anchor="middle" font-size="13" font-weight="700" fill="#047857">Workspace Execution</text>
+  <text x="278" y="726" text-anchor="middle" font-size="10.5" fill="#059669">ExecutionBackend - Local Worker / SSH Worker</text>
+
+  <rect x="584" y="686" width="476" height="52" rx="12" fill="#e0f2fe" stroke="#0284c7" filter="url(#shadow)"/>
+  <text x="822" y="707" text-anchor="middle" font-size="13" font-weight="700" fill="#0369a1">Browser Runtime</text>
+  <text x="822" y="726" text-anchor="middle" font-size="10.5" fill="#0284c7">BrowserManager - Isolated / Extension Chrome</text>
+</svg>

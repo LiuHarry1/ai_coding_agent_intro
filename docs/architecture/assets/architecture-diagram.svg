@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1040 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Coding Agent high-level architecture diagram">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#94a3b8"/></marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" fill="#2563eb"/></marker>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.07"/></filter>
+    <linearGradient id="hero" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
+  </defs>
+  <text x="520" y="28" text-anchor="middle" font-size="13" fill="#64748b" font-weight="500">One engine · Multiple interfaces · Extensible · Self-hosted</text>
+  <rect x="420" y="44" width="200" height="44" rx="22" fill="#0f172a" filter="url(#shadow)"/>
+  <text x="520" y="72" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">Developers / Teams</text>
+  <path d="M520 88 L520 108" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="40" y="112" width="960" height="88" rx="14" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="56" y="134" font-size="12" font-weight="700" fill="#0369a1">Access Layer — Agent Interfaces</text>
+  <g font-size="11" font-weight="600">
+    <rect x="56" y="144" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="140" y="164" text-anchor="middle" fill="#0369a1">Web Chat</text><text x="140" y="178" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Collaboration · Workspace IDE</text>
+    <rect x="240" y="144" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="324" y="164" text-anchor="middle" fill="#0369a1">Desktop App</text><text x="324" y="178" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">One-click local launch</text>
+    <rect x="424" y="144" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="508" y="164" text-anchor="middle" fill="#0369a1">IDE Extensions</text><text x="508" y="178" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">VS Code · Cursor · IDEA</text>
+    <rect x="608" y="144" width="168" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="692" y="164" text-anchor="middle" fill="#0369a1">Open API / SDK</text><text x="692" y="178" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">CI · Internal platforms</text>
+    <rect x="792" y="144" width="192" height="44" rx="8" fill="#fff" stroke="#7dd3fc"/><text x="888" y="164" text-anchor="middle" fill="#0369a1">Enterprise Deployment</text><text x="888" y="178" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Docker · SSO · Multi-tenant</text>
+  </g>
+  <path d="M520 200 L520 224" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <rect x="120" y="228" width="800" height="148" rx="16" fill="url(#hero)" filter="url(#shadow)"/>
+  <text x="140" y="252" font-size="13" font-weight="700" fill="#fff">Core Agent Engine</text>
+  <text x="140" y="268" font-size="10" fill="#c7d2fe">Interpret → Plan → Use tools → Synthesize → Stream</text>
+  <g font-size="10" font-weight="600">
+    <rect x="140" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="214" y="304" text-anchor="middle" fill="#4338ca">Conversation</text><text x="214" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Multi-turn context</text><text x="214" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Permission modes</text><text x="214" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Human approval</text>
+    <rect x="304" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="378" y="304" text-anchor="middle" fill="#4338ca">Tool Orchestration</text><text x="378" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Read/edit code · Commands</text><text x="378" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Search · Browser</text><text x="378" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Subtask delegation</text>
+    <rect x="468" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="542" y="304" text-anchor="middle" fill="#4338ca">Context and Memory</text><text x="542" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Project rules</text><text x="542" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Cross-session memory</text><text x="542" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Context compaction</text>
+    <rect x="632" y="282" width="148" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="706" y="304" text-anchor="middle" fill="#4338ca">Security and Governance</text><text x="706" y="320" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Sandbox policies</text><text x="706" y="334" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Approvals and quotas</text><text x="706" y="348" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Central policy control</text>
+    <rect x="796" y="282" width="108" height="76" rx="10" fill="rgba(255,255,255,0.95)"/><text x="850" y="304" text-anchor="middle" fill="#4338ca">Unified Protocol</text><text x="850" y="324" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">All interfaces</text><text x="850" y="338" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">share one</text><text x="850" y="352" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">message model</text>
+  </g>
+  <path d="M320 376 L320 408" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M720 376 L720 408" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <rect x="40" y="412" width="440" height="100" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="56" y="434" font-size="12" font-weight="700" fill="#92400e">Large Language Models</text>
+  <text x="56" y="450" font-size="10" fill="#a16207">Reasoning and decisions — understand, select tools, respond</text>
+  <g font-size="10" font-weight="600">
+    <rect x="56" y="462" width="120" height="36" rx="8" fill="#fff" stroke="#fcd34d"/><text x="116" y="484" text-anchor="middle" fill="#92400e">Primary Model</text>
+    <rect x="188" y="462" width="120" height="36" rx="8" fill="#fff" stroke="#fcd34d"/><text x="248" y="484" text-anchor="middle" fill="#92400e">Auxiliary Model</text>
+    <rect x="320" y="462" width="144" height="36" rx="8" fill="#fff" stroke="#fcd34d"/><text x="392" y="484" text-anchor="middle" fill="#92400e">Lightweight Model</text>
+  </g>
+  <text x="260" y="506" text-anchor="middle" font-size="9" fill="#a16207">Task-based routing with predictable cost and quality</text>
+  <rect x="560" y="412" width="440" height="100" rx="14" fill="#d1fae5" stroke="#059669" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="576" y="434" font-size="12" font-weight="700" fill="#047857">Execution Environments</text>
+  <text x="576" y="450" font-size="10" fill="#059669">Where tools run — files, commands, language services</text>
+  <g font-size="10" font-weight="600">
+    <rect x="576" y="462" width="180" height="36" rx="8" fill="#fff" stroke="#6ee7b7"/><text x="666" y="484" text-anchor="middle" fill="#047857">Local Workspace</text>
+    <rect x="772" y="462" width="212" height="36" rx="8" fill="#fff" stroke="#6ee7b7"/><text x="878" y="484" text-anchor="middle" fill="#047857">Remote Host (SSH)</text>
+  </g>
+  <text x="780" y="506" text-anchor="middle" font-size="9" fill="#059669">Consistent capabilities locally and remotely</text>
+  <path d="M260 412 L260 376" stroke="#d97706" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <path d="M780 412 L780 376" stroke="#059669" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <rect x="40" y="536" width="960" height="88" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="56" y="558" font-size="12" font-weight="700" fill="#475569">Agent Capabilities</text>
+  <g font-size="10" font-weight="600" fill="#334155">
+    <rect x="56" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="110" y="588" text-anchor="middle">Read / Write Code</text><text x="110" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Understand structure</text>
+    <rect x="176" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="230" y="588" text-anchor="middle">Run Commands</text><text x="230" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Build · Test · Deploy</text>
+    <rect x="296" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="350" y="588" text-anchor="middle">Code Search</text><text x="350" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Semantic + language services</text>
+    <rect x="416" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="470" y="588" text-anchor="middle">Browser Automation</text><text x="470" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Verify UI · Authenticated sites</text>
+    <rect x="536" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="590" y="588" text-anchor="middle">Subtask Agents</text><text x="590" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Explore · Plan · Specialize</text>
+    <rect x="656" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="710" y="588" text-anchor="middle">Web Search</text><text x="710" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Documentation · Web pages</text>
+    <rect x="776" y="568" width="108" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="830" y="588" text-anchor="middle">External Tools</text><text x="830" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">MCP integrations</text>
+    <rect x="896" y="568" width="88" height="44" rx="8" fill="#fff" stroke="#e2e8f0"/><text x="940" y="588" text-anchor="middle">Domain Skills</text><text x="940" y="602" text-anchor="middle" fill="#64748b" font-size="9" font-weight="400">Custom workflows</text>
+  </g>
+  <path d="M520 512 L520 536" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="40" y="644" width="460" height="56" rx="12" fill="#fce7f3" stroke="#db2777" stroke-width="1"/>
+  <text x="56" y="666" font-size="11" font-weight="700" fill="#9d174d">Extensible — Customize Without Core Changes</text>
+  <text x="56" y="684" font-size="10" fill="#be185d">Custom agents · Domain skills · Project rules · Plugins · MCP servers</text>
+  <rect x="540" y="644" width="460" height="56" rx="12" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+  <text x="556" y="666" font-size="11" font-weight="700" fill="#5b21b6">Operable — Enterprise Controls</text>
+  <text x="556" y="684" font-size="10" fill="#6d28d9">Central policies · Identity · Workspace isolation · Usage and cost</text>
+  <rect x="40" y="44" width="200" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-dasharray="5 3"/>
+  <text x="140" y="66" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">Request Flow</text>
+  <text x="140" y="82" text-anchor="middle" font-size="9" fill="#64748b">Ask → Interpret → Use tools → Respond</text>
+  <text x="140" y="94" text-anchor="middle" font-size="9" fill="#64748b">(Repeat as needed)</text>
+  <rect x="800" y="44" width="200" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-dasharray="5 3"/>
+  <text x="900" y="66" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">Team Value</text>
+  <text x="900" y="82" text-anchor="middle" font-size="9" fill="#64748b">Self-hosted · Integrable · Customizable</text>
+  <text x="900" y="94" text-anchor="middle" font-size="9" fill="#64748b">Long-running coding automation</text>
+</svg>

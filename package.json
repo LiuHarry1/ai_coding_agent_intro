@@ -31,8 +31,10 @@
     "test:memory": "tsx src/scripts/test-auto-memory.ts && tsx src/scripts/test-memory-prefetch.ts && tsx src/scripts/test-session-memory.ts && tsx src/scripts/test-memory-lifecycle.ts && tsx src/scripts/test-request-scope.ts && node src/scripts/test-memory-deployment.mjs && tsx src/scripts/test-rules-loader.ts && tsx src/scripts/test-managed-extensions.ts",
     "test:compact": "tsx src/scripts/test-compact-boundary.ts && tsx src/scripts/test-full-compact-cache-safe.ts && tsx src/scripts/test-micro-reactive-compact.ts && tsx src/scripts/test-compact-outcome.ts && tsx src/scripts/test-session-memory.ts && tsx src/scripts/test-session-compact-persistence.ts && tsx src/scripts/test-compaction-agent-listing.ts && tsx src/scripts/test-read-file-state-dedup.ts",
     "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"scripts/**/*.cjs\"",
-    "presentation:build": "node docs/presentation/build.mjs",
-    "presentation": "npx --yes serve docs/presentation -p 3456"
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "node scripts/build-docs.mjs",
+    "docs:preview": "vitepress preview docs",
+    "docs:check": "node scripts/check-doc-links.mjs"
   },
   "keywords": [],
   "author": "",
@@ -74,8 +76,11 @@
     "electron": "^43.0.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
+    "mermaid": "^11.12.0",
     "prettier": "^3.5.3",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17"
   }
 }

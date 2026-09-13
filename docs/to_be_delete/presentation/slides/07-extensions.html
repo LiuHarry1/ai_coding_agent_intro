@@ -1,0 +1,35 @@
+<section class="slide-content" data-background-color="#ffffff">
+  <div class="slide-head"><span class="slide-num">⑦</span><h2>Extension Mechanisms — Customize Without Changing the Core</h2></div>
+  <p class="subtitle">Subagents divide work · skills inject domain knowledge · MCP connects external services.</p>
+  <div class="cols cols-3">
+    <div>
+      <h3>Subagents</h3>
+      <div class="card card-indigo" style="font-size:0.38em">
+        <span class="card-icon">🤖</span>
+        <strong>Agent Tool</strong>
+        Dispatch by <code>subagent_type</code> · Explore / Plan / general-purpose<br/>
+        On disk: <code>.ai-agent/agents/*.md</code>
+      </div>
+    </div>
+    <div>
+      <h3>Skill / Commands</h3>
+      <div class="card card-green" style="font-size:0.38em">
+        <span class="card-icon">📚</span>
+        <strong>Domain Workflows</strong>
+        Load <code>.ai-agent/skills/</code> on demand<br/>
+        Expand slash commands from <code>.ai-agent/commands/</code>
+      </div>
+    </div>
+    <div>
+      <h3>MCP / Plugins</h3>
+      <div class="card card-sky" style="font-size:0.38em">
+        <span class="card-icon">🔌</span>
+        <strong>External Ecosystem</strong>
+        <code>settings.json → mcpServers</code><br/>
+        ToolSearch activates deferred tools
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:0.45em">Permission modes <code>agent | ask | plan</code> and specialist <code>agentType</code> profiles restrict the tool allowlist.</div>
+  <span class="path-tag">tools/AgentTool/ · assembleToolPool.ts</span>
+</section>
