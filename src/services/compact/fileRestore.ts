@@ -37,12 +37,30 @@ export function extractRecentlyReadFiles(
   return files
 }
 
+/**
+ * Re-inject file contents after compaction.
+ *
+ * Files the model can still see as Read results in `preservedMessages` are
+ * skipped: the preserved tail already carries that content, so restoring it
+ * again is pure duplication (CC applies the same diff in
+ * `createPostCompactFileAttachments`).
+ */
 export function restoreRecentFiles(
   recentPaths: string[],
   cwd: string,
   config: FileRestoreBudget,
+  preservedMessages: readonly Message[] = [],
 ): string {
   if (recentPaths.length === 0) return ''
+
+  const resolve = (p: string) =>
+    path.isAbsolute(p) ? p : path.resolve(cwd, p)
+  const preserved = new Set(
+    extractRecentlyReadFiles(
+      preservedMessages as Message[],
+      Number.POSITIVE_INFINITY,
+    ).map(resolve),
+  )
 
   const maxCharPerFile = config.maxTokensPerFile * 4
   const totalCharBudget = config.totalBudget * 4
@@ -50,9 +68,8 @@ export function restoreRecentFiles(
   const sections: string[] = []
 
   for (const filePath of recentPaths.slice(0, config.maxFiles)) {
-    const abs = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(cwd, filePath)
+    const abs = resolve(filePath)
+    if (preserved.has(abs)) continue
     try {
       if (!fs.existsSync(abs)) continue
       const stat = fs.statSync(abs)

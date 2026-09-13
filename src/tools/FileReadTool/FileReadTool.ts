@@ -13,6 +13,7 @@ import {
   resolveFileInCwd,
   ReadOutputSchema,
   type ReadOutput,
+  activeReadFileState,
   recordReadInState,
   shouldDedupRead,
   formatFileNotFoundMessage,
@@ -29,7 +30,7 @@ import {
 function sessionReadFileState(
   context: { session?: { readFileState?: ReadFileState } },
 ): ReadFileState | undefined {
-  return context.session?.readFileState
+  return activeReadFileState(context.session?.readFileState)
 }
 
 function unchanged(

@@ -407,7 +407,12 @@ export async function compactConversation(
   const recentFiles = ctx.skipFileRestore
     ? []
     : extractRecentlyReadFiles(messages)
-  const fileSection = restoreRecentFiles(recentFiles, ctx.cwd, ctx.fileRestore)
+  const fileSection = restoreRecentFiles(
+    recentFiles,
+    ctx.cwd,
+    ctx.fileRestore,
+    messagesToKeep,
+  )
   const summaryMessages = buildPostCompactMessages(
     summary,
     fileSection,

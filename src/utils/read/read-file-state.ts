@@ -5,11 +5,42 @@
  * Edit/Write set offset/limit to undefined so they never false-stub against
  * pre-edit Read content.
  */
+import { AsyncLocalStorage } from 'node:async_hooks'
 import * as fs from 'fs'
 import type { ReadFileState, ReadFileStateEntry } from './types.js'
 import { FILE_UNCHANGED_STUB } from './boundary-reminders.js'
 
 export { FILE_UNCHANGED_STUB }
+
+/**
+ * Fork-local map installed by `runForkedAgent`.
+ *
+ * Side-path forks (Auto Memory / Session Memory extract, full compact) reuse
+ * the parent's bound tool instances, and a tool's `execute` closed over the
+ * ToolContext it was created with — so its reads would otherwise land in the
+ * main session map. Anything in that map is treated as already-in-context by
+ * Auto Memory prefetch, which silently kills later recall.
+ *
+ * Routing every file tool through `activeReadFileState` gives a fork its own
+ * clone without rebuilding the tool set, and leaves the session map untouched
+ * even while the main loop runs concurrently (extracts are not awaited).
+ */
+const forkedReadFileState = new AsyncLocalStorage<ReadFileState>()
+
+/** Run `fn` with file tools reading/writing `state` instead of the session map. */
+export function runWithForkedReadFileState<T>(
+  state: ReadFileState,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return forkedReadFileState.run(state, fn)
+}
+
+/** The fork-local map when inside a fork scope, else the session map. */
+export function activeReadFileState(
+  sessionState: ReadFileState | undefined,
+): ReadFileState | undefined {
+  return forkedReadFileState.getStore() ?? sessionState
+}
 
 /** Normalize Read offset for cache keys (1-based; undefined → 1). */
 export function normalizeReadOffset(offset?: number): number {

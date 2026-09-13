@@ -179,8 +179,14 @@ export function bumpNotesGeneration(sessionId: string): void {
 const EXTRACTION_WAIT_TIMEOUT_MS = 15_000
 const EXTRACTION_STALE_MS = 60_000
 
+/** Tests shrink the wait so the timeout path runs without a 15s pause. */
+function extractionWaitTimeoutMs(): number {
+  const override = Number(process.env.SM_EXTRACT_WAIT_TIMEOUT_MS)
+  return override > 0 ? override : EXTRACTION_WAIT_TIMEOUT_MS
+}
+
 export type WaitExtractionResult = {
-  /** True when no extract is in flight (safe to read notes for SM compact). */
+  /** True when no extract is in flight, i.e. notes are the newest generation. */
   ready: boolean
   clearedStale: boolean
   timedOut: boolean
@@ -201,7 +207,8 @@ function abandonStaleExtraction(sessionId: string, reason: string): void {
 /**
  * Wait for in-flight extraction (compact path).
  * - Stale (>60s): clear inFlight and return ready.
- * - Wait timeout while still in flight: return ready=false (caller skips SM).
+ * - Wait timeout while still in flight: return ready=false. Callers compact
+ *   from the previous generation rather than skipping; see trySessionMemoryCompaction.
  */
 export async function waitForSessionMemoryExtraction(
   sessionId: string,
@@ -226,8 +233,8 @@ export async function waitForSessionMemoryExtraction(
         notesGeneration: getSessionMemoryState(sessionId).notesGeneration,
       }
     }
-    if (Date.now() - start > EXTRACTION_WAIT_TIMEOUT_MS) {
-      // Still running but not stale — do not compact from possibly mid-write notes.
+    if (Date.now() - start > extractionWaitTimeoutMs()) {
+      // Still running but not stale — caller compacts from the previous generation.
       return {
         ready: false,
         clearedStale: false,

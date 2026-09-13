@@ -16,7 +16,10 @@ import { EDIT_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
-import { recordWriteInState } from '../../utils/read/read-file-state.js'
+import {
+  activeReadFileState,
+  recordWriteInState,
+} from '../../utils/read/read-file-state.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 
 /** Mode B: model gets `message` ACK; UI gets before/after for Cursor-style diff. */
@@ -212,7 +215,9 @@ export const definition: ToolDefinition = {
 
         fs.writeFileSync(abs, newContent, 'utf-8')
         recordWriteInState(
-          context.session?.readFileState as ReadFileState | undefined,
+          activeReadFileState(
+            context.session?.readFileState as ReadFileState | undefined,
+          ),
           abs,
           newContent,
         )

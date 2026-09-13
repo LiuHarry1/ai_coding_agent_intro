@@ -21,6 +21,8 @@ import type {
   ToolContext,
 } from './types.js'
 import type { CanUseToolFn } from './can-use-tool.js'
+import type { ReadFileState } from '../utils/read/types.js'
+import { runWithForkedReadFileState } from '../utils/read/read-file-state.js'
 export type { CanUseToolFn, PermissionDecision } from './can-use-tool.js'
 import { EventBus } from './event-bus.js'
 import { noopWireEmitter, type WireEmitter } from './wire-emitter.js'
@@ -322,23 +324,30 @@ export async function runForkedAgent(
     usageAcc.steps += 1
   })
 
+  // The fork's file tools resolve through `activeReadFileState`, so their reads
+  // land here instead of the session map — even though the tool instances were
+  // bound to the parent's ToolContext at create time.
+  const forkReadFileState: ReadFileState = new Map()
+
   try {
-    const text = await params.runAgent(params.prompt, {
-      tools,
-      systemPrompt,
-      eventBus: isolated.eventBus,
-      wire: isolated.wire,
-      messages: forkContextMessages,
-      maxSteps: params.maxSteps,
-      model,
-      provider,
-      canUseTool: params.canUseTool,
-      cwd: isolated.cwd ?? process.cwd(),
-      compaction: isolated.compaction,
-      // Explicitly omit sessionMemory / sessionMemoryModelId — no nested extract.
-      sessionId: isolated.sessionId,
-      logLabel: forkLabel,
-    })
+    const text = await runWithForkedReadFileState(forkReadFileState, () =>
+      params.runAgent(params.prompt, {
+        tools,
+        systemPrompt,
+        eventBus: isolated.eventBus,
+        wire: isolated.wire,
+        messages: forkContextMessages,
+        maxSteps: params.maxSteps,
+        model,
+        provider,
+        canUseTool: params.canUseTool,
+        cwd: isolated.cwd ?? process.cwd(),
+        compaction: isolated.compaction,
+        // Explicitly omit sessionMemory / sessionMemoryModelId — no nested extract.
+        sessionId: isolated.sessionId,
+        logLabel: forkLabel,
+      }),
+    )
 
     const durationMs = Date.now() - start
     const fmt = (n: number) => n.toLocaleString()
@@ -362,6 +371,13 @@ export async function runForkedAgent(
     throw err
   } finally {
     unsubUsage()
+    const discarded = forkReadFileState.size
+    forkReadFileState.clear()
+    if (discarded > 0) {
+      console.log(
+        `[forked-agent] label=${forkLabel} discarded ${discarded} read-file entries (fork isolation)`,
+      )
+    }
   }
 }
 

@@ -426,6 +426,7 @@ Turn-end side-query extraction:
 - With `cacheSafe: true`, it reuses the main-loop model and prompt-cache shape.
 - With `cacheSafe: false`, it uses a separate `modelTier`, which defaults to medium.
 - Tasks for the same memdir are serialized; automatic pending tasks use latest-wins coalescing.
+- The fork's file tools write to an isolated `readFileState`, so the memory files it reads never register as already-in-context and never suppress later recall (§5.5).
 
 After writing, only the frontmatter of files written in that operation is repaired. The repair logic can correct indentation and values that require quoting, but it does not guess a missing `type`.
 
@@ -498,7 +499,9 @@ Fields that exist only in process memory:
 - `extractionStartedAt`
 - `extractionEpoch`
 
-Compact waits at most 15 seconds for an in-progress extraction. After 15 seconds, but before it meets the stale condition, SM compact is skipped to avoid reading a partially written file. An extraction older than 60 seconds is considered stale; its ownership can be abandoned and processing can continue.
+Compact waits at most 15 seconds for an in-progress extraction. An extraction older than 60 seconds is considered stale; its ownership can be abandoned and processing can continue.
+
+If the wait times out while the extract is still running, compact proceeds from the previous generation rather than skipping (matching Claude Code, whose `waitForSessionMemoryExtraction` returns `void` and falls through on timeout). This is safe because a successful extract publishes the notes file and `lastSummarizedMessageId` together at the end, so what is on disk is always a self-consistent pair: compacting from it preserves the tail after the previous summarized point, keeping more messages than strictly necessary but losing nothing. Skipping instead would drop SM compact entirely whenever an extract runs long and fall back to the more expensive full compact. The `notesGeneration` comparison still aborts if an extract lands between the wait and the read, which would otherwise pair fresh notes with a stale cursor.
 
 ## 7. Compaction
 
@@ -589,8 +592,10 @@ A normal Full compact asks the model to summarize all currently active messages 
 - `/compact <instructions>` explicitly provides summary steering.
 - There is no sessionId or Session Memory is disabled.
 
-The default cache-safe path uses `runForkedAgent()` to reuse the main loop's system prompt, tool schema, provider/model, and message prefix, but the compact fork disables all tools and runs at most one step.
+The default cache-safe path uses `runForkedAgent()` to reuse the main loop's system prompt, tool schema, provider/model, and message prefix, and runs at most one step. The fork keeps the full parent tool schema on purpose — tools are part of the prompt-cache key, so trimming the list would force a cache miss — and instead denies every call through `canUseTool`. Logs therefore show the complete tool list on the `full_compact` fork even though no tool can execute.
 If the cache-safe fork fails or is unavailable, it falls back to `generateText()` from the same request-scoped provider; on prompt-too-long errors, it retries after removing the oldest API round, one round at a time.
+
+Every `runForkedAgent()` call — full compact, Session Memory extract, Auto Memory extract — runs inside an `AsyncLocalStorage` scope holding its own empty `readFileState`, discarded on exit. This is needed because cache-safe forks reuse the parent's bound tool instances, whose `execute` closed over the parent `ToolContext` at create time; without the scope a fork's reads would land in the session map, where Auto Memory prefetch treats them as already-in-context. A scope rather than a snapshot/restore is what keeps this correct while an un-awaited turn-end extract overlaps the next turn: the main loop resolves outside the scope, so its own reads are never rolled back. CC gets the same isolation by passing a cloned `FileStateCache` through `toolUseContext` at call time.
 
 Full compact writes a limited number of recently read files and todos into the summary and regenerates the agent / skill listing attachment. A normal Full append contains only the boundary, summary, and these new attachments; it contains no copies of old messages.
 
@@ -765,7 +770,7 @@ Purely local compact regression tests (do not start a server or call a real mode
 npm run test:compact
 ```
 
-This covers compact boundaries/repeated active model projections, the Full cache-safe fork and fallback, Micro/reactive behavior, manual compact semantics, Session Memory and SM→Full fallback, append-only restart and legacy checkpoints, attachment/agent-listing recovery, and invalidation of Read deduplication state. Old E2E scripts that require a real server, fixed external workspace, or real provider are not included in the default aggregate, including `test-compaction-new-session.ts`, `test-compaction-checkpoint-persist.ts`, and `test-compaction-attachments.ts`.
+This covers compact boundaries/repeated active model projections, the Full cache-safe fork and fallback, Micro/reactive behavior, manual compact semantics, Session Memory and SM→Full fallback, append-only restart and legacy checkpoints, attachment/agent-listing recovery, and invalidation of Read deduplication state. It also asserts that every tool reaches the session map through `activeReadFileState()` — fork isolation is an async scope rather than a type-level guarantee, so a tool touching `context.session.readFileState` directly would compile and silently leak. Old E2E scripts that require a real server, fixed external workspace, or real provider are not included in the default aggregate, including `test-compaction-new-session.ts`, `test-compaction-checkpoint-persist.ts`, and `test-compaction-attachments.ts`.
 
 ## 13. Code map
 

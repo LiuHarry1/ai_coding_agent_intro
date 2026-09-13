@@ -366,10 +366,12 @@ export {
   offsetBeyondEofReminder,
 } from './boundary-reminders.js'
 export {
+  activeReadFileState,
   clearReadFileState,
   invalidateReadPaths,
   recordReadInState,
   recordWriteInState,
+  runWithForkedReadFileState,
   shouldDedupRead,
 } from './read-file-state.js'
 export {

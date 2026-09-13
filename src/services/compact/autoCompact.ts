@@ -46,6 +46,8 @@ import {
 const RESERVED_FOR_OUTPUT = 20_000
 const AUTOCOMPACT_BUFFER = 13_000
 const MICRO_COMPACT_HEADSTART = 27_000
+/** Max share of the compaction threshold that post-compact file restore may use. */
+const FILE_RESTORE_THRESHOLD_SHARE = 0.25
 const WARNING_BUFFER = 20_000
 const MANUAL_COMPACT_BUFFER = 3_000
 
@@ -341,15 +343,28 @@ export async function compactIfNeeded(
     tokens_before: tokens,
   })
 
+  // Clamp the restore budget to a slice of the compaction target. The raw
+  // budget is sized for a full-size context window; on a small configured
+  // window it can exceed the threshold on its own, so compaction would
+  // re-trigger forever on the content it just re-injected.
   const fileRestore = {
     maxFiles: cfg.maxFilesToRestore,
     maxTokensPerFile: cfg.maxTokensPerFile,
-    totalBudget: cfg.fileBudget,
+    totalBudget: Math.min(
+      cfg.fileBudget,
+      Math.max(0, Math.floor(threshold * FILE_RESTORE_THRESHOLD_SHARE)),
+    ),
   }
   const skipFileRestore = aggressive
-  const fileSection = skipFileRestore
-    ? ''
-    : restoreRecentFiles(extractRecentlyReadFiles(working), cwd, fileRestore)
+  const buildFileSection = (preserved: readonly Message[]): string =>
+    skipFileRestore
+      ? ''
+      : restoreRecentFiles(
+          extractRecentlyReadFiles(working),
+          cwd,
+          fileRestore,
+          preserved,
+        )
 
   const attachmentMessages = opts.enrichment
     ? await buildPostCompactAttachmentMessages(cwd, opts.enrichment)
@@ -367,7 +382,7 @@ export async function compactIfNeeded(
         autoCompactThreshold: force || aggressive ? undefined : threshold,
         attachmentMessages,
         todos: currentTodos,
-        fileSection,
+        fileSection: buildFileSection,
         trigger: opts.trigger ?? 'auto',
         preTokens: tokensBeforeFull,
         estimateTokens: msgs => tokenCountWithEstimation(msgs).total,

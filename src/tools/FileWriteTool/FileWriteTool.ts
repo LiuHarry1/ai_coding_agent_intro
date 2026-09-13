@@ -17,7 +17,10 @@ import { WRITE_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
 import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
-import { recordWriteInState } from '../../utils/read/read-file-state.js'
+import {
+  activeReadFileState,
+  recordWriteInState,
+} from '../../utils/read/read-file-state.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 
 /** Mode B: model gets `message` ACK; UI gets content (+ beforeContent on update). */
@@ -172,7 +175,9 @@ export const definition: ToolDefinition = {
         fs.mkdirSync(path.dirname(abs), { recursive: true })
         fs.writeFileSync(abs, content, 'utf-8')
         recordWriteInState(
-          context.session?.readFileState as ReadFileState | undefined,
+          activeReadFileState(
+            context.session?.readFileState as ReadFileState | undefined,
+          ),
           abs,
           content,
         )

@@ -259,30 +259,67 @@ function absFromToolUseResult(tur: unknown, cwd?: string): string | undefined {
   return path.isAbsolute(fp) ? fp : path.resolve(fp)
 }
 
+/**
+ * Ordered ids of every tool payload micro-compaction is allowed to clear —
+ * clearable results plus clearable write inputs.
+ *
+ * Granularity is one id per tool call, not one per tool message. A step that
+ * issues four parallel Reads lands in a single `tool` message, so counting
+ * messages would treat the whole batch as one recent item and never clear any
+ * of it. CC keeps the last N compactable tool ids for the same reason.
+ */
+function collectCompactableToolIds(messages: Message[]): string[] {
+  const ids: string[] = []
+  for (const m of messages) {
+    if (!isRoleMessage(m)) continue
+    if (m.role === 'tool') {
+      for (const part of m.content) {
+        const text = toolResultOutputToText(part.output)
+        if (text === MICRO_COMPACT_MARKER || isPersistedReference(text)) continue
+        if (
+          CLEARABLE_TOOL_RESULTS.has(part.toolName) ||
+          text.length >= CLEARABLE_MIN_CHARS
+        ) {
+          ids.push(part.toolCallId)
+        }
+      }
+      continue
+    }
+    if (m.role === 'assistant') {
+      for (const part of m.content) {
+        if (part.type !== 'tool-call') continue
+        if (!CLEARABLE_TOOL_INPUTS.has(part.toolName)) continue
+        if (JSON.stringify(part.input ?? {}) === MARKER_INPUT_JSON) continue
+        if (!ids.includes(part.toolCallId)) ids.push(part.toolCallId)
+      }
+    }
+  }
+  return ids
+}
+
 export function microCompact(
   messages: Message[],
   keepRecent: number,
   sessionId?: string,
   opts?: { cwd?: string; readFileState?: ReadFileState },
 ): MicroCompactResult {
-  const toolMsgIdx: number[] = []
-  for (let i = 0; i < messages.length; i++) {
-    const m = messages[i]
-    if (isRoleMessage(m) && m.role === 'tool') toolMsgIdx.push(i)
-  }
-  if (toolMsgIdx.length <= Math.max(0, keepRecent)) {
+  const compactableIds = collectCompactableToolIds(messages)
+  const keep = Math.max(0, keepRecent)
+  if (compactableIds.length <= keep) {
     return { messages, tokensFreed: 0, cleared: 0, clearedReadAbsPaths: [] }
   }
 
-  const clearUpToExclusive = toolMsgIdx[toolMsgIdx.length - keepRecent - 1] + 1
+  // `slice(-0)` returns the whole array, so keep 0 has to be spelled out as
+  // "protect nothing" rather than falling through to slice.
+  const keepSet = new Set(keep > 0 ? compactableIds.slice(-keep) : [])
+  const clearSet = new Set(compactableIds.filter(id => !keepSet.has(id)))
   const readAbsById = collectReadAbsByToolCallId(messages, opts?.cwd)
   const clearedReadAbsPaths = new Set<string>()
 
   let tokensFreed = 0
   let cleared = 0
 
-  const out = messages.map((m, i) => {
-    if (i >= clearUpToExclusive) return m
+  const out = messages.map(m => {
     if (!isRoleMessage(m)) return m
     if (m.role === 'tool')
       return clearToolResults(
@@ -293,12 +330,14 @@ export function microCompact(
         readAbsById,
         clearedReadAbsPaths,
         opts?.cwd,
+        clearSet,
       )
     if (m.role === 'assistant')
       return clearToolInputs(
         m,
         () => cleared++,
         n => (tokensFreed += n),
+        clearSet,
       )
     return m
   })
@@ -402,10 +441,12 @@ function clearToolResults(
   addFreed: (n: number) => void,
   readAbsById: Map<string, string>,
   clearedReadAbsPaths: Set<string>,
-  cwd?: string,
+  cwd: string | undefined,
+  clearSet: ReadonlySet<string>,
 ): ToolMessage {
   let touched = false
   const newContent = m.content.map(part => {
+    if (!clearSet.has(part.toolCallId)) return part
     const text = toolResultOutputToText(part.output)
     const clearable =
       CLEARABLE_TOOL_RESULTS.has(part.toolName) ||
@@ -439,10 +480,12 @@ function clearToolInputs(
   m: AssistantMessage,
   bumpCleared: () => void,
   addFreed: (n: number) => void,
+  clearSet: ReadonlySet<string>,
 ): AssistantMessage {
   let touched = false
   const newContent = m.content.map(part => {
     if (part.type !== 'tool-call') return part
+    if (!clearSet.has(part.toolCallId)) return part
     if (!CLEARABLE_TOOL_INPUTS.has(part.toolName)) return part
     const argsJson = JSON.stringify(part.input ?? {})
     if (argsJson === MARKER_INPUT_JSON) return part

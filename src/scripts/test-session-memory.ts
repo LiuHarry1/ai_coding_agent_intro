@@ -255,6 +255,34 @@ async function main(): Promise<void> {
     'SM append events do not physically duplicate preserved messages',
   )
 
+  // An extract that outlives the wait must not disable SM compact: notes and
+  // the cursor are published together, so the previous generation is usable.
+  state.lastSummarizedMessageId = (msgs[2] as { uuid?: string }).uuid
+  state.inFlight = true
+  state.extractionStartedAt = Date.now()
+  process.env.SM_EXTRACT_WAIT_TIMEOUT_MS = '10'
+  let smInFlight: Awaited<ReturnType<typeof trySessionMemoryCompaction>> = null
+  try {
+    smInFlight = await trySessionMemoryCompaction({
+      messages: msgs,
+      sessionId: SESSION_ID,
+      config: SM_CONFIG,
+      estimateTokens: () => 100,
+    })
+  } finally {
+    delete process.env.SM_EXTRACT_WAIT_TIMEOUT_MS
+    state.inFlight = false
+    state.extractionStartedAt = undefined
+  }
+  assert(
+    smInFlight?.source === 'session_memory',
+    'SM compact proceeds while an extract is still in flight',
+  )
+  assert(
+    (smInFlight?.messagesToKeep.length ?? 0) > 0,
+    'in-flight SM compact still preserves a tail',
+  )
+
   // Manual semantics: plain /compact may use SM; steering forces Full.
   state.lastSummarizedMessageId = (msgs[2] as { uuid?: string }).uuid
   const provider: IProvider = {

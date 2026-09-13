@@ -38,7 +38,11 @@ export async function trySessionMemoryCompaction(input: {
   autoCompactThreshold?: number
   attachmentMessages?: Message[]
   todos?: TodoItem[]
-  fileSection?: string
+  /**
+   * Post-compact file restore. Pass a builder so it can diff against the
+   * preserved tail, which is only known once the keep index is computed.
+   */
+  fileSection?: string | ((preserved: readonly Message[]) => string)
   trigger?: 'manual' | 'auto'
   preTokens?: number
   estimateTokens: (msgs: Message[]) => number
@@ -46,13 +50,17 @@ export async function trySessionMemoryCompaction(input: {
   const { messages, sessionId, config } = input
   if (!config.enabled) return null
 
+  // Bounded wait for an in-flight extract; stale runs (>60s) are cleared inside.
+  // On timeout, compact from the previous generation instead of skipping: notes
+  // and lastSummarizedMessageId are both published at the end of a successful
+  // extract, so what is on disk is a self-consistent pair. Compacting from it
+  // keeps the tail after the previous summarized point — more messages than
+  // strictly needed, but nothing is lost.
   const wait = await waitForSessionMemoryExtraction(sessionId)
-  // Extract still running after wait timeout → skip SM (avoid mid-write / stale notes).
   if (!wait.ready) {
     console.log(
-      '[compact] session-memory compact skipped — extract still in flight after wait',
+      '[compact] session-memory extract still in flight — compacting from previous generation',
     )
-    return null
   }
 
   const memoryPath = getSessionMemoryPath(sessionId)
@@ -67,7 +75,9 @@ export async function trySessionMemoryCompaction(input: {
   if (!raw.trim() || isEmptySessionMemoryTemplate(raw)) return null
 
   const state = getSessionMemoryState(sessionId)
-  if (state.inFlight || state.notesGeneration !== wait.notesGeneration) {
+  // An extract landing between the wait and the read would pair fresh notes with
+  // a stale cursor. In-flight on its own is fine — that pair is still consistent.
+  if (state.notesGeneration !== wait.notesGeneration) {
     console.log(
       '[compact] session-memory compact skipped — notes changed while reading',
     )
@@ -91,8 +101,12 @@ export async function trySessionMemoryCompaction(input: {
     truncateSessionMemoryForCompact(raw)
 
   let summaryBody = truncatedContent
-  if (input.fileSection) {
-    summaryBody += `\n\n${input.fileSection}`
+  const fileSection =
+    typeof input.fileSection === 'function'
+      ? input.fileSection(messagesToKeep)
+      : input.fileSection
+  if (fileSection) {
+    summaryBody += `\n\n${fileSection}`
   }
   const todos = input.todos ?? []
   if (todos.length > 0) {
