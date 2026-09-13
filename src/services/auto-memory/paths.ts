@@ -15,8 +15,8 @@ export const AUTO_MEM_DIRNAME = 'memory'
 export { findCanonicalGitRoot, sanitizePath }
 
 /**
- * Validate trusted user/local overrides before they become filesystem
- * allowlist roots. Mirrors Claude Code's safety contract.
+ * Validate trusted user/managed overrides before they become filesystem
+ * allowlist roots. Project and local settings are stripped earlier.
  */
 function resolveTrustedDirectory(raw: string): string | undefined {
   const trimmed = raw.trim()
@@ -62,8 +62,8 @@ function resolveTrustedDirectory(raw: string): string | undefined {
 export type AutoMemPathOptions = {
   cwd: string
   /**
-   * Trusted directory override (env or user/local settings only).
-   * Project settings must never supply this.
+   * Trusted directory override (user or managed settings only).
+   * Project and local settings must never supply this.
    */
   trustedDirectory?: string
 }

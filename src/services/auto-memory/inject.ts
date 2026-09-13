@@ -19,7 +19,7 @@ import {
 export type BuildAutoMemoryAppendOpts = {
   cwd: string
   config: AutoMemoryConfig
-  /** Trusted directory from user/local settings only. */
+  /** Trusted directory from user/managed settings only. */
   trustedDirectory?: string
 }
 
