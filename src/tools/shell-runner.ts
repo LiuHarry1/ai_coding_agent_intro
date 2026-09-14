@@ -22,6 +22,17 @@ import {
  * Background uses CC-style task_id via spawnShellTask (not OS pid on the tool).
  */
 
+/**
+ * Discrete execution outcome — the single source of truth the UI reads.
+ * `interrupted` stays for the model-facing `is_error` mapping and old sessions.
+ */
+export type ShellOutcome =
+  | 'success'
+  | 'failure'
+  | 'timeout'
+  | 'aborted'
+  | 'spawnError'
+
 export type ShellToolOutput = {
   text: string
   stdout?: string
@@ -30,6 +41,7 @@ export type ShellToolOutput = {
   backgroundTaskId?: string
   backgrounded?: boolean
   interrupted?: boolean
+  outcome?: ShellOutcome
 }
 
 export const ShellToolOutputSchema = z.object({
@@ -40,7 +52,20 @@ export const ShellToolOutputSchema = z.object({
   backgroundTaskId: z.string().optional(),
   backgrounded: z.boolean().optional(),
   interrupted: z.boolean().optional(),
+  outcome: z
+    .enum(['success', 'failure', 'timeout', 'aborted', 'spawnError'])
+    .optional(),
 })
+
+function outcomeOf(r: {
+  code: number | null
+  timedOut?: boolean
+  interrupted?: boolean
+}): ShellOutcome {
+  if (r.timedOut) return 'timeout'
+  if (r.interrupted) return 'aborted'
+  return r.code === 0 ? 'success' : 'failure'
+}
 
 function shellOk(
   data: ShellToolOutput,
@@ -122,6 +147,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             return shellOk({
               text: truncate('[interrupted by user]'),
               interrupted: true,
+              outcome: 'aborted',
             })
           }
           const {
@@ -165,12 +191,14 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
                 backgroundTaskId: handle.taskId,
                 backgrounded: true,
                 exitCode: 0,
+                outcome: 'success',
               })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
               return shellOk({
                 text: truncate(`[error starting background task: ${msg}]`),
                 interrupted: true,
+                outcome: 'spawnError',
               })
             }
           }
@@ -216,6 +244,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
                 stderr: result.stderr || '',
                 exitCode: result.code,
                 interrupted,
+                outcome: outcomeOf(result),
               })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
@@ -225,6 +254,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
                 stderr: msg,
                 exitCode: 1,
                 interrupted: true,
+                outcome: 'spawnError',
               })
             }
           }
@@ -243,6 +273,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               stderr: `Remote shell requires Worker execution (env=${envId})`,
               exitCode: 1,
               interrupted: true,
+              outcome: 'spawnError',
             })
           }
 
@@ -293,12 +324,14 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
               stderr: result.stderr || '',
               exitCode: result.code,
               interrupted,
+              outcome: outcomeOf(result),
             })
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
             return shellOk({
               text: truncate(`[error: ${msg}]`),
               interrupted: true,
+              outcome: 'spawnError',
             })
           }
         },

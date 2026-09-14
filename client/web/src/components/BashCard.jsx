@@ -36,18 +36,39 @@ function parseBackgroundTaskId(part) {
   return m ? m[1] : null
 }
 
+const OUTCOMES = ['success', 'failure', 'timeout', 'aborted', 'spawnError']
+
+/** Sharper wording than a blanket "attempted", per outcome. */
+const OUTCOME_DETAILS = {
+  timeout: 'timed out',
+  aborted: 'stopped',
+  spawnError: 'failed to start',
+}
+
+/** Discrete server-side outcome; absent on sessions recorded before it existed. */
+function shellOutcome(tur) {
+  return OUTCOMES.includes(tur?.outcome) ? tur.outcome : null
+}
+
 /** Build display body from TUR fields; strip model wrappers. */
 function shellDisplayParts(part) {
   const tur = getTur(part)
+  const outcome = shellOutcome(tur)
   if (tur) {
     const stdout = typeof tur.stdout === 'string' ? tur.stdout : ''
     const stderr = typeof tur.stderr === 'string' ? tur.stderr : ''
     const exitCode = tur.exitCode
     if (stdout || stderr || exitCode != null) {
-      return { stdout, stderr, exitCode, textFallback: null }
+      return { stdout, stderr, exitCode, textFallback: null, outcome }
     }
     if (typeof tur.text === 'string') {
-      return { stdout: '', stderr: '', exitCode: null, textFallback: tur.text }
+      return {
+        stdout: '',
+        stderr: '',
+        exitCode: null,
+        textFallback: tur.text,
+        outcome,
+      }
     }
   }
   if (typeof part.result === 'string') {
@@ -56,9 +77,16 @@ function shellDisplayParts(part) {
       stderr: '',
       exitCode: null,
       textFallback: part.result,
+      outcome,
     }
   }
-  return { stdout: '', stderr: '', exitCode: null, textFallback: null }
+  return {
+    stdout: '',
+    stderr: '',
+    exitCode: null,
+    textFallback: null,
+    outcome,
+  }
 }
 
 /** Cursor-style first-pass truncate (~5 lines / 2k chars). */
@@ -107,12 +135,16 @@ export default function BashCard({ part, onStopTool }) {
       : typeof part.result === 'string'
         ? part.result
         : ''
-  const isError =
+  // Sessions recorded before `outcome` existed fall back to the old heuristics
+  // so their history keeps reading correctly.
+  const legacyFailed =
+    part.isError === true ||
+    tur?.interrupted === true ||
+    (typeof display.exitCode === 'number' && display.exitCode !== 0) ||
+    detectError(part.name || 'Bash', modelText)
+  const failed =
     isDone &&
-    (part.isError === true ||
-      tur?.interrupted === true ||
-      (typeof display.exitCode === 'number' && display.exitCode !== 0) ||
-      detectError(part.name || 'Bash', modelText))
+    (display.outcome ? display.outcome !== 'success' : legacyFailed)
 
   const command = typeof args?.command === 'string' ? args.command.trim() : ''
   const description =
@@ -120,20 +152,26 @@ export default function BashCard({ part, onStopTool }) {
   // Cursor: prefer description; else generic phrase (not raw command in details)
   const rawDetails =
     description ||
-    (!isDone ? 'Running command' : isError ? 'Run command' : 'Ran command')
-  const details = toolErrorDetails(rawDetails, isError)
+    (!isDone ? 'Running command' : failed ? 'Run command' : 'Ran command')
+  // Keep a real description when there is one; only sharpen the generic
+  // "attempted" fallback into the specific reason.
+  const baseDetails = toolErrorDetails(rawDetails, failed)
+  const details =
+    baseDetails === 'attempted'
+      ? (OUTCOME_DETAILS[display.outcome] ?? baseDetails)
+      : baseDetails
 
   const wantsBackground = !!args.run_in_background
   const backgroundTaskId =
-    isDone && !isError ? parseBackgroundTaskId(part) : null
+    isDone && !failed ? parseBackgroundTaskId(part) : null
   const isBackgrounded =
     !!backgroundTaskId ||
     tur?.backgrounded === true ||
-    (wantsBackground && isDone && !isError)
+    (wantsBackground && isDone && !failed)
 
   const action = toolActionLabel('shell', {
     loading: !isDone,
-    hasError: isError,
+    hasError: failed,
     backgrounded: isBackgrounded,
   })
 
@@ -155,8 +193,8 @@ export default function BashCard({ part, onStopTool }) {
 
   const [expanded, toggleExpanded, chevron] = useToolDensityExpand('shell', {
     isDone,
-    isError,
-    hasBody: hasOutput || hasLiveOutput || isError,
+    isError: failed,
+    hasBody: hasOutput || hasLiveOutput || failed,
     hasLiveOutput,
     isBackgrounded: isBackgrounded || wantsBackground,
   })
@@ -233,7 +271,6 @@ export default function BashCard({ part, onStopTool }) {
       ]
         .filter(Boolean)
         .join(' ')}
-      isError={isError}
       isDone={isDone}
       expanded={expanded}
       onToggle={isBackgrounded ? undefined : toggleExpanded}
@@ -255,7 +292,7 @@ export default function BashCard({ part, onStopTool }) {
         </>
       }
       duration={isBackgrounded ? undefined : part.duration}
-      showSuccess={isDone && !isError && !isBackgrounded}
+      showSuccess={isDone && !failed && !isBackgrounded}
       actions={
         <>
           {!isDone && part.toolCallId && (
@@ -274,10 +311,10 @@ export default function BashCard({ part, onStopTool }) {
               )}
             </button>
           )}
-          {isDone && !isError && hasOutput && !isBackgrounded ? (
+          {isDone && hasOutput && !isBackgrounded ? (
             <CopyButton text={copyText} label='Copy output' inline />
           ) : null}
-          {isDone && !isError && command ? (
+          {isDone && command ? (
             <CopyButton text={command} label='Copy command' inline />
           ) : null}
         </>
@@ -295,14 +332,14 @@ export default function BashCard({ part, onStopTool }) {
         <div className='ui-shell-tool-call__streams'>
           {display.stdout ? (
             <pre
-              className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''} ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}
+              className={`tool-row-body ui-shell-tool-call__output ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}
             >
               {showFullOutput ? display.stdout : stdoutTrunc.preview}
               {!showFullOutput && stdoutTrunc.truncated ? '\n…' : ''}
             </pre>
           ) : null}
           {display.stderr ? (
-            <pre className={`tool-row-body tool-row-body--error ui-shell-tool-call__stderr ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}>
+            <pre className={`tool-row-body tool-row-body--stderr ui-shell-tool-call__stderr ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}>
               {showFullOutput ? display.stderr : stderrTrunc.preview}
               {!showFullOutput && stderrTrunc.truncated ? '\n…' : ''}
             </pre>
@@ -327,7 +364,7 @@ export default function BashCard({ part, onStopTool }) {
       {showFinal && !hasStructured && hasFallback && (
         <>
           <pre
-            className={`tool-row-body ui-shell-tool-call__output ${isError ? 'tool-row-body--error' : ''} ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}
+            className={`tool-row-body ui-shell-tool-call__output ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}
           >
             {showFullOutput ? display.textFallback : fallbackTrunc.preview}
             {!showFullOutput && fallbackTrunc.truncated ? '\n…' : ''}
