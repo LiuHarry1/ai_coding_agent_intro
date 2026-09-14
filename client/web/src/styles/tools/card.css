@@ -7,8 +7,8 @@
   margin-bottom: 4px;
 }
 
-.tool-card.has-error { border-color: rgba(248,81,73,0.3); }
-.tool-card.has-error .tool-name { color: var(--red); }
+/* A failed call keeps the default chrome; the label and body text carry the
+   outcome instead of the border. */
 
 .tool-card-header {
   display: flex;
@@ -106,7 +106,6 @@
 
 .tool-duration--live { color: var(--green); }
 .tool-check { color: var(--green); font-size: 14px; }
-.tool-error-badge { color: var(--red); font-size: 14px; }
 
 .tool-card-body {
   display: none;
@@ -163,29 +162,6 @@
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
-}
-
-.result-error > summary { color: var(--red) !important; }
-
-.result-error-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--red);
-  padding: 1px 6px;
-  border-radius: 3px;
-  margin-left: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.tool-result-wrap--error {
-  background: rgba(248,81,73,0.06);
-  border-top: 2px solid var(--red);
-}
-
-.tool-result-wrap--error .tool-result-pre {
-  color: var(--red);
 }
 
 /* ── Streaming tool-call arguments ──────── */
@@ -320,8 +296,9 @@
   gap: 6px;
 }
 
+/* Neutral accent: marks the stream as stderr without implying failure. */
 .ui-shell-tool-call__stderr {
-  border-left: 2px solid rgba(209, 36, 47, 0.45);
+  border-left: 2px solid var(--text-muted);
 }
 
 .ui-shell-tool-call--backgrounded .tool-row-header {
@@ -333,8 +310,6 @@
 }
 
 /* Light theme */
-
-[data-theme="light"] .tool-card.has-error { border-color: rgba(209,36,47,0.3); }
 
 [data-theme="light"] .tool-icon.search,
 [data-theme="light"] .tool-icon.list { background: rgba(9,105,218,0.1); }

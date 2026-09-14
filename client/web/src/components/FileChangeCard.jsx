@@ -163,14 +163,9 @@ function FileChangeStub({
       </>
     )
   } else {
-    status = (
-      <>
-        {duration && <span className='file-change-stub-meta'>{duration}</span>}
-        <span className='file-change-status file-change-status--error'>
-          {'\u2717'}
-        </span>
-      </>
-    )
+    status = duration ? (
+      <span className='file-change-stub-meta'>{duration}</span>
+    ) : null
   }
   return (
     <div
@@ -419,11 +414,7 @@ export default function FileChangeCard({ part, nested = false }) {
           </span>
         )}
         {isDone ? (
-          isError ? (
-            <span className='file-change-status file-change-status--error'>
-              {'\u2717'}
-            </span>
-          ) : (
+          isError ? null : (
             <span className='file-change-status file-change-status--ok'>
               {'\u2713'}
             </span>

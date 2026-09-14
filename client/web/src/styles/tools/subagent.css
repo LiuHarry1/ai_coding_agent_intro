@@ -135,12 +135,12 @@
   border-radius: 4px;
   overflow: auto;
 }
-.subagent-result--error { color: var(--red); }
+.subagent-result--error { color: var(--text-secondary); }
 .subagent-result-error {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--red);
+  color: var(--text-secondary);
   white-space: pre-wrap;
 }
 

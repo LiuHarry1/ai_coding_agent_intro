@@ -167,7 +167,9 @@
 
 .file-change-card--write { border-left-color: var(--green); }
 .file-change-card--edit  { border-left-color: var(--orange); }
-.file-change-card.has-error { border-left-color: var(--red); }
+/* Nothing landed on disk, so drop the write/edit accent rather than recolour
+   it — the card reads as inert instead of alarming. */
+.file-change-card.has-error { border-left-color: var(--border); }
 
 /* Nested under Task / Explored — denser, no heavy card chrome. */
 .file-change-card--nested {
@@ -184,7 +186,7 @@
   border-left-color: var(--orange);
 }
 .file-change-card--nested.has-error {
-  border-left-color: var(--red);
+  border-left-color: var(--border);
 }
 .file-change-card--nested .file-change-header {
   padding: 2px 6px;
@@ -212,7 +214,6 @@
   opacity: 0.85;
 }
 .file-change-stub.has-error {
-  border-color: rgba(248,81,73,0.35);
   border-style: solid;
   opacity: 1;
 }
@@ -243,10 +244,10 @@
 .file-change-stub-meta { font-size: 11px; color: var(--text-muted); }
 .file-change-stub-error {
   padding: 6px 10px;
-  border-top: 1px solid rgba(248,81,73,0.25);
+  border-top: 1px solid var(--border);
   font-family: var(--font-mono);
   font-size: 11.5px;
-  color: var(--red);
+  color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -341,7 +342,7 @@
 
 .file-change-status { font-size: 13px; flex-shrink: 0; }
 .file-change-status--ok    { color: var(--green); }
-.file-change-status--error { color: var(--red); }
+.file-change-status--error { color: var(--text-muted); }
 
 .file-change-body {
   background: var(--bg-primary);
@@ -356,8 +357,8 @@
 
 .file-change-error {
   padding: 8px 12px;
-  background: rgba(248,81,73,0.08);
-  color: var(--red);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 11.5px;
   white-space: pre-wrap;
@@ -430,8 +431,8 @@
 }
 
 [data-theme="light"] .file-change-error {
-  background: rgba(207,34,46,0.06);
-  color: var(--red);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 
@@ -445,14 +446,14 @@
 [data-theme="light"] .file-change-card { background: #fff; }
 [data-theme="light"] .file-change-card--write { border-left-color: var(--green); }
 [data-theme="light"] .file-change-card--edit  { border-left-color: var(--orange); }
-[data-theme="light"] .file-change-card.has-error { border-left-color: var(--red); }
+[data-theme="light"] .file-change-card.has-error { border-left-color: var(--border); }
 [data-theme="light"] .file-change-count--add    { color: var(--green); }
 [data-theme="light"] .file-change-count--remove { color: var(--red); }
 [data-theme="light"] .file-change-collapsed-preview { color: var(--text-secondary); }
 [data-theme="light"] .file-change-progress,
 [data-theme="light"] .file-change-duration { color: var(--text-secondary); }
 [data-theme="light"] .file-change-status--ok    { color: var(--green); }
-[data-theme="light"] .file-change-status--error { color: var(--red); }
+[data-theme="light"] .file-change-status--error { color: var(--text-muted); }
 [data-theme="light"] .file-change-live { background: var(--bg-secondary); }
 [data-theme="light"] .file-change-live-meta { background: var(--bg-tertiary); color: var(--text-secondary); }
 [data-theme="light"] .file-change-live-code { color: var(--text-primary); }

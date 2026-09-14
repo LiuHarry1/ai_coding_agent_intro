@@ -120,6 +120,31 @@ const DONE_LABELS = {
   [BROWSER_CDP]: 'CDP command',
 }
 
+/**
+ * Past tense would claim the action landed, so a failed call falls back to the
+ * bare verb. Labels that are already nouns ("Screenshot", "Tabs") read fine
+ * either way and deliberately fall through to DONE_LABELS.
+ */
+const ERROR_LABELS = {
+  [BROWSER_NAVIGATE]: 'Open page',
+  [BROWSER_SNAPSHOT]: 'Read page',
+  [BROWSER_GET_TEXT]: 'Read text',
+  [BROWSER_CLICK]: 'Click',
+  [BROWSER_HOVER]: 'Hover',
+  [BROWSER_TYPE]: 'Type',
+  [BROWSER_FILL_FORM]: 'Fill form',
+  [BROWSER_FILE_UPLOAD]: 'Upload file',
+  [BROWSER_HANDLE_DIALOG]: 'Handle dialog',
+  [BROWSER_PRESS_KEY]: 'Press key',
+  [BROWSER_WAIT_FOR]: 'Wait',
+  [BROWSER_SELECT_OPTION]: 'Select',
+  [BROWSER_SCROLL]: 'Scroll',
+  [BROWSER_DRAG]: 'Drag',
+  [BROWSER_RESIZE]: 'Resize viewport',
+  [BROWSER_WAIT_FOR_DOWNLOAD]: 'Wait for download',
+  [BROWSER_HIGHLIGHT]: 'Highlight',
+}
+
 function compactUrl(url) {
   if (typeof url !== 'string' || !url) return ''
   try {
@@ -200,8 +225,11 @@ function BrowserToolCard({ part, nested = false }) {
     },
   )
 
+  const doneLabel = isError
+    ? ERROR_LABELS[toolName] || DONE_LABELS[toolName]
+    : DONE_LABELS[toolName]
   const label = isDone
-    ? DONE_LABELS[toolName] || 'Browser'
+    ? doneLabel || 'Browser'
     : RUNNING_LABELS[toolName] || 'Browser'
 
   const title = isError

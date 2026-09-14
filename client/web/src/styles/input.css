@@ -849,8 +849,10 @@
   color: var(--accent);
 }
 
+/* The user chose this, so it is an outcome rather than a fault. The reject
+   button stays red because it is the destructive action. */
 .perm-card--rejected .perm-card__status {
-  color: var(--red);
+  color: var(--text-secondary);
 }
 
 .perm-card--done .perm-card__path {

@@ -15,9 +15,9 @@
 
 .browser-error {
   padding: 8px;
-  background: rgba(248, 81, 73, 0.08);
+  background: var(--bg-tertiary);
   border-radius: 4px;
-  color: var(--red);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 12px;
   white-space: pre-wrap;

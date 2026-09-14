@@ -91,14 +91,6 @@ export default function ToolRowHeader({
         </span>
       )}
       {!isDone && <span className='spinner spinner-sm' />}
-      {isDone && isError && (
-        <span
-          className='tool-row-status tool-row-status--error'
-          aria-label='failed'
-        >
-          {'\u2717'}
-        </span>
-      )}
       {isDone && !isError && emptyHint && (
         <span
           className='tool-row-status tool-row-status--empty'
