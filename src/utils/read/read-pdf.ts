@@ -110,6 +110,27 @@ export async function getPdfPageCount(
   }
 }
 
+/**
+ * Last-resort text layer extraction: used when the model cannot take a PDF
+ * document block and poppler is unavailable to rasterize pages. Scanned PDFs
+ * have no text layer and return null.
+ */
+export async function extractPdfText(
+  absPath: string,
+  maxChars = 60_000,
+): Promise<string | null> {
+  try {
+    const pdfParse = await loadPdfParse()
+    if (!pdfParse) return null
+    const data = await pdfParse(fs.readFileSync(absPath))
+    const text = data.text?.trim()
+    if (!text) return null
+    return text.length > maxChars ? `${text.slice(0, maxChars)}\n…[truncated]` : text
+  } catch {
+    return null
+  }
+}
+
 export async function readPDF(
   absPath: string,
   displayPath: string,

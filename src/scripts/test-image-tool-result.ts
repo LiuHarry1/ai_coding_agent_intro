@@ -3,6 +3,7 @@
  * Run: npx tsx src/scripts/test-image-tool-result.ts
  */
 import assert from 'node:assert/strict'
+import sharp from 'sharp'
 import { tool } from 'ai'
 import { z } from 'zod'
 import {
@@ -20,7 +21,10 @@ import type {
 } from '../core/types.js'
 import type { IProvider } from '../core/llm/types.js'
 import { buildImageBlock } from '../utils/tool-result-content.js'
-import { toolResultImageBlockFromBuffer } from '../utils/image/resize-buffer.js'
+import {
+  estimateImageTokens,
+  toolResultImageBlockFromBuffer,
+} from '../utils/image/resize-buffer.js'
 import { estimateMessageTokens } from '../services/compact/tokens.js'
 import { projectMessagesForApi } from '../core/agent/messageSanitize.js'
 
@@ -114,6 +118,40 @@ async function testResizePipeline() {
   console.log(`ok resize pipeline (${block.source.media_type})`)
 }
 
+async function testStrictImageBudget() {
+  const width = 2200
+  const height = 1400
+  const pixels = Buffer.allocUnsafe(width * height * 3)
+  // Deterministic high-entropy image: difficult enough to force both lossy
+  // encoding and progressive downscaling.
+  for (let i = 0; i < pixels.length; i++) {
+    pixels[i] = (i * 31 + Math.floor(i / 97) * 17) & 0xff
+  }
+  const input = await sharp(pixels, {
+    raw: { width, height, channels: 3 },
+  })
+    .png()
+    .toBuffer()
+
+  const maxTokens = 1500
+  const block = await toolResultImageBlockFromBuffer(input, 'image/png', {
+    maxTokens,
+    maxWidth: 1280,
+    maxHeight: 1280,
+    strictBudget: true,
+  })
+  assert.ok(
+    estimateImageTokens(block.source.data) <= maxTokens,
+    'strict image budget must never return an oversized original',
+  )
+  const metadata = await sharp(Buffer.from(block.source.data, 'base64')).metadata()
+  assert.ok((metadata.width ?? Infinity) <= 1280)
+  assert.ok((metadata.height ?? Infinity) <= 1280)
+  console.log(
+    `ok strict image budget (${estimateImageTokens(block.source.data)} tokens, ${metadata.width}x${metadata.height})`,
+  )
+}
+
 function fakeProvider(supportsContentBlocks: boolean): IProvider {
   return {
     chatModel: () => ({}) as never,
@@ -165,6 +203,7 @@ async function main() {
   await testErrorResultDropsImage()
   await testTokenEstimateSkipsBase64()
   await testResizePipeline()
+  await testStrictImageBudget()
   await testMultimodalProviderKeepsBlocks()
   await testChatCompletionsProviderRelocatesImage()
   console.log('\nall image tool_result tests passed')

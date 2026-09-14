@@ -6,6 +6,7 @@ import type {
   TodoItem,
   TodoStatus,
   UserContentPart,
+  UserFileAttachment,
   UserMessage,
 } from '../types.js'
 import { isRoleMessage } from '../types.js'
@@ -18,31 +19,51 @@ import {
   parseChatUploadUrl,
   parseDataUrl,
 } from '../../utils/chat-uploads.js'
+import {
+  parseMaxTokensContextOverflowError,
+  type MaxTokensContextOverflow,
+} from '../stream-errors.js'
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  applyMaxTokensToChatBody,
+  getMaxOutputTokens,
+} from '../llm/max-tokens.js'
 
-export const DEFAULT_MAX_OUTPUT_TOKENS = 16_384
+export { DEFAULT_MAX_OUTPUT_TOKENS, applyMaxTokensToChatBody, getMaxOutputTokens }
+
 export const MAX_TRANSIENT_RETRIES = 2
+/** CC `withRetry.ts` DEFAULT_MAX_RETRIES for overflow max_tokens adjustment */
+export const MAX_OVERFLOW_RETRIES = 10
+/** CC `withRetry.ts` FLOOR_OUTPUT_TOKENS */
+export const FLOOR_OUTPUT_TOKENS = 3_000
+/** CC `withRetry.ts` safetyBuffer */
+export const OUTPUT_SAFETY_BUFFER = 1_000
 
 /** Default / resolve console tag: `[agent:main]` or `[agent:session_memory]`. */
 export function agentLogTag(logLabel?: string): string {
   return `agent:${logLabel ?? 'main'}`
 }
 
-export function getMaxOutputTokens(): number {
-  const parsed = parseInt(process.env.AGENT_MAX_OUTPUT_TOKENS ?? '', 10)
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_MAX_OUTPUT_TOKENS
+/**
+ * CC `withRetry.ts`: shrink max_tokens so input + output fits the window.
+ * Returns undefined when remaining budget is below FLOOR — CC throws; we
+ * do not raise max_tokens up to the floor.
+ */
+export function adjustMaxTokensForContextOverflow(
+  overflow: MaxTokensContextOverflow,
+): number | undefined {
+  const availableContext = Math.max(
+    0,
+    overflow.contextLimit - overflow.inputTokens - OUTPUT_SAFETY_BUFFER,
+  )
+  if (availableContext < FLOOR_OUTPUT_TOKENS) return undefined
+  return Math.max(FLOOR_OUTPUT_TOKENS, availableContext)
 }
 
-/** Providers reject when prompt tokens + max_tokens exceed the model window. */
-export function capMaxOutputTokens(
-  promptTokens: number,
-  contextWindow?: number,
-): number {
-  const wanted = getMaxOutputTokens()
-  const window = contextWindow && contextWindow > 0 ? contextWindow : 200_000
-  const remaining = window - promptTokens - 1_024
-  return Math.max(1_024, Math.min(wanted, remaining))
+export function maxTokensOverrideFromError(err: unknown): number | undefined {
+  const overflow = parseMaxTokensContextOverflowError(err)
+  if (!overflow) return undefined
+  return adjustMaxTokensForContextOverflow(overflow)
 }
 
 /**
@@ -57,8 +78,12 @@ export function buildUserMessage(
   text: string,
   images?: string[],
   isMeta?: boolean,
+  files?: UserFileAttachment[],
 ): UserMessage {
-  const meta = isMeta ? { isMeta: true as const } : {}
+  const meta = {
+    ...(isMeta ? { isMeta: true as const } : {}),
+    ...(files?.length ? { files } : {}),
+  }
   if (!images || images.length === 0) {
     return ensureMessageUuid({ role: 'user', content: text, ...meta })
   }
@@ -79,7 +104,9 @@ export function buildUserMessage(
       parts.push({ type: 'image', image: ref, mediaType })
       continue
     }
-    throw new Error('Unsupported image ref in buildUserMessage')
+    throw new Error(
+      `Unsupported image ref in buildUserMessage: ${ref.slice(0, 120)}`,
+    )
   }
   return ensureMessageUuid({ role: 'user', content: parts, ...meta })
 }

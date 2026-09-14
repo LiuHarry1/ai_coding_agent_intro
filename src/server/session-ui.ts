@@ -207,6 +207,7 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
         id: randomUUID(),
         content,
         ...(images ? { images } : {}),
+        ...(msg.files?.length ? { files: msg.files } : {}),
       })
     } else if (isRoleMessage(msg) && msg.role === 'assistant') {
       currentBoundary = null

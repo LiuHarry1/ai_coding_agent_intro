@@ -1,4 +1,5 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { applyMaxTokensToChatBody } from '../max-tokens.js'
 import type { ProviderStrategy } from '../types.js'
 
 /**
@@ -16,6 +17,7 @@ export const openaiCompatibleStrategy: ProviderStrategy = {
       baseURL: p.baseURL,
       apiKey: p.apiKey,
       supportsStructuredOutputs: true,
+      transformRequestBody: args => applyMaxTokensToChatBody(args),
     })
     return {
       chatModel: id => client.chatModel(id),
@@ -26,8 +28,9 @@ export const openaiCompatibleStrategy: ProviderStrategy = {
       supportsToolResultContentBlocks: () => false,
       // LiteLLM/vLLM Qwen etc. reject application/pdf file parts (probe 400).
       supportsNativePdf: () => false,
+      supportsImageInput: () => p.vision !== false,
       describe: () =>
-        `openai-compatible model=${p.model} structuredOutputs=true`,
+        `openai-compatible model=${p.model} structuredOutputs=true vision=${p.vision !== false}`,
     }
   },
 }

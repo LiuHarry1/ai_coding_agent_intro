@@ -117,6 +117,7 @@ function normalizeAttachmentForAPI(attachment: Attachment): UserMessage[] {
     case 'directory':
     case 'file':
     case 'already_read_file':
+    case 'uploaded_binary':
     case 'pdf_reference':
       return wrapMessagesInSystemReminder(
         attachmentToMessages(attachment) as UserMessage[],

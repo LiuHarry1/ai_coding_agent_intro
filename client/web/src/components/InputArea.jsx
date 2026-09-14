@@ -13,14 +13,14 @@ import {
   insertTextAtCursor,
 } from '../lib/at-mention.js'
 import {
-  MAX_IMAGES,
-  ACCEPTED_TYPES,
+  MAX_ATTACHMENTS,
+  attachmentRejection,
   fileToAttachment,
+  formatBytes,
   revokeAttachment,
   revokeAttachments,
   extractDroppedFiles,
   extractImages,
-  isImageFile,
 } from '../lib/composer-attachments.js'
 import {
   INITIAL_VISIBLE,
@@ -37,6 +37,14 @@ const MODE_PLACEHOLDERS = {
   plan: 'Plan your implementation…',
 }
 
+const KIND_LABEL = { image: 'IMG', pdf: 'PDF', text: 'TXT', binary: 'BIN' }
+
+/** Attachment-only sends still need message text for the transcript. */
+function describeAttachments(list) {
+  if (list.length === 1) return `(attached ${list[0].name})`
+  return `(attached ${list.length} files)`
+}
+
 export default function InputArea() {
   const sendMessage = useChatStore(s => s.sendMessage)
   const isStreaming = useChatStore(s => s.isStreaming)
@@ -50,7 +58,8 @@ export default function InputArea() {
   const slashMenuRef = useRef(null)
   const atMenuRef = useRef(null)
   const slashActiveRef = useRef(null)
-  const [images, setImages] = useState([])
+  const [attachments, setAttachments] = useState([])
+  const [attachError, setAttachError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [lightbox, setLightbox] = useState(null)
   const [inputValue, setInputValue] = useState('')
@@ -63,11 +72,11 @@ export default function InputArea() {
   const [uploadingDrop, setUploadingDrop] = useState(false)
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false)
   const [atMenuSuppressed, setAtMenuSuppressed] = useState(false)
-  const imagesRef = useRef(images)
-  imagesRef.current = images
+  const attachmentsRef = useRef(attachments)
+  attachmentsRef.current = attachments
 
   useEffect(() => {
-    return () => revokeAttachments(imagesRef.current)
+    return () => revokeAttachments(attachmentsRef.current)
   }, [])
 
   useEffect(() => {
@@ -228,21 +237,32 @@ export default function InputArea() {
     return () => document.removeEventListener('mousedown', onDocMouseDown)
   }, [showSlashMenu, showAtMenu])
 
-  const addImageFiles = useCallback(files => {
-    const accepted = files.filter(isImageFile)
-    setImages(prev => {
-      const remaining = MAX_IMAGES - prev.length
-      const next = accepted.slice(0, remaining).map(fileToAttachment)
-      return [...prev, ...next].slice(0, MAX_IMAGES)
-    })
+  const addFiles = useCallback(files => {
+    const rejections = []
+    const accepted = []
+    for (const file of files) {
+      const reason = attachmentRejection(file)
+      if (reason) rejections.push(reason)
+      else accepted.push(file)
+    }
+
+    const remaining = MAX_ATTACHMENTS - attachmentsRef.current.length
+    if (accepted.length > remaining) {
+      rejections.push(`Only ${MAX_ATTACHMENTS} attachments per message`)
+    }
+    const next = accepted.slice(0, remaining).map(fileToAttachment)
+    const updated = [...attachmentsRef.current, ...next]
+    attachmentsRef.current = updated
+    setAttachments(updated)
+    setAttachError(rejections.length > 0 ? rejections.join(' · ') : null)
   }, [])
 
-  const removeImage = useCallback(idx => {
-    setImages(prev => {
-      const doomed = prev[idx]
-      if (doomed) revokeAttachment(doomed)
-      return prev.filter((_, i) => i !== idx)
-    })
+  const removeAttachment = useCallback(idx => {
+    const doomed = attachmentsRef.current[idx]
+    if (doomed) revokeAttachment(doomed)
+    const updated = attachmentsRef.current.filter((_, i) => i !== idx)
+    attachmentsRef.current = updated
+    setAttachments(updated)
   }, [])
 
   const handleInput = useCallback(e => {
@@ -343,16 +363,18 @@ export default function InputArea() {
     const el = textareaRef.current
     if (!el) return
     const text = el.value.trim()
-    if ((!text && images.length === 0) || isStreaming) return
+    if ((!text && attachments.length === 0) || isStreaming) return
     el.value = ''
     setInputValue('')
     setCursorPos(0)
     el.style.height = 'auto'
-    const attachments = images
-    setImages([])
+    const outgoing = attachments
+    attachmentsRef.current = []
+    setAttachments([])
+    setAttachError(null)
     setAtSuggestions([])
-    sendMessage(text || '(image)', attachments)
-  }, [sendMessage, isStreaming, images])
+    sendMessage(text || describeAttachments(outgoing), outgoing)
+  }, [sendMessage, isStreaming, attachments])
 
   const handleKeyDown = useCallback(
     e => {
@@ -432,63 +454,70 @@ export default function InputArea() {
 
   const handlePaste = useCallback(
     e => {
+      // Only images are intercepted: pasting a file from the OS file manager
+      // also puts its text path on the clipboard, which users expect to land
+      // in the textarea.
       const files = extractImages(e.clipboardData)
       if (files.length > 0) {
         e.preventDefault()
-        addImageFiles(files)
+        addFiles(files)
       }
     },
-    [addImageFiles],
+    [addFiles],
   )
+
+  const [dropToWorkspace, setDropToWorkspace] = useState(false)
 
   const handleDragOver = useCallback(e => {
     e.preventDefault()
     setDragOver(true)
+    setDropToWorkspace(e.shiftKey)
   }, [])
 
   const handleDragLeave = useCallback(e => {
     e.preventDefault()
     setDragOver(false)
+    setDropToWorkspace(false)
   }, [])
 
   const handleDrop = useCallback(
     async e => {
       e.preventDefault()
       setDragOver(false)
-      const allFiles = extractDroppedFiles(e.dataTransfer)
-      const imageFiles = allFiles.filter(isImageFile)
-      const otherFiles = allFiles.filter(f => !isImageFile(f))
+      const files = extractDroppedFiles(e.dataTransfer)
+      if (files.length === 0) return
 
-      if (imageFiles.length > 0) addImageFiles(imageFiles)
-
-      if (otherFiles.length === 0) return
-      if (!workspace) return
+      // Plain drop attaches to this message; Shift+drop copies into the
+      // workspace so the agent can edit the file later.
+      if (!e.shiftKey || !workspace) {
+        addFiles(files)
+        return
+      }
 
       setUploadingDrop(true)
       try {
-        const result = await workspaceApi.uploadFiles(workspace, otherFiles)
+        const result = await workspaceApi.uploadFiles(workspace, files)
         const paths = (result.uploaded ?? []).map(u =>
           toWorkspaceRelative(u.path, workspace),
         )
         insertAtMentions(paths)
       } catch (err) {
         console.error('Drop upload failed:', err)
+        setAttachError(err?.message || 'Workspace upload failed')
       } finally {
         setUploadingDrop(false)
       }
     },
-    [addImageFiles, workspace, insertAtMentions],
+    [addFiles, workspace, insertAtMentions],
   )
 
   const handleFileChange = useCallback(
     e => {
-      const files = [...e.target.files].filter(f =>
-        ACCEPTED_TYPES.includes(f.type),
-      )
-      if (files.length > 0) addImageFiles(files)
+      const files = [...e.target.files]
+      if (files.length > 0) addFiles(files)
       e.target.value = ''
     },
-    [addImageFiles],
+    [addFiles],
   )
 
   return (
@@ -607,26 +636,62 @@ export default function InputArea() {
         </div>
       )}
       <div
-        className={`input-wrapper input-wrapper--${agentMode} ${images.length > 0 ? 'has-images' : ''}`}
+        className={`input-wrapper input-wrapper--${agentMode} ${attachments.length > 0 ? 'has-images' : ''}`}
       >
-        {images.length > 0 && (
+        {attachments.length > 0 && (
           <div className='image-preview-bar'>
-            {images.map((att, i) => (
-              <div key={att.id} className='image-preview-item'>
-                <img
-                  src={att.previewUrl}
-                  alt={`Attachment ${i + 1}`}
-                  onClick={() => setLightbox(att.previewUrl)}
-                />
-                <button
-                  className='image-preview-remove'
-                  onClick={() => removeImage(i)}
-                  title='Remove'
+            {attachments.map((att, i) =>
+              att.kind === 'image' ? (
+                <div key={att.id} className='image-preview-item'>
+                  <img
+                    src={att.previewUrl}
+                    alt={att.name}
+                    title={att.name}
+                    onClick={() => setLightbox(att.previewUrl)}
+                  />
+                  <button
+                    className='image-preview-remove'
+                    onClick={() => removeAttachment(i)}
+                    title='Remove'
+                  >
+                    &times;
+                  </button>
+                </div>
+              ) : (
+                <div
+                  key={att.id}
+                  className='file-chip'
+                  title={`${att.name} · ${formatBytes(att.size)}`}
                 >
-                  &times;
-                </button>
-              </div>
-            ))}
+                  <span className={`file-chip__kind file-chip__kind--${att.kind}`}>
+                    {KIND_LABEL[att.kind] ?? 'FILE'}
+                  </span>
+                  <span className='file-chip__name'>{att.name}</span>
+                  <span className='file-chip__size'>
+                    {formatBytes(att.size)}
+                  </span>
+                  <button
+                    className='file-chip__remove'
+                    onClick={() => removeAttachment(i)}
+                    title='Remove'
+                  >
+                    &times;
+                  </button>
+                </div>
+              ),
+            )}
+          </div>
+        )}
+        {attachError && (
+          <div className='attach-error' role='alert'>
+            {attachError}
+            <button
+              className='attach-error__dismiss'
+              onClick={() => setAttachError(null)}
+              title='Dismiss'
+            >
+              &times;
+            </button>
           </div>
         )}
         <div className='input-row'>
@@ -634,7 +699,7 @@ export default function InputArea() {
           <button
             className='attach-btn'
             onClick={() => fileInputRef.current?.click()}
-            title='Attach image'
+            title='Attach files (images, PDF, CSV, …)'
             type='button'
           >
             <svg
@@ -647,15 +712,12 @@ export default function InputArea() {
               strokeLinecap='round'
               strokeLinejoin='round'
             >
-              <rect x='3' y='3' width='18' height='18' rx='2' ry='2' />
-              <circle cx='8.5' cy='8.5' r='1.5' />
-              <polyline points='21 15 16 10 5 21' />
+              <path d='M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48' />
             </svg>
           </button>
           <input
             ref={fileInputRef}
             type='file'
-            accept='image/png,image/jpeg,image/gif,image/webp'
             multiple
             style={{ display: 'none' }}
             onChange={handleFileChange}
@@ -722,7 +784,7 @@ export default function InputArea() {
               onClick={handleSend}
               title='Send (Enter)'
               type='button'
-              disabled={!inputValue.trim() && images.length === 0}
+              disabled={!inputValue.trim() && attachments.length === 0}
             >
               <svg
                 width='16'
@@ -745,7 +807,9 @@ export default function InputArea() {
         <div className='drop-overlay'>
           {uploadingDrop
             ? 'Uploading…'
-            : 'Drop files here (images attach, others → @path)'}
+            : dropToWorkspace
+              ? 'Drop to copy into the workspace as @path'
+              : 'Drop to attach · hold Shift to copy into the workspace'}
         </div>
       )}
       {lightbox && (

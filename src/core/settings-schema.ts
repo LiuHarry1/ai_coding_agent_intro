@@ -10,6 +10,8 @@ const ModelProfileSchema = z.object({
   baseURL: z.string().url().optional(),
   apiKey: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
+  /** Set false for text-only models so image attachments are rejected up front. */
+  vision: z.boolean().optional(),
 })
 
 const ModelsSchema = z.object({

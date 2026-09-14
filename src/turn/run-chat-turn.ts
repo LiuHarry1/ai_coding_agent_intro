@@ -9,6 +9,7 @@ import type {
   Message,
   IEventBus,
   AgentDefinition,
+  UserFileAttachment,
 } from '../core/types.js'
 import { offloadChatImageRefs } from '../utils/chat-uploads.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
@@ -78,6 +79,10 @@ import {
   registerTurnAbort,
   type TurnAbortReason,
 } from '../core/turn-abort-registry.js'
+import {
+  resolveChatAttachments,
+  type ChatAttachmentRef,
+} from '../utils/attachments/from-chat-upload.js'
 
 export interface RunChatTurnInput {
   message: string
@@ -87,6 +92,8 @@ export interface RunChatTurnInput {
   /** Protocol sink -- use noop transport when the client wants buffered JSON. */
   transport: SSETransport
   images?: string[]
+  /** Composer attachments (pdf / csv / binary as well as images). */
+  attachments?: ChatAttachmentRef[]
   /** System-generated turn (scheduled tasks). */
   isMeta?: boolean
   mode?: string
@@ -193,6 +200,7 @@ export async function runChatTurn(
     runAgent,
     transport,
     images,
+    attachments,
     isMeta,
     mode,
     emitHandshake = true,
@@ -256,9 +264,27 @@ export async function runChatTurn(
 
   // OpenClaw claim-check: persist bytes under uploads/, keep short URLs in history.
   let imageRefs: string[] | undefined
+  let attachmentPrelude: Message[] | undefined
+  let attachmentFiles: UserFileAttachment[] | undefined
   try {
     const refs = await offloadChatImageRefs(session.id, images)
-    imageRefs = refs.length ? refs : undefined
+    // Non-image attachments become meta messages ahead of the user turn;
+    // images join the legacy ref list and ride on the user turn itself.
+    const resolved = await resolveChatAttachments(attachments, {
+      sessionId: session.id,
+      provider,
+    })
+    // Degraded attachments already carry an explanation in their prelude
+    // message, so the model can tell the user; the log is for operators.
+    for (const warning of resolved.warnings) {
+      console.warn(`[attachments] ${warning}`)
+    }
+    const allImageRefs = [...refs, ...resolved.imageRefs]
+    imageRefs = allImageRefs.length ? allImageRefs : undefined
+    attachmentPrelude = resolved.preludeMessages.length
+      ? resolved.preludeMessages
+      : undefined
+    attachmentFiles = resolved.files.length ? resolved.files : undefined
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     wire.error(msg)
@@ -686,6 +712,8 @@ export async function runChatTurn(
         sessionMemory: resolvedSettings.config.sessionMemory,
         messages: session.messages,
         images: imageRefs,
+        attachmentPrelude,
+        attachmentFiles,
         isMeta,
         subagentNames: prepared.subagentNames,
         deferredToolPool: prepared.deferredToolPool,

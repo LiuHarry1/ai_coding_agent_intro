@@ -178,6 +178,7 @@ export function messagesToBubbles(messages) {
         kind: 'user',
         content: msg.content,
         images: msg.images,
+        files: msg.files,
       })
       continue
     }

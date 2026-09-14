@@ -67,11 +67,29 @@ export function bashExeFromGitExe(gitExe: string): string {
  * Locate `git.exe` (CC `findExecutable('git')`).
  * Prefers `Git\cmd\git.exe` (env-wrapped), never `mingw64\bin\git.exe`.
  */
+function isUnsafeGitExe(gitExe: string): boolean {
+  const normalized = path.resolve(gitExe).toLowerCase()
+  const cwd = path.resolve(process.cwd()).toLowerCase()
+  const sep = path.sep.toLowerCase()
+  const pathDir = path.dirname(normalized)
+  if (pathDir === cwd || normalized.startsWith(cwd + sep)) return true
+  // Store alias — CreateProcess hangs waiting on the Microsoft Store.
+  if (normalized.includes('\\windowsapps\\')) return true
+  return false
+}
+
 function findGitExecutable(): string | null {
-  for (const location of [
+  const locations = [
     'C:\\Program Files\\Git\\cmd\\git.exe',
     'C:\\Program Files (x86)\\Git\\cmd\\git.exe',
-  ]) {
+  ]
+  const localApp = process.env.LOCALAPPDATA?.trim()
+  if (localApp) {
+    locations.push(
+      path.win32.join(localApp, 'Programs', 'Git', 'cmd', 'git.exe'),
+    )
+  }
+  for (const location of locations) {
     if (existsSync(location)) return location
   }
 
@@ -79,17 +97,14 @@ function findGitExecutable(): string | null {
     const r = spawnSync('where', ['git'], {
       encoding: 'utf8',
       windowsHide: true,
+      timeout: 5_000,
     })
-    const cwd = path.resolve(process.cwd()).toLowerCase()
-    const sep = path.sep.toLowerCase()
     for (const gitExe of (r.stdout ?? '')
       .trim()
       .split(/\r?\n/)
       .map(l => l.trim())
       .filter(Boolean)) {
-      const normalized = path.resolve(gitExe).toLowerCase()
-      const pathDir = path.dirname(normalized)
-      if (pathDir === cwd || normalized.startsWith(cwd + sep)) continue
+      if (isUnsafeGitExe(gitExe)) continue
       return gitExe
     }
   } catch {
@@ -100,7 +115,7 @@ function findGitExecutable(): string | null {
 
 /**
  * Locate Git for Windows bash.exe (CC `findGitBashPath`).
- * Order: GIT_BASH_PATH → Program Files `cmd\git.exe` → where git.
+ * Order: GIT_BASH_PATH → Program Files / %LOCALAPPDATA% `cmd\git.exe` → where git.
  * Returns null if missing — never fall back to System32/WSL bash.
  */
 export function findGitBashPath(): string | null {

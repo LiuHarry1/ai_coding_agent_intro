@@ -2,7 +2,7 @@
 
 ## Example 1 — City sales bar chart
 
-**User:** Draw a bar chart comparing sales by city
+**User:** Draw a bar chart comparing city sales
 
 **Input:**
 
@@ -28,20 +28,20 @@ and `city-sales.html` from the same validated input.
 **Delivery (final reply):**
 
 ```markdown
-Chart ready.
+Chart generated.
 
 - File: `/workspace/charts/city-sales.html`
 - Preview: [Open interactive chart](http://AGENT_HOST/workspace/preview?path=...)
 
-The in-page secure preview supports tooltips, compatible chart-type switching,
-color adjustments, and downloading the cleaned data.
+In-page preview supports tooltips, compatible chart-type switching, palette
+changes, and cleaned-data download.
 ```
 
 ---
 
 ## Example 2 — Monthly trend (line)
 
-**User:** Show 2025 monthly revenue trends
+**User:** Show 2025 monthly revenue trend
 
 ```json
 {
@@ -69,7 +69,7 @@ silently converted to zero.
 
 ## Example 3 — Composition (pie)
 
-**User:** Traffic source breakdown
+**User:** Traffic source mix
 
 ```json
 {

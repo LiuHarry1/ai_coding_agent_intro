@@ -342,6 +342,88 @@
 }
 .image-preview-item:hover .image-preview-remove { opacity: 1; }
 
+/* ── Non-image attachment chips ─────────────── */
+.file-chip {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  height: 32px;
+  padding: 0 26px 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-size: 12px;
+}
+
+.file-chip__kind {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+.file-chip__kind--pdf { color: #e5534b; }
+.file-chip__kind--text { color: #3fb950; }
+.file-chip__kind--binary { color: #d29922; }
+
+.file-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.file-chip__size {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.file-chip__remove {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.file-chip__remove:hover { color: var(--text-primary); }
+
+.attach-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(229, 83, 75, 0.12);
+  color: #e5534b;
+  font-size: 12px;
+}
+
+.attach-error__dismiss {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 /* ── Drop overlay ───────────────────────────── */
 .drop-overlay {
   position: absolute;

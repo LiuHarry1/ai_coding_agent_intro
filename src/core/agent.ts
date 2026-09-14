@@ -27,7 +27,17 @@ export async function runAgent(
       messages.push(ensureMessageUuid(att))
     }
   }
-  messages.push(buildUserMessage(userMessage, opts.images, opts.isMeta))
+  for (const prelude of opts.attachmentPrelude ?? []) {
+    messages.push(ensureMessageUuid(prelude))
+  }
+  messages.push(
+    buildUserMessage(
+      userMessage,
+      opts.images,
+      opts.isMeta,
+      opts.attachmentFiles,
+    ),
+  )
   ensureMessageUuids(messages)
 
   const result = await query({ ...opts, runAgent, messages })

@@ -66,13 +66,13 @@ export const agentApi = {
     ),
 
   /**
-   * Upload composer images before /chat (OpenClaw claim-check).
+   * Upload composer attachments before /chat (OpenClaw claim-check).
    * Creates a session when sessionId is null. Returns durable /sessions/.../uploads URLs.
    * @param {string|null} sessionId
    * @param {File[]} files
-   * @returns {Promise<{ session_id: string, urls: string[] }>}
+   * @returns {Promise<{ session_id: string, urls: string[], files: Array<{url:string,filename:string,mediaType:string,kind:string,sizeBytes:number}> }>}
    */
-  uploadChatImages: (sessionId, files) => {
+  uploadChatAttachments: (sessionId, files) => {
     const form = new FormData()
     for (const f of files) form.append('file', f)
     const qs = sessionId

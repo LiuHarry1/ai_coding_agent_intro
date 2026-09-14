@@ -487,6 +487,22 @@
 }
 .msg-user-img:hover { transform: scale(1.03); }
 
+.msg-user-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.msg-user-file {
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  font-size: 12px;
+  opacity: 0.85;
+}
+
 .msg-assistant {
   align-self: stretch;
   width: 100%;

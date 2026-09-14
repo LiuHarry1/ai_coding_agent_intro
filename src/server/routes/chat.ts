@@ -41,6 +41,11 @@ import {
   pickerModeError,
 } from '../../core/agent-picker-workspace.js'
 import { normalizeWorkspacePath } from '../../core/workspace-path.js'
+import {
+  isChatAttachmentRef,
+  type ChatAttachmentRef,
+} from '../../utils/attachments/from-chat-upload.js'
+import { CHAT_ATTACHMENT_MAX_COUNT } from '../../constants/attachment-types.js'
 
 export async function handleChat(
   req: IncomingMessage,
@@ -55,12 +60,22 @@ export async function handleChat(
     return
   }
 
-  const { message, workspace, session_id, images, mode, agentType, environmentId } =
-    body as {
+  const {
+    message,
+    workspace,
+    session_id,
+    images,
+    attachments,
+    mode,
+    agentType,
+    environmentId,
+  } = body as {
       message?: string
       workspace?: string
       session_id?: string
+      /** @deprecated Image-only predecessor of `attachments`. */
       images?: string[]
+      attachments?: unknown[]
       mode?: string
       agentType?: string | null
       /** Optional: bind/use execution environment (default local). */
@@ -68,6 +83,15 @@ export async function handleChat(
     }
   if (!message) {
     sendJSON(res, 400, { error: "Missing 'message' field" })
+    return
+  }
+  if (
+    Array.isArray(attachments) &&
+    attachments.length > CHAT_ATTACHMENT_MAX_COUNT
+  ) {
+    sendJSON(res, 400, {
+      error: `Too many attachments (max ${CHAT_ATTACHMENT_MAX_COUNT})`,
+    })
     return
   }
 
@@ -147,6 +171,9 @@ export async function handleChat(
     await handleChatLocked(req, res, runAgent, session, {
       message,
       images,
+      attachments: Array.isArray(attachments)
+        ? attachments.filter(isChatAttachmentRef)
+        : undefined,
       mode,
       agentType: agentType === undefined ? undefined : agentType,
       wantsStream,
@@ -167,6 +194,7 @@ async function handleChatLocked(
   opts: {
     message: string
     images?: string[]
+    attachments?: ChatAttachmentRef[]
     mode?: string
     agentType?: string | null
     wantsStream: boolean
@@ -174,8 +202,16 @@ async function handleChatLocked(
     requesterEmail?: string
   },
 ): Promise<void> {
-  const { message, images, mode, agentType, wantsStream, cwd, requesterEmail } =
-    opts
+  const {
+    message,
+    images,
+    attachments,
+    mode,
+    agentType,
+    wantsStream,
+    cwd,
+    requesterEmail,
+  } = opts
 
   if (!session.permissionMode) {
     session.permissionMode = { mode: 'agent' }
@@ -368,6 +404,7 @@ async function handleChatLocked(
       runAgent,
       transport,
       images,
+      attachments,
       mode,
       eventBus,
       http: { res, wantsStream, sseHeaders },

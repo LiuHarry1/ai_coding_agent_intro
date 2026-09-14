@@ -21,6 +21,7 @@ import {
 import { BASH_TOOL_NAME } from '../constants/tool_names.js'
 import { createSession, deleteSession } from '../session/index.js'
 import { shouldAttemptReactiveCompaction } from '../core/query/run-step.js'
+import { maxTokensOverrideFromError } from '../core/query/helpers.js'
 
 function toolOutput(
   messages: Message[],
@@ -263,6 +264,15 @@ function testReactiveRetryLimit(): void {
   assert.equal(
     shouldAttemptReactiveCompaction(0, new Error('ordinary failure')),
     false,
+  )
+  const belowFloorOverflow = new Error(
+    'input length and `max_tokens` exceed context limit: 197500 + 16384 > 200000',
+  )
+  assert.equal(maxTokensOverrideFromError(belowFloorOverflow), undefined)
+  assert.equal(
+    shouldAttemptReactiveCompaction(0, belowFloorOverflow),
+    true,
+    'an overflow below the output floor must fall back to compaction',
   )
 }
 

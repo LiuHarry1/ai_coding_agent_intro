@@ -32,6 +32,12 @@ export interface LlmProfile {
   apiKey: string
   model: string
   thinking: ThinkingConfig
+  /**
+   * Set false for text-only models behind an OpenAI-compatible gateway.
+   * Composer images are then rejected up front and PDFs fall back to their
+   * text layer, instead of the gateway 400-ing mid-turn. Default true.
+   */
+  vision?: boolean
 }
 
 export type AgentStreamTextExtras = {
@@ -73,6 +79,11 @@ export interface IProvider {
    * attaches images instead. Omitted → false.
    */
   supportsNativePdf?(): boolean
+  /**
+   * Whether the model accepts image parts. Drives whether composer images and
+   * rasterized PDF pages are sent at all. Omitted → true.
+   */
+  supportsImageInput?(): boolean
 }
 
 export interface ProviderStrategy {

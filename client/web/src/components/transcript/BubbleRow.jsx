@@ -75,6 +75,15 @@ function BubbleRow({ bubbleId, streamingTail = false, embedded = false }) {
             ))}
           </div>
         )}
+        {bubble.files && bubble.files.length > 0 && (
+          <div className='msg-user-files'>
+            {bubble.files.map((f, i) => (
+              <span key={f.name + i} className='msg-user-file'>
+                {f.name}
+              </span>
+            ))}
+          </div>
+        )}
         {bubble.content}
         {lightbox && (
           <div className='lightbox' onClick={() => setLightbox(null)}>

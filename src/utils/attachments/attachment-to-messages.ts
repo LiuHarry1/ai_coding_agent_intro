@@ -53,6 +53,7 @@ function fileAttachmentToMessages(attachment: {
   displayPath: string
   content: ReadOutput
   truncated?: boolean
+  note?: string
 }): Message[] {
   const input = { file_path: attachment.displayPath }
   const msgs: Message[] = [createToolUseMessage(FILE_READ_TOOL_NAME, input)]
@@ -78,6 +79,8 @@ function fileAttachmentToMessages(attachment: {
     )
   }
 
+  if (attachment.note) msgs.push(metaUserMessage(attachment.note))
+
   return msgs
 }
 
@@ -101,6 +104,16 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'file':
     case 'already_read_file':
       return fileAttachmentToMessages(attachment)
+
+    case 'uploaded_binary':
+      return [
+        metaUserMessage(
+          `The user attached ${attachment.displayPath} (${attachment.mediaType}, ${formatFileSize(attachment.fileSize)}). ` +
+            `Its contents cannot be shown inline. The file is saved at ${attachment.filename} — ` +
+            `use ${BASH_TOOL_NAME} to inspect or convert it (for example a Python one-liner with python-docx, openpyxl, or python-pptx) ` +
+            `before answering questions about it.`,
+        ),
+      ]
 
     case 'pdf_reference':
       return [

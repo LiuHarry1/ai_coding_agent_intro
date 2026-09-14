@@ -3,13 +3,13 @@ import {
   applyMicroCompactProjection,
   attachTokenUsage,
   compactIfNeeded,
-  tokenCountWithEstimation,
 } from '../../services/compact/index.js'
 import type { AttachedTokenUsage, CompactEnrichment } from '../../services/compact/index.js'
 import { ensureMessageUuid, ensureMessageUuids } from '../../services/session-memory/index.js'
 import {
   isContextLengthError,
   isTransientStreamError,
+  parseMaxTokensContextOverflowError,
 } from '../stream-errors.js'
 import type {
   AgentOptions,
@@ -60,7 +60,9 @@ import type { AnyTool } from '../types.js'
 import {
   agentLogTag,
   autoCompleteTodos,
-  capMaxOutputTokens,
+  getMaxOutputTokens,
+  maxTokensOverrideFromError,
+  MAX_OVERFLOW_RETRIES,
   MAX_TRANSIENT_RETRIES,
 } from './helpers.js'
 import { applyCompactOutcome } from './pre-turn.js'
@@ -137,6 +139,8 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
   const executors = tools
 
   let ctxLengthAttempt = 0
+  let overflowAttempt = 0
+  let maxTokensOverride: number | undefined
   let transientAttempt = 0
   let reactiveCompacted = false
   let requestStart = Date.now()
@@ -212,10 +216,12 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
         messages: apiMessages,
         tools: apiTools,
         ...(toolChoice !== undefined ? { toolChoice } : {}),
-        maxOutputTokens: capMaxOutputTokens(
-          tokenCountWithEstimation(activeModelMessages).total,
-          compaction?.contextWindow,
-        ),
+        // CC claude.ts: retry override > call override > model default.
+        // Do not cap against a local prompt estimate on the first request.
+        maxOutputTokens:
+          maxTokensOverride ??
+          compaction?.maxOutputTokens ??
+          getMaxOutputTokens(),
         maxRetries: 3,
         ...(abortSignal ? { abortSignal } : {}),
         ...provider.streamTextExtras(),
@@ -349,6 +355,28 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
           toolCalls: [],
           toolResults: [],
           aborted: true,
+        }
+      }
+      // First shrink max_tokens and retry the same request. If the remaining
+      // output budget is below the floor, or retries are exhausted, fall
+      // through to reactive compaction instead of failing a recoverable turn.
+      const overflow = parseMaxTokensContextOverflowError(err)
+      if (overflow) {
+        const adjusted = maxTokensOverrideFromError(err)
+        if (
+          adjusted !== undefined &&
+          overflowAttempt < MAX_OVERFLOW_RETRIES
+        ) {
+          overflowAttempt++
+          const errMsg = err instanceof Error ? err.message : String(err)
+          console.warn(
+            `[${agentLogTag(logLabel)}] step ${step} max_tokens overflow -> retry with maxOutputTokens=${adjusted} (attempt ${overflowAttempt}/${MAX_OVERFLOW_RETRIES}). ${errMsg}`,
+          )
+          maxTokensOverride = adjusted
+          requestStart = Date.now()
+          streamingExecutor?.discard()
+          streamingExecutor = createStreamingExecutor()
+          continue
         }
       }
       if (shouldAttemptReactiveCompaction(ctxLengthAttempt, err)) {

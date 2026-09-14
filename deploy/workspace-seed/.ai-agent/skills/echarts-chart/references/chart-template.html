@@ -1,32 +1,109 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Offline data chart</title>
 <style>
-  :root{color-scheme:light;--bg:#f4f0e8;--paper:#fffdf8;--ink:#17324d;--muted:#66737e;--line:#d8d1c5;--accent:#176b87;--shadow:0 18px 50px rgba(23,50,77,.12)}
+  :root{
+    color-scheme:light;
+    --bg:#e8eef5;
+    --bg-glow:#d7e8f4;
+    --paper:#ffffff;
+    --ink:#0f1c2e;
+    --muted:#5b6b7c;
+    --line:#d7e0ea;
+    --line-soft:#edf2f7;
+    --accent:#0f766e;
+    --accent-soft:rgba(15,118,110,.08);
+    --shadow:0 22px 60px rgba(15,28,46,.10);
+    --control:#f7fafc;
+  }
   *{box-sizing:border-box}
-  body{font-family:"Aptos","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;margin:0;padding:24px;background:radial-gradient(circle at 8% 5%,#fff8e8 0,transparent 28%),var(--bg);color:var(--ink)}
-  body[data-theme="dark"]{color-scheme:dark;--bg:#101820;--paper:#17232d;--ink:#edf3f4;--muted:#a9bac2;--line:#32434d;--accent:#79c1d4;--shadow:0 18px 50px rgba(0,0,0,.32)}
-  main{max-width:1500px;margin:0 auto;background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
-  header{padding:20px 24px 15px;border-bottom:1px solid var(--line)}
-  h1{font-family:Georgia,"Noto Serif SC",serif;font-size:clamp(22px,3vw,34px);line-height:1.14;letter-spacing:-.02em;margin:0 0 7px}
-  #description{color:var(--muted);font-size:14px;line-height:1.55;margin:0}
-  #controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:12px 24px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
-  #controls label{display:flex;gap:6px;align-items:center}
-  #controls select,#controls button{font:inherit;color:var(--ink);background:var(--paper);padding:6px 9px;border:1px solid var(--line);border-radius:8px}
-  #controls button{cursor:pointer;margin-left:auto}
+  body{
+    font-family:"Segoe UI Variable Text","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    margin:0;
+    padding:14px 16px;
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse 70% 45% at 12% -10%,var(--bg-glow),transparent 55%),
+      radial-gradient(ellipse 50% 40% at 100% 0%,#eef2ff,transparent 45%),
+      linear-gradient(180deg,#f3f6fa 0%,var(--bg) 100%);
+    color:var(--ink);
+  }
+  body[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#0b1220;
+    --bg-glow:#16324a;
+    --paper:#121a27;
+    --ink:#e8eef6;
+    --muted:#93a4b8;
+    --line:#273348;
+    --line-soft:#1a2433;
+    --accent:#2dd4bf;
+    --accent-soft:rgba(45,212,191,.12);
+    --shadow:0 22px 60px rgba(0,0,0,.45);
+    --control:#182233;
+  }
+  body[data-theme="dark"]{
+    background:
+      radial-gradient(ellipse 70% 45% at 10% -8%,rgba(45,212,191,.12),transparent 50%),
+      radial-gradient(ellipse 45% 35% at 100% 0%,rgba(59,130,246,.10),transparent 45%),
+      linear-gradient(180deg,#0d1524 0%,var(--bg) 100%);
+  }
+  main{
+    max-width:min(1040px,100%);
+    margin:0 auto;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+  header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+  h1{
+    font-size:clamp(17px,2vw,24px);
+    font-weight:700;
+    line-height:1.25;
+    letter-spacing:-.02em;
+    margin:0 0 4px;
+  }
+  #description{color:var(--muted);font-size:13px;line-height:1.45;margin:0;max-width:72ch}
+  #controls{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+    padding:8px 18px;border-bottom:1px solid var(--line);
+    font-size:12px;color:var(--muted);background:linear-gradient(180deg,var(--control),transparent);
+  }
+  #controls label{display:flex;gap:8px;align-items:center}
+  #controls select,#controls button{
+    font:inherit;color:var(--ink);background:var(--paper);
+    padding:7px 11px;border:1px solid var(--line);border-radius:10px;
+    transition:border-color .15s ease,box-shadow .15s ease,color .15s ease;
+  }
+  #controls select:focus,#controls button:focus{
+    outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  #controls button{cursor:pointer;margin-left:auto;font-weight:600}
   #controls button:hover{border-color:var(--accent);color:var(--accent)}
-  #chart{width:1200px;height:720px;max-width:100%;margin:0 auto}
-  #table-wrap{padding:20px 24px;overflow:auto}
-  table{border-collapse:collapse;width:100%;font-size:13px}
-  th,td{border-bottom:1px solid var(--line);padding:9px 11px;text-align:left;white-space:nowrap}
-  th{color:var(--muted);font-weight:650}
-  footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:14px 24px 18px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.45}
-  footer strong{display:block;color:var(--ink);font-weight:650;margin-bottom:2px}
+  #chart-shell{padding:4px 10px 0}
+  #chart{width:960px;height:480px;max-width:100%;margin:0 auto}
+  #table-wrap{padding:12px 18px;overflow:auto;max-height:min(480px,60vh)}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;white-space:nowrap}
+  th{color:var(--muted);font-weight:650;background:var(--control)}
+  footer{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;
+    padding:10px 18px 12px;border-top:1px solid var(--line);
+    color:var(--muted);font-size:11px;line-height:1.4;background:var(--control);
+  }
+  footer strong{display:block;color:var(--ink);font-weight:650;margin-bottom:3px}
   .hidden{display:none!important}
-  @media(max-width:680px){body{padding:8px}main{border-radius:12px}header,#controls,footer{padding-left:14px;padding-right:14px}#controls button{margin-left:0}}
+  @media(max-width:680px){
+    body{padding:8px}
+    main{border-radius:12px}
+    header,#controls,footer,#chart-shell{padding-left:12px;padding-right:12px}
+    #controls button{margin-left:0}
+  }
 </style>
 </head>
 <body>
@@ -39,7 +116,7 @@
     <label>View <select id="type"></select></label>
     <label>Palette
       <select id="palette">
-        <option value="default">Editorial</option>
+        <option value="default">Studio</option>
         <option value="warm">Warm</option>
         <option value="cool">Cool</option>
         <option value="business">Business</option>
@@ -47,7 +124,9 @@
     </label>
     <button id="download" type="button">Download cleaned data</button>
   </div>
-  <div id="chart" role="img" aria-label="Interactive data chart"></div>
+  <div id="chart-shell">
+    <div id="chart" role="img" aria-label="Interactive data chart"></div>
+  </div>
   <div id="table-wrap" class="hidden"></div>
   <footer>
     <div id="source"></div>
@@ -73,67 +152,221 @@ function formatValue(value,field){
   const digits=abs!==0&&abs<1?2:abs<100?1:0;
   return Number(value).toLocaleString(undefined,{maximumFractionDigits:digits})+(unitFor(field)?' '+unitFor(field):'');
 }
+function ink(){return D.theme==='dark'?'#e8eef6':'#0f1c2e'}
+function muted(){return D.theme==='dark'?'#93a4b8':'#5b6b7c'}
+function gridLine(){return D.theme==='dark'?'#273348':'#e2e8f0'}
+function axisLine(){return D.theme==='dark'?'#334155':'#cbd5e1'}
+function paper(){return D.theme==='dark'?'#121a27':'#ffffff'}
+function tooltipTheme(){
+  return {
+    backgroundColor:D.theme==='dark'?'rgba(15,23,42,.94)':'rgba(15,28,46,.94)',
+    borderWidth:0,
+    padding:[10,14],
+    textStyle:{color:'#f8fafc',fontSize:12,fontFamily:'Segoe UI, PingFang SC, Microsoft YaHei, sans-serif'},
+    extraCssText:'border-radius:12px;box-shadow:0 16px 40px rgba(15,28,46,.22);backdrop-filter:blur(8px);'
+  };
+}
+function hexToRgba(hex,alpha){
+  const h=String(hex||'').replace('#','');
+  if(h.length!==6)return 'rgba(15,118,110,'+alpha+')';
+  const n=parseInt(h,16);
+  return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+alpha+')';
+}
 function baseOption(colors){
-  const dark=D.theme==='dark';
   return {
     backgroundColor:'transparent',
     color:colors,
-    animationDuration:450,
-    textStyle:{color:dark?'#edf3f4':'#17324d',fontFamily:'Aptos, Segoe UI, sans-serif'},
-    aria:{enabled:true,decal:{show:true}},
-    tooltip:{confine:true},
-    legend:{bottom:4,type:'scroll',textStyle:{color:dark?'#a9bac2':'#66737e'}},
-    grid:{left:72,right:34,top:36,bottom:76,containLabel:true}
+    animationDuration:520,
+    animationEasing:'cubicOut',
+    textStyle:{color:ink(),fontFamily:'Segoe UI, PingFang SC, Microsoft YaHei, sans-serif'},
+    aria:{enabled:true,decal:{show:false}},
+    tooltip:Object.assign({confine:true,axisPointer:{type:'line',lineStyle:{color:hexToRgba(colors[0],.35),width:1.5}}},tooltipTheme()),
+    legend:{
+      bottom:2,type:'scroll',icon:'roundRect',itemWidth:14,itemHeight:8,itemGap:16,
+      textStyle:{color:muted(),fontSize:12}
+    },
+    grid:{left:56,right:28,top:42,bottom:72,containLabel:true}
+  };
+}
+function categoryAxis(cats){
+  const dense=cats.length>12;
+  return {
+    type:'category',
+    data:cats,
+    boundaryGap:true,
+    axisTick:{show:false},
+    axisLine:{lineStyle:{color:axisLine()}},
+    axisLabel:{
+      color:muted(),
+      hideOverlap:true,
+      rotate:dense?36:cats.length>8?24:0,
+      margin:14,
+      fontSize:dense?11:12,
+      interval:dense?Math.ceil(cats.length/14)-1:0
+    },
+    splitLine:{show:false}
+  };
+}
+function valueAxis(name){
+  return {
+    type:'value',
+    name:name||'',
+    nameTextStyle:{color:muted(),padding:[0,0,0,8]},
+    axisTick:{show:false},
+    axisLine:{show:false},
+    axisLabel:{color:muted(),fontSize:12},
+    splitLine:{lineStyle:{color:gridLine(),type:'dashed',width:1}},
+    splitNumber:4
   };
 }
 function annotationLines(){
   return D.annotations.length?{
     silent:true,symbol:['none','none'],
-    label:{formatter:p=>p.name},
-    lineStyle:{type:'dashed',width:1},
+    label:{formatter:p=>p.name,color:muted(),fontSize:11,distance:8},
+    lineStyle:{type:'dashed',width:1.2,color:muted()},
     data:D.annotations.map(a=>({name:a.label,xAxis:String(a.x)}))
   }:undefined;
+}
+function seriesExtras(type,color,index){
+  const extras={
+    emphasis:{focus:'series',itemStyle:{shadowBlur:10,shadowColor:hexToRgba(color,.35)}},
+    markLine:index===0?annotationLines():undefined
+  };
+  if(type==='line'||type==='area'){
+    extras.smooth=0.28;
+    extras.showSymbol=records.length<=24;
+    extras.symbol='circle';
+    extras.symbolSize=7;
+    extras.lineStyle={width:3,cap:'round',join:'round'};
+    extras.itemStyle={borderColor:paper(),borderWidth:2};
+    if(type==='area'||(type==='line'&&yFields.length===1)){
+      extras.areaStyle={
+        opacity:type==='area'?0.22:0.12,
+        color:{
+          type:'linear',x:0,y:0,x2:0,y2:1,
+          colorStops:[
+            {offset:0,color:hexToRgba(color,type==='area'?0.34:0.22)},
+            {offset:1,color:hexToRgba(color,0.02)}
+          ]
+        }
+      };
+    }
+  }
+  if(type==='bar'||type==='stacked_bar'||type==='histogram'){
+    extras.barMaxWidth=yFields.length>1?36:48;
+    extras.barCategoryGap=records.length>10?'28%':'42%';
+    extras.itemStyle={
+      borderRadius:type==='stacked_bar'?[0,0,0,0]:[8,8,0,0],
+      color:{
+        type:'linear',x:0,y:0,x2:0,y2:1,
+        colorStops:[
+          {offset:0,color:hexToRgba(color,0.95)},
+          {offset:1,color:hexToRgba(color,0.72)}
+        ]
+      }
+    };
+  }
+  return extras;
 }
 function axisOption(type,colors){
   const option=baseOption(colors);
   const cats=records.map(r=>String(r[D.fields.x]));
-  const commonSeries=yFields.map((field,index)=>({
-    name:field,
-    type:type==='area'?'line':type==='stacked_bar'?'bar':type,
-    data:records.map(r=>r[field]),
-    smooth:type==='line'||type==='area',
-    connectNulls:false,
-    stack:type==='stacked_bar'?'total':undefined,
-    areaStyle:type==='area'?{opacity:.16}:undefined,
-    emphasis:{focus:'series'},
-    markLine:index===0?annotationLines():undefined
-  }));
+  const seriesType=type==='area'?'line':type==='stacked_bar'?'bar':type==='histogram'?'bar':type;
+  const commonSeries=yFields.map((field,index)=>{
+    const color=colors[index%colors.length];
+    return Object.assign({
+      name:field,
+      type:seriesType,
+      data:records.map(r=>r[field]),
+      connectNulls:false,
+      stack:type==='stacked_bar'?'total':undefined
+    },seriesExtras(type==='histogram'?'bar':type,color,index));
+  });
+  if(type==='stacked_bar'){
+    commonSeries.forEach((s,i)=>{
+      const last=i===commonSeries.length-1;
+      s.itemStyle=Object.assign({},s.itemStyle,{borderRadius:last?[8,8,0,0]:[0,0,0,0]});
+    });
+  }
   const ranking=D.goal==='ranking'&&type==='bar';
+  if(ranking){
+    commonSeries.forEach((s,index)=>{
+      const color=colors[index%colors.length];
+      s.barMaxWidth=22;
+      s.itemStyle={
+        borderRadius:[0,8,8,0],
+        color:{
+          type:'linear',x:0,y:0,x2:1,y2:0,
+          colorStops:[
+            {offset:0,color:hexToRgba(color,0.7)},
+            {offset:1,color:hexToRgba(color,0.95)}
+          ]
+        }
+      };
+    });
+  }
   return Object.assign(option,{
-    tooltip:{trigger:'axis',confine:true,valueFormatter:v=>formatValue(v,yFields[0])},
-    xAxis:ranking?{type:'value'}:{type:'category',data:cats,axisLabel:{hideOverlap:true,rotate:cats.length>10?28:0}},
-    yAxis:ranking?{type:'category',data:cats,inverse:true}:{type:'value',name:typeof D.unit==='string'?D.unit:''},
-    series:ranking?commonSeries.map(s=>Object.assign(s,{data:s.data})):commonSeries
+    tooltip:Object.assign({
+      trigger:'axis',
+      confine:true,
+      valueFormatter:v=>formatValue(v,yFields[0]),
+      axisPointer:{type:ranking?'shadow':'line',shadowStyle:{color:hexToRgba(colors[0],.08)},lineStyle:{color:hexToRgba(colors[0],.35),width:1.5}}
+    },tooltipTheme()),
+    xAxis:ranking?valueAxis():categoryAxis(cats),
+    yAxis:ranking?{
+      type:'category',data:cats,inverse:true,axisTick:{show:false},
+      axisLine:{show:false},axisLabel:{color:muted(),fontSize:12},
+      splitLine:{show:false}
+    }:valueAxis(typeof D.unit==='string'?D.unit:''),
+    series:commonSeries
   });
 }
 function pieOption(type,colors){
   const field=yFields[0];
   const option=baseOption(colors);
-  option.tooltip={trigger:'item',formatter:p=>p.name+'<br>'+formatValue(p.value,field)+' ('+p.percent+'%)'};
+  option.tooltip=Object.assign({
+    trigger:'item',
+    formatter:p=>'<div style="font-weight:600;margin-bottom:4px">'+p.name+'</div>'+formatValue(p.value,field)+'<br><span style="opacity:.8">'+p.percent+'%</span>'
+  },tooltipTheme());
+  option.legend={bottom:2,type:'scroll',textStyle:{color:muted()}};
   option.series=[{
-    name:field,type:'pie',radius:type==='donut'?['42%','70%']:'70%',
+    name:field,type:'pie',radius:type==='donut'?['46%','72%']:'70%',
     center:['50%','46%'],
     data:records.map(r=>({name:String(r[D.fields.x]),value:r[field]})),
-    label:{formatter:'{b}\n{d}%'},itemStyle:{borderWidth:2,borderColor:D.theme==='dark'?'#17232d':'#fffdf8'}
+    padAngle:2,
+    itemStyle:{borderWidth:3,borderColor:paper(),borderRadius:6},
+    label:{
+      formatter:'{b}\n{d}%',
+      color:ink(),
+      fontSize:12,
+      lineHeight:16
+    },
+    labelLine:{length:14,length2:10,lineStyle:{color:axisLine()}},
+    emphasis:{
+      scale:true,
+      scaleSize:6,
+      itemStyle:{shadowBlur:16,shadowColor:'rgba(15,28,46,.18)'}
+    }
   }];
   return option;
 }
 function scatterOption(colors){
   const option=baseOption(colors);
-  option.tooltip={trigger:'item',formatter:p=>p.seriesName+'<br>'+D.fields.x+': '+formatValue(p.value[0],D.fields.x)+'<br>'+formatValue(p.value[1],p.seriesName)};
-  option.xAxis={type:'value',name:D.fields.x};
-  option.yAxis={type:'value',name:typeof D.unit==='string'?D.unit:''};
-  option.series=yFields.map(field=>({name:field,type:'scatter',symbolSize:10,data:records.map(r=>[r[D.fields.x],r[field]])}));
+  option.tooltip=Object.assign({
+    trigger:'item',
+    formatter:p=>'<div style="font-weight:600;margin-bottom:4px">'+p.seriesName+'</div>'+D.fields.x+': '+formatValue(p.value[0],D.fields.x)+'<br>'+formatValue(p.value[1],p.seriesName)
+  },tooltipTheme());
+  option.xAxis=Object.assign(valueAxis(D.fields.x),{splitLine:{lineStyle:{color:gridLine(),type:'dashed'}}});
+  option.yAxis=valueAxis(typeof D.unit==='string'?D.unit:'');
+  option.series=yFields.map((field,index)=>({
+    name:field,type:'scatter',symbolSize:12,
+    itemStyle:{
+      color:hexToRgba(colors[index%colors.length],0.82),
+      borderColor:paper(),borderWidth:2,
+      shadowBlur:8,shadowColor:hexToRgba(colors[index%colors.length],0.25)
+    },
+    data:records.map(r=>[r[D.fields.x],r[field]])
+  }));
   return option;
 }
 function heatmapOption(colors){
@@ -142,19 +375,36 @@ function heatmapOption(colors){
   const yField=yFields[0],ys=[...new Set(records.map(r=>String(r[yField])))];
   const values=records.map(r=>r[D.fields.value]);
   option.grid={left:80,right:70,top:30,bottom:80,containLabel:true};
-  option.tooltip={position:'top',formatter:p=>xs[p.value[0]]+' / '+ys[p.value[1]]+'<br>'+formatValue(p.value[2],D.fields.value)};
-  option.xAxis={type:'category',data:xs,splitArea:{show:true}};
-  option.yAxis={type:'category',data:ys,splitArea:{show:true}};
-  option.visualMap={min:Math.min(...values),max:Math.max(...values),calculable:true,orient:'vertical',right:4,top:'middle'};
-  option.series=[{name:D.fields.value,type:'heatmap',data:records.map(r=>[xs.indexOf(String(r[D.fields.x])),ys.indexOf(String(r[yField])),r[D.fields.value]]),label:{show:records.length<=36}}];
+  option.tooltip=Object.assign({
+    position:'top',
+    formatter:p=>xs[p.value[0]]+' / '+ys[p.value[1]]+'<br>'+formatValue(p.value[2],D.fields.value)
+  },tooltipTheme());
+  option.xAxis={type:'category',data:xs,splitArea:{show:true},axisLabel:{color:muted()},axisTick:{show:false}};
+  option.yAxis={type:'category',data:ys,splitArea:{show:true},axisLabel:{color:muted()},axisTick:{show:false}};
+  option.visualMap={
+    min:Math.min(...values),max:Math.max(...values),calculable:true,orient:'vertical',right:4,top:'middle',
+    inRange:{color:[hexToRgba(colors[0],0.15),colors[0],colors[1]||colors[0]]},
+    textStyle:{color:muted()}
+  };
+  option.series=[{
+    name:D.fields.value,type:'heatmap',
+    data:records.map(r=>[xs.indexOf(String(r[D.fields.x])),ys.indexOf(String(r[yField])),r[D.fields.value]]),
+    label:{show:records.length<=36,color:ink()},
+    itemStyle:{borderRadius:4,borderColor:paper(),borderWidth:2}
+  }];
   return option;
 }
 function boxplotOption(colors){
   const option=baseOption(colors);
-  option.tooltip={trigger:'item'};
-  option.xAxis={type:'category',data:records.map(r=>String(r[D.fields.x])),boundaryGap:true};
-  option.yAxis={type:'value',name:typeof D.unit==='string'?D.unit:''};
-  option.series=[{name:'Five-number summary',type:'boxplot',data:records.map(r=>yFields.map(f=>r[f]))}];
+  option.tooltip=Object.assign({trigger:'item'},tooltipTheme());
+  option.xAxis=categoryAxis(records.map(r=>String(r[D.fields.x])));
+  option.yAxis=valueAxis(typeof D.unit==='string'?D.unit:'');
+  option.series=[{
+    name:'Five-number summary',type:'boxplot',
+    data:records.map(r=>yFields.map(f=>r[f])),
+    itemStyle:{color:hexToRgba(colors[0],0.18),borderColor:colors[0],borderWidth:2},
+    boxWidth:['28%','48%']
+  }];
   return option;
 }
 function paretoOption(colors){
@@ -162,12 +412,19 @@ function paretoOption(colors){
   const values=records.map(r=>r[field]),total=values.reduce((a,b)=>a+b,0);
   let running=0;
   const cumulative=values.map(v=>{running+=v;return total?running/total*100:0});
-  option.tooltip={trigger:'axis'};
-  option.xAxis={type:'category',data:records.map(r=>String(r[D.fields.x])),axisLabel:{hideOverlap:true,rotate:records.length>10?28:0}};
-  option.yAxis=[{type:'value',name:unitFor(field)},{type:'value',name:'Cumulative %',min:0,max:100,axisLabel:{formatter:'{value}%'}}];
+  option.tooltip=Object.assign({trigger:'axis'},tooltipTheme());
+  option.xAxis=categoryAxis(records.map(r=>String(r[D.fields.x])));
+  option.yAxis=[
+    valueAxis(unitFor(field)),
+    Object.assign(valueAxis('Cumulative %'),{min:0,max:100,axisLabel:{formatter:'{value}%',color:muted()},splitLine:{show:false}})
+  ];
   option.series=[
-    {name:field,type:'bar',data:values},
-    {name:'Cumulative %',type:'line',yAxisIndex:1,data:cumulative,smooth:false}
+    Object.assign({name:field,type:'bar',data:values},seriesExtras('bar',colors[0],0)),
+    {
+      name:'Cumulative %',type:'line',yAxisIndex:1,data:cumulative,smooth:0.2,
+      showSymbol:true,symbolSize:7,lineStyle:{width:3,color:colors[1]||'#ea580c'},
+      itemStyle:{color:colors[1]||'#ea580c',borderColor:paper(),borderWidth:2}
+    }
   ];
   return option;
 }
@@ -200,14 +457,25 @@ function renderTable(){
   records.forEach(r=>{const tr=document.createElement('tr');fields.forEach(f=>{const td=document.createElement('td');td.textContent=r[f]==null?'':String(r[f]);tr.appendChild(td);});body.appendChild(tr);});
   table.appendChild(body);wrap.replaceChildren(table);
 }
+function fitChartBox(){
+  const el=document.getElementById('chart');
+  const chrome=168;
+  const sidePad=40;
+  const width=Math.max(320,Math.min(D.width,window.innerWidth-sidePad));
+  const height=Math.max(260,Math.min(D.height,window.innerHeight-chrome));
+  el.style.width=width+'px';
+  el.style.height=height+'px';
+  return {width,height};
+}
 function render(){
   const type=document.getElementById('type').value;
   if(type==='table'){if(chart){chart.dispose();chart=null;}renderTable();document.body.dataset.chartReady='true';return;}
   document.getElementById('table-wrap').classList.add('hidden');
   document.getElementById('chart').classList.remove('hidden');
-  if(!chart)chart=echarts.init(document.getElementById('chart'),D.theme);
+  const size=fitChartBox();
+  if(!chart)chart=echarts.init(document.getElementById('chart'),null,{renderer:'canvas'});
   chart.setOption(buildOption(type,document.getElementById('palette').value),true);
-  chart.resize({width:D.width,height:D.height});
+  chart.resize(size);
   chart.on('finished',()=>{document.body.dataset.chartReady='true';});
 }
 function meta(id,label,value){
@@ -241,7 +509,10 @@ function init(){
     a.href=url;a.download=D.downloadName;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   });
   render();
-  window.addEventListener('resize',()=>{if(chart)chart.resize();});
+  window.addEventListener('resize',()=>{
+    if(!chart)return;
+    chart.resize(fitChartBox());
+  });
 }
 window.addEventListener('DOMContentLoaded',init);
 </script>

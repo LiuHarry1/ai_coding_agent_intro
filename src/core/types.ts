@@ -268,6 +268,12 @@ export interface ReasoningPart {
 export type UserContentPart = TextPart | ImagePart | FilePart
 export type AssistantContentPart = TextPart | ReasoningPart | ToolCallPart
 
+export type UserFileAttachment = {
+  name: string
+  kind: 'pdf' | 'text' | 'binary'
+  size: number
+}
+
 export interface UserMessage {
   role: 'user'
   content: string | UserContentPart[]
@@ -275,6 +281,8 @@ export interface UserMessage {
   uuid?: string
   /** Meta attachments expanded for API �?hidden from UI when true. */
   isMeta?: boolean
+  /** Composer file chips persisted for transcript reload. */
+  files?: UserFileAttachment[]
   /**
    * Full-compact summary injected for the model (isCompactSummary).
    * Hidden from chat view; UI shows a compact_boundary marker instead.
@@ -449,6 +457,14 @@ export interface AgentOptions {
   wire: import('./wire-emitter.js').WireEmitter
   messages?: Message[]
   images?: string[]
+  /**
+   * Composer attachments already resolved to meta messages (PDF documents,
+   * Read-style file attachments, binary notes). Injected just before the user
+   * turn, after `@mention` attachments.
+   */
+  attachmentPrelude?: Message[]
+  /** File-chip metadata stored on the visible user turn. */
+  attachmentFiles?: UserFileAttachment[]
   /** System-generated user turn (scheduled tasks). Hidden from some prefetch paths. */
   isMeta?: boolean
   /**

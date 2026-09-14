@@ -611,7 +611,7 @@ export const useChatStore = create((set, get) => {
     /**
      * Send a message and process the SSE response stream.
      * @param {string} text
-     * @param {Array<string|{previewUrl:string,file:File}>} [attachments]
+     * @param {Array<string|{kind:string,name:string,size:number,previewUrl:string|null,file:File}>} [attachments]
      */
     sendMessage: async (text, attachments = []) => {
       if (!text.trim() || get().isStreaming) return
@@ -627,7 +627,14 @@ export const useChatStore = create((set, get) => {
       const userMsgId = newId()
       const assistantMsgId = newId()
       const previewUrls = isComposerAtt
-        ? attachments.map(a => a.previewUrl)
+        ? attachments.map(a => a.previewUrl).filter(Boolean)
+        : []
+      // Non-image attachments render as chips, so the bubble needs their
+      // names before the upload round-trip resolves.
+      const fileChips = isComposerAtt
+        ? attachments
+            .filter(a => a.kind !== 'image')
+            .map(a => ({ name: a.name, kind: a.kind, size: a.size }))
         : []
 
       set(s => {
@@ -636,6 +643,7 @@ export const useChatStore = create((set, get) => {
           kind: 'user',
           content: text,
           images: previewUrls.length > 0 ? previewUrls : undefined,
+          files: fileChips.length > 0 ? fileChips : undefined,
         })
         return {
           isStreaming: true,
@@ -648,18 +656,22 @@ export const useChatStore = create((set, get) => {
       })
 
       let wireImages = []
+      let wireAttachments = []
 
       if (isComposerAtt) {
         try {
-          const up = await agentApi.uploadChatImages(
+          const up = await agentApi.uploadChatAttachments(
             get().currentSessionId,
             attachments.map(a => a.file),
           )
           if (up.session_id) get().setSessionId(up.session_id)
-          wireImages = up.urls || []
+          wireAttachments = up.files || (up.urls || []).map(url => ({ url }))
+          const uploadedImages = wireAttachments
+            .filter(f => f.kind === 'image' || !f.kind)
+            .map(f => f.url)
           set(s => ({
             ...patchBubble(s, userMsgId, {
-              images: wireImages.length ? wireImages : undefined,
+              images: uploadedImages.length ? uploadedImages : undefined,
             }),
             bubbleOrder: s.bubbleOrder,
           }))
@@ -687,8 +699,7 @@ export const useChatStore = create((set, get) => {
               id: errorBubbleId(eid),
               kind: 'error',
               turnId: assistantMsgId,
-              message:
-                err?.message || 'Failed to upload image attachments',
+              message: err?.message || 'Failed to upload attachments',
             })
             return {
               isStreaming: false,
@@ -701,6 +712,7 @@ export const useChatStore = create((set, get) => {
           return
         }
       } else if (attachments.length > 0) {
+        // Legacy callers (replay, tests) pass bare upload URLs for images.
         wireImages = attachments
         set(s => ({
           ...patchBubble(s, userMsgId, { images: undefined }),
@@ -717,6 +729,7 @@ export const useChatStore = create((set, get) => {
         environmentId: get().workspaceHandle?.environmentId || 'local',
       }
       if (wireImages.length > 0) body.images = wireImages
+      if (wireAttachments.length > 0) body.attachments = wireAttachments
 
       try {
         const meta = await streamChatTurn({

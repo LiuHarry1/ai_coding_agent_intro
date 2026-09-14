@@ -52,43 +52,43 @@ Before generating, confirm:
 
 - [ ] `data` is a non-empty array
 - [ ] `fields.x` exists on every record
-- [ ] every field in `fields.y` exists on every record
-- [ ] `goal` is a valid enum value
-- [ ] `chartType` (if set) is on the whitelist
-- [ ] `source`, `unit`, and `timeRange` are filled in when the data supports it
-- [ ] null-handling is explicit; YTD / current periods are marked with `incompletePeriod`
-- [ ] for percentages/ratios, numerator, denominator, and definition are confirmed
+- [ ] every `fields.y` field exists on every record
+- [ ] `goal` is a valid enum
+- [ ] `chartType` (if set) is in the whitelist
+- [ ] `source`, `unit`, and `timeRange` are filled when the data provides them
+- [ ] missing-value policy is explicit; YTD / current period is marked `incompletePeriod`
+- [ ] numerators, denominators, and definitions are confirmed for percentages/ratios
 
-If fields are unclear, clean up the data first — do not invent column names.
+If field names are unclear, shape the data first. Do not guess column names.
 
 ## Standard Workflows
 
 ### Workflow A — new chart
 
-1. Write the user input to a temporary JSON file (full model in
+1. Write the user input to a temporary JSON file (full model:
    [references/input-model.md](references/input-model.md)).
 2. Run:
    `node .ai-agent/skills/echarts-chart/scripts/generate-chart.mjs --input <input.json> --output-dir charts`
-3. Read the generated `<slug>.spec.json` and `<slug>.data.json`; check record count,
-   units, time range, nulls, and sort order.
-4. For visual QA, re-run with `--png` and Read the PNG once. If the environment has
-   no Chrome, keep the HTML and say clearly that no PNG was produced.
-5. Return all artifacts plus a preview link. The frontend opens the preview with the
-   current session so access stays authenticated.
+3. Read the generated `<slug>.spec.json` and `<slug>.data.json`. Confirm record
+   count, units, time range, missing values, and sort order.
+4. For visual QA, rerun with `--png` and Read the PNG once. If Chrome is not
+   available, keep the HTML and say the PNG was not generated.
+5. Return all artifacts and the preview link. The frontend opens preview with
+   the current login session.
 
 ### Workflow B — small edits (patch)
 
-When the user changes the title, type, theme, size, field mapping, or analysis metadata:
+When the user changes title, type, theme, size, field mapping, or analysis metadata:
 
-- Edit the original input JSON and re-run the generator
-- Do not patch the generated HTML (that drifts spec / data / HTML apart)
-- If a title change produces a new slug, list the new paths explicitly
+- Edit the original input JSON and rerun the generator
+- Do not patch generated HTML, or spec/data/HTML will drift
+- If the title change produces a new slug, list the new paths
 
 ### Workflow C — bad data
 
-- Incompatible mappings, missing fields, NaN/Infinity, illegal nulls, or an unreasonable
-  number of pie categories: let the generator surface a concrete validation error
-- Use `chartType: "table"` only when the data truly does not belong in a chart
+- Incompatible mapping, missing fields, NaN/Infinity, illegal nulls, or too many pie slices:
+  let the generator raise a specific validation error
+- Use `chartType: "table"` only when the data is genuinely a poor fit for a chart
 
 ## goal → defaultType
 
@@ -101,12 +101,12 @@ When the user changes the title, type, theme, size, field mapping, or analysis m
 | ranking | bar |
 | correlation | scatter |
 
-## Delivery format (search2chart-mcp standard)
+## Delivery format (search2chart-mcp)
 
-The final reply lists the artifacts that were actually produced; do not embed base64:
+The final reply must include the actual artifacts; do not embed base64:
 
 ```markdown
-Chart ready.
+Chart generated.
 
 - Interactive chart: `{absoluteHtmlPath}`
 - Cleaned data: `{absoluteDataPath}`
@@ -115,19 +115,20 @@ Chart ready.
 - PNG: `{absolutePngPath}` (list only when actually generated)
 ```
 
-Add 2–4 insights from `.data.json`, and call out source, units, and any incomplete periods.
+Add 2–4 insights from `.data.json`, and state source, unit, and any incomplete period.
 
 ## References
 
-- [input-model.md](references/input-model.md) — fields and `const D` shape
+- [input-model.md](references/input-model.md) — fields and the `const D` payload
 - [chart-template.html](references/chart-template.html) — search2chart-style HTML template
 - [examples.md](references/examples.md) — few-shot examples
 - `references/echarts.min.js` — pinned offline ECharts runtime
 
 ## Quality rules
 
-- Trends → line/area; category comparisons → bar; rankings → horizontal bar
-- For composition with more than 6 categories, use Top-N + Other, or switch to bar
-- Stacked bar series must share a unit; no meaningless dual axes or 3D
-- Prefer labels that keep units and enough precision; avoid decoration that hides data
-- Default PNG is 1600×1000; the Read path compresses it into a separate token budget
+- Use line/area for trends; bar for category comparison; horizontal bar for ranking
+- Composition with more than 6 categories must use Top-N + Other, or switch to bar
+- Stacked-bar series must share one unit; no decorative dual axes or 3D
+- Prefer labels that keep units and enough precision; do not hide data behind decoration
+- Default chart size is 960×480 (override with width/height); the page shrinks to the viewport to avoid scrolling
+- Default PNG screenshot window is 1280×860; the Read path compresses it to a separate token budget

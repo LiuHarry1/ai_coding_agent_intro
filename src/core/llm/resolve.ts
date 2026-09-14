@@ -83,6 +83,7 @@ export function resolveProfile(raw: unknown): LlmProfile {
     apiKey: merged.apiKey as string,
     model: merged.model as string,
     thinking: parseThinking(merged.thinking),
+    vision: typeof merged.vision === 'boolean' ? merged.vision : undefined,
   }
 }
 
@@ -95,5 +96,6 @@ export function profileToRecord(p: LlmProfile): Record<string, unknown> {
     apiKey: p.apiKey,
     model: p.model,
     thinking: p.thinking,
+    vision: p.vision,
   }
 }

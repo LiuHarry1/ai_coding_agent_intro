@@ -3,12 +3,92 @@
  * Separated from compaction — used by the agent retry loop.
  */
 
+export function streamErrorText(err: unknown): string {
+  if (!err) return ''
+  const parts: string[] = []
+  const seen = new Set<unknown>()
+  const walk = (value: unknown, depth: number): void => {
+    if (value == null || depth > 5 || seen.has(value)) return
+    if (typeof value === 'object') seen.add(value)
+    if (typeof value === 'string') {
+      parts.push(value)
+      return
+    }
+    if (value instanceof Error) {
+      parts.push(value.message)
+      walk(value.cause, depth + 1)
+      return
+    }
+    if (typeof value === 'object') {
+      const e = value as { message?: string; cause?: unknown }
+      if (typeof e.message === 'string') parts.push(e.message)
+      walk(e.cause, depth + 1)
+    }
+  }
+  walk(err, 0)
+  return parts.join(' ')
+}
+
+export type MaxTokensContextOverflow = {
+  inputTokens: number
+  maxTokens: number
+  contextLimit: number
+}
+
+/**
+ * CC `parseMaxTokensContextOverflowError` (withRetry.ts).
+ * Anthropic: "input length and `max_tokens` exceed context limit: 188059 + 20000 > 200000"
+ * LiteLLM:  "maximum context length is 262144 ... requested 128000 output tokens
+ *            ... prompt contains at least 134145 input tokens"
+ */
+export function parseMaxTokensContextOverflowError(
+  err: unknown,
+): MaxTokensContextOverflow | undefined {
+  const msg = streamErrorText(err)
+  if (!msg) return undefined
+
+  const anthropic = msg.match(
+    /input length and [`']?max_tokens[`']? exceed context limit:\s*(\d+)\s*\+\s*(\d+)\s*>\s*(\d+)/i,
+  )
+  if (anthropic?.[1] && anthropic[2] && anthropic[3]) {
+    const inputTokens = parseInt(anthropic[1], 10)
+    const maxTokens = parseInt(anthropic[2], 10)
+    const contextLimit = parseInt(anthropic[3], 10)
+    if (
+      Number.isFinite(inputTokens) &&
+      Number.isFinite(maxTokens) &&
+      Number.isFinite(contextLimit)
+    ) {
+      return { inputTokens, maxTokens, contextLimit }
+    }
+  }
+
+  const litellm = msg.match(
+    /maximum context length is (\d+)[\s\S]*?requested (\d+) output tokens[\s\S]*?(?:prompt contains at least|prompt contains)\s+(\d+) input tokens/i,
+  )
+  if (litellm?.[1] && litellm[2] && litellm[3]) {
+    const contextLimit = parseInt(litellm[1], 10)
+    const maxTokens = parseInt(litellm[2], 10)
+    const inputTokens = parseInt(litellm[3], 10)
+    if (
+      Number.isFinite(inputTokens) &&
+      Number.isFinite(maxTokens) &&
+      Number.isFinite(contextLimit)
+    ) {
+      return { inputTokens, maxTokens, contextLimit }
+    }
+  }
+
+  return undefined
+}
+
 /**
  * Heuristic: did this error come from the model rejecting the prompt as
  * too long? Covers OpenAI, Anthropic (413), Gemini, and proxy variants.
  */
 export function isContextLengthError(err: unknown): boolean {
   if (!err) return false
+  if (parseMaxTokensContextOverflowError(err)) return true
   const e = err as {
     statusCode?: number
     status?: number
@@ -17,7 +97,7 @@ export function isContextLengthError(err: unknown): boolean {
   }
   const status = e.statusCode ?? e.status
   if (status === 413) return true
-  const msg = ((e.message ?? '') + ' ' + (e.cause?.message ?? '')).toLowerCase()
+  const msg = streamErrorText(err).toLowerCase()
   // Rate-limit errors from gateways often mention tokens too ("too many
   // tokens per minute", "token limit exceeded") — those need a retry/backoff,
   // NOT compaction. Misclassifying them fires a full LLM summarization on

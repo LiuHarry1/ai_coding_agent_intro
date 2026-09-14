@@ -2,21 +2,21 @@
 
 ## Example 1 — City sales bar chart
 
-**User:** 画一张城市销量对比柱状图
+**User:** Draw a bar chart comparing city sales
 
 **Input:**
 
 ```json
 {
-  "title": "城市销量对比",
+  "title": "City sales comparison",
   "goal": "compare",
   "chartType": "bar",
   "source": "Sales warehouse / daily close",
   "unit": "orders",
   "data": [
-    { "city": "北京", "sales": 120 },
-    { "city": "上海", "sales": 200 },
-    { "city": "广州", "sales": 150 }
+    { "city": "Beijing", "sales": 120 },
+    { "city": "Shanghai", "sales": 200 },
+    { "city": "Guangzhou", "sales": 150 }
   ],
   "fields": { "x": "city", "y": "sales" }
 }
@@ -28,23 +28,24 @@ and `city-sales.html` from the same validated input.
 **Delivery (final reply):**
 
 ```markdown
-图表已生成。
+Chart generated.
 
-- 文件：`/workspace/charts/city-sales.html`
-- 预览：[打开交互图表](http://AGENT_HOST/workspace/preview?path=...)
+- File: `/workspace/charts/city-sales.html`
+- Preview: [Open interactive chart](http://AGENT_HOST/workspace/preview?path=...)
 
-页面内安全预览支持 tooltip、兼容图形切换、配色调整和清洗数据下载。
+In-page preview supports tooltips, compatible chart-type switching, palette
+changes, and cleaned-data download.
 ```
 
 ---
 
 ## Example 2 — Monthly trend (line)
 
-**User:** 展示 2025 各月营收趋势
+**User:** Show 2025 monthly revenue trend
 
 ```json
 {
-  "title": "2025 月度营收",
+  "title": "2025 monthly revenue",
   "goal": "trend",
   "source": "Finance close v3",
   "unit": "CNY million",
@@ -68,11 +69,11 @@ silently converted to zero.
 
 ## Example 3 — Composition (pie)
 
-**User:** 流量来源占比
+**User:** Traffic source mix
 
 ```json
 {
-  "title": "流量来源占比",
+  "title": "Traffic source mix",
   "goal": "composition",
   "chartType": "donut",
   "topN": 5,
@@ -93,7 +94,7 @@ The generator rejects more than six visible slices unless Top-N reduces them.
 
 ## Example 4 — Patch existing chart
 
-**User:** 把标题改成「Q1 销量」并把默认类型改成折线图
+**User:** Change the title to "Q1 sales" and switch the default type to a line chart
 
 Edit the original input JSON and run the generator again. Do not patch generated
 HTML because that would make the spec, data, and chart disagree.

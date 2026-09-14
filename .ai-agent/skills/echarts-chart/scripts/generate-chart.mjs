@@ -39,10 +39,11 @@ const DEFAULT_TYPE = {
   correlation: 'scatter',
 }
 const PALETTES = {
-  default: ['#176B87', '#E58F65', '#4E937A', '#D9A441', '#6D5A8D', '#A85555'],
-  warm: ['#B94C32', '#E58F65', '#D9A441', '#8F3B2D', '#F2C078', '#A85555'],
-  cool: ['#176B87', '#5A8BB8', '#4E937A', '#6D5A8D', '#78A6B8', '#2E6F6D'],
-  business: ['#17324D', '#315F7D', '#5F849D', '#C47A44', '#8F9AA3', '#4E6B58'],
+  // Studio: teal/amber/blue — crisp on white, avoids cream-editorial look
+  default: ['#0F766E', '#EA580C', '#2563EB', '#DC2626', '#059669', '#CA8A04'],
+  warm: ['#C2410C', '#EA580C', '#D97706', '#B45309', '#F59E0B', '#9A3412'],
+  cool: ['#0E7490', '#0284C7', '#2563EB', '#0F766E', '#64748B', '#0369A1'],
+  business: ['#0F172A', '#1E3A5F', '#334155', '#0F766E', '#B45309', '#475569'],
 }
 
 function fail(message) {
@@ -316,13 +317,14 @@ function normalizeInput(raw) {
     }
   })
 
-  const width = raw.width == null ? 1200 : Number(raw.width)
-  const height = raw.height == null ? 720 : Number(raw.height)
+  // Compact defaults so the full chart fits typical laptop viewports.
+  const width = raw.width == null ? 960 : Number(raw.width)
+  const height = raw.height == null ? 480 : Number(raw.height)
   if (!Number.isInteger(width) || width < 480 || width > 1600) {
     fail('width must be an integer from 480 to 1600')
   }
-  if (!Number.isInteger(height) || height < 320 || height > 1200) {
-    fail('height must be an integer from 320 to 1200')
+  if (!Number.isInteger(height) || height < 280 || height > 1200) {
+    fail('height must be an integer from 280 to 1200')
   }
   const source = raw.source == null
     ? []
@@ -403,7 +405,7 @@ function renderPng(htmlPath, pngPath) {
     '--no-sandbox',
     '--hide-scrollbars',
     '--force-device-scale-factor=1',
-    '--window-size=1600,1000',
+    '--window-size=1280,860',
     '--virtual-time-budget=3000',
     `--screenshot=${pngPath}`,
     target,

@@ -6,6 +6,25 @@ export type FileAttachment = {
   displayPath: string
   content: ReadOutput
   truncated?: boolean
+  /**
+   * Extra guidance appended after the synthetic Read result — e.g. the CSV
+   * shape summary and on-disk path for a composer attachment the model may
+   * want to process with a shell instead of reading inline.
+   */
+  note?: string
+}
+
+/**
+ * A composer attachment we deliberately keep out of the context window
+ * (Office docs, archives, binaries). The model gets a path and is expected to
+ * reach for Bash.
+ */
+export type UploadedBinaryAttachment = {
+  type: 'uploaded_binary'
+  filename: string
+  displayPath: string
+  mediaType: string
+  fileSize: number
 }
 
 export type PdfReferenceAttachment = {
@@ -119,6 +138,7 @@ export type ConditionalRulesAttachment = {
 
 export type Attachment =
   | FileAttachment
+  | UploadedBinaryAttachment
   | PdfReferenceAttachment
   | DirectoryAttachment
   | AlreadyReadFileAttachment

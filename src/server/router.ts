@@ -355,14 +355,15 @@ export function createRouter({ staticDir }: RouterOptions) {
       return
     }
 
-    // User chat image uploads (claim-check; see utils/chat-uploads.ts).
+    // User chat attachments (claim-check; see utils/chat-uploads.ts).
     const uploadGetMatch = url?.match(
-      /^\/sessions\/([^/]+)\/uploads\/([^/]+)$/,
+      /^\/sessions\/([^/]+)\/uploads\/([^/?]+)(?:\?.*)?$/,
     )
     if (method === 'GET' && uploadGetMatch) {
       const id = decodeURIComponent(uploadGetMatch[1]!)
       const file = decodeURIComponent(uploadGetMatch[2]!)
       const {
+        CHAT_UPLOAD_ANY_FILE_RE,
         CHAT_UPLOAD_FILE_RE,
         getChatUploadsDir,
         mimeFromUploadFileName,
@@ -371,19 +372,36 @@ export function createRouter({ staticDir }: RouterOptions) {
       if (
         !session ||
         !canAccessSession(session, authed.user?.email, authed.user?.role) ||
-        !CHAT_UPLOAD_FILE_RE.test(file)
+        !CHAT_UPLOAD_ANY_FILE_RE.test(file)
       ) {
         sendJSON(res, 404, { error: 'Not found' })
         return
       }
-      const fsp = await import('fs/promises')
+      const uploadPath = path.join(getChatUploadsDir(id), file)
       try {
-        const buf = await fsp.readFile(path.join(getChatUploadsDir(id), file))
-        res.writeHead(200, {
-          'content-type': mimeFromUploadFileName(file),
+        const stat = await fs.promises.stat(uploadPath)
+        if (!stat.isFile()) throw new Error('Not a file')
+        // Only images render inline. Anything else (html, svg, pdf) is a
+        // stored-XSS vector when served from the app origin, so force a
+        // download with an opaque type.
+        const isImage = CHAT_UPLOAD_FILE_RE.test(file)
+        const headers: Record<string, string> = {
+          'content-type': isImage
+            ? mimeFromUploadFileName(file)
+            : 'application/octet-stream',
           'cache-control': 'private, max-age=31536000, immutable',
-        })
-        res.end(buf)
+          'x-content-type-options': 'nosniff',
+          'content-length': String(stat.size),
+        }
+        if (!isImage) {
+          headers['content-disposition'] =
+            `attachment; filename="${file.replace(/"/g, '')}"`
+        }
+        res.writeHead(200, headers)
+        const stream = fs.createReadStream(uploadPath)
+        stream.on('error', () => res.destroy())
+        res.on('close', () => stream.destroy())
+        stream.pipe(res)
       } catch {
         sendJSON(res, 404, { error: 'Not found' })
       }

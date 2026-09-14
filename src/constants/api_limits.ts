@@ -10,13 +10,13 @@ export const IMAGE_MAX_WIDTH = 2000
 export const IMAGE_MAX_HEIGHT = 2000
 
 /**
- * Model-facing Read images (matplotlib charts, diagrams, PDF pages).
- * Preserve more detail than browser screenshots, where the DOM snapshot is
- * the primary signal, but keep repeated multimodal turns bounded.
+ * Model-facing Read images (matplotlib charts, diagrams, PDF pages, scans).
+ * Matches CC FileReadTool: use the file-read maxTokens budget (~25k), not the
+ * much tighter screenshot budget. Invoice/scan JPEGs never fit ~15KB.
  */
 export const READ_IMAGE_MAX_WIDTH = 1600
 export const READ_IMAGE_MAX_HEIGHT = 1600
-export const READ_IMAGE_TOKEN_BUDGET = 2500
+export const READ_IMAGE_TOKEN_BUDGET = DEFAULT_MAX_OUTPUT_TOKENS
 
 export const PDF_TARGET_RAW_SIZE = 20 * 1024 * 1024
 export const PDF_AT_MENTION_INLINE_THRESHOLD = 10
