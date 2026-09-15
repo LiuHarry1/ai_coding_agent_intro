@@ -41,6 +41,7 @@ import {
   setUserHasControl,
 } from '../../browser/session-flags.js'
 import {
+  assertBrowserAgentMayAct,
   trackActiveBrowserTool,
   untrackActiveBrowserTool,
 } from '../../browser/active-browser-tools.js'
@@ -214,19 +215,6 @@ function withTimeout<T>(
   })
 }
 
-const USER_CONTROL_ALLOWED = new Set([
-  BROWSER_LOCK_TOOL_NAME,
-  BROWSER_SNAPSHOT_TOOL_NAME,
-  BROWSER_GET_TEXT_TOOL_NAME,
-  BROWSER_SCREENSHOT_TOOL_NAME,
-  BROWSER_CONSOLE_TOOL_NAME,
-  BROWSER_NETWORK_TOOL_NAME,
-  BROWSER_TABS_TOOL_NAME,
-  BROWSER_WAIT_FOR_TOOL_NAME,
-  BROWSER_HIGHLIGHT_TOOL_NAME,
-  BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
-])
-
 const screenshotAfterwardsSchema = z
   .boolean()
   .optional()
@@ -238,17 +226,7 @@ function assertAgentMayAct(
   sessionId?: string,
 ): void {
   if (!getUserHasControl(sessionId)) return
-  if (toolName === BROWSER_TABS_TOOL_NAME) {
-    const action = (args as { action?: string } | undefined)?.action
-    if (!action || action === 'list') return
-    throw new BrowserError(
-      'The user has control of the browser. Only browser_tabs action "list" is allowed until you call browser_lock with action "lock".',
-    )
-  }
-  if (USER_CONTROL_ALLOWED.has(toolName)) return
-  throw new BrowserError(
-    'The user has control of the browser. Call browser_lock with action "lock" after they finish, then continue. Do not click or type while they are using it.',
-  )
+  assertBrowserAgentMayAct(toolName, args)
 }
 
 function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
