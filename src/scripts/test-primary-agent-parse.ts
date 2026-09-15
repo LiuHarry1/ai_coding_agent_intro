@@ -191,8 +191,12 @@ assert(
   'browser.md does not forbid repeated snapshots',
 )
 assert(
-  browserMd.includes('browser_file_upload'),
-  'browser.md tells the agent to upload via the tool, not a click',
+  browserMd.includes('Avoid rabbit holes'),
+  'browser.md has avoid-rabbit-holes policy',
+)
+assert(
+  browserMd.includes('four attempts'),
+  'browser.md stops after about four attempts',
 )
 
 const browserProfile = parseAgentFromMarkdown({

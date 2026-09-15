@@ -304,6 +304,7 @@ export async function clickLocatorRobust(
   opts: RobustClickOpts,
 ): Promise<void> {
   const maxScroll = opts.maxScrollAttempts ?? DEFAULT_MAX_SCROLL_ATTEMPTS
+  const attempted: string[] = [`scrolled into view (up to ${maxScroll} attempts)`]
   await ensureInView(loc, page, maxScroll)
 
   const box = await loc.boundingBox()
@@ -344,6 +345,7 @@ export async function clickLocatorRobust(
   }
 
   if (opts.autoCloseDropdowns !== false) {
+    attempted.push('dismissed open dropdowns')
     await dismissOpenDropdowns(page)
     if (await pointHitsLocator(loc, viewportX, viewportY)) {
       await performClick()
@@ -352,6 +354,7 @@ export async function clickLocatorRobust(
   }
 
   if (opts.retryWithOffset !== false) {
+    attempted.push('offset click retries')
     const offsets = [
       { x: box.width * 0.25, y: box.height * 0.5 },
       { x: box.width * 0.75, y: box.height * 0.5 },
@@ -376,7 +379,9 @@ export async function clickLocatorRobust(
     viewportY,
   )
   if (intercept) {
-    throw new BrowserError(formatClickIntercept(intercept))
+    throw new BrowserError(
+      `Already tried: ${attempted.join('; ')}.\n${formatClickIntercept(intercept)}`,
+    )
   }
   await performClick()
 }

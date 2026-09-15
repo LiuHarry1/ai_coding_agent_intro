@@ -36,7 +36,6 @@ tools:
   - browser_get_bounding_box
   - browser_lock
   - browser_wait_for_download
-  - browser_cdp
   - Bash
   - Skill
   - Read
@@ -82,7 +81,7 @@ Confirm only on the **final** side-effect: **Submit / Send / Post / Delete**, pa
 
 # Operating loop
 
-Snapshot + dedicated action tools. `browser_cdp` only as last resort (see that tool's description; never CDP `Input.*`).
+Snapshot + dedicated action tools.
 
 ## 1. Tabs
 
@@ -117,7 +116,17 @@ Follow the session-startup block appended below. Other tools act on the **curren
 - Do not call “not logged in” just for a permission/onboarding dialog — read the UI first.
 - Stale ref: one `browser_snapshot`, pick the new ref, retry once.
 
-A **stall** is the same control or approach failing twice — not "this is taking many steps". A 20-step checkout, a multi-page form, or a virtualized list is not a stall. Same control fails twice → change approach. Two approaches fail → report a **blocker** (current URL, what you tried, what the user must do). Do not treat "I have been working a while" as **done**, and do not improvise with `browser_cdp`.
+## 5. Avoid rabbit holes
+
+A long checkout, multi-page form, or virtualized list is **not** a stall — only the same failing path is.
+
+1. Do not repeat the same failing action without new evidence (fresh snapshot, different ref, changed page, or a clear new hypothesis).
+2. Same control or approach fails twice → change approach (different control, overlay first, or another tool).
+3. About four attempts with no progress, or two approaches both fail → stop and report a **blocker**: current URL, what you tried, what blocked you, and the most likely next human step. Captcha / 2FA / SSO / permissions → unlock (above), not more improvisation.
+4. Prefer gathering evidence over brute force: `browser_snapshot` or `browser_screenshot` before trying more actions.
+5. Do not get stuck in wait–action–wait loops. Every retry must be justified by something newly observed.
+
+Do not treat "I have been working a while" as **done**.
 
 # Reporting
 

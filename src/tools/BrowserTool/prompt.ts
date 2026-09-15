@@ -2,18 +2,15 @@
  * Tool descriptions for browser_* tools.
  *
  * Shared operating rules (latest-snapshot refs, screenshot vs snapshot,
- * stop after two failures) live on the Browser Automation agent prompt.
+ * avoid-rabbit-holes) live on the Browser Automation agent prompt.
  * Coding agents only see these strings — keep per-tool unique pitfalls here.
  */
 
 export const ELEMENT_HINT_DESCRIPTION =
   'Human-readable element description; must match the resolved ref'
 
-export const NAVIGATE_DESCRIPTION = `Navigate to a URL, or go back / forward / reload.
-
-Waits for the document and in-flight XHR/fetch, then returns a snapshot. Reuse it when the next control is there; if named fields are missing, ${'`browser_snapshot`'}. If a list is still empty, ${'`browser_wait_for`'} that text. Session cookies persist across calls.
-
-http(s) only — no file: or javascript: URLs. If a modal is covering the current page, click it — do not navigate away to dismiss it. Stay on the current page URL; do not replace a GUID path segment with a short display code (click the row in the list instead). Concur report numbers (e.g. WPIXXZ) in \`/reports/\` are rejected.`
+export const NAVIGATE_DESCRIPTION =
+  'Navigate to a URL. Reuses the current tab; use browser_tabs with action "new" to open another tab first. Omit url and set action for back / forward / reload.'
 
 export const SNAPSHOT_DESCRIPTION = `Capture an accessibility snapshot of the current page, this is better than screenshot.
 
@@ -23,7 +20,7 @@ Click \`[ref=eN]\` from the latest tree; bare \`text:\` is not clickable. Defaul
 
 export const GET_TEXT_DESCRIPTION = `Read bounded visible page text for answering questions or extracting copy.
 
-Uses the first match of \`selector\`, otherwise article → main → body. Cap with \`maxChars\` (default/ceiling 40k). \`selector\` is CSS, not \`[ref=eN]\`. Prefer this over ${'`browser_snapshot`'} mode=full or ${'`browser_cdp`'} Runtime.evaluate when you need prose, not clickable refs.`
+Uses the first match of \`selector\`, otherwise article → main → body. Cap with \`maxChars\` (default/ceiling 40k). \`selector\` is CSS, not \`[ref=eN]\`. Prefer this over ${'`browser_snapshot`'} mode=full when you need prose, not clickable refs.`
 
 export const CLICK_DESCRIPTION = `Click an element by snapshot ref, or x/y for canvas. Use this, not CDP Input.*`
 
@@ -35,7 +32,7 @@ export const FILL_FORM_DESCRIPTION = `Fill multiple form fields in one call. Pre
 
 Writes every listed field, then settles and snapshots once. Each field comes back as filled, skipped, or failed. Native \`<select>\` uses the visible label. Custom comboboxes: open them and ${'`browser_click`'} the option ref.
 
-If the ref is a wrapper div, the inner visible textbox is filled. A readonly display, a typed Date Range string (use the calendar), or a non-editable tag is skipped with a reason — use the inner textbox / combobox ref from a new snapshot. If a field has no snapshot ref (unlabeled input), set it with ${'`browser_cdp`'} Runtime.evaluate — do not guess a click.`
+If the ref is a wrapper div, the inner visible textbox is filled. A readonly display, a typed Date Range string (use the calendar), or a non-editable tag is skipped with a reason — use the inner textbox / combobox ref from a new snapshot. If a field has no snapshot ref (unlabeled input), snapshot again with a tighter CSS \`selector\` or report a blocker — do not guess a click.`
 
 export const SELECT_OPTION_DESCRIPTION = `Select an option in a native \`<select>\` dropdown.
 

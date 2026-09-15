@@ -326,20 +326,26 @@ const refSchema = z
 
 export const navigateTool = defineBrowserTool({
   name: BROWSER_NAVIGATE_TOOL_NAME,
-  summary: 'Open a URL, or go back / forward / reload',
+  summary: 'Navigate to a URL',
   description: prompt.NAVIGATE_DESCRIPTION,
   requireTab: false,
   inputSchema: z.object({
     url: z
       .string()
       .optional()
-      .describe('Absolute http(s) URL, e.g. http://localhost:3000'),
+      .describe('The URL to navigate to (http(s) only)'),
     action: z
       .enum(['back', 'forward', 'reload'])
       .optional()
       .describe('History action when url is omitted'),
+    screenshotAfterwards: z
+      .boolean()
+      .optional()
+      .describe(
+        'When true, takes a screenshot after navigation completes. Defaults to false.',
+      ),
   }),
-  async run({ url, action }, ctx) {
+  async run({ url, action, screenshotAfterwards }, ctx) {
     let targetId = ctx.targetId
     if (targetId && isTabPoisoned(targetId)) {
       const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
@@ -356,13 +362,18 @@ export const navigateTool = defineBrowserTool({
         ? 'Reloaded the page'
         : `Navigated ${action}`
       : `Navigated to ${url}`
-    return observe(ctx.backend, targetId, {
-      action: 'navigate',
-      message,
-      mode: 'full',
-      sessionId: ctx.sessionId,
-      toolCallId: ctx.toolCallId,
-    })
+    return observeAfterAction(
+      ctx.backend,
+      targetId,
+      {
+        action: 'navigate',
+        message,
+        mode: 'full',
+        skipIfDegraded: false,
+        screenshotAfterwards,
+      },
+      ctx,
+    )
   },
 })
 
@@ -564,12 +575,16 @@ export const clickTool = defineBrowserTool({
       offsetY: args.offsetY,
     })
     const label = args.element ? ` (${args.element})` : ''
+    const recovered =
+      args.ref && el.ref && el.ref !== args.ref
+        ? ` (ref recovered: ${args.ref} → ${el.ref})`
+        : ''
     return observeAfterAction(
       ctx.backend,
       ctx.targetId,
       {
         action: 'click',
-        message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} ${el.role} "${el.name}"${label}`,
+        message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} ${el.role} "${el.name}"${label}${recovered}`,
         compact: true,
         screenshotAfterwards: args.screenshotAfterwards,
       },
