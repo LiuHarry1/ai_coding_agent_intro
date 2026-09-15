@@ -415,7 +415,9 @@ export const snapshotTool = defineBrowserTool({
     selector: z
       .string()
       .optional()
-      .describe('CSS selector for one subtree, e.g. [role=dialog]'),
+      .describe(
+        'CSS selector for one subtree (e.g. [role=dialog]). Not a snapshot ref — [ref=eN] is rejected.',
+      ),
     compact: z
       .boolean()
       .optional()
@@ -608,7 +610,9 @@ export const typeTool = defineBrowserTool({
     slowly: z
       .boolean()
       .optional()
-      .describe('Send per-character key events for widgets that need keydown'),
+      .describe(
+        'When true, click then type character-by-character (75ms). Default replaces via fill.',
+      ),
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {

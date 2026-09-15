@@ -112,12 +112,16 @@ assert(
   'CDP summary is findable via ToolSearch',
 )
 assert(
-  CDP_DESCRIPTION.includes('Runtime.evaluate'),
-  'CDP description names evaluate',
+  CDP_DESCRIPTION.includes('Do not use CDP Input'),
+  'CDP description matches Cursor Input.* denial',
 )
 assert(
   !CDP_DESCRIPTION.includes('Electron'),
   'CDP description is not Cursor-host copy',
+)
+assert(
+  !CDP_DESCRIPTION.includes('DOM.getDocument'),
+  'cdp tool description stays Cursor-short; DOM tree denial is runtime policy',
 )
 assert(LOCK_DESCRIPTION.includes('unlock'), 'lock prompt names unlock')
 assert(LOCK_DESCRIPTION.includes('lock'), 'lock prompt names lock')
@@ -127,7 +131,7 @@ assert(
 )
 assert(
   FILE_UPLOAD_DESCRIPTION.includes('omit') ||
-    FILE_UPLOAD_DESCRIPTION.includes('ignored'),
+    FILE_UPLOAD_DESCRIPTION.includes('Omit'),
   'file_upload treats a non-file ref as optional',
 )
 assert(
@@ -136,7 +140,11 @@ assert(
 )
 assert(
   CLICK_DESCRIPTION.includes('x/y'),
-  'click documents canvas coordinates',
+  'click documents canvas coordinates (BaiX combines Cursor click + mouse_click_xy)',
+)
+assert(
+  TYPE_DESCRIPTION.toLowerCase().includes('replace'),
+  'type documents BaiX fill-replace default (Cursor splits type/fill)',
 )
 assert(
   !TYPE_DESCRIPTION.includes('do not reuse old refs'),
@@ -147,16 +155,8 @@ assert(
   'wait_for does not repeat the snapshot primer',
 )
 assert(
-  SNAPSHOT_DESCRIPTION.includes('maxDepth 30'),
-  'snapshot default maxDepth is 30',
-)
-assert(
-  SNAPSHOT_DESCRIPTION.includes('mode=full'),
-  'snapshot default mode is full',
-)
-assert(
-  SNAPSHOT_DESCRIPTION.includes('is CSS, not a ref'),
-  'snapshot selector is CSS, not a ref',
+  SNAPSHOT_DESCRIPTION.includes('better than screenshot'),
+  'snapshot matches Cursor one-liner role',
 )
 assert(
   !SNAPSHOT_DESCRIPTION.includes('never full'),
@@ -165,6 +165,10 @@ assert(
 assert(
   !SNAPSHOT_DESCRIPTION.includes('at most once'),
   'snapshot does not cap full at once',
+)
+assert(
+  !SNAPSHOT_DESCRIPTION.includes('Cursor'),
+  'snapshot tool description is not Cursor-branded',
 )
 
 const browserMd = readFileSync(
@@ -181,6 +185,22 @@ assert(
 assert(
   browserMd.includes('[ref=eN]'),
   'browser.md tells the agent to click latest snapshot refs',
+)
+assert(
+  browserMd.includes('maxDepth 30'),
+  'browser.md documents snapshot maxDepth 30',
+)
+assert(
+  browserMd.includes('mode=full'),
+  'browser.md documents snapshot mode=full',
+)
+assert(
+  browserMd.includes('CSS only'),
+  'browser.md documents snapshot selector is CSS, not a ref',
+)
+assert(
+  browserMd.includes('replaces'),
+  'browser.md documents browser_type replace semantics',
 )
 assert(
   !browserMd.replaceAll('Cursor defaults', '').includes('Cursor'),
