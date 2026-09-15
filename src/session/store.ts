@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import type { Session, SessionInfo, Message } from '../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
 import { isCompactBoundaryMessage } from '../core/messages/compact-boundary.js'
+import type { ExternalMode } from '../core/permission-mode.js'
 import { createDefaultPermissionMode } from '../core/permission-mode.js'
 import { resetSessionMemoryState } from '../services/session-memory/state.js'
 import { resetAutoMemoryState } from '../services/auto-memory/state.js'
@@ -150,7 +151,9 @@ export function getSession(
 ): Session | null {
   if (sessions.has(id)) return sessions.get(id)!
 
-  const found = findSessionLocation(id, opts?.agentHome)
+  const found = opts?.agentHome
+    ? findSessionLocation(id, opts.agentHome)
+    : (getCachedSessionLocation(id) ?? findSessionLocation(id))
   if (!found) return null
   registerSessionLocation(id, found)
 
@@ -268,45 +271,193 @@ export function setSessionWorkspace(
 }
 
 /**
+ * Bytes of jsonl to skim for list rows. Full restoreFromDisk would JSON.parse
+ * every line (including base64 image buffers) and pin the Session in RAM —
+ * super's GET /sessions was doing that for every tenant transcript.
+ */
+const LIST_JSONL_HEAD_BYTES = 64 * 1024
+
+function isExternalMode(value: unknown): value is ExternalMode {
+  return value === 'agent' || value === 'ask' || value === 'plan'
+}
+
+function modeFromIndexLine(line: Record<string, unknown>): ExternalMode | undefined {
+  const pm = line.permissionMode
+  if (isExternalMode(pm)) return pm
+  if (pm && typeof pm === 'object' && isExternalMode((pm as { mode?: unknown }).mode)) {
+    return (pm as { mode: ExternalMode }).mode
+  }
+  return undefined
+}
+
+function previewFromUserContent(content: unknown): string | undefined {
+  if (typeof content === 'string') {
+    const text = content.trim()
+    return text ? text.slice(0, 80) : undefined
+  }
+  if (!Array.isArray(content)) return undefined
+  const text = content
+    .filter(
+      (p): p is { type: string; text?: string } =>
+        Boolean(p) &&
+        typeof p === 'object' &&
+        (p as { type?: unknown }).type === 'text',
+    )
+    .map(p => p.text ?? '')
+    .join('')
+    .trim()
+  return text ? text.slice(0, 80) : undefined
+}
+
+function applyJsonlHeadToListInfo(
+  info: SessionInfo,
+  lines: string[],
+  wholeFile: boolean,
+): void {
+  let messageCount = 0
+  for (const raw of lines) {
+    const trimmed = raw.trim()
+    if (!trimmed) continue
+    let line: Record<string, unknown>
+    try {
+      line = JSON.parse(trimmed) as Record<string, unknown>
+    } catch {
+      continue
+    }
+    if (line.type === 'session_created') {
+      if (typeof line.createdAt === 'number') info.createdAt = line.createdAt
+      if (typeof line.ownerEmail === 'string') info.ownerEmail = line.ownerEmail
+      const mode = modeFromIndexLine(line)
+      if (mode) info.permissionMode = mode
+      if (line.agentType === null || typeof line.agentType === 'string') {
+        info.agentType = line.agentType
+      }
+    } else if (line.type === 'session_title') {
+      if (typeof line.title === 'string' && line.title.trim()) {
+        info.preview = line.title.trim()
+      }
+    } else if (line.type === 'mode_changed' || line.type === 'agent_changed') {
+      const mode = modeFromIndexLine(line)
+      if (mode) info.permissionMode = mode
+      if (line.agentType === null || typeof line.agentType === 'string') {
+        info.agentType = line.agentType
+      }
+    } else if (line.type === 'message') {
+      messageCount++
+      if (!info.preview && line.role === 'user') {
+        const preview = previewFromUserContent(line.content)
+        if (preview) info.preview = preview
+      }
+    } else if (line.type === 'compacted' && Array.isArray(line.messages)) {
+      messageCount = line.messages.length
+      if (!info.preview) {
+        const firstUser = line.messages.find(
+          (m): m is Record<string, unknown> =>
+            Boolean(m) &&
+            typeof m === 'object' &&
+            (m as { role?: unknown }).role === 'user',
+        )
+        if (firstUser) {
+          const preview = previewFromUserContent(firstUser.content)
+          if (preview) info.preview = preview
+        }
+      }
+    }
+  }
+  // Truncated reads are a lower bound; keep a higher index cache if present.
+  info.messageCount = wholeFile
+    ? messageCount
+    : Math.max(info.messageCount, messageCount)
+}
+
+function readSessionListMeta(
+  id: string,
+  entry: {
+    projectKey: string
+    createdAt: number
+    ownerEmail?: string
+    messageCount?: number
+  },
+  home: string,
+): SessionInfo {
+  const info: SessionInfo = {
+    id,
+    createdAt: entry.createdAt,
+    messageCount:
+      typeof entry.messageCount === 'number' && entry.messageCount >= 0
+        ? entry.messageCount
+        : 0,
+    ownerEmail: entry.ownerEmail,
+    agentType: null,
+  }
+  const filePath = getSessionJsonlPath(id, entry.projectKey, home)
+  if (!fs.existsSync(filePath)) return info
+  try {
+    const size = fs.statSync(filePath).size
+    const n = Math.min(size, LIST_JSONL_HEAD_BYTES)
+    const fd = fs.openSync(filePath, 'r')
+    try {
+      const buf = Buffer.alloc(n)
+      fs.readSync(fd, buf, 0, n, 0)
+      const text = buf.toString('utf8')
+      const lines = text.split('\n')
+      const wholeFile = size <= LIST_JSONL_HEAD_BYTES
+      if (!wholeFile) lines.pop()
+      applyJsonlHeadToListInfo(info, lines, wholeFile)
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch {
+    // Keep index fields.
+  }
+  return info
+}
+
+function toSessionInfo(session: Session): SessionInfo {
+  return {
+    id: session.id,
+    createdAt: session.createdAt,
+    messageCount: session.messages.length,
+    preview: extractPreview(session),
+    permissionMode: session.permissionMode.mode,
+    agentType: session.agentType ?? null,
+    ownerEmail: session.ownerEmail,
+  }
+}
+
+/**
  * List sessions. In SSO mode pass the requester's email to return only that
  * user's sessions; omit it (or run without auth) to list everything.
+ *
+ * Super (no owner filter) must not restoreFromDisk — that JSON.parse's every
+ * tenant jsonl (hundreds of MB) on the HTTP event loop and stalls /health.
  */
 export function listSessions(ownerEmail?: string): SessionInfo[] {
-  const homes = listSessionAgentHomes()
+  const homes =
+    ownerEmail !== undefined ? [resolveAgentHome()] : listSessionAgentHomes()
 
-  const ids = new Set<string>()
+  const infos: SessionInfo[] = []
   for (const home of homes) {
     const index = readSessionIndex(home)
     for (const [id, entry] of Object.entries(index.sessions)) {
       if (ownerEmail !== undefined && entry.ownerEmail !== ownerEmail) continue
-      ids.add(id)
       registerSessionLocation(id, {
         projectKey: entry.projectKey,
         agentHome: home,
       })
+      const live = sessions.get(id)
+      if (live) {
+        if (ownerEmail !== undefined && live.ownerEmail !== ownerEmail) continue
+        infos.push(toSessionInfo(live))
+        continue
+      }
+      infos.push(readSessionListMeta(id, entry, home))
     }
   }
 
-  return [...ids]
-    .map(id => getSession(id))
-    .filter((session: Session | null): session is Session => {
-      if (!session) return false
-      if (ownerEmail === undefined) return true
-      return session.ownerEmail === ownerEmail
-    })
-    .map((session: Session) => ({
-      id: session.id,
-      createdAt: session.createdAt,
-      messageCount: session.messages.length,
-      preview: extractPreview(session),
-      permissionMode: session.permissionMode.mode,
-      agentType: session.agentType ?? null,
-      ownerEmail: session.ownerEmail,
-    }))
-    .sort(
-      (a: SessionInfo, b: SessionInfo) =>
-        (b.createdAt ?? 0) - (a.createdAt ?? 0),
-    )
+  return infos.sort(
+    (a: SessionInfo, b: SessionInfo) => (b.createdAt ?? 0) - (a.createdAt ?? 0),
+  )
 }
 
 export function deleteSession(id: string): void {

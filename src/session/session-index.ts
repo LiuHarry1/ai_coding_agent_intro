@@ -15,6 +15,11 @@ export type SessionIndexEntry = {
   projectKey: string
   createdAt: number
   ownerEmail?: string
+  /** Optional list-row cache; GET /sessions must not restore jsonl to fill these. */
+  preview?: string
+  messageCount?: number
+  permissionMode?: string
+  agentType?: string | null
 }
 
 export type SessionIndexFile = {
