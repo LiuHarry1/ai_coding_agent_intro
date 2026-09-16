@@ -96,6 +96,15 @@ export type SkillListingAttachment = {
   content: string
 }
 
+export type InvokedSkillsAttachment = {
+  type: 'invoked_skills'
+  skills: Array<{
+    name: string
+    path: string
+    content: string
+  }>
+}
+
 export type AgentListingDeltaAttachment = {
   type: 'agent_listing_delta'
   addedTypes: string[]
@@ -147,6 +156,7 @@ export type Attachment =
   | PlanModeReentryAttachment
   | PlanModeExitAttachment
   | SkillListingAttachment
+  | InvokedSkillsAttachment
   | AgentListingDeltaAttachment
   | TaskNotificationAttachment
   | RelevantMemoriesAttachment

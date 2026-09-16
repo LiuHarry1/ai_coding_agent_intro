@@ -9,7 +9,11 @@ import {
   registerSubagents,
   getSubagentNames,
 } from '../../tools/AgentTool/index.js'
-import { registerSkills, formatSkillListing } from '../../skills/index.js'
+import {
+  registerSkills,
+  formatSkillListing,
+  addInvokedSkill,
+} from '../../skills/index.js'
 import {
   loadPlugins,
   pluginErrorMessage,
@@ -110,6 +114,15 @@ export async function resolveSlashCommand(
     immediateReply = `Unknown slash command: /${slashResult.name}\n\nTry /help to see all available commands.`
   } else if (slashResult.kind === 'run' && slashResult.mode === 'inline') {
     effectiveMessage = slashResult.text
+    if (session && slashResult.entry.kind === 'skill') {
+      const def = slashResult.entry.def
+      addInvokedSkill(
+        session,
+        def.name,
+        def.filePath ?? def.baseDir ?? def.name,
+        slashResult.text,
+      )
+    }
     console.log(
       `[server] expanded /${slashResult.entry.name} (${slashResult.entry.kind}) -> ${effectiveMessage.length} char prompt`,
     )

@@ -32,6 +32,9 @@ export type {
 export {
   buildPostCompactAttachmentMessages,
   countPostCompactAgentListing,
+  createSkillAttachmentIfNeeded,
+  POST_COMPACT_MAX_TOKENS_PER_SKILL,
+  POST_COMPACT_SKILLS_TOKEN_BUDGET,
 } from './post-compact-attachments.js'
 
 export {

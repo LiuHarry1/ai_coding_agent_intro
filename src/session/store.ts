@@ -37,6 +37,7 @@ import {
 } from './json-serialize.js'
 import { projectMessageForDisk } from './persist-project.js'
 import { replayTranscriptMessages } from './compact-replay.js'
+import { restoreInvokedSkillsFromMessages } from '../skills/invoked-skills.js'
 
 const sessions = new Map<string, Session>()
 
@@ -565,6 +566,7 @@ function restoreFromDisk(id: string): Session {
 
   const replayed = replayTranscriptMessages(lines)
   session.messages = replayed.messages
+  restoreInvokedSkillsFromMessages(session, session.messages)
 
   for (const line of lines) {
     if (line.type === 'session_created') {

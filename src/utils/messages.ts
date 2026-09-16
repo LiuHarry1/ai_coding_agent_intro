@@ -173,6 +173,21 @@ You have exited plan mode. You can now make edits, run tools, and take actions.$
       ])
     }
 
+    case 'invoked_skills': {
+      if (attachment.skills.length === 0) return []
+      const skillsContent = attachment.skills
+        .map(
+          skill =>
+            `### Skill: ${skill.name}\nPath: ${skill.path}\n\n${skill.content}`,
+        )
+        .join('\n\n---\n\n')
+      return wrapMessagesInSystemReminder([
+        metaUserMessage(
+          `The following skills were invoked in this session. Continue to follow these guidelines:\n\n${skillsContent}`,
+        ),
+      ])
+    }
+
     case 'agent_listing_delta': {
       const parts: string[] = []
       if (attachment.addedLines.length > 0) {

@@ -27,6 +27,8 @@ import { loadConditionalRulesForPaths } from './rules-loader.js'
 function getSkillListingAttachments(ctx: ToolUseContext): Attachment[] {
   const content = ctx.skillListingContent?.trim()
   if (!content) return []
+  if (ctx.session.skillListingAnnounced) return []
+  ctx.session.skillListingAnnounced = true
   return [{ type: 'skill_listing', content }]
 }
 

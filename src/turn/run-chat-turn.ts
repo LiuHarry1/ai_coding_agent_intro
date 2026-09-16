@@ -37,6 +37,7 @@ import { applyModeRestrictions } from '../core/mode-restrictions.js'
 import { filterToolsRecordByDisallowedGlobs } from '../tools/AgentTool/toolGlob.js'
 import { planExists } from '../utils/plans.js'
 import { createMemoryLifecycleHooks } from './memory-lifecycle.js'
+import { getInvokedSkillsForAgent } from '../skills/invoked-skills.js'
 import {
   consumeImmediateMemoryPrefetch,
   consumeMemoryPrefetchWithTimeout,
@@ -421,6 +422,10 @@ export async function runChatTurn(
           force: true,
           trigger: 'manual',
           instructions: instructions || undefined,
+          enrichment: {
+            toolNames: Object.keys(prepared.tools),
+            getInvokedSkills: () => getInvokedSkillsForAgent(session, null),
+          },
           sessionMemory: resolvedSettings.config.sessionMemory,
           readFileState: session.readFileState as
             import('../utils/read/types.js').ReadFileState | undefined,

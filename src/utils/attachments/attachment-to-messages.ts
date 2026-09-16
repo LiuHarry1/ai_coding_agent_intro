@@ -130,6 +130,7 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'plan_mode_exit':
     case 'diagnostics':
     case 'skill_listing':
+    case 'invoked_skills':
     case 'agent_listing_delta':
     case 'task_notification':
     case 'relevant_memories':

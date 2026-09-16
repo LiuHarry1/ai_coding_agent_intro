@@ -9,6 +9,12 @@ import type { SkillDefinition } from './types.js'
 
 export { SKILL_TOOL_NAME, filterSkillsByPaths }
 export type { SkillDefinition }
+export {
+  addInvokedSkill,
+  getInvokedSkillsForAgent,
+  restoreInvokedSkillsFromMessages,
+} from './invoked-skills.js'
+export type { InvokedSkillInfo } from './invoked-skills.js'
 
 // ── Skill listing for <system-reminder> injection ────────────────────────
 

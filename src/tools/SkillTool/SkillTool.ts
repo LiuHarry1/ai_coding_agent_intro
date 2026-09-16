@@ -5,8 +5,8 @@
  * The model calls `skill(skill_name=..., arguments=...)` and we either:
  *
  *   - inline:  expand the skill body ($ARGUMENTS / $1 / $name + !`shell` +
- *              @file) and return it as the tool result. The model reads it
- *              on the next turn like a "remembered" procedure.
+ *              @file), return `Launching skill: name` as the tool result,
+ *              and inject the body as a meta user message (CC newMessages).
  *
  *   - fork:    spin up a fresh subagent run with the expanded body as the
  *              system prompt. Used for skills that need many tool calls —
@@ -22,6 +22,7 @@ import type {
 } from '../../core/types.js'
 import type { SkillDefinition } from '../../skills/types.js'
 import { expandSkillBody, SkillExpansionError } from '../../skills/expand.js'
+import { addInvokedSkill } from '../../skills/invoked-skills.js'
 import { runSkillFork } from '../../skills/run-fork.js'
 
 import { SKILL_TOOL_NAME } from '../../constants/tool_names.js'
@@ -60,7 +61,7 @@ Important:
 - When a listed skill's description matches this task, invoke it before starting that workflow. Skip skills that do not match.
 
 Two execution modes:
-- **inline** skills return their expanded body as the tool result. Use them when you want to *remember* a procedure mid-thought (e.g. "code-review checklist", "PR-body template").
+- **inline** skills inject their expanded body as a follow-up message and return \`Launching skill: name\` as the tool result. Use them when you want to *remember* a procedure mid-thought (e.g. "code-review checklist", "PR-body template").
 - **fork** skills run as a fresh subagent with the body as system prompt. Use them when the skill needs many tool calls and you don't want its scratch work in your context.
 
 Arguments:
@@ -74,19 +75,32 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
     description,
     // Surface as a subagent-style card in the UI when the skill is `fork`.
     // For inline skills the card style is still useful — it groups the
-    // expanded body visually.
+    // launch line visually.
     isSubagent: true,
     isConcurrencySafe: () => false,
     outputSchema: z.object({
-      text: z.string(),
+      success: z.boolean().optional(),
       skill_name: z.string().optional(),
       mode: z.string().optional(),
+      text: z.string().optional(),
     }),
     mapToolResultToToolResultBlockParam(output, toolUseID) {
+      const data = output as {
+        skill_name?: string
+        mode?: string
+        text?: string
+      }
+      if (data.mode === 'fork') {
+        return {
+          tool_use_id: toolUseID,
+          type: 'tool_result',
+          content: typeof data.text === 'string' ? data.text : '',
+        }
+      }
       return {
         tool_use_id: toolUseID,
         type: 'tool_result',
-        content: (output as { text: string }).text,
+        content: `Launching skill: ${data.skill_name ?? ''}`,
       }
     },
     create(cwd: string, context: ToolContext) {
@@ -131,9 +145,23 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
             throw e
           }
 
-          // ── inline ── return the expanded body as the tool result.
+          // ── inline ── CC: short tool_result + body as meta newMessages.
           if (skill.context === 'inline') {
-            return { data: { text: combined, skill_name, mode: 'inline' } }
+            if (context.session) {
+              addInvokedSkill(
+                context.session,
+                skill_name,
+                skill.filePath ?? skill.baseDir ?? skill_name,
+                combined,
+                null,
+              )
+            }
+            return {
+              data: { success: true, skill_name, mode: 'inline' as const },
+              newMessages: [
+                { role: 'user' as const, content: combined, isMeta: true },
+              ],
+            }
           }
 
           // ── fork ── dispatch as a subagent using the requested agent

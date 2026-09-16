@@ -1,3 +1,4 @@
+import { getInvokedSkillsForAgent } from '../skills/invoked-skills.js'
 import type { CompactEnrichment } from '../services/compact/index.js'
 import {
   ensureMessageUuid,
@@ -98,7 +99,8 @@ export async function query(opts: QueryOptions): Promise<QueryResult> {
   const compactEnrichment: CompactEnrichment | undefined = toolUseContext
     ? {
         toolNames: Object.keys(activeTools),
-        skillListingContent: toolUseContext.skillListingContent,
+        getInvokedSkills: () =>
+          getInvokedSkillsForAgent(toolUseContext.session, null),
       }
     : undefined
 

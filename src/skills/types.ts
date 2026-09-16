@@ -6,9 +6,9 @@
  * Two execution modes:
  *
  *   "inline" (default): the body — after `$ARGUMENTS` / `!` / `@` expansion
- *                       — is returned as the tool result. The main agent
- *                       reads it on the next turn as if it had remembered
- *                       a procedure mid-thought.
+ *                       — is injected as a meta user message (`newMessages`);
+ *                       the tool result is `Launching skill: name`. Compact
+ *                       preserves the body via session.invokedSkills.
  *
  *   "fork":            the body becomes the system prompt of a fresh
  *                      subagent (typically `general_purpose`). Useful when
@@ -36,7 +36,7 @@ export interface SkillDefinition {
    */
   baseDir?: string
   /**
-   * "inline" — expand body, return as tool result.
+   * "inline" — expand body, inject as newMessages + register invokedSkills.
    * "fork"   — run as a subagent with body as system prompt.
    */
   context: SkillContextMode

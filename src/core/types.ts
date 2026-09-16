@@ -679,6 +679,20 @@ export interface Session {
    * Later Reads/Writes under these trees auto-allow for this session.
    */
   additionalWorkingDirectories?: string[]
+  /**
+   * Inline skills invoked this session (CC invokedSkills). Not written as its
+   * own jsonl event — durable copy is the post-compact `invoked_skills`
+   * attachment, restored on getSession.
+   */
+  invokedSkills?: Map<
+    string,
+    import('../skills/invoked-skills.js').InvokedSkillInfo
+  >
+  /**
+   * CC sentSkillNames: skill_listing is fire-once and survives compact so the
+   * catalog is not re-injected after summarization.
+   */
+  skillListingAnnounced?: boolean
 }
 
 export interface SessionInfo {
