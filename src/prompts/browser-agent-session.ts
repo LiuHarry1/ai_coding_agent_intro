@@ -1,7 +1,8 @@
 /**
  * Session-startup block for the Browser Automation primary agent.
  * Isolated vs extension are different products; say which one this process is.
- * CDP usage lives on the browser_cdp tool description (coding agents see it too).
+ * CDP usage lives on `.ai-agent/agents/browser.md` (Cursor MCP server
+ * description analogue). The loaded tool schema stays the Cursor one-liner.
  */
 
 export interface BrowserSessionHandoff {

@@ -1311,7 +1311,7 @@ export const cdpTool = defineBrowserTool({
     method: z
       .string()
       .describe(
-        'CDP method, e.g. Runtime.evaluate',
+        'CDP method name, for example Runtime.evaluate, Profiler.start, or Performance.getMetrics.',
       ),
     params: z
       .record(z.string(), z.unknown())

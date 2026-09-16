@@ -116,9 +116,12 @@ export const WAIT_FOR_DOWNLOAD_DESCRIPTION =
 export const LOCK_DESCRIPTION =
   'Take or release control of the current tab. unlock: user takes the page (captcha, 2FA, payment). lock: agent resumes after they finish.'
 
-/** Shown in ToolSearch / deferred catalog so coding agents can find evaluate. */
+/**
+ * ToolSearch / deferred catalog. Cursor's loaded schema is CDP_DESCRIPTION;
+ * this line matches Cursor CORE WORKFLOW #8 (not "evaluate when no ref").
+ */
 export const CDP_SUMMARY =
-  'Send a CDP command; Runtime.evaluate when a control has no snapshot ref'
+  'Send a CDP command for page inspection, profiling, Runtime.evaluate, DOM/CSS queries, and performance data'
 
 /** Matches Cursor's MCP description (first paragraph). BaiX adds DOM tree denial in runtime policy. */
 export const CDP_DESCRIPTION =

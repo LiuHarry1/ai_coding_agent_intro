@@ -112,6 +112,10 @@ assert(
   'CDP summary is findable via ToolSearch',
 )
 assert(
+  !CDP_SUMMARY.includes('no snapshot ref'),
+  'CDP summary does not send the model to evaluate when a ref is missing',
+)
+assert(
   CDP_DESCRIPTION.includes('Do not use CDP Input'),
   'CDP description matches Cursor Input.* denial',
 )
@@ -217,6 +221,27 @@ assert(
 assert(
   browserMd.includes('four attempts'),
   'browser.md stops after about four attempts',
+)
+assert(
+  /^  - browser_cdp\s*$/m.test(browserMd),
+  'browser.md allowlists browser_cdp',
+)
+assert(
+  browserMd.includes('returnByValue'),
+  'browser.md requires returnByValue on Runtime.evaluate',
+)
+assert(
+  browserMd.includes('main source of truth'),
+  'browser.md matches Cursor snapshot-as-source-of-truth note',
+)
+assert(
+  browserMd.includes('Do not use `browser_cdp`') ||
+    browserMd.includes('not as a second click'),
+  'browser.md forbids CDP as a click/type substitute',
+)
+assert(
+  !browserMd.includes('click a node'),
+  'browser.md does not tell the model to click via evaluate',
 )
 
 const browserProfile = parseAgentFromMarkdown({

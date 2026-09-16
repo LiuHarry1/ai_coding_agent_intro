@@ -851,6 +851,10 @@ await withRelay(async relay => {
     typeof deniedDom === 'string' && /browser_snapshot/.test(deniedDom),
     'DOM.getDocument is denied — use snapshot / get_text / evaluate',
   )
+  assert(
+    typeof deniedDom === 'string' && !/click a node/i.test(deniedDom),
+    'DOM.getDocument denial must not suggest clicking via evaluate',
+  )
   const deniedFlat = denyCdpMethod('DOM.getFlattenedDocument')
   assert(
     typeof deniedFlat === 'string' && /not allowed/.test(deniedFlat),

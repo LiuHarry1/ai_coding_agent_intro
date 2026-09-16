@@ -56,8 +56,8 @@ export function denyCdpMethod(method: string): string | undefined {
       `CDP method '${name}' is not allowed — the full DOM tree always exceeds ` +
       `the inline budget and is not useful for automation. Prefer ` +
       `browser_snapshot (refs), browser_get_text (copy), or Runtime.evaluate ` +
-      `with a small querySelector/XPath expression that returns a short value ` +
-      `(e.g. click a node whose textContent matches, or return {ok:true}).`
+      `with returnByValue: true that returns a short JSON value. ` +
+      `Do not click, type, or fill via evaluate.`
     )
   }
   if (DENIED_CDP_DOMAINS.has(domain) || DENIED_CDP_METHODS.has(name)) {
