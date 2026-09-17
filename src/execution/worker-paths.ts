@@ -3,6 +3,7 @@
  */
 import * as fs from 'fs'
 import * as path from 'path'
+import Module from 'node:module'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import {
@@ -132,10 +133,15 @@ function resolveNodePath(
 
 /** Set NODE_PATH for bundled externals (sharp, playwright-core) before they load. */
 export function applyRuntimeModulePath(appRoot?: string): void {
-  if (process.env.NODE_PATH) return
   const root = appRoot ? path.resolve(appRoot) : getRepoRoot()
-  const nodePath = resolveNodePath(root)
-  if (nodePath) process.env.NODE_PATH = nodePath
+  const nodePath = resolveNodePath(root, process.env.NODE_PATH)
+  if (!nodePath) return
+  process.env.NODE_PATH = nodePath
+  // NODE_PATH is snapshotted at process start. Re-init so a late set
+  // (bundled agent entry) still resolves `sharp` / playwright-core.
+  const initPaths = (Module as unknown as { _initPaths?: () => void })
+    ._initPaths
+  initPaths?.()
 }
 
 /**

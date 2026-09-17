@@ -7,6 +7,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { resolveFileInCwd } from '../utils/read/index.js'
 import {
+  coerceSanitizedProjectsPath,
   getBrowserLogsDir,
   getProjectsRoot,
   isReadableInternalPath,
@@ -337,6 +338,72 @@ try {
 
   fs.unlinkSync(outside)
   fs.rmSync(extraDir, { recursive: true, force: true })
+
+  const wrongKey = 'C--Users-harry.liu--ws'
+  const realKey = 'C--Users-harry-liu--ws'
+  const coerced = coerceSanitizedProjectsPath(
+    path.join(root, '.ai-agent', 'projects', wrongKey, 'sid', 'browser', 'snap.txt'),
+  )
+  const coercedKey = coerced
+    ? coerced.split(path.sep).find((_, i, arr) => arr[i - 1] === 'projects')
+    : undefined
+  if (coercedKey !== realKey) {
+    throw new Error(`coerceSanitizedProjectsPath failed: ${coerced}`)
+  }
+  const snapDir = path.join(root, '.ai-agent', 'projects', realKey, 'sid', 'browser')
+  fs.mkdirSync(snapDir, { recursive: true })
+  const snapFile = path.join(snapDir, 'snap.txt')
+  fs.writeFileSync(snapFile, 'ok')
+  const asked = path.join(root, '.ai-agent', 'projects', wrongKey, 'sid', 'browser', 'snap.txt')
+  const hit = resolveFileInCwd(root, asked, { allowOutsideWorkspace: true })
+  if ('error' in hit || path.normalize(hit.abs) !== path.normalize(snapFile)) {
+    throw new Error(`Read should follow sanitized project key, got ${JSON.stringify(hit)}`)
+  }
+
+  const sid = '59a89bca-a1ed-4fe6-932f-f822b19e0409'
+  const collapsedKey = 'C--Users-harry-liu--ai-agent-workspace'
+  const collapsedDir = path.join(
+    root,
+    '.ai-agent',
+    'projects',
+    collapsedKey,
+    sid,
+    'browser',
+  )
+  fs.mkdirSync(collapsedDir, { recursive: true })
+  const collapsedFile = path.join(collapsedDir, 'snapshot-x.txt')
+  fs.writeFileSync(collapsedFile, 'ok')
+  const mangledNested = path.join(
+    root,
+    '.ai-agent',
+    'projects',
+    'C--Users',
+    'harry.liu',
+    '.ai-agent',
+    'workspace',
+    sid,
+    'browser',
+    'snapshot-x.txt',
+  )
+  const collapsed = coerceSanitizedProjectsPath(mangledNested)
+  if (
+    !collapsed ||
+    path.normalize(collapsed) !== path.normalize(collapsedFile)
+  ) {
+    throw new Error(`nested project-key collapse failed: ${collapsed}`)
+  }
+  const nestedHit = resolveFileInCwd(root, mangledNested, {
+    allowOutsideWorkspace: true,
+  })
+  if (
+    'error' in nestedHit ||
+    path.normalize(nestedHit.abs) !== path.normalize(collapsedFile)
+  ) {
+    throw new Error(
+      `Read should collapse nested cwd-into-projects path, got ${JSON.stringify(nestedHit)}`,
+    )
+  }
+
   fs.rmSync(root, { recursive: true, force: true })
   console.log('filesystem permission tests OK')
 } finally {

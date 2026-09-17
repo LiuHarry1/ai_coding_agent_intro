@@ -37,7 +37,11 @@ import type {
   UserFileAttachment,
 } from '../../core/types.js'
 import { resolveChatAttachmentAbsPath, saveChatUpload } from '../chat-uploads.js'
-import { maybeResizeAndDownsampleImageBuffer } from '../image/resize-buffer.js'
+import {
+  fallbackImageForModel,
+  isImageResizeError,
+  maybeResizeAndDownsampleImageBuffer,
+} from '../image/resize-buffer.js'
 import {
   extractPDFPages,
   extractPdfText,
@@ -136,10 +140,13 @@ async function pdfPageImageMessages(
   for (const page of pages) {
     const imgPath = path.join(dir, page)
     const raw = fs.readFileSync(imgPath)
-    const resized = await maybeResizeAndDownsampleImageBuffer(
-      raw,
-      'image/jpeg',
-    )
+    let resized: { buffer: Buffer; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' }
+    try {
+      resized = await maybeResizeAndDownsampleImageBuffer(raw, 'image/jpeg')
+    } catch (err) {
+      if (!isImageResizeError(err)) throw err
+      resized = await fallbackImageForModel(raw, 'image/jpeg')
+    }
     const saved = await saveChatUpload(
       sessionId,
       resized.buffer,

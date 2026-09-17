@@ -88,6 +88,21 @@ export function buildAgentSpawnEnv(
   return env
 }
 
+/**
+ * Unpackaged desktop: use the Node that launched npm so native addons
+ * (sharp) match ABI. Packaged ELECTRON_RUN_AS_NODE keeps a pure-JS JPEG/PNG
+ * fallback when the Electron ABI cannot load sharp.node.
+ */
+export function resolveAgentNodeExecPath(
+  electronExecPath,
+  { packaged = false } = {},
+) {
+  if (packaged) return electronExecPath
+  const npmNode = process.env.npm_node_execpath
+  if (npmNode && fs.existsSync(npmNode)) return npmNode
+  return electronExecPath
+}
+
 export function resolveTsxCli(appRoot) {
   return path.join(appRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 }

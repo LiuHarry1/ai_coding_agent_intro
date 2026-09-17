@@ -3,6 +3,9 @@
  * Run: npx tsx src/scripts/test-image-tool-result.ts
  */
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import sharp from 'sharp'
 import { tool } from 'ai'
 import { z } from 'zod'
@@ -22,11 +25,19 @@ import type {
 import type { IProvider } from '../core/llm/types.js'
 import { buildImageBlock } from '../utils/tool-result-content.js'
 import {
+  compressImageBufferWithTokenLimit,
   estimateImageTokens,
   toolResultImageBlockFromBuffer,
 } from '../utils/image/resize-buffer.js'
 import { estimateMessageTokens } from '../services/compact/tokens.js'
 import { projectMessagesForApi } from '../core/agent/messageSanitize.js'
+import {
+  READ_IMAGE_MAX_HEIGHT,
+  READ_IMAGE_MAX_WIDTH,
+  READ_IMAGE_TOKEN_BUDGET,
+} from '../constants/api_limits.js'
+import { readImageFile } from '../utils/read/read-image.js'
+import { SCREENSHOT_TOKEN_BUDGET } from '../browser/limits.js'
 
 /** 1x1 transparent PNG. */
 const PNG_BASE64 =
@@ -152,6 +163,131 @@ async function testStrictImageBudget() {
   )
 }
 
+async function noiseJpeg(width: number, height: number, quality = 90) {
+  const pixels = Buffer.allocUnsafe(width * height * 3)
+  for (let i = 0; i < pixels.length; i++) {
+    pixels[i] = (i * 31 + Math.floor(i / 97) * 17) & 0xff
+  }
+  return sharp(pixels, { raw: { width, height, channels: 3 } })
+    .jpeg({ quality })
+    .toBuffer()
+}
+
+async function testTallReceiptFitsReadBudget() {
+  // Width-only downscale left 240×18000 水单 JPEGs above the 25k-token cap.
+  const input = await noiseJpeg(240, 18_000)
+  const result = await compressImageBufferWithTokenLimit(
+    input,
+    READ_IMAGE_TOKEN_BUDGET,
+    'image/jpeg',
+    { strict: true },
+  )
+  const meta = await sharp(result.buffer).metadata()
+  assert.ok(
+    result.buffer.length <= 150_000,
+    `tall receipt still ${result.buffer.length} bytes`,
+  )
+  const tokens = estimateImageTokens(result.buffer.toString('base64'))
+  assert.ok(
+    tokens <= READ_IMAGE_TOKEN_BUDGET,
+    `tall receipt still ${tokens} tokens`,
+  )
+  console.log(
+    `ok tall receipt budget (${result.buffer.length} bytes, ${meta.width}x${meta.height})`,
+  )
+}
+
+async function testReadImageFileHotelFolio() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'read-img-'))
+  const abs = path.join(dir, 'hotel.jpg')
+  fs.writeFileSync(abs, await noiseJpeg(3024, 4032, 95))
+  const output = await readImageFile(abs, '酒店水单.jpg')
+  assert.equal(output.type, 'image')
+  assert.ok(output.file.base64.length > 0)
+  assert.ok(
+    estimateImageTokens(output.file.base64) <= READ_IMAGE_TOKEN_BUDGET,
+    `Read image still ${estimateImageTokens(output.file.base64)} tokens`,
+  )
+  const meta = await sharp(Buffer.from(output.file.base64, 'base64')).metadata()
+  assert.ok((meta.width ?? Infinity) <= READ_IMAGE_MAX_WIDTH)
+  assert.ok((meta.height ?? Infinity) <= READ_IMAGE_MAX_HEIGHT)
+  console.log(
+    `ok Read 酒店水单.jpg (${estimateImageTokens(output.file.base64)} tokens, ${meta.width}x${meta.height})`,
+  )
+}
+
+async function testJsFallbackWithoutSharp() {
+  const prev = process.env.BAIZE_DISABLE_SHARP
+  process.env.BAIZE_DISABLE_SHARP = '1'
+  try {
+    const input = await noiseJpeg(240, 18_000)
+    const result = await compressImageBufferWithTokenLimit(
+      input,
+      READ_IMAGE_TOKEN_BUDGET,
+      'image/jpeg',
+      { strict: true },
+    )
+    assert.ok(
+      result.buffer.length <= 150_000,
+      `JS fallback still ${result.buffer.length} bytes`,
+    )
+    console.log(
+      `ok JS fallback without sharp (${result.buffer.length} bytes)`,
+    )
+
+    const pngPixels = Buffer.allocUnsafe(1280 * 800 * 3)
+    for (let i = 0; i < pngPixels.length; i++) {
+      pngPixels[i] = (i * 31 + Math.floor(i / 97) * 17) & 0xff
+    }
+    const pngInput = await sharp(pngPixels, {
+      raw: { width: 1280, height: 800, channels: 3 },
+    })
+      .png()
+      .toBuffer()
+    const pngResult = await compressImageBufferWithTokenLimit(
+      pngInput,
+      SCREENSHOT_TOKEN_BUDGET,
+      'image/png',
+      { strict: true },
+    )
+    const pngMaxBytes = Math.floor(
+      Math.floor(SCREENSHOT_TOKEN_BUDGET / 0.125) * 0.75,
+    )
+    assert.ok(
+      pngResult.buffer.length <= pngMaxBytes,
+      `JS PNG fallback still ${pngResult.buffer.length} bytes`,
+    )
+    assert.equal(pngResult.mediaType, 'image/jpeg')
+    console.log(
+      `ok JS PNG fallback without sharp (${pngResult.buffer.length} bytes)`,
+    )
+  } finally {
+    if (prev === undefined) delete process.env.BAIZE_DISABLE_SHARP
+    else process.env.BAIZE_DISABLE_SHARP = prev
+  }
+}
+
+async function testCompressionFailureFallsBackToOriginal() {
+  const prev = process.env.BAIZE_DISABLE_SHARP
+  process.env.BAIZE_DISABLE_SHARP = '1'
+  try {
+    const raw = Buffer.concat([
+      Buffer.from('NOTANIMAGE'),
+      Buffer.alloc(80_000, 1),
+    ])
+    const block = await toolResultImageBlockFromBuffer(raw, 'image/webp', {
+      maxTokens: SCREENSHOT_TOKEN_BUDGET,
+      strictBudget: true,
+    })
+    assert.equal(block.source.data, raw.toString('base64'))
+    assert.equal(block.source.media_type, 'image/webp')
+    console.log('ok compression failure falls back to original')
+  } finally {
+    if (prev === undefined) delete process.env.BAIZE_DISABLE_SHARP
+    else process.env.BAIZE_DISABLE_SHARP = prev
+  }
+}
+
 function fakeProvider(supportsContentBlocks: boolean): IProvider {
   return {
     chatModel: () => ({}) as never,
@@ -204,6 +340,10 @@ async function main() {
   await testTokenEstimateSkipsBase64()
   await testResizePipeline()
   await testStrictImageBudget()
+  await testTallReceiptFitsReadBudget()
+  await testReadImageFileHotelFolio()
+  await testJsFallbackWithoutSharp()
+  await testCompressionFailureFallsBackToOriginal()
   await testMultimodalProviderKeepsBlocks()
   await testChatCompletionsProviderRelocatesImage()
   console.log('\nall image tool_result tests passed')

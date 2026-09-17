@@ -13,6 +13,7 @@ import brand from '../brand.json' with { type: 'json' }
 import {
   buildAgentSpawnEnv,
   resolveAgentLaunch,
+  resolveAgentNodeExecPath,
   resolveDefaultDesktopWorkspace,
 } from './agent-launch.mjs'
 
@@ -99,8 +100,16 @@ function startAgent() {
       : launch.kind === 'bundle'
         ? launch.entry
         : launch.startScript
+  const nodeExec = resolveAgentNodeExecPath(process.execPath, {
+    packaged: app.isPackaged,
+  })
+  const electronNode = nodeExec === process.execPath
+  const nodeEnv = electronNode
+    ? { ...env, ELECTRON_RUN_AS_NODE: '1' }
+    : env
   const launchHeader =
     `[desktop] agent launch kind=${launch.kind} entry=${launchEntry}` +
+    ` node=${nodeExec}` +
     (workspace ? ` workspace=${workspace}` : '')
   process.stderr.write(`${launchHeader}\n`)
 
@@ -112,16 +121,16 @@ function startAgent() {
       windowsHide: true,
     })
   } else if (launch.kind === 'bundle') {
-    agentProc = spawn(process.execPath, [launch.entry], {
+    agentProc = spawn(nodeExec, [launch.entry], {
       cwd: appRoot,
-      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+      env: nodeEnv,
       stdio: 'pipe',
       windowsHide: true,
     })
   } else {
-    agentProc = spawn(process.execPath, [launch.tsxCli, launch.startScript], {
+    agentProc = spawn(nodeExec, [launch.tsxCli, launch.startScript], {
       cwd: appRoot,
-      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+      env: nodeEnv,
       stdio: 'pipe',
       windowsHide: true,
     })

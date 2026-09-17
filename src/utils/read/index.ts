@@ -11,7 +11,11 @@ import {
 import type { Message, UserContentPart } from '../../core/types.js'
 import { resolvePath } from '../../tools/utils.js'
 import { coerceSanitizedProjectsPath } from '../../core/session-paths.js'
-import { maybeResizeAndDownsampleImageBuffer } from '../image/resize-buffer.js'
+import {
+  fallbackImageForModel,
+  isImageResizeError,
+  maybeResizeAndDownsampleImageBuffer,
+} from '../image/resize-buffer.js'
 import { mediaTypeForExt, saveChatUpload } from '../chat-uploads.js'
 import { formatTextReadBoundaryReminder } from './boundary-reminders.js'
 import { FILE_UNCHANGED_STUB } from './read-file-state.js'
@@ -288,11 +292,20 @@ export async function buildImageFollowUp(
     // is removed.
     const raw = fs.readFileSync(absPath)
     const originalMediaType = mediaTypeForExt(path.extname(absPath))
-    const preview = await maybeResizeAndDownsampleImageBuffer(
-      raw,
-      originalMediaType,
-      { maxWidth: 2000, maxHeight: 2000 },
-    )
+    let preview: {
+      buffer: Buffer
+      mediaType: typeof originalMediaType
+    }
+    try {
+      preview = await maybeResizeAndDownsampleImageBuffer(
+        raw,
+        originalMediaType,
+        { maxWidth: 2000, maxHeight: 2000 },
+      )
+    } catch (err) {
+      if (!isImageResizeError(err)) throw err
+      preview = await fallbackImageForModel(raw, originalMediaType)
+    }
     if (
       preview.mediaType === output.file.mediaType &&
       preview.buffer.equals(modelBuffer)

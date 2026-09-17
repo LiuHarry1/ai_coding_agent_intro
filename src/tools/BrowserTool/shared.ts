@@ -46,7 +46,10 @@ import type {
   ToolResultBlockParam,
   ToolResultContentBlockParam,
 } from '../../core/types.js'
-import { toolResultImageBlockFromBuffer } from '../../utils/image/resize-buffer.js'
+import {
+  fitsApiImageLimit,
+  toolResultImageBlockFromBuffer,
+} from '../../utils/image/resize-buffer.js'
 
 export interface NetworkRow {
   method: string
@@ -555,8 +558,11 @@ export async function attachScreenshot(
     out.screenshotBase64 = block.source.data
     out.screenshotMediaType = block.source.media_type
   } catch (err) {
-    // The full-fidelity file/URL remains available to the UI. Never exceed
-    // the model budget just because the optional image codec is unavailable.
+    if (fitsApiImageLimit(shot.buffer)) {
+      out.screenshotBase64 = shot.buffer.toString('base64')
+      out.screenshotMediaType = mediaType
+      return
+    }
     const reason = err instanceof Error ? err.message : String(err)
     out.message = `${out.message} (model image omitted: ${reason})`
   }
