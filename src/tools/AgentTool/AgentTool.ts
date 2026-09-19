@@ -292,7 +292,12 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
 
           let basePrompt = def.systemPrompt
           if (agentMemEnabled && def.memory) {
-            basePrompt = `${def.systemPrompt}\n\n${loadAgentMemoryPrompt(subagent_type, def.memory, cwd)}`
+            basePrompt = `${def.systemPrompt}\n\n${loadAgentMemoryPrompt(
+              subagent_type,
+              def.memory,
+              cwd,
+              def.memoryPolicy?.vocabulary,
+            )}`
           }
 
           const projectRules = def.omitProjectRules

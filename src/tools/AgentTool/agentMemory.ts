@@ -12,8 +12,10 @@ import { findCanonicalGitRoot } from '../../utils/git-root.js'
 import { sanitizePath } from '../../utils/sanitize-path.js'
 import { AUTO_MEM_ENTRYPOINT } from '../../services/auto-memory/paths.js'
 import { buildMemoryPrompt } from '../../services/auto-memory/prompts.js'
+import type { AgentMemoryScope, MemoryVocabulary } from '../../core/types.js'
 
-export type AgentMemoryScope = 'user' | 'project' | 'local'
+export type { AgentMemoryScope }
+export { parseAgentMemoryScope } from './memoryPolicy.js'
 
 const AGENT_MEMORY_DIRNAME = 'agent-memory'
 const AGENT_MEMORY_LOCAL_DIRNAME = 'agent-memory-local'
@@ -129,6 +131,17 @@ export function getMemoryScopeDisplay(
   }
 }
 
+export function agentMemoryScopeNote(scope: AgentMemoryScope): string {
+  switch (scope) {
+    case 'user':
+      return '- Since this memory is user-scope, keep learnings general since they apply across all projects'
+    case 'project':
+      return '- Since this memory is project-scope and shared with your team via version control, tailor your memories to this project'
+    case 'local':
+      return '- Since this memory is local-scope (not checked into version control), tailor your memories to this project and machine'
+  }
+}
+
 export function ensureAgentMemoryDirExists(memoryDir: string): void {
   try {
     fs.mkdirSync(memoryDir, { recursive: true })
@@ -146,22 +159,9 @@ export function loadAgentMemoryPrompt(
   agentType: string,
   scope: AgentMemoryScope,
   cwd?: string,
+  vocabulary: MemoryVocabulary = 'coding',
 ): string {
-  let scopeNote: string
-  switch (scope) {
-    case 'user':
-      scopeNote =
-        '- Since this memory is user-scope, keep learnings general since they apply across all projects'
-      break
-    case 'project':
-      scopeNote =
-        '- Since this memory is project-scope and shared with your team via version control, tailor your memories to this project'
-      break
-    case 'local':
-      scopeNote =
-        '- Since this memory is local-scope (not checked into version control), tailor your memories to this project and machine'
-      break
-  }
+  const scopeNote = agentMemoryScopeNote(scope)
 
   const memoryDir = getAgentMemoryDir(agentType, scope, cwd)
   ensureAgentMemoryDirExists(memoryDir)
@@ -171,18 +171,10 @@ export function loadAgentMemoryPrompt(
   return buildMemoryPrompt({
     displayName: 'Persistent Agent Memory',
     memoryDir,
+    vocabulary,
     extraGuidelines:
       coworkExtraGuidelines && coworkExtraGuidelines.trim().length > 0
         ? [scopeNote, coworkExtraGuidelines]
         : [scopeNote],
   })
-}
-
-export function parseAgentMemoryScope(
-  raw: unknown,
-): AgentMemoryScope | undefined {
-  if (typeof raw !== 'string') return undefined
-  const v = raw.trim().toLowerCase()
-  if (v === 'user' || v === 'project' || v === 'local') return v
-  return undefined
 }

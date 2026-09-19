@@ -12,14 +12,15 @@ The current runtime memory architecture has only four layers:
 3. **Session Memory**: a progress ledger for one session, consumed primarily by Compaction.
 4. **Compaction**: cleans or summarizes historical messages when the context approaches its limit.
 
-There is Persistent Agent Memory for **subagents** (CC-aligned), separate from project Auto Memory:
+There is Persistent Agent Memory, separate from project Auto Memory:
 
-- Subagent frontmatter may declare `memory: user | project | local`.
-- Primary agents that set `memory:` are ignored (warn); Primary `memoryMode` is out of scope here.
+- Subagent frontmatter may declare `memory: user | project | local` (CC short form) or `memory: { mode, scope, vocabulary }`.
+- Primary agents use the same key. `mode: private` gives that profile its own memdir; omitting `memory:` keeps shared Auto Memory.
 - Paths: user `{agentHome}/.ai-agent/agent-memory/<type>/`, project `{cwd}/.ai-agent/agent-memory/<type>/`, local `{cwd}/.ai-agent/agent-memory-local/<type>/`.
 - On AgentTool spawn (when Auto Memory is enabled), the subagent gets `Persistent Agent Memory` prompt + `MEMORY.md`, Write/Edit/Read if allow-listed, and write permission to its memdir.
-- Subagents do **not** run independent turn-end Auto Memory extract.
+- Subagents do **not** run independent turn-end Auto Memory extract. A private Primary does: extract writes its own memdir.
 - `@` mentions: files remain; `@agent-<type>` / `@"<type> (agent)"` invoke subagent reminder and may switch prefetch to that agent's memdir when it has `memory:`.
+- `resolveMemoryBinding()` is the single per-turn decision for prompt directory, filesystem roots, prefetch `readDirs`, and extract `writeDir`.
 
 Auto Memory topic frontmatter currently contains only `name`, `description`, and `type`. There is no source field such as `source: browser`, nor is there an implementation that filters by source.
 
@@ -627,21 +628,36 @@ The `type: compacted` snapshots written by older versions remain readable. Recov
 
 In agent mode, the Primary Agent profile replaces the default system prompt and determines the main-thread tool pool through tool allow-list / deny globs.
 
-Memory features are not entirely coupled to the profile:
+Memory directory selection is resolved once per turn by `resolveMemoryBinding()` in `src/services/auto-memory/binding.ts`. The resulting `MemoryBinding` is what prompt injection, filesystem roots, prefetch, and turn-end extract all consume.
 
-- Auto Memory prefetch, turn-end extract, Session Memory extract, and Compaction run in the main-thread turn lifecycle.
-- Project Rules and the Auto Memory usage guide are first merged into one `projectRules` string.
-- `omitProjectRules: true` removes that entire string from the Primary Agent system prompt, thereby removing both Project Rules and the Auto Memory usage guide.
-- This switch does not automatically disable independently started Auto Memory prefetch and turn-end extract.
+Priority:
 
-The current `.ai-agent/agents/browser.md` and the built-in Plan / Explore profiles all set `omitProjectRules: true`. Therefore, Browser Primary:
+1. Remote workspace or Auto Memory disabled → empty binding.
+2. Primary `memoryPolicy.mode === 'private'` → that agent's memdir, standalone prompt, extract writes only there.
+3. Otherwise → shared project Auto Memory (guide still merged into `projectRules`).
+4. An `@agent` mention with `memory:` narrows `readDirs` only; the write target does not move.
 
-- Shares Auto Memory storage and recall with General Primary.
-- Can still receive a `relevant_memories` attachment.
-- Still runs turn-end Auto Memory extraction.
-- Does not see the unified Auto Memory write guide in its system prompt, nor does it see Project Rules / conditional rules.
+`omitProjectRules: true` still strips Project Rules (and the shared Auto Memory guide when it rides in `projectRules`). A private Primary's memory guide is a **standalone** append and is not stripped.
 
-Plan / Explore likewise lose the merged `projectRules` string. They use their respective tool pools and do not replace the main thread's Auto Memory / Session Memory lifecycle.
+`.ai-agent/agents/browser.md` is configured as:
+
+```yaml
+memory:
+  mode: private
+  scope: local
+  vocabulary: external
+```
+
+So Browser Primary:
+
+- Reads and writes `.ai-agent/agent-memory-local/browser/` only.
+- Never reads or writes the shared Auto Memory directory.
+- Sees Persistent Agent Memory with the external-system vocabulary (how to operate a UI you do not edit).
+- Still receives `relevant_memories` from prefetch of its own memdir.
+- Still runs turn-end extract, into its own memdir.
+- Does not see Project Rules / conditional rules (`omitProjectRules: true`).
+
+Plan / Explore do not set `memory:` and stay on shared Auto Memory. They still lose the merged `projectRules` string when `omitProjectRules: true`.
 
 ### 8.1 Subagent Agent Memory (CC-aligned)
 
@@ -657,7 +673,7 @@ Subagents may declare `memory: user | project | local`. When Auto Memory is enab
 - File mentions (`@src/foo.ts`) unchanged.
 - Agent mentions (`@agent-explore` or `@"explore (agent)"`) produce an `agent_mention` reminder and, if that subagent has `memory:`, prefetch searches only its private memdir.
 
-Primary `memory:` in frontmatter is ignored. User-scope agents can initialize from `{cwd}/.ai-agent/agent-memory-snapshots/<type>/` on load (no update dialog UI yet).
+User-scope agents can initialize from `{cwd}/.ai-agent/agent-memory-snapshots/<type>/` on load (no update dialog UI yet).
 
 ## 9. Configuration defaults
 
@@ -749,7 +765,7 @@ Relevant environment variables:
 - Auto Memory scanning processes at most 200 topic files and skips `team/`, `logs/`, and `_*-` directories.
 - In default prefetch mode, `MEMORY.md` is normally an empty compatibility entry point, not the primary recall index.
 - The current memory schema has no `source` field and cannot filter by Browser / General source.
-- `omitProjectRules` controls both Rules and the Auto Memory guide, which is coarse-grained.
+- `omitProjectRules` still strips Project Rules and a shared Auto Memory guide that was merged into `projectRules`. A private Primary's standalone memory append is not stripped.
 - Auto Memory directory overrides accept only user / managed scope; local and project overrides are both removed.
 - Actual end-to-end LLM quality still depends on the selector / extractor model and prompts; most unit tests use stubs or mocks.
 
@@ -778,6 +794,8 @@ This currently chains:
 - `src/scripts/test-memory-deployment.mjs`
 - `src/scripts/test-rules-loader.ts`
 - `src/scripts/test-managed-extensions.ts`
+- `src/scripts/test-agent-memory.ts`
+- `src/scripts/test-memory-binding.ts`
 
 Purely local compact regression tests (do not start a server or call a real model):
 
@@ -865,4 +883,4 @@ To decide which layer should receive a piece of information:
 3. Is it current-session progress, error context, or a next step? Put it in Session Memory.
 4. Is its purpose to reduce tokens in the current context? Leave it to Compaction.
 
-Do not create another `MEMORY.md` system, and do not duplicate memory per Primary Agent. Unified Auto Memory provides cross-session sharing; Session Memory, the append-only compact boundary, and the active model projection jointly provide single-session continuity.
+Do not invent a third file format. Shared Auto Memory and private Agent Memory use the same topic-file + `MEMORY.md` shape; `MemoryBinding` chooses the directory. Default Primary agents stay on the shared pool. A specialist Primary (Browser) opts into a private local memdir so its operating notes do not pollute coding memory. Session Memory and Compaction remain session-scoped, not agent-scoped.

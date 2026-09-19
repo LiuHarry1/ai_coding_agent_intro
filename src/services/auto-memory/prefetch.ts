@@ -3,11 +3,13 @@
  */
 import type {
   AttachmentMessage,
+  AgentDefinition,
   Message,
   ToolUseContext,
   AutoMemoryConfig,
-  AgentDefinition,
 } from '../../core/types.js'
+import { getAgentMemoryDir } from '../../tools/AgentTool/agentMemory.js'
+import { extractAgentMentions } from '../../utils/attachments/extract-mentions.js'
 import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
 import type { IProvider } from '../../core/llm/types.js'
 import type { Attachment } from '../../utils/attachments/types.js'
@@ -22,15 +24,11 @@ import {
   readMemoriesForSurfacingSync,
   type SelectRelevantFn,
 } from './findRelevant.js'
-import {
-  getAgentMemoryDir,
-  type AgentMemoryScope,
-} from '../../tools/AgentTool/agentMemory.js'
-import { extractAgentMentions } from '../../utils/attachments/extract-mentions.js'
 
 /**
- * CC: if user @-mentions an agent with memory, prefetch only that agent's
- * memdir; otherwise use the project auto-memory path.
+ * @deprecated Prefer MemoryBinding.readDirs. Kept for mention-only tests:
+ * when the user @-mentions a subagent with memory, search that memdir;
+ * otherwise keep the caller-supplied auto-memory path.
  */
 export function resolvePrefetchMemoryDirs(
   queryText: string,
@@ -44,7 +42,7 @@ export function resolvePrefetchMemoryDirs(
   const dirs = mentions.flatMap(agentType => {
     const def = agents.find(a => a.agentType === agentType)
     if (!def?.memory || def.mode === 'primary') return []
-    return [getAgentMemoryDir(agentType, def.memory as AgentMemoryScope, cwd)]
+    return [getAgentMemoryDir(agentType, def.memory, cwd)]
   })
   return dirs.length > 0 ? dirs : [autoMemPath]
 }
@@ -82,6 +80,7 @@ const ENGLISH_RECALL_PATTERNS = [
   /\b(?:we|you|i)\s+(?:discussed|decided|agreed|said|mentioned|chose)\b/iu,
   /\bwhat\s+(?:did|have|had)\s+(?:we|you|i)\b/iu,
   /\b(?:find|search|review|summarize)\b.{0,24}\b(?:past|previous|earlier)\s+(?:conversation|chat|discussion|memory)\b/iu,
+  /\b(?:only\s+)?(?:from|based\s+on)\s+(?:your\s+)?memory\b/iu,
 ] as const
 
 const CHINESE_RECALL_PATTERNS = [
@@ -90,6 +89,7 @@ const CHINESE_RECALL_PATTERNS = [
   /(?:我们|我們|你|我).{0,10}(?:之前|以前|曾经|曾經).{0,20}(?:讨论|討論|决定|決定|约定|約定|说|說|提)/u,
   /(?:找|搜|搜索|查|翻).{0,12}(?:记忆|記憶|之前|以前|历史|歷史|聊天记录|聊天記錄|会话|會話)/u,
   /(?:记忆|記憶|跨会话|跨會話).{0,16}(?:什么|什麼|是否|有没有|有沒有|找|搜|查|校验码|校驗碼|偏好|约定|約定)/u,
+  /只?根据(?:你的)?记忆|只?根據(?:你的)?記憶/u,
 ] as const
 
 const FUTURE_OR_WRITE_PATTERNS = [

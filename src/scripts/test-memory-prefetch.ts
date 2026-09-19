@@ -60,6 +60,10 @@ async function main(): Promise<void> {
     '上次我们决定用哪个数据库？',
     '之前那个 issue 后来怎样了？',
     '帮我找一下之前的聊天记录',
+    '只根据记忆回答，不要写文件、不要读代码。我的测试代号是什么？',
+    '根据记忆，这个仓库应该用什么测试框架？',
+    '只根据你的记忆回答账单后台怎么操作',
+    'Answer only from memory: what is my test codename?',
   ]) {
     assert(hasRecallIntent(query), `recall intent expected: ${query}`)
   }
@@ -69,6 +73,7 @@ async function main(): Promise<void> {
     'Remember that we use PostgreSQL',
     '记住这个配置',
     '帮我记一下这个路径',
+    '根据记忆，记住这个配置',
     '记得明天发送报告',
     '部署之前先运行测试',
   ]) {

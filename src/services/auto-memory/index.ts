@@ -18,6 +18,8 @@ export {
   WHEN_TO_ACCESS_SECTION,
   TRUSTING_RECALL_SECTION,
   TYPES_SECTION_INDIVIDUAL,
+  TYPES_SECTION_INDIVIDUAL_EXTERNAL,
+  WHAT_NOT_TO_SAVE_SECTION_EXTERNAL,
 } from './types.js'
 export type { MemoryType } from './types.js'
 
@@ -59,6 +61,14 @@ export type {
   SelectRelevantFn,
 } from './findRelevant.js'
 
+export { resolveMemoryBinding, describeMemoryBinding } from './binding.js'
+export type {
+  MemoryBinding,
+  MemoryPromptKind,
+  MemoryPromptPlacement,
+  ResolveMemoryBindingOpts,
+} from './binding.js'
+
 export {
   startRelevantMemoryPrefetch,
   resolvePrefetchMemoryDirs,
@@ -97,6 +107,7 @@ export {
 
 export {
   buildAutoMemorySystemAppend,
+  buildMemorySystemAppend,
   buildExistingMemoriesManifest,
 } from './inject.js'
 

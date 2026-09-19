@@ -187,6 +187,12 @@ assert(
   'browser.md omits AGENTS.md / project rules',
 )
 assert(
+  /memory:\s*\n\s*mode:\s*private\s*\n\s*scope:\s*local\s*\n\s*vocabulary:\s*external/.test(
+    browserMd,
+  ),
+  'browser.md uses private local external memory',
+)
+assert(
   browserMd.includes('[ref=eN]'),
   'browser.md tells the agent to click latest snapshot refs',
 )

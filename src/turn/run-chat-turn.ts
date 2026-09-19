@@ -28,7 +28,10 @@ import {
   appendMessage,
   appendModeChange,
 } from '../session/index.js'
-import { prepareChatTurn } from '../utils/processUserInput/prepare_chat_turn.js'
+import {
+  prepareChatTurn,
+  type PreparedChatTurn,
+} from '../utils/processUserInput/prepare_chat_turn.js'
 import { createCanUseTool } from '../core/can-use-tool.js'
 import { profileSpan } from '../utils/startupProfiler.js'
 import { getSystemPromptForMode } from '../prompts/mode.js'
@@ -41,9 +44,7 @@ import { getInvokedSkillsForAgent } from '../skills/invoked-skills.js'
 import {
   consumeImmediateMemoryPrefetch,
   consumeMemoryPrefetchWithTimeout,
-  getAutoMemPath,
   resolveMemoryRecallDecision,
-  resolvePrefetchMemoryDirs,
   startRelevantMemoryPrefetch,
 } from '../services/auto-memory/index.js'
 import {
@@ -138,6 +139,7 @@ async function resolveTurnSystemPrompt(
   projectRules: string | undefined,
   profile: AgentDefinition | null,
   planOpts: { planFilePath: string; planExists: boolean },
+  memoryAppend?: string,
 ): Promise<string> {
   if (session.permissionMode.mode === 'agent' && profile) {
     return getSystemPromptForAgentProfile(
@@ -146,6 +148,7 @@ async function resolveTurnSystemPrompt(
       projectRules,
       session.id,
       '',
+      memoryAppend,
     )
   }
   return getSystemPromptForMode(
@@ -154,6 +157,17 @@ async function resolveTurnSystemPrompt(
     projectRules,
     planOpts,
   )
+}
+
+/** Private-primary memory guide; dropped with the profile when mode leaves agent. */
+function turnMemoryAppend(
+  session: Session,
+  prepared: PreparedChatTurn,
+): string | undefined {
+  if (session.permissionMode.mode === 'agent' && session.agentType) {
+    return prepared.memoryPromptSegment || undefined
+  }
+  return undefined
 }
 
 /** Buffered JSON responses -- wire emits are dropped. */
@@ -404,6 +418,7 @@ export async function runChatTurn(
           planFilePath: prepared.planFilePath,
           planExists: planExists(session, cwd),
         },
+        turnMemoryAppend(session, prepared),
       )
       const cacheSafeParams = createCacheSafeParams({
         systemPrompt: compactSystemPrompt,
@@ -492,6 +507,7 @@ export async function runChatTurn(
           planFilePath: prepared.planFilePath,
           planExists: planExists(session, cwd),
         },
+        turnMemoryAppend(session, prepared),
       )
       const mainModelId = models.profile('large').model
       const side = resolveSidePathModel({
@@ -577,6 +593,7 @@ export async function runChatTurn(
       planFilePath: prepared.planFilePath,
       planExists: planExists(session, cwd),
     },
+    turnMemoryAppend(session, prepared),
   )
 
   const refreshTools = () => {
@@ -601,6 +618,7 @@ export async function runChatTurn(
         planFilePath: prepared.planFilePath,
         planExists: planExists(session, cwd),
       },
+      turnMemoryAppend(session, prepared),
     )
 
   try {
@@ -640,36 +658,19 @@ export async function runChatTurn(
       autoMemoryModelId: autoMemorySide.modelId,
       autoMemoryProvider: autoMemorySide.provider,
       runAgent,
+      memoryDir: prepared.memoryBinding.writeDir,
+      extractEnabled: prepared.memoryBinding.extract.enabled,
+      vocabulary: prepared.memoryBinding.prompt.vocabulary,
     })
 
-    const memPath =
-      autoMemoryConfig.enabled &&
-      !remote &&
-      autoMemoryConfig.prefetchEnabled !== false
-        ? getAutoMemPath({
-            cwd,
-            trustedDirectory: autoMemoryConfig.directory,
-          })
-        : undefined
-
-    const prefetchDirs =
-      memPath != null
-        ? resolvePrefetchMemoryDirs(
-            prepared.effectiveMessage,
-            memPath,
-            prepared.toolUseContext.agentDefinitions?.activeAgents,
-            cwd,
-            autoMemoryConfig.enabled,
-          )
-        : undefined
-
+    const prefetchDirs = prepared.memoryBinding.readDirs
     const memoryPrefetch =
-      memPath != null && prefetchDirs != null
+      prefetchDirs.length > 0 && autoMemoryConfig.prefetchEnabled !== false
         ? startRelevantMemoryPrefetch(
             getActiveModelMessages(session.messages, session.id),
             {
               config: autoMemoryConfig,
-              memPath,
+              memPath: prefetchDirs[0]!,
               memPaths: prefetchDirs,
               provider: prefetchSide.provider,
               modelId: prefetchSide.modelId,

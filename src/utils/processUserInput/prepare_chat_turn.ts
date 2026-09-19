@@ -52,9 +52,12 @@ import {
 } from '../permissions/filesystem.js'
 import { resolveAutoMemoryConfig } from '../../core/settings-manager.js'
 import {
-  buildAutoMemorySystemAppend,
-  getAutoMemPath,
+  buildMemorySystemAppend,
+  describeMemoryBinding,
+  resolveMemoryBinding,
+  type MemoryBinding,
 } from '../../services/auto-memory/index.js'
+import { findPrimaryAgent } from '../../tools/AgentTool/mergeAgents.js'
 import { assembleToolPool } from '../../tools/assembleToolPool.js'
 import { isBrowserEnabledForMainThread } from '../../browser/enablement.js'
 import { warmExtensionRelay } from '../../browser/manager.js'
@@ -157,6 +160,10 @@ export interface PreparedChatTurn {
   /** Per-turn dynamic defs first, then the registry. */
   getToolDefinition: (name: string) => ToolDefinition | undefined
   projectRules: string
+  /** Resolved once per turn; prompt / roots / prefetch / extract all consume this. */
+  memoryBinding: MemoryBinding
+  /** Standalone memory guide (private primary). Empty when it rides in projectRules. */
+  memoryPromptSegment: string
   toolUseContext: ToolUseContext
   subagentNames: Set<string>
   concurrencyPolicy: ReturnType<typeof buildConcurrencyPolicy>
@@ -238,15 +245,23 @@ export async function prepareChatTurn(
 
   const projectRulesRaw = remote ? '' : loadAllAgentRules(cwd)
   const autoMemory = resolveAutoMemoryConfig(config)
-  const autoMemoryAppend = remote
-    ? ''
-    : buildAutoMemorySystemAppend({
-        cwd: pluginCwd,
-        config: autoMemory,
-      })
-  const projectRules = [projectRulesRaw, autoMemoryAppend]
-    .filter(s => s.trim())
-    .join('\n\n')
+  const earlyProfile = findPrimaryAgent(activeAgents, session.agentType)
+  const memoryBinding = resolveMemoryBinding({
+    cwd: pluginCwd,
+    config: autoMemory,
+    profile: earlyProfile,
+    agents: activeAgents,
+    queryText: slash.effectiveMessage,
+    remote,
+  })
+  const memoryGuide = buildMemorySystemAppend(memoryBinding)
+  const projectRules =
+    memoryBinding.prompt.placement === 'project-rules'
+      ? [projectRulesRaw, memoryGuide].filter(s => s.trim()).join('\n\n')
+      : projectRulesRaw
+  const memoryPromptSegment =
+    memoryBinding.prompt.placement === 'standalone' ? memoryGuide : ''
+  console.log(`[server] ${describeMemoryBinding(memoryBinding)}`)
   const toolEnablement = {
     disabledTools: [
       ...(config.disabledTools ?? []),
@@ -255,13 +270,6 @@ export async function prepareChatTurn(
     ],
   }
 
-  const autoMemEnabled = autoMemory.enabled && !remote
-  const autoMemPath = autoMemEnabled
-    ? getAutoMemPath({
-        cwd: pluginCwd,
-        trustedDirectory: autoMemory.directory,
-      })
-    : undefined
   const permOpts = settingsPermissionOpts(config.permissions)
 
   let execution
@@ -301,8 +309,14 @@ export async function prepareChatTurn(
     permissionContext: createFilesystemPermissionContext(
       remote ? pluginCwd : cwd,
       {
-        extraReadRoots: autoMemPath ? [autoMemPath] : undefined,
-        extraWriteRoots: autoMemPath ? [autoMemPath] : undefined,
+        extraReadRoots:
+          memoryBinding.roots.read.length > 0
+            ? memoryBinding.roots.read
+            : undefined,
+        extraWriteRoots:
+          memoryBinding.roots.write.length > 0
+            ? memoryBinding.roots.write
+            : undefined,
         ...permOpts,
         additionalWorkingDirectories: [
           ...(permOpts.additionalWorkingDirectories ?? []),
@@ -389,6 +403,8 @@ export async function prepareChatTurn(
     getToolDefinition: (name: string) =>
       pool.dynamicDefs[name] ?? registry.get(name),
     projectRules,
+    memoryBinding,
+    memoryPromptSegment,
     toolUseContext,
     subagentNames: getSubagentNames(registry),
     concurrencyPolicy: buildConcurrencyPolicy(registry),

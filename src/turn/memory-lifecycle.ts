@@ -5,6 +5,7 @@
 import type {
   AgentLifecycleSnapshot,
   AutoMemoryConfig,
+  MemoryVocabulary,
   RunAgentFn,
   SessionMemoryConfig,
 } from '../core/types.js'
@@ -23,6 +24,10 @@ export function createMemoryLifecycleHooks(opts: {
   autoMemoryModelId?: string
   autoMemoryProvider?: IProvider
   runAgent: RunAgentFn
+  /** Explicit extract write target from MemoryBinding.writeDir. */
+  memoryDir?: string
+  extractEnabled?: boolean
+  vocabulary?: MemoryVocabulary
 }) {
   const {
     sessionMemory,
@@ -32,6 +37,9 @@ export function createMemoryLifecycleHooks(opts: {
     autoMemoryModelId,
     autoMemoryProvider,
     runAgent,
+    memoryDir,
+    extractEnabled,
+    vocabulary,
   } = opts
 
   return {
@@ -80,6 +88,8 @@ export function createMemoryLifecycleHooks(opts: {
       if (
         !snap.sessionId ||
         !autoMemory?.enabled ||
+        extractEnabled === false ||
+        !memoryDir ||
         (autoMemory.cacheSafe === false && !autoMemoryModelId)
       ) {
         return
@@ -108,6 +118,8 @@ export function createMemoryLifecycleHooks(opts: {
           cwd: snap.cwd ?? process.cwd(),
           cacheSafeParams,
           trustedDirectory: autoMemory.directory,
+          memoryDir,
+          vocabulary,
         })
       }
       if (scope) runWithRequestScope(scope, reenter)

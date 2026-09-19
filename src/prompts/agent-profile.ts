@@ -25,6 +25,8 @@ function resolveBrowserMode(cwd: string): 'isolated' | 'extension' {
  * Build the effective system prompt for a primary agent profile.
  * REPLACE default agent/ask/plan prompts with the markdown body, then append
  * a short environment block and project rules (unless omitProjectRules).
+ * `memoryAppend` is independent of omitProjectRules — private agent memory
+ * must still reach browser / Plan profiles that strip the rules block.
  */
 export async function getSystemPromptForAgentProfile(
   profile: AgentDefinition,
@@ -32,6 +34,7 @@ export async function getSystemPromptForAgentProfile(
   projectRules?: string,
   sessionId?: string,
   modelId = '',
+  memoryAppend?: string,
 ): Promise<string> {
   setCwd(cwd)
   const env =
@@ -47,6 +50,7 @@ export async function getSystemPromptForAgentProfile(
 
   const rulesAppend =
     !profile.omitProjectRules && projectRules ? `\n\n${projectRules}` : ''
+  const memorySection = memoryAppend?.trim() ? `\n\n${memoryAppend}` : ''
 
-  return `${profile.systemPrompt}${session}\n\n${env}${rulesAppend}`
+  return `${profile.systemPrompt}${session}\n\n${env}${rulesAppend}${memorySection}`
 }

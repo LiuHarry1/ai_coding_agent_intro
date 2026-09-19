@@ -12,6 +12,7 @@ import * as path from 'path'
 import type {
   AutoMemoryConfig,
   IProvider,
+  MemoryVocabulary,
   Message,
   RunAgentFn,
 } from '../../core/types.js'
@@ -271,6 +272,9 @@ export type ExtractAutoMemoryArgs = {
   force?: boolean
   cacheSafeParams?: CacheSafeParams
   trustedDirectory?: string
+  /** Explicit write target from MemoryBinding.writeDir. Overrides getAutoMemPath. */
+  memoryDir?: string
+  vocabulary?: MemoryVocabulary
 }
 
 export type ExtractAutoMemoryResult = {
@@ -328,12 +332,16 @@ async function runAutoMemoryExtract(
     force,
     cacheSafeParams,
     trustedDirectory,
+    memoryDir,
+    vocabulary,
   } = args
 
-  const memPath = getAutoMemPath({
-    cwd,
-    trustedDirectory: trustedDirectory ?? config.directory,
-  })
+  const memPath =
+    memoryDir ??
+    getAutoMemPath({
+      cwd,
+      trustedDirectory: trustedDirectory ?? config.directory,
+    })
   ensureAutoMemDir(memPath)
 
   const state = getAutoMemoryState(sessionId)
@@ -377,6 +385,7 @@ async function runAutoMemoryExtract(
     existingMemories: existing,
     memoryDir: memPath,
     skipIndex,
+    vocabulary,
   })
 
   const canUseTool = createAutoMemCanUseTool(memPath, cwd)
@@ -496,10 +505,12 @@ export async function extractAutoMemories(
     return { ok: false, error: 'throttle' }
   }
 
-  const memPath = getAutoMemPath({
-    cwd: args.cwd,
-    trustedDirectory: args.trustedDirectory ?? args.config.directory,
-  })
+  const memPath =
+    args.memoryDir ??
+    getAutoMemPath({
+      cwd: args.cwd,
+      trustedDirectory: args.trustedDirectory ?? args.config.directory,
+    })
   const lockKey = path.resolve(memPath)
 
   const parked: ExtractAutoMemoryArgs = {

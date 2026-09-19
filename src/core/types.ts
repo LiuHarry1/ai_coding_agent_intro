@@ -730,6 +730,33 @@ export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project' | 'managed'
 /** Whether a disk agent is a ModePicker primary or AgentTool-only subagent. */
 export type AgentMode = 'primary' | 'subagent'
 
+/** Persistent Agent Memory scope (CC-aligned). */
+export type AgentMemoryScope = 'user' | 'project' | 'local'
+
+/**
+ * `shared` — this agent reads and writes the project-wide auto memory.
+ * `private` — this agent gets its own memdir and never touches the shared one.
+ */
+export type MemoryPolicyMode = 'shared' | 'private'
+
+/**
+ * Which memory-type vocabulary the guide uses. `external` suits agents that
+ * drive a system they do not edit (browser consoles, dashboards).
+ */
+export type MemoryVocabulary = 'coding' | 'external'
+
+/**
+ * Normalized memory configuration for one agent. Both frontmatter surfaces
+ * (`memory: project` and `memory: { mode, scope, vocabulary }`) collapse into
+ * this, and it is the only input the binding resolver reads.
+ */
+export interface MemoryPolicy {
+  mode: MemoryPolicyMode
+  /** Meaningful when `mode === 'private'`. */
+  scope: AgentMemoryScope
+  vocabulary: MemoryVocabulary
+}
+
 /**
  * Pure-data definition of a subagent / primary profile. After the single-Task
  * architecture refactor, subagents are entries in the `task` tool directory.
@@ -789,11 +816,17 @@ export interface AgentDefinition {
    */
   omitProjectRules?: boolean
   /**
-   * Persistent Agent Memory scope (CC-aligned). Subagents only.
-   * Primary agents must not set this — use a future memoryMode instead.
+   * Persistent Agent Memory scope (CC-aligned short form). Set for subagents
+   * with a private memdir; AgentTool spawn reads this directly.
    * Gated by AutoMemoryConfig.enabled at spawn / prefetch time.
    */
-  memory?: 'user' | 'project' | 'local'
+  memory?: AgentMemoryScope
+  /**
+   * Normalized memory policy for both primary and subagent. Derived from the
+   * same `memory:` frontmatter key (short or object form). The binding
+   * resolver reads only this.
+   */
+  memoryPolicy?: MemoryPolicy
   /** Set when a newer project snapshot exists for user-scope agent memory. */
   pendingSnapshotUpdate?: { snapshotTimestamp: string }
   /** Where this definition was loaded from (disk agents + plugins). */

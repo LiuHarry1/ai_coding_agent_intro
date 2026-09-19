@@ -12,6 +12,10 @@ description: |
   "check that the login page renders correctly on localhost:5173".
 mode: primary
 omitProjectRules: true
+memory:
+  mode: private
+  scope: local
+  vocabulary: external
 tools:
   - browser_navigate
   - browser_snapshot

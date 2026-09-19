@@ -1,9 +1,18 @@
 /**
  * Auto-memory system append. Prefetch mode injects guidance only; legacy
  * index mode injects the bounded MEMORY.md entrypoint as its recall fallback.
+ *
+ * Prefer `buildMemorySystemAppend(binding)` — it is the single dispatcher
+ * used by the turn host. `buildAutoMemorySystemAppend` remains for callers
+ * that only have a cwd + config (tests, shared-memory fallback).
  */
 import type { AutoMemoryConfig } from '../../core/types.js'
-import { loadAutoMemoryPrompt } from './prompts.js'
+import {
+  agentMemoryScopeNote,
+  ensureAgentMemoryDirExists,
+} from '../../tools/AgentTool/agentMemory.js'
+import { loadAutoMemoryPrompt, buildMemoryPrompt } from './prompts.js'
+import type { MemoryBinding } from './binding.js'
 import {
   ensureAutoMemDir,
   getAutoMemPath,
@@ -46,6 +55,36 @@ export function buildAutoMemorySystemAppend(
   if (skipIndex) return guide
 
   const { content } = truncateEntrypointContent(readEntrypointRaw(memPath))
+  if (!content.trim()) return guide
+  return `${guide}\n\n## Auto memory index\n\n${content}`
+}
+
+/**
+ * Build the memory guide for this turn from a resolved binding.
+ * Shared memory uses the auto-memory guide; private uses Persistent Agent Memory.
+ */
+export function buildMemorySystemAppend(binding: MemoryBinding): string {
+  const dir = binding.prompt.dir
+  if (binding.prompt.kind === 'none' || !dir) return ''
+
+  if (binding.prompt.kind === 'agent') {
+    ensureAgentMemoryDirExists(dir)
+    const extra = binding.prompt.scope
+      ? [agentMemoryScopeNote(binding.prompt.scope)]
+      : undefined
+    return buildMemoryPrompt({
+      displayName: 'Persistent Agent Memory',
+      memoryDir: dir,
+      vocabulary: binding.prompt.vocabulary,
+      extraGuidelines: extra,
+    })
+  }
+
+  ensureAutoMemDir(dir)
+  const skipIndex = binding.prompt.skipIndex
+  const guide = loadAutoMemoryPrompt(dir, skipIndex, binding.prompt.vocabulary)
+  if (skipIndex) return guide
+  const { content } = truncateEntrypointContent(readEntrypointRaw(dir))
   if (!content.trim()) return guide
   return `${guide}\n\n## Auto memory index\n\n${content}`
 }

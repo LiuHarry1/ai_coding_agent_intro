@@ -20,7 +20,7 @@ import {
   AGENT_TOOL_NAME,
   INTERACTIVE_TOOLS,
 } from '../../constants/tool_names.js'
-import { parseAgentMemoryScope } from './agentMemory.js'
+import { parseMemoryPolicy } from './memoryPolicy.js'
 
 /** Names that must not be used as ModePicker primary agentTypes. */
 const RESERVED_PRIMARY_AGENT_TYPES = new Set([
@@ -112,17 +112,13 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
 
   const filename = path.basename(file.filePath, '.md')
 
-  let memory = parseAgentMemoryScope(fm.memory)
-  if (fm.memory !== undefined && memory === undefined) {
-    console.warn(
-      `[agents] agent '${agentType}': invalid memory '${String(fm.memory)}'. Valid: user, project, local`,
-    )
-  }
-  if (memory && mode === 'primary') {
-    console.warn(
-      `[agents] agent '${agentType}': memory: is subagent-only; ignored on mode: primary`,
-    )
-    memory = undefined
+  const {
+    policy: memoryPolicy,
+    scope: memory,
+    warnings: memoryWarnings,
+  } = parseMemoryPolicy(fm.memory)
+  for (const w of memoryWarnings) {
+    console.warn(`[agents] agent '${agentType}': ${w}`)
   }
 
   const agent: AgentDefinition = {
@@ -151,6 +147,7 @@ export function parseAgentFromMarkdown(file: MarkdownFile): AgentParseResult {
       ? { omitProjectRules: true }
       : {}),
     ...(memory ? { memory } : {}),
+    ...(memoryPolicy ? { memoryPolicy } : {}),
   }
 
   return { agent, filePath: file.filePath }

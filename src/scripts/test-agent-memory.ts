@@ -78,7 +78,7 @@ try {
       'not agent memory',
     )
 
-    // ── frontmatter: subagent keeps memory; primary ignores ──
+    // ── frontmatter: short form works for both subagent and primary ──
     const sub = parseAgentFromMarkdown({
       filePath: path.join(cwd, 'agents', 'reviewer.md'),
       baseDir: path.join(cwd, 'agents'),
@@ -104,7 +104,11 @@ try {
       },
       body: 'Browser agent.',
     })
-    assert(primary.agent?.memory === undefined, 'primary memory ignored')
+    assert(primary.agent?.memory === 'project', 'primary short form sets scope')
+    assert(
+      primary.agent?.memoryPolicy?.mode === 'private',
+      'primary short form is private',
+    )
 
     // ── prompt includes MEMORY.md ──
     fs.mkdirSync(projectDir, { recursive: true })

@@ -18,9 +18,28 @@ import {
   MEMORY_FRONTMATTER_EXAMPLE,
   TRUSTING_RECALL_SECTION,
   TYPES_SECTION_INDIVIDUAL,
+  TYPES_SECTION_INDIVIDUAL_EXTERNAL,
   WHAT_NOT_TO_SAVE_SECTION,
+  WHAT_NOT_TO_SAVE_SECTION_EXTERNAL,
   WHEN_TO_ACCESS_SECTION,
 } from './types.js'
+import type { MemoryVocabulary } from '../../core/types.js'
+
+/**
+ * The two sections that differ between a coding agent and an agent driving a
+ * system it does not edit. Everything else in the guide is shared.
+ */
+function typesSection(vocabulary: MemoryVocabulary): readonly string[] {
+  return vocabulary === 'external'
+    ? TYPES_SECTION_INDIVIDUAL_EXTERNAL
+    : TYPES_SECTION_INDIVIDUAL
+}
+
+function whatNotToSaveSection(vocabulary: MemoryVocabulary): readonly string[] {
+  return vocabulary === 'external'
+    ? WHAT_NOT_TO_SAVE_SECTION_EXTERNAL
+    : WHAT_NOT_TO_SAVE_SECTION
+}
 
 /** Guidance when the memory directory already exists. (CC DIR_EXISTS_GUIDANCE) */
 export const DIR_EXISTS_GUIDANCE =
@@ -45,6 +64,7 @@ export function buildMemoryLines(
   memoryDir: string,
   extraGuidelines?: string[],
   skipIndex = false,
+  vocabulary: MemoryVocabulary = 'coding',
 ): string[] {
   const howToSave = skipIndex
     ? [
@@ -86,8 +106,8 @@ export function buildMemoryLines(
     '',
     'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find and remove the relevant entry.',
     '',
-    ...TYPES_SECTION_INDIVIDUAL,
-    ...WHAT_NOT_TO_SAVE_SECTION,
+    ...typesSection(vocabulary),
+    ...whatNotToSaveSection(vocabulary),
     '',
     ...howToSave,
     '',
@@ -117,6 +137,7 @@ export function buildMemoryPrompt(params: {
   displayName: string
   memoryDir: string
   extraGuidelines?: string[]
+  vocabulary?: MemoryVocabulary
 }): string {
   const { displayName, memoryDir, extraGuidelines } = params
   const entrypoint = join(memoryDir, AUTO_MEM_ENTRYPOINT)
@@ -128,7 +149,13 @@ export function buildMemoryPrompt(params: {
     // No memory file yet
   }
 
-  const lines = buildMemoryLines(displayName, memoryDir, extraGuidelines)
+  const lines = buildMemoryLines(
+    displayName,
+    memoryDir,
+    extraGuidelines,
+    false,
+    params.vocabulary ?? 'coding',
+  )
 
   if (entrypointContent.trim()) {
     const t = truncateEntrypointContent(entrypointContent)
@@ -187,6 +214,7 @@ function howToSaveSection(skipIndex: boolean): string[] {
 export function loadAutoMemoryPrompt(
   memoryDir: string,
   skipIndex = true,
+  vocabulary: MemoryVocabulary = 'coding',
 ): string {
   return [
     '# auto memory',
@@ -197,8 +225,8 @@ export function loadAutoMemoryPrompt(
     '',
     'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. Preserve exact facts, names, paths, identifiers, codes, and literal values verbatim; do not generalize them away. If they ask you to forget something, find and remove the relevant entry.',
     '',
-    ...TYPES_SECTION_INDIVIDUAL,
-    ...WHAT_NOT_TO_SAVE_SECTION,
+    ...typesSection(vocabulary),
+    ...whatNotToSaveSection(vocabulary),
     '',
     ...howToSaveSection(skipIndex),
     '',
@@ -223,9 +251,11 @@ export function buildExtractAutoMemoryPrompt(opts: {
   existingMemories: string
   memoryDir: string
   skipIndex?: boolean
+  vocabulary?: MemoryVocabulary
 }): string {
   const { newMessageCount, existingMemories, memoryDir } = opts
   const skipIndex = opts.skipIndex !== false
+  const vocabulary = opts.vocabulary ?? 'coding'
   const manifest =
     existingMemories.length > 0
       ? `\n\n## Existing memory files\n\n${existingMemories}\n\nCheck this list before writing — update an existing file rather than creating a duplicate.`
@@ -243,8 +273,8 @@ export function buildExtractAutoMemoryPrompt(opts: {
     '',
     'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. Preserve exact facts, names, paths, identifiers, codes, and literal values verbatim; do not generalize them away. If they ask you to forget something, find and remove the relevant entry.',
     '',
-    ...TYPES_SECTION_INDIVIDUAL,
-    ...WHAT_NOT_TO_SAVE_SECTION,
+    ...typesSection(vocabulary),
+    ...whatNotToSaveSection(vocabulary),
     '',
     ...howToSaveSection(skipIndex),
   ].join('\n')
