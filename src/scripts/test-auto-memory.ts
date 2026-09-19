@@ -66,6 +66,46 @@ function assert(cond: boolean, msg: string): void {
     extract.includes('identifiers, codes, and literal values verbatim'),
     'explicit memory requests preserve exact identifiers',
   )
+  assert(
+    guide.includes('identifiers, codes, and literal values verbatim'),
+    'coding load guide preserves exact identifiers',
+  )
+
+  const externalGuide = loadAutoMemoryPrompt('/tmp/memory', true, 'external')
+  const externalExtract = buildExtractAutoMemoryPrompt({
+    newMessageCount: 4,
+    existingMemories: '',
+    memoryDir: '/tmp/memory',
+    vocabulary: 'external',
+  })
+  assert(
+    !externalExtract.includes(
+      'identifiers, codes, and literal values verbatim',
+    ),
+    'external extract does not preserve identifiers verbatim',
+  )
+  assert(
+    !externalGuide.includes('identifiers, codes, and literal values verbatim'),
+    'external load guide does not preserve identifiers verbatim',
+  )
+  assert(
+    externalExtract.includes('Do not persist this-visit observed values'),
+    'external extract forbids writing observed values',
+  )
+  assert(
+    externalGuide.includes('Do not persist this-visit observed values'),
+    'external load guide forbids writing observed values',
+  )
+  assert(
+    externalExtract.includes(
+      'already has the same control sequence, do not write the file',
+    ),
+    'external extract skips rewrite when the playbook path is unchanged',
+  )
+  assert(
+    externalExtract.includes('leave the file unchanged'),
+    'external extract when_to_save leaves playbook unchanged',
+  )
 }
 
 function assistantWrite(filePath: string, toolCallId = randomUUID()): Message {

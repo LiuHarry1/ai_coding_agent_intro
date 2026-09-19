@@ -41,6 +41,18 @@ function whatNotToSaveSection(vocabulary: MemoryVocabulary): readonly string[] {
     : WHAT_NOT_TO_SAVE_SECTION
 }
 
+/**
+ * Shared remember/forget line for load + extract so the two copies cannot
+ * drift. `coding` keeps identifiers verbatim; `external` keeps control labels
+ * and order, not this-visit page values.
+ */
+function rememberSaveGuidance(vocabulary: MemoryVocabulary): string {
+  if (vocabulary === 'external') {
+    return 'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. Keep control labels and the order they must happen in verbatim. Do not persist this-visit observed values — amounts, counts, status text from one page load, query-string URLs, snapshot refs, or the current tab. If an existing playbook already has the same control sequence, do not write the file. If they ask you to forget something, find and remove the relevant entry.'
+  }
+  return 'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. Preserve exact facts, names, paths, identifiers, codes, and literal values verbatim; do not generalize them away. If they ask you to forget something, find and remove the relevant entry.'
+}
+
 /** Guidance when the memory directory already exists. (CC DIR_EXISTS_GUIDANCE) */
 export const DIR_EXISTS_GUIDANCE =
   'This directory already exists — write to it directly with the Write tool (do not run mkdir or check for its existence).'
@@ -104,7 +116,9 @@ export function buildMemoryLines(
     '',
     "You should build up this memory system over time so that future conversations can have a complete picture of who the user is, how they'd like to collaborate with you, what behaviors to avoid or repeat, and the context behind the work the user gives you.",
     '',
-    'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find and remove the relevant entry.',
+    vocabulary === 'external'
+      ? rememberSaveGuidance('external')
+      : 'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find and remove the relevant entry.',
     '',
     ...typesSection(vocabulary),
     ...whatNotToSaveSection(vocabulary),
@@ -223,7 +237,7 @@ export function loadAutoMemoryPrompt(
     '',
     "You should build up this memory system over time so that future conversations can have a complete picture of who the user is, how they'd like to collaborate with you, what behaviors to avoid or repeat, and the context behind the work the user gives you.",
     '',
-    'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. Preserve exact facts, names, paths, identifiers, codes, and literal values verbatim; do not generalize them away. If they ask you to forget something, find and remove the relevant entry.',
+    rememberSaveGuidance(vocabulary),
     '',
     ...typesSection(vocabulary),
     ...whatNotToSaveSection(vocabulary),
@@ -271,7 +285,7 @@ export function buildExtractAutoMemoryPrompt(opts: {
     `You MUST only use content from the last ~${newMessageCount} messages to update your persistent memories. Do not waste any turns attempting to investigate or verify that content further — no grepping source files, no reading code to confirm a pattern exists, no git commands.` +
       manifest,
     '',
-    'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. Preserve exact facts, names, paths, identifiers, codes, and literal values verbatim; do not generalize them away. If they ask you to forget something, find and remove the relevant entry.',
+    rememberSaveGuidance(vocabulary),
     '',
     ...typesSection(vocabulary),
     ...whatNotToSaveSection(vocabulary),

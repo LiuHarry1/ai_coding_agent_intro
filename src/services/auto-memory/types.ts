@@ -68,6 +68,8 @@ export const WHAT_NOT_TO_SAVE_SECTION_EXTERNAL = [
   '',
   'Every exclusion above rests on one test: the information is recoverable from the project itself, by reading the code, `git log`, or AGENTS.md. Apply that test rather than the label. Operating knowledge for an external system you drive but do not edit — a web console, an internal dashboard — fails it, because nothing in the repo records how that system behaves. Save that as `reference`.',
   '',
+  'Do not persist this-visit observed values from a page you drove: dollar amounts, counts, status copy from one load, query-string URLs (`?run=`), snapshot refs (`e13`), or the current tab. Those belong to this conversation, not to a playbook.',
+  '',
   'These exclusions apply even when the user explicitly asks you to save. If they ask you to save a PR list or activity summary, ask what was *surprising* or *non-obvious* about it — that is the part worth keeping.',
 ] as const
 
@@ -239,7 +241,7 @@ export const TYPES_SECTION_INDIVIDUAL_EXTERNAL = [
   '<type>',
   '    <name>reference</name>',
   '    <description>Stores pointers to where information can be found in external systems, and, for systems you operate rather than just read, how to get at it. These memories allow you to remember where to look, and what it takes to get there, for anything outside the project directory.</description>',
-  '    <when_to_save>When you learn about resources in external systems and their purpose. For example, that bugs are tracked in a specific project in Linear or that feedback can be found in a specific Slack channel. Also when you work out how to get something specific out of an external system and that route was not obvious from its interface: the sequence of controls that works, a precondition the page never states, a prominent figure that turns out to be stale, or a control that looks right and leads nowhere. Record the durable shape (control names and the order they must happen in) and never element refs, selectors, or ids, which belong to one page load and are worthless afterwards.</when_to_save>',
+  '    <when_to_save>When you learn about resources in external systems and their purpose. For example, that bugs are tracked in a specific project in Linear or that feedback can be found in a specific Slack channel. Also when you work out how to get something specific out of an external system and that route was not obvious from its interface: the sequence of controls that works, a precondition the page never states, a prominent figure that turns out to be stale, or a control that looks right and leads nowhere. Record the durable shape (control names and the order they must happen in) and never element refs, selectors, or ids, which belong to one page load and are worthless afterwards. If a playbook for that system already records the same control sequence, do not append this visit\'s observed values — leave the file unchanged.</when_to_save>',
   '    <how_to_use>When the user references an external system or information that may be in an external system. Before you start driving a system you already have notes on, apply them instead of rediscovering the route.</how_to_use>',
   '    <examples>',
   '    user: check the Linear project "INGEST" if you want context on these tickets, that\'s where we track all pipeline bugs',
