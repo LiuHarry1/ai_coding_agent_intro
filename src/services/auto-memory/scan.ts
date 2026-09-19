@@ -13,8 +13,12 @@ import {
 } from './paths.js'
 import { parseMemoryType, type MemoryType } from './types.js'
 
-const MAX_INDEX_LINES = 200
-const MAX_INDEX_BYTES = 25 * 1024
+/** CC memdir.MAX_ENTRYPOINT_LINES */
+export const MAX_ENTRYPOINT_LINES = 200
+/** CC memdir.MAX_ENTRYPOINT_BYTES */
+export const MAX_ENTRYPOINT_BYTES = 25_000
+const MAX_INDEX_LINES = MAX_ENTRYPOINT_LINES
+const MAX_INDEX_BYTES = MAX_ENTRYPOINT_BYTES
 const MAX_SCAN_FILES = 200
 
 /** Topic file header (CC MemoryHeader + legacy absPath/relPath aliases). */

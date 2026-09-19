@@ -1,7 +1,7 @@
 /**
  * Auto-memory content types and prompt section constants.
  * (INDIVIDUAL / auto-only; no team <scope>).
- * CLAUDE.md → AGENTS.md where applicable.
+ * Prompt copy aligns with Claude Code memoryTypes.ts; CLAUDE.md → AGENTS.md.
  */
 
 export const MEMORY_TYPES = [

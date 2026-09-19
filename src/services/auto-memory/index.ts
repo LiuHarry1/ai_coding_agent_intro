@@ -89,6 +89,10 @@ export type { SelectedMemoriesResult } from './sideQuery.js'
 export {
   loadAutoMemoryPrompt,
   buildExtractAutoMemoryPrompt,
+  buildMemoryPrompt,
+  buildMemoryLines,
+  buildSearchingPastContextSection,
+  DIR_EXISTS_GUIDANCE,
 } from './prompts.js'
 
 export {

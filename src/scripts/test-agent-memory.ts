@@ -117,6 +117,17 @@ try {
     assert(prompt.includes(projectDir), 'prompt has mem dir')
     assert(prompt.includes('remember tests'), 'prompt embeds index')
     assert(prompt.includes('project-scope'), 'scope note')
+    assert(
+      prompt.includes(
+        'is always loaded into your conversation context — lines after 200 will be truncated',
+      ),
+      'CC truncation wording',
+    )
+    assert(prompt.includes('AGENTS.md files'), 'AGENTS.md exclusion (product rename)')
+    assert(
+      !prompt.includes('## Searching past context'),
+      'no Searching section when CC gate off',
+    )
 
     // ── permission carve-out ──
     const ctx = createFilesystemPermissionContext(cwd, {
