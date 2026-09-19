@@ -1,5 +1,6 @@
 import { tool } from 'ai'
 import { z } from 'zod'
+import path from 'path'
 import type {
   AgentDefinition,
   AnyTool,
@@ -10,6 +11,8 @@ import {
   AGENT_TOOL_NAME,
   GLOB_TOOL_NAME,
   FILE_READ_TOOL_NAME,
+  WRITE_FILE_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
 } from '../../constants/tool_names.js'
 import { EXPLORE_AGENT_TYPE } from './built-in/exploreAgent.js'
 import { PLAN_AGENT_TYPE } from './built-in/planAgent.js'
@@ -27,6 +30,10 @@ import {
   clearToolAbort,
   registerToolAbort,
 } from '../../core/tool-abort-registry.js'
+import {
+  getAgentMemoryDir,
+  loadAgentMemoryPrompt,
+} from './agentMemory.js'
 
 const SUBAGENT_STOPPED = 'Error: Subagent stopped by user.'
 
@@ -218,6 +225,41 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             models?.profile(tier).model ??
             subProvider.defaultModelId()
 
+          const autoMemOn = context.autoMemory?.enabled !== false
+          const agentMemEnabled = Boolean(autoMemOn && def.memory)
+
+          let toolAllow = def.tools ? [...def.tools] : undefined
+          if (agentMemEnabled && toolAllow) {
+            for (const name of [
+              WRITE_FILE_TOOL_NAME,
+              EDIT_FILE_TOOL_NAME,
+              FILE_READ_TOOL_NAME,
+            ]) {
+              if (!toolAllow.includes(name)) toolAllow.push(name)
+            }
+          }
+
+          const agentMemDir =
+            agentMemEnabled && def.memory
+              ? getAgentMemoryDir(subagent_type, def.memory, cwd)
+              : undefined
+
+          const parentPerm = context.permissionContext
+          const permissionContext =
+            agentMemDir && parentPerm
+              ? {
+                  ...parentPerm,
+                  extraReadRoots: [
+                    ...parentPerm.extraReadRoots,
+                    path.resolve(agentMemDir),
+                  ],
+                  extraWriteRoots: [
+                    ...parentPerm.extraWriteRoots,
+                    path.resolve(agentMemDir),
+                  ],
+                }
+              : parentPerm
+
           const subContext: ToolContext = {
             eventBus,
             wire: subWire,
@@ -228,14 +270,15 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
             models,
             compaction,
             sessionId: context.sessionId,
-            permissionContext: context.permissionContext,
+            permissionContext,
             cwd: context.cwd ?? cwd,
             execution: context.execution,
+            autoMemory: context.autoMemory,
           }
 
           let subTools: Record<string, AnyTool>
-          if (def.tools) {
-            subTools = registry.createAll(cwd, subContext, def.tools)
+          if (toolAllow) {
+            subTools = registry.createAll(cwd, subContext, toolAllow)
           } else {
             subTools = registry.createAll(cwd, subContext)
             const patterns = def.disallowedTools ?? []
@@ -247,12 +290,17 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           }
           delete subTools[AGENT_TOOL_NAME]
 
+          let basePrompt = def.systemPrompt
+          if (agentMemEnabled && def.memory) {
+            basePrompt = `${def.systemPrompt}\n\n${loadAgentMemoryPrompt(subagent_type, def.memory, cwd)}`
+          }
+
           const projectRules = def.omitProjectRules
             ? ''
             : loadAllAgentRules(cwd)
           const withRules = projectRules
-            ? `${def.systemPrompt}\n\n<project_rules>\nThe following rules were auto-loaded (user ~/.ai-agent/AGENTS.md, project AGENTS.md / .ai-agent/AGENTS.md / .ai-agent/rules/*.md, and AGENTS.local.md). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
-            : def.systemPrompt
+            ? `${basePrompt}\n\n<project_rules>\nThe following rules were auto-loaded (user ~/.ai-agent/AGENTS.md, project AGENTS.md / .ai-agent/AGENTS.md / .ai-agent/rules/*.md, and AGENTS.local.md). They take precedence over all other sections when there is a conflict.\n\n${projectRules}\n</project_rules>`
+            : basePrompt
           setCwd(cwd)
           const subSystemPrompt = (
             await enhanceSystemPromptWithEnvDetails([withRules], subModel ?? '')

@@ -43,6 +43,7 @@ import {
   consumeMemoryPrefetchWithTimeout,
   getAutoMemPath,
   resolveMemoryRecallDecision,
+  resolvePrefetchMemoryDirs,
   startRelevantMemoryPrefetch,
 } from '../services/auto-memory/index.js'
 import {
@@ -651,13 +652,25 @@ export async function runChatTurn(
           })
         : undefined
 
-    const memoryPrefetch =
+    const prefetchDirs =
       memPath != null
+        ? resolvePrefetchMemoryDirs(
+            prepared.effectiveMessage,
+            memPath,
+            prepared.toolUseContext.agentDefinitions?.activeAgents,
+            cwd,
+            autoMemoryConfig.enabled,
+          )
+        : undefined
+
+    const memoryPrefetch =
+      memPath != null && prefetchDirs != null
         ? startRelevantMemoryPrefetch(
             getActiveModelMessages(session.messages, session.id),
             {
               config: autoMemoryConfig,
               memPath,
+              memPaths: prefetchDirs,
               provider: prefetchSide.provider,
               modelId: prefetchSide.modelId,
               readFileState: prepared.toolUseContext.readFileState,

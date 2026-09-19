@@ -90,6 +90,15 @@ export function formatAtMentionReplacement(displayPath, options) {
   return `${displayPath}${suffix}`
 }
 
+/** Format replacement for a subagent mention (CC @"type (agent)" / @agent-type). */
+export function formatAgentMentionReplacement(agentType, options = {}) {
+  const { quoted = true } = options
+  if (quoted) {
+    return `@"${agentType} (agent)" `
+  }
+  return `@agent-${agentType} `
+}
+
 /** Replace partial @ token with selected path. */
 export function applyFileSuggestion(
   replacementValue,

@@ -24,12 +24,49 @@ export function extractAtMentionedFiles(content: string): string[] {
   const regularMatchArray = content.match(regularAtMentionRegex) || []
   for (const m of regularMatchArray) {
     const filename = m.slice(m.indexOf('@') + 1)
-    if (!filename.startsWith('"') && !filename.includes(':')) {
+    if (
+      !filename.startsWith('"') &&
+      !filename.includes(':') &&
+      !filename.startsWith('agent-')
+    ) {
       regularMatches.push(filename)
     }
   }
 
   return [...new Set([...quotedMatches, ...regularMatches])]
+}
+
+/**
+ * Extract agent mentions (CC extractAgentMentions).
+ * Returns agentType strings (without `agent-` prefix for unquoted form).
+ * Formats:
+ * - `@agent-<type>` → type
+ * - `@"<type> (agent)"` → type
+ */
+export function extractAgentMentions(content: string): string[] {
+  const results: string[] = []
+
+  const quotedAgentRegex = new RegExp(
+    `${AT_MENTION_PREFIX}@"([\\w:.@-]+) \\(agent\\)"`,
+    'g',
+  )
+  let match: RegExpExecArray | null
+  while ((match = quotedAgentRegex.exec(content)) !== null) {
+    if (match[1]) results.push(match[1])
+  }
+
+  const unquotedAgentRegex = new RegExp(
+    `${AT_MENTION_PREFIX}@(agent-[\\w:.@-]+)`,
+    'g',
+  )
+  while ((match = unquotedAgentRegex.exec(content)) !== null) {
+    const raw = match[1]
+    if (raw?.startsWith('agent-')) {
+      results.push(raw.slice('agent-'.length))
+    }
+  }
+
+  return [...new Set(results)]
 }
 
 export interface AtMentionedFileLines {

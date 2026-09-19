@@ -61,6 +61,7 @@ export type {
 
 export {
   startRelevantMemoryPrefetch,
+  resolvePrefetchMemoryDirs,
   hasRecallIntent,
   resolveMemoryRecallDecision,
   consumeImmediateMemoryPrefetch,

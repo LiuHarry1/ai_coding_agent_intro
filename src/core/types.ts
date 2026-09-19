@@ -788,6 +788,14 @@ export interface AgentDefinition {
    * with full context.
    */
   omitProjectRules?: boolean
+  /**
+   * Persistent Agent Memory scope (CC-aligned). Subagents only.
+   * Primary agents must not set this — use a future memoryMode instead.
+   * Gated by AutoMemoryConfig.enabled at spawn / prefetch time.
+   */
+  memory?: 'user' | 'project' | 'local'
+  /** Set when a newer project snapshot exists for user-scope agent memory. */
+  pendingSnapshotUpdate?: { snapshotTimestamp: string }
   /** Where this definition was loaded from (disk agents + plugins). */
   source?: AgentSource
   /** Absolute path to the defining `.md` file, when loaded from disk. */

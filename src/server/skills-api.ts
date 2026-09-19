@@ -141,6 +141,7 @@ interface AgentSummary {
   label?: string
   source?: AgentDefinition['source']
   filePath?: string
+  memory?: AgentDefinition['memory']
   overriddenBy?: AgentDefinition['source']
 }
 
@@ -157,6 +158,7 @@ function toAgentSummary(a: AgentDefinition | ResolvedAgent): AgentSummary {
     label: a.label,
     source: a.source,
     filePath: a.filePath,
+    ...(a.memory ? { memory: a.memory } : {}),
     ...('overriddenBy' in a && a.overriddenBy
       ? { overriddenBy: a.overriddenBy }
       : {}),

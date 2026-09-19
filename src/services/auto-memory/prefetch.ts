@@ -5,10 +5,11 @@ import type {
   AttachmentMessage,
   Message,
   ToolUseContext,
+  AutoMemoryConfig,
+  AgentDefinition,
 } from '../../core/types.js'
 import { isAttachmentMessage, isRoleMessage } from '../../core/types.js'
 import type { IProvider } from '../../core/llm/types.js'
-import type { AutoMemoryConfig } from '../../core/types.js'
 import type { Attachment } from '../../utils/attachments/types.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 import { createAttachmentMessage } from '../../utils/attachments.js'
@@ -21,6 +22,32 @@ import {
   readMemoriesForSurfacingSync,
   type SelectRelevantFn,
 } from './findRelevant.js'
+import {
+  getAgentMemoryDir,
+  type AgentMemoryScope,
+} from '../../tools/AgentTool/agentMemory.js'
+import { extractAgentMentions } from '../../utils/attachments/extract-mentions.js'
+
+/**
+ * CC: if user @-mentions an agent with memory, prefetch only that agent's
+ * memdir; otherwise use the project auto-memory path.
+ */
+export function resolvePrefetchMemoryDirs(
+  queryText: string,
+  autoMemPath: string,
+  agents: readonly AgentDefinition[] | undefined,
+  cwd: string,
+  autoMemoryEnabled: boolean,
+): string[] {
+  if (!autoMemoryEnabled || !agents?.length) return [autoMemPath]
+  const mentions = extractAgentMentions(queryText)
+  const dirs = mentions.flatMap(agentType => {
+    const def = agents.find(a => a.agentType === agentType)
+    if (!def?.memory || def.mode === 'primary') return []
+    return [getAgentMemoryDir(agentType, def.memory as AgentMemoryScope, cwd)]
+  })
+  return dirs.length > 0 ? dirs : [autoMemPath]
+}
 
 export type MemoryPrefetch = {
   immediate: Attachment[]
@@ -175,7 +202,13 @@ export function collectRecentSuccessfulTools(
 
 export type StartPrefetchOpts = {
   config: AutoMemoryConfig
+  /** Default auto-memory directory when no @agent mention overrides. */
   memPath: string
+  /**
+   * Optional override directories (CC: @agent → agent memory dirs only).
+   * When set and non-empty, search these instead of memPath.
+   */
+  memPaths?: string[]
   provider: IProvider
   modelId: string
   readFileState?: ReadFileState
@@ -185,6 +218,11 @@ export type StartPrefetchOpts = {
   /** Override query text (defaults to last non-meta user message). */
   queryText?: string
   sessionId?: string
+}
+
+function resolveSearchDirs(opts: StartPrefetchOpts): string[] {
+  if (opts.memPaths && opts.memPaths.length > 0) return opts.memPaths
+  return [opts.memPath]
 }
 
 /**
@@ -252,15 +290,28 @@ export function startRelevantMemoryPrefetch(
   for (const filePath of readFileState?.keys() ?? []) {
     unavailablePaths.add(filePath)
   }
-  const fast = findFastRelevantMemories(trimmed, opts.memPath, unavailablePaths)
-  const fastMemories = fast.strong
-    ? readMemoriesForSurfacingSync(fast.matches, controller.signal)
+  const searchDirs = resolveSearchDirs(opts)
+  // Strong hit if any dir had a strong exclusive result — recompute per dir.
+  let immediateStrong = false
+  const strongFromDirs: Array<{ path: string; mtimeMs: number; score: number }> =
+    []
+  for (const dir of searchDirs) {
+    const fast = findFastRelevantMemories(trimmed, dir, unavailablePaths)
+    if (fast.strong) {
+      immediateStrong = true
+      strongFromDirs.push(...fast.matches)
+    }
+  }
+  const fastMemories = immediateStrong
+    ? readMemoriesForSurfacingSync(
+        strongFromDirs.slice(0, 5),
+        controller.signal,
+      )
     : []
   const immediate: Attachment[] =
     fastMemories.length > 0
       ? [{ type: 'relevant_memories' as const, memories: fastMemories }]
       : []
-  const immediateStrong = immediate.length > 0
 
   // Keep CC's cheap short-query suppression for the model lane only. Exact
   // filenames, identifiers, and short CJK prompts still reach the fast lane.
@@ -275,19 +326,25 @@ export function startRelevantMemoryPrefetch(
   const promise = (async (): Promise<Attachment[]> => {
     if (skipSemantic) return []
     try {
-      const selected = await findRelevantMemories(
-        input!,
-        opts.memPath,
-        {
-          provider: opts.provider,
-          modelId: opts.modelId,
-          signal: controller.signal,
-          selectFn: opts.selectFn,
-        },
-        recentTools,
-        unavailablePaths,
-      )
-      const filtered = selected
+      const allSelected = (
+        await Promise.all(
+          searchDirs.map(dir =>
+            findRelevantMemories(
+              input!,
+              dir,
+              {
+                provider: opts.provider,
+                modelId: opts.modelId,
+                signal: controller.signal,
+                selectFn: opts.selectFn,
+              },
+              recentTools,
+              unavailablePaths,
+            ).catch(() => []),
+          ),
+        )
+      ).flat()
+      const filtered = allSelected
         .filter(
           m =>
             !surfaced.paths.has(m.path) &&

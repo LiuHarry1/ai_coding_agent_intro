@@ -23,6 +23,24 @@ import { BASH_TOOL_NAME } from '../constants/tool_names.js'
 import { getAgentListingDeltaAttachments } from '../tools/AgentTool/agentListing.js'
 import { drainTaskNotifications } from '../utils/task/pendingNotifications.js'
 import { loadConditionalRulesForPaths } from './rules-loader.js'
+import { extractAgentMentions } from './attachments/extract-mentions.js'
+import type { AgentDefinition } from '../core/types.js'
+
+function getAgentMentionAttachments(
+  input: string,
+  agents: readonly AgentDefinition[] | undefined,
+): Attachment[] {
+  if (!agents?.length) return []
+  const mentions = extractAgentMentions(input)
+  if (mentions.length === 0) return []
+  const out: Attachment[] = []
+  for (const agentType of mentions) {
+    const def = agents.find(a => a.agentType === agentType)
+    if (!def || def.mode === 'primary') continue
+    out.push({ type: 'agent_mention', agentType: def.agentType })
+  }
+  return out
+}
 
 function getSkillListingAttachments(ctx: ToolUseContext): Attachment[] {
   const content = ctx.skillListingContent?.trim()
@@ -116,6 +134,14 @@ export async function getAttachments(
             cwd: toolUseContext.cwd,
             readFileState: toolUseContext.readFileState,
           }),
+        ),
+        maybe('agent_mentions', () =>
+          Promise.resolve(
+            getAgentMentionAttachments(
+              input,
+              toolUseContext.agentDefinitions?.activeAgents,
+            ),
+          ),
         ),
       ]
     : []

@@ -205,6 +205,14 @@ You have exited plan mode. You can now make edits, run tools, and take actions.$
       return wrapMessagesInSystemReminder([metaUserMessage(parts.join('\n\n'))])
     }
 
+    case 'agent_mention': {
+      return wrapMessagesInSystemReminder([
+        metaUserMessage(
+          `The user has expressed a desire to invoke the agent "${attachment.agentType}". Please invoke the agent appropriately, passing in the required context to it.`,
+        ),
+      ])
+    }
+
     case 'task_notification': {
       return wrapMessagesInSystemReminder([metaUserMessage(attachment.rawXml)])
     }

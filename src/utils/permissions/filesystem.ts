@@ -21,6 +21,7 @@ import { isPathInWorkspace } from '../../core/workspace.js'
 import { normalizeWorkspacePath } from '../../core/workspace-path.js'
 import { resolvePath } from '../../tools/utils.js'
 import { matchingPermissionRule } from './permission-rules.js'
+import { isAgentMemoryPath } from '../../tools/AgentTool/agentMemory.js'
 
 /** Settings values that actually change filesystem behavior. */
 export const PERMISSION_DEFAULT_MODES = [
@@ -276,6 +277,10 @@ export function checkReadPermission(
     return { behavior: 'deny', message: denyMessage(abs, 'read') }
   }
   if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
+  // Agent memory directories (any scope) — CC isAgentMemoryPath carve-out.
+  if (pathsToCheck.some(p => isAgentMemoryPath(p, ctx.root))) {
+    return { behavior: 'allow' }
+  }
   if (allPathsAllowed(pathsToCheck, ctx, 'read')) return { behavior: 'allow' }
   if (allowedByRule(pathsToCheck, ctx, 'read', toolName)) {
     return { behavior: 'allow' }
@@ -294,6 +299,10 @@ export function checkWritePermission(
     return { behavior: 'deny', message: denyMessage(abs, 'write') }
   }
   if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
+  // Agent memory directories (any scope) — CC isAgentMemoryPath carve-out.
+  if (pathsToCheck.some(p => isAgentMemoryPath(p, ctx.root))) {
+    return { behavior: 'allow' }
+  }
   if (allPathsAllowed(pathsToCheck, ctx, 'write')) return { behavior: 'allow' }
   if (allowedByRule(pathsToCheck, ctx, 'write', toolName)) {
     return { behavior: 'allow' }

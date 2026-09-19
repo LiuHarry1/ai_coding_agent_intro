@@ -12,6 +12,7 @@ import { definition as exploreDef } from './built-in/exploreAgent.js'
 import { definition as planDef } from './built-in/planAgent.js'
 import { definition as generalPurposeDef } from './built-in/generalPurposeAgent.js'
 import { mergeAgents } from './mergeAgents.js'
+import { initializeAgentMemorySnapshots } from './agentMemorySnapshot.js'
 
 const BUILTIN_AGENTS: readonly AgentDefinition[] = [
   exploreDef,
@@ -29,6 +30,7 @@ export async function loadAgentDefinitions(
     ...pluginAgentFiles,
     ...files,
   ])
+  await initializeAgentMemorySnapshots(allAgents, cwd)
   return { activeAgents: agents, allAgents, errors }
 }
 

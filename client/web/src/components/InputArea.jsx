@@ -8,6 +8,7 @@ import {
   extractCompletionToken,
   extractSearchToken,
   formatAtMentionReplacement,
+  formatAgentMentionReplacement,
   applyFileSuggestion,
   toWorkspaceRelative,
   insertTextAtCursor,
@@ -32,7 +33,7 @@ import {
 } from '../lib/slash-menu.jsx'
 
 const MODE_PLACEHOLDERS = {
-  agent: 'Describe your task… @file',
+  agent: 'Describe your task… @file or @agent',
   ask: 'Ask about your codebase…',
   plan: 'Plan your implementation…',
 }
@@ -69,6 +70,7 @@ export default function InputArea() {
   const [expandedSections, setExpandedSections] = useState(new Set())
   const [atSuggestions, setAtSuggestions] = useState([])
   const [atIndex, setAtIndex] = useState(0)
+  const [subagentMentions, setSubagentMentions] = useState([])
   const [uploadingDrop, setUploadingDrop] = useState(false)
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false)
   const [atMenuSuppressed, setAtMenuSuppressed] = useState(false)
@@ -89,6 +91,25 @@ export default function InputArea() {
         }
       } catch {
         if (!cancelled) setSlashEntries([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [workspace])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await agentApi.getAgents(workspace || undefined)
+        if (cancelled) return
+        const list = Array.isArray(data.agents) ? data.agents : []
+        setSubagentMentions(
+          list.filter(a => (a.mode ?? 'subagent') !== 'primary'),
+        )
+      } catch {
+        if (!cancelled) setSubagentMentions([])
       }
     })()
     return () => {
@@ -197,29 +218,48 @@ export default function InputArea() {
     setAtSuggestions([])
   }, [workspace])
 
-  // Debounced @ file search
+  // Debounced @ search: agents + files (files retained; agents superimposed)
   useEffect(() => {
     if (!atToken?.token.startsWith('@') || showSlashMenu || !workspace) {
       setAtSuggestions([])
       return undefined
     }
-    const searchToken = extractSearchToken(atToken)
+    const searchToken = extractSearchToken(atToken).toLowerCase()
     let cancelled = false
     const timer = setTimeout(async () => {
+      const agentEntries = subagentMentions
+        .filter(a => {
+          const type = String(a.agentType || '').toLowerCase()
+          const label = String(a.label || '').toLowerCase()
+          if (!searchToken) return true
+          return type.includes(searchToken) || label.includes(searchToken)
+        })
+        .slice(0, 8)
+        .map(a => ({
+          kind: 'agent',
+          agentType: a.agentType,
+          label: a.label || a.agentType,
+          path: a.agentType,
+        }))
+
+      let fileEntries = []
       try {
         const data = await workspaceApi.searchFiles(searchToken, workspace)
-        if (!cancelled && Array.isArray(data.entries)) {
-          setAtSuggestions(data.entries)
+        if (Array.isArray(data.entries)) {
+          fileEntries = data.entries.map(e => ({ ...e, kind: 'file' }))
         }
       } catch {
-        if (!cancelled) setAtSuggestions([])
+        fileEntries = []
+      }
+      if (!cancelled) {
+        setAtSuggestions([...agentEntries, ...fileEntries])
       }
     }, 120)
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [atToken, showSlashMenu, workspace])
+  }, [atToken, showSlashMenu, workspace, subagentMentions])
 
   useEffect(() => {
     if (!showSlashMenu && !showAtMenu) return undefined
@@ -319,14 +359,21 @@ export default function InputArea() {
     entry => {
       const el = textareaRef.current
       if (!el || !atToken) return
-      const hasAtPrefix = atToken.token.startsWith('@')
-      const needsQuotes = entry.path.includes(' ')
-      const replacementValue = formatAtMentionReplacement(entry.path, {
-        hasAtPrefix,
-        needsQuotes,
-        isQuoted: atToken.isQuoted,
-        isDir: entry.isDir,
-      })
+      let replacementValue
+      if (entry.kind === 'agent') {
+        replacementValue = formatAgentMentionReplacement(entry.agentType, {
+          quoted: true,
+        })
+      } else {
+        const hasAtPrefix = atToken.token.startsWith('@')
+        const needsQuotes = entry.path.includes(' ')
+        replacementValue = formatAtMentionReplacement(entry.path, {
+          hasAtPrefix,
+          needsQuotes,
+          isQuoted: atToken.isQuoted,
+          isDir: entry.isDir,
+        })
+      }
       const { newInput, newCursorPos } = applyFileSuggestion(
         replacementValue,
         inputValue,
@@ -338,7 +385,7 @@ export default function InputArea() {
       el.setSelectionRange(newCursorPos, newCursorPos)
       setCursorPos(newCursorPos)
       el.focus()
-      if (!entry.isDir) setAtSuggestions([])
+      if (entry.kind === 'agent' || !entry.isDir) setAtSuggestions([])
       handleInput({ target: el })
     },
     [atToken, inputValue, handleInput],
@@ -609,30 +656,61 @@ export default function InputArea() {
           className='slash-menu at-menu'
           ref={atMenuRef}
           role='listbox'
-          aria-label='File suggestions'
+          aria-label='Mention suggestions'
         >
-          <div className='slash-menu__section'>Files</div>
-          {atSuggestions.map((entry, idx) => (
-            <button
-              key={entry.path}
-              type='button'
-              role='option'
-              aria-selected={idx === atIndex}
-              className={`slash-menu__item${idx === atIndex ? ' slash-menu__item--active' : ''}`}
-              onMouseDown={ev => {
-                ev.preventDefault()
-                applyAtSelection(entry)
-              }}
-            >
-              <div className='slash-menu__row-top'>
-                <span className='slash-menu__name'>
-                  @{entry.path}
-                  {entry.isDir ? '/' : ''}
-                </span>
-                {entry.isDir && <span className='slash-menu__badge'>dir</span>}
-              </div>
-            </button>
-          ))}
+          {atSuggestions.some(e => e.kind === 'agent') && (
+            <div className='slash-menu__section'>Agents</div>
+          )}
+          {atSuggestions.map((entry, idx) =>
+            entry.kind === 'agent' ? (
+              <button
+                key={`agent-${entry.agentType}`}
+                type='button'
+                role='option'
+                aria-selected={idx === atIndex}
+                className={`slash-menu__item${idx === atIndex ? ' slash-menu__item--active' : ''}`}
+                onMouseDown={ev => {
+                  ev.preventDefault()
+                  applyAtSelection(entry)
+                }}
+                onMouseEnter={() => setAtIndex(idx)}
+              >
+                <div className='slash-menu__row-top'>
+                  <span className='slash-menu__name'>
+                    @{entry.agentType} (agent)
+                  </span>
+                  <span className='slash-menu__badge'>agent</span>
+                </div>
+              </button>
+            ) : null,
+          )}
+          {atSuggestions.some(e => e.kind !== 'agent') && (
+            <div className='slash-menu__section'>Files</div>
+          )}
+          {atSuggestions.map((entry, idx) =>
+            entry.kind === 'agent' ? null : (
+              <button
+                key={entry.path}
+                type='button'
+                role='option'
+                aria-selected={idx === atIndex}
+                className={`slash-menu__item${idx === atIndex ? ' slash-menu__item--active' : ''}`}
+                onMouseDown={ev => {
+                  ev.preventDefault()
+                  applyAtSelection(entry)
+                }}
+                onMouseEnter={() => setAtIndex(idx)}
+              >
+                <div className='slash-menu__row-top'>
+                  <span className='slash-menu__name'>
+                    @{entry.path}
+                    {entry.isDir ? '/' : ''}
+                  </span>
+                  {entry.isDir && <span className='slash-menu__badge'>dir</span>}
+                </div>
+              </button>
+            ),
+          )}
         </div>
       )}
       <div

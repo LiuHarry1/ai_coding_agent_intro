@@ -113,6 +113,12 @@ export type AgentListingDeltaAttachment = {
   isInitial: boolean
 }
 
+/** User @-mentioned a subagent (CC agent_mention). */
+export type AgentMentionAttachment = {
+  type: 'agent_mention'
+  agentType: string
+}
+
 export type TaskNotificationAttachment = {
   type: 'task_notification'
   taskId: string
@@ -158,6 +164,7 @@ export type Attachment =
   | SkillListingAttachment
   | InvokedSkillsAttachment
   | AgentListingDeltaAttachment
+  | AgentMentionAttachment
   | TaskNotificationAttachment
   | RelevantMemoriesAttachment
   | ConditionalRulesAttachment

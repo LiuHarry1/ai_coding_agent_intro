@@ -81,6 +81,7 @@ Session Memory and Full compact append a `compact_boundary` plus a summary and r
 - Turn orchestration: `src/utils/processUserInput/prepare_chat_turn.ts`, `src/turn/run-chat-turn.ts`, `src/turn/memory-lifecycle.ts`
 - Project Rules: `src/utils/rules-loader.ts`, `src/utils/attachments.ts`
 - Auto Memory: `src/services/auto-memory/`
+- Subagent Agent Memory: `src/tools/AgentTool/agentMemory.ts`, `agentMemorySnapshot.ts`
 - Session Memory: `src/services/session-memory/`
 - Compaction and replay: `src/services/compact/`, `src/core/messages/compact-boundary.ts`, `src/session/compact-replay.ts`
 - Canonical detail: `docs/architecture/memory-guide.md`

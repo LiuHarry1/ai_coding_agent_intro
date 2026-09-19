@@ -12,13 +12,14 @@ The current runtime memory architecture has only four layers:
 3. **Session Memory**: a progress ledger for one session, consumed primarily by Compaction.
 4. **Compaction**: cleans or summarizes historical messages when the context approaches its limit.
 
-There is currently no Persistent Agent Memory isolated by custom Agent:
+There is Persistent Agent Memory for **subagents** (CC-aligned), separate from project Auto Memory:
 
-- `AgentDefinition` no longer declares `memory: user | project | local`.
-- Agent markdown frontmatter does not parse `memory:`.
-- Browser Primary and General Primary use the same project Auto Memory directory.
-- Subagents do not receive independent persistent memory directories.
-- The original `src/tools/AgentTool/agentMemory.ts` and its corresponding tests have been deleted; the module with the same name in the Claude Code reference documentation exists only for comparison with the upstream design.
+- Subagent frontmatter may declare `memory: user | project | local`.
+- Primary agents that set `memory:` are ignored (warn); Primary `memoryMode` is out of scope here.
+- Paths: user `{agentHome}/.ai-agent/agent-memory/<type>/`, project `{cwd}/.ai-agent/agent-memory/<type>/`, local `{cwd}/.ai-agent/agent-memory-local/<type>/`.
+- On AgentTool spawn (when Auto Memory is enabled), the subagent gets `Persistent Agent Memory` prompt + `MEMORY.md`, Write/Edit/Read if allow-listed, and write permission to its memdir.
+- Subagents do **not** run independent turn-end Auto Memory extract.
+- `@` mentions: files remain; `@agent-<type>` / `@"<type> (agent)"` invoke subagent reminder and may switch prefetch to that agent's memdir when it has `memory:`.
 
 Auto Memory topic frontmatter currently contains only `name`, `description`, and `type`. There is no source field such as `source: browser`, nor is there an implementation that filters by source.
 
@@ -642,7 +643,21 @@ The current `.ai-agent/agents/browser.md` and the built-in Plan / Explore profil
 
 Plan / Explore likewise lose the merged `projectRules` string. They use their respective tool pools and do not replace the main thread's Auto Memory / Session Memory lifecycle.
 
-Subagents use the `AgentTool` fork path and do not own an independent Auto Memory lifecycle. A subagent can receive Project Rules, but it does not independently start main-thread prefetch / extract and has no per-agent memdir.
+### 8.1 Subagent Agent Memory (CC-aligned)
+
+Subagents may declare `memory: user | project | local`. When Auto Memory is enabled:
+
+- Spawn injects Persistent Agent Memory prompt (includes `MEMORY.md` index).
+- Allow-listed tools get Write / Edit / Read forced in for memory access.
+- Filesystem permission allows agent-memory paths (any scope).
+- No per-subagent turn-end extract; the subagent writes via normal tools.
+
+`@` coexistence:
+
+- File mentions (`@src/foo.ts`) unchanged.
+- Agent mentions (`@agent-explore` or `@"explore (agent)"`) produce an `agent_mention` reminder and, if that subagent has `memory:`, prefetch searches only its private memdir.
+
+Primary `memory:` in frontmatter is ignored. User-scope agents can initialize from `{cwd}/.ai-agent/agent-memory-snapshots/<type>/` on load (no update dialog UI yet).
 
 ## 9. Configuration defaults
 
