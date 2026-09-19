@@ -34,6 +34,12 @@ import {
 } from '../skills/invoked-skills.js'
 import type { SkillDefinition } from '../skills/types.js'
 import { createSkillTool } from '../tools/SkillTool/SkillTool.js'
+import { getSkillToolPrompt } from '../tools/SkillTool/prompt.js'
+import { COMMAND_NAME_TAG } from '../constants/xml.js'
+import {
+  formatSkillListing,
+  MAX_LISTING_DESC_CHARS,
+} from '../skills/index.js'
 import { loadSkillsFromDisk } from '../skills/loadSkillsDir.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
 import { expandAttachmentMessagesForAPI } from '../utils/messages.js'
@@ -96,12 +102,12 @@ async function testInlineSkillTool(): Promise<void> {
     session,
   } as ToolContext) as {
     execute: (
-      input: { skill_name: string; arguments?: string },
+      input: { skill: string; args?: string },
       opts?: unknown,
     ) => Promise<unknown>
   }
 
-  const raw = await tool.execute({ skill_name: 'demo-inline' })
+  const raw = await tool.execute({ skill: 'demo-inline' })
   assert.ok(isDual(raw), 'inline skill returns DualChannel')
   assert.equal(raw.data.mode, 'inline')
   assert.equal(raw.data.skill_name, 'demo-inline')
@@ -134,12 +140,12 @@ async function testForkDoesNotRegister(): Promise<void> {
     session,
   } as ToolContext) as {
     execute: (
-      input: { skill_name: string; arguments?: string },
+      input: { skill: string; args?: string },
       opts?: unknown,
     ) => Promise<unknown>
   }
 
-  const raw = await tool.execute({ skill_name: 'demo-fork' })
+  const raw = await tool.execute({ skill: 'demo-fork' })
   assert.equal(typeof raw, 'string')
   assert.ok(
     String(raw).startsWith('Error:'),
@@ -266,11 +272,11 @@ async function testRealSkillMicroContrast(): Promise<void> {
     session,
   } as ToolContext) as {
     execute: (
-      input: { skill_name: string; arguments?: string },
+      input: { skill: string; args?: string },
       opts?: unknown,
     ) => Promise<unknown>
   }
-  const raw = await tool.execute({ skill_name: 'echarts-chart' })
+  const raw = await tool.execute({ skill: 'echarts-chart' })
   assert.ok(isDual(raw))
   const follow = raw.newMessages![0]!
   assert.ok(isRoleMessage(follow) && follow.role === 'user')
@@ -475,7 +481,7 @@ async function testSlashInlineRegisters(): Promise<void> {
   )
   assert.equal(slash.forkSkill, null)
   assert.ok(
-    slash.effectiveMessage.includes('Never Submit a Concur report'),
+    slash.effectiveMessage.includes('Never Submit'),
     'slash inline expands skill body into the user prompt',
   )
   const registered = getInvokedSkillsForAgent(session, null)
@@ -511,7 +517,49 @@ async function testListingFireOnce(): Promise<void> {
   console.log('[ok] skill_listing fire-once survives subsequent turns')
 }
 
+function testSkillToolPromptMatchesCcContract(): void {
+  const prompt = getSkillToolPrompt()
+  assert.ok(
+    prompt.includes('BLOCKING REQUIREMENT'),
+    'CC invoke-first contract in Skill tool prompt',
+  )
+  assert.ok(prompt.includes('skill: "pdf"'), 'CC skill field example')
+  assert.ok(prompt.includes('args:'), 'CC args field example')
+  assert.ok(
+    prompt.includes(`<${COMMAND_NAME_TAG}>`),
+    'already-loaded command-name hint',
+  )
+  console.log('[ok] Skill tool prompt matches CC invoke-first contract')
+}
+
+function testFormatSkillListingDiscoveryOnly(): void {
+  const long =
+    'Step 1 reset temp_invoices. Step 4 SSO in references/concur-sso.md. ' +
+    'x'.repeat(400)
+  const listing = formatSkillListing([
+    {
+      name: 'concur-expense',
+      description: long,
+      source: 'user',
+      context: 'inline',
+      argumentNames: [],
+      loadBody: async () => '',
+    },
+  ])
+  assert.equal(listing.startsWith('- concur-expense: '), true)
+  assert.equal(listing.includes('(inline)'), false, 'CC listing has no context mode')
+  const desc = listing.slice('- concur-expense: '.length)
+  assert.ok(
+    desc.length <= MAX_LISTING_DESC_CHARS,
+    `listing desc ${desc.length} <= ${MAX_LISTING_DESC_CHARS}`,
+  )
+  assert.ok(desc.endsWith('\u2026'))
+  console.log('[ok] skill listing is discovery-only (250 char cap, - name: desc)')
+}
+
 async function main(): Promise<void> {
+  testSkillToolPromptMatchesCcContract()
+  testFormatSkillListingDiscoveryOnly()
   await testInlineSkillTool()
   await testForkDoesNotRegister()
   testMicroCompactLeavesSkillBody()

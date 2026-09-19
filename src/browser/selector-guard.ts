@@ -17,7 +17,7 @@ export function isAriaRefCssSelector(selector: string): boolean {
 export function ariaRefCssSelectorMessage(selector: string): string {
   return (
     `selector is CSS, not a snapshot ref. ${JSON.stringify(selector)} matches nothing in the DOM. ` +
-    `Omit selector to capture the page tree, or Read the spilled snapshot file. ` +
+    `Call browser_snapshot again without selector (use CSS like [role=dialog] only to scope a subtree). ` +
     `To click or type, pass ref= on browser_click / browser_type — do not snapshot with [ref=eN].`
   )
 }

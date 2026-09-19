@@ -16,8 +16,15 @@ import { BINARY_EXTENSIONS } from '../constants/files.js'
 import {
   registerSessionLocation,
   clearSessionLocationCache,
+  getSessionDataDir,
 } from '../core/session-paths.js'
-import { saveChatAttachment, parseChatUploadRef } from '../utils/chat-uploads.js'
+import {
+  saveChatAttachment,
+  parseChatUploadRef,
+  getChatUploadsDir,
+  resolveChatAttachmentAbsPath,
+} from '../utils/chat-uploads.js'
+import { toModelFilePath } from '../utils/attachments/attachment-to-messages.js'
 import { resolveChatAttachments } from '../utils/attachments/from-chat-upload.js'
 import {
   summarizeDelimitedFile,
@@ -323,6 +330,71 @@ try {
   assert.ok(
     typeof filePart.data === 'string' && filePart.data.startsWith('file://'),
     'document bytes stay on disk as a claim-check ref',
+  )
+  const nativeText = renderedText(nativePdf.preludeMessages)
+  const pdfDisk = toModelFilePath(pdf.absPath)
+  assert.ok(
+    nativeText.includes(pdfDisk),
+    'synthetic Read file_path must be the on-disk hash path',
+  )
+  assert.ok(
+    !nativeText.includes(`uploads/${pdf.originalName}`),
+    'original filename must not be presented as an uploads path',
+  )
+
+  const cjk = await saveChatAttachment(SESSION_ID, minimalPdf(), {
+    originalName: '中国移不动.pdf',
+  })
+  const cjkResolved = await resolveChatAttachments(
+    [
+      {
+        url: cjk.url,
+        filename: cjk.originalName,
+        mediaType: 'application/pdf',
+      },
+    ],
+    {
+      sessionId: SESSION_ID,
+      provider: stubProvider({
+        supportsNativePdf: () => true,
+        supportsImageInput: () => true,
+      }),
+    },
+  )
+  const cjkText = renderedText(cjkResolved.preludeMessages)
+  const cjkDisk = toModelFilePath(cjk.absPath)
+  assert.ok(cjkText.includes(cjkDisk), 'CJK display name still maps to hash path')
+  assert.ok(cjkText.includes(cjk.fileName), 'saved hash name is in the prelude')
+  assert.ok(
+    !cjkText.includes('uploads/中国移不动.pdf'),
+    'CJK original name must not be presented as an uploads path',
+  )
+
+  const uploadsDir = getChatUploadsDir(SESSION_ID)
+  assert.ok(
+    uploadsDir.split(path.sep).includes('uploads'),
+    'new uploads root is named uploads',
+  )
+  assert.ok(
+    !uploadsDir.split(path.sep).includes('projects'),
+    'uploads must not live under projects/',
+  )
+  assert.ok(
+    cjk.absPath.startsWith(uploadsDir),
+    'new writes land in the session uploads dir',
+  )
+
+  const legacyName = 'bbbbbbbbbbbb-old.pdf'
+  const legacyDir = path.join(getSessionDataDir(SESSION_ID), 'uploads')
+  fs.mkdirSync(legacyDir, { recursive: true })
+  fs.writeFileSync(path.join(legacyDir, legacyName), minimalPdf())
+  const legacyAbs = resolveChatAttachmentAbsPath(
+    `/sessions/${SESSION_ID}/uploads/${legacyName}`,
+    SESSION_ID,
+  )
+  assert.ok(
+    legacyAbs && legacyAbs.replace(/\\/g, '/').endsWith(`uploads/${legacyName}`),
+    'readers fall back to the pre-move session-data uploads dir',
   )
 
   // Non-native providers rasterize; without poppler they fall back to the

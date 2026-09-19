@@ -365,8 +365,8 @@ export function createRouter({ staticDir }: RouterOptions) {
       const {
         CHAT_UPLOAD_ANY_FILE_RE,
         CHAT_UPLOAD_FILE_RE,
-        getChatUploadsDir,
         mimeFromUploadFileName,
+        resolveChatUploadFileAbs,
       } = await import('../utils/chat-uploads.js')
       const session = getSession(id)
       if (
@@ -377,7 +377,11 @@ export function createRouter({ staticDir }: RouterOptions) {
         sendJSON(res, 404, { error: 'Not found' })
         return
       }
-      const uploadPath = path.join(getChatUploadsDir(id), file)
+      const uploadPath = resolveChatUploadFileAbs(id, file)
+      if (!uploadPath) {
+        sendJSON(res, 404, { error: 'Not found' })
+        return
+      }
       try {
         const stat = await fs.promises.stat(uploadPath)
         if (!stat.isFile()) throw new Error('Not a file')

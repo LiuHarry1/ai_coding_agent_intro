@@ -12,6 +12,11 @@ function metaUserMessage(content: string | UserContentPart[]): UserMessage {
   return { role: 'user', content, isMeta: true }
 }
 
+/** Model-facing abs path: forward slashes so git-bash `cp` can copy the string as-is. */
+export function toModelFilePath(filePath: string): string {
+  return filePath.replace(/\\/g, '/')
+}
+
 function createToolUseMessage(
   toolName: string,
   input: Record<string, string | number>,
@@ -19,6 +24,12 @@ function createToolUseMessage(
   return metaUserMessage(
     `Called the ${toolName} tool with the following input: ${JSON.stringify(input)}`,
   )
+}
+
+export function syntheticReadCallMessage(filePath: string): UserMessage {
+  return createToolUseMessage(FILE_READ_TOOL_NAME, {
+    file_path: toModelFilePath(filePath),
+  })
 }
 
 function createToolResultTextMessage(
@@ -55,8 +66,7 @@ function fileAttachmentToMessages(attachment: {
   truncated?: boolean
   note?: string
 }): Message[] {
-  const input = { file_path: attachment.displayPath }
-  const msgs: Message[] = [createToolUseMessage(FILE_READ_TOOL_NAME, input)]
+  const msgs: Message[] = [syntheticReadCallMessage(attachment.filename)]
 
   if (attachment.content.type === 'image') {
     msgs.push(
@@ -109,8 +119,9 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
       return [
         metaUserMessage(
           `The user attached ${attachment.displayPath} (${attachment.mediaType}, ${formatFileSize(attachment.fileSize)}). ` +
-            `Its contents cannot be shown inline. The file is saved at ${attachment.filename} — ` +
-            `use ${BASH_TOOL_NAME} to inspect or convert it (for example a Python one-liner with python-docx, openpyxl, or python-pptx) ` +
+            `Its contents cannot be shown inline. The file is saved at ${toModelFilePath(attachment.filename)} — ` +
+            `copy or process that on-disk path (do not rebuild it from the original filename). ` +
+            `Use ${BASH_TOOL_NAME} to inspect or convert it (for example a Python one-liner with python-docx, openpyxl, or python-pptx) ` +
             `before answering questions about it.`,
         ),
       ]
@@ -119,7 +130,9 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
       return [
         metaUserMessage(
           `PDF file: ${attachment.displayPath} (${attachment.pageCount} pages, ${formatFileSize(attachment.fileSize)}). ` +
-            `This PDF is too large to read all at once. You MUST use the ${FILE_READ_TOOL_NAME} tool with the pages parameter ` +
+            `On disk: ${toModelFilePath(attachment.filename)}. ` +
+            `This PDF is too large to read all at once. You MUST use the ${FILE_READ_TOOL_NAME} tool with ` +
+            `file_path ${JSON.stringify(toModelFilePath(attachment.filename))} and the pages parameter ` +
             `to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${FILE_READ_TOOL_NAME} without the pages parameter ` +
             `or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. ` +
             `Maximum 20 pages per request.`,

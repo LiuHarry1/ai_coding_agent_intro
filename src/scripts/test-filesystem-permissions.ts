@@ -9,6 +9,7 @@ import { resolveFileInCwd } from '../utils/read/index.js'
 import {
   coerceSanitizedProjectsPath,
   getBrowserLogsDir,
+  getChatUploadsRoot,
   getProjectsRoot,
   isReadableInternalPath,
 } from '../core/session-paths.js'
@@ -246,6 +247,40 @@ try {
     try {
       fs.unlinkSync(logPath)
     } catch {}
+  }
+
+  const uploadsRoot = getChatUploadsRoot()
+  if (uploadsRoot.split(path.sep).includes('projects')) {
+    throw new Error('uploads must not live under projects/')
+  }
+  const uploadPath = path.join(uploadsRoot, 'perm-sid', 'att.pdf')
+  fs.mkdirSync(path.dirname(uploadPath), { recursive: true })
+  fs.writeFileSync(uploadPath, 'pdf')
+  const otherHome = fs.mkdtempSync(path.join(os.tmpdir(), 'fsperm-other-'))
+  try {
+    if (checkReadPermission(uploadPath, desktop).behavior !== 'allow') {
+      throw new Error('uploads/ internal path should allow read')
+    }
+    if (!isReadableInternalPath(uploadPath)) {
+      throw new Error('isReadableInternalPath should cover uploads')
+    }
+    const otherUpload = path.join(
+      otherHome,
+      '.ai-agent',
+      'uploads',
+      'sid',
+      'x.pdf',
+    )
+    fs.mkdirSync(path.dirname(otherUpload), { recursive: true })
+    fs.writeFileSync(otherUpload, 'x')
+    if (isReadableInternalPath(otherUpload)) {
+      throw new Error('uploads under another agentHome must not be readable')
+    }
+  } finally {
+    try {
+      fs.unlinkSync(uploadPath)
+    } catch {}
+    fs.rmSync(otherHome, { recursive: true, force: true })
   }
 
   process.env.AUTH_ENABLED = 'true'

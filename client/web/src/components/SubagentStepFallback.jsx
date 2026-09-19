@@ -19,6 +19,7 @@ function nestedStepTitle(name, args) {
     return fileName(args.file_path || args.path) || args.file_path || args.path
   }
   if (typeof args.pattern === 'string') return args.pattern
+  if (typeof args.skill === 'string') return args.skill
   if (typeof args.skill_name === 'string') return args.skill_name
   const keys = Object.keys(args)
   if (keys.length === 1 && typeof args[keys[0]] === 'string') {

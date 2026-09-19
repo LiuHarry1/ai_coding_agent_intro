@@ -14,6 +14,7 @@ import {
   isReadableInternalPath,
   getProjectsRoot,
   getBrowserLogsDir,
+  getChatUploadsRoot,
 } from '../../core/session-paths.js'
 import { getDefaultPlansDirectory } from '../plans.js'
 import { isPathInWorkspace } from '../../core/workspace.js'
@@ -141,6 +142,7 @@ export function createFilesystemPermissionContext(
   const extraReads = [
     path.resolve(getProjectsRoot()),
     path.resolve(getBrowserLogsDir()),
+    path.resolve(getChatUploadsRoot()),
     plansRoot,
     ...parseExtraReadRoots(),
     ...(opts?.extraReadRoots ?? []).map(p => path.resolve(p)),

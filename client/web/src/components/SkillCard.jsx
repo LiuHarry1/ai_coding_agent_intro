@@ -24,7 +24,7 @@ import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
  * subtitle (same density as SubagentCard).
  */
 function skillArgsHint(args) {
-  const raw = args?.arguments
+  const raw = args?.args ?? args?.arguments
   if (typeof raw !== 'string' || !raw.trim()) return null
   const t = raw.trim()
   return t.length > 72 ? `${t.slice(0, 72)}\u2026` : t

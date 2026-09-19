@@ -55,6 +55,10 @@ import {
   formatTabularSummary,
   summarizeDelimitedFile,
 } from './tabular-summary.js'
+import {
+  syntheticReadCallMessage,
+  toModelFilePath,
+} from './attachment-to-messages.js'
 import type { Attachment } from './types.js'
 
 /** Wire shape of one composer attachment on `POST /chat`. */
@@ -171,6 +175,22 @@ async function pdfPageImageMessages(
   return messages
 }
 
+function pdfPrelude(
+  absPath: string,
+  displayName: string,
+  pageCount: number | null,
+  sizeText: string,
+): Message[] {
+  const diskPath = toModelFilePath(absPath)
+  return [
+    syntheticReadCallMessage(absPath),
+    metaMessage(
+      `The user attached ${displayName} (PDF, ${pageCount ?? '?'} pages, ${sizeText}). ` +
+        `Copy or process the on-disk path ${diskPath} — do not rebuild it from the original filename.`,
+    ),
+  ]
+}
+
 async function resolvePdfAttachment(
   absPath: string,
   displayName: string,
@@ -179,9 +199,8 @@ async function resolvePdfAttachment(
 ): Promise<{ messages: Message[]; warning?: string }> {
   const pageCount = await getPdfPageCount(absPath)
   const sizeText = formatPdfFileSize(fs.statSync(absPath).size)
-  const header = metaMessage(
-    `The user attached ${displayName} (PDF, ${pageCount ?? '?'} pages, ${sizeText}). Saved at ${absPath}.`,
-  )
+  const header = pdfPrelude(absPath, displayName, pageCount, sizeText)
+  const diskPath = toModelFilePath(absPath)
 
   if (provider.supportsNativePdf?.() === true) {
     const result = await readPDF(absPath, displayName)
@@ -195,7 +214,12 @@ async function resolvePdfAttachment(
           filename: displayName,
         },
       ]
-      return { messages: [header, { role: 'user', content: parts, isMeta: true }] }
+      return {
+        messages: [
+          ...header,
+          { role: 'user', content: parts, isMeta: true },
+        ],
+      }
     }
     // Oversized/corrupt for a document block — fall through to page images.
   }
@@ -213,12 +237,12 @@ async function resolvePdfAttachment(
       lastPage,
     )
     if (Array.isArray(pages) && pages.length > 0) {
-      const messages = [header, ...pages]
+      const messages = [...header, ...pages]
       if (pageCount != null && pageCount > lastPage) {
         messages.push(
           metaMessage(
             `Only pages 1-${lastPage} of ${displayName} are shown. Use ${FILE_READ_TOOL_NAME} with ` +
-              `file_path "${absPath}" and the pages parameter (max ${PDF_MAX_PAGES_PER_READ} per call) to see the rest.`,
+              `file_path ${JSON.stringify(diskPath)} and the pages parameter (max ${PDF_MAX_PAGES_PER_READ} per call) to see the rest.`,
           ),
         )
       }
@@ -230,7 +254,7 @@ async function resolvePdfAttachment(
   if (text) {
     return {
       messages: [
-        header,
+        ...header,
         metaMessage(
           `Text layer extracted from ${displayName} (page images unavailable, layout is lost):\n\n${text}`,
         ),
@@ -241,10 +265,10 @@ async function resolvePdfAttachment(
 
   return {
     messages: [
-      header,
+      ...header,
       metaMessage(
         `${displayName} could not be converted for this model — no PDF document support, no page renderer (poppler), and no text layer. ` +
-          `The raw file is at ${absPath} if a shell tool can help.`,
+          `The raw file is at ${diskPath} if a shell tool can help.`,
       ),
     ],
     warning: `${displayName}: could not be read (install poppler-utils for PDF page rendering).`,
@@ -262,9 +286,17 @@ function resolveTextAttachment(
     let note: string | undefined
     if (isTabularExtension(displayName)) {
       const summary = summarizeDelimitedFile(absPath)
-      if (summary) note = formatTabularSummary(summary, displayName, absPath)
+      if (summary) {
+        note = formatTabularSummary(
+          summary,
+          displayName,
+          toModelFilePath(absPath),
+        )
+      }
     }
-    note ??= `${displayName} is saved at ${absPath}; read more of it or process it with a shell tool if the preview is not enough.`
+    note ??=
+      `${displayName} is on disk at ${toModelFilePath(absPath)}. ` +
+      `Copy or process that on-disk path; do not rebuild it from the original filename.`
 
     return {
       messages: [
@@ -386,7 +418,7 @@ export async function resolveChatAttachments(
       result.warnings.push(`${displayName}: ${msg}`)
       result.preludeMessages.push(
         metaMessage(
-          `The user attached ${displayName} (${formatAttachmentSize(ref.sizeBytes ?? 0)}) but it could not be processed: ${msg}. The file is at ${absPath}.`,
+          `The user attached ${displayName} (${formatAttachmentSize(ref.sizeBytes ?? 0)}) but it could not be processed: ${msg}. The file is at ${toModelFilePath(absPath)}.`,
         ),
       )
     }

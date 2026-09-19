@@ -1251,10 +1251,10 @@ await withRelay(async relay => {
   assert(isAriaRefCssSelector('[ref=e12]'), 'ref attr is not CSS')
   assert(isAriaRefCssSelector('aria-ref=e12'), 'aria-ref is not CSS')
   assert(!isAriaRefCssSelector('#main'), 'real CSS is allowed')
-  assert(
-    ariaRefCssSelectorMessage('[ref=e12]').includes('not a snapshot ref'),
-    'ref selector error tells the model to omit selector',
-  )
+  const refMsg = ariaRefCssSelectorMessage('[ref=e12]')
+  assert(refMsg.includes('not a snapshot ref'), 'ref selector error names the mistake')
+  assert(refMsg.includes('without selector'), 'recovery is a fresh snapshot, not Read')
+  assert(!/spilled snapshot file|\bRead\b/i.test(refMsg), 'must not send the model to Read a log')
   ok('snapshot selector rejects [ref=eN]')
 }
 

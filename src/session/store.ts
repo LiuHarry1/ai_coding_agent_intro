@@ -13,6 +13,7 @@ import { removeTasksForSession } from '../services/cron/store.js'
 import {
   computeProjectKey,
   getCachedSessionLocation,
+  getChatUploadsSessionDir,
   getProjectSessionDir,
   getSessionDataDir,
   getSessionJsonlPath,
@@ -471,6 +472,10 @@ export function deleteSession(id: string): void {
     const memoryDir = getSessionDataDir(id, loc.projectKey, loc.agentHome)
     if (fs.existsSync(memoryDir)) {
       fs.rmSync(memoryDir, { recursive: true, force: true })
+    }
+    const uploadsDir = getChatUploadsSessionDir(id, loc.agentHome)
+    if (fs.existsSync(uploadsDir)) {
+      fs.rmSync(uploadsDir, { recursive: true, force: true })
     }
     removeSessionIndexEntry(id, loc.agentHome)
   }

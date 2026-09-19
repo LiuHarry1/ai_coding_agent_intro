@@ -18,15 +18,24 @@ export type { InvokedSkillInfo } from './invoked-skills.js'
 
 // ── Skill listing for <system-reminder> injection ────────────────────────
 
-const DEFAULT_LISTING_BUDGET = 8_000
-const BUDGET_CONTEXT_PERCENT = 0.01
+// Skill listing gets 1% of the context window (in characters)
+// CC: tools/SkillTool/prompt.ts
+export const SKILL_BUDGET_CONTEXT_PERCENT = 0.01
+export const CHARS_PER_TOKEN = 4
+export const DEFAULT_CHAR_BUDGET = 8_000
+export const MAX_LISTING_DESC_CHARS = 250
+const MIN_DESC_LENGTH = 20
 
 function getCharBudget(contextWindowTokens?: number): number {
-  if (!contextWindowTokens) return DEFAULT_LISTING_BUDGET
-  return Math.max(
-    2_000,
-    Math.floor(contextWindowTokens * BUDGET_CONTEXT_PERCENT),
-  )
+  if (Number(process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET)) {
+    return Number(process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET)
+  }
+  if (contextWindowTokens) {
+    return Math.floor(
+      contextWindowTokens * CHARS_PER_TOKEN * SKILL_BUDGET_CONTEXT_PERCENT,
+    )
+  }
+  return DEFAULT_CHAR_BUDGET
 }
 
 function truncateDesc(text: string, maxLen: number): string {
@@ -34,9 +43,13 @@ function truncateDesc(text: string, maxLen: number): string {
   return text.slice(0, maxLen - 1) + '\u2026'
 }
 
+function listingDescription(desc: string): string {
+  return truncateDesc(desc, MAX_LISTING_DESC_CHARS)
+}
+
 /**
  * Format a skill listing suitable for `<system-reminder>` injection.
- * Budget-aware: if all descriptions exceed the budget, they are truncated.
+ * CC `formatCommandsWithinBudget` / `formatCommandDescription`: `- name: desc`.
  */
 export function formatSkillListing(
   skills: readonly SkillDefinition[],
@@ -45,22 +58,26 @@ export function formatSkillListing(
   if (skills.length === 0) return ''
 
   const budget = getCharBudget(contextWindowTokens)
-  const lines = skills.map(s => `- ${s.name} (${s.context}): ${s.description}`)
+  const lines = skills.map(
+    s => `- ${s.name}: ${listingDescription(s.description)}`,
+  )
   const full = lines.join('\n')
 
   if (full.length <= budget) return full
 
-  const nameOverhead = skills.reduce(
-    (sum, s) => sum + s.name.length + s.context.length + 8,
-    0,
-  )
+  const nameOverhead =
+    skills.reduce((sum, s) => sum + s.name.length + 4, 0) + (skills.length - 1)
   const available = budget - nameOverhead
-  const maxDesc = Math.max(30, Math.floor(available / skills.length))
+  const maxDesc = Math.floor(available / skills.length)
+
+  if (maxDesc < MIN_DESC_LENGTH) {
+    return skills.map(s => `- ${s.name}`).join('\n')
+  }
 
   return skills
     .map(
       s =>
-        `- ${s.name} (${s.context}): ${truncateDesc(s.description, maxDesc)}`,
+        `- ${s.name}: ${truncateDesc(listingDescription(s.description), maxDesc)}`,
     )
     .join('\n')
 }

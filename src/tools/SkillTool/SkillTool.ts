@@ -2,7 +2,7 @@
  * Single dispatcher tool exposing all loaded skills. Mirrors the `task`
  * tool's "one tool, many subagent_types" pattern.
  *
- * The model calls `skill(skill_name=..., arguments=...)` and we either:
+ * The model calls `Skill({ skill, args })` (CC field names) and we either:
  *
  *   - inline:  expand the skill body ($ARGUMENTS / $1 / $name + !`shell` +
  *              @file), return `Launching skill: name` as the tool result,
@@ -26,6 +26,7 @@ import { addInvokedSkill } from '../../skills/invoked-skills.js'
 import { runSkillFork } from '../../skills/run-fork.js'
 
 import { SKILL_TOOL_NAME } from '../../constants/tool_names.js'
+import { getSkillToolPrompt } from './prompt.js'
 
 export { SKILL_TOOL_NAME } from '../../constants/tool_names.js'
 
@@ -52,23 +53,7 @@ export function createSkillTool(
     }
     bySkill.set(s.name, s)
   }
-  const validSkills = [...bySkill.keys()]
-
-  const description = `Invoke a reusable skill — a parameterized procedure the user (or this project) has defined for repeatable workflows.
-
-Important:
-- Available skills are listed in <system-reminder> messages in the conversation.
-- When a listed skill's description matches this task, invoke it before starting that workflow. Skip skills that do not match.
-
-Two execution modes:
-- **inline** skills inject their expanded body as a follow-up message and return \`Launching skill: name\` as the tool result. Use them when you want to *remember* a procedure mid-thought (e.g. "code-review checklist", "PR-body template").
-- **fork** skills run as a fresh subagent with the body as system prompt. Use them when the skill needs many tool calls and you don't want its scratch work in your context.
-
-Arguments:
-- \`skill_name\`: one of [${validSkills.join(', ')}]
-- \`arguments\`: raw argument string (optional). Substituted into the skill body as \`$ARGUMENTS\`, \`$1\`, or \`$name\` depending on the skill's declared argument names.
-
-Prefer skills over reinventing a procedure inline — they encode user/project conventions.`
+  const description = getSkillToolPrompt()
 
   return {
     name: SKILL_TOOL_NAME,
@@ -109,28 +94,28 @@ Prefer skills over reinventing a procedure inline — they encode user/project c
       return tool({
         description,
         inputSchema: z.object({
-          skill_name: z
-            .enum(validSkills as [string, ...string[]])
-            .describe(
-              'Which skill to invoke. Must be a registered skill name.',
-            ),
-          arguments: z
+          skill: z
+            .string()
+            .describe('The skill name. E.g., "commit", "review-pr", or "pdf"'),
+          args: z
             .string()
             .optional()
-            .describe(
-              'Raw argument string. Substituted into the skill body via $ARGUMENTS / $1 / $name. Pass an empty string if the skill takes none.',
-            ),
+            .describe('Optional arguments for the skill'),
         }),
         execute: async ({
-          skill_name,
-          arguments: rawArgs,
+          skill: rawSkill,
+          args: rawArgs,
         }: {
-          skill_name: string
-          arguments?: string
+          skill: string
+          args?: string
         }) => {
+          const trimmed = (rawSkill ?? '').trim()
+          const skill_name = trimmed.startsWith('/')
+            ? trimmed.slice(1)
+            : trimmed
           const skill = bySkill.get(skill_name)
           if (!skill) {
-            return `Error: unknown skill '${skill_name}'. Valid: ${validSkills.join(', ')}`
+            return `Unknown skill: ${skill_name}`
           }
 
           // Body load + arg substitution + `!`/`@`/`${SKILL_DIR}` expansion

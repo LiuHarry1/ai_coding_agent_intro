@@ -1,8 +1,10 @@
 /**
  * Chat attachments — OpenClaw-style claim-check.
  *
- * Bytes live under `.sessions/{id}/uploads/`; transcript + UI keep short
- * `/sessions/{id}/uploads/{file}` refs (never multi-MB base64 / Buffer arrays).
+ * Bytes live under `{agentHome}/.ai-agent/uploads/{sessionId}/`; transcript + UI
+ * keep short `/sessions/{id}/uploads/{file}` refs (never multi-MB base64 /
+ * Buffer arrays). Older sessions may still have files under
+ * `projects/<key>/<sessionId>/uploads/` — readers fall back there.
  *
  * Images keep their own narrow helpers because `buildUserMessage` and the
  * image hydrate path must never be handed a PDF or a CSV by accident.
@@ -20,7 +22,11 @@ import {
   normalizeExt,
   type AttachmentKind,
 } from '../constants/attachment-types.js'
-import { getSessionDataDir } from '../core/session-paths.js'
+import {
+  getChatUploadsSessionDir,
+  getSessionDataDir,
+  requireSessionLocation,
+} from '../core/session-paths.js'
 import type { ImageMediaType } from '../core/types.js'
 
 export const CHAT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
@@ -94,7 +100,42 @@ export function chatUploadUrl(sessionId: string, fileName: string): string {
 }
 
 export function getChatUploadsDir(sessionId: string): string {
+  const { agentHome } = requireSessionLocation(sessionId)
+  return getChatUploadsSessionDir(sessionId, agentHome)
+}
+
+function legacyChatUploadsDir(sessionId: string): string {
   return path.join(getSessionDataDir(sessionId), 'uploads')
+}
+
+function joinUnderDir(root: string, fileName: string): string | null {
+  const resolvedRoot = path.resolve(root)
+  const abs = path.resolve(resolvedRoot, fileName)
+  if (abs === resolvedRoot || !abs.startsWith(resolvedRoot + path.sep)) {
+    return null
+  }
+  return abs
+}
+
+/**
+ * On-disk path for an upload filename. New writes live under
+ * `{agentHome}/.ai-agent/uploads/{sessionId}/`; readers also accept the
+ * pre-move `projects/<key>/<sessionId>/uploads/` location.
+ */
+export function resolveChatUploadFileAbs(
+  sessionId: string,
+  fileName: string,
+): string | null {
+  const primary = joinUnderDir(getChatUploadsDir(sessionId), fileName)
+  if (!primary) return null
+  if (fs.existsSync(primary)) return primary
+  try {
+    const legacy = joinUnderDir(legacyChatUploadsDir(sessionId), fileName)
+    if (legacy && fs.existsSync(legacy)) return legacy
+  } catch {
+    /* session location missing or legacy dir unreachable */
+  }
+  return primary
 }
 
 /** Match `/sessions/{id}/uploads/{file}` (encoded or plain id). */
@@ -259,10 +300,7 @@ export function resolveChatAttachmentAbsPath(
 ): string | null {
   const parsed = parseChatUploadRef(ref)
   if (!parsed || parsed.sessionId !== sessionId) return null
-  const root = path.resolve(getChatUploadsDir(sessionId))
-  const abs = path.resolve(root, parsed.fileName)
-  if (abs !== root && !abs.startsWith(root + path.sep)) return null
-  return abs
+  return resolveChatUploadFileAbs(sessionId, parsed.fileName)
 }
 
 /**
@@ -288,11 +326,8 @@ export async function offloadChatImageRefs(
       if (existing.sessionId !== sessionId) {
         throw new Error('Image upload belongs to another session')
       }
-      const abs = path.join(
-        getChatUploadsDir(sessionId),
-        existing.fileName,
-      )
-      if (!fs.existsSync(abs)) {
+      const abs = resolveChatUploadFileAbs(sessionId, existing.fileName)
+      if (!abs || !fs.existsSync(abs)) {
         throw new Error(`Missing upload file: ${existing.fileName}`)
       }
       out.push(chatUploadUrl(sessionId, existing.fileName))
@@ -315,12 +350,8 @@ export async function offloadChatImageRefs(
 export function resolveChatUploadAbsPath(ref: string): string | null {
   const parsed = parseChatUploadUrl(ref)
   if (!parsed) return null
-  const abs = path.resolve(
-    getChatUploadsDir(parsed.sessionId),
-    parsed.fileName,
-  )
-  const root = path.resolve(getChatUploadsDir(parsed.sessionId))
-  if (abs !== root && !abs.startsWith(root + path.sep)) return null
+  const abs = resolveChatUploadFileAbs(parsed.sessionId, parsed.fileName)
+  if (!abs) return null
   return abs
 }
 

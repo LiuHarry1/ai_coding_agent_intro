@@ -337,7 +337,7 @@ export async function prepareChatTurn(
   const reminderParts: string[] = []
   if (activeSkills.length > 0) {
     reminderParts.push(
-      `The following skills are available for use with the skill tool:\n\n${formatSkillListing(activeSkills)}`,
+      `The following skills are available for use with the Skill tool:\n\n${formatSkillListing(activeSkills)}`,
     )
   }
   if (pool.deferredDefs.length > 0) {
