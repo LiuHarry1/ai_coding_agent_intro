@@ -18,8 +18,10 @@ import * as pw from '../../browser/playwright/index.js'
 import {
   CALL_TIMEOUT_MS,
   DEFAULT_MAX_CHARS,
+  DEFAULT_MAX_NODES,
   DEFAULT_SNAPSHOT_DEPTH,
   EFFICIENT_MAX_CHARS,
+  MAX_SNAPSHOT_DEPTH,
   POST_ACTION_MAX_NODES,
   POST_ACTION_SNAPSHOT_MS,
 } from '../../browser/limits.js'
@@ -34,6 +36,7 @@ import {
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
 import {
+  clearTabMemory,
   getUserHasControl,
   isSnapshotDegraded,
   isTabPoisoned,
@@ -338,12 +341,7 @@ export const navigateTool = defineBrowserTool({
       .enum(['back', 'forward', 'reload'])
       .optional()
       .describe('History action when url is omitted'),
-    screenshotAfterwards: z
-      .boolean()
-      .optional()
-      .describe(
-        'When true, takes a screenshot after navigation completes. Defaults to false.',
-      ),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run({ url, action, screenshotAfterwards }, ctx) {
     let targetId = ctx.targetId
@@ -394,7 +392,7 @@ export const snapshotTool = defineBrowserTool({
       .positive()
       .optional()
       .describe(
-        `Maximum snapshot tree depth. Defaults to ${DEFAULT_SNAPSHOT_DEPTH}.`,
+        `Maximum snapshot tree depth. Defaults to ${DEFAULT_SNAPSHOT_DEPTH}, capped at ${MAX_SNAPSHOT_DEPTH}.`,
       ),
     maxNodes: z
       .number()
@@ -402,7 +400,7 @@ export const snapshotTool = defineBrowserTool({
       .positive()
       .optional()
       .describe(
-        `Ref-bearing node cap for mode=efficient (default ${POST_ACTION_MAX_NODES}).`,
+        `Ref-bearing node cap for mode=efficient (default ${POST_ACTION_MAX_NODES}, max ${DEFAULT_MAX_NODES}).`,
       ),
     maxChars: z
       .number()
@@ -417,12 +415,6 @@ export const snapshotTool = defineBrowserTool({
       .optional()
       .describe(
         'CSS selector for one subtree (e.g. [role=dialog]). Not a snapshot ref — [ref=eN] is rejected.',
-      ),
-    compact: z
-      .boolean()
-      .optional()
-      .describe(
-        'When true, more compact snapshot format. Defaults to false.',
       ),
     interactive: z
       .boolean()
@@ -444,7 +436,7 @@ export const snapshotTool = defineBrowserTool({
       ),
   }),
   async run(
-    { mode, maxDepth, maxNodes, maxChars, selector, compact, interactive, includeDiff, urls },
+    { mode, maxDepth, maxNodes, maxChars, selector, interactive, includeDiff, urls },
     ctx,
   ) {
     const resolvedMode = mode ?? 'full'
@@ -463,7 +455,6 @@ export const snapshotTool = defineBrowserTool({
         maxChars ??
         (resolvedMode === 'efficient' ? EFFICIENT_MAX_CHARS : undefined),
       selector,
-      compact: compact ?? resolvedMode === 'efficient',
       interactive: interactive ?? resolvedMode === 'efficient',
       includeDiff,
       urls,
@@ -1139,7 +1130,22 @@ export const tabsTool = defineBrowserTool({
       }
       case 'close': {
         if (!args.tabId) throw new BrowserError('close requires a tabId.')
+        const before = await ctx.backend.listTabs()
+        const closedAt = before.findIndex(t => t.targetId === args.tabId)
         await ctx.backend.closeTab(args.tabId)
+        // Refs and the console offset are keyed by target id, and Chrome reuses
+        // those ids. Left behind, they would be read as the next tab's state.
+        clearTabMemory(args.tabId)
+        resetConsoleWatermark(args.tabId)
+        // Closing the active tab would otherwise leave the session pointing at
+        // a dead target. resolveTab's fallback covers the easy cases but throws
+        // once two real tabs are left, so adopt the neighbour Chrome itself
+        // would focus instead of reporting no current tab.
+        if (getCurrentTabId(ctx.sessionId) === args.tabId) {
+          const remaining = before.filter(t => t.targetId !== args.tabId)
+          const next = remaining[Math.min(closedAt, remaining.length - 1)]
+          if (next) setCurrentTab(next.targetId, ctx.sessionId)
+        }
         message = `Closed tab ${args.tabId}`
         break
       }
@@ -1325,12 +1331,7 @@ export const cdpTool = defineBrowserTool({
       .describe(
         'Target browser tab ID. If omitted, uses the last interacted tab.',
       ),
-    take_screenshot_afterwards: z
-      .boolean()
-      .optional()
-      .describe(
-        'When true, takes a screenshot after the CDP command completes. Defaults to false.',
-      ),
+    screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
     let targetId = ctx.targetId
@@ -1355,7 +1356,7 @@ export const cdpTool = defineBrowserTool({
         action: 'cdp',
         message,
         withSnapshot: false,
-        screenshotAfterwards: args.take_screenshot_afterwards,
+        screenshotAfterwards: args.screenshotAfterwards,
       },
       ctx,
     )

@@ -65,6 +65,12 @@ export const EFFICIENT_MAX_CHARS = 8_000
  * and reports truncated=false.
  */
 export const DEFAULT_SNAPSHOT_DEPTH = 30
+/**
+ * Ceiling for a caller-supplied `maxDepth`. Real accessibility trees bottom out
+ * far below this, so the cap only exists to keep an absurd value from being
+ * handed to Playwright.
+ */
+export const MAX_SNAPSHOT_DEPTH = 100
 
 /** Screenshots compete with the snapshot for context; cap them hard. */
 export const SCREENSHOT_TOKEN_BUDGET = 1500

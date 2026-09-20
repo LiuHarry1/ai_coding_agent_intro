@@ -6,8 +6,11 @@
 
 import type { Frame, Page } from 'playwright-core'
 import {
+  DEFAULT_MAX_CHARS,
+  DEFAULT_MAX_NODES,
   DEFAULT_SNAPSHOT_DEPTH,
   EFFICIENT_MAX_CHARS,
+  MAX_SNAPSHOT_DEPTH,
   POST_ACTION_MAX_NODES,
   SNAPSHOT_TIMEOUT_MS,
   WAIT_FOR_TIMEOUT_MS,
@@ -402,13 +405,37 @@ function recordSnapshotHealth(targetId: string, text: string): void {
   }
 }
 
+/**
+ * Hold callers to the ceilings the tool descriptions already advertise.
+ * Clamping rather than rejecting follows `getPageText`: an over-large budget
+ * degrades to the cap instead of costing the model a turn on a schema error.
+ * Non-positive values fall back to the defaults, since `?? EFFICIENT_MAX_CHARS`
+ * would otherwise honour a literal 0 and snapshot nothing.
+ */
+function clampSnapshotOpts(opts: SnapshotOpts): SnapshotOpts {
+  const clamp = (
+    value: number | undefined,
+    ceiling: number,
+  ): number | undefined =>
+    typeof value === 'number' && value > 0
+      ? Math.min(Math.floor(value), ceiling)
+      : undefined
+  return {
+    ...opts,
+    maxChars: clamp(opts.maxChars, DEFAULT_MAX_CHARS),
+    maxNodes: clamp(opts.maxNodes, DEFAULT_MAX_NODES),
+    depth: clamp(opts.depth, MAX_SNAPSHOT_DEPTH),
+  }
+}
+
 export async function snapshot(
   backend: BrowserBackend,
   targetId: string,
   opts: SnapshotOpts = {},
 ): Promise<SnapshotResult> {
+  const bounded = clampSnapshotOpts(opts)
   return withReadBoost(backend, targetId, () =>
-    snapshotInner(backend, targetId, opts),
+    snapshotInner(backend, targetId, bounded),
   )
 }
 
@@ -657,7 +684,6 @@ export async function forceRefreshSnapshot(
   targetId: string,
 ): Promise<void> {
   await snapshot(backend, targetId, {
-    compact: true,
     maxNodes: POST_ACTION_MAX_NODES,
   })
 }

@@ -816,14 +816,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       launcherLine.includes(': Messages'),
       `the group's label must be on the clickable line, not only on a child:\n${snapshot}`,
     )
-    const compactIndex = expectData(
-      await run(snapshotTool, { compact: true }, sessionId),
-    )
-    const compactLauncher = refForGeneric(String(compactIndex.snapshot), 'Messages')
-    assert.ok(
-      compactLauncher,
-      `compact must keep the pointer+label group:\n${compactIndex.snapshot}`,
-    )
+    // No extra snapshot here: the refs below come from `snapshot`, and a
+    // mode=efficient capture would replace the remembered tree with a filtered
+    // one. mode=efficient is covered in the distiller section instead.
     const openedLauncher = expectData(
       await run(clickTool, { ref: launcherRef }, sessionId),
     )
@@ -1266,21 +1261,22 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('selector snapshots a subtree')
 
-    const compact = expectData(
-      await run(snapshotTool, { compact: true }, sessionId),
+    const efficient = expectData(
+      await run(snapshotTool, { mode: 'efficient' }, sessionId),
     )
-    const compactText = String(compact.snapshot)
-    const compactLines = compactText.split('\n').filter(Boolean)
+    const efficientText = String(efficient.snapshot)
+    const efficientLines = efficientText.split('\n').filter(Boolean)
     const fullLines = nestedSnap.split('\n').filter(Boolean)
     assert.ok(
-      compactLines.length <= fullLines.length,
-      `compact should not grow the tree (${compactLines.length} vs ${fullLines.length})`,
+      efficientLines.length <= fullLines.length,
+      `efficient should not grow the tree (${efficientLines.length} vs ${fullLines.length})`,
     )
     assert.ok(
-      compactText.includes('[ref=') && compactText.includes('Alice: latest note'),
-      `compact must keep the clickable row:\n${compactText.slice(0, 800)}`,
+      efficientText.includes('[ref=') &&
+        efficientText.includes('Alice: latest note'),
+      `efficient must keep the clickable row:\n${efficientText.slice(0, 800)}`,
     )
-    ok('compact drops structural wrappers')
+    ok('mode=efficient clips the tree but keeps clickable rows')
 
     assert.ok(
       nestedSnap.length < 25_000,

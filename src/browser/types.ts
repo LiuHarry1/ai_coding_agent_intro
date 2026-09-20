@@ -69,8 +69,6 @@ export interface SnapshotOpts {
   maxChars?: number
   /** CSS selector; snapshot this subtree instead of the whole page. */
   selector?: string
-  /** Clip tree depth, for a cheaper post-action look at the page. */
-  compact?: boolean
   /** Explicit depth override (default DEFAULT_SNAPSHOT_DEPTH / Cursor maxDepth 30). */
   depth?: number
   /** Only keep ref-bearing nodes (and their ancestors). Cheaper for driving actions. */

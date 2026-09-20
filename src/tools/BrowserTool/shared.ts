@@ -416,6 +416,7 @@ export async function observe(
     maxNodes?: number
     maxChars?: number
     selector?: string
+    /** Internal shorthand for `mode: 'efficient'`, which `mode` overrides. */
     compact?: boolean
     interactive?: boolean
     includeDiff?: boolean
@@ -430,7 +431,6 @@ export async function observe(
   const mode: SnapshotMode =
     opts.mode ?? (opts.compact ? 'efficient' : 'full')
   const efficient = mode === 'efficient'
-  const compact = opts.compact ?? efficient
   const interactive = opts.interactive ?? (efficient ? true : false)
   const maxChars = efficient
     ? (opts.maxChars ?? EFFICIENT_MAX_CHARS)
@@ -463,7 +463,6 @@ export async function observe(
       maxNodes,
       maxChars,
       selector: opts.selector,
-      compact,
       interactive,
       urls: opts.urls,
       depth,

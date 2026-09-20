@@ -267,19 +267,15 @@ async function main() {
     )
     console.log('ok [playwright] click waits for lazy dialog content')
 
-    const compact = expectData(
-      await run(
-        snapshotTool,
-        { selector: '[role=dialog]', compact: true },
-        sessionId,
-      ),
+    const scoped = expectData(
+      await run(snapshotTool, { selector: '[role=dialog]' }, sessionId),
     )
-    const compactSnap = String(compact.snapshot)
+    const scopedSnap = String(scoped.snapshot)
     assert.ok(
-      compactSnap.includes('8月') && compactSnap.includes('蒋先生'),
-      `compact selector snapshot must not depth-clip the dialog list:\n${compactSnap}`,
+      scopedSnap.includes('8月') && scopedSnap.includes('蒋先生'),
+      `selector snapshot must not depth-clip the dialog list:\n${scopedSnap}`,
     )
-    console.log('ok [playwright] compact selector keeps the dialog subtree')
+    console.log('ok [playwright] selector snapshot keeps the dialog subtree')
 
     const nested = expectData(
       await run(navigateTool, { url: `${server.url}dialog-nested` }, sessionId),
