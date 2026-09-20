@@ -123,6 +123,24 @@ async function main() {
       403,
     )
 
+    const cookieOnly = (url: string, init?: RequestInit) =>
+      fetch(`${base}${url}`, { ...init, headers: cookie(alice) })
+    assert.equal(
+      (await cookieOnly('/sessions', { method: 'POST' })).status,
+      401,
+      'cookie grants no authority over mutating routes',
+    )
+    assert.equal(
+      (await cookieOnly('/sessions')).status,
+      401,
+      'cookie auth is limited to the preview navigation path',
+    )
+    assert.equal(
+      (await cookieOnly(upload)).status,
+      401,
+      'session artifacts still require the bearer header',
+    )
+
     assert.equal((await request(base, upload, alice)).status, 200)
     assert.equal((await request(base, upload, bob)).status, 404)
     assert.equal((await request(base, upload, superUser)).status, 200)

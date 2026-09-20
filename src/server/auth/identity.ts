@@ -10,10 +10,11 @@
  *   - AUTH_ENABLED unset/false → `authenticateRequest` returns null and the
  *     server keeps its legacy single-user behavior (client-chosen workspace).
  *   - AUTH_ENABLED=true → every protected request must carry a valid JWT as
- *     `Authorization: Bearer` (SPA fetch) or the `coding_agent_auth_token`
- *     cookie (same-origin document navigation, e.g. chart preview in a new
- *     tab). The workspace is pinned to /USERS_ROOT/<slug(email)> and the
- *     client-supplied `workspace` is ignored.
+ *     `Authorization: Bearer`. A `coding_agent_auth_token` cookie is accepted
+ *     only on the few read-only GETs listed in `COOKIE_AUTH_GET_PATHS`, which
+ *     the browser reaches by top-level navigation. The workspace is pinned to
+ *     /USERS_ROOT/<slug(email)> and the client-supplied `workspace` is
+ *     ignored.
  *
  * Env:
  *   AUTH_ENABLED   "true" to turn the gate on.
@@ -65,6 +66,15 @@ export function isAuthEnabled(): boolean {
 
 /** Same-origin cookie the SPA mirrors from localStorage so GET navigation can auth. */
 export const AUTH_COOKIE_NAME = 'coding_agent_auth_token'
+
+/**
+ * The only paths where the cookie may stand in for the bearer header: a
+ * top-level navigation (chart preview opened in a new tab) cannot attach one.
+ * Keeping the list to read-only GETs means the cookie carries no ambient
+ * authority over the mutating API, so a same-site request forged elsewhere
+ * cannot act as the user. Matched after `stripMountPath`, so `/code/…` works.
+ */
+const COOKIE_AUTH_GET_PATHS = ['/workspace/preview']
 
 /** JWT role that may list/view any user's sessions (SSO mode). */
 const SUPER_ROLE = 'super'
@@ -206,9 +216,10 @@ function extractCookieToken(req: IncomingMessage): string | null {
     if (idx <= 0) continue
     if (part.slice(0, idx).trim() !== AUTH_COOKIE_NAME) continue
     const value = part.slice(idx + 1).trim()
-    if (!value) return null
+    // Keep scanning: the same name can appear twice under different paths.
+    if (!value) continue
     try {
-      return decodeURIComponent(value) || null
+      return decodeURIComponent(value)
     } catch {
       return value
     }
@@ -216,17 +227,29 @@ function extractCookieToken(req: IncomingMessage): string | null {
   return null
 }
 
+function allowsCookieAuth(req: IncomingMessage): boolean {
+  if ((req.method ?? 'GET').toUpperCase() !== 'GET') return false
+  const url = req.url ?? '/'
+  const queryAt = url.indexOf('?')
+  return COOKIE_AUTH_GET_PATHS.includes(
+    queryAt === -1 ? url : url.slice(0, queryAt),
+  )
+}
+
 /** Bearer header wins; cookie covers top-level navigations that cannot set it. */
 export function extractAccessToken(req: IncomingMessage): string | null {
-  return extractBearer(req) ?? extractCookieToken(req)
+  return (
+    extractBearer(req) ??
+    (allowsCookieAuth(req) ? extractCookieToken(req) : null)
+  )
 }
 
 /**
  * Gate entrypoint. Returns null when auth is disabled (caller keeps legacy
- * behavior). When enabled, verifies the JWT (Bearer or auth cookie), pins
- * the user's workspace, mutates `req` (so downstream handlers can read
- * `req.user` / `req.userWorkspace`), and returns both. Throws AuthError
- * otherwise.
+ * behavior). When enabled, verifies the JWT (bearer header, or the auth
+ * cookie on a `COOKIE_AUTH_GET_PATHS` navigation), pins the user's workspace,
+ * mutates `req` (so downstream handlers can read `req.user` /
+ * `req.userWorkspace`), and returns both. Throws AuthError otherwise.
  */
 export function authenticateRequest(
   req: AuthedRequest,
