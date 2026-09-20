@@ -6,7 +6,8 @@
  * `@ai-sdk/openai-compatible` requires id + function.name on the *first*
  * delta of each index and throws otherwise. This rewrite buffers until that
  * start event can be synthesized — same invariant as Anthropic
- * `content_block_start` (name first, JSON deltas after).
+ * `content_block_start` (name first, JSON deltas after). An index whose name
+ * never arrives is unusable, so it is dropped with a warning at end of stream.
  */
 
 type ToolCallDelta = {
@@ -61,56 +62,32 @@ export class OpenAIToolCallNormalizer {
     const choice = chunk.choices?.[0]
     if (!choice) return value
 
-    const delta = choice.delta
-    const rawCalls = delta?.tool_calls
-    const hasCalls = Array.isArray(rawCalls) && rawCalls.length > 0
-    const shouldFlush = choice.finish_reason != null && choice.finish_reason !== ''
+    const rawCalls = choice.delta?.tool_calls
+    if (!Array.isArray(rawCalls) || rawCalls.length === 0) return value
 
     const outgoing: ToolCallDelta[] = []
-    if (hasCalls && rawCalls) {
-      for (const tc of rawCalls) {
-        const emitted = this.absorb(tc)
-        if (emitted) outgoing.push(emitted)
-      }
-    }
-    if (shouldFlush) {
-      outgoing.push(...this.flushNamedPending())
-    }
-
-    if (!hasCalls && !shouldFlush) return value
-
-    if (outgoing.length === 0) {
-      if (!hasCalls) return value
-      if (deltaHasOtherPayload(delta, choice)) {
-        const next = cloneChunk(chunk)
-        const nextDelta = next.choices?.[0]?.delta
-        if (nextDelta) delete nextDelta.tool_calls
-        return next
-      }
-      return null
+    for (const tc of rawCalls) {
+      const emitted = this.absorb(tc)
+      if (emitted) outgoing.push(emitted)
     }
 
     const next = cloneChunk(chunk)
-    const nextChoice = next.choices?.[0]
-    if (!nextChoice) return next
-    nextChoice.delta = { ...(nextChoice.delta ?? {}), tool_calls: outgoing }
-    return next
-  }
-
-  flushNamedPending(): ToolCallDelta[] {
-    const outgoing: ToolCallDelta[] = []
-    for (const [index, pend] of [...this.pending]) {
-      const started = this.emitStart(index, pend)
-      if (started) outgoing.push(started)
+    const nextDelta = next.choices?.[0]?.delta
+    if (!nextDelta) return next
+    if (outgoing.length > 0) {
+      nextDelta.tool_calls = outgoing
+      return next
     }
-    return outgoing
+
+    // Every delta here is still buffered. Drop the event unless it also
+    // carries payload the caller is waiting on, such as streamed content.
+    delete nextDelta.tool_calls
+    return hasPayloadBesidesToolCalls(nextDelta, choice) ? next : null
   }
 
-  reset(): void {
-    this.opened.clear()
-    this.pending.clear()
-    this.lastIndex = 0
-    this.synthSeq = 0
+  /** Indexes still buffered because `function.name` never arrived. */
+  unresolvedIndexes(): number[] {
+    return [...this.pending.keys()]
   }
 
   private absorb(tc: ToolCallDelta): ToolCallDelta | null {
@@ -160,17 +137,29 @@ export class OpenAIToolCallNormalizer {
   }
 }
 
-function deltaHasOtherPayload(
-  delta: { [key: string]: unknown } | undefined,
+function hasPayloadBesidesToolCalls(
+  delta: { [key: string]: unknown },
   choice: { finish_reason?: unknown },
 ): boolean {
   if (choice.finish_reason != null && choice.finish_reason !== '') return true
-  if (!delta) return false
-  return Object.keys(delta).some(key => key !== 'tool_calls' && delta[key] != null)
+  return Object.keys(delta).some(key => delta[key] != null)
 }
 
 function cloneChunk(chunk: ChatChunk): ChatChunk {
   return structuredClone(chunk)
+}
+
+/**
+ * An index that never received a name cannot become a legal start event, so
+ * it is dropped. Say so: this module exists because upstream providers
+ * misbehave, and a silent drop would leave no trace of a new failure mode.
+ */
+function warnUnresolved(normalizer: OpenAIToolCallNormalizer): void {
+  const dropped = normalizer.unresolvedIndexes()
+  if (dropped.length === 0) return
+  console.warn(
+    `[openai-compatible] dropped ${dropped.length} tool_call delta(s) with no function.name (index ${dropped.join(', ')})`,
+  )
 }
 
 /** Rewrite a complete SSE document (one or more `data:` events). */
@@ -189,6 +178,7 @@ export function rewriteSseText(
     const rewritten = rewriteSseLine(line, normalizer)
     if (rewritten !== null) out.push(rewritten)
   }
+  warnUnresolved(normalizer)
   return out.join('\n')
 }
 
@@ -198,10 +188,7 @@ export function rewriteSseLine(
 ): string | null {
   if (!line.startsWith('data:')) return line
   const payload = line.slice(5).trimStart()
-  if (payload === '[DONE]') {
-    const flushed = flushAsSseLines(normalizer)
-    return flushed.length > 0 ? `${flushed.join('\n')}\n${line}` : line
-  }
+  if (payload === '[DONE]') return line
   let parsed: unknown
   try {
     parsed = JSON.parse(payload)
@@ -212,16 +199,6 @@ export function rewriteSseLine(
   if (rewritten == null) return null
   if (rewritten === parsed) return line
   return `data: ${JSON.stringify(rewritten)}`
-}
-
-function flushAsSseLines(normalizer: OpenAIToolCallNormalizer): string[] {
-  const leftover = normalizer.flushNamedPending()
-  if (leftover.length === 0) return []
-  return [
-    `data: ${JSON.stringify({
-      choices: [{ delta: { tool_calls: leftover }, finish_reason: null }],
-    })}`,
-  ]
 }
 
 export function createOpenAIToolCallNormalizeTransform(): TransformStream<
@@ -247,9 +224,7 @@ export function createOpenAIToolCallNormalizeTransform(): TransformStream<
         if (rewritten !== null) controller.enqueue(`${rewritten}\n`)
         carry = ''
       }
-      for (const line of flushAsSseLines(normalizer)) {
-        controller.enqueue(`${line}\n`)
-      }
+      warnUnresolved(normalizer)
     },
   })
 }
