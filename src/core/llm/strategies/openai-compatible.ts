@@ -1,6 +1,7 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { applyMaxTokensToChatBody } from '../max-tokens.js'
 import type { ProviderStrategy } from '../types.js'
+import { createNormalizedOpenAICompatibleFetch } from './normalize-openai-tool-stream.js'
 
 /**
  * Generic OpenAI-compatible chat endpoint (copilot-proxy, Ollama, vLLM, …).
@@ -18,6 +19,8 @@ export const openaiCompatibleStrategy: ProviderStrategy = {
       apiKey: p.apiKey,
       supportsStructuredOutputs: true,
       transformRequestBody: args => applyMaxTokensToChatBody(args),
+      // LiteLLM/Qwen parallel tool_calls often omit name on a new index.
+      fetch: createNormalizedOpenAICompatibleFetch(),
     })
     return {
       chatModel: id => client.chatModel(id),
