@@ -35,7 +35,13 @@ export const DEFAULT_DOWNLOAD_DIR = path.join(
   'downloads',
 )
 
+/** Root holding every ephemeral isolated Chrome profile. */
+export const ISOLATED_PROFILES_DIR = path.join(
+  DEFAULT_BROWSER_TMP_DIR,
+  'profiles',
+)
+
 /** Isolated Chrome userDataDir when `browser.profile` is `fresh`. */
 export function freshIsolatedProfileDir(sessionKey: string): string {
-  return path.join(DEFAULT_BROWSER_TMP_DIR, 'profiles', sessionKey)
+  return path.join(ISOLATED_PROFILES_DIR, sessionKey)
 }

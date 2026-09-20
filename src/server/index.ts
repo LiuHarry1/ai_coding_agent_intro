@@ -14,7 +14,10 @@ import * as os from 'os'
 import { resolveSettings } from '../core/settings-manager.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
 import { runWithRequestScope } from '../utils/request-scope.js'
-import { initBrowserLifecycle } from '../browser/manager.js'
+import {
+  initBrowserLifecycle,
+  shutdownBrowserLifecycle,
+} from '../browser/manager.js'
 import { preconnectModelApis } from '../utils/apiPreconnect.js'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
 import {
@@ -69,11 +72,12 @@ export function startServer(_opts: ServerOptions = {}): void {
     console.log(`[server] ${signal}: shutting down`)
     stopCronScheduler()
     server.close(() => {
-      void shutdownExecutionPlane()
-        .catch(() => {})
-        .finally(() =>
-          void shutdownAllLspManagers().finally(() => process.exit(0)),
-        )
+      void (async () => {
+        await shutdownExecutionPlane().catch(() => {})
+        await shutdownBrowserLifecycle().catch(() => {})
+        await shutdownAllLspManagers().catch(() => {})
+        process.exit(0)
+      })()
     })
   }
   process.once('SIGINT', () => shutdown('SIGINT'))

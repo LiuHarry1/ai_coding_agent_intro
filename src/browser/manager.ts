@@ -13,10 +13,13 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { resolveSettings } from '../core/settings-manager.js'
 import { getUserAppDir } from '../utils/app-dir.js'
-import { createExtensionBackend, getExtensionRelay } from './backends/extension.js'
+import {
+  createExtensionBackend,
+  getExtensionRelay,
+} from './backends/extension.js'
 import { createIsolatedBackend } from './backends/isolated.js'
 import { isSafePathSegment } from './fs-safe/safe-path-segment.js'
-import { freshIsolatedProfileDir } from './paths.js'
+import { freshIsolatedProfileDir, ISOLATED_PROFILES_DIR } from './paths.js'
 import {
   attachExtensionPlaywright,
   detachPlaywright,
@@ -56,6 +59,69 @@ interface Live {
 const lives = new Map<string, Live>()
 const starting = new Map<string, Promise<Live>>()
 
+/**
+ * Ephemeral profile dirs that must not outlive the process. Tracked separately
+ * from `lives` because the directory exists from the moment `start()` creates
+ * it -- before the bucket is registered -- and the `exit` handler cannot await.
+ */
+const ephemeralProfileDirs = new Set<string>()
+
+function removeProfileDirSync(dir: string): void {
+  ephemeralProfileDirs.delete(dir)
+  try {
+    fs.rmSync(dir, { recursive: true, force: true })
+  } catch {
+    // Best effort: on Windows Chrome may still hold a handle on the profile.
+  }
+}
+
+/**
+ * True while a Chrome still owns this profile. Chrome writes `SingletonLock` as
+ * a symlink to `<hostname>-<pid>` and leaves it behind when it is killed, so
+ * only the pid can tell a live profile from a stale one. Windows has no such
+ * symlink, but there the directory cannot be unlinked while Chrome holds it
+ * open, which gives the same protection.
+ */
+function isProfileHeldByLiveChrome(dir: string): boolean {
+  let target: string
+  try {
+    target = fs.readlinkSync(path.join(dir, 'SingletonLock'))
+  } catch {
+    return false
+  }
+  const pid = Number(target.slice(target.lastIndexOf('-') + 1))
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    // EPERM means the pid is taken, just owned by another user.
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/**
+ * Drop profiles orphaned by an earlier run. A hard kill (SIGKILL, crash, or the
+ * Windows exit path, where the profile is still open) leaves the directory
+ * behind, so without a boot-time sweep these accumulate for the life of the
+ * machine. A profile another agent process is still using is skipped and gets
+ * retried on a later boot.
+ */
+async function sweepOrphanedProfiles(): Promise<void> {
+  let names: string[]
+  try {
+    names = await fs.promises.readdir(ISOLATED_PROFILES_DIR)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    const dir = path.join(ISOLATED_PROFILES_DIR, name)
+    if (ephemeralProfileDirs.has(dir)) continue
+    if (isProfileHeldByLiveChrome(dir)) continue
+    await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 interface SharedExtension {
   backend: BrowserBackend
   users: Set<string>
@@ -74,7 +140,12 @@ export function browserSessionKey(sessionId?: string): string {
 }
 
 function persistProfileDir(sessionKey: string): string {
-  return path.join(getUserAppDir(), 'browser', 'profiles', profileSegment(sessionKey))
+  return path.join(
+    getUserAppDir(),
+    'browser',
+    'profiles',
+    profileSegment(sessionKey),
+  )
 }
 
 function profileSegment(sessionKey: string): string {
@@ -139,6 +210,7 @@ async function createIsolatedConfigured(
     ? persistProfileDir(sessionKey)
     : freshIsolatedProfileDir(profileSegment(sessionKey))
   fs.mkdirSync(userDataDir, { recursive: true })
+  if (!persist) ephemeralProfileDirs.add(userDataDir)
   const backend = await createIsolatedBackend({
     userDataDir,
     headless: config.headless ?? false,
@@ -273,13 +345,13 @@ async function disposeLive(live: Live): Promise<void> {
   }
 
   if (live.ephemeralProfileDir) {
-    fs.rmSync(live.ephemeralProfileDir, { recursive: true, force: true })
+    removeProfileDirSync(live.ephemeralProfileDir)
   }
 }
 
 /**
  * Close one chat's browser, or every bucket when sessionId is omitted
- * (process exit and tests).
+ * (shutdown and tests).
  */
 export async function closeBrowser(sessionId?: string): Promise<void> {
   if (sessionId) {
@@ -403,11 +475,35 @@ export async function openTab(
   return tab
 }
 
+/**
+ * Release every browser this process owns. Awaitable, so a caller with a real
+ * shutdown sequence (see `startServer`) lets Chrome close and profiles get
+ * removed instead of leaving both behind.
+ */
+export async function shutdownBrowserLifecycle(): Promise<void> {
+  await closeBrowser().catch(() => {})
+  const inst = relay
+  relay = null
+  await inst?.close().catch(() => {})
+}
+
+let lifecycleInstalled = false
+
 export function initBrowserLifecycle(cwd: string = process.cwd()): void {
-  process.on('exit', () => {
-    void closeBrowser()
-    void relay?.close()
-  })
+  if (!lifecycleInstalled) {
+    lifecycleInstalled = true
+    // `exit` runs no microtasks, so everything after the first `await` in
+    // closeBrowser() would be queued and dropped. Only the synchronous part
+    // belongs here, and it lands on POSIX only -- Chrome is still running at
+    // this point, so Windows refuses to unlink the open profile and the boot
+    // sweep is what reclaims it. Graceful teardown is
+    // shutdownBrowserLifecycle() on the signal path.
+    process.on('exit', () => {
+      for (const dir of [...ephemeralProfileDirs]) removeProfileDirSync(dir)
+    })
+
+    void sweepOrphanedProfiles()
+  }
 
   // Extension mode starts the relay at boot. First tool call also lazy-starts
   // via getRelay(); the `browser` primary agent warms it per turn as well.
