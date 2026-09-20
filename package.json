@@ -31,6 +31,8 @@
     "test:memory": "tsx src/scripts/test-auto-memory.ts && tsx src/scripts/test-memory-prefetch.ts && tsx src/scripts/test-session-memory.ts && tsx src/scripts/test-memory-lifecycle.ts && tsx src/scripts/test-request-scope.ts && node src/scripts/test-memory-deployment.mjs && tsx src/scripts/test-rules-loader.ts && tsx src/scripts/test-managed-extensions.ts && tsx src/scripts/test-agent-memory.ts && tsx src/scripts/test-memory-binding.ts",
     "test:compact": "tsx src/scripts/test-compact-boundary.ts && tsx src/scripts/test-full-compact-cache-safe.ts && tsx src/scripts/test-micro-reactive-compact.ts && tsx src/scripts/test-compact-outcome.ts && tsx src/scripts/test-session-memory.ts && tsx src/scripts/test-session-compact-persistence.ts && tsx src/scripts/test-compaction-agent-listing.ts && tsx src/scripts/test-read-file-state-dedup.ts && tsx src/scripts/test-fork-read-isolation.ts",
     "test:attachments": "tsx src/scripts/test-chat-attachments.ts",
+    "test:auth": "tsx src/scripts/test-session-artifact-auth.ts",
+    "test:llm": "tsx src/scripts/test-normalize-openai-tool-stream.ts",
     "format": "npx prettier --write \"src/**/*.ts\" \"protocol/src/**/*.ts\" \"client-sdk/**/*.ts\" \"client/web/src/**/*.{js,jsx}\" \"electron/**/*.mjs\" \"start.js\" \"scripts/**/*.cjs\"",
     "docs:dev": "vitepress dev docs",
     "docs:build": "node scripts/build-docs.mjs",
