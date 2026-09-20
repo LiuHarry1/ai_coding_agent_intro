@@ -31,7 +31,7 @@ and `city-sales.html` from the same validated input.
 Chart generated.
 
 - File: `/workspace/charts/city-sales.html`
-- Preview: [Open interactive chart](http://AGENT_HOST/workspace/preview?path=...)
+- Preview: [Open interactive chart](/workspace/preview?path=...)
 
 In-page preview supports tooltips, compatible chart-type switching, palette
 changes, and cleaned-data download.

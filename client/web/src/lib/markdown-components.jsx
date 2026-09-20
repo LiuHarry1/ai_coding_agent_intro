@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Mermaid from '../components/Mermaid.jsx'
+import { apiUrl } from './api/_http.js'
 import { fetchAuthenticatedResourceBlobUrl } from './api/workspace.js'
 
 function isMermaidBlock(child) {
@@ -91,6 +92,8 @@ function PreviewLink({ href, children, ...props }) {
     return () => window.removeEventListener('keydown', close)
   }, [open])
 
+  const previewHref = resource ? apiUrl(resource) : href
+
   if (!resource) {
     return (
       <a href={href} {...props}>
@@ -145,7 +148,7 @@ function PreviewLink({ href, children, ...props }) {
   return (
     <>
       <a
-        href={href}
+        href={previewHref}
         {...props}
         onClick={event => {
           event.preventDefault()

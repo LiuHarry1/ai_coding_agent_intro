@@ -73,8 +73,9 @@ If field names are unclear, shape the data first. Do not guess column names.
    count, units, time range, missing values, and sort order.
 4. For visual QA, rerun with `--png` and Read the PNG once. If Chrome is not
    available, keep the HTML and say the PNG was not generated.
-5. Return all artifacts and the preview link. The frontend opens preview with
-   the current login session.
+5. Return all artifacts and a same-origin preview link (`/workspace/preview?path=`).
+   Do not prefix `http://IP:port`. The web app opens it in-page and the logged-in
+   browser can also open the `/code/workspace/preview` URL in a new tab.
 
 ### Workflow B — small edits (patch)
 
@@ -111,7 +112,7 @@ Chart generated.
 - Interactive chart: `{absoluteHtmlPath}`
 - Cleaned data: `{absoluteDataPath}`
 - Chart spec: `{absoluteSpecPath}`
-- Preview: [Open interactive chart]({previewBaseUrl}/workspace/preview?path={encodedAbsoluteHtmlPath})
+- Preview: [Open interactive chart](/workspace/preview?path={encodedAbsoluteHtmlPath})
 - PNG: `{absolutePngPath}` (list only when actually generated)
 ```
 

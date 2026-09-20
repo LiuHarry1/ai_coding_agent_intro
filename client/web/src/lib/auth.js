@@ -3,14 +3,17 @@
  *
  * Mirrors the KnowBot SSO flow: when auth is enabled the SPA redirects to
  * the auth-service `/sso/authorize`, which bounces back with `#token=<jwt>`.
- * We stash the JWT in localStorage and attach it as a bearer token on every
- * agent API call. The agent backend verifies it and pins the workspace.
+ * We stash the JWT in localStorage (Bearer on fetch) and mirror it into a
+ * same-origin cookie so top-level GETs like `/code/workspace/preview` can
+ * authenticate. The agent verifies the JWT and pins the workspace.
  *
  * Auth is OFF unless the runtime config says otherwise, so the password and
  * local deploy modes (and `npm run dev`) are completely unaffected.
  */
 
 const TOKEN_KEY = 'coding_agent_auth_token'
+/** Must match `AUTH_COOKIE_NAME` in src/server/auth/identity.ts */
+const AUTH_COOKIE = TOKEN_KEY
 
 /** Runtime flag injected via /app-config.js (see deploy/web-runtime-config.sh). */
 export function authEnabled() {
@@ -47,12 +50,28 @@ export function getToken() {
   }
 }
 
+function persistAuthCookie(token) {
+  if (typeof document === 'undefined') return
+  if (!token) {
+    document.cookie = `${AUTH_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
+    return
+  }
+  const payload = decodeToken(token)
+  const maxAge =
+    payload && typeof payload.exp === 'number'
+      ? Math.max(0, payload.exp - Math.floor(Date.now() / 1000))
+      : 7 * 24 * 3600
+  const secure = globalThis.location?.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`
+}
+
 export function setToken(token) {
   try {
     localStorage.setItem(TOKEN_KEY, token)
   } catch {
     /* storage unavailable */
   }
+  persistAuthCookie(token)
 }
 
 export function clearToken() {
@@ -61,6 +80,7 @@ export function clearToken() {
   } catch {
     /* ignore */
   }
+  persistAuthCookie(null)
 }
 
 /** Authorization header object (empty when no token / auth disabled). */
@@ -147,6 +167,7 @@ export function ensureAuth() {
     redirectToLogin()
     return false
   }
+  persistAuthCookie(token)
   return true
 }
 

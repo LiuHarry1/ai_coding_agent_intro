@@ -9,8 +9,10 @@
  * The whole layer is gated by AUTH_ENABLED:
  *   - AUTH_ENABLED unset/false → `authenticateRequest` returns null and the
  *     server keeps its legacy single-user behavior (client-chosen workspace).
- *   - AUTH_ENABLED=true → every protected request must carry a valid bearer
- *     token; the workspace is pinned to /USERS_ROOT/<slug(email)> and the
+ *   - AUTH_ENABLED=true → every protected request must carry a valid JWT as
+ *     `Authorization: Bearer` (SPA fetch) or the `coding_agent_auth_token`
+ *     cookie (same-origin document navigation, e.g. chart preview in a new
+ *     tab). The workspace is pinned to /USERS_ROOT/<slug(email)> and the
  *     client-supplied `workspace` is ignored.
  *
  * Env:
@@ -60,6 +62,9 @@ export function isAuthEnabled(): boolean {
       .toLowerCase() === 'true'
   )
 }
+
+/** Same-origin cookie the SPA mirrors from localStorage so GET navigation can auth. */
+export const AUTH_COOKIE_NAME = 'coding_agent_auth_token'
 
 /** JWT role that may list/view any user's sessions (SSO mode). */
 const SUPER_ROLE = 'super'
@@ -192,17 +197,42 @@ function extractBearer(req: IncomingMessage): string | null {
   return parts[1].trim() || null
 }
 
+function extractCookieToken(req: IncomingMessage): string | null {
+  const header = req.headers.cookie
+  if (!header) return null
+  const raw = Array.isArray(header) ? header.join('; ') : header
+  for (const part of raw.split(';')) {
+    const idx = part.indexOf('=')
+    if (idx <= 0) continue
+    if (part.slice(0, idx).trim() !== AUTH_COOKIE_NAME) continue
+    const value = part.slice(idx + 1).trim()
+    if (!value) return null
+    try {
+      return decodeURIComponent(value) || null
+    } catch {
+      return value
+    }
+  }
+  return null
+}
+
+/** Bearer header wins; cookie covers top-level navigations that cannot set it. */
+export function extractAccessToken(req: IncomingMessage): string | null {
+  return extractBearer(req) ?? extractCookieToken(req)
+}
+
 /**
  * Gate entrypoint. Returns null when auth is disabled (caller keeps legacy
- * behavior). When enabled, verifies the bearer token, pins the user's
- * workspace, mutates `req` (so downstream handlers can read `req.user` /
- * `req.userWorkspace`), and returns both. Throws AuthError otherwise.
+ * behavior). When enabled, verifies the JWT (Bearer or auth cookie), pins
+ * the user's workspace, mutates `req` (so downstream handlers can read
+ * `req.user` / `req.userWorkspace`), and returns both. Throws AuthError
+ * otherwise.
  */
 export function authenticateRequest(
   req: AuthedRequest,
 ): { identity: AuthIdentity; workspace: string } | null {
   if (!isAuthEnabled()) return null
-  const token = extractBearer(req)
+  const token = extractAccessToken(req)
   if (!token) throw new AuthError('Missing bearer token')
   const identity = verifyJwt(token)
   const workspace = resolveUserWorkspace(identity.email)
