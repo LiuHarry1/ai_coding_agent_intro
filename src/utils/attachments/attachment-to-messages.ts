@@ -145,6 +145,7 @@ export function attachmentToMessages(attachment: Attachment): Message[] {
     case 'skill_listing':
     case 'invoked_skills':
     case 'agent_listing_delta':
+    case 'agent_mention':
     case 'task_notification':
     case 'relevant_memories':
     case 'conditional_rules':
