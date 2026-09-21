@@ -14,14 +14,21 @@
  * this browser" banner appears whenever a tab is attached.
  */
 
-const DEFAULT_PORT = 8766
-const PROTOCOL_VERSION = 1
+const PROTOCOL_VERSION = 2
 const GROUP_TITLE = 'Agent'
 const KEEPALIVE_ALARM = 'relay-keepalive'
+/**
+ * How long to keep dialling a relay that will not answer. The endpoint is
+ * per-agent-process, so once that process is gone the URL is dead forever and
+ * retrying is pure noise — but a service worker restart or a brief hiccup must
+ * not lose a connection the user already approved.
+ */
+const GIVE_UP_AFTER_MS = 2 * 60 * 1000
 
 let socket = null
 let reconnectTimer = null
 let reconnectDelay = 1000
+let firstFailureAt = null
 /** Tab ids with a live chrome.debugger session. */
 const attached = new Set()
 /** Tab ids the agent is allowed to act on. */
@@ -112,9 +119,37 @@ async function detachAll() {
   await Promise.all([...attached].map(detach))
 }
 
+const REATTACH_DELAY_MS = 150
+const REATTACH_COOLDOWN_MS = 3000
+/** Tabs re-attached recently, so a user repeatedly dismissing the banner wins. */
+const recentReattach = new Set()
+
+/**
+ * Come back after an unexpected detach. Commands would recover on their own
+ * through `ensureAttached`, but CDP *events* stop the moment the session drops
+ * and the Playwright engine on the host side is listening to them, so waiting
+ * for the next command is not good enough.
+ */
+function scheduleReattach(tabId) {
+  if (!owned.has(tabId) || recentReattach.has(tabId)) return
+  recentReattach.add(tabId)
+  setTimeout(() => recentReattach.delete(tabId), REATTACH_COOLDOWN_MS)
+  setTimeout(async () => {
+    if (!owned.has(tabId) || attached.has(tabId)) return
+    if (socket?.readyState !== WebSocket.OPEN) return
+    try {
+      await ensureAttached(tabId)
+    } catch {
+      // The tab is gone, or the user refused. Either way, stop here.
+    }
+  }, REATTACH_DELAY_MS)
+}
+
 chrome.debugger.onDetach.addListener(source => {
   // Fires when the user dismisses Chrome's debugging banner, among others.
-  if (source.tabId != null) attached.delete(source.tabId)
+  if (source.tabId == null) return
+  attached.delete(source.tabId)
+  scheduleReattach(source.tabId)
 })
 
 chrome.debugger.onEvent.addListener((source, method, params) => {
@@ -221,17 +256,70 @@ async function restoreTab(targetId) {
   await chrome.tabs.update(tabId, { active: true })
 }
 
-async function cdp(targetId, cdpMethod, params, sessionId) {
-  const tabId = Number(targetId)
+// ── reflective chrome.* invocation ───────────────────────
+
+/**
+ * chrome.* calls the agent may make, and where each one's tab id sits in the
+ * positional argument list. Every entry is ownership-checked before it runs,
+ * so reflection never widens what the agent can reach: adding a capability is
+ * a line here rather than another branch through the whole stack.
+ */
+const ALLOWED_CHROME_COMMANDS = {
+  'chrome.debugger.attach': args => args[0]?.tabId,
+  'chrome.debugger.detach': args => args[0]?.tabId,
+  'chrome.debugger.sendCommand': args => args[0]?.tabId,
+}
+
+/**
+ * Methods that cannot be a plain forward. Either they carry the ownership
+ * bookkeeping itself (create/close), or they deliberately act on a tab the
+ * agent does *not* own (getActiveUserTab, restore — that is the point of
+ * handing focus back to the user).
+ */
+const SEMANTIC_METHODS = [
+  'tabs.list',
+  'tabs.create',
+  'tabs.close',
+  'tabs.getActiveUserTab',
+  'tabs.focus',
+  'tabs.restore',
+]
+
+/** Announced in `hello` so the host can branch at handshake time. */
+const CAPABILITIES = [
+  ...SEMANTIC_METHODS,
+  ...Object.keys(ALLOWED_CHROME_COMMANDS),
+]
+
+/** Walk `chrome.a.b.c` down to `{ obj: chrome.a.b, name: 'c' }`. */
+function resolveChromeMember(fullMethod) {
+  const parts = fullMethod.split('.')
+  let obj = chrome
+  for (let i = 1; i < parts.length - 1; i++) {
+    obj = obj?.[parts[i]]
+    if (obj === undefined) {
+      throw new Error(`Unknown chrome path: ${parts.slice(0, i + 1).join('.')}`)
+    }
+  }
+  return { obj, name: parts[parts.length - 1] }
+}
+
+async function invokeChrome(method, args) {
+  const tabIdOf = ALLOWED_CHROME_COMMANDS[method]
+  const tabId = tabIdOf(args)
+  if (typeof tabId !== 'number') {
+    throw new Error(`${method} needs a numeric tab id in its first argument`)
+  }
   assertOwned(tabId)
-  await ensureAttached(tabId)
+  // Attaching on demand keeps the host from having to track debugger state
+  // that only the browser really knows.
+  if (method === 'chrome.debugger.sendCommand') await ensureAttached(tabId)
+
+  const { obj, name } = resolveChromeMember(method)
   try {
-    const debuggee = sessionId ? { tabId, sessionId } : { tabId }
-    const result = await chrome.debugger.sendCommand(
-      debuggee,
-      cdpMethod,
-      params ?? {},
-    )
+    const result = await obj[name].apply(obj, args)
+    if (method === 'chrome.debugger.attach') attached.add(tabId)
+    if (method === 'chrome.debugger.detach') attached.delete(tabId)
     // Commands with an empty reply resolve to undefined; the host expects JSON.
     return result ?? {}
   } catch (err) {
@@ -241,11 +329,12 @@ async function cdp(targetId, cdpMethod, params, sessionId) {
     ) {
       // A navigation or a dismissed banner can drop the session mid-command.
       attached.delete(tabId)
+      scheduleReattach(tabId)
       throw new Error(
         `Lost the debugger session for tab ${tabId} (${message}). Retry the action.`,
       )
     }
-    throw new Error(`${cdpMethod} failed: ${message}`)
+    throw new Error(`${method} failed: ${message}`)
   }
 }
 
@@ -263,18 +352,36 @@ async function handle(req) {
       return focusTab(req.targetId, req.level)
     case 'tabs.restore':
       return restoreTab(req.targetId)
-    case 'cdp':
-      return cdp(req.targetId, req.cdpMethod, req.params, req.sessionId)
     default:
+      if (ALLOWED_CHROME_COMMANDS[req.method]) {
+        return invokeChrome(req.method, req.params ?? [])
+      }
       throw new Error(`Unknown relay method: ${req.method}`)
   }
 }
 
 // ── socket ───────────────────────────────────────────────
 
-async function getConfig() {
-  const { token, port } = await chrome.storage.local.get(['token', 'port'])
-  return { token: token || '', port: Number(port) || DEFAULT_PORT }
+function relayHost(relayUrl) {
+  try {
+    return new URL(relayUrl).host
+  } catch {
+    return relayUrl
+  }
+}
+
+/**
+ * Session storage on purpose: the relay endpoint is a live capability, not a
+ * saved setting. It dies with the agent process, so it must not outlive the
+ * browser session either.
+ */
+async function getRelayUrl() {
+  const { relayUrl } = await chrome.storage.session.get('relayUrl')
+  return typeof relayUrl === 'string' ? relayUrl : ''
+}
+
+async function forgetRelayUrl() {
+  await chrome.storage.session.remove('relayUrl')
 }
 
 async function setStatus(status, detail) {
@@ -291,6 +398,11 @@ async function setStatus(status, detail) {
 
 function scheduleReconnect() {
   if (reconnectTimer) return
+  if (firstFailureAt === null) firstFailureAt = Date.now()
+  if (Date.now() - firstFailureAt > GIVE_UP_AFTER_MS) {
+    void giveUp()
+    return
+  }
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null
     void connect()
@@ -300,10 +412,20 @@ function scheduleReconnect() {
   reconnectDelay = Math.min(reconnectDelay * 2, 5_000)
 }
 
+async function giveUp() {
+  firstFailureAt = null
+  reconnectDelay = 1000
+  await forgetRelayUrl()
+  await setStatus(
+    'disconnected',
+    'The agent is no longer reachable. Ask it to connect again.',
+  )
+}
+
 async function connect() {
-  const { token, port } = await getConfig()
-  if (!token) {
-    await setStatus('unpaired', 'Paste the pairing token below.')
+  const relayUrl = await getRelayUrl()
+  if (!relayUrl) {
+    await setStatus('disconnected', 'Waiting for the agent to ask for access.')
     return
   }
   if (
@@ -316,9 +438,9 @@ async function connect() {
 
   let ws
   try {
-    ws = new WebSocket(`ws://127.0.0.1:${port}`)
+    ws = new WebSocket(relayUrl)
   } catch {
-    await setStatus('disconnected', `Cannot reach 127.0.0.1:${port}`)
+    await setStatus('disconnected', `Cannot reach ${relayHost(relayUrl)}`)
     scheduleReconnect()
     return
   }
@@ -328,9 +450,9 @@ async function connect() {
     ws.send(
       JSON.stringify({
         type: 'hello',
-        token,
         version: PROTOCOL_VERSION,
         browser: navigator.userAgent,
+        capabilities: [...CAPABILITIES],
       }),
     )
   })
@@ -345,7 +467,8 @@ async function connect() {
 
     if (msg.type === 'welcome') {
       reconnectDelay = 1000
-      await setStatus('connected', `Agent on port ${port}`)
+      firstFailureAt = null
+      await setStatus('connected', `Agent on ${relayHost(relayUrl)}`)
       return
     }
     if (msg.type === 'lockState') {
@@ -374,10 +497,16 @@ async function connect() {
     if (socket === ws) socket = null
     await detachAll()
     if (event.code === 1008) {
-      await setStatus('rejected', 'Pairing token was rejected.')
-      return // Reconnecting with a bad token would just loop.
+      // The agent refused the handshake itself, which in practice means this
+      // build is older than it is. Retrying changes nothing.
+      await forgetRelayUrl()
+      await setStatus(
+        'rejected',
+        'The agent rejected this connection. Reload this extension from chrome://extensions.',
+      )
+      return
     }
-    await setStatus('disconnected', `Lost connection to 127.0.0.1:${port}`)
+    await setStatus('disconnected', `Lost connection to ${relayHost(relayUrl)}`)
     scheduleReconnect()
   })
 
@@ -399,13 +528,16 @@ chrome.alarms.onAlarm.addListener(alarm => {
 chrome.runtime.onStartup.addListener(() => void boot())
 chrome.runtime.onInstalled.addListener(() => void boot())
 
-// Pairing is expressed purely as stored credentials, so writing them — from the
-// popup or anywhere else — is what makes a new pairing take effect.
+// The stored relay url *is* the connection request, so writing it — from the
+// connect page or anywhere else — is what makes a new one take effect.
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || (!changes.token && !changes.port)) return
+  // Only a new value is a request to connect. Clearing the key is how we give
+  // up, and reacting to that would immediately overwrite the reason we did.
+  if (area !== 'session' || !changes.relayUrl?.newValue) return
   reconnectDelay = 1000
+  firstFailureAt = null
   if (socket) {
-    socket.close(1000, 're-pairing')
+    socket.close(1000, 'reconnecting to a new agent')
     socket = null
   }
   void connect()
@@ -414,20 +546,27 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   ;(async () => {
     switch (msg?.type) {
+      case 'connect': {
+        if (typeof msg.relayUrl !== 'string' || !msg.relayUrl) {
+          sendResponse({ ok: false, error: 'No relay url supplied.' })
+          return
+        }
+        // Writing it is enough; the storage listener above opens the socket.
+        await chrome.storage.session.set({ relayUrl: msg.relayUrl })
+        sendResponse({ ok: true })
+        return
+      }
       case 'get-state': {
-        const { status, statusDetail, token, port, userHasControl } =
+        const { status, statusDetail, userHasControl } =
           await chrome.storage.local.get([
             'status',
             'statusDetail',
-            'token',
-            'port',
             'userHasControl',
           ])
         sendResponse({
           status: status ?? 'disconnected',
           statusDetail: statusDetail ?? '',
-          hasToken: Boolean(token),
-          port: Number(port) || DEFAULT_PORT,
+          relayHost: relayHost(await getRelayUrl()),
           tabs: await listTabs(),
           userHasControl: Boolean(userHasControl),
         })

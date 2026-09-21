@@ -51,7 +51,16 @@ The browser is **headless** by default, so it is not visible. To watch the agent
 
 Pages load with your actual signed-in session, without requiring a login script.
 
-### 1. Update the configuration
+### 1. Install the extension
+
+Your everyday Chrome browser **does not need to be restarted**:
+
+1. Open `chrome://extensions` and enable **Developer mode** in the upper-right corner.
+2. Click **Load unpacked** and select the repository's `chrome-extension/` directory.
+
+> Do not use the adjacent **Pack extension** button. The generated `.crx` cannot be installed by dragging it into modern Chrome because non-store sources are rejected. The generated `.pem` is also a private signing key; do not commit it to the repository (it is already included in `.gitignore`). Use **Load unpacked** to install the local extension.
+
+### 2. Update the configuration
 
 `.ai-agent/settings.json`:
 
@@ -63,37 +72,27 @@ Pages load with your actual signed-in session, without requiring a login script.
 }
 ```
 
-### 2. Restart the agent
+### 3. Restart the agent
 
 ```bash
 npm start
 ```
 
-**This step is required.** The relay service listens only when the **Browser Automation** expert is selected (or `browser.enabled: true`) and `mode: extension` is configured. The default Coding Agent does not start the relay. The startup log should contain:
+**This step is required.** The relay service listens only when the **Browser Automation** expert is selected (or `browser.enabled: true`) and `mode` is `extension` or `auto`. The default Coding Agent does not start the relay. The startup log should contain:
 
 ```
-[browser] extension relay listening on 127.0.0.1:8766
+[browser] extension relay listening on 127.0.0.1:53417
 ```
 
-### 3. Get the pairing token
+The port is assigned by the operating system and differs on every run, so nothing needs to be configured to match it.
 
-```bash
-npm run browser:pair
-```
+### 4. Approve the connection
 
-This prints the port and token. The token is stored in `~/.ai-agent/browser/relay.json` with permissions `0600` and **does not change**. Pairing is therefore required only once; the extension reconnects automatically after subsequent agent restarts.
+There is no token to copy. The first time the agent needs the browser, it opens a tab titled **Connect this browser to the agent?**; press **Allow** and the dot in the extension popup turns green.
 
-### 4. Install the extension
+That approval covers the running agent process. The address it approved stops working when that process exits, so the next agent run asks again. Nothing durable is stored in the browser, which is why there is no credential to rotate or leak.
 
-Your everyday Chrome browser **does not need to be restarted**:
-
-1. Open `chrome://extensions` and enable **Developer mode** in the upper-right corner.
-2. Click **Load unpacked** and select the repository's `chrome-extension/` directory.
-3. Click the new extension icon in the toolbar, paste the token, and click **Pair**.
-
-The connection is active when the dot turns green.
-
-> Do not use the adjacent **Pack extension** button. The generated `.crx` cannot be installed by dragging it into modern Chrome because non-store sources are rejected. The generated `.pem` is also a private signing key; do not commit it to the repository (it is already included in `.gitignore`). Use **Load unpacked** to install the local extension.
+If no tab appears, run `npm run browser:pair`. It performs the same exchange in its own process and reports which step failed.
 
 ### 5. Verify the connection
 
@@ -180,10 +179,10 @@ Place all fields under `browser` in `.ai-agent/settings.json`:
 
 | Field                  | Default    | Description                                                                                                                                                                    |
 | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mode`                 | `isolated` | `isolated` or `extension`                                                                                                                                                      |
+| `mode`                 | `isolated` | `isolated`, `extension`, or `auto` (use the extension if it is already connected, otherwise fall back to `isolated` without prompting)                                          |
 | `enabled`              | `false`    | By default, Coding Agent and other primary agents have no `browser_*` tools; `true` restores deferred availability. The **Browser Automation** expert always has browser tools |
 | `headless`             | `true`     | `isolated` mode only; set to `false` to show the window                                                                                                                        |
-| `relayPort`            | `8766`     | `extension` mode only; if changed, update the popup to match                                                                                                                   |
+| `relayPort`            | unset      | `extension` mode only; pins the loopback port instead of letting the operating system assign one. Only needed behind a strict local firewall                                    |
 | `channel`              | `chrome`   | `isolated` mode only; specifies the Chrome channel                                                                                                                             |
 | `viewportWidth`        | `1280`     | `isolated` mode only                                                                                                                                                           |
 | `viewportHeight`       | `800`      | `isolated` mode only                                                                                                                                                           |
@@ -198,15 +197,16 @@ Restart the agent after changing any field.
 
 | Symptom                                                 | Cause and resolution                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| “I cannot see it operating my browser”                  | It is probably still using the default headless `isolated` mode. Check the relay port with `nc -z 127.0.0.1 8766`; if the connection fails, the agent is not in `extension` mode                                                                                                          |
-| `No browser extension is connected on 127.0.0.1:8766`   | The extension is not installed or paired, or the agent was not restarted after changing `mode`                                                                                                                                                                                            |
-| Clicking Pair in the popup does nothing                 | The agent is not running or is not in `extension` mode, so the relay is not listening                                                                                                                                                                                                     |
+| “I cannot see it operating my browser”                  | It is probably still using the default headless `isolated` mode. Look for `[browser] extension relay listening` in the startup log; if it is absent, the agent is not in `extension` mode                                                                                                |
+| `No browser extension is connected`                     | The consent tab was never approved, or the extension is not installed. Run `npm run browser:pair` to see which                                                                                                                                                                            |
+| No consent tab appears when the agent needs the browser | The agent could not find Chrome. Set `CHROME_PATH` to the executable                                                                                                                                                                                                                      |
+| The consent tab opens in the wrong Chrome profile       | Chrome opens the URL in whichever profile is already running, and the extension must be installed there. Load it in that profile, or quit Chrome and let the agent start it                                                                                                              |
 | Baidu or Google displays a CAPTCHA                      | The empty profile in `isolated` mode looks automated. Switch to `extension` mode to use your real session                                                                                                                                                                                 |
 | `Ref e3 is stale`                                       | The page changed and the snapshot expired. Capture a new snapshot; the agent normally handles this automatically                                                                                                                                                                          |
 | “It switches to its tab whenever it performs an action” | Write operations in extension mode require L1 activation of the agent tab for input; read operations do not switch tabs. By default, it does not switch back. Set `restoreTabAfterInput: true` to return after about 0.6 seconds without activity. For no disruption, use `isolated` mode |
 | `The page is still hidden after being brought to front` | This is legacy behavior; the current extension no longer calls `bringToFront`. If it still occurs, restart the agent and reload the extension                                                                                                                                             |
-| Port 8766 is in use                                     | Another agent instance is running. Alternatively, change `relayPort` and update the popup to match                                                                                                                                                                                        |
-| The extension cannot connect after reinstallation       | The token has not changed; paste it into the popup again                                                                                                                                                                                                                                  |
+| The popup says `rejected`                               | The agent refused the handshake, which in practice means the extension is older than the agent. Reload it from `chrome://extensions`                                                                                                                                                     |
+| The popup went back to `disconnected` on its own        | Expected when the agent process exits: the address it approved no longer works, so the extension stops retrying and forgets it                                                                                                                                                           |
 
 ---
 
@@ -214,8 +214,8 @@ Restart the agent after changing any field.
 
 | Command                      | Description                                                                                                                                           |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run browser:pair`       | Print the pairing port and token                                                                                                                      |
-| `npm run browser:dev-chrome` | Start a separate Chrome instance with the extension installed and paired, allowing you to test extension mode without affecting your everyday browser |
+| `npm run browser:pair`       | Run the connect exchange in its own process to check the extension is installed and can reach the agent                                               |
+| `npm run browser:dev-chrome` | Start a separate Chrome instance with the extension installed, allowing you to test extension mode without affecting your everyday browser            |
 | `npm run test:browser:unit`  | Run browser unit tests; takes about one second and does not require Chrome                                                                            |
 | `npm run test:browser`       | Run the complete suite: unit, boundary, isolated backend, relay, and real-extension end-to-end tests                                                  |
 

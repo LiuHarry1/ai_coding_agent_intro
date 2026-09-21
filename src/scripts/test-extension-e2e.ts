@@ -80,14 +80,16 @@ function refFor(snapshot: string, role: string, name: string): string {
 
 async function main() {
   const fixture = await startFixtureServer()
-  const relay = await startRelayServer({ port: RELAY_PORT })
+  const relay = await startRelayServer()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-ext-e2e-'))
 
+  // Goes through the extension's own consent page and presses its Allow
+  // button, so this covers the path a user actually walks.
   const chrome = await launchChromeWithExtension({
     userDataDir: profile,
     debugPort: DEBUG_PORT,
     headless: !HEADED,
-    pair: { token: relay.token, port: RELAY_PORT },
+    pair: { connectUrl: relay.connectUrl('Baize e2e') },
   })
   console.log(`ok [e2e] extension loaded into chrome (${chrome.extensionId})`)
 
@@ -102,9 +104,13 @@ async function main() {
   }
 
   try {
-    await waitFor('extension to pair', () => relay.isConnected())
+    await waitFor('extension to connect', () => relay.isConnected())
     assert.match(String(relay.peerName()), /Chrome/)
-    console.log('ok [e2e] paired from stored credentials, no user action')
+    assert.ok(
+      relay.capabilities().has('chrome.debugger.sendCommand'),
+      'the real extension must report its capabilities in the handshake',
+    )
+    console.log('ok [e2e] connected by approving the extension consent page')
 
     // ── drive the real extension through the tool layer ──
     setBrowserBackendFactory(() => createExtensionBackend({ relay }))

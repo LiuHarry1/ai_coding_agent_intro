@@ -1,20 +1,40 @@
 /**
  * Wire protocol between the agent (host) and the MV3 extension.
  *
- * The CDP tool path is still request/response: list/open/close tabs plus one
- * `cdp` command. The Playwright engine additionally consumes unsolicited
- * `cdpEvent` frames so `connectOverCDP` can see execution contexts and frames.
- * Keep the extension side in sync when changing anything here.
+ * The tool path is request/response: a few tab methods that carry the
+ * ownership model, plus `chrome.*` calls forwarded by name. The Playwright
+ * engine additionally consumes unsolicited `cdpEvent` frames so
+ * `connectOverCDP` can see execution contexts and frames.
+ *
+ * The extension reports its `capabilities` in the handshake, so a build older
+ * than the host degrades at connect time rather than failing mid-task. Bump
+ * RELAY_PROTOCOL_VERSION only for changes that make the two incompatible.
  */
 
-export const RELAY_PROTOCOL_VERSION = 1
-export const DEFAULT_RELAY_PORT = 8766
+export const RELAY_PROTOCOL_VERSION = 2
 
 export interface RelayTab {
   /** Chrome tab id, stringified. This is the `targetId` the tool layer sees. */
   targetId: string
   url: string
   title: string
+}
+
+/**
+ * `chrome.*` calls the extension forwards reflectively. The extension holds
+ * the matching allow-list and ownership-checks the tab id in the first
+ * argument, so widening this type alone grants nothing.
+ */
+export type ChromeCommand =
+  | 'chrome.debugger.attach'
+  | 'chrome.debugger.detach'
+  | 'chrome.debugger.sendCommand'
+
+/** CDP debuggee, optionally scoped to a flattened child session. */
+export interface ChromeDebuggee {
+  tabId: number
+  /** Flattened CDP child session (iframes/workers). */
+  sessionId?: string
 }
 
 export type RelayRequest =
@@ -29,15 +49,7 @@ export type RelayRequest =
       level: 'tab' | 'window'
     }
   | { id: number; method: 'tabs.restore'; targetId: string }
-  | {
-      id: number
-      method: 'cdp'
-      targetId: string
-      cdpMethod: string
-      params?: Record<string, unknown>
-      /** Flattened CDP child session (iframes/workers). */
-      sessionId?: string
-    }
+  | { id: number; method: ChromeCommand; params: unknown[] }
 
 /** `Omit` over a union keeps only the shared keys; this preserves each variant. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
@@ -51,12 +63,16 @@ export type RelayResponse =
   | { id: number; ok: true; result: unknown }
   | { id: number; ok: false; error: string }
 
-/** First frame the extension sends; the host closes the socket if it fails. */
+/**
+ * First frame the extension sends. It carries no secret — the connect URL
+ * already proved the caller's identity — only what this build can do, so the
+ * host can branch at handshake time instead of probing with failed calls.
+ */
 export interface RelayHello {
   type: 'hello'
-  token: string
   version: number
   browser?: string
+  capabilities?: string[]
 }
 
 export interface RelayWelcome {
@@ -86,7 +102,8 @@ export function isRelayHello(msg: unknown): msg is RelayHello {
   return (
     typeof msg === 'object' &&
     msg !== null &&
-    (msg as { type?: unknown }).type === 'hello'
+    (msg as { type?: unknown }).type === 'hello' &&
+    typeof (msg as { version?: unknown }).version === 'number'
   )
 }
 

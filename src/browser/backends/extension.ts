@@ -20,11 +20,6 @@ import type { RelayTab } from '../relay/protocol.js'
 
 const relays = new WeakMap<BrowserBackend, RelayServer>()
 
-function isUnknownRelayMethod(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err)
-  return /Unknown relay method/i.test(msg)
-}
-
 export interface ExtensionBackendOptions {
   relay: RelayServer
   /** How long to wait for the extension to show up before giving up. */
@@ -42,13 +37,12 @@ export async function createExtensionBackend(
   const { relay } = opts
   await relay.waitForExtension(opts.connectTimeoutMs ?? 20_000)
 
-  /** Old extension builds lack tabs.focus / tabs.restore / tabs.getActiveUserTab. */
-  let legacyFocusRelay = false
-  let legacyFocusWarned = false
-
-  function warnLegacyFocusOnce(): void {
-    if (legacyFocusWarned) return
-    legacyFocusWarned = true
+  // The handshake says what this build can do, so a stale extension is one
+  // warning at connect time instead of a surprise failure mid-task.
+  const capabilities = relay.capabilities()
+  const canFocus =
+    capabilities.has('tabs.focus') && capabilities.has('tabs.getActiveUserTab')
+  if (!canFocus) {
     console.warn(
       '[browser] Extension is missing focus relay methods (tabs.getActiveUserTab / tabs.focus). ' +
         'Reload the unpacked extension from chrome://extensions. ' +
@@ -58,6 +52,22 @@ export async function createExtensionBackend(
 
   function toTab(tab: RelayTab): BrowserTab {
     return { targetId: tab.targetId, url: tab.url, title: tab.title }
+  }
+
+  /**
+   * In this backend a targetId is a Chrome tab id, and the extension checks
+   * ownership against the number inside the debuggee. Anything else is a bug
+   * on our side, so say that rather than sending `{ tabId: null }`.
+   */
+  function tabIdOf(targetId: string): number {
+    const tabId = Number(targetId)
+    if (!Number.isInteger(tabId)) {
+      throw new BrowserError(
+        `"${targetId}" is not a Chrome tab id. The extension backend cannot ` +
+          'drive a target that did not come from it.',
+      )
+    }
+    return tabId
   }
 
   const backend: BrowserBackend = {
@@ -79,55 +89,31 @@ export async function createExtensionBackend(
 
     async send(targetId, method, params) {
       return relay.request({
-        method: 'cdp',
-        targetId,
-        cdpMethod: method,
-        params,
+        method: 'chrome.debugger.sendCommand',
+        params: [{ tabId: tabIdOf(targetId) }, method, params ?? {}],
       })
     },
 
     async getActiveUserTabId() {
-      if (legacyFocusRelay) return null
-      try {
-        const tab = await relay.request<RelayTab | null>({
-          method: 'tabs.getActiveUserTab',
-        })
-        return tab?.targetId ?? null
-      } catch (err) {
-        if (!isUnknownRelayMethod(err)) throw err
-        legacyFocusRelay = true
-        warnLegacyFocusOnce()
-        return null
-      }
+      if (!canFocus) return null
+      const tab = await relay.request<RelayTab | null>({
+        method: 'tabs.getActiveUserTab',
+      })
+      return tab?.targetId ?? null
     },
 
     async focusTab(targetId, level) {
-      if (legacyFocusRelay) {
-        warnLegacyFocusOnce()
-        return
-      }
-      try {
-        await relay.request({
-          method: 'tabs.focus',
-          targetId,
-          level: level === 'window' ? 'tab' : level,
-        })
-      } catch (err) {
-        if (!isUnknownRelayMethod(err)) throw err
-        legacyFocusRelay = true
-        warnLegacyFocusOnce()
-      }
+      if (!canFocus) return
+      await relay.request({
+        method: 'tabs.focus',
+        targetId,
+        level: level === 'window' ? 'tab' : level,
+      })
     },
 
     async restoreTab(targetId) {
-      if (legacyFocusRelay) return
-      try {
-        await relay.request({ method: 'tabs.restore', targetId })
-      } catch (err) {
-        if (!isUnknownRelayMethod(err)) throw err
-        legacyFocusRelay = true
-        warnLegacyFocusOnce()
-      }
+      if (!canFocus) return
+      await relay.request({ method: 'tabs.restore', targetId })
     },
 
     async dispose() {

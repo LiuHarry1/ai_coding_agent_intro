@@ -20,11 +20,8 @@ import {
   isRelayUserControl,
   type RelayRequestBody,
 } from '../browser/relay/protocol.js'
-import {
-  getPairingToken,
-  startRelayServer,
-  type RelayServer,
-} from '../browser/relay/server.js'
+import { startRelayServer, type RelayServer } from '../browser/relay/server.js'
+import { BRIDGE_EXTENSION_ORIGIN } from '../browser/relay/extension-id.js'
 import { startCdpEndpoint } from '../browser/relay/cdp-endpoint.js'
 import type { BrowserBackend } from '../browser/types.js'
 import {
@@ -204,23 +201,6 @@ const ok = (msg: string) => console.log(`ok ${msg}`)
   ok('protocol guards reject malformed frames')
 }
 
-// ── pairing token ────────────────────────────────────────
-
-{
-  const first = getPairingToken()
-  const second = getPairingToken()
-  eq(second, first, 'token must be stable so pairing survives restarts')
-  assert(first.length >= 16, 'token must be long enough to not be guessable')
-
-  const file = path.join(os.homedir(), '.ai-agent', 'browser', 'relay.json')
-  // NTFS has no POSIX mode bits — Node reports 0666 there whatever we chmod.
-  if (fs.existsSync(file) && process.platform !== 'win32') {
-    const mode = fs.statSync(file).mode & 0o777
-    eq(mode, 0o600, 'the token file must not be readable by other users')
-  }
-  ok('pairing token is stable and stored 0600')
-}
-
 // ── relay harness ────────────────────────────────────────
 
 /** A client that speaks the protocol but answers with canned results. */
@@ -236,9 +216,11 @@ interface FakePeer {
 
 async function connectPeer(
   relay: RelayServer,
-  opts: { token?: string; delayMs?: number } = {},
+  opts: { delayMs?: number } = {},
 ): Promise<FakePeer> {
-  const socket = new WebSocket(`ws://127.0.0.1:${relay.port}`)
+  const socket = new WebSocket(relay.wsUrl, {
+    origin: BRIDGE_EXTENSION_ORIGIN,
+  })
   const peer: FakePeer = {
     socket,
     seen: [],
@@ -255,9 +237,9 @@ async function connectPeer(
       socket.send(
         JSON.stringify({
           type: 'hello',
-          token: opts.token ?? relay.token,
-          version: 1,
+          version: 2,
           browser: 'FakePeer/1.0',
+          capabilities: ['tabs.list', 'chrome.debugger.sendCommand'],
         }),
       )
     })
@@ -290,11 +272,13 @@ async function connectPeer(
 
 /** Raw connection that never completes the handshake, to test rejection. */
 function expectRejected(
-  port: number,
+  relay: RelayServer,
   firstFrame: string | undefined,
 ): Promise<number> {
   return new Promise<number>((resolve, reject) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}`)
+    const socket = new WebSocket(relay.wsUrl, {
+      origin: BRIDGE_EXTENSION_ORIGIN,
+    })
     socket.once('open', () => {
       if (firstFrame !== undefined) socket.send(firstFrame)
     })
@@ -303,10 +287,26 @@ function expectRejected(
   })
 }
 
+/** A handshake the relay must refuse before the socket ever opens. */
+function expectUpgradeRefused(
+  url: string,
+  options: { origin?: string },
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(url, options)
+    socket.once('open', () => {
+      socket.terminate()
+      reject(new Error(`relay accepted ${url} with origin ${options.origin}`))
+    })
+    socket.once('error', () => resolve())
+    socket.once('close', () => resolve())
+  })
+}
+
 async function withRelay(
   fn: (relay: RelayServer) => Promise<void>,
 ): Promise<void> {
-  const relay = await startRelayServer({ port: 0 })
+  const relay = await startRelayServer()
   try {
     await fn(relay)
   } finally {
@@ -314,48 +314,85 @@ async function withRelay(
   }
 }
 
-// ── relay: bound port ────────────────────────────────────
+// ── relay: bound port and connect url ────────────────────
 
 await withRelay(async relay => {
-  assert(relay.port > 0, 'relay must report the port it actually bound')
+  assert(relay.port > 0, 'the OS must have assigned a real port')
+  assert(
+    relay.wsUrl.startsWith(`ws://127.0.0.1:${relay.port}/relay/`),
+    'the url must name the bound port and the uuid path',
+  )
   eq(relay.isConnected(), false, 'no peer yet')
   eq(relay.peerName(), undefined, 'no peer name yet')
-  ok('relay reports its real bound port')
+  eq(relay.capabilities().size, 0, 'no capabilities before a handshake')
+
+  const connect = new URL(relay.connectUrl('Some Client'))
+  eq(connect.protocol, 'chrome-extension:', 'consent page is in the extension')
+  eq(
+    connect.searchParams.get('relayUrl'),
+    relay.wsUrl,
+    'the connect url carries the credential',
+  )
+  eq(connect.searchParams.get('client'), 'Some Client', 'client name is shown')
+  ok('relay reports its bound port and a self-contained connect url')
+})
+
+// Two relays in one process must not collide, which is the whole reason the
+// port is no longer fixed.
+{
+  const a = await startRelayServer()
+  const b = await startRelayServer()
+  try {
+    assert(a.port !== b.port, 'concurrent relays must get different ports')
+    assert(a.wsUrl !== b.wsUrl, 'and different credentials')
+  } finally {
+    await a.close()
+    await b.close()
+  }
+  ok('two relays can run side by side')
+}
+
+// ── relay: the url is the credential ─────────────────────
+
+await withRelay(async relay => {
+  // Origin is set by the browser and unforgeable from a page, so it is what
+  // keeps a random local process or a website off this socket.
+  await expectUpgradeRefused(relay.wsUrl, {})
+  await expectUpgradeRefused(relay.wsUrl, { origin: 'https://evil.example' })
+  await expectUpgradeRefused(relay.wsUrl, {
+    origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  })
+
+  const wrongPath = new URL(relay.wsUrl)
+  wrongPath.pathname = '/relay/00000000-0000-0000-0000-000000000000'
+  await expectUpgradeRefused(wrongPath.toString(), {
+    origin: BRIDGE_EXTENSION_ORIGIN,
+  })
+  await expectUpgradeRefused(`ws://127.0.0.1:${relay.port}/`, {
+    origin: BRIDGE_EXTENSION_ORIGIN,
+  })
+
+  eq(relay.isConnected(), false, 'refused clients must not count as connected')
+  ok('relay refuses any origin or path but its own')
 })
 
 // ── relay: handshake ─────────────────────────────────────
 
 await withRelay(async relay => {
   eq(
-    await expectRejected(
-      relay.port,
-      JSON.stringify({
-        type: 'hello',
-        token: 'wrong',
-        version: 1,
-      }),
-    ),
-    1008,
-    'a wrong token must be rejected',
-  )
-
-  eq(
-    await expectRejected(relay.port, 'not json at all'),
+    await expectRejected(relay, 'not json at all'),
     1003,
     'malformed json must be rejected',
   )
 
   eq(
-    await expectRejected(
-      relay.port,
-      JSON.stringify({ id: 1, ok: true, result: {} }),
-    ),
+    await expectRejected(relay, JSON.stringify({ id: 1, ok: true, result: {} })),
     1008,
     'a response before the handshake must be rejected',
   )
 
   eq(relay.isConnected(), false, 'rejected clients must not count as connected')
-  ok('relay rejects wrong tokens, junk, and skipped handshakes')
+  ok('relay rejects junk and skipped handshakes')
 })
 
 // ── relay: happy path + correlation ──────────────────────
@@ -373,14 +410,13 @@ await withRelay(async relay => {
     relay.request<{ echo: string }>({ method: 'tabs.list' }),
     relay.request<{ echo: string }>({ method: 'tabs.create', url: 'x' }),
     relay.request<{ echo: string }>({
-      method: 'cdp',
-      targetId: '1',
-      cdpMethod: 'Runtime.evaluate',
+      method: 'chrome.debugger.sendCommand',
+      params: [{ tabId: 1 }, 'Runtime.evaluate', {}],
     }),
   ])
   eq(a.echo, 'tabs.list', 'reply a matched its request')
   eq(b.echo, 'tabs.create', 'reply b matched its request')
-  eq(c.echo, 'cdp', 'reply c matched its request')
+  eq(c.echo, 'chrome.debugger.sendCommand', 'reply c matched its request')
   eq(peer.seen.length, 3, 'peer saw three requests')
 
   // Ids must be distinct, or replies could cross.
@@ -402,7 +438,10 @@ await withRelay(async relay => {
   const peer = await connectPeer(relay)
   peer.failWith = 'Tab 7 is not shared with the agent.'
   const err = await relay
-    .request({ method: 'cdp', targetId: '7', cdpMethod: 'Runtime.evaluate' })
+    .request({
+      method: 'chrome.debugger.sendCommand',
+      params: [{ tabId: 7 }, 'Runtime.evaluate', {}],
+    })
     .then(() => null)
     .catch((e: Error) => e)
   assert(err instanceof BrowserError, 'peer errors arrive as BrowserError')
@@ -423,8 +462,10 @@ await withRelay(async relay => {
     .then(() => 'resolved')
     .catch((e: Error) => e.message)
   const msg = String(err)
-  assert(msg.includes(String(relay.port)), 'error names the port')
-  assert(msg.includes('chrome-extension/README.md'), 'error says how to pair')
+  // No port or token to quote any more; what is actionable is the tab the
+  // user was asked to approve, and the way to opt out entirely.
+  assert(msg.includes('approve it there'), 'error points at the consent tab')
+  assert(msg.includes('chrome-extension/README.md'), 'error says how to install')
   assert(msg.includes('"isolated"'), 'error offers the fallback')
   ok('requesting with no peer explains both ways out')
 })
@@ -558,20 +599,21 @@ await withRelay(async relay => {
 // ── relay: close does not hang on a live peer ────────────
 
 {
-  const relay = await startRelayServer({ port: 0 })
+  const relay = await startRelayServer()
   const peer = await connectPeer(relay)
   peer.silent = true
-  const pending = relay.request({ method: 'tabs.list' })
+  // Settled before close(), or the rejection close() causes has no handler yet.
+  const pending = relay
+    .request({ method: 'tabs.list' })
+    .then(() => 'resolved')
+    .catch((e: Error) => e.message)
 
   const closed = await Promise.race([
     relay.close().then(() => 'closed'),
     new Promise(r => setTimeout(() => r('timeout'), 3000)),
   ])
   eq(closed, 'closed', 'close() must not wait for the peer to hang up')
-  const err = await pending
-    .then(() => 'resolved')
-    .catch((e: Error) => e.message)
-  assert(String(err).includes('shut down'), 'pending work fails on shutdown')
+  assert(String(await pending).includes('shut down'), 'pending work fails on shutdown')
   await peer.close()
   ok('relay shutdown never blocks on a connected extension')
 }
@@ -595,28 +637,57 @@ await withRelay(async relay => {
 
 // ── extension backend: wire contract ─────────────────────
 
-{
-  const calls: RelayRequestBody[] = []
-  const fakeRelay: RelayServer = {
+/** Everything the current extension build reports it can do. */
+const ALL_CAPABILITIES = [
+  'tabs.list',
+  'tabs.create',
+  'tabs.close',
+  'tabs.getActiveUserTab',
+  'tabs.focus',
+  'tabs.restore',
+  'chrome.debugger.attach',
+  'chrome.debugger.detach',
+  'chrome.debugger.sendCommand',
+]
+
+function makeFakeRelay(opts: {
+  calls: RelayRequestBody[]
+  capabilities: string[]
+  reply?: (req: RelayRequestBody) => unknown
+}): RelayServer {
+  return {
     port: 1234,
-    token: 'tok',
+    wsUrl: 'ws://127.0.0.1:1234/relay/test',
+    connectUrl: () => 'chrome-extension://test/connect.html',
     isConnected: () => true,
     peerName: () => 'FakeChrome',
+    capabilities: () => new Set(opts.capabilities),
     waitForExtension: async () => {},
     request: async <T>(req: RelayRequestBody): Promise<T> => {
-      calls.push(req)
-      if (req.method === 'tabs.list') {
-        return [{ targetId: '7', url: 'http://a/', title: 'A' }] as T
-      }
-      if (req.method === 'tabs.create') {
-        return { targetId: '8', url: 'http://b/', title: 'B' } as T
-      }
-      return { ok: 1 } as T
+      opts.calls.push(req)
+      return (opts.reply?.(req) ?? {}) as T
     },
     onCdpEvent: () => () => {},
     notifyLock: () => {},
     close: async () => {},
   }
+}
+
+{
+  const calls: RelayRequestBody[] = []
+  const fakeRelay = makeFakeRelay({
+    calls,
+    capabilities: ALL_CAPABILITIES,
+    reply: req => {
+      if (req.method === 'tabs.list') {
+        return [{ targetId: '7', url: 'http://a/', title: 'A' }]
+      }
+      if (req.method === 'tabs.create') {
+        return { targetId: '8', url: 'http://b/', title: 'B' }
+      }
+      return { ok: 1 }
+    },
+  })
 
   const backend = await createExtensionBackend({ relay: fakeRelay })
   eq(backend.kind, 'extension', 'backend identifies itself')
@@ -643,10 +714,12 @@ await withRelay(async relay => {
     '{"method":"tabs.close","targetId":"8"}',
     'close',
   )
+  // The tab id has to sit inside the debuggee argument, because that is the
+  // one place the extension's ownership check looks before it forwards.
   eq(
     JSON.stringify(calls[3]),
-    '{"method":"cdp","targetId":"7","cdpMethod":"Runtime.evaluate","params":{"expression":"1"}}',
-    'cdp forwards method under cdpMethod, not method',
+    '{"method":"chrome.debugger.sendCommand","params":[{"tabId":7},"Runtime.evaluate",{"expression":"1"}]}',
+    'cdp goes out as a reflective chrome.debugger.sendCommand',
   )
 
   // Disposing must never try to close the user's browser.
@@ -655,54 +728,24 @@ await withRelay(async relay => {
   ok('extension backend maps every operation onto the documented wire shape')
 }
 
-// ── extension backend: legacy focus relay fallback ───────
+// ── extension backend: an older extension build ──────────
 
 {
   const calls: RelayRequestBody[] = []
-  const fakeRelay: RelayServer = {
-    port: 1234,
-    token: 'tok',
-    isConnected: () => true,
-    peerName: () => 'FakeChrome',
-    waitForExtension: async () => {},
-    request: async <T>(req: RelayRequestBody): Promise<T> => {
-      calls.push(req)
-      if (
-        req.method === 'tabs.getActiveUserTab' ||
-        req.method === 'tabs.focus' ||
-        req.method === 'tabs.restore'
-      ) {
-        throw new Error(`Unknown relay method: ${req.method}`)
-      }
-      if (req.method === 'cdp') return {} as T
-      return {} as T
-    },
-    onCdpEvent: () => () => {},
-    notifyLock: () => {},
-    close: async () => {},
-  }
+  // An extension that predates the focus methods says so in its handshake,
+  // so the backend knows up front instead of finding out by failing.
+  const fakeRelay = makeFakeRelay({
+    calls,
+    capabilities: ['tabs.list', 'tabs.create', 'chrome.debugger.sendCommand'],
+  })
 
   const backend = await createExtensionBackend({ relay: fakeRelay })
-  eq(await backend.getActiveUserTabId(), null, 'legacy getActiveUserTab returns null')
+  eq(await backend.getActiveUserTabId(), null, 'getActiveUserTab returns null')
   await backend.focusTab('7', 'tab')
   await backend.focusTab('7', 'window')
   await backend.restoreTab('3')
-  eq(
-    calls.filter(c => c.method === 'cdp').length,
-    0,
-    'legacy focus is silent (no Page.bringToFront)',
-  )
-  eq(
-    calls.filter(c => c.method === 'tabs.getActiveUserTab').length,
-    1,
-    'legacy mode detected on first getActiveUserTab probe',
-  )
-  eq(
-    calls.filter(c => c.method === 'tabs.focus').length,
-    0,
-    'focusTab is a no-op once legacy mode is active',
-  )
-  ok('extension backend stays silent when focus relay methods are missing')
+  eq(calls.length, 0, 'nothing is sent that the extension cannot answer')
+  ok('extension backend degrades on capabilities, not on failed calls')
 }
 
 // ── screenshot dual channel ──────────────────────────────

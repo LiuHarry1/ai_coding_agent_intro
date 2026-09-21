@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { BrowserError, type BrowserBackend } from '../types.js'
 import type { RelayServer } from './server.js'
-import type { RelayCdpEvent } from './protocol.js'
+import type { ChromeDebuggee, RelayCdpEvent } from './protocol.js'
 
 const BROWSER_CONTEXT_ID = 'agent-extension-context'
 const BROWSER_TARGET_ID = 'agent-extension-relay'
@@ -429,13 +429,13 @@ export async function startCdpEndpoint(opts: {
         ? request.sessionId
         : undefined
 
+    const debuggee: ChromeDebuggee = { tabId: Number(tab.targetId) }
+    if (child) debuggee.sessionId = child
+
     try {
       const result = await relay.request({
-        method: 'cdp',
-        targetId: tab.targetId,
-        cdpMethod: request.method,
-        params: request.params,
-        ...(child ? { sessionId: child } : {}),
+        method: 'chrome.debugger.sendCommand',
+        params: [debuggee, request.method, request.params ?? {}],
       })
       respond(socket, request, result ?? {})
     } catch (err) {

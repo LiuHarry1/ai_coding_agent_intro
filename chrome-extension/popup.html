@@ -36,32 +36,15 @@
         flex: 0 0 auto;
       }
       .dot.connected { background: #2ea043; }
-      .dot.rejected,
-      .dot.disconnected { background: #d1242f; }
-      .dot.unpaired { background: #bf8700; }
+      .dot.rejected { background: #d1242f; }
+      /* Not an error: waiting to be asked is the resting state. */
+      .dot.disconnected { background: #999; }
       .status-text { min-width: 0; }
       .status-label { font-weight: 600; text-transform: capitalize; }
       .status-detail {
         color: var(--muted);
         font-size: 11.5px;
         overflow-wrap: anywhere;
-      }
-      label {
-        display: block;
-        font-size: 11.5px;
-        color: var(--muted);
-        margin: 0 0 3px;
-      }
-      input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 6px 8px;
-        font: 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        background: transparent;
-        color: inherit;
-        margin-bottom: 8px;
       }
       button {
         font: inherit;
@@ -126,16 +109,6 @@
       </span>
     </div>
 
-    <div id="pairing">
-      <label for="token">Pairing token</label>
-      <input id="token" type="password" placeholder="paste token" autocomplete="off" />
-      <label for="port">Port (browser.relayPort, default 8766 — not the CDP port from errors)</label>
-      <input id="port" type="number" value="8766" />
-      <div class="row">
-        <button class="primary" id="pair">Pair</button>
-      </div>
-    </div>
-
     <div class="section" id="control" style="display:none">
       <h2>Who is driving</h2>
       <p class="hint" id="control-label" style="margin-top:0"></p>
@@ -154,8 +127,8 @@
     </div>
 
     <p class="hint">
-      The agent can only see the tabs listed above. Get the token with
-      <code>npx tsx src/scripts/browser-pair.ts</code>.
+      The agent can only see the tabs listed above. It asks for access in its
+      own tab when it needs this browser; nothing to configure here.
     </p>
 
     <script src="popup.js"></script>

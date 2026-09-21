@@ -9,8 +9,6 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { DEFAULT_RELAY_PORT } from '../browser/relay/protocol.js'
-import { getPairingToken } from '../browser/relay/server.js'
 import { resolveSettings } from '../core/settings-manager.js'
 import { getUserAppDir } from '../utils/app-dir.js'
 import { launchChromeWithExtension } from './chrome-launcher.js'
@@ -19,14 +17,14 @@ const DEBUG_PORT = 9334
 
 async function main() {
   const config = resolveSettings(process.cwd()).config.browser ?? {}
-  const relayPort = config.relayPort ?? DEFAULT_RELAY_PORT
   const userDataDir = path.join(getUserAppDir(), 'browser', 'dev-chrome')
   fs.mkdirSync(userDataDir, { recursive: true })
 
+  // No pairing here: the extension connects to whichever agent process asks
+  // for it, and this command only supplies the browser.
   const chrome = await launchChromeWithExtension({
     userDataDir,
     debugPort: DEBUG_PORT,
-    pair: { token: getPairingToken(), port: relayPort },
   })
 
   console.log('')
@@ -34,9 +32,8 @@ async function main() {
     `  Chrome is up with the bridge installed (${chrome.extensionId})`,
   )
   console.log(`  Profile   ${userDataDir}`)
-  console.log(`  Paired to 127.0.0.1:${relayPort}`)
   console.log('')
-  if (config.mode !== 'extension') {
+  if (config.mode !== 'extension' && config.mode !== 'auto') {
     console.log(
       '  Set "browser": { "mode": "extension" } in .ai-agent/settings.json,',
     )

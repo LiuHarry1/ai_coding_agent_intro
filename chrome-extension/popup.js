@@ -1,4 +1,4 @@
-/** Pairing + tab-sharing UI. All state lives in the service worker. */
+/** Status + tab-sharing UI. All state lives in the service worker. */
 
 const $ = id => document.getElementById(id)
 
@@ -13,13 +13,6 @@ async function render() {
   $('status').textContent = state.status
   $('detail').textContent = state.statusDetail || ''
   $('dot').className = `dot ${state.status}`
-  $('port').value = state.port
-
-  // Once paired, the token field is only clutter unless it was rejected.
-  $('pairing').style.display =
-    state.hasToken && state.status !== 'rejected' && state.status !== 'unpaired'
-      ? 'none'
-      : 'block'
 
   const connected = state.status === 'connected'
   $('control').style.display = connected ? 'block' : 'none'
@@ -55,18 +48,6 @@ async function render() {
     list.appendChild(li)
   }
 }
-
-$('pair').addEventListener('click', async () => {
-  const token = $('token').value.trim()
-  if (!token) return
-  // The service worker watches storage and reconnects on its own.
-  await chrome.storage.local.set({
-    token,
-    port: Number($('port').value) || 8766,
-  })
-  $('token').value = ''
-  setTimeout(render, 400)
-})
 
 $('share').addEventListener('click', async () => {
   await send({ type: 'share-active-tab' })

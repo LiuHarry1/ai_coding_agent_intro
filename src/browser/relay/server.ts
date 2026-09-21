@@ -5,20 +5,21 @@
  * worker can open a WebSocket but cannot listen on one, and this direction also
  * means no inbound port has to survive the extension being asleep.
  *
- * Why a token: a loopback WebSocket is reachable from any page the user has
- * open, not just from our extension. Without the shared secret, any website
- * could drive the user's signed-in browser. The token is generated once and
- * kept 0600 in the agent's home directory.
+ * Authentication is the URL itself. The server binds an OS-assigned port and
+ * serves a single path containing a per-process uuid, so knowing where to
+ * connect *is* the capability. The host hands that URL to the extension by
+ * opening the extension's own connect page (see `open-connect-page.ts`), which
+ * is a channel no other local process or web page can read. On top of that the
+ * handshake only accepts an `Origin` of our extension — a header the browser
+ * writes itself, so a page cannot forge it.
  */
 
-import { randomBytes } from 'crypto'
-import * as fs from 'fs'
-import * as path from 'path'
+import { randomUUID } from 'crypto'
+import http from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { getUserAppDir } from '../../utils/app-dir.js'
 import { BrowserError } from '../types.js'
+import { BRIDGE_EXTENSION_ID, BRIDGE_EXTENSION_ORIGIN } from './extension-id.js'
 import {
-  DEFAULT_RELAY_PORT,
   isRelayCdpEvent,
   isRelayHello,
   isRelayResponse,
@@ -34,12 +35,19 @@ import {
 
 const REQUEST_TIMEOUT_MS = 30_000
 
+export const DEFAULT_CLIENT_NAME = 'Baize Agent'
+
 export interface RelayServer {
   readonly port: number
-  readonly token: string
+  /** `ws://127.0.0.1:<port>/relay/<uuid>` — the credential the extension needs. */
+  readonly wsUrl: string
+  /** The extension page that hands `wsUrl` to the service worker. */
+  connectUrl(clientName?: string): string
   isConnected(): boolean
   /** Describes the connected browser, for error messages. */
   peerName(): string | undefined
+  /** What the extension told us it can do, once connected. */
+  capabilities(): ReadonlySet<string>
   waitForExtension(timeoutMs: number): Promise<void>
   request<T>(req: RelayRequestBody): Promise<T>
   /** Subscribe to CDP events the extension forwards. Returns an unsubscribe. */
@@ -55,97 +63,75 @@ interface Pending {
   timer: NodeJS.Timeout
 }
 
-function relayConfigPath(): string {
-  return path.join(getUserAppDir(), 'browser', 'relay.json')
-}
-
-function readRelayConfigFile(): { token?: string; port?: number } {
-  try {
-    return JSON.parse(fs.readFileSync(relayConfigPath(), 'utf8')) as {
-      token?: string
-      port?: number
-    }
-  } catch {
-    return {}
-  }
-}
-
-/** Persist pairing metadata the extension popup should mirror (`browser.relayPort`). */
-export function persistRelayConfig(patch: {
-  token?: string
-  port?: number
-}): void {
-  const file = relayConfigPath()
-  const existing = readRelayConfigFile()
-  const next = { ...existing, ...patch }
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(next, null, 2), { mode: 0o600 })
-}
-
 /**
- * Read the pairing token, creating it on first use. Stable across restarts so
- * the user only ever pastes it into the extension once.
+ * The agent is configured to drive the user's browser and cannot reach it.
+ * Both ways out belong in the message: nothing about the running process tells
+ * the model whether the user wants to finish the connect prompt or fall back.
  */
-export function getPairingToken(): string {
-  const parsed = readRelayConfigFile()
-  if (typeof parsed.token === 'string' && parsed.token.length >= 16) {
-    return parsed.token
-  }
-
-  const token = randomBytes(24).toString('base64url')
-  persistRelayConfig({ token })
-  return token
-}
-
-/**
- * The agent is configured to drive the user's browser and cannot reach it. Both
- * ways out belong in the message: nothing about the running process tells the
- * model whether the user wants to fix the pairing or fall back.
- */
-function notConnectedMessage(port: number): string {
+function notConnectedMessage(): string {
   return (
-    `No browser extension is connected on 127.0.0.1:${port}. ` +
-    'Open Chrome with the agent extension installed and paired (see chrome-extension/README.md), ' +
-    'or set browser.mode to "isolated" in .ai-agent/settings.json to use a separate browser instead.'
+    'No browser extension is connected. A tab should have opened asking to connect the agent to ' +
+    'this browser — approve it there, or install the extension first (see chrome-extension/README.md). ' +
+    'Set browser.mode to "isolated" in .ai-agent/settings.json to use a separate browser instead.'
   )
 }
 
 export async function startRelayServer(
   opts: { port?: number } = {},
 ): Promise<RelayServer> {
-  const requestedPort = opts.port ?? DEFAULT_RELAY_PORT
-  const token = getPairingToken()
+  // Port 0 by default: two agent processes must not fight over a well-known
+  // port, and nothing needs to guess this one now that the URL is handed over
+  // rather than typed in.
+  const requestedPort = opts.port ?? 0
+  const path = `/relay/${randomUUID()}`
 
-  let wss: WebSocketServer
+  const httpServer = http.createServer((_req, res) => {
+    res.statusCode = 404
+    res.end()
+  })
+
+  const wss = new WebSocketServer({ noServer: true })
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    // Reject before the handshake completes: an unauthorized caller should not
+    // get an open socket, and it learns nothing about which check it failed.
+    if (req.url !== path || req.headers.origin !== BRIDGE_EXTENSION_ORIGIN) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    wss.handleUpgrade(req, socket, head, ws => {
+      wss.emit('connection', ws, req)
+    })
+  })
+
   try {
-    wss = await new Promise<WebSocketServer>((resolve, reject) => {
-      const server = new WebSocketServer({
-        host: '127.0.0.1',
-        port: requestedPort,
-      })
-      server.once('listening', () => resolve(server))
-      server.once('error', reject)
+    await new Promise<void>((resolve, reject) => {
+      httpServer.once('error', reject)
+      httpServer.listen(requestedPort, '127.0.0.1', () => resolve())
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     throw new BrowserError(
-      `Could not start the browser relay on 127.0.0.1:${requestedPort}: ${message}. ` +
-        'Another agent instance may already be running; set browser.relayPort to use a different port.',
+      `Could not start the browser relay on 127.0.0.1:${requestedPort}: ${message}.` +
+        (requestedPort === 0
+          ? ''
+          : ' Unset browser.relayPort to let the OS pick a free port.'),
     )
   }
 
   // Report where we actually bound, not what was asked for: with port 0 the OS
-  // picks, and every error message quotes this back to the user.
-  const address = wss.address()
+  // picks, and the connect URL quotes this back to the extension.
+  const address = httpServer.address()
   const port =
     typeof address === 'object' && address !== null
       ? address.port
       : requestedPort
-
-  persistRelayConfig({ port })
+  const wsUrl = `ws://127.0.0.1:${port}${path}`
 
   let peer: WebSocket | undefined
   let peerName: string | undefined
+  let peerCapabilities: ReadonlySet<string> = new Set()
   let nextId = 1
   const pending = new Map<number, Pending>()
   const waiters: Array<() => void> = []
@@ -172,16 +158,23 @@ export async function startRelayServer(
       }
 
       if (!authed) {
-        if (!isRelayHello(msg) || msg.token !== token) {
-          // Deliberately vague: an unauthorized caller learns nothing about
-          // whether the token was wrong or the handshake was malformed.
-          socket.close(1008, 'unauthorized')
+        // The URL already proved who this is; `hello` only carries the
+        // extension's self-description.
+        if (!isRelayHello(msg)) {
+          socket.close(1008, 'expected hello')
+          return
+        }
+        if (msg.version !== RELAY_PROTOCOL_VERSION) {
+          // Surfaces in the popup as "rejected", which tells the user to
+          // reload the extension — the only fix.
+          socket.close(1008, 'protocol version mismatch')
           return
         }
         authed = true
         peer?.close(1000, 'replaced by a newer connection')
         peer = socket
         peerName = msg.browser
+        peerCapabilities = new Set(msg.capabilities ?? [])
         socket.send(
           JSON.stringify({ type: 'welcome', version: RELAY_PROTOCOL_VERSION }),
         )
@@ -216,6 +209,7 @@ export async function startRelayServer(
       if (peer !== socket) return
       peer = undefined
       peerName = undefined
+      peerCapabilities = new Set()
       failAllPending(
         'The browser extension disconnected. Reopen Chrome or re-enable the extension, then try again.',
       )
@@ -232,23 +226,43 @@ export async function startRelayServer(
 
   return {
     port,
-    token,
+    wsUrl,
+
+    connectUrl(clientName = DEFAULT_CLIENT_NAME) {
+      const url = new URL(
+        `chrome-extension://${BRIDGE_EXTENSION_ID}/connect.html`,
+      )
+      url.searchParams.set('relayUrl', wsUrl)
+      url.searchParams.set('client', clientName)
+      url.searchParams.set('protocolVersion', String(RELAY_PROTOCOL_VERSION))
+      return url.toString()
+    },
+
     isConnected,
 
     peerName() {
       return peerName
     },
 
+    capabilities() {
+      return peerCapabilities
+    },
+
     waitForExtension(timeoutMs: number) {
       if (isConnected()) return Promise.resolve()
       return new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          const idx = waiters.indexOf(onReady)
-          if (idx >= 0) waiters.splice(idx, 1)
-          reject(new BrowserError(notConnectedMessage(port)))
-        }, timeoutMs)
+        // timeoutMs <= 0 means "wait indefinitely": the user has been shown a
+        // prompt and may well walk away before approving it.
+        const timer =
+          timeoutMs > 0
+            ? setTimeout(() => {
+                const idx = waiters.indexOf(onReady)
+                if (idx >= 0) waiters.splice(idx, 1)
+                reject(new BrowserError(notConnectedMessage()))
+              }, timeoutMs)
+            : undefined
         const onReady = () => {
-          clearTimeout(timer)
+          if (timer) clearTimeout(timer)
           resolve()
         }
         waiters.push(onReady)
@@ -258,7 +272,7 @@ export async function startRelayServer(
     request<T>(req: RelayRequestBody): Promise<T> {
       const socket = peer
       if (!socket || socket.readyState !== socket.OPEN) {
-        return Promise.reject(new BrowserError(notConnectedMessage(port)))
+        return Promise.reject(new BrowserError(notConnectedMessage()))
       }
       const id = nextId++
       return new Promise<T>((resolve, reject) => {
@@ -300,6 +314,7 @@ export async function startRelayServer(
       for (const client of wss.clients) client.terminate()
       peer = undefined
       await new Promise<void>(resolve => wss.close(() => resolve()))
+      await new Promise<void>(resolve => httpServer.close(() => resolve()))
     },
   }
 }

@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Connect to Baize Agent</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --border: color-mix(in srgb, currentColor 18%, transparent);
+        --muted: color-mix(in srgb, currentColor 55%, transparent);
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 14px/1.5 system-ui, -apple-system, sans-serif;
+      }
+      main {
+        width: 420px;
+        padding: 28px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      h1 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 6px;
+      }
+      p {
+        margin: 0 0 14px;
+        color: var(--muted);
+      }
+      ul {
+        margin: 0 0 18px;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+      li {
+        margin: 3px 0;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      button {
+        font: inherit;
+        padding: 7px 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #result {
+        margin: 0;
+        font-size: 13px;
+      }
+      #result.error {
+        color: #d1242f;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="title">Connect this browser to the agent?</h1>
+      <p id="subtitle"></p>
+      <ul>
+        <li>It can drive tabs it opens itself, plus any tab you share.</li>
+        <li>It cannot see or read the rest of your browsing.</li>
+        <li>Its tabs are grouped and labelled, and you can pause it at any time.</li>
+      </ul>
+      <div class="row" id="actions">
+        <button class="primary" id="allow">Allow</button>
+        <button id="cancel">Cancel</button>
+      </div>
+      <p id="result"></p>
+    </main>
+    <script src="connect.js"></script>
+  </body>
+</html>

@@ -25,8 +25,8 @@ import {
   detachPlaywright,
 } from './playwright/connect.js'
 import { applyFocusConfig, flushTabRestore } from './playwright/focus.js'
+import { openConnectPage } from './relay/open-connect-page.js'
 import { startRelayServer, type RelayServer } from './relay/server.js'
-import { DEFAULT_RELAY_PORT } from './relay/protocol.js'
 import {
   clearTabMemory,
   DEFAULT_BROWSER_SESSION_KEY,
@@ -189,7 +189,7 @@ onUserControlChange(hasControl => {
   relay?.notifyLock(hasControl)
 })
 
-export async function getRelay(port: number): Promise<RelayServer> {
+export async function getRelay(port?: number): Promise<RelayServer> {
   if (relay) return relay
   if (!relayStarting) {
     relayStarting = startRelayServer({ port }).finally(() => {
@@ -226,18 +226,36 @@ async function createIsolatedConfigured(
   }
 }
 
+/**
+ * How long to wait for the extension when it is *already* connected but the
+ * handshake has not landed yet. Waiting on a human is handled separately.
+ */
+const EXTENSION_HANDSHAKE_TIMEOUT_MS = 30_000
+
 async function getSharedExtensionBackend(cwd: string): Promise<BrowserBackend> {
   if (sharedExtension) return sharedExtension.backend
   if (!sharedExtensionStarting) {
     sharedExtensionStarting = (async () => {
       const config = resolveSettings(cwd).config.browser ?? {}
+      const relayInst = await getRelay(config.relayPort)
+
+      // Ask for access only when we actually need the browser, and only if
+      // nobody has granted it yet. Once the tab is up the wait is unbounded:
+      // the user is being asked a question and may not answer immediately.
+      let connectTimeoutMs = EXTENSION_HANDSHAKE_TIMEOUT_MS
+      if (!relayInst.isConnected()) {
+        openConnectPage(relayInst)
+        connectTimeoutMs = 0
+      }
+
       const backend = await createExtensionBackend({
-        relay: await getRelay(config.relayPort ?? DEFAULT_RELAY_PORT),
+        relay: relayInst,
+        connectTimeoutMs,
       })
-      const relayInst =
-        getExtensionRelay(backend) ??
-        (await getRelay(config.relayPort ?? DEFAULT_RELAY_PORT))
-      await attachExtensionPlaywright(backend, relayInst)
+      await attachExtensionPlaywright(
+        backend,
+        getExtensionRelay(backend) ?? relayInst,
+      )
       if (!sharedExtension) sharedExtension = { backend, users: new Set() }
       return backend
     })().finally(() => {
@@ -256,8 +274,7 @@ async function start(cwd: string, key: string): Promise<Live> {
     const backend = await backendFactory()
     if (backend.kind === 'extension') {
       const relayInst =
-        getExtensionRelay(backend) ??
-        (await getRelay(config.relayPort ?? DEFAULT_RELAY_PORT))
+        getExtensionRelay(backend) ?? (await getRelay(config.relayPort))
       await attachExtensionPlaywright(backend, relayInst)
     }
     return {
@@ -270,7 +287,14 @@ async function start(cwd: string, key: string): Promise<Live> {
     }
   }
 
-  if (config.mode === 'extension') {
+  // "auto" uses the user's browser only if they have already offered it —
+  // a silent fallback to isolated, never a prompt. "extension" is the mode
+  // that goes and asks.
+  const useExtension =
+    config.mode === 'extension' ||
+    (config.mode === 'auto' && (relay?.isConnected() ?? false))
+
+  if (useExtension) {
     const backend = await getSharedExtensionBackend(cwd)
     sharedExtension?.users.add(key)
     return {
@@ -521,11 +545,13 @@ export function warmExtensionRelay(cwd: string): void {
     )
     return
   }
-  if (config.mode !== 'extension') return
-  const port = config.relayPort ?? DEFAULT_RELAY_PORT
-  void getRelay(port)
-    .then(() => {
-      console.log(`[browser] extension relay listening on 127.0.0.1:${port}`)
+  // Listening costs nothing and is what makes "auto" able to notice an
+  // extension that connects later. It deliberately does not open the connect
+  // page — starting the agent should not pop a tab.
+  if (config.mode !== 'extension' && config.mode !== 'auto') return
+  void getRelay(config.relayPort)
+    .then(r => {
+      console.log(`[browser] extension relay listening on 127.0.0.1:${r.port}`)
     })
     .catch((err: Error) => {
       console.error(`[browser] ${err.message}`)

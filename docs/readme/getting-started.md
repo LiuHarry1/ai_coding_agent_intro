@@ -128,7 +128,14 @@ The default **isolated** mode opens a separate Chrome instance for the agent. Si
 
 If a task requires an **already signed-in account**—for example, an admin console, email account, or intranet—complete the following setup once. **Pairing is required only once.**
 
-### 6.1 Update the configuration
+### 6.1 Install the Chrome extension (one time only)
+
+1. Enter `chrome://extensions` in the Chrome address bar.
+2. Enable **Developer mode** in the upper-right corner.
+3. Click **Load unpacked**.
+4. Select the project's `chrome-extension` folder, not the repository root.
+
+### 6.2 Update the configuration
 
 Edit `.ai-agent/settings.json` and ensure it contains:
 
@@ -142,7 +149,7 @@ Edit `.ai-agent/settings.json` and ensure it contains:
 
 If the file already contains other fields, change only the `browser` section and preserve everything else.
 
-### 6.2 Restart the desktop app
+### 6.3 Restart the desktop app
 
 Close the Electron window, then run:
 
@@ -150,32 +157,15 @@ Close the Electron window, then run:
 npm run desktop:dev
 ```
 
-### 6.3 Get the pairing token
+### 6.4 Approve the connection
 
-**Keep the desktop app running**, open a new terminal, and run this command from the project root:
-
-```bash
-npm run browser:pair
-```
-
-The terminal prints a **Port** and **Token**. Copy the token for the next step.
-
-### 6.4 Install the Chrome extension (one time only)
-
-1. Enter `chrome://extensions` in the Chrome address bar.
-2. Enable **Developer mode** in the upper-right corner.
-3. Click **Load unpacked**.
-4. Select the project's `chrome-extension` folder, not the repository root.
-
-### 6.5 Pair the extension
-
-1. Click the Coding Agent extension icon in the Chrome toolbar.
-2. Paste the **Token** from the previous step.
-3. Click **Pair**.
+There is no token to copy. The first time the agent needs the browser, Chrome opens a tab titled **Connect this browser to the agent?**. Click **Allow**.
 
 **Success indicator**: the dot beside the extension icon turns **green**.
 
-### 6.6 Verify the connection
+The approval lasts as long as that agent process. When you restart the app, the agent asks again the next time it needs the browser.
+
+### 6.5 Verify the connection
 
 Tell the agent:
 
@@ -193,8 +183,8 @@ For complete instructions, see the [Browser Automation Guide](browser.md).
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Open the desktop app               | From the project root, run `npm run desktop:dev`                                                                             |
 | Use public websites or local pages | No extension is needed; enter your request directly                                                                          |
-| Use sites that require sign-in     | Ensure the extension is paired (green dot). If necessary, click **Share this tab** in the extension to share the current tab |
-| View the pairing code again        | Run `npm run browser:pair` (the token normally does not change)                                                              |
+| Use sites that require sign-in     | Approve the consent tab when it appears (green dot). If necessary, click **Share this tab** in the extension to share the current tab |
+| The extension will not connect     | Run `npm run browser:pair`; it repeats the exchange on its own and reports which step failed                                 |
 
 ---
 

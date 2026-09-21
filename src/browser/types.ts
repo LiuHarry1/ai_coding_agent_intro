@@ -153,11 +153,17 @@ export interface BrowserConfig {
   /**
    * Which browser the tools drive.
    *   isolated  — a Chrome the agent launches, with its own profile (default)
-   *   extension — the user's own Chrome via the paired MV3 extension, so pages
-   *               load with their real logged-in sessions
+   *   extension — the user's own Chrome via the bridge extension, so pages load
+   *               with their real logged-in sessions; asks for access when it
+   *               first needs the browser
+   *   auto      — use the extension if it is already connected, otherwise fall
+   *               back to isolated without prompting
    */
-  mode?: 'isolated' | 'extension'
-  /** Loopback port the extension connects back on. Default 8766. */
+  mode?: 'isolated' | 'extension' | 'auto'
+  /**
+   * Pin the loopback port the extension connects back on. Normally unset, so
+   * the OS assigns a free one and nothing can collide.
+   */
   relayPort?: number
   /**
    * Isolated Chrome userDataDir.

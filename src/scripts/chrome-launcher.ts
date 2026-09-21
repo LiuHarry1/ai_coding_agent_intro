@@ -10,38 +10,18 @@
  * extension in the user's everyday Chrome is a manual, one-time step by design.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocket } from 'ws'
+import { chromePath } from '../browser/chrome-path.js'
+import { BRIDGE_EXTENSION_ID } from '../browser/relay/extension-id.js'
 
 export const EXTENSION_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../chrome-extension',
 )
 
-export function chromePath(): string {
-  const fromEnv = process.env.CHROME_PATH
-  if (fromEnv) return fromEnv
-  const candidates =
-    process.platform === 'darwin'
-      ? [
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-          '/Applications/Chromium.app/Contents/MacOS/Chromium',
-        ]
-      : [
-          '/usr/bin/google-chrome',
-          '/usr/bin/chromium',
-          '/usr/bin/chromium-browser',
-        ]
-  const found = candidates.find(p => fs.existsSync(p))
-  if (!found) {
-    throw new Error(
-      `Could not find Chrome. Set CHROME_PATH. Looked in:\n  ${candidates.join('\n  ')}`,
-    )
-  }
-  return found
-}
+export { chromePath }
 
 /** Just enough CDP to install the extension and poke its service worker. */
 export class MinimalCdp {
@@ -143,8 +123,44 @@ export interface LaunchOptions {
   userDataDir: string
   debugPort: number
   headless?: boolean
-  /** Writes these into extension storage, which is what triggers pairing. */
-  pair?: { token: string; port: number }
+  /**
+   * Drives the extension's own connect page, the same way a user would. Kept
+   * on the real path rather than writing storage directly so the dev and e2e
+   * runs exercise what ships.
+   */
+  pair?: { connectUrl: string }
+}
+
+/** Open the extension's connect page and press its Allow button. */
+async function approveConnectPage(
+  cdp: MinimalCdp,
+  connectUrl: string,
+): Promise<void> {
+  const { targetId } = await cdp.send<{ targetId: string }>(
+    'Target.createTarget',
+    { url: connectUrl },
+  )
+  const { sessionId } = await cdp.send<{ sessionId: string }>(
+    'Target.attachToTarget',
+    { targetId, flatten: true },
+  )
+  await waitFor('connect page approval', async () => {
+    try {
+      const res = await cdp.send<{ result?: { value?: boolean } }>(
+        'Runtime.evaluate',
+        {
+          expression:
+            "(() => { const b = document.getElementById('allow'); if (!b) return false; b.click(); return true })()",
+          returnByValue: true,
+        },
+        sessionId,
+      )
+      return res.result?.value === true
+    } catch {
+      // The document is not there yet.
+      return false
+    }
+  })
 }
 
 export async function launchChromeWithExtension(
@@ -172,6 +188,15 @@ export async function launchChromeWithExtension(
     { path: EXTENSION_DIR },
   )
   if (!extensionId) throw new Error('Extensions.loadUnpacked returned no id')
+  // The whole connect-page scheme depends on the host being able to name the
+  // extension before it has ever spoken to it. If the manifest `key` is lost,
+  // fail here rather than in a confusing connection timeout.
+  if (extensionId !== BRIDGE_EXTENSION_ID) {
+    throw new Error(
+      `Extension id drifted: loaded "${extensionId}", expected "${BRIDGE_EXTENSION_ID}". ` +
+        'Check the "key" field in chrome-extension/manifest.json.',
+    )
+  }
 
   // The service worker starts lazily.
   let workerSession = ''
@@ -192,17 +217,7 @@ export async function launchChromeWithExtension(
   })
 
   if (opts.pair) {
-    await cdp.send(
-      'Runtime.evaluate',
-      {
-        expression: `chrome.storage.local.set(${JSON.stringify({
-          token: opts.pair.token,
-          port: opts.pair.port,
-        })})`,
-        awaitPromise: true,
-      },
-      workerSession,
-    )
+    await approveConnectPage(cdp, opts.pair.connectUrl)
   }
 
   return {

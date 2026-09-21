@@ -13,19 +13,10 @@ capability, so no restart, no flags, and no security prompt.
 
 ## Install
 
-1. Print the pairing details:
-
-   ```bash
-   npx tsx src/scripts/browser-pair.ts
-   ```
-
-2. Open `chrome://extensions`, turn on **Developer mode**, click **Load
+1. Open `chrome://extensions`, turn on **Developer mode**, click **Load
    unpacked**, and select this `chrome-extension/` folder.
 
-3. Open the extension's popup and paste the token. The dot turns green once it
-   reaches the agent.
-
-4. Tell the agent to use it, in `.ai-agent/settings.json`:
+2. Tell the agent to use it, in `.ai-agent/settings.json`:
 
    ```json
    {
@@ -37,6 +28,26 @@ capability, so no restart, no flags, and no security prompt.
 
    Without this the agent keeps using its own isolated Chrome. The tools behave
    identically either way.
+
+That is the whole setup. There is nothing to copy and no port to configure:
+the first time the agent needs the browser it opens a tab asking for access,
+and you press **Allow**.
+
+## How the connection works
+
+The agent listens on a loopback port the OS picks for it, at a URL containing
+a one-time id, and passes that URL to Chrome on the command line as a page
+inside this extension. So the address is only ever known to the extension, and
+the extension only dials it after you approve the prompt.
+
+Two things follow from that, both deliberate:
+
+- **The connection belongs to one agent process.** When that process exits, the
+  address stops working and the extension forgets it. Nothing long-lived is
+  left in the browser, and there is no credential to leak or rotate.
+- **Only this extension can connect.** The agent checks the `Origin` of the
+  handshake, which Chrome writes itself and a web page cannot forge. Its id is
+  pinned to `fpajgihelhfenahgncmdjadkhpcmmbac` by the `key` in `manifest.json`.
 
 ## What the agent can and cannot see
 
@@ -82,23 +93,35 @@ Clicking **Cancel** on the banner still detaches the agent from that tab.
 
 ## Settings
 
-| Key                  | Default     | Meaning                                        |
-| -------------------- | ----------- | ---------------------------------------------- |
-| `browser.mode`       | `isolated`  | `extension` to drive this browser               |
-| `browser.relayPort`  | `8766`      | Loopback port the extension connects back on    |
+| Key                 | Default    | Meaning                                                         |
+| ------------------- | ---------- | --------------------------------------------------------------- |
+| `browser.mode`      | `isolated` | `extension` to drive this browser; `auto` to use it only if already connected |
+| `browser.relayPort` | unset      | Pin the loopback port. Only needed behind a strict local firewall |
 
-The port in the popup must match `browser.relayPort`.
+`auto` never opens the consent tab: it uses this browser if a connection is
+already live and quietly falls back to the isolated Chrome otherwise. Use
+`npx tsx src/scripts/browser-pair.ts` to offer the browser by hand.
 
 ## Troubleshooting
 
-**Popup says `unpaired`** — no token stored yet. Paste the one from
-`browser-pair.ts`.
+Run `npx tsx src/scripts/browser-pair.ts` first. It performs the same exchange
+in its own process and says which step failed.
 
-**Popup says `rejected`** — the token does not match the agent's. The agent
-keeps it in `~/.ai-agent/browser/relay.json`; re-run `browser-pair.ts` and paste
-again. The extension deliberately stops retrying on a rejection.
+**No tab appeared when the agent wanted the browser** — it could not find
+Chrome. Set `CHROME_PATH` to the executable.
 
-**Popup says `disconnected`** — the agent is not running, you are not on the Browser Automation specialist (and `browser.enabled` is not `true`), or it is listening on a different port. Set `browser.mode` to `extension`, switch to the browser agent or set `browser.enabled: true`, then restart the agent.
+**The tab appeared in the wrong Chrome profile** — Chrome opens the URL in
+whichever profile is already running, and the extension has to be installed
+there. Load it in that profile, or quit Chrome and let the agent start it.
+
+**Popup says `disconnected`** — nobody has asked for access yet. That is the
+resting state. If the agent should have asked: check `browser.mode` is
+`extension`, and that you are on the Browser Automation specialist or have set
+`browser.enabled: true`.
+
+**Popup says `rejected`** — the agent refused the handshake, which in practice
+means the extension is older than the agent. Reload it from
+`chrome://extensions`.
 
 **The agent says a tab "is not shared"** — it is trying to reach a tab it does
 not own. Let it open its own tab, or share the one you mean from the popup.
@@ -110,10 +133,31 @@ are in scope, and forwards everything else to `chrome.debugger`. All the
 snapshot, ref and staleness logic lives in the agent and arrives as ordinary CDP
 commands, so this folder should rarely need to change.
 
-After pulling agent changes that touch `chrome-extension/`, open
-`chrome://extensions` and click **Reload** on this extension. Until you do, the
-agent may log `Unknown relay method: tabs.getActiveUserTab` and extension
-click/type may fail on background tabs (no `Page.bringToFront` fallback).
+`chrome.*` calls arrive by name and are dispatched reflectively against
+`ALLOWED_CHROME_COMMANDS`, whose entries also say where each call's tab id
+sits so ownership can be checked before anything runs. Only the handful of
+methods that carry ownership bookkeeping, or that deliberately act on a tab the
+agent does *not* own, are written out by hand.
+
+The handshake reports what this build supports, so an extension older than the
+agent degrades with one warning at connect time rather than failing mid-task.
+Reload it from `chrome://extensions` after pulling changes to this folder.
+
+Do not remove `"key"` from `manifest.json`. It is the public half of a keypair,
+and Chrome derives the extension id from it, which is what lets the agent name
+the connect page and check the handshake `Origin` before the extension has ever
+spoken to it. `test-extension-e2e.ts` fails loudly if the id ever moves.
+
+The private half was not kept. Loading unpacked does not use it; it would only
+be needed to sign a self-hosted `.crx` carrying this same id. If we ever go
+that way, generate a fresh keypair, replace `key`, and update
+`BRIDGE_EXTENSION_ID` — the id will change and everyone reloads once.
+
+`connect.html` is deliberately **not** in `web_accessible_resources`. Chrome
+blocks navigation to an extension page from a web origin unless it is listed
+there, which is what stops a website from opening the consent prompt and
+pointing it at a relay of its own. Chrome opening the URL from the command
+line is not a web origin, so the real path still works.
 
 ```bash
 npx tsx src/scripts/test-browser-relay.ts   # protocol + tools, simulated extension

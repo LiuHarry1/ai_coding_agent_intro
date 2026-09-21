@@ -343,7 +343,7 @@ export async function prepareChatTurn(
       pool.mainThreadProfile?.agentType ?? session.agentType,
       config.browser,
     ) &&
-    config.browser?.mode === 'extension'
+    (config.browser?.mode === 'extension' || config.browser?.mode === 'auto')
   ) {
     warmExtensionRelay(cwd)
   }

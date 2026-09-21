@@ -70,7 +70,7 @@ User-level configuration: `~/.ai-agent/settings.json`. Project-level configurati
 | `npm run desktop:dev` | Start the desktop app (recommended for new users) |
 | `npm start` | Start only the agent backend (`:4567`) |
 | `npm run dev:web` | Start the Web UI in development mode (run `npm start` in another terminal) |
-| `npm run browser:pair` | Get a pairing token for the Chrome extension |
+| `npm run browser:pair` | Check that the Chrome extension can reach the agent |
 | `npm run desktop:pack` | Package the desktop installer |
 | `npm run desktop:pack:win` | Package the Windows installer |
 | `npm run build:web` | Build the frontend into `client/web/dist` |
@@ -87,7 +87,7 @@ Coding Agent can open web pages, click controls, fill forms, take screenshots, a
 
 ```bash
 npm start                 # Isolated mode works out of the box
-npm run browser:pair      # Get a pairing token to use your own Chrome profile
+npm run browser:pair      # Check the extension, to use your own Chrome profile
 ```
 
 For complete instructions, see [docs/readme/browser.md](docs/readme/browser.md).

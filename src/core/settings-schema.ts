@@ -93,7 +93,7 @@ const SshHostSchema = z.object({
 })
 
 const BrowserConfigSchema = z.object({
-  mode: z.enum(['isolated', 'extension']).optional(),
+  mode: z.enum(['isolated', 'extension', 'auto']).optional(),
   headless: z.boolean().optional(),
   cdpEndpoint: z.string().optional(),
   enabled: z.boolean().optional(),

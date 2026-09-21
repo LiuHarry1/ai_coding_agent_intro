@@ -17,6 +17,7 @@ import * as path from 'node:path'
 import { WebSocket } from 'ws'
 import { createExtensionBackend } from '../browser/backends/extension.js'
 import { createIsolatedBackend } from '../browser/backends/isolated.js'
+import { BRIDGE_EXTENSION_ORIGIN } from '../browser/relay/extension-id.js'
 import { startRelayServer } from '../browser/relay/server.js'
 import type { BrowserBackend } from '../browser/types.js'
 import {
@@ -25,7 +26,6 @@ import {
 } from './browser-tool-suite.js'
 
 const HEADED = process.argv.includes('--headed')
-const RELAY_PORT = 8899
 
 interface FakeExtension {
   close: () => Promise<void>
@@ -39,24 +39,50 @@ interface FakeExtension {
  * explicitly shared) may be listed or driven.
  */
 async function startFakeExtension(
-  port: number,
-  token: string,
+  wsUrl: string,
   chrome: BrowserBackend,
 ): Promise<FakeExtension> {
-  const owned = new Set<string>()
+  const owned = new Set<number>()
   const seenMethods = new Set<string>()
   let deniedCount = 0
 
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`)
+  // Chrome tab ids are numbers, and the reflective protocol puts them on the
+  // wire inside a debuggee object, so the fake has to hand out numbers too —
+  // the CDP target strings underneath are a detail the host never sees.
+  const toTabId = new Map<string, number>()
+  const toCdpTarget = new Map<number, string>()
+  let nextTabId = 1
+
+  function tabIdFor(cdpTarget: string): number {
+    let id = toTabId.get(cdpTarget)
+    if (id === undefined) {
+      id = nextTabId++
+      toTabId.set(cdpTarget, id)
+      toCdpTarget.set(id, cdpTarget)
+    }
+    return id
+  }
+
+  const ws = new WebSocket(wsUrl, { origin: BRIDGE_EXTENSION_ORIGIN })
 
   await new Promise<void>((resolve, reject) => {
     ws.once('open', () => {
       ws.send(
         JSON.stringify({
           type: 'hello',
-          token,
-          version: 1,
+          version: 2,
           browser: 'FakeChrome/1.0',
+          capabilities: [
+            'tabs.list',
+            'tabs.create',
+            'tabs.close',
+            'tabs.getActiveUserTab',
+            'tabs.focus',
+            'tabs.restore',
+            'chrome.debugger.attach',
+            'chrome.debugger.detach',
+            'chrome.debugger.sendCommand',
+          ],
         }),
       )
     })
@@ -70,52 +96,59 @@ async function startFakeExtension(
     })
   })
 
-  function assertOwned(targetId: string): void {
-    if (!owned.has(targetId)) {
+  function assertOwned(tabId: number): string {
+    const cdpTarget = owned.has(tabId) ? toCdpTarget.get(tabId) : undefined
+    if (!cdpTarget) {
       deniedCount++
       throw new Error(
-        `Tab ${targetId} is not shared with the agent. Open it with browser_tabs, ` +
+        `Tab ${tabId} is not shared with the agent. Open it with browser_tabs, ` +
           'or share it from the extension popup.',
       )
     }
+    return cdpTarget
   }
 
   async function handle(msg: Record<string, unknown>): Promise<unknown> {
     switch (msg.method) {
       case 'tabs.list': {
         const tabs = await chrome.listTabs()
-        return tabs.filter(t => owned.has(t.targetId))
+        return tabs
+          .filter(t => owned.has(tabIdFor(t.targetId)))
+          .map(t => ({ ...t, targetId: String(tabIdFor(t.targetId)) }))
       }
       case 'tabs.create': {
         const tab = await chrome.createTab(msg.url as string | undefined)
-        owned.add(tab.targetId)
-        return tab
+        const tabId = tabIdFor(tab.targetId)
+        owned.add(tabId)
+        return { ...tab, targetId: String(tabId) }
       }
       case 'tabs.close': {
-        const id = msg.targetId as string
-        assertOwned(id)
-        owned.delete(id)
-        await chrome.closeTab(id)
+        const tabId = Number(msg.targetId)
+        const cdpTarget = assertOwned(tabId)
+        owned.delete(tabId)
+        await chrome.closeTab(cdpTarget)
         return true
       }
       case 'tabs.getActiveUserTab': {
         const tabs = await chrome.listTabs()
-        return tabs[0] ?? null
+        const tab = tabs[0]
+        if (!tab) return null
+        return { ...tab, targetId: String(tabIdFor(tab.targetId)) }
       }
       case 'tabs.focus':
       case 'tabs.restore':
         return true
-      case 'cdp': {
-        const id = msg.targetId as string
-        assertOwned(id)
-        seenMethods.add(msg.cdpMethod as string)
-        return (
-          (await chrome.send(
-            id,
-            msg.cdpMethod as string,
-            msg.params as Record<string, unknown>,
-          )) ?? {}
-        )
+      // Mirrors the extension's reflective path: the tab id comes out of the
+      // debuggee argument and is ownership-checked before anything runs.
+      case 'chrome.debugger.sendCommand': {
+        const [debuggee, cdpMethod, params] = msg.params as [
+          { tabId: number },
+          string,
+          Record<string, unknown>,
+        ]
+        const cdpTarget = assertOwned(debuggee.tabId)
+        seenMethods.add(cdpMethod)
+        return (await chrome.send(cdpTarget, cdpMethod, params)) ?? {}
       }
       default:
         throw new Error(`Unknown relay method: ${String(msg.method)}`)
@@ -154,29 +187,61 @@ async function startFakeExtension(
   }
 }
 
-async function testRejectsBadToken(port: number): Promise<void> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`)
-  const code = await new Promise<number>((resolve, reject) => {
-    ws.once('open', () => {
-      ws.send(
-        JSON.stringify({ type: 'hello', token: 'not-the-token', version: 1 }),
-      )
-    })
-    ws.once('close', c => resolve(c))
-    ws.once('error', reject)
+/** The handshake must fail before a socket opens, never after. */
+async function expectHandshakeRejected(
+  wsUrl: string,
+  opts: { origin?: string },
+): Promise<void> {
+  const ws = new WebSocket(wsUrl, opts)
+  await new Promise<void>((resolve, reject) => {
+    ws.once('open', () => reject(new Error('the relay accepted the socket')))
+    ws.once('error', () => resolve())
+    ws.once('close', () => resolve())
   })
-  assert.equal(code, 1008, 'relay must reject an unpaired client')
-  console.log('ok [relay] rejects a bad pairing token')
+  ws.terminate()
+}
+
+/**
+ * Origin is written by the browser and cannot be forged from a page, so it is
+ * what stops any local process — or any site running JavaScript — from
+ * driving the agent's browser if it ever guesses the url.
+ */
+async function testRejectsBadOrigin(relayUrl: string): Promise<void> {
+  await expectHandshakeRejected(relayUrl, {
+    origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  })
+  await expectHandshakeRejected(relayUrl, { origin: 'https://evil.example' })
+  await expectHandshakeRejected(relayUrl, {})
+  console.log('ok [relay] rejects a handshake from any other origin')
+}
+
+/** The path holds the per-process uuid; without it the url is not a credential. */
+async function testRejectsBadPath(relayUrl: string): Promise<void> {
+  const wrong = new URL(relayUrl)
+  wrong.pathname = '/relay/00000000-0000-0000-0000-000000000000'
+  await expectHandshakeRejected(wrong.toString(), {
+    origin: BRIDGE_EXTENSION_ORIGIN,
+  })
+
+  const root = new URL(relayUrl)
+  root.pathname = '/'
+  await expectHandshakeRejected(root.toString(), {
+    origin: BRIDGE_EXTENSION_ORIGIN,
+  })
+  console.log('ok [relay] rejects a handshake on any other path')
 }
 
 async function main() {
   const server = await startFixtureServer()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-browser-relay-'))
 
-  const relay = await startRelayServer({ port: RELAY_PORT })
+  const relay = await startRelayServer()
+  assert.ok(relay.port > 0, 'the OS must have assigned a port')
+  assert.match(relay.wsUrl, /^ws:\/\/127\.0\.0\.1:\d+\/relay\/[0-9a-f-]{36}$/)
   console.log(`ok [relay] listening on 127.0.0.1:${relay.port}`)
 
-  await testRejectsBadToken(relay.port)
+  await testRejectsBadOrigin(relay.wsUrl)
+  await testRejectsBadPath(relay.wsUrl)
 
   // Stands in for the user's signed-in Chrome.
   const chrome = await createIsolatedBackend({
@@ -184,10 +249,14 @@ async function main() {
     headless: !HEADED,
     viewport: { width: 1280, height: 800 },
   })
-  const extension = await startFakeExtension(relay.port, relay.token, chrome)
+  const extension = await startFakeExtension(relay.wsUrl, chrome)
   assert.equal(relay.isConnected(), true)
   assert.match(String(relay.peerName()), /FakeChrome/)
-  console.log('ok [relay] extension paired and handshook')
+  assert.ok(
+    relay.capabilities().has('chrome.debugger.sendCommand'),
+    'the handshake must carry what the extension can do',
+  )
+  console.log('ok [relay] extension connected and handshook')
 
   try {
     await runBrowserToolSuite({
@@ -200,8 +269,9 @@ async function main() {
     // The consent model held. Exactly one denial is expected: the suite ends by
     // deliberately closing an already-closed tab. Any other count means the
     // tool layer reached for a tab the agent does not own.
+    const deniedDuringSuite = extension.deniedCount
     assert.equal(
-      extension.deniedCount,
+      deniedDuringSuite,
       1,
       'suite should only touch agent-owned tabs, apart from the deliberate dead-tab close',
     )
@@ -218,6 +288,39 @@ async function main() {
     console.log(
       `ok [relay] forwarded ${extension.seenMethods.size} distinct CDP methods`,
     )
+
+    // Reflective forwarding must not become a way around the ownership model.
+    // The tab id travels inside the debuggee argument now, so that is exactly
+    // where the check has to happen.
+    for (const attempt of [
+      {
+        what: 'a tab the agent never opened',
+        req: {
+          method: 'chrome.debugger.sendCommand' as const,
+          params: [{ tabId: 999_999 }, 'Runtime.evaluate', { expression: '1' }],
+        },
+      },
+      {
+        what: 'closing a tab the agent never opened',
+        req: { method: 'tabs.close' as const, targetId: '999999' },
+      },
+    ]) {
+      const denied = await relay
+        .request(attempt.req)
+        .then(() => 'allowed')
+        .catch((err: Error) => err.message)
+      assert.match(
+        String(denied),
+        /is not shared with the agent/,
+        `the extension must refuse ${attempt.what}`,
+      )
+    }
+    assert.equal(
+      extension.deniedCount,
+      deniedDuringSuite + 2,
+      'both over-reach attempts must have been counted as denials',
+    )
+    console.log('ok [relay] reflective calls cannot reach unowned tabs')
 
     // A disconnected extension must fail loudly rather than hang.
     await extension.close()
