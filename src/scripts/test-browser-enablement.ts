@@ -19,6 +19,7 @@ import {
   BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
   BROWSER_HIGHLIGHT_TOOL_NAME,
   BROWSER_CLICK_TOOL_NAME,
+  BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
   ENTER_PLAN_MODE_TOOL_NAME,
   LSP_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
@@ -77,7 +78,9 @@ assert.equal(isBrowserEnabledForMainThread(BROWSER_AGENT_TYPE, {}), true)
 assert.equal(isBrowserEnabledForMainThread(null, { enabled: true }), true)
 console.log('ok enablement helpers')
 
-assert.deepEqual(browserDenyGlobsForMainThread(null, {}), [BROWSER_TOOLS_DENY_GLOB])
+assert.deepEqual(browserDenyGlobsForMainThread(null, {}), [
+  BROWSER_TOOLS_DENY_GLOB,
+])
 assert.deepEqual(browserDenyGlobsForMainThread(BROWSER_AGENT_TYPE, {}), [])
 console.log('ok deny globs')
 
@@ -89,6 +92,7 @@ console.log('ok default agent has no browser tools')
 
 const browserPool = poolFor(BROWSER_AGENT_TYPE)
 assert.ok(BROWSER_CLICK_TOOL_NAME in browserPool.tools)
+assert.ok(BROWSER_MOUSE_CLICK_XY_TOOL_NAME in browserPool.tools)
 assert.ok(BROWSER_DRAG_TOOL_NAME in browserPool.tools)
 assert.ok(BROWSER_HIGHLIGHT_TOOL_NAME in browserPool.tools)
 assert.ok(BROWSER_GET_BOUNDING_BOX_TOOL_NAME in browserPool.tools)
@@ -103,6 +107,7 @@ console.log('ok browser primary loads curated tool set')
 const optedIn = poolFor(null, { enabled: true })
 assert.ok(!(BROWSER_CLICK_TOOL_NAME in optedIn.tools))
 assert.ok(BROWSER_CLICK_TOOL_NAME in (optedIn.deferredToolPool ?? {}))
+assert.ok(BROWSER_MOUSE_CLICK_XY_TOOL_NAME in (optedIn.deferredToolPool ?? {}))
 assert.ok(TOOL_SEARCH_TOOL_NAME in optedIn.tools)
 console.log('ok browser.enabled keeps deferred browser tools')
 

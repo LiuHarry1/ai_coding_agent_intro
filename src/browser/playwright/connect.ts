@@ -9,19 +9,22 @@
  * user's signed-in Chrome.
  */
 
+import { randomUUID } from 'crypto'
 import type { Browser, Page } from 'playwright-core'
 import { chromium } from 'playwright-core'
 import { getIsolatedPage } from '../backends/isolated.js'
 import { startCdpEndpoint, type CdpEndpoint } from '../relay/cdp-endpoint.js'
 import type { RelayServer } from '../relay/server.js'
 import { BrowserError, type BrowserBackend } from '../types.js'
-import { pickPageForTab } from './page-match.js'
+import { isBlankUrl, pickPageForTab, urlsRoughlyEqual } from './page-match.js'
 import { watchPage } from './overlays.js'
 
 const browsers = new WeakMap<BrowserBackend, Promise<Browser>>()
 const endpoints = new WeakMap<BrowserBackend, CdpEndpoint>()
 
 const PAGE_ATTACH_MS = 3_000
+const TAB_TOKEN_KEY = '__aiAgentTabToken'
+const TAB_TOKEN_PROBE_MS = 1_000
 /** Cold connectOverCDP on Windows/extension can exceed 20s; agent log showed ~28s before attach. */
 const CDP_CONNECT_MS = 45_000
 const pagesByTarget = new Map<string, Page>()
@@ -90,6 +93,39 @@ function allPages(browser: Browser): Page[] {
   return browser.contexts().flatMap(ctx => ctx.pages().filter(p => !p.isClosed()))
 }
 
+/**
+ * Tabs showing the same URL are indistinguishable by URL, and picking the
+ * wrong one sends clicks and screenshots to another tab. Stamp a token through
+ * the tab's own debugger session and find the Page that sees it. `null` means
+ * no candidate is this tab; `undefined` means the stamp itself failed.
+ */
+async function pageMarkedForTab(
+  backend: BrowserBackend,
+  targetId: string,
+  candidates: Page[],
+): Promise<Page | null | undefined> {
+  const token = `${targetId}:${randomUUID()}`
+  try {
+    await backend.send(targetId, 'Runtime.evaluate', {
+      expression: `window.${TAB_TOKEN_KEY} = ${JSON.stringify(token)}`,
+    })
+  } catch {
+    return undefined
+  }
+  for (const page of candidates) {
+    const seen = await Promise.race([
+      page
+        .evaluate(key => (window as unknown as Record<string, unknown>)[key], TAB_TOKEN_KEY)
+        .catch(() => undefined),
+      new Promise<undefined>(resolve =>
+        setTimeout(() => resolve(undefined), TAB_TOKEN_PROBE_MS),
+      ),
+    ])
+    if (seen === token) return page
+  }
+  return null
+}
+
 async function findPage(
   backend: BrowserBackend,
   browser: Browser,
@@ -110,6 +146,23 @@ async function findPage(
   if (cached && !cached.isClosed() && pages.includes(cached)) {
     pagesByTarget.set(targetId, cached)
     return cached
+  }
+  const sameUrl = isBlankUrl(tab.url)
+    ? []
+    : pages.filter(p => urlsRoughlyEqual(p.url(), tab.url))
+  if (sameUrl.length > 0) {
+    const marked = await pageMarkedForTab(backend, targetId, sameUrl)
+    if (marked) {
+      pagesByTarget.set(targetId, marked)
+      return marked
+    }
+    if (marked === null) {
+      // The only URL matches belong to other tabs; this tab's Page has not
+      // attached yet, and the caller's retry loop waits for it.
+      throw new BrowserError(
+        `Tab "${targetId}" (${tab.url}) is not attached to Playwright yet.`,
+      )
+    }
   }
   const matched = pickPageForTab(pages, tab.url)
   if (matched) {

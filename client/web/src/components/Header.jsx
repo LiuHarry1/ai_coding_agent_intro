@@ -408,7 +408,7 @@ export default function Header() {
         >
           Clear
         </button>
-        {locked && (
+        {authEnabled() && (
           <button className='btn-clear' onClick={logout} title='Sign out'>
             Logout
           </button>

@@ -37,7 +37,19 @@ export default function SkillCard({ part, nested = false }) {
   const isError = isDone && detectError('Skill', result)
   const skillName = args.skill_name || args.skill || ''
   const hint = skillArgsHint(args)
-  const hasBody = typeof result === 'string' && result.length > 0
+  // Inline skills answer the model with `Launching skill: name` and deliver
+  // the SKILL.md body out of band, so the card shows the body when present.
+  const tur =
+    part.toolUseResult && typeof part.toolUseResult === 'object'
+      ? part.toolUseResult
+      : null
+  const body =
+    typeof tur?.body === 'string' && tur.body
+      ? tur.body
+      : typeof result === 'string'
+        ? result
+        : ''
+  const hasBody = body.length > 0
 
   const steps = useMemo(() => {
     const raw = Array.isArray(part.subagentParts) ? part.subagentParts : []
@@ -63,7 +75,11 @@ export default function SkillCard({ part, nested = false }) {
   const [showAllSteps, setShowAllSteps] = useState(false)
 
   const sizeLabel =
-    isDone && !isError && hasBody && !isFork ? formatBytes(result.length) : null
+    isDone && !isError && hasBody && !isFork
+      ? formatBytes(
+          typeof tur?.body_chars === 'number' ? tur.body_chars : body.length,
+        )
+      : null
 
   const summary = useMemo(() => summarizeToolSteps(steps), [steps])
   const liveStep = useMemo(() => pickLiveMember(steps), [steps])
@@ -141,7 +157,7 @@ export default function SkillCard({ part, nested = false }) {
       showSuccess={isDone && !isError}
       actions={
         isDone && !isError && hasBody && !isFork ? (
-          <CopyButton text={result} label='Copy' inline />
+          <CopyButton text={body} label='Copy' inline />
         ) : null
       }
     >
@@ -169,7 +185,7 @@ export default function SkillCard({ part, nested = false }) {
             </div>
           )}
           {!isError && hasBody && !isFork && (
-            <pre className='tool-row-body'>{result}</pre>
+            <pre className='tool-row-body'>{body}</pre>
           )}
         </div>
     </ToolChrome>

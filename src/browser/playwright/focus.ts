@@ -1,9 +1,10 @@
 /**
  * Silent extension automation: no Page.bringToFront, no window focus.
  *
- * Reads (snapshot, navigate, screenshot) run on the background agent tab (L0).
- * Writes (click, type) only call tabs.update({ active: true }) — L1 tab strip,
- * not windows.update({ focused }) and not CDP bringToFront [OpenClaw PR #105356].
+ * Reads (snapshot, navigate) run on the background agent tab (L0).
+ * Writes (click, type) and screenshots only call tabs.update({ active: true })
+ * — L1 tab strip, not windows.update({ focused }) and not CDP bringToFront
+ * [OpenClaw PR #105356].
  *
  * Chrome may still reject input on a fully background tab; L1 is the minimum
  * without stealing the window. For zero tab-bar changes, use isolated mode
@@ -13,7 +14,16 @@
  * between tabs after every action.
  */
 
-import type { BrowserBackend } from '../types.js'
+import type { Page } from 'playwright-core'
+import { BrowserError, type BrowserBackend } from '../types.js'
+import { getPageForTarget } from './connect.js'
+
+const RENDER_PROBE_MS = 1_500
+
+export const NOT_RENDERING_MESSAGE =
+  'Chrome is not rendering this tab: its window is minimized or completely covered by other windows, ' +
+  'so screenshots and clicks cannot complete. Stop and ask the user to restore the Chrome window ' +
+  '(it does not need focus), then retry. Do not retry in a loop.'
 
 export type FocusLevel = 'tab' | 'window'
 
@@ -101,6 +111,15 @@ export async function restoreUserTab(
   await backend.restoreTab(userTabId)
 }
 
+/** Screenshots need Chrome to paint the tab, which a background tab may not. */
+export async function withVisualFocus<T>(
+  backend: BrowserBackend,
+  targetId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return withInputFocus(backend, targetId, fn)
+}
+
 /** L0 — no tab or window changes (extension reads stay in the background). */
 export async function withReadBoost<T>(
   backend: BrowserBackend,
@@ -110,6 +129,31 @@ export async function withReadBoost<T>(
   void backend
   void targetId
   return fn()
+}
+
+/**
+ * A minimized or fully occluded Chrome window produces no frames, so
+ * Page.captureScreenshot and Playwright's actionability waits hang until
+ * their outer timeout instead of failing.
+ */
+async function isRendering(page: Page): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined
+  const frame = page
+    .evaluate(
+      () =>
+        new Promise<boolean>(resolve =>
+          requestAnimationFrame(() => resolve(true)),
+        ),
+    )
+    .catch(() => true)
+  const timeout = new Promise<boolean>(resolve => {
+    timer = setTimeout(() => resolve(false), RENDER_PROBE_MS)
+  })
+  try {
+    return await Promise.race([frame, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /** L1 tab strip only before input; optional debounced restore if configured. */
@@ -127,6 +171,10 @@ export async function withInputFocus<T>(
       const active = await getActiveUserTabId(backend)
       if (active !== targetId) {
         await ensureTabFocus(backend, targetId, 'tab')
+      }
+      const page = await getPageForTarget(backend, targetId)
+      if (!(await isRendering(page))) {
+        throw new BrowserError(NOT_RENDERING_MESSAGE)
       }
     }
     return await fn()

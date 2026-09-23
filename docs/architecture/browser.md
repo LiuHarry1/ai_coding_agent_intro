@@ -90,7 +90,6 @@ flowchart LR
 - Snapshot refs can become stale after navigation or DOM updates.
 - Screenshots show pixels; snapshots provide elements the agent can act on.
 - Large snapshots are stored as files and replaced with a bounded preview.
-- Raw `browser_cdp` is restricted; normal input should use dedicated tools.
 
 ## Source map
 

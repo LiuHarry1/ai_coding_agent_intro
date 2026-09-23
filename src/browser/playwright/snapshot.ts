@@ -26,7 +26,6 @@ import {
   countRefs,
   dropRedundantWrapperNames,
   groupBadgeLabels,
-  isBlockingMessageBox,
   keepInteractive,
   prioritizeAriaSnapshot,
 } from '../distill-snapshot.js'
@@ -125,7 +124,11 @@ async function hideByAttr(page: Page, attr: string, all: boolean): Promise<void>
               const w = window as unknown as Record<string, unknown>
               type Slot = { el: Element; parent: Node; next: Node | null }
               const slots: Slot[] = []
-              const visit = (root: ParentNode) => {
+              // A queue, not a recursive helper: named inner functions become
+              // `__name` calls that do not exist in the page.
+              const roots: ParentNode[] = [document]
+              for (let r = 0; r < roots.length; r++) {
+                const root = roots[r]
                 const kids = root.querySelectorAll('iframe, embed, object')
                 for (let i = 0; i < kids.length; i++) {
                   const el = kids[i]
@@ -171,10 +174,9 @@ async function hideByAttr(page: Page, attr: string, all: boolean): Promise<void>
                 const allEls = root.querySelectorAll('*')
                 for (let i = 0; i < allEls.length; i++) {
                   const sr = (allEls[i] as HTMLElement).shadowRoot
-                  if (sr) visit(sr)
+                  if (sr) roots.push(sr)
                 }
               }
-              visit(document)
               for (const slot of slots) {
                 try {
                   slot.parent.removeChild(slot.el)
@@ -229,6 +231,108 @@ async function unhideByAttr(page: Page, attr: string): Promise<void> {
   )
 }
 
+const PARKED_ATTR = 'data-snap-parked'
+
+/**
+ * ExtJS and similar toolkits "hide" pickers and message boxes by moving them
+ * to about (-10000, -10000) instead of display:none, so the accessibility
+ * tree keeps a closed "Please Confirm" box or date picker forever and the
+ * model keeps answering it. Nothing at negative page coordinates can be
+ * scrolled into view, so hide those subtrees for the capture. Only
+ * absolutely/fixed positioned boxes far past the origin qualify, so carousel
+ * items and 1px screen-reader text are untouched, and taking them out of
+ * layout moves nothing on screen. Playwright's AI snapshot keeps visible
+ * aria-hidden nodes (it only drops their names), so display:none it is.
+ */
+async function markParkedOffscreen(page: Page): Promise<Frame[]> {
+  // A still-loading frame (empty URL) never answers evaluate; waiting out the
+  // cap twice per snapshot pushed hung-viewer pages past the snapshot budget.
+  const frames = collectSnapshotFrames(page).filter(
+    frame => !frame.isDetached() && frame.url() !== '',
+  )
+  const counts = await Promise.all(
+    frames.map(frame =>
+      raceMs(
+        HIDE_EVAL_MS,
+        frame.evaluate(attr => {
+            const FAR = 500
+            const all = document.body?.querySelectorAll('*') ?? []
+            const parked: HTMLElement[] = []
+            for (let i = 0; i < all.length; i++) {
+              const el = all[i] as HTMLElement
+              if (parked.some(p => p.contains(el))) continue
+              const style = window.getComputedStyle(el)
+              if (style.position !== 'absolute' && style.position !== 'fixed') {
+                continue
+              }
+              if (style.display === 'none') continue
+              const rect = el.getBoundingClientRect()
+              if (rect.width <= 1 || rect.height <= 1) continue
+              const right = rect.right + window.scrollX
+              const bottom = rect.bottom + window.scrollY
+              if (right > -FAR && bottom > -FAR) continue
+              parked.push(el)
+            }
+            for (const el of parked) {
+              const prev = el.style.getPropertyValue('display')
+              const priority = el.style.getPropertyPriority('display')
+              el.setAttribute(attr, JSON.stringify([prev, priority]))
+              el.style.setProperty('display', 'none', 'important')
+            }
+            return parked.length
+          }, PARKED_ATTR),
+        // A timed-out evaluate can still apply display:none after the race,
+        // so that frame must be unmarked too.
+        -1,
+      ),
+    ),
+  )
+  return frames.filter((_, i) => counts[i] !== 0)
+}
+
+async function unmarkParkedOffscreen(frames: Frame[]): Promise<void> {
+  await Promise.all(
+    frames.map(frame =>
+      raceMs(
+        HIDE_EVAL_MS,
+        frame
+          .evaluate(attr => {
+            for (const node of Array.from(
+              document.querySelectorAll(`[${attr}]`),
+            )) {
+              const el = node as HTMLElement
+              let prev = ''
+              let priority = ''
+              try {
+                ;[prev, priority] = JSON.parse(el.getAttribute(attr) || '[]')
+              } catch {
+                /* keep defaults */
+              }
+              el.removeAttribute(attr)
+              if (prev) el.style.setProperty('display', prev, priority)
+              else el.style.removeProperty('display')
+            }
+          }, PARKED_ATTR)
+          .then(() => undefined)
+          .catch(() => undefined),
+        undefined,
+      ),
+    ),
+  )
+}
+
+async function withParkedOffscreenHidden<T>(
+  page: Page,
+  run: () => Promise<T>,
+): Promise<T> {
+  const marked = await markParkedOffscreen(page).catch(() => [] as Frame[])
+  try {
+    return await run()
+  } finally {
+    if (marked.length) await unmarkParkedOffscreen(marked).catch(() => {})
+  }
+}
+
 export async function withHeavyMediaHidden<T>(
   page: Page,
   run: () => Promise<T>,
@@ -267,13 +371,18 @@ async function ariaSnapshotPage(
 }
 
 /**
- * In-page Error / Yes-No / OK box. Not `window.alert` (that is
- * `browser_handle_dialog`), and not every `role=dialog` (nav panels, inbox
- * sheets, "Please wait" overlays).
+ * Actionable in-page alert box. Not `window.alert` (that is
+ * `browser_handle_dialog`) and not a generic `role=dialog` panel.
  *
  * PDF/blob frames are skipped and every locator is time-capped: a hung
  * receipt viewer used to block this for the full 60s call budget, so the
  * model never saw the Yes/No box sitting on top of the form.
+ *
+ * This is only a fallback for an explicit dialog-only request or a failed
+ * full-page snapshot. Normal snapshots keep the entire page. ExtJS moves
+ * dismissed dialogs far offscreen while Playwright still reports them as
+ * visible, so CSS visibility alone is not enough: the candidate must overlap
+ * the viewport and win a real hit test.
  */
 async function snapshotDialogInFrame(frame: Frame): Promise<string | null> {
   const alerts = frame.locator('[role="alertdialog"]')
@@ -284,52 +393,48 @@ async function snapshotDialogInFrame(frame: Frame): Promise<string | null> {
   )
   for (let i = 0; i < n; i++) {
     const item = alerts.nth(i)
-    const visible = await raceMs(
+    const actionable = await raceMs(
       FRAME_QUERY_MS,
-      item.isVisible().catch(() => false),
+      item
+        .evaluate(element => {
+          const el = element as HTMLElement
+          if (el.closest('[aria-hidden="true"], [inert]')) return false
+          const style = window.getComputedStyle(el)
+          if (
+            style.display === 'none' ||
+            style.visibility === 'hidden' ||
+            Number(style.opacity) === 0
+          ) {
+            return false
+          }
+          const rect = el.getBoundingClientRect()
+          if (rect.width <= 0 || rect.height <= 0) return false
+          const left = Math.max(0, rect.left)
+          const top = Math.max(0, rect.top)
+          const right = Math.min(window.innerWidth, rect.right)
+          const bottom = Math.min(window.innerHeight, rect.bottom)
+          if (right <= left || bottom <= top) return false
+          const hit = document.elementFromPoint(
+            (left + right) / 2,
+            (top + bottom) / 2,
+          )
+          return hit === el || (hit !== null && el.contains(hit))
+        })
+        .catch(() => false),
       false,
     )
-    if (!visible) continue
+    if (!actionable) continue
     const yaml = await raceMs(
       DIALOG_SNAPSHOT_MS,
-      item.ariaSnapshot({ mode: 'ai', timeout: DIALOG_SNAPSHOT_MS }).catch(() => ''),
+      item
+        .ariaSnapshot({ mode: 'ai', timeout: DIALOG_SNAPSHOT_MS })
+        .catch(() => ''),
       '',
     )
     if (yaml && countRefs(yaml) > 0) return yaml
     if (yaml) return DIALOG_NO_REF_PREFIX
   }
-
-  const yes = frame.getByRole('button', { name: /^Yes$/i })
-  const yesVisible = await raceMs(
-    FRAME_QUERY_MS,
-    yes.first().isVisible().catch(() => false),
-    false,
-  )
-  if (!yesVisible) return null
-  const no = frame.getByRole('button', { name: /^No$/i })
-  const hasNo = await raceMs(
-    FRAME_QUERY_MS,
-    no.first().isVisible().catch(() => false),
-    false,
-  )
-  if (!hasNo) return null
-  const box = yes
-    .first()
-    .locator(
-      'xpath=ancestor::*[@role="dialog" or @role="alertdialog" or @aria-modal="true"][1]',
-    )
-  const yaml = await raceMs(
-    DIALOG_SNAPSHOT_MS,
-    box.ariaSnapshot({ mode: 'ai', timeout: DIALOG_SNAPSHOT_MS }).catch(() => ''),
-    '',
-  )
-  if (yaml && isBlockingMessageBox(yaml)) return yaml
-  const yesYaml = await raceMs(
-    DIALOG_SNAPSHOT_MS,
-    yes.first().ariaSnapshot({ mode: 'ai', timeout: DIALOG_SNAPSHOT_MS }).catch(() => ''),
-    '',
-  )
-  return yesYaml && countRefs(yesYaml) > 0 ? yesYaml : null
+  return null
 }
 
 async function snapshotBlockingDialog(page: Page): Promise<string | null> {
@@ -497,10 +602,6 @@ async function snapshotInner(
       if (dialog) return finish(await packDialog(dialog))
       return finish(await emptyDialogPack())
     }
-    if (!opts.selector) {
-      const dialog = await snapshotBlockingDialog(page)
-      if (dialog) return finish(await packDialog(dialog))
-    }
     // Cursor default maxDepth is 30. Depth 6 on compact trees dropped nested
     // ExtJS comboboxes (and open dialogs became Close + title) without setting
     // truncated. Selector-scoped still uses the same default unless overridden.
@@ -518,14 +619,19 @@ async function snapshotInner(
     let raw = ''
     let omittedFrames = skipIframeWalk
     if (opts.selector) {
-      raw = await scopedLocatorSnapshot(page, opts.selector, SNAPSHOT_TIMEOUT_MS)
+      const selector = opts.selector
+      raw = await withParkedOffscreenHidden(page, () =>
+        scopedLocatorSnapshot(page, selector, SNAPSHOT_TIMEOUT_MS),
+      )
     } else if (!skipIframeWalk) {
       // Detach PDF/receipt iframes first. Playwright AI mode still enter-frames
       // display:none iframes; Cursor never snapshots iframe contents.
       raw = await raceMs(
         SNAPSHOT_TIMEOUT_MS + 500,
         withHeavyMediaHidden(page, () =>
-          ariaSnapshotPage(page, SNAPSHOT_TIMEOUT_MS, depth),
+          withParkedOffscreenHidden(page, () =>
+            ariaSnapshotPage(page, SNAPSHOT_TIMEOUT_MS, depth),
+          ),
         ),
         '',
       )
@@ -535,7 +641,9 @@ async function snapshotInner(
       raw = await raceMs(
         EMBEDDED_FRAME_OMIT_MS,
         withEmbeddedFramesOmitted(page, () =>
-          ariaSnapshotPage(page, EMBEDDED_FRAME_OMIT_MS, depth),
+          withParkedOffscreenHidden(page, () =>
+            ariaSnapshotPage(page, EMBEDDED_FRAME_OMIT_MS, depth),
+          ),
         ),
         '',
       )

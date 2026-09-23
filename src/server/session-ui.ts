@@ -8,6 +8,7 @@ import { parseSessionJsonLine } from '../session/json-serialize.js'
 import { replayTranscriptMessages } from '../session/compact-replay.js'
 import { getSubagentNames } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools.js'
+import { isScheduledPromptText } from '../services/cron/scheduled-prompt.js'
 import { isSystemReminderContent } from '../utils/system-reminder.js'
 import {
   INTERRUPT_MESSAGE,
@@ -148,8 +149,9 @@ function appendAssistantParts(
  * those into a single assistant bubble; merge consecutive assistant parts here
  * so session reload matches that layout.
  *
- * isCompactSummary user messages become compact_boundary markers,
- * not raw user bubbles with the full summary text.
+ * isCompactSummary user messages become compact_boundary markers, not raw
+ * user bubbles with the full summary text. isMeta user messages are dropped
+ * — they are API-side injections, not chat turns (scheduled turns aside).
  */
 export function sessionToUIMessages(messages: Message[]): unknown[] {
   const uiMessages: unknown[] = []
@@ -172,8 +174,14 @@ export function sessionToUIMessages(messages: Message[]): unknown[] {
       continue
     }
     if (isRoleMessage(msg) && msg.role === 'user') {
-      currentAssistant = null
       const content = userMessageText(msg)
+      // Meta user messages (inline skill bodies, attachment preludes, plan
+      // follow-ups) are model-only. Streaming never emits a bubble for them,
+      // so reload must not either — and the assistant turn they sit inside
+      // stays one bubble, hence no `currentAssistant` reset here. Scheduled
+      // turns are the exception: stored meta, but shown live and on reload.
+      if (msg.isMeta && !isScheduledPromptText(content)) continue
+      currentAssistant = null
       if (isSystemReminderContent(content)) continue
       if (isInterruptMessage(msg)) {
         uiMessages.push({

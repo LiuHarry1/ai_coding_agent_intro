@@ -39,7 +39,11 @@ import {
 import { PAGE_SCRIPT, PAGE_SCRIPT_VERSION } from '../browser/page-script.js'
 import { BrowserError } from '../browser/types.js'
 import { normalizeRef } from '../browser/playwright/locator.js'
-import { formatClickIntercept } from '../browser/playwright/robust-click.js'
+import {
+  formatClickIntercept,
+  isBoxInViewport,
+  visibleClickPosition,
+} from '../browser/playwright/robust-click.js'
 import {
   keepInteractive,
   countRefs,
@@ -62,7 +66,10 @@ import {
   setBrowserBackendFactory,
   setCurrentTab,
 } from '../browser/manager.js'
-import { isHeavyMediaFrame, SNAPSHOT_STALL_NEXT } from '../browser/heavy-media.js'
+import {
+  isHeavyMediaFrame,
+  SNAPSHOT_STALL_NEXT,
+} from '../browser/heavy-media.js'
 import { assertNavigateUrl } from '../browser/navigate-policy.js'
 import { denyCdpMethod } from '../browser/cdp-policy.js'
 import { sendCdpCommand } from '../browser/cdp-command.js'
@@ -740,7 +747,11 @@ function makeFakeRelay(opts: {
   })
 
   const backend = await createExtensionBackend({ relay: fakeRelay })
-  eq(await backend.getActiveUserTabId(), null, 'getActiveUserTab returns null')
+  eq(
+    await backend.getActiveUserTabId(),
+    null,
+    'legacy getActiveUserTab returns null',
+  )
   await backend.focusTab('7', 'tab')
   await backend.focusTab('7', 'window')
   await backend.restoreTab('3')
@@ -843,6 +854,25 @@ function makeFakeRelay(opts: {
     '',
     'do not duplicate Recovery action',
   )
+  const screenshotStall = recoverySuffixForError(
+    'Screenshot timed out (PDF/iframe receipt previews often stall it).',
+  )
+  assert(
+    !screenshotStall.includes('The click hit an iframe'),
+    `a screenshot stall is not an iframe click:\n${screenshotStall}`,
+  )
+  assert(
+    recoverySuffixForError(
+      'Click would hit an iframe instead of the target element.',
+    ).includes('The click hit an iframe'),
+    'a real iframe intercept keeps the iframe hint',
+  )
+  assert(
+    recoverySuffixForError(
+      'Chrome is not rendering this tab: its window is minimized or completely covered by other windows',
+    ).includes('ask the user to restore the Chrome window'),
+    'a minimized window must not be told to snapshot and retry',
+  )
   const intercept = browserErrorText(
     new BrowserError(
       'Click would hit a modal/dialog instead of the target element.\nClose it first.\nRecovery action: browser_click with ref "e9"',
@@ -881,6 +911,61 @@ function makeFakeRelay(opts: {
   assert(formatted.includes('Recovery action: browser_click with ref "e44"'), formatted)
   assert(formatted.includes('[ref=e44]'), formatted)
   ok('click intercept diagnosis names the covering ref')
+}
+
+{
+  const viewport = { width: 1280, height: 800 }
+  assert(
+    isBoxInViewport({ x: -5, y: 20, width: 80, height: 30 }, viewport),
+    'small Cursor-style edge tolerance should remain interactable',
+  )
+  assert(
+    !isBoxInViewport({ x: -9581, y: -9869, width: 41, height: 24 }, viewport),
+    'far-offscreen ExtJS clones must not be interactable',
+  )
+  assert(
+    !isBoxInViewport({ x: -10, y: 20, width: 5, height: 30 }, viewport),
+    'a box entirely outside the viewport must fail despite edge tolerance',
+  )
+  assert(
+    !isBoxInViewport({ x: 20, y: 20, width: 0, height: 30 }, viewport),
+    'zero-width elements must not be interactable',
+  )
+  assert(
+    isBoxInViewport({ x: 16, y: -571, width: 406, height: 2006 }, viewport),
+    'an element taller than the viewport is interactable once it overlaps',
+  )
+  assert(
+    isBoxInViewport({ x: -933, y: 372, width: 2400, height: 120 }, viewport),
+    'an element wider than the viewport is interactable once it overlaps',
+  )
+  assert(
+    !isBoxInViewport({ x: -300, y: -571, width: 406, height: 2006 }, viewport),
+    'the axis that fits the viewport still needs full containment',
+  )
+  assert(
+    !isBoxInViewport({ x: 16, y: 900, width: 406, height: 2006 }, viewport),
+    'an oversized element entirely below the viewport must fail',
+  )
+  const tallClick = visibleClickPosition(
+    { x: 16, y: -571, width: 406, height: 2006 },
+    viewport,
+    { x: 203, y: 1003 },
+  )
+  assert(
+    -571 + tallClick.y > 0 && -571 + tallClick.y < viewport.height,
+    'an oversized element clicks inside its visible part',
+  )
+  const clamped = visibleClickPosition(
+    { x: -5, y: 20, width: 8, height: 30 },
+    viewport,
+    { x: 4, y: 15 },
+  )
+  assert(
+    -5 + clamped.x > 0 && -5 + clamped.x < 3,
+    'a partially offscreen target must click its visible intersection',
+  )
+  ok('viewport geometry rejects hidden offscreen click targets')
 }
 
 {

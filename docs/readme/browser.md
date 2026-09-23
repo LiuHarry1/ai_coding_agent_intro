@@ -125,7 +125,8 @@ You generally do not need to memorize these tools; describe your goal in natural
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `browser_navigate`          | Open an HTTP(S) URL, or navigate back, forward, or refresh                                                                  |
 | `browser_snapshot`          | Capture the page structure; optionally use `includeDiff` / `urls`                                                           |
-| `browser_click`             | Click a snapshot ref or an `x`/`y` canvas coordinate                                                                        |
+| `browser_click`             | Click a snapshot ref                                                                                                        |
+| `browser_mouse_click_xy`    | Click coordinates from a fresh viewport screenshot for a canvas or visual-only control with no snapshot ref                  |
 | `browser_drag`              | Drag one ref to another                                                                                                     |
 | `browser_type`              | Enter text, optionally pressing Enter to submit                                                                             |
 | `browser_fill_form`         | Fill multiple fields at once—text fields, checkboxes, radio buttons, and selects—and report each result                     |
@@ -143,7 +144,6 @@ You generally do not need to memorize these tools; describe your goal in natural
 | `browser_network`           | List fetch/XHR requests made by the page, including status codes and durations                                              |
 | `browser_highlight`         | Highlight a ref on the page for visual alignment                                                                            |
 | `browser_get_bounding_box`  | Read the viewport bounding box of a ref                                                                                     |
-| `browser_cdp`               | Send one CDP command as an escape hatch. Use `Runtime.evaluate` for controls absent from snapshots; `Input.*` is prohibited |
 | `browser_tabs`              | List, create, switch, or close tabs                                                                                         |
 | `browser_lock`              | Give control to the user (`unlock`) or return it to the agent (`lock`)                                                      |
 

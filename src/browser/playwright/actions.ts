@@ -17,7 +17,11 @@ import {
   NAVIGATE_TIMEOUT_MS,
   SCREENSHOT_TIMEOUT_MS,
 } from '../limits.js'
-import { BrowserError, type BrowserBackend, type ResolvedElement } from '../types.js'
+import {
+  BrowserError,
+  type BrowserBackend,
+  type ResolvedElement,
+} from '../types.js'
 import { DATE_RANGE_CALENDAR_MSG, isTypedDateRange } from './fields.js'
 import {
   assertElementHint,
@@ -27,12 +31,21 @@ import {
   targetLocator,
 } from './locator.js'
 import { pickValue } from './pick.js'
-import { handleDialog, peekDialog, throwIfUnarmedDestructiveDialog, uploadFiles } from './overlays.js'
+import {
+  handleDialog,
+  peekDialog,
+  throwIfUnarmedDestructiveDialog,
+  uploadFiles,
+} from './overlays.js'
 import { settleIfUrlChanged, withActionWait } from './settle.js'
 import { getPageForTarget } from './connect.js'
 import { clearTabMemory, setTabPoisoned } from '../session-flags.js'
 import { assertNavigateUrl } from '../navigate-policy.js'
 import { SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
+import {
+  clearViewportScreenshot,
+  getViewportScreenshot,
+} from '../viewport-screenshot-cache.js'
 import {
   ensureSnapshotFresh,
   forceRefreshSnapshot,
@@ -48,7 +61,9 @@ import {
   ensureTabFocus,
   withInputFocus,
   withReadBoost,
+  withVisualFocus,
 } from './focus.js'
+import { captureViewport } from './viewport-capture.js'
 
 function staleRecovery(
   backend: BrowserBackend,
@@ -138,8 +153,6 @@ export async function click(
     button?: 'left' | 'right' | 'middle'
     doubleClick?: boolean
     modifiers?: string[]
-    x?: number
-    y?: number
     force?: boolean
     offsetX?: number
     offsetY?: number
@@ -150,63 +163,167 @@ export async function click(
   },
 ): Promise<ResolvedElement> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  const modifiers = opts.modifiers as
-    | Array<'Alt' | 'Control' | 'Meta' | 'Shift'>
-    | undefined
-  const robust: RobustClickOpts = {
-    button: opts.button,
-    doubleClick: opts.doubleClick,
-    modifiers,
-    offsetX: opts.offsetX,
-    offsetY: opts.offsetY,
-    force: opts.force,
-    maxScrollAttempts: opts.maxScrollAttempts,
-    retryOnStaleRef: opts.retryOnStaleRef,
-    autoCloseDropdowns: opts.autoCloseDropdowns,
-    retryWithOffset: opts.retryWithOffset,
-  }
-  try {
-    if (opts.x != null && opts.y != null && !opts.ref) {
+    const page = await getPageForTarget(backend, targetId)
+    const modifiers = opts.modifiers as
+      Array<'Alt' | 'Control' | 'Meta' | 'Shift'> | undefined
+    const robust: RobustClickOpts = {
+      button: opts.button,
+      doubleClick: opts.doubleClick,
+      modifiers,
+      offsetX: opts.offsetX,
+      offsetY: opts.offsetY,
+      force: opts.force,
+      maxScrollAttempts: opts.maxScrollAttempts,
+      retryOnStaleRef: opts.retryOnStaleRef,
+      autoCloseDropdowns: opts.autoCloseDropdowns,
+      retryWithOffset: opts.retryWithOffset,
+    }
+    try {
+      if (!opts.ref) {
+        throw new BrowserError('Provide ref from the latest snapshot.')
+      }
+      await ensureSnapshotFresh(backend, targetId)
+      const { loc, ref, described } = await resolveClickTarget(
+        page,
+        targetId,
+        opts.ref,
+        opts.element,
+        staleRecovery(backend, targetId, opts.retryOnStaleRef),
+      )
       const urlBefore = page.url()
       await withActionWait(page, async () => {
-        await page.mouse.click(opts.x!, opts.y!, {
-          button: opts.button,
-          clickCount: opts.doubleClick ? 2 : 1,
-        })
+        await clickLocatorRobust(page, loc, robust)
       })
       throwIfUnarmedDestructiveDialog(page)
       await afterNavigationLikeAction(page, targetId, urlBefore)
-      return {
-        ref: '',
-        role: 'generic',
-        name: `(${opts.x}, ${opts.y})`,
-        tag: 'div',
-      }
+      return { ...described, ref }
+    } catch (err) {
+      mapPlaywrightError(err, opts.ref)
     }
-    if (!opts.ref) {
+  })
+}
+
+export async function mouseClickXY(
+  backend: BrowserBackend,
+  targetId: string,
+  opts: {
+    x: number
+    y: number
+    button?: 'left' | 'right' | 'middle'
+    doubleClick?: boolean
+  },
+): Promise<
+  ResolvedElement & {
+    screenshotCoordinates: { x: number; y: number }
+    viewportCoordinates: { x: number; y: number }
+  }
+> {
+  return withInputFocus(backend, targetId, async () => {
+    const page = await getPageForTarget(backend, targetId)
+    const screenshot = getViewportScreenshot(backend, targetId)
+    if (!screenshot) {
       throw new BrowserError(
-        'Provide ref from the latest snapshot, or x/y for a coordinate click.',
+        'browser_mouse_click_xy needs a fresh viewport screenshot for this tab. ' +
+          'Call browser_screenshot without labels or ref immediately before this tool; any other browser tool call invalidates it. ' +
+          'Coordinates are pixels in that image, not label box values.',
       )
     }
-    await ensureSnapshotFresh(backend, targetId)
-    const { loc, ref, described } = await resolveClickTarget(
-      page,
-      targetId,
-      opts.ref,
-      opts.element,
-      staleRecovery(backend, targetId, opts.retryOnStaleRef),
+    const screenshotX = Math.round(opts.x)
+    const screenshotY = Math.round(opts.y)
+    if (!Number.isFinite(screenshotX) || !Number.isFinite(screenshotY)) {
+      throw new BrowserError('Coordinate click requires finite x and y values.')
+    }
+    if (
+      screenshotX < 0 ||
+      screenshotY < 0 ||
+      screenshotX >= screenshot.sentImageWidth ||
+      screenshotY >= screenshot.sentImageHeight
+    ) {
+      throw new BrowserError(
+        `Coordinate (${screenshotX}, ${screenshotY}) is outside the latest screenshot ` +
+          `${screenshot.sentImageWidth}x${screenshot.sentImageHeight}.`,
+      )
+    }
+    if (page.url() !== screenshot.url) {
+      clearViewportScreenshot(backend, targetId)
+      throw new BrowserError(
+        'browser_mouse_click_xy needs a fresh screenshot. The page URL changed since the latest screenshot.',
+      )
+    }
+    const viewport =
+      page.viewportSize() ??
+      (await page.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      })))
+    if (
+      viewport.width !== screenshot.viewportCssWidth ||
+      viewport.height !== screenshot.viewportCssHeight
+    ) {
+      clearViewportScreenshot(backend, targetId)
+      throw new BrowserError(
+        'browser_mouse_click_xy needs a fresh screenshot. The viewport changed since the latest screenshot.',
+      )
+    }
+    const x = Math.round(
+      (screenshotX * screenshot.viewportCssWidth) / screenshot.sentImageWidth,
     )
+    const y = Math.round(
+      (screenshotY * screenshot.viewportCssHeight) / screenshot.sentImageHeight,
+    )
+    if (x < 0 || y < 0 || x >= viewport.width || y >= viewport.height) {
+      throw new BrowserError(
+        `Coordinate (${x}, ${y}) is outside viewport ${viewport.width}x${viewport.height}.`,
+      )
+    }
+
+    const hit = await page.evaluate(
+      ({ x, y }) => {
+        const target = document.elementFromPoint(x, y) as HTMLElement | null
+        if (!target) return null
+        return {
+          target: {
+            tag: target.tagName.toLowerCase(),
+            role: target.getAttribute('role') || 'generic',
+            name: (
+              target.getAttribute('aria-label') ||
+              target.getAttribute('title') ||
+              target.textContent ||
+              ''
+            )
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 80),
+          },
+        }
+      },
+      { x, y },
+    )
+    if (!hit) {
+      throw new BrowserError(
+        `Coordinate (${x}, ${y}) does not hit a page element.`,
+      )
+    }
+
     const urlBefore = page.url()
-    await withActionWait(page, async () => {
-      await clickLocatorRobust(page, loc, robust)
-    })
+    throwIfUnarmedDestructiveDialog(page)
+    await withActionWait(page, () =>
+      page.mouse.click(x, y, {
+        button: opts.button,
+        clickCount: opts.doubleClick ? 2 : 1,
+      }),
+    )
     throwIfUnarmedDestructiveDialog(page)
     await afterNavigationLikeAction(page, targetId, urlBefore)
-    return { ...described, ref }
-  } catch (err) {
-    mapPlaywrightError(err, opts.ref)
-  }
+    clearViewportScreenshot(backend, targetId)
+    return {
+      ref: '',
+      role: hit.target.role,
+      name: hit.target.name || `(${x}, ${y})`,
+      tag: hit.target.tag,
+      screenshotCoordinates: { x: screenshotX, y: screenshotY },
+      viewportCoordinates: { x, y },
+    }
   })
 }
 
@@ -412,7 +529,10 @@ export async function pressKey(
   })
 }
 
-function resolveViewportDimension(value: unknown, label: 'width' | 'height'): number {
+function resolveViewportDimension(
+  value: unknown,
+  label: 'width' | 'height',
+): number {
   const dimension = Math.floor(Number(value))
   if (!Number.isFinite(dimension) || dimension < 1) {
     throw new BrowserError(`viewport ${label} must be >= 1`)
@@ -511,40 +631,66 @@ export async function screenshot(
     quality?: number
     element?: string
   } = {},
-): Promise<{ buffer: Buffer; format: 'png' | 'jpeg' }> {
-  return withReadBoost(backend, targetId, async () => {
-  const page: Page = await getPageForTarget(backend, targetId)
-  const format = opts.format ?? 'png'
-  const quality = format === 'jpeg' ? { quality: opts.quality ?? 80 } : {}
-  try {
-    if (opts.ref && opts.fullPage) {
-      throw new BrowserError('fullPage is not supported for element screenshots')
+): Promise<{
+  buffer: Buffer
+  format: 'png' | 'jpeg'
+  url: string
+  viewport: { width: number; height: number }
+}> {
+  return withVisualFocus(backend, targetId, async () => {
+    const page: Page = await getPageForTarget(backend, targetId)
+    const format = opts.format ?? 'png'
+    const quality = format === 'jpeg' ? { quality: opts.quality ?? 80 } : {}
+    try {
+      if (opts.ref && opts.fullPage) {
+        throw new BrowserError(
+          'fullPage is not supported for element screenshots',
+        )
+      }
+      const take = async () =>
+        opts.ref
+          ? await (
+              await targetLocator(page, {
+                ref: opts.ref,
+                element: opts.element,
+              })
+            ).screenshot({
+              type: format,
+              timeout: SCREENSHOT_TIMEOUT_MS,
+              ...quality,
+            })
+          : opts.fullPage
+            ? await page.screenshot({
+                type: format,
+                fullPage: true,
+                timeout: SCREENSHOT_TIMEOUT_MS,
+                ...quality,
+              })
+            : await captureViewport(backend, targetId, page, {
+                type: format,
+                ...quality,
+              })
+      // Same as snapshot: PDF/receipt iframes stall Chrome's compositor.
+      const shot = await withHeavyMediaHidden(page, take)
+      const viewport =
+        page.viewportSize() ??
+        (await page.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        })))
+      return { buffer: Buffer.from(shot), format, url: page.url(), viewport }
+    } catch (err) {
+      if (
+        !opts.ref &&
+        /Timeout|waiting/i.test(
+          err instanceof Error ? err.message : String(err),
+        )
+      ) {
+        throw new BrowserError(
+          'Screenshot timed out (PDF/iframe receipt previews often stall it). Do not retry screenshot in a loop. Prefer a compact accessibility snapshot after the next form action, or keep filling visible form controls if they are already known.',
+        )
+      }
+      mapPlaywrightError(err, opts.ref)
     }
-    const take = async () =>
-      opts.ref
-        ? await (
-            await targetLocator(page, { ref: opts.ref, element: opts.element })
-          ).screenshot({
-            type: format,
-            timeout: SCREENSHOT_TIMEOUT_MS,
-            ...quality,
-          })
-        : await page.screenshot({
-            type: format,
-            fullPage: Boolean(opts.fullPage),
-            timeout: SCREENSHOT_TIMEOUT_MS,
-            ...quality,
-          })
-    // Same as snapshot: PDF/receipt iframes stall Chrome's compositor.
-    const shot = await withHeavyMediaHidden(page, take)
-    return { buffer: Buffer.from(shot), format }
-  } catch (err) {
-    if (!opts.ref && /Timeout|waiting/i.test(err instanceof Error ? err.message : String(err))) {
-      throw new BrowserError(
-        'Screenshot timed out (PDF/iframe receipt previews often stall it). Do not retry screenshot in a loop. Prefer a compact accessibility snapshot after the next form action, or keep filling visible form controls if they are already known.',
-      )
-    }
-    mapPlaywrightError(err, opts.ref)
-  }
   })
 }

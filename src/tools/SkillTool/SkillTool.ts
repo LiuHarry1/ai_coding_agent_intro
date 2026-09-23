@@ -30,6 +30,17 @@ import { getSkillToolPrompt } from './prompt.js'
 
 export { SKILL_TOOL_NAME } from '../../constants/tool_names.js'
 
+/**
+ * The expanded body goes to the model as a meta user message; the card only
+ * needs enough of it to inspect. Same cap the session UI puts on tool text.
+ */
+const UI_BODY_MAX_CHARS = 2_000
+
+function uiBody(text: string): string {
+  if (text.length <= UI_BODY_MAX_CHARS) return text
+  return `${text.slice(0, UI_BODY_MAX_CHARS - 1)}…`
+}
+
 export function createSkillTool(
   skills: readonly SkillDefinition[],
   /**
@@ -68,6 +79,9 @@ export function createSkillTool(
       skill_name: z.string().optional(),
       mode: z.string().optional(),
       text: z.string().optional(),
+      /** UI-only: expanded SKILL.md preview shown inside the skill card. */
+      body: z.string().optional(),
+      body_chars: z.number().optional(),
     }),
     mapToolResultToToolResultBlockParam(output, toolUseID) {
       const data = output as {
@@ -142,7 +156,13 @@ export function createSkillTool(
               )
             }
             return {
-              data: { success: true, skill_name, mode: 'inline' as const },
+              data: {
+                success: true,
+                skill_name,
+                mode: 'inline' as const,
+                body: uiBody(combined),
+                body_chars: combined.length,
+              },
               newMessages: [
                 { role: 'user' as const, content: combined, isMeta: true },
               ],

@@ -43,6 +43,12 @@ const PAGE = `<!doctype html>
 
   <button id="counter">Clicked 0 times</button>
 
+  <!-- A fixed box past the viewport edge stays in the accessibility tree
+       (only negative-coordinate parking is pruned) but must never be
+       click-targeted, including through the explicit force option. -->
+  <p id="ghost-state">Ghost untouched</p>
+  <button id="ghost-yes" style="position:fixed;left:10000px;top:10000px">Ghost Yes</button>
+
   <form id="login" onsubmit="event.preventDefault(); document.getElementById('status').textContent = 'Submitted ' + document.getElementById('email').value;">
     <label for="email">Email address</label>
     <input id="email" name="email" type="email" placeholder="you@example.com">
@@ -123,6 +129,9 @@ const PAGE = `<!doctype html>
       n += 1;
       document.getElementById('counter').textContent = 'Clicked ' + n + ' times';
     });
+    document.getElementById('ghost-yes').addEventListener('click', () => {
+      document.getElementById('ghost-state').textContent = 'Ghost clicked';
+    });
     document.addEventListener('keydown', e => {
       const mods = [e.ctrlKey && 'Control', e.shiftKey && 'Shift'].filter(Boolean);
       document.getElementById('last-key').textContent =
@@ -189,6 +198,20 @@ const PAGE = `<!doctype html>
 
 const OTHER_PAGE = `<!doctype html>
 <html><head><title>Other</title></head><body><h1>Other page</h1></body></html>`
+
+const COORDINATE_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Coordinate Click</title></head>
+<body>
+  <p id="state">Canvas untouched</p>
+  <canvas id="surface" width="300" height="160" style="position:fixed;left:40px;top:80px;border:1px solid #333"></canvas>
+  <script>
+    document.getElementById('surface').addEventListener('click', () => {
+      document.getElementById('state').textContent = 'Canvas clicked';
+    });
+  </script>
+</body>
+</html>`
 
 function nestedRows(count: number): string {
   const rows: string[] = []
@@ -330,6 +353,49 @@ const ERROR_MODAL_PAGE = `<!doctype html>
       d.setAttribute('aria-modal', 'true');
       d.innerHTML = '<h2>Error</h2><p>This expense has been saved, but it is missing required information. Would you like to make corrections now?</p><button type="button">Yes</button><button type="button">No</button>';
       document.body.appendChild(d);
+    });
+  </script>
+</body>
+</html>`
+
+const STALE_MODAL_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Stale Modal</title></head>
+<body>
+  <h1>Expense form remains usable</h1>
+  <label>Departure Date <input type="text" value="09/23/2026"></label>
+  <button type="button">Continue Expense</button>
+  <div role="dialog" aria-modal="true" style="position:absolute;left:-10000px;top:-10000px;width:300px;height:160px">
+    <h2>Please Confirm</h2>
+    <button type="button">Yes</button>
+    <button type="button">No</button>
+  </div>
+</body>
+</html>`
+
+/** Concur Travel Allowance in miniature: document Escape = "cancel edit". */
+const ESCAPE_TRAP_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Escape Trap</title></head>
+<body>
+  <h1>Itinerary stop</h1>
+  <label>Departure City <input id="dep" type="text" style="position:absolute;left:20px;top:80px;width:200px"></label>
+  <label>Arrival City <input id="arr" type="text" style="position:absolute;left:20px;top:140px;width:200px"></label>
+  <ul id="dep-list" class="x-boundlist" style="position:absolute;left:20px;top:104px;width:220px;height:80px;margin:0;padding:0;background:#eee;z-index:50;list-style:none">
+    <li>Shanghai, Shanghai</li><li>Shenzhen, Guangdong</li>
+  </ul>
+  <p id="arr-state">arrival untouched</p>
+  <p id="cancel-state">no cancel prompt</p>
+  <script>
+    var list = document.getElementById('dep-list');
+    document.addEventListener('mousedown', function (e) {
+      if (!list.contains(e.target)) { list.style.left = '-10000px'; list.style.top = '-10000px'; }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') document.getElementById('cancel-state').textContent = 'Your changes may be lost';
+    });
+    document.getElementById('arr').addEventListener('click', function () {
+      document.getElementById('arr-state').textContent = 'arrival clicked';
     });
   </script>
 </body>
@@ -513,6 +579,10 @@ export function startFixtureServer(): Promise<{
       res.end(OTHER_PAGE)
       return
     }
+    if (route === '/coordinate') {
+      res.end(COORDINATE_PAGE)
+      return
+    }
     if (route === '/nested') {
       res.end(NESTED_PAGE)
       return
@@ -535,6 +605,14 @@ export function startFixtureServer(): Promise<{
     }
     if (route === '/error-modal') {
       res.end(ERROR_MODAL_PAGE)
+      return
+    }
+    if (route === '/stale-modal') {
+      res.end(STALE_MODAL_PAGE)
+      return
+    }
+    if (route === '/escape-trap') {
+      res.end(ESCAPE_TRAP_PAGE)
       return
     }
     if (route === '/form') {

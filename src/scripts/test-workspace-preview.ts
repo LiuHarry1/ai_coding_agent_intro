@@ -82,6 +82,11 @@ async function main() {
         okRes.headers.get('content-disposition') || '',
         /inline/i,
       )
+      assert.equal(
+        okRes.headers.get('content-security-policy'),
+        'sandbox allow-scripts allow-downloads',
+      )
+      assert.equal(okRes.headers.get('x-content-type-options'), 'nosniff')
       const body = await okRes.text()
       assert.match(body, /Test/)
 

@@ -18,6 +18,7 @@ import {
   tryBeginTurn,
 } from '../../session/store.js'
 import { findSessionLocation } from '../../session/session-index.js'
+import { formatScheduledPrompt } from './scheduled-prompt.js'
 import { isScheduledTasksEnabled } from './settings.js'
 import {
   computeNextRunAtMs,
@@ -30,22 +31,6 @@ import {
   type FireResult,
   type ScheduledTask,
 } from './types.js'
-
-function formatFireTime(d: Date): string {
-  return d
-    .toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-    .replace(/,? at |, /, ' ')
-    .replace(/ ([AP]M)/, (_, ampm: string) => ampm.toLowerCase())
-}
-
-export function formatScheduledPrompt(task: ScheduledTask, now: Date): string {
-  return `[Scheduled task · ${formatFireTime(now)}]\n\n${task.prompt}`
-}
 
 export async function fireScheduledTask(
   task: ScheduledTask,

@@ -727,6 +727,12 @@ const RECOVERY_RULES: Array<{
   recovery: string
 }> = [
   {
+    patterns: ['not rendering this tab'],
+    suggestion:
+      'Snapshots and retries cannot fix this; only the user can restore the Chrome window.',
+    recovery: 'stop and ask the user to restore the Chrome window',
+  },
+  {
     patterns: [
       'element not found',
       'cannot find',
@@ -739,7 +745,7 @@ const RECOVERY_RULES: Array<{
     recovery: 'browser_snapshot',
   },
   {
-    patterns: ['iframe'],
+    patterns: ['hit an iframe'],
     suggestion:
       'The click hit an iframe. Snapshot again and use the inner control ref (fNeM), not the iframe chrome.',
     recovery: 'browser_snapshot',

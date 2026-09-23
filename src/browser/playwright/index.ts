@@ -16,6 +16,7 @@ export {
   drag,
   handleNativeDialog,
   hover,
+  mouseClickXY,
   navigate,
   activateTab,
   peekNativeDialog,
@@ -30,7 +31,12 @@ export {
 } from './actions.js'
 export { fillForm } from './forms.js'
 export { normalizeRef } from './locator.js'
-export { snapshot, waitFor, findInSnapshot, ensureSnapshotFresh } from './snapshot.js'
+export {
+  snapshot,
+  waitFor,
+  findInSnapshot,
+  ensureSnapshotFresh,
+} from './snapshot.js'
 export { getPageText } from './page-text.js'
 export { screenshotWithLabels } from './screenshot-labels.js'
 export { waitForDownload, downloadByRef } from './downloads.js'

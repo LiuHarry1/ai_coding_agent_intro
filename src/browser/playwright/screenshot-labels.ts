@@ -13,25 +13,41 @@ import type { BrowserBackend } from '../types.js'
 import { listRefMeta } from '../session-flags.js'
 import { SCREENSHOT_TIMEOUT_MS } from '../limits.js'
 import { getPageForTarget } from './connect.js'
+import { withVisualFocus } from './focus.js'
 import { refLocator } from './locator.js'
+import { captureViewport } from './viewport-capture.js'
 import { withHeavyMediaHidden } from './snapshot.js'
 
-export async function screenshotWithLabels(
-  backend: BrowserBackend,
-  targetId: string,
-  opts: {
-    maxLabels?: number
-    type?: 'png' | 'jpeg'
-    timeoutMs?: number
-    fullPage?: boolean
-    ref?: string
-  } = {},
-): Promise<{
+interface LabelScreenshotOpts {
+  maxLabels?: number
+  type?: 'png' | 'jpeg'
+  timeoutMs?: number
+  fullPage?: boolean
+  ref?: string
+}
+
+interface LabelScreenshot {
   buffer: Buffer
   labels: number
   skipped: number
   annotations: AnnotationItem[]
-}> {
+}
+
+export async function screenshotWithLabels(
+  backend: BrowserBackend,
+  targetId: string,
+  opts: LabelScreenshotOpts = {},
+): Promise<LabelScreenshot> {
+  return withVisualFocus(backend, targetId, () =>
+    captureWithLabels(backend, targetId, opts),
+  )
+}
+
+async function captureWithLabels(
+  backend: BrowserBackend,
+  targetId: string,
+  opts: LabelScreenshotOpts,
+): Promise<LabelScreenshot> {
   const page = await getPageForTarget(backend, targetId)
   const type = opts.type ?? 'png'
   const maxLabels =
@@ -124,11 +140,9 @@ export async function screenshotWithLabels(
     const buffer = await withHeavyMediaHidden(page, async () =>
       space === 'element'
         ? await captureElementScreenshotForLabels(page, refKey, type, timeoutMs)
-        : await page.screenshot({
-            type,
-            fullPage: Boolean(opts.fullPage),
-            timeout: timeoutMs,
-          }),
+        : opts.fullPage
+          ? await page.screenshot({ type, fullPage: true, timeout: timeoutMs })
+          : await captureViewport(backend, targetId, page, { type, timeoutMs }),
     )
     return {
       buffer: Buffer.from(buffer),

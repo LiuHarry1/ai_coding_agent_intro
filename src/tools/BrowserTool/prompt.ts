@@ -21,12 +21,13 @@ export const SNAPSHOT_DESCRIPTION =
 export const GET_TEXT_DESCRIPTION =
   'Read bounded visible page text (article/main/body or a CSS selector). Prefer this over a full snapshot when you need prose, not clickable refs.'
 
-/**
- * Cursor splits click vs mouse_click_xy. BaiX: one tool with optional x/y.
- * Cursor: "Click an element by ref from browser_snapshot…"
- */
+/** Matches Cursor's ref-only click boundary. */
 export const CLICK_DESCRIPTION =
-  'Click an element by ref from browser_snapshot, or x/y for canvas. Use this instead of CDP Input.* methods.'
+  'Click an element by ref from browser_snapshot. Use this instead of CDP Input.* methods.'
+
+/** Matches Cursor's separate coordinate click tool. */
+export const MOUSE_CLICK_XY_DESCRIPTION =
+  'Click coordinates from a fresh viewport browser_screenshot for canvas or other visual-only controls with no snapshot ref. Call browser_screenshot without labels or ref immediately before this tool; any other browser tool call invalidates it. x/y are pixels in that screenshot image. Do not use this as fallback when browser_click fails.'
 
 /**
  * Cursor has separate browser_type and browser_fill.
@@ -93,8 +94,7 @@ export const NETWORK_DESCRIPTION =
 /**
  * Matches Cursor one-liner. BaiX: tabId is CDP target id; list is ownership-scoped in extension mode.
  */
-export const TABS_DESCRIPTION =
-  'List, create, close, or select a browser tab'
+export const TABS_DESCRIPTION = 'List, create, close, or select a browser tab'
 
 /**
  * Cursor also allows drop at x/y. BaiX: ref → ref only.

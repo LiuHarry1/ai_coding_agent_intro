@@ -1,4 +1,7 @@
-import { parseAgentFromMarkdown, findPrimaryAgent } from '../tools/AgentTool/mergeAgents.js'
+import {
+  parseAgentFromMarkdown,
+  findPrimaryAgent,
+} from '../tools/AgentTool/mergeAgents.js'
 import { AGENT_TOOL_NAME } from '../constants/tool_names.js'
 import { browserAgentSessionSection } from '../prompts/browser-agent-session.js'
 import { getSystemPromptForAgentProfile } from '../prompts/agent-profile.js'
@@ -13,6 +16,7 @@ import {
   FILE_UPLOAD_DESCRIPTION,
   FILL_FORM_DESCRIPTION,
   LOCK_DESCRIPTION,
+  MOUSE_CLICK_XY_DESCRIPTION,
   SNAPSHOT_DESCRIPTION,
   TYPE_DESCRIPTION,
   WAIT_FOR_DESCRIPTION,
@@ -88,11 +92,11 @@ assert(
   extension.includes("user's signed-in Chrome"),
   'extension names user Chrome',
 )
+assert(extension.includes('browser_lock'), 'extension names lock for captcha')
 assert(
-  extension.includes('browser_lock'),
-  'extension names lock for captcha',
+  !extension.includes('Electron'),
+  'extension session is not Cursor-host copy',
 )
-assert(!extension.includes('Electron'), 'extension session is not Cursor-host copy')
 assert(
   !extension.includes('browser.mode'),
   'extension session does not tell the model to switch Chrome product',
@@ -143,8 +147,14 @@ assert(
   'file_upload forbids clicking a visible Upload',
 )
 assert(
-  CLICK_DESCRIPTION.includes('x/y'),
-  'click documents canvas coordinates (BaiX combines Cursor click + mouse_click_xy)',
+  !CLICK_DESCRIPTION.includes('x/y') && CLICK_DESCRIPTION.includes('by ref'),
+  'click is ref-only like Cursor',
+)
+assert(
+  MOUSE_CLICK_XY_DESCRIPTION.includes('visual-only') &&
+    MOUSE_CLICK_XY_DESCRIPTION.includes('Do not use this as fallback') &&
+    MOUSE_CLICK_XY_DESCRIPTION.includes('fresh viewport browser_screenshot'),
+  'coordinate click is separate, screenshot-bound, and not a ref-click fallback',
 )
 assert(
   TYPE_DESCRIPTION.toLowerCase().includes('replace'),
@@ -229,21 +239,21 @@ assert(
   'browser.md stops after about four attempts',
 )
 assert(
-  /^  - browser_cdp\s*$/m.test(browserMd),
-  'browser.md allowlists browser_cdp',
+  /^  - browser_mouse_click_xy\s*$/m.test(browserMd),
+  'browser.md allowlists browser_mouse_click_xy',
 )
 assert(
-  browserMd.includes('returnByValue'),
-  'browser.md requires returnByValue on Runtime.evaluate',
+  !/^  - browser_cdp\s*$/m.test(browserMd),
+  'browser.md no longer allowlists browser_cdp',
 )
 assert(
   browserMd.includes('main source of truth'),
   'browser.md matches Cursor snapshot-as-source-of-truth note',
 )
 assert(
-  browserMd.includes('Do not use `browser_cdp`') ||
-    browserMd.includes('not as a second click'),
-  'browser.md forbids CDP as a click/type substitute',
+  browserMd.includes('Do not use this as fallback') ||
+    browserMd.includes('never a fallback for a failed ref click'),
+  'browser.md forbids coordinate click as a ref-click fallback',
 )
 assert(
   !browserMd.includes('click a node'),
@@ -287,8 +297,14 @@ assert(
 
 const env = await computeSimpleEnvInfo('')
 if (process.platform === 'win32') {
-  assert(!env.includes('Shell: unknown'), 'Windows env must not say Shell: unknown')
-  assert(env.includes('Git Bash') || env.includes('bash'), 'Windows env names the Bash tool shell')
+  assert(
+    !env.includes('Shell: unknown'),
+    'Windows env must not say Shell: unknown',
+  )
+  assert(
+    env.includes('Git Bash') || env.includes('bash'),
+    'Windows env names the Bash tool shell',
+  )
 }
 
 console.log('primary agent parse checks passed')

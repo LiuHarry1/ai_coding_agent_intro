@@ -36,6 +36,10 @@ import {
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
 import {
+  clearViewportScreenshot,
+  rememberViewportScreenshot,
+} from '../../browser/viewport-screenshot-cache.js'
+import {
   clearTabMemory,
   getUserHasControl,
   isSnapshotDegraded,
@@ -60,6 +64,7 @@ import {
   BROWSER_HIGHLIGHT_TOOL_NAME,
   BROWSER_HOVER_TOOL_NAME,
   BROWSER_LOCK_TOOL_NAME,
+  BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
   BROWSER_DRAG_TOOL_NAME,
   BROWSER_NAVIGATE_TOOL_NAME,
   BROWSER_NETWORK_TOOL_NAME,
@@ -79,6 +84,7 @@ import type {
   ToolContext,
   ToolDefinition,
 } from '../../core/types.js'
+import { readImageDimensions } from '../../utils/image/dimensions.js'
 import * as prompt from './prompt.js'
 import {
   attachScreenshot,
@@ -135,8 +141,9 @@ async function observeAfterAction(
       try {
         const shot = await pw.screenshot(backend, targetId, { format: 'jpeg' })
         await attachScreenshot(out, shot, ctx.sessionId, ctx.toolCallId)
-      } catch {
-        out.message = `${out.message} (screenshot afterwards failed)`
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        out.message = `${out.message} (screenshot afterwards failed: ${reason})`
       }
     }
     return out
@@ -147,7 +154,10 @@ async function observeAfterAction(
         'dialog-snapshot',
         5_000,
       )
-      if (snap.nodes > 0 || (snap.text && !/^No blocking in-page dialog/.test(snap.text))) {
+      if (
+        snap.nodes > 0 ||
+        (snap.text && !/^No blocking in-page dialog/.test(snap.text))
+      ) {
         const dialogOut: BrowserToolOutput = {
           action: opts.action,
           message: `${opts.message} (full snapshot timed out; showing the open dialog — click it, do not wait or navigate)`,
@@ -266,7 +276,8 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
                 cfg.name,
               )
             }
-            let resolved: { backend: BrowserBackend; targetId: string } | undefined
+            let resolved:
+              { backend: BrowserBackend; targetId: string } | undefined
             try {
               const cwdNow = context.cwd ?? cwd
               if (cfg.requireTab === false) {
@@ -289,6 +300,9 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
                 )
               }
               assertAgentMayAct(cfg.name, args, sessionId)
+              if (cfg.name !== BROWSER_MOUSE_CLICK_XY_TOOL_NAME) {
+                clearViewportScreenshot(resolved.backend, resolved.targetId)
+              }
               const data = await withTimeout(
                 cfg.run(args, {
                   backend: resolved.backend,
@@ -425,27 +439,28 @@ export const snapshotTool = defineBrowserTool({
     includeDiff: z
       .boolean()
       .optional()
-      .describe(
-        'Return only added/removed lines since the last snapshot',
-      ),
-    urls: z
-      .boolean()
-      .optional()
-      .describe(
-        'Append discovered link hrefs',
-      ),
+      .describe('Return only added/removed lines since the last snapshot'),
+    urls: z.boolean().optional().describe('Append discovered link hrefs'),
   }),
   async run(
-    { mode, maxDepth, maxNodes, maxChars, selector, interactive, includeDiff, urls },
+    {
+      mode,
+      maxDepth,
+      maxNodes,
+      maxChars,
+      selector,
+      interactive,
+      includeDiff,
+      urls,
+    },
     ctx,
   ) {
     const resolvedMode = mode ?? 'full'
     return observe(ctx.backend, ctx.targetId, {
       action: 'snapshot',
-      message:
-        includeDiff
-          ? `Page snapshot (diff, ${resolvedMode})`
-          : `Page snapshot (${resolvedMode})`,
+      message: includeDiff
+        ? `Page snapshot (diff, ${resolvedMode})`
+        : `Page snapshot (${resolvedMode})`,
       mode: resolvedMode,
       depth: maxDepth,
       maxNodes:
@@ -516,13 +531,10 @@ export const clickTool = defineBrowserTool({
   summary: 'Click an element by ref',
   description: prompt.CLICK_DESCRIPTION,
   inputSchema: z.object({
-    ref: refSchema
-      .optional()
-      .describe('Exact target element reference from the page snapshot'),
-    element: z
-      .string()
-      .optional()
-      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
+    ref: refSchema.describe(
+      'Exact target element reference from the page snapshot',
+    ),
+    element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
     doubleClick: z.boolean().optional().describe('Send a double click'),
     button: z
       .enum(['left', 'right', 'middle'])
@@ -532,14 +544,6 @@ export const clickTool = defineBrowserTool({
       .array(z.enum(['Alt', 'Control', 'Meta', 'Shift']))
       .optional()
       .describe('Modifier keys held during the click'),
-    x: z
-      .number()
-      .optional()
-      .describe('Viewport X for a coordinate click (canvas / no ref)'),
-    y: z
-      .number()
-      .optional()
-      .describe('Viewport Y for a coordinate click'),
     offsetX: z
       .number()
       .optional()
@@ -549,10 +553,7 @@ export const clickTool = defineBrowserTool({
       .optional()
       .describe('Click offset from the element top edge (pixels)'),
     screenshotAfterwards: screenshotAfterwardsSchema,
-    force: z
-      .boolean()
-      .optional()
-      .describe('Skip actionability checks'),
+    force: z.boolean().optional().describe('Skip actionability checks'),
   }),
   async run(args, ctx) {
     const el = await pw.click(ctx.backend, ctx.targetId, {
@@ -561,8 +562,6 @@ export const clickTool = defineBrowserTool({
       doubleClick: args.doubleClick,
       button: args.button,
       modifiers: args.modifiers,
-      x: args.x,
-      y: args.y,
       force: args.force,
       offsetX: args.offsetX,
       offsetY: args.offsetY,
@@ -586,6 +585,52 @@ export const clickTool = defineBrowserTool({
   },
 })
 
+export const mouseClickXYTool = defineBrowserTool({
+  name: BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
+  summary: 'Click viewport coordinates',
+  description: prompt.MOUSE_CLICK_XY_DESCRIPTION,
+  inputSchema: z.object({
+    x: z
+      .number()
+      .finite()
+      .describe('X coordinate from the latest viewport browser_screenshot'),
+    y: z
+      .number()
+      .finite()
+      .describe('Y coordinate from the latest viewport browser_screenshot'),
+    doubleClick: z.boolean().optional().describe('Send a double click'),
+    button: z
+      .enum(['left', 'right', 'middle'])
+      .optional()
+      .describe('Mouse button (default left)'),
+    screenshotAfterwards: screenshotAfterwardsSchema,
+  }),
+  async run(args, ctx) {
+    const el = await pw.mouseClickXY(ctx.backend, ctx.targetId, {
+      x: args.x,
+      y: args.y,
+      doubleClick: args.doubleClick,
+      button: args.button,
+    })
+    const mapped =
+      el.viewportCoordinates.x === el.screenshotCoordinates.x &&
+      el.viewportCoordinates.y === el.screenshotCoordinates.y
+        ? ''
+        : ` mapped to viewport (${el.viewportCoordinates.x}, ${el.viewportCoordinates.y})`
+    return observeAfterAction(
+      ctx.backend,
+      ctx.targetId,
+      {
+        action: 'mouse_click_xy',
+        message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} screenshot coordinate (${el.screenshotCoordinates.x}, ${el.screenshotCoordinates.y})${mapped} on ${el.tag}${el.name ? ` "${el.name}"` : ''}`,
+        compact: true,
+        screenshotAfterwards: args.screenshotAfterwards,
+      },
+      ctx,
+    )
+  },
+})
+
 export const typeTool = defineBrowserTool({
   name: BROWSER_TYPE_TOOL_NAME,
   summary: 'Type text into a field by ref',
@@ -593,10 +638,7 @@ export const typeTool = defineBrowserTool({
   inputSchema: z.object({
     ref: refSchema,
     text: z.string().describe('Text to type'),
-    element: z
-      .string()
-      .optional()
-      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
+    element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
     submit: z.boolean().optional().describe('Press Enter after typing'),
     slowly: z
       .boolean()
@@ -702,10 +744,7 @@ export const selectOptionTool = defineBrowserTool({
       )
       .pipe(z.array(z.string()).min(1))
       .describe('Visible labels (or native option values) to select'),
-    element: z
-      .string()
-      .optional()
-      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
+    element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
@@ -837,18 +876,12 @@ export const waitForTool = defineBrowserTool({
       .optional()
       .describe('Time to wait in seconds (capped at 30)'),
     text: z.string().optional().describe('Text to wait for to appear'),
-    textGone: z
-      .string()
-      .optional()
-      .describe('Text to wait for to disappear'),
+    textGone: z.string().optional().describe('Text to wait for to disappear'),
     selector: z
       .string()
       .optional()
       .describe('CSS selector to wait until visible'),
-    url: z
-      .string()
-      .optional()
-      .describe('URL glob to wait for'),
+    url: z.string().optional().describe('URL glob to wait for'),
   }),
   async run(args, ctx) {
     await pw.waitFor(ctx.backend, ctx.targetId, {
@@ -864,7 +897,8 @@ export const waitForTool = defineBrowserTool({
     if (args.textGone) {
       parts.push(`text ${JSON.stringify(args.textGone)} disappeared`)
     }
-    if (args.selector) parts.push(`selector ${JSON.stringify(args.selector)} visible`)
+    if (args.selector)
+      parts.push(`selector ${JSON.stringify(args.selector)} visible`)
     if (args.url) parts.push(`url ${JSON.stringify(args.url)}`)
     return observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'wait_for',
@@ -880,10 +914,7 @@ export const hoverTool = defineBrowserTool({
   description: prompt.HOVER_DESCRIPTION,
   inputSchema: z.object({
     ref: refSchema,
-    element: z
-      .string()
-      .optional()
-      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
+    element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
@@ -919,14 +950,8 @@ export const scrollTool = defineBrowserTool({
       .string()
       .optional()
       .describe('Scroll over this element instead of the page center'),
-    element: z
-      .string()
-      .optional()
-      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
-    scrollIntoView: z
-      .boolean()
-      .optional()
-      .describe('Bring the ref into view'),
+    element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
+    scrollIntoView: z.boolean().optional().describe('Bring the ref into view'),
     direction: z
       .enum(['up', 'down', 'left', 'right'])
       .optional()
@@ -1005,15 +1030,41 @@ export const screenshotTool = defineBrowserTool({
         : 'viewport'
     const out = await observe(ctx.backend, ctx.targetId, {
       action: 'screenshot',
-      message: 'labels' in shot
-        ? `Screenshot of ${scope} with ${shot.labels} labels (${shot.skipped} skipped)`
-        : `Screenshot of ${scope}`,
+      message:
+        'labels' in shot
+          ? `Screenshot of ${scope} with ${shot.labels} labels (${shot.skipped} skipped)`
+          : `Screenshot of ${scope}`,
       withSnapshot: false,
     })
     if (args.labels && 'annotations' in shot) {
       out.annotations = shot.annotations
     }
-    await attachScreenshot(out, { buffer: shot.buffer, format }, ctx.sessionId, ctx.toolCallId)
+    await attachScreenshot(
+      out,
+      { buffer: shot.buffer, format },
+      ctx.sessionId,
+      ctx.toolCallId,
+    )
+    if (
+      !args.labels &&
+      !args.ref &&
+      !args.fullPage &&
+      'viewport' in shot &&
+      out.screenshotBase64
+    ) {
+      const dimensions = readImageDimensions(
+        Buffer.from(out.screenshotBase64, 'base64'),
+      )
+      if (dimensions) {
+        rememberViewportScreenshot(ctx.backend, ctx.targetId, {
+          url: shot.url,
+          viewportCssWidth: shot.viewport.width,
+          viewportCssHeight: shot.viewport.height,
+          sentImageWidth: dimensions.width,
+          sentImageHeight: dimensions.height,
+        })
+      }
+    }
     return out
   },
 })
@@ -1047,7 +1098,10 @@ export const consoleTool = defineBrowserTool({
       withSnapshot: false,
     })
     // Full listing at the requested level, not just errors from this call.
-    out.consoleErrors = logs.entries.map(e => ({ level: e.level, text: e.text }))
+    out.consoleErrors = logs.entries.map(e => ({
+      level: e.level,
+      text: e.text,
+    }))
     return out
   },
 })
@@ -1111,7 +1165,9 @@ export const tabsTool = defineBrowserTool({
     switch (args.action) {
       case 'new': {
         const tab = await openTab(ctx.cwd, args.url, ctx.sessionId)
-        message = args.url ? `Opened ${args.url} in a new tab` : 'Opened a new tab'
+        message = args.url
+          ? `Opened ${args.url} in a new tab`
+          : 'Opened a new tab'
         setCurrentTab(tab.targetId, ctx.sessionId)
         break
       }
@@ -1224,7 +1280,9 @@ export const waitForDownloadTool = defineBrowserTool({
     path: z
       .string()
       .optional()
-      .describe('Optional destination path under the agent downloads directory'),
+      .describe(
+        'Optional destination path under the agent downloads directory',
+      ),
     ref: z
       .string()
       .optional()
@@ -1258,10 +1316,7 @@ export const highlightTool = defineBrowserTool({
   description: prompt.HIGHLIGHT_DESCRIPTION,
   inputSchema: z.object({
     ref: refSchema,
-    element: z
-      .string()
-      .optional()
-      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
+    element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
     durationMs: z
       .number()
       .int()
@@ -1289,10 +1344,7 @@ export const getBoundingBoxTool = defineBrowserTool({
   description: prompt.GET_BOUNDING_BOX_DESCRIPTION,
   inputSchema: z.object({
     ref: refSchema,
-    element: z
-      .string()
-      .optional()
-      .describe(prompt.ELEMENT_HINT_DESCRIPTION),
+    element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
   }),
   async run(args, ctx) {
     const box = await pw.getElementBoundingBox(ctx.backend, ctx.targetId, {
@@ -1409,6 +1461,7 @@ export const browserToolDefinitions: ToolDefinition[] = [
   snapshotTool,
   getTextTool,
   clickTool,
+  mouseClickXYTool,
   typeTool,
   fillFormTool,
   selectOptionTool,

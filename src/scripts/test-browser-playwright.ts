@@ -9,7 +9,10 @@ import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { chromium } from 'playwright-core'
 import { createIsolatedBackend } from '../browser/backends/isolated.js'
+import { findChrome } from '../browser/chrome-path.js'
+import { withHeavyMediaHidden } from '../browser/playwright/snapshot.js'
 import {
   closeBrowser,
   getBrowser,
@@ -23,7 +26,9 @@ import {
   fileUploadTool,
   fillFormTool,
   handleDialogTool,
+  mouseClickXYTool,
   navigateTool,
+  screenshotTool,
   selectOptionTool,
   snapshotTool,
   typeTool,
@@ -35,6 +40,7 @@ import type {
   ToolContext,
   ToolDefinition,
 } from '../core/types.js'
+import { readImageDimensions } from '../utils/image/dimensions.js'
 import { startFixtureServer } from './browser-tool-suite.js'
 
 const HEADED = process.argv.includes('--headed')
@@ -80,6 +86,22 @@ function yamlFromObserve(out: Record<string, unknown>): string {
   return String(out.snapshot ?? '')
 }
 
+function screenshotPoint(
+  out: Record<string, unknown>,
+  viewportX: number,
+  viewportY: number,
+): { x: number; y: number } {
+  assert.equal(typeof out.screenshotBase64, 'string')
+  const dimensions = readImageDimensions(
+    Buffer.from(out.screenshotBase64 as string, 'base64'),
+  )
+  assert.ok(dimensions, 'model screenshot must have readable dimensions')
+  return {
+    x: Math.round((viewportX * dimensions.width) / 1280),
+    y: Math.round((viewportY * dimensions.height) / 800),
+  }
+}
+
 function refFor(snapshot: string, role: string, name: string): string {
   const line = snapshot
     .split('\n')
@@ -96,7 +118,48 @@ function refNear(snapshot: string, needle: string): string {
   return /\[ref=([^\]]+)\]/.exec(line)![1]
 }
 
+/**
+ * Page-side code must not use named inner functions: tsx/esbuild rewrite them
+ * into `__name` calls that throw in the page, and the detach silently no-ops.
+ */
+async function checkHeavyMediaDetach(): Promise<void> {
+  const browser = await chromium.launch({
+    executablePath: findChrome(),
+    headless: !HEADED,
+  })
+  try {
+    const page = await browser.newPage()
+    await page.setContent(`
+      <button>Save</button>
+      <iframe title="Document preview" src="about:blank"></iframe>
+      <div id="host"></div>
+      <script>
+        document.getElementById('host').attachShadow({ mode: 'open' }).innerHTML =
+          '<iframe title="Receipt viewer" src="about:blank"></iframe>';
+      </script>`)
+    const count = () =>
+      page.evaluate(
+        () =>
+          document.querySelectorAll('iframe').length +
+          (document.getElementById('host')?.shadowRoot?.querySelectorAll('iframe')
+            .length ?? 0),
+      )
+    const during = await withHeavyMediaHidden(page, count)
+    const after = await count()
+    assert.equal(
+      during,
+      0,
+      'preview iframes (including inside shadow roots) must be detached during capture',
+    )
+    assert.equal(after, 2, 'detached iframes must be restored after capture')
+  } finally {
+    await browser.close()
+  }
+  console.log('ok [playwright] heavy preview iframes detach and restore')
+}
+
 async function main() {
+  await checkHeavyMediaDetach()
   const server = await startFixtureServer()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-browser-pw-'))
 
@@ -137,6 +200,31 @@ async function main() {
     console.log('ok [playwright] locator(aria-ref).click() mutates the page')
 
     const afterClick = yamlFromObserve(clicked)
+    const ghostRef = refFor(afterClick, 'button', 'Ghost Yes')
+    for (const force of [false, true]) {
+      const ghostClick = await run(
+        clickTool,
+        { ref: ghostRef, ...(force ? { force: true } : {}) },
+        sessionId,
+      )
+      assert.ok(
+        typeof ghostClick === 'string' &&
+          /outside the visible viewport|offscreen/i.test(ghostClick),
+        `${force ? 'force' : 'normal'} click must reject an offscreen ref:\n${String(ghostClick)}`,
+      )
+    }
+    const afterGhost = yamlFromObserve(
+      expectData(await run(snapshotTool, {}, sessionId)),
+    )
+    assert.ok(
+      afterGhost.includes('Ghost untouched') &&
+        !afterGhost.includes('Ghost clicked'),
+      `offscreen ref must not receive normal or force clicks:\n${afterGhost}`,
+    )
+    console.log(
+      'ok [playwright] offscreen refs are rejected even with force=true',
+    )
+
     const liveCounter = refFor(afterClick, 'button', 'Clicked 1 times')
     const wrongHint = await run(
       clickTool,
@@ -325,10 +413,68 @@ async function main() {
       `Save must return the in-page Error Yes/No box, not a native dialog:\n${errorSnap}`,
     )
     assert.ok(
-      /modal dialog is covering the page/i.test(errorSnap),
-      `blocking alertdialog should replace the full-page tree:\n${errorSnap.slice(0, 400)}`,
+      errorSnap.includes('Expense form') &&
+        errorSnap.includes('Save Expense') &&
+        !/modal dialog is covering the page/i.test(errorSnap),
+      `an alertdialog must remain in the full-page snapshot:\n${errorSnap.slice(0, 600)}`,
     )
-    console.log('ok [playwright] in-page Error modal is snapshotted as alertdialog')
+    console.log(
+      'ok [playwright] in-page Error modal stays in the full-page snapshot',
+    )
+
+    const staleModal = expectData(
+      await run(navigateTool, { url: `${server.url}stale-modal` }, sessionId),
+    )
+    const staleModalSnap = String(staleModal.snapshot)
+    assert.ok(
+      staleModalSnap.includes('Expense form remains usable') &&
+        staleModalSnap.includes('Continue Expense') &&
+        staleModalSnap.includes('Departure Date'),
+      `an offscreen Yes/No clone must not hide the usable page:\n${staleModalSnap}`,
+    )
+    assert.ok(
+      !/modal dialog is covering the page/i.test(staleModalSnap),
+      `an offscreen dialog clone must not be promoted to a blocking modal:\n${staleModalSnap}`,
+    )
+    assert.ok(
+      !staleModalSnap.includes('Please Confirm'),
+      `a dialog parked at negative coordinates must not appear in the snapshot:\n${staleModalSnap}`,
+    )
+    console.log(
+      'ok [playwright] offscreen dialog clone does not block snapshot',
+    )
+
+    const trap = expectData(
+      await run(navigateTool, { url: `${server.url}escape-trap` }, sessionId),
+    )
+    const trapSnap = String(trap.snapshot)
+    assert.ok(
+      trapSnap.includes('Shenzhen, Guangdong'),
+      `the open dropdown must be in the snapshot:\n${trapSnap}`,
+    )
+    const arrival = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(trapSnap, 'textbox', 'Arrival City') },
+        sessionId,
+      ),
+    )
+    const arrivalSnap = yamlFromObserve(arrival)
+    assert.ok(
+      arrivalSnap.includes('arrival clicked'),
+      `a click covered by a dropdown must close it and reach the field:\n${arrivalSnap}`,
+    )
+    assert.ok(
+      arrivalSnap.includes('no cancel prompt'),
+      `closing a dropdown must not fire a document-level Escape:\n${arrivalSnap}`,
+    )
+    assert.ok(
+      !arrivalSnap.includes('Shenzhen, Guangdong'),
+      `the dropdown parked offscreen after closing must leave the snapshot:\n${arrivalSnap}`,
+    )
+    console.log(
+      'ok [playwright] covering dropdown closes without a document Escape',
+    )
 
     const waitNav = expectData(
       await run(navigateTool, { url: `${server.url}wait-text` }, sessionId),
@@ -585,6 +731,68 @@ async function main() {
       `interactive snapshot must keep the controls:\n${interactiveSnap}`,
     )
     console.log('ok [playwright] snapshot interactive keeps refs only')
+
+    expectData(
+      await run(navigateTool, { url: `${server.url}coordinate` }, sessionId),
+    )
+    const withoutScreenshot = await run(
+      mouseClickXYTool,
+      { x: 100, y: 120 },
+      sessionId,
+    )
+    assert.ok(
+      typeof withoutScreenshot === 'string' &&
+        /needs a fresh viewport screenshot/i.test(withoutScreenshot),
+      `coordinate click must require a fresh screenshot:\n${String(withoutScreenshot)}`,
+    )
+    expectData(await run(screenshotTool, {}, sessionId))
+    expectData(await run(snapshotTool, { interactive: true }, sessionId))
+    const invalidated = await run(
+      mouseClickXYTool,
+      { x: 100, y: 120 },
+      sessionId,
+    )
+    assert.ok(
+      typeof invalidated === 'string' &&
+        /needs a fresh viewport screenshot/i.test(invalidated),
+      `an intervening browser tool must invalidate the screenshot:\n${String(invalidated)}`,
+    )
+    expectData(await run(screenshotTool, { labels: true }, sessionId))
+    const afterLabels = await run(mouseClickXYTool, { x: 100, y: 120 }, sessionId)
+    assert.ok(
+      typeof afterLabels === 'string' &&
+        /needs a fresh viewport screenshot/i.test(afterLabels),
+      `a labeled screenshot (CSS label boxes) must not arm the coordinate tool:\n${String(afterLabels)}`,
+    )
+    const coordinateScreenshot = expectData(
+      await run(screenshotTool, {}, sessionId),
+    )
+    const canvasPoint = screenshotPoint(coordinateScreenshot, 100, 120)
+    const coordinateClick = expectData(
+      await run(mouseClickXYTool, canvasPoint, sessionId),
+    )
+    assert.ok(
+      yamlFromObserve(coordinateClick).includes('Canvas clicked'),
+      `separate coordinate tool must click a visual-only canvas:\n${yamlFromObserve(coordinateClick)}`,
+    )
+    expectData(await run(screenshotTool, {}, sessionId))
+    const outside = await run(mouseClickXYTool, { x: -1, y: 120 }, sessionId)
+    assert.ok(
+      typeof outside === 'string' &&
+        /outside (?:the latest screenshot|viewport)/i.test(outside),
+      `coordinate tool must reject out-of-viewport points:\n${String(outside)}`,
+    )
+    expectData(await run(navigateTool, { url: server.url }, sessionId))
+    const modalScreenshot = expectData(await run(screenshotTool, {}, sessionId))
+    const besideModalPoint = screenshotPoint(modalScreenshot, 1000, 700)
+    const besideModal = await run(mouseClickXYTool, besideModalPoint, sessionId)
+    assert.ok(
+      typeof besideModal !== 'string',
+      `a small aria-modal elsewhere must not block the coordinate click:\n${String(besideModal)}`,
+    )
+    console.log(
+      'ok [playwright] coordinate click requires a fresh screenshot and is viewport guarded',
+    )
 
     expectData(
       await run(navigateTool, { url: `${server.url}itemization` }, sessionId),

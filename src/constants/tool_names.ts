@@ -36,6 +36,7 @@ export const BROWSER_NAVIGATE_TOOL_NAME = 'browser_navigate'
 export const BROWSER_SNAPSHOT_TOOL_NAME = 'browser_snapshot'
 export const BROWSER_GET_TEXT_TOOL_NAME = 'browser_get_text'
 export const BROWSER_CLICK_TOOL_NAME = 'browser_click'
+export const BROWSER_MOUSE_CLICK_XY_TOOL_NAME = 'browser_mouse_click_xy'
 export const BROWSER_TYPE_TOOL_NAME = 'browser_type'
 export const BROWSER_FILL_FORM_TOOL_NAME = 'browser_fill_form'
 export const BROWSER_SELECT_OPTION_TOOL_NAME = 'browser_select_option'
@@ -62,6 +63,7 @@ export const BROWSER_TOOL_NAMES: readonly string[] = [
   BROWSER_SNAPSHOT_TOOL_NAME,
   BROWSER_GET_TEXT_TOOL_NAME,
   BROWSER_CLICK_TOOL_NAME,
+  BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
   BROWSER_TYPE_TOOL_NAME,
   BROWSER_FILL_FORM_TOOL_NAME,
   BROWSER_SELECT_OPTION_TOOL_NAME,
