@@ -33,6 +33,35 @@ That is the whole setup. There is nothing to copy and no port to configure:
 the first time the agent needs the browser it opens a tab asking for access,
 and you press **Allow**.
 
+## Skip the Allow prompt (optional)
+
+Each agent process asks once. To stop being asked, give the agent this
+browser's auto-connect token:
+
+1. Open the extension popup, and under **Auto-connect token** press **Copy**.
+2. Put it in your **user** settings (`~/.ai-agent/settings.json`), not the
+   project one — it grants control of your logged-in browser:
+
+   ```json
+   {
+     "browser": {
+       "mode": "extension",
+       "extensionToken": "<paste here>"
+     }
+   }
+   ```
+
+   Or set `AGENT_BROWSER_EXTENSION_TOKEN`, which takes precedence.
+
+3. Restart the agent. The connect tab still opens, connects by itself, and
+   closes again (unless it is the only tab, i.e. the agent had to start Chrome).
+
+The token itself never leaves the machine's config: the agent sends
+`HMAC-SHA256(token, relayUrl)`, which is only valid for that one agent
+process. A wrong token is refused with an error on the connect tab rather than
+falling back to **Allow**, so a stale config is visible instead of silently
+prompting again. **Regenerate** in the popup revokes the old token.
+
 ## How the connection works
 
 The agent listens on a loopback port the OS picks for it, at a URL containing
@@ -44,7 +73,8 @@ Two things follow from that, both deliberate:
 
 - **The connection belongs to one agent process.** When that process exits, the
   address stops working and the extension forgets it. Nothing long-lived is
-  left in the browser, and there is no credential to leak or rotate.
+  left in the browser, and unless you opt into the auto-connect token there is
+  no credential to leak or rotate.
 - **Only this extension can connect.** The agent checks the `Origin` of the
   handshake, which Chrome writes itself and a web page cannot forge. Its id is
   pinned to `fpajgihelhfenahgncmdjadkhpcmmbac` by the `key` in `manifest.json`.
@@ -97,6 +127,7 @@ Clicking **Cancel** on the banner still detaches the agent from that tab.
 | ------------------- | ---------- | --------------------------------------------------------------- |
 | `browser.mode`      | `isolated` | `extension` to drive this browser; `auto` to use it only if already connected |
 | `browser.relayPort` | unset      | Pin the loopback port. Only needed behind a strict local firewall |
+| `browser.extensionToken` | unset | Auto-connect token from the popup; skips the Allow prompt. `AGENT_BROWSER_EXTENSION_TOKEN` overrides it |
 
 `auto` never opens the consent tab: it uses this browser if a connection is
 already live and quietly falls back to the isolated Chrome otherwise. Use

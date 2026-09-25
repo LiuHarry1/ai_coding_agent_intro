@@ -14,6 +14,8 @@
  * this browser" banner appears whenever a tab is attached.
  */
 
+import { generatePairingToken, pairingProof, sameProof } from './pairing.js'
+
 const PROTOCOL_VERSION = 2
 const GROUP_TITLE = 'Agent'
 const KEEPALIVE_ALARM = 'relay-keepalive'
@@ -384,6 +386,42 @@ async function forgetRelayUrl() {
   await chrome.storage.session.remove('relayUrl')
 }
 
+// ── auto-connect token ───────────────────────────────────
+
+/**
+ * Local storage on purpose, unlike the relay url: this is the standing grant
+ * the user copies into the agent's config, so it has to survive restarts.
+ * Regenerating it is how the user revokes it.
+ */
+async function getPairingToken() {
+  const { pairingToken } = await chrome.storage.local.get('pairingToken')
+  if (typeof pairingToken === 'string' && pairingToken) return pairingToken
+  return regeneratePairingToken()
+}
+
+async function regeneratePairingToken() {
+  const pairingToken = generatePairingToken()
+  await chrome.storage.local.set({ pairingToken })
+  return pairingToken
+}
+
+/**
+ * Close the connect tab once it has done its job — unless it is the only tab
+ * in its window. That happens when the agent had to start Chrome itself, and
+ * closing the last window can take the whole browser down with it.
+ */
+async function closeConnectTab(tab) {
+  if (tab?.id == null) return false
+  try {
+    const siblings = await chrome.tabs.query({ windowId: tab.windowId })
+    if (siblings.length <= 1) return false
+    await chrome.tabs.remove(tab.id)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function setStatus(status, detail) {
   await chrome.storage.local.set({ status, statusDetail: detail ?? '' })
   try {
@@ -543,7 +581,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   void connect()
 })
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   ;(async () => {
     switch (msg?.type) {
       case 'connect': {
@@ -554,6 +592,40 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         // Writing it is enough; the storage listener above opens the socket.
         await chrome.storage.session.set({ relayUrl: msg.relayUrl })
         sendResponse({ ok: true })
+        return
+      }
+      case 'connect-with-proof': {
+        // Verified here rather than in the page so the token never leaves
+        // the service worker except to be shown in the popup.
+        if (typeof msg.relayUrl !== 'string' || !msg.relayUrl) {
+          sendResponse({ ok: false, error: 'No relay url supplied.' })
+          return
+        }
+        const expected = await pairingProof(
+          await getPairingToken(),
+          msg.relayUrl,
+        )
+        if (!sameProof(expected, msg.proof)) {
+          sendResponse({
+            ok: false,
+            mismatch: true,
+            error:
+              "The agent's auto-connect token does not match this browser. " +
+              'Copy the token from the extension popup into browser.extensionToken ' +
+              '(or AGENT_BROWSER_EXTENSION_TOKEN) and restart the agent.',
+          })
+          return
+        }
+        await chrome.storage.session.set({ relayUrl: msg.relayUrl })
+        sendResponse({ ok: true, closed: await closeConnectTab(sender.tab) })
+        return
+      }
+      case 'get-pairing-token': {
+        sendResponse({ ok: true, token: await getPairingToken() })
+        return
+      }
+      case 'regenerate-pairing-token': {
+        sendResponse({ ok: true, token: await regeneratePairingToken() })
         return
       }
       case 'get-state': {
@@ -610,6 +682,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 async function boot() {
   await loadOwned()
+  await getPairingToken()
   await connect()
 }
 

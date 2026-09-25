@@ -96,6 +96,14 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 11px;
       }
+      code.token {
+        display: block;
+        padding: 6px 8px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        overflow-wrap: anywhere;
+        user-select: all;
+      }
     </style>
   </head>
   <body>
@@ -126,9 +134,24 @@
       </div>
     </div>
 
+    <div class="section">
+      <h2>Auto-connect token</h2>
+      <code class="token" id="token">••••••••••••••••</code>
+      <div class="row" style="margin-top: 8px">
+        <button id="token-show">Show</button>
+        <button id="token-copy">Copy</button>
+        <button id="token-regenerate">Regenerate</button>
+      </div>
+      <p class="hint" id="token-hint" style="margin-top: 6px">
+        Optional. Put it in <code>browser.extensionToken</code> in your user
+        settings (or <code>AGENT_BROWSER_EXTENSION_TOKEN</code>) and the agent
+        connects without asking. Regenerate to revoke it.
+      </p>
+    </div>
+
     <p class="hint">
-      The agent can only see the tabs listed above. It asks for access in its
-      own tab when it needs this browser; nothing to configure here.
+      The agent can only see the tabs listed above. Without a token it asks for
+      access in its own tab each time it starts.
     </p>
 
     <script src="popup.js"></script>

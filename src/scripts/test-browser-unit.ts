@@ -11,6 +11,7 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
+import { pathToFileURL } from 'url'
 import { WebSocket } from 'ws'
 import { createExtensionBackend } from '../browser/backends/extension.js'
 import {
@@ -20,7 +21,11 @@ import {
   isRelayUserControl,
   type RelayRequestBody,
 } from '../browser/relay/protocol.js'
-import { startRelayServer, type RelayServer } from '../browser/relay/server.js'
+import {
+  pairingProof,
+  startRelayServer,
+  type RelayServer,
+} from '../browser/relay/server.js'
 import { BRIDGE_EXTENSION_ORIGIN } from '../browser/relay/extension-id.js'
 import { startCdpEndpoint } from '../browser/relay/cdp-endpoint.js'
 import type { BrowserBackend } from '../browser/types.js'
@@ -341,7 +346,37 @@ await withRelay(async relay => {
     'the connect url carries the credential',
   )
   eq(connect.searchParams.get('client'), 'Some Client', 'client name is shown')
+  eq(connect.searchParams.get('proof'), null, 'no token means no proof')
   ok('relay reports its bound port and a self-contained connect url')
+
+  const token = 'test-token-abc'
+  const withToken = new URL(relay.connectUrl('Some Client', token))
+  const proof = withToken.searchParams.get('proof')
+  eq(proof, pairingProof(token, relay.wsUrl), 'proof is HMAC(token, wsUrl)')
+  assert(!withToken.href.includes(token), 'the token itself never goes on the url')
+  const extensionPairing = (await import(
+    pathToFileURL(path.resolve('chrome-extension/pairing.js')).href
+  )) as {
+    pairingProof: (t: string, u: string) => Promise<string>
+    sameProof: (a: string, b: string) => boolean
+    generatePairingToken: () => string
+  }
+  eq(
+    await extensionPairing.pairingProof(token, relay.wsUrl),
+    proof,
+    'the extension computes the same proof as the agent',
+  )
+  assert(extensionPairing.sameProof(proof!, proof!), 'sameProof accepts a match')
+  assert(
+    !extensionPairing.sameProof(proof!, pairingProof('other', relay.wsUrl)),
+    'sameProof rejects a different token',
+  )
+  assert(
+    extensionPairing.generatePairingToken() !==
+      extensionPairing.generatePairingToken(),
+    'generated tokens are random',
+  )
+  ok('auto-connect proof matches between agent and extension')
 })
 
 // Two relays in one process must not collide, which is the whole reason the

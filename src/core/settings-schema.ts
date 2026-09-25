@@ -98,6 +98,7 @@ const BrowserConfigSchema = z.object({
   cdpEndpoint: z.string().optional(),
   enabled: z.boolean().optional(),
   relayPort: z.number().int().positive().optional(),
+  extensionToken: z.string().optional(),
   profile: z.enum(['fresh', 'persist']).optional(),
 })
 

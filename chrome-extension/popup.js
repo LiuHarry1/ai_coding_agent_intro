@@ -64,5 +64,51 @@ $('resume-agent').addEventListener('click', async () => {
   render()
 })
 
+// ── auto-connect token ───────────────────────────────────
+
+const TOKEN_MASK = '••••••••••••••••'
+let tokenShown = false
+
+async function fetchToken() {
+  const res = await send({ type: 'get-pairing-token' })
+  return res?.ok ? res.token : ''
+}
+
+function showToken(token) {
+  tokenShown = true
+  $('token').textContent = token
+  $('token-show').textContent = 'Hide'
+}
+
+function hideToken() {
+  tokenShown = false
+  $('token').textContent = TOKEN_MASK
+  $('token-show').textContent = 'Show'
+}
+
+$('token-show').addEventListener('click', async () => {
+  if (tokenShown) hideToken()
+  else showToken(await fetchToken())
+})
+
+$('token-copy').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(await fetchToken())
+  $('token-copy').textContent = 'Copied'
+  setTimeout(() => {
+    $('token-copy').textContent = 'Copy'
+  }, 1500)
+})
+
+$('token-regenerate').addEventListener('click', async () => {
+  if (
+    !confirm(
+      'Generate a new token? Agents configured with the old one will be refused until you update their config.',
+    )
+  )
+    return
+  const res = await send({ type: 'regenerate-pairing-token' })
+  if (res?.ok) showToken(res.token)
+})
+
 render()
 setInterval(render, 2000)

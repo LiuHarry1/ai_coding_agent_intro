@@ -10,7 +10,10 @@
  *
  * Run: npx tsx src/scripts/browser-pair.ts
  */
-import { openConnectPage } from '../browser/relay/open-connect-page.js'
+import {
+  openConnectPage,
+  resolveExtensionToken,
+} from '../browser/relay/open-connect-page.js'
 import { startRelayServer } from '../browser/relay/server.js'
 import { BRIDGE_EXTENSION_ID } from '../browser/relay/extension-id.js'
 import { resolveSettings } from '../core/settings-manager.js'
@@ -24,17 +27,25 @@ async function main(): Promise<void> {
   console.log('  ───────────────────────')
   console.log(`  Expecting extension  ${BRIDGE_EXTENSION_ID}`)
   console.log(`  Relay listening on   ${relay.wsUrl}`)
+  const pairingToken = resolveExtensionToken(config)
+  console.log(
+    `  Auto-connect token   ${pairingToken ? 'configured' : 'not set (will ask)'}`,
+  )
   console.log('')
 
   try {
-    openConnectPage(relay, { clientName: 'Baize (browser check)' })
+    openConnectPage(relay, { clientName: 'Baize (browser check)', pairingToken })
   } catch (err) {
     console.error(`  ${err instanceof Error ? err.message : String(err)}`)
     process.exitCode = 1
     await relay.close()
     return
   }
-  console.log('  Opened a tab in Chrome asking for access. Approve it there.')
+  console.log(
+    pairingToken
+      ? '  Opened the connect tab with the token. It should connect on its own.'
+      : '  Opened a tab in Chrome asking for access. Approve it there.',
+  )
   console.log('')
 
   try {
@@ -50,6 +61,11 @@ async function main(): Promise<void> {
     console.error(
       '    - the tab opened in the Chrome profile that has the extension',
     )
+    if (pairingToken) {
+      console.error(
+        '    - the token matches the one in the extension popup (the connect tab says so if not)',
+      )
+    }
     process.exitCode = 1
     await relay.close()
     return

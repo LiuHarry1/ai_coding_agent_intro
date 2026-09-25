@@ -166,6 +166,13 @@ export interface BrowserConfig {
    */
   relayPort?: number
   /**
+   * The bridge extension's auto-connect token, copied from its popup. When set
+   * (or via AGENT_BROWSER_EXTENSION_TOKEN, which wins) the extension connects
+   * without the Allow prompt. It grants control of the logged-in browser, so
+   * keep it in user settings rather than a committed project file.
+   */
+  extensionToken?: string
+  /**
    * Isolated Chrome userDataDir.
    *   fresh   — temp dir, deleted when this chat's browser closes (default)
    *   persist — keep cookies under the agent home, per chat session

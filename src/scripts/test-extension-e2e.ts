@@ -103,6 +103,15 @@ async function main() {
     ).length
   }
 
+  async function countConnectPages(): Promise<number> {
+    const { targetInfos } = await chrome.cdp.send<{
+      targetInfos: Array<{ type: string; url: string }>
+    }>('Target.getTargets')
+    return targetInfos.filter(
+      t => t.type === 'page' && t.url.includes('/connect.html'),
+    ).length
+  }
+
   try {
     await waitFor('extension to connect', () => relay.isConnected())
     assert.match(String(relay.peerName()), /Chrome/)
@@ -230,7 +239,7 @@ async function main() {
             if (!status) return null;
             return {
               status: status.textContent,
-              pairingVisible: document.getElementById('pairing').style.display !== 'none',
+              tokenMasked: document.getElementById('token').textContent.startsWith('•'),
               tabCount: document.querySelectorAll('#tabs li:not(.empty)').length,
             };
           })()`,
@@ -240,7 +249,7 @@ async function main() {
       )
       return res.result.value as {
         status: string
-        pairingVisible: boolean
+        tokenMasked: boolean
         tabCount: number
       } | null
     }
@@ -251,9 +260,9 @@ async function main() {
     })
     const popupState = await readPopup()
     assert.equal(
-      popupState?.pairingVisible,
-      false,
-      'the token field should be hidden once paired',
+      popupState?.tokenMasked,
+      true,
+      'the auto-connect token should be masked until asked for',
     )
     console.log('ok [e2e] popup shows connected and lists the shared tab')
 
@@ -317,6 +326,52 @@ async function main() {
       )
     })
     console.log('ok [e2e] extension reports disconnect and stays alive')
+
+    // ── auto-connect token: no Allow click ───────────────
+    const tokenRes = await chrome.cdp.send<{ result: { value: unknown } }>(
+      'Runtime.evaluate',
+      {
+        expression: 'chrome.storage.local.get("pairingToken")',
+        awaitPromise: true,
+        returnByValue: true,
+      },
+      chrome.workerSession,
+    )
+    const pairingToken = (tokenRes.result.value as { pairingToken?: string })
+      ?.pairingToken
+    assert.ok(pairingToken, 'the extension generates a token on boot')
+
+    const wrongRelay = await startRelayServer()
+    try {
+      await chrome.cdp.send('Target.createTarget', {
+        url: wrongRelay.connectUrl('Baize e2e', 'not-the-token'),
+      })
+      await new Promise(r => setTimeout(r, 1500))
+      assert.equal(
+        wrongRelay.isConnected(),
+        false,
+        'a wrong token must not connect',
+      )
+    } finally {
+      await wrongRelay.close()
+    }
+    console.log('ok [e2e] a wrong token is refused')
+
+    const tokenRelay = await startRelayServer()
+    try {
+      const connectPagesBefore = await countConnectPages()
+      await chrome.cdp.send('Target.createTarget', {
+        url: tokenRelay.connectUrl('Baize e2e', pairingToken),
+      })
+      await waitFor('auto-connect with token', () => tokenRelay.isConnected())
+      await waitFor(
+        'connect tab to close itself',
+        async () => (await countConnectPages()) === connectPagesBefore,
+      )
+    } finally {
+      await tokenRelay.close()
+    }
+    console.log('ok [e2e] the right token connects without a click and closes its tab')
 
     console.log('\nall real-extension end-to-end tests passed')
   } finally {

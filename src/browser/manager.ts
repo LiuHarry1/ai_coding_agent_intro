@@ -25,7 +25,11 @@ import {
   detachPlaywright,
 } from './playwright/connect.js'
 import { applyFocusConfig, flushTabRestore } from './playwright/focus.js'
-import { openConnectPage } from './relay/open-connect-page.js'
+import {
+  EXTENSION_TOKEN_ENV,
+  openConnectPage,
+  resolveExtensionToken,
+} from './relay/open-connect-page.js'
 import { startRelayServer, type RelayServer } from './relay/server.js'
 import {
   clearTabMemory,
@@ -242,15 +246,25 @@ async function getSharedExtensionBackend(cwd: string): Promise<BrowserBackend> {
       // Ask for access only when we actually need the browser, and only if
       // nobody has granted it yet. Once the tab is up the wait is unbounded:
       // the user is being asked a question and may not answer immediately.
+      // With a token nobody is asked, so a long silence means it was refused.
       let connectTimeoutMs = EXTENSION_HANDSHAKE_TIMEOUT_MS
+      const pairingToken = resolveExtensionToken(config)
       if (!relayInst.isConnected()) {
-        openConnectPage(relayInst)
-        connectTimeoutMs = 0
+        openConnectPage(relayInst, { pairingToken })
+        if (!pairingToken) connectTimeoutMs = 0
       }
 
       const backend = await createExtensionBackend({
         relay: relayInst,
         connectTimeoutMs,
+      }).catch((err: unknown) => {
+        if (!pairingToken) throw err
+        throw new BrowserError(
+          'The browser extension did not auto-connect. If the connect tab says the token ' +
+            `does not match, copy it again from the extension popup into browser.extensionToken ` +
+            `(or ${EXTENSION_TOKEN_ENV}). Otherwise check the extension is installed in the ` +
+            'Chrome profile that opened.',
+        )
       })
       await attachExtensionPlaywright(
         backend,

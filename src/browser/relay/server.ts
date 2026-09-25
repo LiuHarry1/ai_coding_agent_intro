@@ -14,7 +14,7 @@
  * writes itself, so a page cannot forge it.
  */
 
-import { randomUUID } from 'crypto'
+import { createHmac, randomUUID } from 'crypto'
 import http from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { BrowserError } from '../types.js'
@@ -41,8 +41,11 @@ export interface RelayServer {
   readonly port: number
   /** `ws://127.0.0.1:<port>/relay/<uuid>` — the credential the extension needs. */
   readonly wsUrl: string
-  /** The extension page that hands `wsUrl` to the service worker. */
-  connectUrl(clientName?: string): string
+  /**
+   * The extension page that hands `wsUrl` to the service worker. With the
+   * extension's auto-connect token it carries a proof instead of asking.
+   */
+  connectUrl(clientName?: string, pairingToken?: string): string
   isConnected(): boolean
   /** Describes the connected browser, for error messages. */
   peerName(): string | undefined
@@ -74,6 +77,15 @@ function notConnectedMessage(): string {
     'this browser — approve it there, or install the extension first (see chrome-extension/README.md). ' +
     'Set browser.mode to "isolated" in .ai-agent/settings.json to use a separate browser instead.'
   )
+}
+
+/**
+ * What the connect page checks against the extension's auto-connect token.
+ * Must match `pairingProof` in chrome-extension/pairing.js. Bound to one relay
+ * url, so it cannot be replayed against another agent process.
+ */
+export function pairingProof(token: string, relayUrl: string): string {
+  return createHmac('sha256', token).update(relayUrl).digest('hex')
 }
 
 export async function startRelayServer(
@@ -228,13 +240,15 @@ export async function startRelayServer(
     port,
     wsUrl,
 
-    connectUrl(clientName = DEFAULT_CLIENT_NAME) {
+    connectUrl(clientName = DEFAULT_CLIENT_NAME, pairingToken) {
       const url = new URL(
         `chrome-extension://${BRIDGE_EXTENSION_ID}/connect.html`,
       )
       url.searchParams.set('relayUrl', wsUrl)
       url.searchParams.set('client', clientName)
       url.searchParams.set('protocolVersion', String(RELAY_PROTOCOL_VERSION))
+      if (pairingToken)
+        url.searchParams.set('proof', pairingProof(pairingToken, wsUrl))
       return url.toString()
     },
 
