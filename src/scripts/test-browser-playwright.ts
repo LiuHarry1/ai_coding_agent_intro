@@ -566,6 +566,12 @@ async function main() {
       typeof notASelect === 'string',
       `select_option is native <select> only:\n${notASelect}`,
     )
+    assert.match(
+      String(notASelect),
+      /only supports a native <select>/,
+      `custom combobox error must explain the supported control:\n${notASelect}`,
+    )
+    assert.match(String(notASelect), /Recovery action: browser_snapshot/)
     await run(
       clickTool,
       { ref: refNear(widgetSnap, 'Fruit') },
@@ -627,6 +633,28 @@ async function main() {
       `native confirm must update page state:\n${asked.snapshot}`,
     )
     console.log('ok [playwright] handle_dialog accepts a native confirm')
+
+    const promptArmed = expectData(
+      await run(
+        handleDialogTool,
+        { accept: true, promptText: 'CODE-42' },
+        sessionId,
+      ),
+    )
+    assert.match(String(promptArmed.message), /Next native dialog will be accepted/)
+    const beforePrompt = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const prompted = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(beforePrompt, 'button', 'Prompt me') },
+        sessionId,
+      ),
+    )
+    assert.match(String(prompted.message), /native prompt dialog/)
+    assert.match(String(prompted.snapshot), /prompt:CODE-42/)
+    console.log('ok [playwright] handle_dialog supplies native prompt text')
 
     const uploadFile = path.join(profile, 'receipt.txt')
     fs.writeFileSync(uploadFile, 'invoice')

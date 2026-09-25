@@ -7,7 +7,7 @@ import {
   DEFAULT_MAX_CHARS,
   SNAPSHOT_TIMEOUT_MS,
 } from '../limits.js'
-import type { BrowserBackend } from '../types.js'
+import { BrowserError, type BrowserBackend } from '../types.js'
 import {
   ariaRefCssSelectorMessage,
   isAriaRefCssSelector,
@@ -63,6 +63,13 @@ export async function getPageText(
     } catch {
       /* try next */
     }
+  }
+
+  if (opts.selector && !text.trim()) {
+    throw new BrowserError(
+      `No visible text matched selector "${opts.selector}". The selector may be missing, invalid, hidden, or empty.\n` +
+        'Recovery action: browser_snapshot, then retry browser_get_text with a CSS selector from the current page',
+    )
   }
 
   if (!text.trim()) {

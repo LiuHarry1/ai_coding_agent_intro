@@ -14,7 +14,9 @@ import type { BrowserBackend } from '../browser/types.js'
 import {
   clickTool,
   consoleTool,
+  dragTool,
   networkTool,
+  getTextTool,
   hoverTool,
   fillFormTool,
   navigateTool,
@@ -60,6 +62,16 @@ const PAGE = `<!doctype html>
   <select id="env">
     <option value="dev">Development</option>
     <option value="prod">Production</option>
+    <option value="prod-preview">Production Preview</option>
+    <option value="staging">Staging</option>
+    <option value="qa">QA</option>
+    <option value="canary">Canary</option>
+    <option value="beta">Beta</option>
+    <option value="demo">Demo</option>
+    <option value="local">Local</option>
+    <option value="testing">Testing</option>
+    <option value="legacy" disabled>Legacy</option>
+    <option value="sandbox">Sandbox</option>
   </select>
 
   <button id="hover-target">Hover me</button>
@@ -408,12 +420,14 @@ const WAIT_TEXT_PAGE = `<!doctype html>
   <h1>Wait fixture</h1>
   <p id="status">waiting</p>
   <p id="banner">Loading now</p>
+  <p id="later" hidden>Selector appeared</p>
   <button id="reveal" type="button">Reveal</button>
   <script>
     document.getElementById('reveal').addEventListener('click', function () {
       setTimeout(function () {
         document.getElementById('status').textContent = 'Message delivered';
         document.getElementById('banner').remove();
+        document.getElementById('later').hidden = false;
       }, 2000);
     });
   </script>
@@ -465,6 +479,8 @@ const COMBOBOX_PAGE = `<!doctype html>
   <p id="fruit-state">none</p>
   <button id="ask" type="button">Confirm me</button>
   <p id="dialog-state">waiting</p>
+  <button id="prompt" type="button">Prompt me</button>
+  <p id="prompt-state">prompt waiting</p>
   <input id="receipt" type="file" aria-label="Receipt upload">
   <p id="file-state">none</p>
   <script>
@@ -499,6 +515,11 @@ const COMBOBOX_PAGE = `<!doctype html>
     document.getElementById('ask').addEventListener('click', function () {
       var ok = window.confirm('Delete this expense?');
       document.getElementById('dialog-state').textContent = ok ? 'accepted' : 'dismissed';
+    });
+    document.getElementById('prompt').addEventListener('click', function () {
+      var answer = window.prompt('Enter approval code', '');
+      document.getElementById('prompt-state').textContent =
+        answer === null ? 'prompt dismissed' : 'prompt:' + answer;
     });
     document.getElementById('receipt').addEventListener('change', function () {
       document.getElementById('file-state').textContent = this.files[0] ? this.files[0].name : 'none';
@@ -557,6 +578,119 @@ const ITEMIZATION_PAGE = `<!doctype html>
 </body>
 </html>`
 
+const INTERACTIONS_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Interaction matrix</title></head>
+<body>
+  <h1>Interaction matrix</h1>
+  <button id="click-box" style="width:160px;height:80px">Click matrix</button>
+  <p id="click-state">no clicks</p>
+  <label>Editable <input id="editable" type="text"></label>
+  <label>Readonly <input id="readonly" type="text" value="locked" readonly></label>
+  <label>Disabled <input id="disabled" type="text" value="disabled" disabled></label>
+  <p id="key-state">no key</p>
+  <div id="drag-source" draggable="true" role="button" tabindex="0">Drag source</div>
+  <div id="drop-target" role="button" tabindex="0" style="width:180px;height:80px;border:1px solid">Drop target</div>
+  <p id="drag-state">not dropped</p>
+  <script>
+    document.getElementById('click-box').addEventListener('click', function (e) {
+      document.getElementById('click-state').textContent =
+        'detail=' + e.detail + ' button=' + e.button +
+        ' ctrl=' + e.ctrlKey + ' meta=' + e.metaKey +
+        ' shift=' + e.shiftKey + ' alt=' + e.altKey +
+        ' offset=' + e.offsetX + ',' + e.offsetY;
+    });
+    document.getElementById('click-box').addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      document.getElementById('click-state').textContent = 'context button=' + e.button;
+    });
+    document.addEventListener('keydown', function (e) {
+      document.getElementById('key-state').textContent =
+        'key=' + e.key + ' ctrl=' + e.ctrlKey + ' meta=' + e.metaKey +
+        ' shift=' + e.shiftKey + ' target=' + (e.target.id || e.target.tagName);
+    });
+    document.getElementById('drop-target').addEventListener('dragover', function (e) {
+      e.preventDefault();
+    });
+    document.getElementById('drop-target').addEventListener('drop', function (e) {
+      e.preventDefault();
+      document.getElementById('drag-state').textContent = 'dropped';
+    });
+  </script>
+</body>
+</html>`
+
+const SCROLL_MATRIX_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Scroll matrix</title></head>
+<body>
+  <h1>Scroll matrix</h1>
+  <div id="scroller" aria-label="Results scroller" style="width:320px;height:180px;overflow:auto;border:1px solid">
+    <div style="width:900px">
+      ${Array.from({ length: 30 }, (_, i) =>
+        `<p>Container row ${i + 1}${i === 24 ? ' <button id="container-target">Container target</button>' : ''}</p>`,
+      ).join('')}
+    </div>
+  </div>
+  <div id="flat"><button id="flat-target">Flat target</button></div>
+  <div style="height:1800px"></div>
+  <button id="page-bottom">Page bottom</button>
+</body>
+</html>`
+
+const DIAGNOSTICS_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Diagnostics matrix</title></head>
+<body>
+  <h1>Diagnostics matrix</h1>
+  <button id="emit">Emit console levels</button>
+  <button id="requests">Make requests</button>
+  <p id="diag-state">idle</p>
+  <script>
+    console.info('diagnostics boot info');
+    fetch('/api/ok?request=boot');
+    document.getElementById('emit').addEventListener('click', function () {
+      console.log('diagnostics log');
+      console.warn('diagnostics warn');
+      console.error('diagnostics error');
+      document.getElementById('diag-state').textContent = 'console emitted';
+    });
+    document.getElementById('requests').addEventListener('click', function () {
+      Promise.allSettled([
+        fetch('/api/ok?request=first'),
+        fetch('/api/ok?request=second'),
+        fetch('/api/boom?request=failed')
+      ]).then(function () {
+        document.getElementById('diag-state').textContent = 'requests done';
+      });
+    });
+  </script>
+</body>
+</html>`
+
+const DOWNLOAD_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Download matrix</title></head>
+<body>
+  <h1>Download matrix</h1>
+  <a id="download" href="/files/report.csv" download>Download report</a>
+  <button id="delayed">Download after 5 seconds</button>
+  <button id="ordinary">Ordinary button</button>
+  <p id="download-state">idle</p>
+  <script>
+    document.getElementById('ordinary').addEventListener('click', function () {
+      document.getElementById('download-state').textContent = 'ordinary clicked';
+    });
+    document.getElementById('delayed').addEventListener('click', function () {
+      document.getElementById('download-state').textContent = 'download scheduled';
+      setTimeout(function () {
+        document.getElementById('download').click();
+      }, 5000);
+    });
+  </script>
+</body>
+</html>`
+
 export function startFixtureServer(): Promise<{
   url: string
   close: () => Promise<void>
@@ -572,6 +706,20 @@ export function startFixtureServer(): Promise<{
       res.statusCode = 500
       res.setHeader('content-type', 'application/json')
       res.end('{"error":"kaboom"}')
+      return
+    }
+    if (route === '/slow-navigation') {
+      setTimeout(() => {
+        if (res.writableEnded) return
+        res.setHeader('content-type', 'text/html; charset=utf-8')
+        res.end('<!doctype html><title>Slow navigation</title><h1>Slow navigation finished</h1>')
+      }, 20_000)
+      return
+    }
+    if (route === '/files/report.csv') {
+      res.setHeader('content-type', 'text/csv')
+      res.setHeader('content-disposition', 'attachment; filename="report.csv"')
+      res.end('id,name\n1,Alice\n2,Bob\n')
       return
     }
     res.setHeader('content-type', 'text/html; charset=utf-8')
@@ -633,6 +781,22 @@ export function startFixtureServer(): Promise<{
     }
     if (route === '/itemization') {
       res.end(ITEMIZATION_PAGE)
+      return
+    }
+    if (route === '/interactions') {
+      res.end(INTERACTIONS_PAGE)
+      return
+    }
+    if (route === '/scroll-matrix') {
+      res.end(SCROLL_MATRIX_PAGE)
+      return
+    }
+    if (route === '/diagnostics') {
+      res.end(DIAGNOSTICS_PAGE)
+      return
+    }
+    if (route === '/download') {
+      res.end(DOWNLOAD_PAGE)
       return
     }
     if (route === '/hang-frame') {
@@ -1002,6 +1166,58 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       /Production/,
       `select_option must update page state:\n${selected.snapshot}`,
     )
+    const selectedSnap = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const partialOption = expectData(
+      await run(
+        selectOptionTool,
+        {
+          ref: refFor(selectedSnap, 'combobox', 'Environment'),
+          values: ['Develop'],
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(partialOption.snapshot), /Development.*selected/)
+    const partialSnap = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const ambiguousOption = await run(
+      selectOptionTool,
+      {
+        ref: refFor(partialSnap, 'combobox', 'Environment'),
+        values: ['Prod'],
+      },
+      sessionId,
+    )
+    assert.equal(typeof ambiguousOption, 'string')
+    assert.match(String(ambiguousOption), /matches multiple options/)
+    assert.match(String(ambiguousOption), /"Production", "Production Preview"/)
+    const disabledOption = await run(
+      selectOptionTool,
+      {
+        ref: refFor(partialSnap, 'combobox', 'Environment'),
+        values: ['Legacy'],
+      },
+      sessionId,
+    )
+    assert.equal(typeof disabledOption, 'string')
+    assert.match(String(disabledOption), /Option "Legacy" is disabled/)
+    const invalidOption = await run(
+      selectOptionTool,
+      {
+        ref: refFor(partialSnap, 'combobox', 'Environment'),
+        values: ['Mars'],
+      },
+      sessionId,
+    )
+    assert.equal(typeof invalidOption, 'string')
+    assert.match(String(invalidOption), /Option not found: "Mars"/)
+    assert.match(String(invalidOption), /"Development", "Production"/)
+    assert.match(String(invalidOption), /and 4 more/)
+    assert.doesNotMatch(String(invalidOption), /"Sandbox"/)
+    assert.doesNotMatch(String(invalidOption), /not found or not visible/)
     ok('select_option')
 
     // ── fill_form ─────
@@ -1048,6 +1264,49 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       `a readonly field must be reported, not silently dropped:\n${readonlyField.message}`,
     )
     ok('fill_form writes text, checkbox and select in one call')
+
+    const interactionNav = expectData(
+      await run(navigateTool, { url: `${baseUrl}interactions` }, sessionId),
+    )
+    const interactionSnap = String(interactionNav.snapshot)
+    const doubleClicked = expectData(
+      await run(
+        clickTool,
+        {
+          ref: refFor(interactionSnap, 'button', 'Click matrix'),
+          doubleClick: true,
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(doubleClicked.snapshot), /detail=2 button=0/)
+    const interactionFresh = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const readonlyTyped = expectData(
+      await run(
+        typeTool,
+        {
+          ref: refFor(interactionFresh, 'textbox', 'Readonly'),
+          text: 'overwrite',
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(readonlyTyped.message), /nothing typed: the field is readonly/)
+    const dragged = expectData(
+      await run(
+        dragTool,
+        {
+          startRef: refFor(interactionFresh, 'button', 'Drag source'),
+          endRef: refFor(interactionFresh, 'button', 'Drop target'),
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(dragged.snapshot), /dropped/)
+    ok('double click, readonly type and drag')
+
     await run(navigateTool, { url: baseUrl }, sessionId)
 
     // ── stale ref detection ───────────────────────────────
@@ -1207,6 +1466,20 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       ),
     )
     assert.ok(elementShot.screenshotBase64)
+    const incompatibleShot = await run(
+      screenshotTool,
+      {
+        ref: refFor(rebuilt, 'button', 'Recycle row'),
+        fullPage: true,
+      },
+      sessionId,
+    )
+    assert.equal(typeof incompatibleShot, 'string')
+    assert.match(
+      String(incompatibleShot),
+      /Recovery action: retry browser_screenshot and remove either ref or fullPage/,
+    )
+    assert.doesNotMatch(String(incompatibleShot), /browser_snapshot/)
     ok('element screenshot')
 
     // ── console tool ──────────────────────────────────────
@@ -1387,6 +1660,32 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('fixed overlay chrome is kept in the complete snapshot (inline or spilled file)')
 
+    const boundedText = expectData(
+      await run(getTextTool, { maxChars: 120 }, sessionId),
+    )
+    assert.equal(boundedText.snapshotMode, 'text')
+    assert.equal(boundedText.snapshotTruncated, true)
+    assert.equal(String(boundedText.snapshot).length, 120)
+    const feedText = expectData(
+      await run(
+        getTextTool,
+        { selector: '#feed', maxChars: 1000 },
+        sessionId,
+      ),
+    )
+    assert.match(String(feedText.snapshot), /^Filler paragraph 0/)
+    assert.doesNotMatch(String(feedText.snapshot), /^Feed/)
+    const missingText = await run(
+      getTextTool,
+      { selector: '#does-not-exist' },
+      sessionId,
+    )
+    assert.equal(typeof missingText, 'string')
+    assert.match(String(missingText), /No visible text matched selector/)
+    assert.match(String(missingText), /Recovery action: browser_snapshot/)
+    assert.doesNotMatch(String(missingText), /Filler paragraph/)
+    ok('get_text bounds and honors explicit selectors')
+
     // ── tab lifecycle ─────────────────────────────────────
     // On the extension backend this is the path that creates and destroys tabs
     // in the user's real browser, so open/select/close all need to round-trip.
@@ -1411,6 +1710,15 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         expectData(await run(snapshotTool, {}, sessionId)).snapshot,
       ).includes('heading "Dashboard"'),
       'snapshot should come from the newly opened tab',
+    )
+    const newTabLogs = expectData(
+      await run(consoleTool, { level: 'error' }, sessionId),
+    )
+    assert.ok(
+      (newTabLogs.consoleErrors as Array<{ text: string }>).some(entry =>
+        entry.text.includes('widget service unreachable'),
+      ),
+      'tabs new with a URL must capture console output from the first page script',
     )
     ok('tabs: open a new tab and switch to it')
 
@@ -1484,6 +1792,67 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('wait_for time')
 
+    const selectorWaitNav = expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}wait-text?selector-wait=${encodeURIComponent(label)}` },
+        sessionId,
+      ),
+    )
+    await run(
+      clickTool,
+      {
+        ref: refFor(
+          String(selectorWaitNav.snapshot),
+          'button',
+          'Reveal',
+        ),
+      },
+      sessionId,
+    )
+    const selectorWaited = expectData(
+      await run(waitForTool, { selector: '#later' }, sessionId),
+    )
+    assert.match(String(selectorWaited.snapshot), /Selector appeared/)
+    ok('wait_for selector becomes visible')
+
+    const emptyWait = await run(waitForTool, {}, sessionId)
+    assert.equal(typeof emptyWait, 'string')
+    assert.match(
+      String(emptyWait),
+      /Recovery action: retry browser_wait_for with at least one wait condition/,
+    )
+    assert.doesNotMatch(String(emptyWait), /browser_snapshot/)
+    ok('wait_for rejects an empty condition with the right recovery')
+
+    // ── browser history actions ──────────────────────────
+    const historyUrl = `${baseUrl}wait-text?history=${encodeURIComponent(label)}`
+    expectData(await run(navigateTool, { url: historyUrl }, sessionId))
+    expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}other?history=${encodeURIComponent(label)}` },
+        sessionId,
+      ),
+    )
+    const back = expectData(
+      await run(navigateTool, { action: 'back' }, sessionId),
+    )
+    assert.equal(back.url, historyUrl)
+    const forward = expectData(
+      await run(navigateTool, { action: 'forward' }, sessionId),
+    )
+    assert.match(String(forward.url), /\/other\?history=/)
+    const reloaded = expectData(
+      await run(
+        navigateTool,
+        { action: 'reload', screenshotAfterwards: true },
+        sessionId,
+      ),
+    )
+    assert.ok(reloaded.screenshotPath, 'reload screenshotAfterwards must capture')
+    ok('navigate back, forward and reload')
+
     const closed = expectData(
       await run(
         tabsTool,
@@ -1504,6 +1873,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.ok(
       typeof closeMissing === 'string',
       'closing an already-closed tab must report an error, not succeed silently',
+    )
+    assert.match(
+      String(closeMissing),
+      new RegExp(`No open tab with id "${newTab.targetId}"`),
     )
     ok('tabs: closing a dead tab fails cleanly')
   } finally {

@@ -708,7 +708,10 @@ export async function waitFor(
     !opts.selector &&
     !opts.url
   ) {
-    throw new BrowserError('Either time, text, textGone, selector or url must be provided')
+    throw new BrowserError(
+      'Either time, text, textGone, selector or url must be provided.\n' +
+        'Recovery action: retry browser_wait_for with at least one wait condition',
+    )
   }
   const page = await getPageForTarget(backend, targetId)
   try {

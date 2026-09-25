@@ -85,6 +85,12 @@ export async function navigate(
   await ensureScript(backend, targetId)
   await withReadBoost(backend, targetId, async () => {
     const page = await getPageForTarget(backend, targetId)
+    const beforeUrl = page.url()
+    const beforeTimeOrigin = dest.action
+      ? await page
+          .evaluate<number>('performance.timeOrigin')
+          .catch(() => undefined)
+      : undefined
     try {
       if (dest.action === 'back') {
         await page.goBack({
@@ -113,18 +119,37 @@ export async function navigate(
           timeout: NAVIGATE_TIMEOUT_MS,
         })
       }
-      clearTabMemory(targetId)
-      await new Promise(r => setTimeout(r, NAVIGATE_SETTLE_MS))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (/Timeout/i.test(message)) {
-        setTabPoisoned(targetId)
-        throw new BrowserError(
-          `Navigation timed out. Stay on this tab — do not retry navigate. ${SNAPSHOT_STALL_NEXT}`,
-        )
+        // Synthetic CDP endpoints can miss the lifecycle event Playwright is
+        // awaiting even though Chrome completed a history navigation. Verify
+        // the resulting document before poisoning an otherwise healthy tab.
+        const after = dest.action
+          ? await page
+              .evaluate<{ readyState: string; timeOrigin: number }>(
+                '({ readyState: document.readyState, timeOrigin: performance.timeOrigin })',
+              )
+              .catch(() => undefined)
+          : undefined
+        const historyActionCompleted =
+          after !== undefined &&
+          after.readyState !== 'loading' &&
+          (page.url() !== beforeUrl ||
+            (beforeTimeOrigin !== undefined &&
+              after.timeOrigin !== beforeTimeOrigin))
+        if (!historyActionCompleted) {
+          setTabPoisoned(targetId)
+          throw new BrowserError(
+            `Navigation timed out. Stay on this tab — do not retry navigate. ${SNAPSHOT_STALL_NEXT}`,
+          )
+        }
+      } else {
+        mapPlaywrightError(err)
       }
-      mapPlaywrightError(err)
     }
+    clearTabMemory(targetId)
+    await new Promise(r => setTimeout(r, NAVIGATE_SETTLE_MS))
   })
 }
 
@@ -817,7 +842,8 @@ export async function screenshot(
     try {
       if (opts.ref && opts.fullPage) {
         throw new BrowserError(
-          'fullPage is not supported for element screenshots',
+          'fullPage is not supported for element screenshots.\n' +
+            'Recovery action: retry browser_screenshot and remove either ref or fullPage',
         )
       }
       const take = async () =>

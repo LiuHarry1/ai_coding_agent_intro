@@ -284,14 +284,14 @@ async function main() {
       backendFactory: () => createExtensionBackend({ relay }),
     })
 
-    // The consent model held. Exactly one denial is expected: the suite ends by
-    // deliberately closing an already-closed tab. Any other count means the
-    // tool layer reached for a tab the agent does not own.
+    // The consent model held. The suite ends by deliberately closing an
+    // already-closed tab; the host must reject it before it reaches the
+    // extension ownership boundary.
     const deniedDuringSuite = extension.deniedCount
     assert.equal(
       deniedDuringSuite,
-      1,
-      'suite should only touch agent-owned tabs, apart from the deliberate dead-tab close',
+      0,
+      'suite should only send agent-owned tab ids to the extension',
     )
     // And the relay really did carry the whole CDP surface.
     for (const required of [

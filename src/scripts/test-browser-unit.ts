@@ -522,13 +522,16 @@ await withRelay(async relay => {
 await withRelay(async relay => {
   const peer = await connectPeer(relay)
   peer.silent = true
-  const pending = relay.request({ method: 'tabs.list' })
+  // Attach the rejection handler before closing the peer. Node's strict
+  // unhandled-rejection mode can otherwise terminate between close and await.
+  const pending = relay
+    .request({ method: 'tabs.list' })
+    .then(() => 'resolved')
+    .catch((e: Error) => e.message)
   await new Promise(r => setTimeout(r, 30))
   await peer.close()
 
   const err = await pending
-    .then(() => 'resolved')
-    .catch((e: Error) => e.message)
   assert(
     String(err).includes('disconnected'),
     `a dropped socket must fail pending work, got: ${err}`,

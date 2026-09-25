@@ -144,14 +144,15 @@ async function run(
   def: ToolDefinition,
   args: Record<string, unknown>,
   toolCallId = 'call-1',
+  abortSignal?: AbortSignal,
 ): Promise<DualChannelToolResult<Record<string, unknown>> | string> {
   const instance = def.create(process.cwd(), fakeContext()) as AnyTool & {
     execute: (
       a: unknown,
-      o: { toolCallId: string },
+      o: { toolCallId: string; abortSignal?: AbortSignal },
     ) => Promise<DualChannelToolResult<Record<string, unknown>> | string>
   }
-  return instance.execute(args, { toolCallId })
+  return instance.execute(args, { toolCallId, abortSignal })
 }
 
 function expectData(
@@ -225,6 +226,17 @@ async function main() {
     assert.match(String(blocked), /Recovery action: stop and wait for the user/)
     assert.doesNotMatch(String(blocked), /browser_snapshot|fresh ref/)
   }
+  const aborted = new AbortController()
+  aborted.abort()
+  const interrupted = await run(
+    clickTool,
+    { ref: 'e1' },
+    'call-interrupted',
+    aborted.signal,
+  )
+  assert.match(String(interrupted), /interrupted because the user took control/)
+  assert.match(String(interrupted), /Recovery action: stop and wait for the user/)
+  assert.doesNotMatch(String(interrupted), /browser_snapshot|fresh ref/)
   expectData(await run(tabsTool, { action: 'list' }))
   const relocked = expectData(await run(lockTool, { action: 'lock' }))
   assert.match(String(relocked.message), /Agent has control/)

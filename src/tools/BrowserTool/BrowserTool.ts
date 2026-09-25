@@ -276,7 +276,12 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
           try {
             if (abortSignal?.aborted) {
               return browserErrorText(
-                new BrowserError('interrupted by user'),
+                getUserHasControl(sessionId)
+                  ? new BrowserError(
+                      `${cfg.name} interrupted because the user took control of the browser.\n` +
+                        'Recovery action: stop and wait for the user to say they are done, then browser_lock with action "lock"',
+                    )
+                  : new BrowserError('interrupted by user'),
                 cfg.name,
               )
             }
@@ -330,6 +335,15 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
               }
               return { data }
             } catch (err) {
+              if (abortSignal?.aborted && getUserHasControl(sessionId)) {
+                return browserErrorText(
+                  new BrowserError(
+                    `${cfg.name} interrupted because the user took control of the browser.\n` +
+                      'Recovery action: stop and wait for the user to say they are done, then browser_lock with action "lock"',
+                  ),
+                  cfg.name,
+                )
+              }
               return browserErrorText(err, cfg.name)
             }
           } finally {
@@ -1203,7 +1217,12 @@ export const tabsTool = defineBrowserTool({
 
     switch (args.action) {
       case 'new': {
-        const tab = await openTab(ctx.cwd, args.url, ctx.sessionId)
+        // Create blank first so the page-inspection script is installed before
+        // the destination's first console call or fetch/XHR can run.
+        const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
+        if (args.url) {
+          await pw.navigate(ctx.backend, tab.targetId, { url: args.url })
+        }
         message = args.url
           ? `Opened ${args.url} in a new tab`
           : 'Opened a new tab'
@@ -1227,6 +1246,11 @@ export const tabsTool = defineBrowserTool({
         if (!args.tabId) throw new BrowserError('close requires a tabId.')
         const before = await ctx.backend.listTabs()
         const closedAt = before.findIndex(t => t.targetId === args.tabId)
+        if (closedAt < 0) {
+          throw new BrowserError(
+            `No open tab with id "${args.tabId}". Run browser_tabs with action "list".`,
+          )
+        }
         await ctx.backend.closeTab(args.tabId)
         // Refs and the console offset are keyed by target id, and Chrome reuses
         // those ids. Left behind, they would be read as the next tab's state.
