@@ -67,7 +67,7 @@ export function throwIfUnarmedDestructiveDialog(page: Page): void {
   if (note.type === 'alert') return
   lastNote.delete(page)
   throw new BrowserError(
-    `Native ${note.type} dialog ${JSON.stringify(note.message)} was dismissed because browser_handle_dialog was not armed. Call it with accept: true BEFORE retrying the click. Do not treat the previous action as successful.`,
+    `Native ${note.type} dialog ${JSON.stringify(note.message)} was dismissed because browser_handle_dialog was not armed. Call it with accept: true BEFORE retrying the click. Do not treat the previous action as successful.\nRecovery action: browser_handle_dialog with accept: true, then retry the click`,
   )
 }
 

@@ -64,6 +64,7 @@ import {
   withVisualFocus,
 } from './focus.js'
 import { captureViewport } from './viewport-capture.js'
+import type { ScrollExtent, ScrollOutcome } from '../scroll-report.js'
 
 function staleRecovery(
   backend: BrowserBackend,
@@ -214,6 +215,8 @@ export async function mouseClickXY(
   },
 ): Promise<
   ResolvedElement & {
+    /** Tag, id, classes and leading text of the hit element, e.g. `<canvas id="cv">`. */
+    preview: string
     screenshotCoordinates: { x: number; y: number }
     viewportCoordinates: { x: number; y: number }
   }
@@ -281,19 +284,32 @@ export async function mouseClickXY(
       ({ x, y }) => {
         const target = document.elementFromPoint(x, y) as HTMLElement | null
         if (!target) return null
+        const tag = target.tagName.toLowerCase()
+        const name = (
+          target.getAttribute('aria-label') ||
+          target.getAttribute('title') ||
+          target.textContent ||
+          ''
+        )
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80)
+        const attrs: string[] = []
+        if (target.id) attrs.push(`id="${target.id}"`)
+        if (typeof target.className === 'string' && target.className.trim()) {
+          attrs.push(
+            `class="${target.className.trim().split(/\s+/).slice(0, 2).join(' ')}"`,
+          )
+        }
+        const role = target.getAttribute('role')
+        if (role) attrs.push(`role="${role}"`)
+        const text = name.slice(0, 30)
         return {
           target: {
-            tag: target.tagName.toLowerCase(),
-            role: target.getAttribute('role') || 'generic',
-            name: (
-              target.getAttribute('aria-label') ||
-              target.getAttribute('title') ||
-              target.textContent ||
-              ''
-            )
-              .replace(/\s+/g, ' ')
-              .trim()
-              .slice(0, 80),
+            tag,
+            role: role || 'generic',
+            name,
+            preview: `<${tag}${attrs.length ? ' ' + attrs.join(' ') : ''}${text ? '>' + text + (name.length > 30 ? '...' : '') : ''}>`,
           },
         }
       },
@@ -319,8 +335,9 @@ export async function mouseClickXY(
     return {
       ref: '',
       role: hit.target.role,
-      name: hit.target.name || `(${x}, ${y})`,
+      name: hit.target.name,
       tag: hit.target.tag,
+      preview: hit.target.preview,
       screenshotCoordinates: { x: screenshotX, y: screenshotY },
       viewportCoordinates: { x, y },
     }
@@ -577,6 +594,109 @@ export async function scrollIntoView(
   })
 }
 
+interface InPageScrollArgs {
+  dx: number
+  dy: number
+  /** `page` falls back to the scroller under the viewport center; `container` needs one around the element. */
+  mode: 'page' | 'container'
+}
+
+type InPageScrollResult =
+  | { found: false }
+  | {
+      found: true
+      container: boolean
+      /** False when neither the page nor any container could move on the requested axes. */
+      scrollable: boolean
+      label: string
+      moved: { x: number; y: number }
+      extent: ScrollExtent
+    }
+
+/**
+ * `scrollBy` instead of a wheel event: a wheel lands wherever the mouse happens
+ * to be and returns before the scroll settles, so neither the target nor the
+ * distance moved is knowable. No named inner functions: the bundler rewrites
+ * them into `__name` calls that do not exist in the page.
+ */
+const SCROLL_IN_PAGE = (
+  start: Element,
+  a: InPageScrollArgs,
+): InPageScrollResult => {
+  const doc = start.ownerDocument
+  const win = doc.defaultView || window
+  const root = (doc.scrollingElement || doc.documentElement) as HTMLElement
+  const wantX = a.dx !== 0
+  const wantY = a.dy !== 0
+  const pageX = root.scrollWidth > root.clientWidth + 1
+  const pageY = root.scrollHeight > root.clientHeight + 1
+  const pageMoves = (!wantX && !wantY) || (wantY && pageY) || (wantX && pageX)
+  let from: Element | null = start
+  if (a.mode === 'page') {
+    from = pageMoves
+      ? null
+      : doc.elementFromPoint(win.innerWidth / 2, win.innerHeight / 2)
+  }
+  let box: HTMLElement | null = null
+  for (let el = from; el && el !== root; el = el.parentElement) {
+    const style = win.getComputedStyle(el)
+    const okY =
+      wantY &&
+      /(auto|scroll|overlay)/.test(style.overflowY) &&
+      el.scrollHeight > el.clientHeight + 1
+    const okX =
+      wantX &&
+      /(auto|scroll|overlay)/.test(style.overflowX) &&
+      el.scrollWidth > el.clientWidth + 1
+    if (okY || okX) {
+      box = el as HTMLElement
+      break
+    }
+  }
+  if (!box && a.mode === 'container') return { found: false }
+
+  const beforeX = box ? box.scrollLeft : win.scrollX
+  const beforeY = box ? box.scrollTop : win.scrollY
+  if (wantX || wantY) {
+    const by = { left: a.dx, top: a.dy, behavior: 'instant' as ScrollBehavior }
+    if (box) box.scrollBy(by)
+    else win.scrollBy(by)
+  }
+  const x = box ? box.scrollLeft : win.scrollX
+  const y = box ? box.scrollTop : win.scrollY
+  const m = box || root
+  let label = ''
+  if (box) {
+    label = box.tagName.toLowerCase()
+    if (box.id) label += '#' + box.id
+    else if (typeof box.className === 'string' && box.className.trim()) {
+      label += '.' + box.className.trim().split(/\s+/)[0]
+    }
+    const aria = box.getAttribute('aria-label')
+    if (aria) label += ' "' + aria.slice(0, 40) + '"'
+  }
+  return {
+    found: true,
+    container: Boolean(box),
+    scrollable: Boolean(box) || pageMoves,
+    label,
+    moved: { x: x - beforeX, y: y - beforeY },
+    extent: {
+      x,
+      y,
+      clientWidth: m.clientWidth,
+      clientHeight: m.clientHeight,
+      scrollWidth: m.scrollWidth,
+      scrollHeight: m.scrollHeight,
+    },
+  }
+}
+
+/**
+ * Scroll and report what actually moved (Cursor's browser_scroll contract):
+ * no ref scrolls the page, a ref with a delta scrolls its nearest scrollable
+ * container, and a ref alone is brought into view.
+ */
 export async function scroll(
   backend: BrowserBackend,
   targetId: string,
@@ -589,9 +709,7 @@ export async function scroll(
     amount?: number
     element?: string
   },
-): Promise<void> {
-  return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
+): Promise<ScrollOutcome> {
   const amount = opts.amount ?? 300
   let deltaX = opts.deltaX ?? 0
   let deltaY = opts.deltaY ?? 0
@@ -599,22 +717,77 @@ export async function scroll(
   if (opts.direction === 'down') deltaY = amount
   if (opts.direction === 'left') deltaX = -amount
   if (opts.direction === 'right') deltaX = amount
+  const hasDelta = deltaX !== 0 || deltaY !== 0
+  const intoView = Boolean(opts.ref) && (opts.scrollIntoView ?? !hasDelta)
+  if (!hasDelta && !intoView) {
+    throw new BrowserError(
+      'Nothing to scroll: pass direction (with optional amount) or deltaX/deltaY, or a ref to bring into view.\nRecovery action: browser_scroll with direction "down" or "up"',
+    )
+  }
+  const requested = { x: deltaX, y: deltaY }
+
+  return withInputFocus(backend, targetId, async () => {
+  const page = await getPageForTarget(backend, targetId)
   try {
-    if (opts.scrollIntoView && opts.ref) {
-      const loc = await targetLocator(page, {
-        ref: opts.ref,
-        element: opts.element,
-      })
-      await loc.scrollIntoViewIfNeeded({ timeout: ACTION_TIMEOUT_MS })
-      return
-    }
     if (!opts.ref) {
-      await page.mouse.wheel(deltaX, deltaY || (deltaX ? 0 : 500))
-      return
+      const res = await page
+        .locator(':root')
+        .evaluate(SCROLL_IN_PAGE, { dx: deltaX, dy: deltaY, mode: 'page' as const })
+      if (!res.found) throw new BrowserError('Could not read the page scroll position.')
+      if (!res.scrollable) {
+        await page.mouse.move(
+          res.extent.clientWidth / 2,
+          res.extent.clientHeight / 2,
+        )
+        await page.mouse.wheel(deltaX, deltaY)
+        return { kind: 'wheel', requested, moved: { x: 0, y: 0 }, extent: res.extent }
+      }
+      return {
+        kind: res.container ? 'container' : 'page',
+        label: res.container ? res.label : undefined,
+        requested,
+        moved: res.moved,
+        extent: res.extent,
+      }
     }
-    const loc = await targetLocator(page, { ref: opts.ref, element: opts.element })
-    await loc.scrollIntoViewIfNeeded({ timeout: ACTION_TIMEOUT_MS })
-    if (deltaX || deltaY) await page.mouse.wheel(deltaX, deltaY)
+
+    await ensureSnapshotFresh(backend, targetId)
+    const { loc, ref, described } = await resolveClickTarget(
+      page,
+      targetId,
+      opts.ref,
+      opts.element,
+      staleRecovery(backend, targetId),
+    )
+    if (intoView) {
+      await ensureInView(loc, page)
+      const res = await loc.evaluate(SCROLL_IN_PAGE, { dx: 0, dy: 0, mode: 'page' as const })
+      if (!res.found) throw new BrowserError('Could not read the page scroll position.')
+      return {
+        kind: 'into-view',
+        label: described.name ? `${described.role} "${described.name}"` : described.role,
+        requested,
+        moved: { x: 0, y: 0 },
+        extent: res.extent,
+      }
+    }
+    const res = await loc.evaluate(SCROLL_IN_PAGE, {
+      dx: deltaX,
+      dy: deltaY,
+      mode: 'container' as const,
+    })
+    if (!res.found) {
+      throw new BrowserError(
+        `${ref} is not inside a scrollable container. Omit ref to scroll the page, or pass scrollIntoView: true to bring it into view.\nRecovery action: browser_scroll without ref, or with scrollIntoView: true`,
+      )
+    }
+    return {
+      kind: 'container',
+      label: res.label,
+      requested,
+      moved: res.moved,
+      extent: res.extent,
+    }
   } catch (err) {
     mapPlaywrightError(err, opts.ref)
   }

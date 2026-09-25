@@ -220,6 +220,11 @@ async function main() {
     typeof clickBlocked === 'string' && /user has control/i.test(clickBlocked),
     `click while user has control must fail:\n${clickBlocked}`,
   )
+  const tabsBlocked = await run(tabsTool, { action: 'new' })
+  for (const blocked of [clickBlocked, tabsBlocked]) {
+    assert.match(String(blocked), /Recovery action: stop and wait for the user/)
+    assert.doesNotMatch(String(blocked), /browser_snapshot|fresh ref/)
+  }
   expectData(await run(tabsTool, { action: 'list' }))
   const relocked = expectData(await run(lockTool, { action: 'lock' }))
   assert.match(String(relocked.message), /Agent has control/)

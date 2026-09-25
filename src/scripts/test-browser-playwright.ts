@@ -547,6 +547,15 @@ async function main() {
       typeof unarmed === 'string' && /handle_dialog|not armed/i.test(unarmed),
       `unarmed confirm must fail the click:\n${unarmed}`,
     )
+    assert.match(
+      String(unarmed),
+      /Recovery action: browser_handle_dialog with accept: true/,
+      'a dismissed native confirm must point at handle_dialog, not the in-page overlay rule',
+    )
+    assert.ok(
+      !String(unarmed).includes('Close the overlay first'),
+      `a native dialog has no overlay to close:\n${unarmed}`,
+    )
     console.log('ok [playwright] unarmed confirm fails the click')
     const notASelect = await run(
       selectOptionTool,
@@ -632,7 +641,20 @@ async function main() {
         sessionId,
       ),
     )
-    assert.match(String(uploaded.message), /Uploaded 1 file/)
+    assert.match(String(uploaded.message), /Uploaded 1 file: receipt\.txt/)
+    const missingUpload = await run(
+      fileUploadTool,
+      { paths: [path.join(profile, 'no-such-receipt.txt')] },
+      sessionId,
+    )
+    assert.ok(
+      typeof missingUpload === 'string' &&
+        /File not found: .*no-such-receipt\.txt/.test(missingUpload) &&
+        /Recovery action: locate the file/.test(missingUpload) &&
+        !missingUpload.includes('ENOENT') &&
+        !missingUpload.includes('Recovery action: browser_snapshot'),
+      `a missing file must be named with a path fix, not a snapshot:\n${String(missingUpload)}`,
+    )
     assert.ok(
       String(uploaded.snapshot).includes('Receipt upload'),
       `file_upload must return a snapshot:\n${uploaded.snapshot}`,
@@ -745,6 +767,11 @@ async function main() {
         /needs a fresh viewport screenshot/i.test(withoutScreenshot),
       `coordinate click must require a fresh screenshot:\n${String(withoutScreenshot)}`,
     )
+    assert.match(
+      String(withoutScreenshot),
+      /Recovery action: browser_screenshot without ref or labels/,
+      'a missing screenshot must point at browser_screenshot, not a snapshot',
+    )
     expectData(await run(screenshotTool, {}, sessionId))
     expectData(await run(snapshotTool, { interactive: true }, sessionId))
     const invalidated = await run(
@@ -775,12 +802,21 @@ async function main() {
       yamlFromObserve(coordinateClick).includes('Canvas clicked'),
       `separate coordinate tool must click a visual-only canvas:\n${yamlFromObserve(coordinateClick)}`,
     )
+    assert.match(
+      String(coordinateClick.message),
+      / on <canvas[ >]/,
+      'a text-less hit is described by tag and attributes, not by coordinates',
+    )
     expectData(await run(screenshotTool, {}, sessionId))
     const outside = await run(mouseClickXYTool, { x: -1, y: 120 }, sessionId)
     assert.ok(
       typeof outside === 'string' &&
         /outside (?:the latest screenshot|viewport)/i.test(outside),
       `coordinate tool must reject out-of-viewport points:\n${String(outside)}`,
+    )
+    assert.ok(
+      !String(outside).includes('Recovery action: browser_snapshot'),
+      `an out-of-screenshot point must not be told to snapshot:\n${String(outside)}`,
     )
     expectData(await run(navigateTool, { url: server.url }, sessionId))
     const modalScreenshot = expectData(await run(screenshotTool, {}, sessionId))

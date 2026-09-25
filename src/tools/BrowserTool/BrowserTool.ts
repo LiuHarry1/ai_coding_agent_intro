@@ -9,6 +9,7 @@
  */
 
 import { randomUUID } from 'crypto'
+import * as fs from 'fs'
 import * as path from 'path'
 import { tool } from 'ai'
 import { z } from 'zod'
@@ -27,6 +28,7 @@ import {
 } from '../../browser/limits.js'
 import { SNAPSHOT_STALL_NEXT } from '../../browser/heavy-media.js'
 import {
+  clearCurrentTab,
   getBrowser,
   getCurrentTabId,
   openTab,
@@ -39,6 +41,8 @@ import {
   clearViewportScreenshot,
   rememberViewportScreenshot,
 } from '../../browser/viewport-screenshot-cache.js'
+import { formatScrollOutcome } from '../../browser/scroll-report.js'
+import { DEFAULT_DOWNLOAD_DIR } from '../../browser/paths.js'
 import {
   clearTabMemory,
   getUserHasControl,
@@ -363,6 +367,14 @@ export const navigateTool = defineBrowserTool({
       const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
       targetId = tab.targetId
     }
+    // The remembered tab may have been closed or revoked from the extension
+    // popup since the last call; navigate then opens a fresh one.
+    if (
+      targetId &&
+      !(await ctx.backend.listTabs()).some(t => t.targetId === targetId)
+    ) {
+      targetId = ''
+    }
     if (!targetId) {
       const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
       targetId = tab.targetId
@@ -622,7 +634,7 @@ export const mouseClickXYTool = defineBrowserTool({
       ctx.targetId,
       {
         action: 'mouse_click_xy',
-        message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} screenshot coordinate (${el.screenshotCoordinates.x}, ${el.screenshotCoordinates.y})${mapped} on ${el.tag}${el.name ? ` "${el.name}"` : ''}`,
+        message: `${args.doubleClick ? 'Double-clicked' : 'Clicked'} screenshot coordinate (${el.screenshotCoordinates.x}, ${el.screenshotCoordinates.y})${mapped} on ${el.preview}`,
         compact: true,
         screenshotAfterwards: args.screenshotAfterwards,
       },
@@ -789,6 +801,19 @@ export const fileUploadTool = defineBrowserTool({
     const paths = args.paths.map(p =>
       path.isAbsolute(p) ? p : path.resolve(ctx.cwd, p),
     )
+    const missing: string[] = []
+    for (const [i, p] of paths.entries()) {
+      const stat = await fs.promises.stat(p).catch(() => null)
+      if (!stat?.isFile()) {
+        const given = args.paths[i]
+        missing.push(given === p ? p : `${given} (resolved to ${p})`)
+      }
+    }
+    if (missing.length) {
+      throw new BrowserError(
+        `File${missing.length === 1 ? '' : 's'} not found: ${missing.join(', ')}. Relative paths resolve against the workspace ${ctx.cwd}. Nothing was uploaded.\nRecovery action: locate the file (e.g. with Glob) and retry browser_file_upload with its correct path`,
+      )
+    }
     const res = await pw.uploadFilesToPage(ctx.backend, ctx.targetId, {
       paths,
       ref: args.ref,
@@ -797,14 +822,21 @@ export const fileUploadTool = defineBrowserTool({
     // Receipt/PDF previews often stall Playwright snapshot+screenshot after
     // upload. Confirm success from the action message; let the next form
     // mutation re-observe instead of blocking here.
-    return observeAfterAction(ctx.backend, ctx.targetId, {
+    const out = await observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'file_upload',
       message: res.cancelled
         ? 'Cancelled the file chooser'
-        : `Uploaded ${n} file${n === 1 ? '' : 's'}. PDF/receipt preview iframes are omitted from this snapshot (iframe contents are not entered). Click Close / Save from these refs — do not screenshot or wait_for the preview.`,
+        : `Uploaded ${n} file${n === 1 ? '' : 's'}: ${res.files.map(f => path.basename(f)).join(', ')}`,
       compact: true,
       mode: 'efficient',
     })
+    const previewLikely =
+      /\biframe\b/.test(String(out.snapshot ?? '')) ||
+      /snapshot timed out/.test(out.message)
+    if (!res.cancelled && previewLikely) {
+      out.message = `${out.message}. PDF/receipt preview iframes are omitted from this snapshot (iframe contents are not entered). Click Close / Save from these refs — do not screenshot or wait_for the preview.`
+    }
+    return out
   },
 })
 
@@ -949,9 +981,14 @@ export const scrollTool = defineBrowserTool({
     ref: z
       .string()
       .optional()
-      .describe('Scroll over this element instead of the page center'),
+      .describe(
+        'With a delta or direction: scroll the nearest scrollable container of this element. Alone: bring it into view',
+      ),
     element: z.string().optional().describe(prompt.ELEMENT_HINT_DESCRIPTION),
-    scrollIntoView: z.boolean().optional().describe('Bring the ref into view'),
+    scrollIntoView: z
+      .boolean()
+      .optional()
+      .describe('Bring the ref into view (default when ref is given without a delta)'),
     direction: z
       .enum(['up', 'down', 'left', 'right'])
       .optional()
@@ -963,7 +1000,7 @@ export const scrollTool = defineBrowserTool({
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
-    await pw.scroll(ctx.backend, ctx.targetId, {
+    const outcome = await pw.scroll(ctx.backend, ctx.targetId, {
       deltaX: args.deltaX,
       deltaY: args.deltaY,
       ref: args.ref,
@@ -972,13 +1009,15 @@ export const scrollTool = defineBrowserTool({
       direction: args.direction,
       amount: args.amount,
     })
+    // The accessibility tree does not change with scroll position, so a
+    // post-scroll snapshot costs tokens without telling the model anything.
     return observeAfterAction(
       ctx.backend,
       ctx.targetId,
       {
         action: 'scroll',
-        message: 'Scrolled',
-        compact: true,
+        message: formatScrollOutcome(outcome),
+        withSnapshot: false,
         screenshotAfterwards: args.screenshotAfterwards,
       },
       ctx,
@@ -1194,13 +1233,13 @@ export const tabsTool = defineBrowserTool({
         clearTabMemory(args.tabId)
         resetConsoleWatermark(args.tabId)
         // Closing the active tab would otherwise leave the session pointing at
-        // a dead target. resolveTab's fallback covers the easy cases but throws
-        // once two real tabs are left, so adopt the neighbour Chrome itself
-        // would focus instead of reporting no current tab.
+        // a dead target, which resolveTab rejects. The agent closed it on
+        // purpose, so adopt the neighbour Chrome itself would focus.
         if (getCurrentTabId(ctx.sessionId) === args.tabId) {
           const remaining = before.filter(t => t.targetId !== args.tabId)
           const next = remaining[Math.min(closedAt, remaining.length - 1)]
           if (next) setCurrentTab(next.targetId, ctx.sessionId)
+          else clearCurrentTab(ctx.sessionId)
         }
         message = `Closed tab ${args.tabId}`
         break
@@ -1281,7 +1320,7 @@ export const waitForDownloadTool = defineBrowserTool({
       .string()
       .optional()
       .describe(
-        'Optional destination path under the agent downloads directory',
+        'Optional file path relative to the agent downloads directory',
       ),
     ref: z
       .string()
@@ -1290,10 +1329,13 @@ export const waitForDownloadTool = defineBrowserTool({
   }),
   async run(args, ctx) {
     const dest = args.path
-      ? path.isAbsolute(args.path)
-        ? args.path
-        : path.resolve(ctx.cwd, args.path)
+      ? path.resolve(DEFAULT_DOWNLOAD_DIR, args.path)
       : undefined
+    if (dest && path.relative(DEFAULT_DOWNLOAD_DIR, dest).startsWith('..')) {
+      throw new BrowserError(
+        `Downloads can only be saved under ${DEFAULT_DOWNLOAD_DIR}; ${JSON.stringify(args.path)} is outside it.\nRecovery action: retry browser_wait_for_download with a relative path, or omit path`,
+      )
+    }
     const result = args.ref
       ? await pw.downloadByRef(ctx.backend, ctx.targetId, {
           ref: args.ref,

@@ -101,10 +101,22 @@ async function groupTab(tabId) {
 
 // ── debugger ─────────────────────────────────────────────
 
+/** In-flight attaches, so concurrent commands to a fresh tab share one attach. */
+const attaching = new Map()
+
 async function ensureAttached(tabId) {
   if (attached.has(tabId)) return
-  await chrome.debugger.attach({ tabId }, '1.3')
-  attached.add(tabId)
+  let pending = attaching.get(tabId)
+  if (!pending) {
+    pending = chrome.debugger
+      .attach({ tabId }, '1.3')
+      .then(() => {
+        attached.add(tabId)
+      })
+      .finally(() => attaching.delete(tabId))
+    attaching.set(tabId, pending)
+  }
+  await pending
 }
 
 async function detach(tabId) {
@@ -258,6 +270,100 @@ async function restoreTab(targetId) {
   await chrome.tabs.update(tabId, { active: true })
 }
 
+// ── downloads ────────────────────────────────────────────
+
+/** Stay under the host's 30s relay request timeout. */
+const DOWNLOAD_WAIT_CAP_MS = 25000
+const DOWNLOAD_POLL_MS = 250
+
+/** Download ids already handed to the agent, so two waits never share one. */
+const claimedDownloads = new Set()
+
+/**
+ * The site's own file name per download id. item.filename is the path Chrome
+ * finally wrote, which gets " (1)" appended when ~/Downloads already has one.
+ */
+const suggestedNames = new Map()
+const SUGGESTED_NAMES_CAP = 200
+
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+  suggestedNames.set(item.id, item.filename)
+  if (suggestedNames.size > SUGGESTED_NAMES_CAP) {
+    suggestedNames.delete(suggestedNames.keys().next().value)
+  }
+  // No argument: keep Chrome's default name and conflict handling.
+  suggest()
+})
+
+function originOf(url) {
+  try {
+    return new URL(url).origin
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * chrome.downloads items carry no tab id, so attribute them by origin: the
+ * file URL itself (blob: URLs keep their page origin) or the referrer. With no
+ * referrer there is nothing to contradict the match, so it is accepted.
+ */
+function startedByPage(item, pageOrigin) {
+  if (!pageOrigin || pageOrigin === 'null') return true
+  if (originOf(item.finalUrl || item.url) === pageOrigin) return true
+  return !item.referrer || originOf(item.referrer) === pageOrigin
+}
+
+/**
+ * Resolve with the first download this tab's page started at or after `since`
+ * once Chrome has finished writing it, or null when none finished in time.
+ */
+async function waitForDownload(targetId, since, timeoutMs) {
+  const tabId = Number(targetId)
+  assertOwned(tabId)
+  const deadline = Date.now() + Math.min(timeoutMs, DOWNLOAD_WAIT_CAP_MS)
+  let id = null
+  while (Date.now() < deadline) {
+    if (id == null) {
+      const tab = await chrome.tabs.get(tabId)
+      const pageOrigin = originOf(tab.url ?? '')
+      const items = await chrome.downloads.search({
+        startedAfter: new Date(since).toISOString(),
+        orderBy: ['startTime'],
+      })
+      const hit = items.find(
+        item => !claimedDownloads.has(item.id) && startedByPage(item, pageOrigin),
+      )
+      if (hit) {
+        id = hit.id
+        claimedDownloads.add(id)
+      }
+    }
+    if (id != null) {
+      const [item] = await chrome.downloads.search({ id })
+      if (!item) {
+        throw new Error(
+          "The download was removed from Chrome's download list before it finished.",
+        )
+      }
+      if (item.state === 'complete') {
+        const suggestedName = suggestedNames.get(id)
+        suggestedNames.delete(id)
+        return {
+          url: item.finalUrl || item.url,
+          filename: item.filename,
+          ...(suggestedName ? { suggestedName } : {}),
+        }
+      }
+      if (item.state === 'interrupted') {
+        throw new Error(`The download was interrupted: ${item.error ?? 'unknown reason'}.`)
+      }
+    }
+    await new Promise(r => setTimeout(r, DOWNLOAD_POLL_MS))
+  }
+  return null
+}
+
 // ── reflective chrome.* invocation ───────────────────────
 
 /**
@@ -285,6 +391,7 @@ const SEMANTIC_METHODS = [
   'tabs.getActiveUserTab',
   'tabs.focus',
   'tabs.restore',
+  'downloads.wait',
 ]
 
 /** Announced in `hello` so the host can branch at handshake time. */
@@ -354,6 +461,8 @@ async function handle(req) {
       return focusTab(req.targetId, req.level)
     case 'tabs.restore':
       return restoreTab(req.targetId)
+    case 'downloads.wait':
+      return waitForDownload(req.targetId, req.since, req.timeoutMs)
     default:
       if (ALLOWED_CHROME_COMMANDS[req.method]) {
         return invokeChrome(req.method, req.params ?? [])

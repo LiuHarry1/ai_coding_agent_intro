@@ -49,7 +49,24 @@ export type RelayRequest =
       level: 'tab' | 'window'
     }
   | { id: number; method: 'tabs.restore'; targetId: string }
+  | {
+      id: number
+      /** Resolves to a `RelayDownload`, or null when nothing finished in time. */
+      method: 'downloads.wait'
+      targetId: string
+      since: number
+      timeoutMs: number
+    }
   | { id: number; method: ChromeCommand; params: unknown[] }
+
+/** A download Chrome finished writing, as `chrome.downloads` reports it. */
+export interface RelayDownload {
+  url: string
+  /** Absolute path in the user's download folder. */
+  filename: string
+  /** The site's file name, before Chrome de-duplicates it as "name (1).ext". */
+  suggestedName?: string
+}
 
 /** `Omit` over a union keeps only the shared keys; this preserves each variant. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown

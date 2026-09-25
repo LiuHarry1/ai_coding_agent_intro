@@ -25,6 +25,27 @@ export function getIsolatedPage(
   return pagesByBackend.get(backend)?.get(targetId)?.page
 }
 
+/**
+ * Observe every CDP event on a tab's backend session — the isolated
+ * equivalent of chrome.debugger.onEvent, used to simulate the extension.
+ * CDPSession has no wildcard listener, so this wraps its emit.
+ */
+export function onIsolatedCdpEvent(
+  backend: BrowserBackend,
+  targetId: string,
+  listener: (method: string, params: unknown) => void,
+): void {
+  const session = pagesByBackend.get(backend)?.get(targetId)?.session as
+    | { emit: (event: string | symbol, ...args: unknown[]) => boolean }
+    | undefined
+  if (!session) throw new BrowserError(`Unknown tab "${targetId}".`)
+  const emit = session.emit.bind(session)
+  session.emit = (event, ...args) => {
+    if (typeof event === 'string' && event.includes('.')) listener(event, args[0])
+    return emit(event, ...args)
+  }
+}
+
 export interface IsolatedBackendOptions {
   userDataDir: string
   headless?: boolean

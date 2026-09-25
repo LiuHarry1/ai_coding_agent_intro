@@ -608,8 +608,13 @@ function renderText(out: BrowserToolOutput): string {
 
   if (out.consoleErrors?.length) {
     lines.push('')
-    lines.push(`Console errors during this action (${out.consoleErrors.length}):`)
-    for (const e of out.consoleErrors) lines.push(`  ${e.text}`)
+    // browser_console reuses this list for its full, all-level listing.
+    const heading =
+      out.action === 'console'
+        ? 'Console messages'
+        : 'Console errors during this action'
+    lines.push(`${heading} (${out.consoleErrors.length}):`)
+    for (const e of out.consoleErrors) lines.push(`  [${e.level}] ${e.text}`)
   }
 
   if (out.network?.length) {
@@ -731,6 +736,19 @@ const RECOVERY_RULES: Array<{
     suggestion:
       'Snapshots and retries cannot fix this; only the user can restore the Chrome window.',
     recovery: 'stop and ask the user to restore the Chrome window',
+  },
+  {
+    // browser_mouse_click_xy: coordinates come from a screenshot, not refs.
+    patterns: [
+      'needs a fresh viewport screenshot',
+      'needs a fresh screenshot',
+      'outside the latest screenshot',
+      'outside viewport',
+      'does not hit a page element',
+    ],
+    suggestion:
+      'Take a new screenshot for this tab, then retry with coordinates from it.',
+    recovery: 'browser_screenshot without ref or labels',
   },
   {
     patterns: [

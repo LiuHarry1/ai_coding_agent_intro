@@ -16,7 +16,10 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { WebSocket } from 'ws'
 import { createExtensionBackend } from '../browser/backends/extension.js'
-import { createIsolatedBackend } from '../browser/backends/isolated.js'
+import {
+  createIsolatedBackend,
+  onIsolatedCdpEvent,
+} from '../browser/backends/isolated.js'
 import { BRIDGE_EXTENSION_ORIGIN } from '../browser/relay/extension-id.js'
 import { startRelayServer } from '../browser/relay/server.js'
 import type { BrowserBackend } from '../browser/types.js'
@@ -108,6 +111,20 @@ async function startFakeExtension(
     return cdpTarget
   }
 
+  // Mirrors chrome.debugger.onEvent: Playwright on the host waits on these
+  // (lifecycle, execution contexts), so without them every navigate hangs.
+  const forwarding = new Set<number>()
+  function forwardEvents(tabId: number, cdpTarget: string): void {
+    if (forwarding.has(tabId)) return
+    forwarding.add(tabId)
+    onIsolatedCdpEvent(chrome, cdpTarget, (method, params) => {
+      if (ws.readyState !== WebSocket.OPEN) return
+      ws.send(
+        JSON.stringify({ type: 'cdpEvent', targetId: String(tabId), method, params }),
+      )
+    })
+  }
+
   async function handle(msg: Record<string, unknown>): Promise<unknown> {
     switch (msg.method) {
       case 'tabs.list': {
@@ -147,6 +164,7 @@ async function startFakeExtension(
           Record<string, unknown>,
         ]
         const cdpTarget = assertOwned(debuggee.tabId)
+        forwardEvents(debuggee.tabId, cdpTarget)
         seenMethods.add(cdpMethod)
         return (await chrome.send(cdpTarget, cdpMethod, params)) ?? {}
       }

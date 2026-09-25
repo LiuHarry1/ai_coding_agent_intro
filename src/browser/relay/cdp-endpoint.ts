@@ -432,6 +432,20 @@ export async function startCdpEndpoint(opts: {
     const debuggee: ChromeDebuggee = { tabId: Number(tab.targetId) }
     if (child) debuggee.sessionId = child
 
+    // The tab's debugger session is shared with direct backend.send callers,
+    // which may already have enabled Runtime (the page script installer does).
+    // A repeated Runtime.enable is a no-op that does not replay existing
+    // contexts, so Playwright would never learn the main world and every
+    // evaluate would hang. Resetting first makes this enable report them all.
+    if (!child && request.method === 'Runtime.enable') {
+      await relay
+        .request({
+          method: 'chrome.debugger.sendCommand',
+          params: [debuggee, 'Runtime.disable', {}],
+        })
+        .catch(() => {})
+    }
+
     try {
       const result = await relay.request({
         method: 'chrome.debugger.sendCommand',

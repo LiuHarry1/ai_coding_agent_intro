@@ -142,7 +142,9 @@ async function main() {
 
     const stale = await run(clickTool, { ref: counter })
     assert.ok(
-      typeof stale === 'string' && stale.includes('Clicked 1 times'),
+      typeof stale === 'string' &&
+        stale.includes(`Element not found: ${counter}`) &&
+        stale.includes('Recovery action: browser_snapshot'),
       'stale refs must behave the same as on the isolated backend',
     )
     console.log('ok [e2e] stale ref detection matches the isolated backend')

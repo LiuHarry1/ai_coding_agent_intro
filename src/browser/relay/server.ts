@@ -75,7 +75,8 @@ function notConnectedMessage(): string {
   return (
     'No browser extension is connected. A tab should have opened asking to connect the agent to ' +
     'this browser — approve it there, or install the extension first (see chrome-extension/README.md). ' +
-    'Set browser.mode to "isolated" in .ai-agent/settings.json to use a separate browser instead.'
+    'Set browser.mode to "isolated" in .ai-agent/settings.json to use a separate browser instead.\n' +
+    'Recovery action: stop and ask the user to approve the connect tab or install the extension; browser tools cannot fix this'
   )
 }
 

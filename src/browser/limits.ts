@@ -36,6 +36,12 @@ export const NETWORK_DRAIN_MS = 3_000
 export const WAIT_FOR_TIMEOUT_MS = 20_000
 export const WAIT_FOR_TIME_CAP_S = 30
 
+/**
+ * Under the relay's 30s request timeout and CALL_TIMEOUT_MS, so a click that
+ * never downloads gets its own error instead of a generic call timeout.
+ */
+export const DOWNLOAD_WAIT_MS = 25_000
+
 export const NAVIGATE_TIMEOUT_MS = 30_000
 /** SPAs paint chrome before the main tree; give widgets a beat to mount. */
 export const NAVIGATE_SETTLE_MS = 300

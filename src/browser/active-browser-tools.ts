@@ -54,6 +54,9 @@ export function isBrowserToolBlockedByUserControl(
   return !USER_CONTROL_ALLOWED.has(toolName)
 }
 
+const USER_CONTROL_RECOVERY =
+  '\nRecovery action: stop and wait for the user to say they are done, then browser_lock with action "lock"'
+
 /** Reject a new tool call while the user has control (same set as Pause abort). */
 export function assertBrowserAgentMayAct(
   toolName: string,
@@ -62,11 +65,13 @@ export function assertBrowserAgentMayAct(
   if (!isBrowserToolBlockedByUserControl(toolName, args)) return
   if (toolName === BROWSER_TABS_TOOL_NAME) {
     throw new BrowserError(
-      'The user has control of the browser. Only browser_tabs action "list" is allowed until you call browser_lock with action "lock".',
+      'The user has control of the browser. Only browser_tabs action "list" is allowed until you call browser_lock with action "lock".' +
+        USER_CONTROL_RECOVERY,
     )
   }
   throw new BrowserError(
-    'The user has control of the browser. Call browser_lock with action "lock" after they finish, then continue. Do not click or type while they are using it.',
+    'The user has control of the browser. Call browser_lock with action "lock" after they finish, then continue. Do not click or type while they are using it.' +
+      USER_CONTROL_RECOVERY,
   )
 }
 

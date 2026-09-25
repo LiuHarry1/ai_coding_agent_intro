@@ -263,7 +263,8 @@ async function getSharedExtensionBackend(cwd: string): Promise<BrowserBackend> {
           'The browser extension did not auto-connect. If the connect tab says the token ' +
             `does not match, copy it again from the extension popup into browser.extensionToken ` +
             `(or ${EXTENSION_TOKEN_ENV}). Otherwise check the extension is installed in the ` +
-            'Chrome profile that opened.',
+            'Chrome profile that opened.\n' +
+            'Recovery action: stop and ask the user to check the extension token and connection; browser tools cannot fix this',
         )
       })
       await attachExtensionPlaywright(
@@ -277,6 +278,27 @@ async function getSharedExtensionBackend(cwd: string): Promise<BrowserBackend> {
     })
   }
   return sharedExtensionStarting
+}
+
+/**
+ * The extension dropped its socket (reloaded, Chrome restarted). Its relay url
+ * lives in session storage, so it will not come back on its own: discard the
+ * dead backend and ask again, keeping every session that shared it.
+ */
+async function reconnectSharedExtension(
+  cwd: string,
+  key: string,
+): Promise<BrowserBackend> {
+  const stale = sharedExtension
+  if (stale && !(relay?.isConnected() ?? false)) {
+    sharedExtension = null
+    await detachPlaywright(stale.backend).catch(() => {})
+    await stale.backend.dispose().catch(() => {})
+  }
+  const backend = await getSharedExtensionBackend(cwd)
+  for (const user of stale?.users ?? []) sharedExtension?.users.add(user)
+  sharedExtension?.users.add(key)
+  return backend
 }
 
 async function start(cwd: string, key: string): Promise<Live> {
@@ -341,6 +363,13 @@ export async function getBrowser(
   const existing = lives.get(key)
   if (existing) {
     existing.lastUsed = Date.now()
+    if (
+      !existing.ownsBackend &&
+      (existing.backend !== sharedExtension?.backend ||
+        !(relay?.isConnected() ?? false))
+    ) {
+      existing.backend = await reconnectSharedExtension(cwd, key)
+    }
     return existing.backend
   }
   let pending = starting.get(key)
@@ -434,9 +463,17 @@ export async function resolveTab(
     return { backend, targetId: explicitTargetId }
   }
 
+  // Once a tab has been in use, never silently swap in another one: the model
+  // would keep acting as if it were still on the page it last saw.
   const current = live?.currentTargetId
-  if (current && tabs.some(t => t.targetId === current)) {
-    return { backend, targetId: current }
+  if (current) {
+    if (tabs.some(t => t.targetId === current)) {
+      return { backend, targetId: current }
+    }
+    throw new BrowserError(
+      `The tab this session was using (${current}) was closed or is no longer shared with the agent. Do not assume you are still on that page.\n` +
+        'Recovery action: browser_tabs with action "list", then "select" the right tab, or browser_navigate to open a fresh one',
+    )
   }
 
   if (tabs.length === 1) {
@@ -473,6 +510,11 @@ export function setCurrentTab(targetId: string, sessionId?: string): void {
     live.currentTargetId = targetId
     live.lastUsed = Date.now()
   }
+}
+
+export function clearCurrentTab(sessionId?: string): void {
+  const live = lives.get(browserSessionKey(sessionId))
+  if (live) live.currentTargetId = undefined
 }
 
 export function getCurrentTabId(sessionId?: string): string | undefined {

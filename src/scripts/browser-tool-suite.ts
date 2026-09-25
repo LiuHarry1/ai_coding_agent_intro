@@ -945,7 +945,8 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       typeof staleCounter === 'string',
       'a ref captured before the label changed must not resolve',
     )
-    assert.ok(staleCounter.includes('Clicked 1 times'), staleCounter)
+    assert.ok(staleCounter.includes(`Element not found: ${counterRef}`), staleCounter)
+    assert.ok(staleCounter.includes('Recovery action: browser_snapshot'), staleCounter)
     const newCounterRef = refFor(
       String(clicked.snapshot),
       'button',
@@ -1167,7 +1168,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
     const bottomRef = refNear(beforeScroll, 'Bottom marker')
-    await run(scrollTool, { ref: bottomRef, scrollIntoView: true }, sessionId)
+    const intoView = expectData(
+      await run(scrollTool, { ref: bottomRef, scrollIntoView: true }, sessionId),
+    )
+    assert.match(String(intoView.message), /into view\. Page position: /)
     const afterScroll = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
@@ -1175,8 +1179,14 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       afterScroll.includes('Bottom marker'),
       `scrollIntoView must bring the bottom marker into the tree:\n${afterScroll}`,
     )
-    await run(scrollTool, { deltaY: -2000 }, sessionId)
-    ok('scroll')
+    const up = expectData(await run(scrollTool, { deltaY: -100000 }, sessionId))
+    assert.match(
+      String(up.message),
+      /(reached the top of the page|already at the top of the page).*\[Top of page\]/,
+    )
+    const again = expectData(await run(scrollTool, { direction: 'up' }, sessionId))
+    assert.match(String(again.message), /^Warning: no scroll occurred/)
+    ok('scroll reports the actual delta, position and the top edge')
 
     // ── screenshot ────────────────────────────────────────
     const shot = expectData(

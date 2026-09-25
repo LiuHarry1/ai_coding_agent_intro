@@ -63,6 +63,7 @@ import {
   urlsRoughlyEqual,
 } from '../browser/playwright/page-match.js'
 import {
+  clearCurrentTab,
   closeBrowser,
   getCurrentTabId,
   initBrowserLifecycle,
@@ -91,6 +92,7 @@ import {
   scaleAnnotations,
 } from '../browser/screenshot-annotate.js'
 import { appendSnapshotUrls } from '../browser/snapshot-urls.js'
+import { formatScrollOutcome, scrollRemaining } from '../browser/scroll-report.js'
 import { sanitizeUntrustedFileName } from '../browser/fs-safe/filename.js'
 import { writeExternalFileWithinOutputRoot } from '../browser/output-files.js'
 import {
@@ -509,6 +511,9 @@ await withRelay(async relay => {
   assert(msg.includes('approve it there'), 'error points at the consent tab')
   assert(msg.includes('chrome-extension/README.md'), 'error says how to install')
   assert(msg.includes('"isolated"'), 'error offers the fallback')
+  const shown = String(browserErrorText(new BrowserError(msg), 'navigate'))
+  assert(shown.includes('Recovery action: stop and ask the user'), 'recovery is to ask the user')
+  assert(!shown.includes('browser_snapshot'), 'no snapshot advice when nothing is connected')
   ok('requesting with no peer explains both ways out')
 })
 
@@ -870,6 +875,26 @@ function makeFakeRelay(opts: {
     'console errors come before the snapshot, where they will be read',
   )
   ok('text projection puts the message, errors, then snapshot in that order')
+}
+
+{
+  const listing = mapBrowserOutput(
+    {
+      action: 'console',
+      message: '2 console messages',
+      url: 'http://x/',
+      title: 'X',
+      consoleErrors: [
+        { level: 'error', text: 'boom' },
+        { level: 'log', text: 'hello' },
+      ],
+    } satisfies BrowserToolOutput,
+    'call-3',
+  ).content as string
+  assert(listing.includes('Console messages (2):'), listing)
+  assert(!listing.includes('Console errors during this action'), listing)
+  assert(listing.includes('[error] boom') && listing.includes('[log] hello'), listing)
+  ok('browser_console lists every level with its label, not as errors')
 }
 
 // ── error funnel ─────────────────────────────────────────
@@ -1852,6 +1877,116 @@ function makeFakeRelay(opts: {
   setBrowserBackendFactory(null)
   assert(!isBrowserLive(), 'all sessions closed')
   ok('isolated chrome is per chat session')
+}
+
+{
+  await closeBrowser()
+  const open = [{ targetId: 'tab-1', url: 'http://x.test/1', title: '1' }]
+  setBrowserBackendFactory(async () => ({
+    kind: 'isolated' as const,
+    async listTabs() {
+      return [...open]
+    },
+    async createTab() {
+      return open[0]
+    },
+    async closeTab() {},
+    async send() {
+      return {} as never
+    },
+    async getActiveUserTabId() {
+      return null
+    },
+    async focusTab() {},
+    async restoreTab() {},
+    async dispose() {},
+  }))
+  eq((await resolveTab(process.cwd(), undefined, 'sess-c')).targetId, 'tab-1', 'first tab adopted')
+  // The user closes the agent's tab; exactly one other tab is left behind.
+  open.splice(0, 1, { targetId: 'tab-2', url: 'http://x.test/2', title: '2' })
+  let err = ''
+  try {
+    await resolveTab(process.cwd(), undefined, 'sess-c')
+  } catch (e) {
+    err = e instanceof Error ? e.message : String(e)
+  }
+  assert(/was closed or is no longer shared/.test(err), `closed current tab must fail, got: ${err}`)
+  assert(/Recovery action: browser_tabs/.test(err), 'closed current tab names the recovery')
+  eq(getCurrentTabId('sess-c'), 'tab-1', 'no silent switch to the leftover tab')
+  setCurrentTab('tab-2', 'sess-c')
+  eq((await resolveTab(process.cwd(), undefined, 'sess-c')).targetId, 'tab-2', 'explicit select recovers')
+  clearCurrentTab('sess-c')
+  eq((await resolveTab(process.cwd(), undefined, 'sess-c')).targetId, 'tab-2', 'no current tab falls back to the only one')
+  await closeBrowser()
+  setBrowserBackendFactory(null)
+  ok('a closed current tab is reported, never silently replaced')
+}
+
+// ── scroll report ────────────────────────────────────────
+
+{
+  const page = (y: number) => ({
+    x: 0,
+    y,
+    clientWidth: 1000,
+    clientHeight: 800,
+    scrollWidth: 1000,
+    scrollHeight: 3200,
+  })
+  const moved = formatScrollOutcome({
+    kind: 'page',
+    requested: { x: 0, y: 300 },
+    moved: { x: 0, y: 300 },
+    extent: page(800),
+  })
+  eq(
+    moved,
+    'Scrolled page by (0px, 300px). Position: 1.0 pages above, 2.0 pages below (viewport 800px, content 3200px)',
+    'a normal scroll reports the actual delta and pages left',
+  )
+
+  const partial = formatScrollOutcome({
+    kind: 'page',
+    requested: { x: 0, y: 1000 },
+    moved: { x: 0, y: 400 },
+    extent: page(2400),
+  })
+  assert(partial.includes('by (0px, 400px); reached the bottom of the page'), partial)
+  assert(partial.endsWith('[End of page]'), partial)
+
+  const stuck = formatScrollOutcome({
+    kind: 'page',
+    requested: { x: 0, y: 300 },
+    moved: { x: 0, y: 0 },
+    extent: page(2400),
+  })
+  assert(stuck.startsWith('Warning: no scroll occurred — already at the bottom of the page'), stuck)
+
+  const flat = formatScrollOutcome({
+    kind: 'page',
+    requested: { x: 0, y: -300 },
+    moved: { x: 0, y: 0 },
+    extent: { ...page(0), scrollHeight: 800 },
+  })
+  assert(flat.includes('has no scrollable overflow'), flat)
+  assert(flat.includes('[Top of page] [End of page]'), flat)
+
+  const container = formatScrollOutcome({
+    kind: 'container',
+    label: 'div#results',
+    requested: { x: 0, y: 200 },
+    moved: { x: 0, y: 200 },
+    extent: { x: 0, y: 200, clientWidth: 400, clientHeight: 400, scrollWidth: 400, scrollHeight: 1000 },
+  })
+  assert(container.startsWith('Scrolled container div#results by (0px, 200px)'), container)
+  assert(container.includes('0.5 pages above, 1.0 pages below'), container)
+
+  eq(
+    scrollRemaining({ ...page(2399.6) }).below,
+    0,
+    'sub-pixel leftovers count as the bottom',
+  )
+  ok('scroll report: actual delta, pages above/below, edge warnings')
 }
 
 console.log('\nall browser unit tests passed')

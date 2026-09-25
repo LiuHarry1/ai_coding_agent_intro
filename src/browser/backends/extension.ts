@@ -16,7 +16,7 @@
 
 import { BrowserError, type BrowserBackend, type BrowserTab } from '../types.js'
 import type { RelayServer } from '../relay/server.js'
-import type { RelayTab } from '../relay/protocol.js'
+import type { RelayDownload, RelayTab } from '../relay/protocol.js'
 
 const relays = new WeakMap<BrowserBackend, RelayServer>()
 
@@ -114,6 +114,23 @@ export async function createExtensionBackend(
     async restoreTab(targetId) {
       if (!canFocus) return
       await relay.request({ method: 'tabs.restore', targetId })
+    },
+
+    // Chrome saves downloads itself here: the relay cannot turn on CDP
+    // download events through chrome.debugger, so Playwright never sees them.
+    async waitForDownload(targetId, opts) {
+      if (!relay.capabilities().has('downloads.wait')) {
+        throw new BrowserError(
+          'This version of the browser extension cannot report downloads. ' +
+            'Reload the unpacked extension from chrome://extensions, then retry.',
+        )
+      }
+      return relay.request<RelayDownload | null>({
+        method: 'downloads.wait',
+        targetId,
+        since: opts.since,
+        timeoutMs: opts.timeoutMs,
+      })
     },
 
     async dispose() {

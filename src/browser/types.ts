@@ -33,7 +33,26 @@ export interface BrowserBackend {
   focusTab(targetId: string, level: 'tab' | 'window'): Promise<void>
   /** Switch back to a tab the user had open (tab level only). */
   restoreTab(targetId: string): Promise<void>
+  /**
+   * Wait for a download this tab starts at or after `since` (epoch ms) and
+   * resolve once the browser has finished writing it, or null on timeout.
+   * Only backends whose browser does not report downloads to Playwright
+   * implement this; the others use Playwright's `download` event.
+   */
+  waitForDownload?(
+    targetId: string,
+    opts: { since: number; timeoutMs: number },
+  ): Promise<BackendDownload | null>
   dispose(): Promise<void>
+}
+
+/** A finished download that the browser saved to local disk itself. */
+export interface BackendDownload {
+  url: string
+  /** Absolute path of the finished file on this machine. */
+  filename: string
+  /** The site's file name, before the browser de-duplicates it. */
+  suggestedName?: string
 }
 
 export class BrowserError extends Error {
