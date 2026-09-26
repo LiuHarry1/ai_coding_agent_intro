@@ -22,6 +22,7 @@ import {
   highlightTool,
   hoverTool,
   fillFormTool,
+  lockTool,
   navigateTool,
   pressKeyTool,
   resizeTool,
@@ -31,6 +32,7 @@ import {
   snapshotTool,
   tabsTool,
   typeTool,
+  waitForDownloadTool,
   waitForTool,
 } from '../tools/BrowserTool/BrowserTool.js'
 import type {
@@ -224,8 +226,15 @@ const COORDINATE_PAGE = `<!doctype html>
   <p id="state">Canvas untouched</p>
   <canvas id="surface" width="300" height="160" style="position:fixed;left:40px;top:80px;border:1px solid #333"></canvas>
   <script>
-    document.getElementById('surface').addEventListener('click', () => {
-      document.getElementById('state').textContent = 'Canvas clicked';
+    document.getElementById('surface').addEventListener('click', event => {
+      document.getElementById('state').textContent = 'Canvas clicked detail=' + event.detail;
+    });
+    document.getElementById('surface').addEventListener('dblclick', event => {
+      document.getElementById('state').textContent = 'Canvas double detail=' + event.detail;
+    });
+    document.getElementById('surface').addEventListener('contextmenu', event => {
+      event.preventDefault();
+      document.getElementById('state').textContent = 'Canvas context button=' + event.button;
     });
   </script>
 </body>
@@ -428,6 +437,7 @@ const WAIT_TEXT_PAGE = `<!doctype html>
   <p id="banner">Loading now</p>
   <p id="later" hidden>Selector appeared</p>
   <button id="reveal" type="button">Reveal</button>
+  <button id="navigate-later" type="button">Navigate later</button>
   <script>
     document.getElementById('reveal').addEventListener('click', function () {
       setTimeout(function () {
@@ -435,6 +445,42 @@ const WAIT_TEXT_PAGE = `<!doctype html>
         document.getElementById('banner').remove();
         document.getElementById('later').hidden = false;
       }, 2000);
+    });
+    document.getElementById('navigate-later').addEventListener('click', function () {
+      setTimeout(function () {
+        location.href = '/other?waited=url';
+      }, 1000);
+    });
+  </script>
+</body>
+</html>`
+
+const TEXT_REGIONS_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Text regions</title></head>
+<body>
+  <p>Body-only navigation chrome</p>
+  <main>Main fallback text</main>
+  <article>Primary article text</article>
+</body>
+</html>`
+
+const SPA_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SPA fixture</title></head>
+<body>
+  <main id="app">
+    <h1>SPA route one</h1>
+    <button id="route">Go SPA two</button>
+  </main>
+  <script>
+    document.getElementById('route').addEventListener('click', function () {
+      history.pushState({ route: 2 }, '', '/spa?route=two');
+      document.getElementById('app').innerHTML =
+        '<h1>SPA route two</h1><button id="action">SPA action</button><p id="state">idle</p>';
+      document.getElementById('action').addEventListener('click', function () {
+        document.getElementById('state').textContent = 'spa action complete';
+      });
     });
   </script>
 </body>
@@ -456,6 +502,13 @@ const FORM_PAGE = `<!doctype html>
       <select id="currency" name="currency">
         <option value="cny">CNY</option>
         <option value="usd">USD</option>
+      </select>
+    </label>
+    <label>Tags
+      <select id="tags" name="tags" multiple>
+        <option value="urgent">Urgent</option>
+        <option value="travel">Travel</option>
+        <option value="client">Client</option>
       </select>
     </label>
   </form>
@@ -487,6 +540,8 @@ const COMBOBOX_PAGE = `<!doctype html>
   <p id="dialog-state">waiting</p>
   <button id="prompt" type="button">Prompt me</button>
   <p id="prompt-state">prompt waiting</p>
+  <button id="alert" type="button">Alert me</button>
+  <p id="alert-state">alert waiting</p>
   <input id="receipt" type="file" aria-label="Receipt upload">
   <p id="file-state">none</p>
   <script>
@@ -526,6 +581,10 @@ const COMBOBOX_PAGE = `<!doctype html>
       var answer = window.prompt('Enter approval code', '');
       document.getElementById('prompt-state').textContent =
         answer === null ? 'prompt dismissed' : 'prompt:' + answer;
+    });
+    document.getElementById('alert').addEventListener('click', function () {
+      window.alert('Read this notice');
+      document.getElementById('alert-state').textContent = 'alert closed';
     });
     document.getElementById('receipt').addEventListener('change', function () {
       document.getElementById('file-state').textContent = this.files[0] ? this.files[0].name : 'none';
@@ -613,7 +672,8 @@ const INTERACTIONS_PAGE = `<!doctype html>
     document.addEventListener('keydown', function (e) {
       document.getElementById('key-state').textContent =
         'key=' + e.key + ' ctrl=' + e.ctrlKey + ' meta=' + e.metaKey +
-        ' shift=' + e.shiftKey + ' target=' + (e.target.id || e.target.tagName);
+        ' shift=' + e.shiftKey + ' alt=' + e.altKey +
+        ' target=' + (e.target.id || e.target.tagName);
     });
     document.getElementById('drop-target').addEventListener('dragover', function (e) {
       e.preventDefault();
@@ -789,6 +849,14 @@ export function startFixtureServer(): Promise<{
     }
     if (route === '/wait-text') {
       res.end(WAIT_TEXT_PAGE)
+      return
+    }
+    if (route === '/text-regions') {
+      res.end(TEXT_REGIONS_PAGE)
+      return
+    }
+    if (route === '/spa') {
+      res.end(SPA_PAGE)
       return
     }
     if (route === '/error-modal') {
@@ -974,6 +1042,8 @@ export interface SuiteOptions {
   showSnapshot?: boolean
   /** Fake relay cannot route flattened OOPIF child sessions; real extension E2E covers them. */
   crossOriginFrames?: boolean
+  /** Fake relay has no chrome.downloads API; real extension E2E covers that path. */
+  downloads?: boolean
 }
 
 export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
@@ -1329,7 +1399,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         {
           ref: environmentRef,
           element: 'Environment select',
-          durationMs: 5000,
+          durationMs: 1500,
         },
         sessionId,
       ),
@@ -1353,6 +1423,24 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ).result?.value
     assert.match(String(outline), /solid/)
     assert.match(String(outline), /3px/)
+    expectData(await run(waitForTool, { time: 1.7 }, sessionId))
+    const clearedOutlineResult = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression: 'document.querySelector("#env").style.outline',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    const clearedOutline = (
+      clearedOutlineResult.value as { result?: { value?: string } }
+    ).result?.value
+    assert.equal(clearedOutline, '')
 
     expectData(
       await run(
@@ -1451,6 +1539,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
             { ref: refNear(formSnap, 'Merchant'), value: 'Suzhou Hotel' },
             { ref: refNear(formSnap, 'Total'), value: '100.00' },
             { ref: refNear(formSnap, 'Billable'), value: 'true', kind: 'checkbox' },
+            { ref: refNear(formSnap, 'Personal'), value: 'true', kind: 'radio' },
             { ref: refNear(formSnap, 'Currency'), value: 'USD', kind: 'combobox' },
           ],
         },
@@ -1458,7 +1547,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       ),
     )
     assert.ok(
-      String(formFilled.message).startsWith('Filled 4/4 fields'),
+      String(formFilled.message).startsWith('Filled 5/5 fields'),
       `fill_form must write every control kind in one call:\n${formFilled.message}`,
     )
     assert.ok(
@@ -1470,6 +1559,23 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       String(formFilled.snapshot).includes('6.00'),
       `readonly tax must still update from the app handler:\n${formFilled.snapshot}`,
     )
+    assert.match(String(formFilled.snapshot), /radio "Personal" \[checked\]/)
+    const afterFormFill = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const multiSelected = expectData(
+      await run(
+        selectOptionTool,
+        {
+          ref: refNear(afterFormFill, 'Tags'),
+          values: ['Urgent', 'Client'],
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(multiSelected.message), /Selected "Urgent", "Client"/)
+    assert.match(String(multiSelected.snapshot), /option "Urgent" \[selected\]/)
+    assert.match(String(multiSelected.snapshot), /option "Client" \[selected\]/)
     const readonlyField = expectData(
       await run(
         fillFormTool,
@@ -1498,14 +1604,91 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       ),
     )
     assert.match(String(doubleClicked.snapshot), /detail=2 button=0/)
+
+    const rightClickSnap = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const rightClicked = expectData(
+      await run(
+        clickTool,
+        {
+          ref: refFor(rightClickSnap, 'button', 'Click matrix'),
+          button: 'right',
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(rightClicked.snapshot), /context button=2/)
+
+    const offsetClickSnap = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const offsetClicked = expectData(
+      await run(
+        clickTool,
+        {
+          ref: refFor(offsetClickSnap, 'button', 'Click matrix'),
+          modifiers: ['Alt', 'Shift'],
+          offsetX: 12,
+          offsetY: 15,
+        },
+        sessionId,
+      ),
+    )
+    assert.match(
+      String(offsetClicked.snapshot),
+      /ctrl=false meta=false shift=true alt=true offset=12,15/,
+    )
+
     const interactionFresh = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const slowlyTyped = expectData(
+      await run(
+        typeTool,
+        {
+          ref: refFor(interactionFresh, 'textbox', 'Editable'),
+          text: 'abc',
+          slowly: true,
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(slowlyTyped.message), /value: "abc"/)
+    const focusedKey = expectData(
+      await run(
+        pressKeyTool,
+        { key: 'x', modifiers: ['Alt', 'Shift'] },
+        sessionId,
+      ),
+    )
+    assert.match(
+      String(focusedKey.snapshot),
+      /key=x ctrl=false meta=false shift=true alt=true target=editable/,
+    )
+
+    const afterSlowType = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const disabledTyped = expectData(
+      await run(
+        typeTool,
+        {
+          ref: refFor(afterSlowType, 'textbox', 'Disabled'),
+          text: 'overwrite',
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(disabledTyped.message), /nothing typed: the field is disabled/)
+    const beforeReadonly = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
     const readonlyTyped = expectData(
       await run(
         typeTool,
         {
-          ref: refFor(interactionFresh, 'textbox', 'Readonly'),
+          ref: refFor(beforeReadonly, 'textbox', 'Readonly'),
           text: 'overwrite',
         },
         sessionId,
@@ -1516,14 +1699,14 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       await run(
         dragTool,
         {
-          startRef: refFor(interactionFresh, 'button', 'Drag source'),
-          endRef: refFor(interactionFresh, 'button', 'Drop target'),
+          startRef: refFor(beforeReadonly, 'button', 'Drag source'),
+          endRef: refFor(beforeReadonly, 'button', 'Drop target'),
         },
         sessionId,
       ),
     )
     assert.match(String(dragged.snapshot), /dropped/)
-    ok('double click, readonly type and drag')
+    ok('click buttons/modifiers/offsets, slow type, disabled/readonly and drag')
 
     await run(navigateTool, { url: baseUrl }, sessionId)
 
@@ -1675,6 +1858,21 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.ok(fs.statSync(shotPath).size > 1000, 'screenshot looks empty')
     ok(`screenshot (${fs.statSync(shotPath).size} bytes)`)
 
+    const jpegFullPage = expectData(
+      await run(
+        screenshotTool,
+        { format: 'jpeg', fullPage: true },
+        sessionId,
+        `${sessionId}-shot-jpeg`,
+      ),
+    )
+    assert.ok(jpegFullPage.screenshotBase64)
+    assert.match(String(jpegFullPage.screenshotPath), /\.jpe?g$/)
+    assert.ok(
+      fs.statSync(String(jpegFullPage.screenshotPath)).size > 1000,
+      'full-page JPEG screenshot looks empty',
+    )
+
     const elementShot = expectData(
       await run(
         screenshotTool,
@@ -1698,7 +1896,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       /Recovery action: retry browser_screenshot and remove either ref or fullPage/,
     )
     assert.doesNotMatch(String(incompatibleShot), /browser_snapshot/)
-    ok('element screenshot')
+    ok('viewport, full-page JPEG and element screenshots')
 
     // ── console tool ──────────────────────────────────────
     const logs = expectData(
@@ -1787,6 +1985,109 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.equal((filtered.network as unknown[]).length, 1)
     ok('network: failedOnly and urlContains filters')
 
+    const diagnostics = expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}diagnostics` },
+        sessionId,
+      ),
+    )
+    const diagnosticsSnapshot = String(diagnostics.snapshot)
+    expectData(
+      await run(
+        clickTool,
+        { ref: refFor(diagnosticsSnapshot, 'button', 'Emit console levels') },
+        sessionId,
+      ),
+    )
+    for (const [level, text] of [
+      ['log', 'diagnostics log'],
+      ['warn', 'diagnostics warn'],
+      ['error', 'diagnostics error'],
+    ] as const) {
+      const levelOutput = expectData(
+        await run(consoleTool, { level }, sessionId),
+      )
+      assert.ok(
+        (levelOutput.consoleErrors as Array<{ level: string; text: string }>).some(
+          entry => entry.level === level && entry.text.includes(text),
+        ),
+        JSON.stringify(levelOutput.consoleErrors),
+      )
+    }
+    const limitedConsole = expectData(
+      await run(consoleTool, { limit: 2 }, sessionId),
+    )
+    assert.equal((limitedConsole.consoleErrors as unknown[]).length, 2)
+
+    const beforeRequests = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    expectData(
+      await run(
+        clickTool,
+        { ref: refFor(beforeRequests, 'button', 'Make requests') },
+        sessionId,
+      ),
+    )
+    const limitedNetwork = expectData(
+      await run(networkTool, { limit: 2 }, sessionId),
+    )
+    assert.equal((limitedNetwork.network as unknown[]).length, 2)
+    assert.ok(Number(limitedNetwork.networkTotal) >= 4)
+    ok('console levels and console/network limits use real page diagnostics')
+
+    const scrollMatrix = expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}scroll-matrix` },
+        sessionId,
+      ),
+    )
+    const containerTarget = refFor(
+      String(scrollMatrix.snapshot),
+      'button',
+      'Container target',
+    )
+    expectData(
+      await run(
+        scrollTool,
+        { ref: containerTarget, deltaY: 600, deltaX: 240 },
+        sessionId,
+      ),
+    )
+    const containerPosition = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression:
+              '({ top: document.querySelector("#scroller").scrollTop, left: document.querySelector("#scroller").scrollLeft, page: scrollY })',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    const scrolled = (
+      containerPosition.value as {
+        result?: { value?: { top?: number; left?: number; page?: number } }
+      }
+    ).result?.value
+    assert.ok((scrolled?.top ?? 0) > 0, JSON.stringify(scrolled))
+    assert.ok((scrolled?.left ?? 0) > 0, JSON.stringify(scrolled))
+    assert.equal(scrolled?.page, 0)
+    expectData(
+      await run(
+        scrollTool,
+        { ref: containerTarget, direction: 'left', amount: 100 },
+        sessionId,
+      ),
+    )
+    ok('scroll targets vertical and horizontal nested containers')
+    expectData(await run(navigateTool, { url: baseUrl }, sessionId))
+
     // ── navigating away resets refs ───────────────────────
     const other = expectData(
       await run(navigateTool, { url: `${baseUrl}other` }, sessionId),
@@ -1857,6 +2158,34 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('mode=efficient clips the tree but keeps clickable rows')
 
+    const interactiveOnly = expectData(
+      await run(
+        snapshotTool,
+        { mode: 'full', interactive: true },
+        sessionId,
+      ),
+    )
+    const interactiveText = String(interactiveOnly.snapshot)
+    assert.match(interactiveText, /Alice: latest note/)
+    assert.doesNotMatch(interactiveText, /heading "Inbox"/)
+
+    const boundedSnapshot = expectData(
+      await run(
+        snapshotTool,
+        { mode: 'efficient', maxChars: 300, maxNodes: 1 },
+        sessionId,
+      ),
+    )
+    const boundedSnapshotText = String(boundedSnapshot.snapshot)
+    assert.equal(boundedSnapshot.snapshotTruncated, true)
+    assert.ok(
+      boundedSnapshotText
+        .split('\n')
+        .filter(line => line.includes('[ref=')).length <= 1,
+      boundedSnapshotText,
+    )
+    ok('snapshot honors interactive, maxChars and maxNodes options')
+
     assert.ok(
       nestedSnap.length < 25_000,
       `50 nested rows must stay well under the char budget, got ${nestedSnap.length}`,
@@ -1904,6 +2233,96 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.doesNotMatch(String(missingText), /Filler paragraph/)
     ok('get_text bounds and honors explicit selectors')
 
+    expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}text-regions` },
+        sessionId,
+      ),
+    )
+    const defaultText = expectData(
+      await run(getTextTool, {}, sessionId),
+    )
+    assert.equal(String(defaultText.snapshot).trim(), 'Primary article text')
+    assert.match(String(defaultText.message), /article/)
+    ok('get_text prefers article over main and body')
+
+    expectData(await run(navigateTool, { url: baseUrl }, sessionId))
+    const snapshotWithUrls = expectData(
+      await run(snapshotTool, { urls: true }, sessionId),
+    )
+    const linkedSnapshot = String(snapshotWithUrls.snapshot)
+    assert.match(linkedSnapshot, /\nLinks:\n/)
+    assert.match(linkedSnapshot, /Go to other page -> http:\/\/127\.0\.0\.1:/)
+    ok('snapshot appends resolved link URLs')
+
+    const escapedDownload = await run(
+      waitForDownloadTool,
+      { path: '../outside.csv' },
+      sessionId,
+    )
+    assert.equal(typeof escapedDownload, 'string')
+    assert.match(String(escapedDownload), /Downloads can only be saved under/)
+
+    if (opts.downloads !== false) {
+      const downloadNav = expectData(
+        await run(
+          navigateTool,
+          { url: `${baseUrl}download` },
+          sessionId,
+        ),
+      )
+      const savedFiles: string[] = []
+      try {
+        const direct = expectData(
+          await run(
+            waitForDownloadTool,
+            {
+              ref: refFor(
+                String(downloadNav.snapshot),
+                'link',
+                'Download report',
+              ),
+              path: `agent-browser-${sessionId}-direct.csv`,
+            },
+            sessionId,
+          ),
+        )
+        savedFiles.push(String(direct.downloadPath))
+        assert.equal(
+          fs.readFileSync(String(direct.downloadPath), 'utf8'),
+          'id,name\n1,Alice\n2,Bob\n',
+        )
+
+        const afterDirect = String(
+          expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+        )
+        const delayed = expectData(
+          await run(
+            waitForDownloadTool,
+            {
+              ref: refFor(
+                afterDirect,
+                'button',
+                'Download after 5 seconds',
+              ),
+              path: `agent-browser-${sessionId}-delayed.csv`,
+            },
+            sessionId,
+          ),
+        )
+        savedFiles.push(String(delayed.downloadPath))
+        assert.equal(
+          fs.readFileSync(String(delayed.downloadPath), 'utf8'),
+          'id,name\n1,Alice\n2,Bob\n',
+        )
+        ok('wait_for_download captures direct and delayed downloads')
+      } finally {
+        for (const file of savedFiles) fs.rmSync(file, { force: true })
+      }
+      expectData(await run(navigateTool, { url: baseUrl }, sessionId))
+    }
+
     // ── tab lifecycle ─────────────────────────────────────
     // On the extension backend this is the path that creates and destroys tabs
     // in the user's real browser, so open/select/close all need to round-trip.
@@ -1950,6 +2369,35 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('tabs: select')
 
+    const temporary = expectData(
+      await run(
+        tabsTool,
+        { action: 'new', url: `${baseUrl}other?temporary=1` },
+        sessionId,
+      ),
+    )
+    const temporaryTabs = temporary.tabs as TabRow[]
+    const temporaryTab = temporaryTabs.find(
+      tab => tab.targetId !== originalId && tab.targetId !== newTab.targetId,
+    )
+    assert.ok(temporaryTab?.current)
+    const afterCurrentClose = expectData(
+      await run(
+        tabsTool,
+        { action: 'close', tabId: temporaryTab.targetId },
+        sessionId,
+      ),
+    ).tabs as TabRow[]
+    assert.equal(afterCurrentClose.length, 2)
+    assert.equal(afterCurrentClose.filter(tab => tab.current).length, 1)
+    assert.ok(
+      afterCurrentClose.every(tab => tab.targetId !== temporaryTab.targetId),
+    )
+    expectData(
+      await run(tabsTool, { action: 'select', tabId: originalId }, sessionId),
+    )
+    ok('tabs: closing the current tab adopts a live neighbour')
+
     // ── input still lands after the tab has been backgrounded ──
     // Chrome drops Input.* aimed at a hidden tab, and opening the tab above
     // pushed this one behind it. That is also the state the extension backend
@@ -1965,6 +2413,36 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       'a click on a backgrounded tab must still reach the page',
     )
     ok('input reaches a backgrounded tab')
+
+    const beforeHandoff = String(bgClicked.snapshot)
+    expectData(
+      await run(lockTool, { action: 'unlock' }, sessionId),
+    )
+    const blockedDuringHandoff = await run(
+      clickTool,
+      {
+        ref: refFor(beforeHandoff, 'button', 'Clicked 1 times'),
+      },
+      sessionId,
+    )
+    assert.equal(typeof blockedDuringHandoff, 'string')
+    assert.match(String(blockedDuringHandoff), /user.*control|control.*user/i)
+    expectData(await run(tabsTool, { action: 'list' }, sessionId))
+    expectData(
+      await run(lockTool, { action: 'lock' }, sessionId),
+    )
+    const afterRelock = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const resumedClick = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(afterRelock, 'button', 'Clicked 1 times') },
+        sessionId,
+      ),
+    )
+    assert.match(String(resumedClick.snapshot), /Clicked 2 times/)
+    ok('lock handoff blocks mutations, permits tab listing and resumes')
 
     // ── wait_for (time / text / textGone) ──
     const waitNav = expectData(
@@ -2034,6 +2512,19 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.match(String(selectorWaited.snapshot), /Selector appeared/)
     ok('wait_for selector becomes visible')
 
+    const navigateLaterRef = refFor(
+      String(selectorWaited.snapshot),
+      'button',
+      'Navigate later',
+    )
+    await run(clickTool, { ref: navigateLaterRef }, sessionId)
+    const urlWaited = expectData(
+      await run(waitForTool, { url: '**/other?waited=url' }, sessionId),
+    )
+    assert.match(String(urlWaited.url), /\/other\?waited=url$/)
+    assert.match(String(urlWaited.snapshot), /heading "Other page"/)
+    ok('wait_for URL glob observes delayed navigation')
+
     const emptyWait = await run(waitForTool, {}, sessionId)
     assert.equal(typeof emptyWait, 'string')
     assert.match(
@@ -2042,6 +2533,39 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     assert.doesNotMatch(String(emptyWait), /browser_snapshot/)
     ok('wait_for rejects an empty condition with the right recovery')
+
+    const spaStart = expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}spa?route=one` },
+        sessionId,
+      ),
+    )
+    const routeRef = refFor(
+      String(spaStart.snapshot),
+      'button',
+      'Go SPA two',
+    )
+    const spaChanged = expectData(
+      await run(clickTool, { ref: routeRef }, sessionId),
+    )
+    assert.match(String(spaChanged.url), /\/spa\?route=two$/)
+    assert.match(String(spaChanged.snapshot), /heading "SPA route two"/)
+    const staleSpaRef = await run(clickTool, { ref: routeRef }, sessionId)
+    assert.equal(typeof staleSpaRef, 'string')
+    assert.match(String(staleSpaRef), /stale|not found|snapshot/i)
+    const spaFresh = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const spaAction = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(spaFresh, 'button', 'SPA action') },
+        sessionId,
+      ),
+    )
+    assert.match(String(spaAction.snapshot), /spa action complete/)
+    ok('SPA history route replaces refs and remains actionable')
 
     // ── browser history actions ──────────────────────────
     const historyUrl = `${baseUrl}wait-text?history=${encodeURIComponent(label)}`
@@ -2070,6 +2594,23 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     assert.ok(reloaded.screenshotPath, 'reload screenshotAfterwards must capture')
     ok('navigate back, forward and reload')
+
+    const ambiguousNavigate = await run(
+      navigateTool,
+      { url: baseUrl, action: 'reload' },
+      sessionId,
+    )
+    assert.equal(
+      typeof ambiguousNavigate,
+      'string',
+      'navigate must reject url and action together instead of silently ignoring url',
+    )
+    assert.match(
+      String(ambiguousNavigate),
+      /provide either url or action/i,
+      'navigate should explain how to resolve mutually exclusive inputs',
+    )
+    ok('navigate rejects url and action together')
 
     const closed = expectData(
       await run(

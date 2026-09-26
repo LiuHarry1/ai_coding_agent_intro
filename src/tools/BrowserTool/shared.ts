@@ -431,7 +431,10 @@ export async function observe(
   const mode: SnapshotMode =
     opts.mode ?? (opts.compact ? 'efficient' : 'full')
   const efficient = mode === 'efficient'
-  const interactive = opts.interactive ?? (efficient ? true : false)
+  // Cursor keeps compact budgeting and interactive-only filtering orthogonal.
+  // Post-action snapshots need status text such as "saved" or an uploaded file
+  // name, so only an explicit interactive=true may remove content nodes.
+  const interactive = opts.interactive ?? false
   const maxChars = efficient
     ? (opts.maxChars ?? EFFICIENT_MAX_CHARS)
     : opts.maxChars

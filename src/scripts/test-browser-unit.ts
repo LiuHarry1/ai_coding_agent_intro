@@ -1381,14 +1381,32 @@ function makeFakeRelay(opts: {
 
   const interactive = keepInteractive(yaml)
   assert(
-    interactive.includes('[ref=e11]') && interactive.includes('我的沟通'),
-    `interactive keeps ref-bearing controls:\n${interactive}`,
+    interactive.includes('[ref=e11]') &&
+      interactive.includes('[ref=e1430]') &&
+      interactive.includes('[ref=e1593]'),
+    `interactive keeps role-based and pointer controls:\n${interactive}`,
   )
   assert(
-    !interactive.includes('驻场广州汇丰') || interactive.includes('[ref=e1595]'),
-    'text-only descendants without their own ref are dropped unless they are the named node',
+    interactive.includes('dialog [ref=e1374]') &&
+      !interactive.includes('我的沟通') &&
+      !interactive.includes('驻场广州汇丰') &&
+      !interactive.includes('Recruiter 0'),
+    `interactive keeps necessary ancestors but drops unrelated ref-bearing content:\n${interactive}`,
   )
-  ok('interactive snapshot keeps refs and their ancestors')
+  const interactiveWithDetails = keepInteractive(
+    [
+      '- generic [ref=e1]:',
+      '  - textbox "Email" [ref=e2]',
+      '    - /placeholder: you@example.com',
+      '  - heading "Ignored" [ref=e3]',
+    ].join('\n'),
+  )
+  assert(
+    interactiveWithDetails.includes('/placeholder: you@example.com') &&
+      !interactiveWithDetails.includes('heading "Ignored"'),
+    `interactive keeps control metadata but drops content siblings:\n${interactiveWithDetails}`,
+  )
+  ok('interactive snapshot keeps controls, metadata and necessary ancestors')
 }
 
 {

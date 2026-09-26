@@ -148,19 +148,54 @@ export function dropRedundantWrapperNames(yaml: string): string {
   return out.join('\n')
 }
 
+const INTERACTIVE_ROLES = new Set([
+  'button',
+  'checkbox',
+  'combobox',
+  'link',
+  'listbox',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'option',
+  'radio',
+  'searchbox',
+  'slider',
+  'spinbutton',
+  'switch',
+  'tab',
+  'textbox',
+  'treeitem',
+])
+
+function isInteractiveSnapshotLine(line: string): boolean {
+  if (!line.includes('[ref=')) return false
+  if (line.includes('[cursor=pointer]')) return true
+  const role = /^\s*-\s+([a-z]+)\b/.exec(line)?.[1]
+  return role !== undefined && INTERACTIVE_ROLES.has(role)
+}
+
 export function keepInteractive(yaml: string): string {
   const lines = yaml.split('\n')
   const keep = new Set<number>()
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].includes('[ref=')) continue
+    if (!isInteractiveSnapshotLine(lines[i])) continue
     keep.add(i)
-    let need = leadingSpaces(lines[i])
+    const nodeIndent = leadingSpaces(lines[i])
+    let need = nodeIndent
     for (let j = i - 1; j >= 0 && need > 0; j--) {
       const indent = leadingSpaces(lines[j])
       if (indent < need && /^\s*- /.test(lines[j])) {
         keep.add(j)
         need = indent
       }
+    }
+    // Preserve Playwright's metadata children (`/url`, `/placeholder`, etc.)
+    // for a retained control, but not ordinary non-interactive descendants.
+    for (let j = i + 1; j < lines.length; j++) {
+      const indent = leadingSpaces(lines[j])
+      if (indent <= nodeIndent) break
+      if (/^\s*-\s+\//.test(lines[j])) keep.add(j)
     }
   }
   return lines.filter((_, i) => keep.has(i)).join('\n')

@@ -257,6 +257,13 @@ export async function uploadFiles(
   page: Page,
   opts: { paths: string[]; ref?: string },
 ): Promise<{ files: string[]; cancelled: boolean }> {
+  if (opts.paths.length === 0) {
+    // An empty list means "cancel", not "clear the current input". Playwright's
+    // setInputFiles([]) clears an existing selection and fires change, which is
+    // a destructive side effect when no chooser is actually pending.
+    return (await drainChooser(page, [])) ?? { files: [], cancelled: true }
+  }
+
   // 1. Snapshot ref that is (or sits next to) a file input.
   if (opts.ref) {
     const fromRef = await fileInputFromRef(page, opts.ref)

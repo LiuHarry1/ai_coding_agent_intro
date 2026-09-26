@@ -400,6 +400,7 @@ async function main() {
       sessionId: 'browser-relay-test',
       backendFactory: () => createExtensionBackend({ relay }),
       crossOriginFrames: false,
+      downloads: false,
     })
 
     const faultSessionId = 'browser-relay-lifecycle-fault-test'

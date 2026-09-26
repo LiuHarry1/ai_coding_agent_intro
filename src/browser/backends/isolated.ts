@@ -51,6 +51,7 @@ export interface IsolatedBackendOptions {
   headless?: boolean
   channel?: string
   viewport?: { width: number; height: number }
+  deviceScaleFactor?: number
 }
 
 interface TabEntry {
@@ -69,6 +70,7 @@ export async function createIsolatedBackend(
       channel: opts.channel ?? 'chrome',
       headless: opts.headless ?? false,
       viewport,
+      deviceScaleFactor: opts.deviceScaleFactor,
       args: [
         '--no-first-run',
         '--no-default-browser-check',

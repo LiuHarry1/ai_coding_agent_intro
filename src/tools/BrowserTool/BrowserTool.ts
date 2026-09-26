@@ -376,6 +376,11 @@ export const navigateTool = defineBrowserTool({
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run({ url, action, screenshotAfterwards }, ctx) {
+    if (url && action) {
+      throw new BrowserError(
+        'browser_navigate received both url and action; provide either url or action, not both.',
+      )
+    }
     let targetId = ctx.targetId
     if (targetId && isTabPoisoned(targetId)) {
       const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
@@ -424,7 +429,7 @@ export const snapshotTool = defineBrowserTool({
       .enum(['efficient', 'full'])
       .optional()
       .describe(
-        `full (default): complete tree. efficient: interactive clip (~${EFFICIENT_MAX_CHARS} chars).`,
+        `full (default): complete tree. efficient: budgeted clip (~${EFFICIENT_MAX_CHARS} chars).`,
       ),
     maxDepth: z
       .number()
@@ -496,7 +501,7 @@ export const snapshotTool = defineBrowserTool({
         maxChars ??
         (resolvedMode === 'efficient' ? EFFICIENT_MAX_CHARS : undefined),
       selector,
-      interactive: interactive ?? resolvedMode === 'efficient',
+      interactive: interactive ?? false,
       includeDiff,
       urls,
       skipIfDegraded: false,

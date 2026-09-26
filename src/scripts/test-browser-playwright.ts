@@ -102,6 +102,58 @@ function screenshotPoint(
   }
 }
 
+async function checkHighDpiCoordinate(baseUrl: string): Promise<void> {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-browser-dpi-'))
+  const sessionId = 'browser-pw-high-dpi-test'
+  setBrowserBackendFactory(() =>
+    createIsolatedBackend({
+      userDataDir: profile,
+      headless: !HEADED,
+      viewport: { width: 1280, height: 800 },
+      deviceScaleFactor: 2,
+    }),
+  )
+  try {
+    expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}coordinate` },
+        sessionId,
+      ),
+    )
+    const dpr = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression: 'devicePixelRatio',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    assert.equal(
+      (dpr.value as { result?: { value?: number } }).result?.value,
+      2,
+    )
+    const screenshot = expectData(
+      await run(screenshotTool, {}, sessionId),
+    )
+    const point = screenshotPoint(screenshot, 100, 120)
+    const clicked = expectData(
+      await run(mouseClickXYTool, point, sessionId),
+    )
+    assert.match(yamlFromObserve(clicked), /Canvas clicked/)
+  } finally {
+    setBrowserBackendFactory(null)
+    await closeBrowser(sessionId)
+    fs.rmSync(profile, { recursive: true, force: true })
+  }
+  console.log('ok [playwright] high-DPI screenshot coordinates map to CSS pixels')
+}
+
 function refFor(snapshot: string, role: string, name: string): string {
   const line = snapshot
     .split('\n')
@@ -161,6 +213,7 @@ async function checkHeavyMediaDetach(): Promise<void> {
 async function main() {
   await checkHeavyMediaDetach()
   const server = await startFixtureServer()
+  await checkHighDpiCoordinate(server.url)
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-browser-pw-'))
 
   setBrowserBackendFactory(() =>
@@ -670,6 +723,22 @@ async function main() {
     )
     console.log('ok [playwright] handle_dialog accepts a native confirm')
 
+    expectData(await run(handleDialogTool, { accept: false }, sessionId))
+    const beforeDismiss = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const dismissed = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(beforeDismiss, 'button', 'Confirm me') },
+        sessionId,
+      ),
+    )
+    assert.match(String(dismissed.message), /native confirm dialog/)
+    assert.match(String(dismissed.message), /dismissed/)
+    assert.match(String(dismissed.snapshot), /dismissed/)
+    console.log('ok [playwright] handle_dialog dismisses a native confirm')
+
     const promptArmed = expectData(
       await run(
         handleDialogTool,
@@ -691,6 +760,21 @@ async function main() {
     assert.match(String(prompted.message), /native prompt dialog/)
     assert.match(String(prompted.snapshot), /prompt:CODE-42/)
     console.log('ok [playwright] handle_dialog supplies native prompt text')
+
+    expectData(await run(handleDialogTool, { accept: true }, sessionId))
+    const beforeAlert = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const alerted = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(beforeAlert, 'button', 'Alert me') },
+        sessionId,
+      ),
+    )
+    assert.match(String(alerted.message), /native alert dialog/)
+    assert.match(String(alerted.snapshot), /alert closed/)
+    console.log('ok [playwright] handle_dialog closes a native alert')
 
     const uploadFile = path.join(profile, 'receipt.txt')
     fs.writeFileSync(uploadFile, 'invoice')
@@ -728,6 +812,18 @@ async function main() {
       /receipt\.txt/,
       `uploaded file name must appear in page state:\n${uploaded.snapshot}`,
     )
+    const cancelledUpload = expectData(
+      await run(
+        fileUploadTool,
+        {
+          ref: refNear(String(uploaded.snapshot), 'Receipt upload'),
+          paths: [],
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(cancelledUpload.message), /Cancelled the file chooser/)
+    assert.match(String(cancelledUpload.snapshot), /receipt\.txt/)
     console.log('ok [playwright] file_upload sets an input type=file')
 
     const nearbyFile = path.join(profile, 'nearby.txt')
@@ -871,6 +967,33 @@ async function main() {
       / on <canvas[ >]/,
       'a text-less hit is described by tag and attributes, not by coordinates',
     )
+
+    const rightScreenshot = expectData(
+      await run(screenshotTool, {}, sessionId),
+    )
+    const rightPoint = screenshotPoint(rightScreenshot, 100, 120)
+    const rightCoordinate = expectData(
+      await run(
+        mouseClickXYTool,
+        { ...rightPoint, button: 'right' },
+        sessionId,
+      ),
+    )
+    assert.match(yamlFromObserve(rightCoordinate), /Canvas context button=2/)
+
+    const doubleScreenshot = expectData(
+      await run(screenshotTool, {}, sessionId),
+    )
+    const doublePoint = screenshotPoint(doubleScreenshot, 100, 120)
+    const doubleCoordinate = expectData(
+      await run(
+        mouseClickXYTool,
+        { ...doublePoint, doubleClick: true },
+        sessionId,
+      ),
+    )
+    assert.match(yamlFromObserve(doubleCoordinate), /Canvas double detail=2/)
+
     expectData(await run(screenshotTool, {}, sessionId))
     const outside = await run(mouseClickXYTool, { x: -1, y: 120 }, sessionId)
     assert.ok(

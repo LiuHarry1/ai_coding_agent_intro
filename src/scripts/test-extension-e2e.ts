@@ -22,6 +22,7 @@ import {
   navigateTool,
   screenshotTool,
   tabsTool,
+  waitForDownloadTool,
 } from '../tools/BrowserTool/BrowserTool.js'
 import type {
   AnyTool,
@@ -92,6 +93,13 @@ async function main() {
     pair: { connectUrl: relay.connectUrl('Baize e2e') },
   })
   let workerSession = chrome.workerSession
+  const chromeDownloadDir = path.join(profile, 'Downloads')
+  fs.mkdirSync(chromeDownloadDir, { recursive: true })
+  await chrome.cdp.send('Browser.setDownloadBehavior', {
+    behavior: 'allow',
+    downloadPath: chromeDownloadDir,
+    eventsEnabled: true,
+  })
   console.log(`ok [e2e] extension loaded into chrome (${chrome.extensionId})`)
 
   /** Real tabs in the browser, ignoring extension pages. */
@@ -219,6 +227,35 @@ async function main() {
     assert.match(String(frameClicked.snapshot), /inner clicked/)
     expectData(await run(navigateTool, { url: fixture.url }))
     console.log('ok [e2e] cross-origin iframe refs work through chrome.debugger')
+
+    assert.ok(
+      relay.capabilities().has('downloads.wait'),
+      'the real extension must advertise chrome.downloads support',
+    )
+    const downloadPage = expectData(
+      await run(navigateTool, { url: `${fixture.url}download` }),
+    )
+    const downloadResult = expectData(
+      await run(waitForDownloadTool, {
+        ref: refFor(
+          String(downloadPage.snapshot),
+          'link',
+          'Download report',
+        ),
+        path: `agent-extension-e2e-${Date.now()}.csv`,
+      }),
+    )
+    const downloadedPath = String(downloadResult.downloadPath)
+    try {
+      assert.equal(
+        fs.readFileSync(downloadedPath, 'utf8'),
+        'id,name\n1,Alice\n2,Bob\n',
+      )
+    } finally {
+      fs.rmSync(downloadedPath, { force: true })
+    }
+    expectData(await run(navigateTool, { url: fixture.url }))
+    console.log('ok [e2e] download round-trips through chrome.downloads')
 
     // ── tabs really open and close in the user's browser ──
     const pagesBefore = await countUserPages()
