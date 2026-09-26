@@ -91,6 +91,7 @@ async function main() {
     headless: !HEADED,
     pair: { connectUrl: relay.connectUrl('Baize e2e') },
   })
+  let workerSession = chrome.workerSession
   console.log(`ok [e2e] extension loaded into chrome (${chrome.extensionId})`)
 
   /** Real tabs in the browser, ignoring extension pages. */
@@ -180,6 +181,45 @@ async function main() {
     )
     console.log('ok [e2e] driving an unshared tab is refused')
 
+    const popupPagesBefore = await countUserPages()
+    expectData(
+      await run(clickTool, {
+        ref: refFor(String(clicked.snapshot), 'link', 'Open popup'),
+      }),
+    )
+    await waitFor(
+      'popup opened by an owned tab to become owned',
+      async () => (await backend.listTabs()).length === 2,
+    )
+    const popupTabs = await backend.listTabs()
+    const inheritedPopup = popupTabs.find(tab => tab.url.includes('popup=1'))
+    assert.ok(inheritedPopup, `owned popup was not listed: ${JSON.stringify(popupTabs)}`)
+    assert.equal(await countUserPages(), popupPagesBefore + 1)
+    expectData(
+      await run(tabsTool, {
+        action: 'close',
+        tabId: inheritedPopup.targetId,
+      }),
+    )
+    assert.equal(await countUserPages(), popupPagesBefore)
+    console.log('ok [e2e] popup tabs inherit ownership from their opener')
+
+    const crossFrame = expectData(
+      await run(navigateTool, { url: `${fixture.url}cross-frame?e2e=1` }),
+    )
+    const crossFrameSnapshot = String(crossFrame.snapshot)
+    const frameButton = refFor(
+      crossFrameSnapshot,
+      'button',
+      'Inner frame action',
+    )
+    const frameClicked = expectData(
+      await run(clickTool, { ref: frameButton }),
+    )
+    assert.match(String(frameClicked.snapshot), /inner clicked/)
+    expectData(await run(navigateTool, { url: fixture.url }))
+    console.log('ok [e2e] cross-origin iframe refs work through chrome.debugger')
+
     // ── tabs really open and close in the user's browser ──
     const pagesBefore = await countUserPages()
     const opened = expectData(
@@ -209,7 +249,7 @@ async function main() {
         awaitPromise: true,
         returnByValue: true,
       },
-      chrome.workerSession,
+      workerSession,
     )
     const found = groups.result.value as Array<{ color: string }>
     assert.equal(
@@ -219,6 +259,79 @@ async function main() {
     )
     assert.equal(found[0].color, 'orange')
     console.log('ok [e2e] agent tabs collected into a labelled tab group')
+
+    const { targetInfos: beforeWorkerReload } = await chrome.cdp.send<{
+      targetInfos: Array<{ targetId: string; type: string; url: string }>
+    }>('Target.getTargets')
+    const oldWorkerTarget = beforeWorkerReload.find(
+      target =>
+        target.type === 'service_worker' &&
+        target.url.startsWith(`chrome-extension://${chrome.extensionId}/`),
+    )
+    assert.ok(oldWorkerTarget, 'extension service worker must exist before reload')
+    const storedBeforeWorkerStop = await chrome.cdp.send<{
+      result: { value: Record<string, unknown> }
+    }>(
+      'Runtime.evaluate',
+      {
+        expression: 'chrome.storage.local.get(null)',
+        awaitPromise: true,
+        returnByValue: true,
+      },
+      workerSession,
+    )
+    assert.equal(
+      typeof storedBeforeWorkerStop.result.value.recoverableRelayUrl,
+      'string',
+      'the relay recovery endpoint must survive an explicit extension reload',
+    )
+    await chrome.cdp.send('Target.closeTarget', {
+      targetId: oldWorkerTarget.targetId,
+    })
+    await waitFor('old extension service worker to stop', async () => {
+      const { targetInfos } = await chrome.cdp.send<{
+        targetInfos: Array<{ targetId: string }>
+      }>('Target.getTargets')
+      return !targetInfos.some(
+        target => target.targetId === oldWorkerTarget.targetId,
+      )
+    })
+    const wakePage = await chrome.cdp.send<{ targetId: string }>(
+      'Target.createTarget',
+      { url: `chrome-extension://${chrome.extensionId}/popup.html` },
+    )
+    let restartedWorker:
+      | { targetId: string; type: string; url: string }
+      | undefined
+    await waitFor('extension service worker to wake again', async () => {
+      const { targetInfos } = await chrome.cdp.send<{
+        targetInfos: Array<{ targetId: string; type: string; url: string }>
+      }>('Target.getTargets')
+      restartedWorker = targetInfos.find(
+        target =>
+          target.type === 'service_worker' &&
+          target.url.startsWith(`chrome-extension://${chrome.extensionId}/`),
+      )
+      return restartedWorker !== undefined
+    })
+    workerSession = (
+      await chrome.cdp.send<{ sessionId: string }>('Target.attachToTarget', {
+        targetId: restartedWorker!.targetId,
+        flatten: true,
+      })
+    ).sessionId
+    await waitFor('extension to reconnect after worker reload', () =>
+      relay.isConnected(),
+    )
+    await chrome.cdp.send('Target.closeTarget', { targetId: wakePage.targetId })
+    const afterWorkerRestart = expectData(
+      await run(navigateTool, { url: `${fixture.url}?worker=reloaded` }),
+    )
+    assert.match(String(afterWorkerRestart.url), /worker=reloaded/)
+    assert.equal((await backend.listTabs()).length, 1)
+    console.log(
+      'ok [e2e] service worker termination preserves recovery state and tool access',
+    )
 
     // ── the popup, actually clicked ──────────────────────
     // Opened as an ordinary tab so its buttons can be driven; it is the same
@@ -256,10 +369,20 @@ async function main() {
       } | null
     }
 
-    await waitFor('popup to render connected state', async () => {
-      const state = await readPopup()
-      return state?.status === 'connected' && state.tabCount === 1
-    })
+    let lastPopupState: Awaited<ReturnType<typeof readPopup>> = null
+    try {
+      await waitFor('popup to render connected state', async () => {
+        lastPopupState = await readPopup()
+        return (
+          lastPopupState?.status === 'connected' &&
+          lastPopupState.tabCount === 1
+        )
+      })
+    } catch (err) {
+      throw new Error(
+        `${err instanceof Error ? err.message : String(err)}; last popup state=${JSON.stringify(lastPopupState)}`,
+      )
+    }
     const popupState = await readPopup()
     assert.equal(
       popupState?.tokenMasked,
@@ -321,7 +444,7 @@ async function main() {
           awaitPromise: true,
           returnByValue: true,
         },
-        chrome.workerSession,
+        workerSession,
       )
       return (
         (status.result.value as { status?: string })?.status === 'disconnected'
@@ -337,7 +460,7 @@ async function main() {
         awaitPromise: true,
         returnByValue: true,
       },
-      chrome.workerSession,
+      workerSession,
     )
     const pairingToken = (tokenRes.result.value as { pairingToken?: string })
       ?.pairingToken

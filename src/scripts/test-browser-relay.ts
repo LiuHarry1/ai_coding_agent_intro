@@ -27,11 +27,31 @@ import {
   runBrowserToolSuite,
   startFixtureServer,
 } from './browser-tool-suite.js'
+import {
+  closeBrowser,
+  getCurrentTabId,
+  setBrowserBackendFactory,
+} from '../browser/manager.js'
+import {
+  clickTool,
+  navigateTool,
+  snapshotTool,
+  tabsTool,
+} from '../tools/BrowserTool/BrowserTool.js'
+import type {
+  AnyTool,
+  DualChannelToolResult,
+  ToolContext,
+  ToolDefinition,
+} from '../core/types.js'
 
 const HEADED = process.argv.includes('--headed')
 
 interface FakeExtension {
   close: () => Promise<void>
+  setDropLifecycleEvents: (enabled: boolean) => void
+  setFailNavigationStateEvaluation: (enabled: boolean) => void
+  setFailTabIdentityEvaluation: (enabled: boolean) => void
   /** CDP methods the simulated extension was asked to forward. */
   seenMethods: Set<string>
   deniedCount: number
@@ -114,11 +134,39 @@ async function startFakeExtension(
   // Mirrors chrome.debugger.onEvent: Playwright on the host waits on these
   // (lifecycle, execution contexts), so without them every navigate hangs.
   const forwarding = new Set<number>()
+  let dropLifecycleEvents = false
+  let failNavigationStateEvaluation = false
+  let failTabIdentityEvaluation = false
+  async function adoptPopup(url: string): Promise<void> {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const tabs = await chrome.listTabs()
+      const popup = [...tabs]
+        .reverse()
+        .find(tab => tab.url === url && !owned.has(tabIdFor(tab.targetId)))
+      if (popup) {
+        owned.add(tabIdFor(popup.targetId))
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, 25))
+    }
+  }
   function forwardEvents(tabId: number, cdpTarget: string): void {
     if (forwarding.has(tabId)) return
     forwarding.add(tabId)
     onIsolatedCdpEvent(chrome, cdpTarget, (method, params) => {
       if (ws.readyState !== WebSocket.OPEN) return
+      if (
+        dropLifecycleEvents &&
+        (method === 'Page.domContentEventFired' ||
+          method === 'Page.loadEventFired' ||
+          method === 'Page.lifecycleEvent' ||
+          method === 'Page.frameStoppedLoading')
+      ) {
+        return
+      }
+      if (method === 'Page.windowOpen') {
+        void adoptPopup(String((params as { url?: unknown })?.url ?? ''))
+      }
       ws.send(
         JSON.stringify({ type: 'cdpEvent', targetId: String(tabId), method, params }),
       )
@@ -166,6 +214,20 @@ async function startFakeExtension(
         const cdpTarget = assertOwned(debuggee.tabId)
         forwardEvents(debuggee.tabId, cdpTarget)
         seenMethods.add(cdpMethod)
+        if (
+          failTabIdentityEvaluation &&
+          cdpMethod === 'Runtime.evaluate' &&
+          String(params?.expression ?? '').includes('__aiAgentTabToken')
+        ) {
+          throw new Error('Injected tab identity evaluation failure')
+        }
+        if (
+          failNavigationStateEvaluation &&
+          (cdpMethod === 'Runtime.evaluate' ||
+            cdpMethod === 'Runtime.callFunctionOn')
+        ) {
+          throw new Error('Injected navigation state evaluation failure')
+        }
         return (await chrome.send(cdpTarget, cdpMethod, params)) ?? {}
       }
       default:
@@ -193,6 +255,15 @@ async function startFakeExtension(
 
   return {
     seenMethods,
+    setDropLifecycleEvents(enabled: boolean) {
+      dropLifecycleEvents = enabled
+    },
+    setFailNavigationStateEvaluation(enabled: boolean) {
+      failNavigationStateEvaluation = enabled
+    },
+    setFailTabIdentityEvaluation(enabled: boolean) {
+      failTabIdentityEvaluation = enabled
+    },
     get deniedCount() {
       return deniedCount
     },
@@ -249,6 +320,52 @@ async function testRejectsBadPath(relayUrl: string): Promise<void> {
   console.log('ok [relay] rejects a handshake on any other path')
 }
 
+async function runTool(
+  definition: ToolDefinition,
+  args: Record<string, unknown>,
+  sessionId: string,
+  abortSignal?: AbortSignal,
+): Promise<DualChannelToolResult<Record<string, unknown>> | string> {
+  const context: ToolContext = {
+    eventBus: { emit() {}, on() {}, off() {} } as unknown as ToolContext['eventBus'],
+    wire: { emit() {} } as unknown as ToolContext['wire'],
+    cwd: process.cwd(),
+    sessionId,
+  }
+  const instance = definition.create(process.cwd(), context) as AnyTool & {
+    execute: (
+      input: unknown,
+      options: { toolCallId: string; abortSignal?: AbortSignal },
+    ) => Promise<DualChannelToolResult<Record<string, unknown>> | string>
+  }
+  return instance.execute(args, {
+    toolCallId: `relay-fault-${Date.now()}`,
+    abortSignal,
+  })
+}
+
+function runNavigate(
+  args: Record<string, unknown>,
+  sessionId: string,
+): Promise<DualChannelToolResult<Record<string, unknown>> | string> {
+  return runTool(navigateTool, args, sessionId)
+}
+
+function expectData(
+  result: DualChannelToolResult<Record<string, unknown>> | string,
+): Record<string, unknown> {
+  assert.ok(typeof result !== 'string', String(result))
+  return result.data
+}
+
+function refFor(snapshot: string, role: string, name: string): string {
+  const line = snapshot
+    .split('\n')
+    .find(item => item.includes(`${role} "${name}"`) && item.includes('[ref='))
+  assert.ok(line, `no ref for ${role} "${name}" in:\n${snapshot}`)
+  return /\[ref=([^\]]+)\]/.exec(line)![1]
+}
+
 async function main() {
   const server = await startFixtureServer()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-browser-relay-'))
@@ -282,7 +399,183 @@ async function main() {
       baseUrl: server.url,
       sessionId: 'browser-relay-test',
       backendFactory: () => createExtensionBackend({ relay }),
+      crossOriginFrames: false,
     })
+
+    const faultSessionId = 'browser-relay-lifecycle-fault-test'
+    setBrowserBackendFactory(() => createExtensionBackend({ relay }))
+    try {
+      const initial = await runNavigate(
+        { url: `${server.url}?lifecycle=initial` },
+        faultSessionId,
+      )
+      assert.notEqual(typeof initial, 'string', String(initial))
+      extension.setDropLifecycleEvents(true)
+      const withoutLifecycle = await runNavigate(
+        { url: `${server.url}other?lifecycle=dropped` },
+        faultSessionId,
+      )
+      assert.notEqual(
+        typeof withoutLifecycle,
+        'string',
+        `a completed URL navigation must survive missing lifecycle events:\n${withoutLifecycle}`,
+      )
+      console.log(
+        'ok [relay] completed URL navigation survives missing lifecycle events',
+      )
+
+      extension.setDropLifecycleEvents(false)
+      const historyStart = await runNavigate(
+        { url: `${server.url}?lifecycle=history-start` },
+        faultSessionId,
+      )
+      assert.notEqual(typeof historyStart, 'string', String(historyStart))
+      const historyEnd = await runNavigate(
+        { url: `${server.url}other?lifecycle=history-end` },
+        faultSessionId,
+      )
+      assert.notEqual(typeof historyEnd, 'string', String(historyEnd))
+      extension.setDropLifecycleEvents(true)
+      extension.setFailNavigationStateEvaluation(true)
+      const unverifiable = await runNavigate(
+        { action: 'back' },
+        faultSessionId,
+      )
+      assert.equal(
+        typeof unverifiable,
+        'string',
+        'an unverifiable timed-out navigation must fail',
+      )
+      assert.match(String(unverifiable), /resulting page state could not be verified/)
+      assert.match(
+        String(unverifiable),
+        /Recovery action: stop and ask the user to inspect the browser tab/,
+      )
+      assert.doesNotMatch(String(unverifiable), /overlay|PDF|browser_snapshot/i)
+
+      extension.setDropLifecycleEvents(false)
+      extension.setFailNavigationStateEvaluation(false)
+      const recovered = await runNavigate(
+        { url: `${server.url}?lifecycle=recovered` },
+        faultSessionId,
+      )
+      assert.notEqual(typeof recovered, 'string', String(recovered))
+      console.log(
+        'ok [relay] unverifiable navigation fails cleanly and recovers on a new tab',
+      )
+    } finally {
+      extension.setDropLifecycleEvents(false)
+      extension.setFailNavigationStateEvaluation(false)
+      setBrowserBackendFactory(null)
+      await closeBrowser(faultSessionId)
+    }
+
+    const identitySession = 'browser-relay-identity-fault-test'
+    setBrowserBackendFactory(() => createExtensionBackend({ relay }))
+    try {
+      const identityUrl = `${server.url}?identity=fault`
+      const firstCandidate = await relay.request<{ targetId: string }>({
+        method: 'tabs.create',
+        url: identityUrl,
+      })
+      const secondCandidate = await relay.request<{ targetId: string }>({
+        method: 'tabs.create',
+        url: identityUrl,
+      })
+      assert.ok(firstCandidate.targetId && secondCandidate.targetId)
+      assert.notEqual(firstCandidate.targetId, secondCandidate.targetId)
+      expectData(
+        await runTool(
+          tabsTool,
+          { action: 'select', tabId: secondCandidate.targetId },
+          identitySession,
+        ),
+      )
+
+      extension.setFailTabIdentityEvaluation(true)
+      const ambiguous = await runTool(snapshotTool, {}, identitySession)
+      assert.equal(
+        typeof ambiguous,
+        'string',
+        'failed identity probing with two blank tabs must not choose one',
+      )
+      assert.match(
+        String(ambiguous),
+        /Could not verify which of \d+ same-URL pages belongs to tab/,
+      )
+
+      extension.setFailTabIdentityEvaluation(false)
+      const recovered = expectData(
+        await runTool(snapshotTool, {}, identitySession),
+      )
+      assert.equal(recovered.url, identityUrl)
+      for (const tabId of [firstCandidate.targetId, secondCandidate.targetId]) {
+        expectData(
+          await runTool(
+            tabsTool,
+            { action: 'close', tabId },
+            identitySession,
+          ),
+        )
+      }
+      console.log(
+        'ok [relay] failed identity probing never guesses between same-URL tabs',
+      )
+    } finally {
+      extension.setFailTabIdentityEvaluation(false)
+      setBrowserBackendFactory(null)
+      await closeBrowser(identitySession)
+    }
+
+    const sessionA = 'browser-relay-concurrent-a'
+    const sessionB = 'browser-relay-concurrent-b'
+    setBrowserBackendFactory(() => createExtensionBackend({ relay }))
+    try {
+      const sameUrl = `${server.url}?multi-session=same-url`
+      const [navA, navB] = await Promise.all([
+        runNavigate({ url: sameUrl }, sessionA),
+        runNavigate({ url: sameUrl }, sessionB),
+      ])
+      const dataA = expectData(navA)
+      const dataB = expectData(navB)
+      const targetA = getCurrentTabId(sessionA)
+      const targetB = getCurrentTabId(sessionB)
+      assert.ok(targetA && targetB, 'both sessions must remember a current tab')
+      assert.notEqual(targetA, targetB, 'sessions must own distinct current tabs')
+
+      const clickA = expectData(
+        await runTool(
+          clickTool,
+          {
+            ref: refFor(
+              String(dataA.snapshot),
+              'button',
+              'Clicked 0 times',
+            ),
+          },
+          sessionA,
+        ),
+      )
+      assert.match(String(clickA.snapshot), /Clicked 1 times/)
+      const observedB = expectData(await runTool(snapshotTool, {}, sessionB))
+      assert.match(String(observedB.snapshot), /Clicked 0 times/)
+      assert.doesNotMatch(String(observedB.snapshot), /Clicked 1 times/)
+      assert.match(String(dataB.snapshot), /Clicked 0 times/)
+      await closeBrowser(sessionA)
+      const afterSessionAClose = expectData(
+        await runTool(snapshotTool, {}, sessionB),
+      )
+      assert.match(String(afterSessionAClose.snapshot), /Clicked 0 times/)
+      console.log(
+        'ok [relay] concurrent sessions isolate same-URL tabs, refs and lifecycle',
+      )
+    } finally {
+      setBrowserBackendFactory(null)
+      await Promise.all([
+        closeBrowser(sessionA),
+        closeBrowser(sessionB),
+      ])
+    }
 
     // The consent model held. The suite ends by deliberately closing an
     // already-closed tab; the host must reject it before it reaches the
@@ -340,8 +633,51 @@ async function main() {
     )
     console.log('ok [relay] reflective calls cannot reach unowned tabs')
 
+    const disconnectSession = 'browser-relay-disconnect-inflight-test'
+    setBrowserBackendFactory(() => createExtensionBackend({ relay }))
+    const disconnectAbort = new AbortController()
+    let disconnectedNavigation:
+      | DualChannelToolResult<Record<string, unknown>>
+      | string
+      | 'hung' = 'hung'
+    try {
+      expectData(
+        await runNavigate(
+          { url: `${server.url}?disconnect=initial` },
+          disconnectSession,
+        ),
+      )
+      const pendingNavigation = runTool(
+        navigateTool,
+        { url: `${server.url}slow-navigation` },
+        disconnectSession,
+        disconnectAbort.signal,
+      )
+      await new Promise(resolve => setTimeout(resolve, 300))
+      await extension.close()
+      disconnectedNavigation = await Promise.race([
+        pendingNavigation,
+        new Promise<'hung'>(resolve =>
+          setTimeout(() => resolve('hung'), 10_000),
+        ),
+      ])
+      if (disconnectedNavigation === 'hung') {
+        disconnectAbort.abort()
+        await pendingNavigation
+      }
+    } finally {
+      setBrowserBackendFactory(null)
+      await closeBrowser(disconnectSession)
+    }
+    assert.notEqual(
+      disconnectedNavigation,
+      'hung',
+      'an in-flight navigation must fail promptly when the extension disconnects',
+    )
+    assert.equal(typeof disconnectedNavigation, 'string')
+    console.log('ok [relay] extension disconnect interrupts in-flight navigation')
+
     // A disconnected extension must fail loudly rather than hang.
-    await extension.close()
     await new Promise(r => setTimeout(r, 100))
     assert.equal(relay.isConnected(), false)
     const orphaned = await createExtensionBackend({
@@ -356,6 +692,22 @@ async function main() {
     assert.match(String(orphaned), /extension\/README/)
     assert.match(String(orphaned), /"isolated"/)
     console.log('ok [relay] missing extension produces an actionable error')
+
+    const replacement = await startFakeExtension(relay.wsUrl, chrome)
+    const reconnectSession = 'browser-relay-reconnect-test'
+    setBrowserBackendFactory(() => createExtensionBackend({ relay }))
+    try {
+      const reconnected = await runNavigate(
+        { url: `${server.url}?reconnect=success` },
+        reconnectSession,
+      )
+      expectData(reconnected)
+      console.log('ok [relay] tools recover after the extension reconnects')
+    } finally {
+      setBrowserBackendFactory(null)
+      await closeBrowser(reconnectSession)
+      await replacement.close()
+    }
 
     console.log('\nall extension-backend tests passed')
   } finally {

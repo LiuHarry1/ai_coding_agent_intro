@@ -412,19 +412,21 @@ export async function dismissBlockingDropdown(
 
 async function pointHitsLocator(
   loc: Locator,
-  x: number,
-  y: number,
+  offset: { x: number; y: number },
 ): Promise<boolean> {
   return loc
     .evaluate(
-      (el, coords) => {
-        let top = document.elementFromPoint(coords.x, coords.y)
+      (el, position) => {
+        const rect = el.getBoundingClientRect()
+        const x = rect.left + position.x
+        const y = rect.top + position.y
+        let top = document.elementFromPoint(x, y)
         if (!top) return false
         // Match Cursor's deep hit test for controls inside open shadow roots.
         while ((top as HTMLElement).shadowRoot) {
           const inner = (top as HTMLElement).shadowRoot!.elementFromPoint(
-            coords.x,
-            coords.y,
+            x,
+            y,
           )
           if (!inner || inner === top) break
           top = inner
@@ -439,7 +441,7 @@ async function pointHitsLocator(
         }
         return false
       },
-      { x, y },
+      offset,
     )
     .catch(() => false)
 }
@@ -469,17 +471,18 @@ export function formatClickIntercept(hit: ClickIntercept): string {
 }
 
 export async function diagnoseClickIntercept(
-  page: Page,
+  _page: Page,
   loc: Locator,
-  x: number,
-  y: number,
+  offsetX: number,
+  offsetY: number,
 ): Promise<ClickIntercept | undefined> {
   const intercept = await loc
     .evaluate(
-      (target, coords) => {
+      (target, offset) => {
+        const rect = target.getBoundingClientRect()
         const hit = document.elementFromPoint(
-          coords.x,
-          coords.y,
+          rect.left + offset.x,
+          rect.top + offset.y,
         ) as HTMLElement | null
         if (!hit) {
           return {
@@ -601,7 +604,7 @@ export async function diagnoseClickIntercept(
             'Snapshot to see what is covering the control, then click that overlay or a new ref.',
         }
       },
-      { x, y },
+      { x: offsetX, y: offsetY },
     )
     .catch(() => undefined)
   return intercept ?? undefined
@@ -700,9 +703,6 @@ export async function clickLocatorRobust(
     y: opts.offsetY ?? box.height / 2,
   }
   const position = visibleClickPosition(box, viewport, preferredPosition)
-  const viewportX = box.x + position.x
-  const viewportY = box.y + position.y
-
   const clickArgs = {
     timeout: 8_000,
     button: opts.button,
@@ -721,7 +721,7 @@ export async function clickLocatorRobust(
     return
   }
 
-  if (await pointHitsLocator(loc, viewportX, viewportY)) {
+  if (await pointHitsLocator(loc, position)) {
     await performClick()
     return
   }
@@ -737,7 +737,7 @@ export async function clickLocatorRobust(
       )
       if (
         dismissal.closed &&
-        (await pointHitsLocator(loc, viewportX, viewportY))
+        (await pointHitsLocator(loc, position))
       ) {
         await performClick()
         return
@@ -754,9 +754,7 @@ export async function clickLocatorRobust(
       { x: box.width * 0.5, y: box.height * 0.75 },
     ]
     for (const off of offsets) {
-      const ox = box.x + off.x
-      const oy = box.y + off.y
-      if (!(await pointHitsLocator(loc, ox, oy))) continue
+      if (!(await pointHitsLocator(loc, off))) continue
       const retryArgs = { ...clickArgs, position: off }
       if (opts.doubleClick) await loc.dblclick(retryArgs)
       else await loc.click(retryArgs)
@@ -767,8 +765,8 @@ export async function clickLocatorRobust(
   const intercept = await diagnoseClickIntercept(
     page,
     loc,
-    viewportX,
-    viewportY,
+    position.x,
+    position.y,
   )
   if (intercept) {
     throw new BrowserError(

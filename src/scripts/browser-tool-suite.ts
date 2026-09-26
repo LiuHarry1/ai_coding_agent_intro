@@ -12,15 +12,19 @@ import * as http from 'node:http'
 import { setBrowserBackendFactory, closeBrowser } from '../browser/manager.js'
 import type { BrowserBackend } from '../browser/types.js'
 import {
+  cdpTool,
   clickTool,
   consoleTool,
   dragTool,
+  getBoundingBoxTool,
   networkTool,
   getTextTool,
+  highlightTool,
   hoverTool,
   fillFormTool,
   navigateTool,
   pressKeyTool,
+  resizeTool,
   screenshotTool,
   scrollTool,
   selectOptionTool,
@@ -104,6 +108,8 @@ const PAGE = `<!doctype html>
   <button id="call-xhr">Call xhr</button>
 
   <a href="/other">Go to other page</a>
+  <a href="/other?popup=1" target="_blank">Open popup</a>
+  <a href="/other?popup=noopener" target="_blank" rel="noopener">Open noopener popup</a>
 
   <!-- Role-less clickable nodes. Playwright emits these as generic + ref +
        [cursor=pointer], not as forged buttons. -->
@@ -691,6 +697,40 @@ const DOWNLOAD_PAGE = `<!doctype html>
 </body>
 </html>`
 
+const FRAME_INNER_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Cross-origin inner frame</title></head>
+<body>
+  <button id="inner-action">Inner frame action</button>
+  <p id="inner-state">inner untouched</p>
+  <script>
+    document.getElementById('inner-action').addEventListener('click', function () {
+      document.getElementById('inner-state').textContent = 'inner clicked';
+    });
+  </script>
+</body>
+</html>`
+
+function crossOriginPage(port: number): string {
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Frame and shadow matrix</title></head>
+<body>
+  <h1>Frame and shadow matrix</h1>
+  <div id="shadow-host"></div>
+  <p id="shadow-state">shadow untouched</p>
+  <iframe title="Cross origin controls" src="http://localhost:${port}/frame-inner"></iframe>
+  <script>
+    const root = document.getElementById('shadow-host').attachShadow({ mode: 'open' });
+    root.innerHTML = '<button id="shadow-action">Shadow action</button>';
+    root.getElementById('shadow-action').addEventListener('click', function () {
+      document.getElementById('shadow-state').textContent = 'shadow clicked';
+    });
+  </script>
+</body>
+</html>`
+}
+
 export function startFixtureServer(): Promise<{
   url: string
   close: () => Promise<void>
@@ -797,6 +837,15 @@ export function startFixtureServer(): Promise<{
     }
     if (route === '/download') {
       res.end(DOWNLOAD_PAGE)
+      return
+    }
+    if (route === '/cross-frame') {
+      const address = server.address() as { port: number }
+      res.end(crossOriginPage(address.port))
+      return
+    }
+    if (route === '/frame-inner') {
+      res.end(FRAME_INNER_PAGE)
       return
     }
     if (route === '/hang-frame') {
@@ -923,6 +972,8 @@ export interface SuiteOptions {
   sessionId: string
   /** Print the first snapshot; useful when eyeballing a new backend. */
   showSnapshot?: boolean
+  /** Fake relay cannot route flattened OOPIF child sessions; real extension E2E covers them. */
+  crossOriginFrames?: boolean
 }
 
 export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
@@ -1219,6 +1270,173 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.doesNotMatch(String(invalidOption), /"Sandbox"/)
     assert.doesNotMatch(String(invalidOption), /not found or not visible/)
     ok('select_option')
+
+    // ── visual grounding + viewport + CDP ───────────────
+    const resized = expectData(
+      await run(
+        resizeTool,
+        { width: 640, height: 480, screenshotAfterwards: true },
+        sessionId,
+      ),
+    )
+    assert.ok(resized.screenshotPath, 'resize screenshotAfterwards must capture')
+    const viewportResult = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression: '({ width: innerWidth, height: innerHeight })',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    const viewport = (
+      viewportResult.value as {
+        result?: { value?: { width?: number; height?: number } }
+      }
+    ).result?.value
+    assert.deepEqual(viewport, { width: 640, height: 480 })
+
+    const oversized = await run(
+      resizeTool,
+      { width: 9000, height: 480 },
+      sessionId,
+    )
+    assert.equal(typeof oversized, 'string')
+    assert.match(String(oversized), /exceeds maximum of 8192/)
+
+    const visualSnap = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const environmentRef = refFor(visualSnap, 'combobox', 'Environment')
+    const bounds = expectData(
+      await run(
+        getBoundingBoxTool,
+        { ref: environmentRef, element: 'Environment select' },
+        sessionId,
+      ),
+    ).value as { x: number; y: number; width: number; height: number }
+    assert.ok(bounds.width > 0 && bounds.height > 0)
+    assert.ok(bounds.x >= 0 && bounds.y >= 0)
+    assert.ok(bounds.x < 640 && bounds.y < 480)
+
+    const highlighted = expectData(
+      await run(
+        highlightTool,
+        {
+          ref: environmentRef,
+          element: 'Environment select',
+          durationMs: 5000,
+        },
+        sessionId,
+      ),
+    )
+    assert.match(String(highlighted.message), /Highlighted select "Environment"/)
+    const outlineResult = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression: 'document.querySelector("#env").style.outline',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    const outline = (
+      outlineResult.value as { result?: { value?: string } }
+    ).result?.value
+    assert.match(String(outline), /solid/)
+    assert.match(String(outline), /3px/)
+
+    expectData(
+      await run(
+        resizeTool,
+        { width: 1280, height: 800 },
+        sessionId,
+      ),
+    )
+    ok('resize, highlight, get_bounding_box and browser_cdp')
+
+    for (const popup of [
+      { name: 'Open popup', query: 'popup=1' },
+      { name: 'Open noopener popup', query: 'popup=noopener' },
+    ]) {
+      const beforePopup = expectData(
+        await run(tabsTool, { action: 'list' }, sessionId),
+      ).tabs as TabRow[]
+      expectData(
+        await run(
+          clickTool,
+          { ref: refFor(visualSnap, 'link', popup.name) },
+          sessionId,
+        ),
+      )
+      expectData(await run(waitForTool, { time: 0.3 }, sessionId))
+      const afterPopup = expectData(
+        await run(tabsTool, { action: 'list' }, sessionId),
+      ).tabs as TabRow[]
+      assert.equal(
+        afterPopup.length,
+        beforePopup.length + 1,
+        `a popup opened by an owned tab must become agent-owned: ${JSON.stringify(afterPopup)}`,
+      )
+      const popupTab = afterPopup.find(tab => tab.url.includes(popup.query))
+      assert.ok(
+        popupTab,
+        `opened popup must be listed: ${JSON.stringify(afterPopup)}`,
+      )
+      expectData(
+        await run(
+          tabsTool,
+          { action: 'close', tabId: popupTab.targetId },
+          sessionId,
+        ),
+      )
+      const afterClose = expectData(
+        await run(tabsTool, { action: 'list' }, sessionId),
+      ).tabs as TabRow[]
+      assert.equal(afterClose.length, beforePopup.length)
+    }
+    ok('popup and noopener popup tabs inherit agent ownership')
+
+    const complexDom = expectData(
+      await run(
+        navigateTool,
+        { url: `${baseUrl}cross-frame?case=${Date.now()}` },
+        sessionId,
+      ),
+    )
+    const complexSnapshot = String(complexDom.snapshot)
+    const shadowClicked = expectData(
+      await run(
+        clickTool,
+        { ref: refFor(complexSnapshot, 'button', 'Shadow action') },
+        sessionId,
+      ),
+    )
+    assert.match(String(shadowClicked.snapshot), /shadow clicked/)
+    if (opts.crossOriginFrames !== false) {
+      const afterShadow = String(
+        expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+      )
+      const innerClicked = expectData(
+        await run(
+          clickTool,
+          { ref: refFor(afterShadow, 'button', 'Inner frame action') },
+          sessionId,
+        ),
+      )
+      assert.match(String(innerClicked.snapshot), /inner clicked/)
+      ok('shadow DOM and cross-origin iframe refs remain actionable')
+    } else {
+      ok('shadow DOM refs remain actionable')
+    }
 
     // ── fill_form ─────
     const formNav = expectData(

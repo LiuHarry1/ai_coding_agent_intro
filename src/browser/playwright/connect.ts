@@ -16,7 +16,7 @@ import { getIsolatedPage } from '../backends/isolated.js'
 import { startCdpEndpoint, type CdpEndpoint } from '../relay/cdp-endpoint.js'
 import type { RelayServer } from '../relay/server.js'
 import { BrowserError, type BrowserBackend } from '../types.js'
-import { isBlankUrl, pickPageForTab, urlsRoughlyEqual } from './page-match.js'
+import { pickPageForTab, urlsRoughlyEqual } from './page-match.js'
 import { watchPage } from './overlays.js'
 
 const browsers = new WeakMap<BrowserBackend, Promise<Browser>>()
@@ -147,9 +147,10 @@ async function findPage(
     pagesByTarget.set(targetId, cached)
     return cached
   }
-  const sameUrl = isBlankUrl(tab.url)
-    ? []
-    : pages.filter(p => urlsRoughlyEqual(p.url(), tab.url))
+  // Blank tabs need identity probing most: several concurrently-created tabs
+  // all start at about:blank, and choosing the last URL match binds multiple
+  // sessions to the same Page. The debugger-session token distinguishes them.
+  const sameUrl = pages.filter(p => urlsRoughlyEqual(p.url(), tab.url))
   if (sameUrl.length > 0) {
     const marked = await pageMarkedForTab(backend, targetId, sameUrl)
     if (marked) {
@@ -161,6 +162,13 @@ async function findPage(
       // attached yet, and the caller's retry loop waits for it.
       throw new BrowserError(
         `Tab "${targetId}" (${tab.url}) is not attached to Playwright yet.`,
+      )
+    }
+    if (sameUrl.length > 1) {
+      // Runtime.evaluate failed, so identity could not be proven. Choosing the
+      // newest same-URL Page here can bind concurrent sessions to one tab.
+      throw new BrowserError(
+        `Could not verify which of ${sameUrl.length} same-URL pages belongs to tab "${targetId}". Retry after the tabs finish attaching.`,
       )
     }
   }

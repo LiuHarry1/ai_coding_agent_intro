@@ -172,6 +172,42 @@ async function main() {
   )
 
   try {
+    const faultSessionId = 'browser-pw-navigation-close-test'
+    expectData(
+      await run(navigateTool, { url: server.url }, faultSessionId),
+    )
+    const faultBackend = await getBrowser(process.cwd(), faultSessionId)
+    const closingTarget = getCurrentTabId(faultSessionId)
+    assert.ok(closingTarget, 'navigation-close test must have a current tab')
+    const interruptedNavigation = run(
+      navigateTool,
+      { url: `${server.url}slow-navigation` },
+      faultSessionId,
+    )
+    await new Promise(resolve => setTimeout(resolve, 300))
+    await faultBackend.closeTab(closingTarget)
+    const interruptedResult = await Promise.race([
+      interruptedNavigation,
+      new Promise<'hung'>(resolve => setTimeout(() => resolve('hung'), 5000)),
+    ])
+    assert.notEqual(
+      interruptedResult,
+      'hung',
+      'closing a tab during navigation must fail promptly instead of hanging',
+    )
+    assert.equal(
+      typeof interruptedResult,
+      'string',
+      'closing a tab during navigation must return an actionable error',
+    )
+    expectData(
+      await run(navigateTool, { url: server.url }, faultSessionId),
+    )
+    await closeBrowser(faultSessionId)
+    console.log(
+      'ok [playwright] closing a tab interrupts navigation and the next navigate recovers',
+    )
+
     const sessionId = 'browser-pw-test'
     const nav = expectData(
       await run(navigateTool, { url: server.url }, sessionId),

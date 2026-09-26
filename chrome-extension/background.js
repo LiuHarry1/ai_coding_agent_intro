@@ -104,16 +104,40 @@ async function groupTab(tabId) {
 /** In-flight attaches, so concurrent commands to a fresh tab share one attach. */
 const attaching = new Map()
 
+async function recoverExistingAttachment(tabId) {
+  try {
+    const targets = await chrome.debugger.getTargets()
+    if (!targets.some(target => target.tabId === tabId && target.attached))
+      return false
+    // A Service Worker restart clears our in-memory Set but Chrome can retain
+    // this extension's debugger attachment. A harmless command distinguishes
+    // that session from a tab attached by DevTools or another extension.
+    await chrome.debugger.sendCommand(
+      { tabId },
+      'Runtime.evaluate',
+      { expression: 'void 0' },
+    )
+    attached.add(tabId)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function ensureAttached(tabId) {
   if (attached.has(tabId)) return
   let pending = attaching.get(tabId)
   if (!pending) {
-    pending = chrome.debugger
-      .attach({ tabId }, '1.3')
-      .then(() => {
+    pending = (async () => {
+      if (await recoverExistingAttachment(tabId)) return
+      try {
+        await chrome.debugger.attach({ tabId }, '1.3')
         attached.add(tabId)
-      })
-      .finally(() => attaching.delete(tabId))
+      } catch (err) {
+        if (await recoverExistingAttachment(tabId)) return
+        throw err
+      }
+    })().finally(() => attaching.delete(tabId))
     attaching.set(tabId, pending)
   }
   await pending
@@ -177,6 +201,27 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
       ...(source.sessionId ? { sessionId: source.sessionId } : {}),
     }),
   )
+})
+
+chrome.tabs.onCreated.addListener(tab => {
+  const createdUrl = tab.pendingUrl || tab.url || ''
+  if (
+    tab.id == null ||
+    tab.openerTabId == null ||
+    !owned.has(tab.openerTabId) ||
+    createdUrl.startsWith(`chrome-extension://${chrome.runtime.id}/`)
+  ) {
+    return
+  }
+  void (async () => {
+    await addOwned(tab.id)
+    try {
+      await chrome.tabs.get(tab.id)
+    } catch {
+      // A popup can close itself before storage/grouping finishes.
+      await dropOwned(tab.id)
+    }
+  })()
 })
 
 chrome.tabs.onRemoved.addListener(tabId => {
@@ -481,18 +526,35 @@ function relayHost(relayUrl) {
   }
 }
 
+const RECOVERABLE_RELAY_URL_KEY = 'recoverableRelayUrl'
+
 /**
- * Session storage on purpose: the relay endpoint is a live capability, not a
- * saved setting. It dies with the agent process, so it must not outlive the
- * browser session either.
+ * Keep the live value in session storage, with a private local fallback so an
+ * extension or browser restart can reconnect while the same agent is alive.
+ * The URL is an unguessable loopback capability private to this extension;
+ * a dead fallback is removed by giveUp() after the bounded reconnect window.
  */
 async function getRelayUrl() {
   const { relayUrl } = await chrome.storage.session.get('relayUrl')
-  return typeof relayUrl === 'string' ? relayUrl : ''
+  if (typeof relayUrl === 'string' && relayUrl) return relayUrl
+  const stored = await chrome.storage.local.get(RECOVERABLE_RELAY_URL_KEY)
+  const recoverable = stored[RECOVERABLE_RELAY_URL_KEY]
+  if (typeof recoverable !== 'string' || !recoverable) return ''
+  return recoverable
+}
+
+async function rememberRelayUrl(relayUrl) {
+  await Promise.all([
+    chrome.storage.session.set({ relayUrl }),
+    chrome.storage.local.set({ [RECOVERABLE_RELAY_URL_KEY]: relayUrl }),
+  ])
 }
 
 async function forgetRelayUrl() {
-  await chrome.storage.session.remove('relayUrl')
+  await Promise.all([
+    chrome.storage.session.remove('relayUrl'),
+    chrome.storage.local.remove(RECOVERABLE_RELAY_URL_KEY),
+  ])
 }
 
 // ── auto-connect token ───────────────────────────────────
@@ -699,7 +761,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           return
         }
         // Writing it is enough; the storage listener above opens the socket.
-        await chrome.storage.session.set({ relayUrl: msg.relayUrl })
+        await rememberRelayUrl(msg.relayUrl)
         sendResponse({ ok: true })
         return
       }
@@ -725,7 +787,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           })
           return
         }
-        await chrome.storage.session.set({ relayUrl: msg.relayUrl })
+        await rememberRelayUrl(msg.relayUrl)
         sendResponse({ ok: true, closed: await closeConnectTab(sender.tab) })
         return
       }

@@ -41,7 +41,6 @@ import { settleIfUrlChanged, withActionWait } from './settle.js'
 import { getPageForTarget } from './connect.js'
 import { clearTabMemory, setTabPoisoned } from '../session-flags.js'
 import { assertNavigateUrl } from '../navigate-policy.js'
-import { SNAPSHOT_STALL_NEXT } from '../heavy-media.js'
 import {
   clearViewportScreenshot,
   getViewportScreenshot,
@@ -86,11 +85,9 @@ export async function navigate(
   await withReadBoost(backend, targetId, async () => {
     const page = await getPageForTarget(backend, targetId)
     const beforeUrl = page.url()
-    const beforeTimeOrigin = dest.action
-      ? await page
-          .evaluate<number>('performance.timeOrigin')
-          .catch(() => undefined)
-      : undefined
+    const beforeTimeOrigin = await page
+      .evaluate<number>('performance.timeOrigin')
+      .catch(() => undefined)
     try {
       if (dest.action === 'back') {
         await page.goBack({
@@ -123,25 +120,25 @@ export async function navigate(
       const message = err instanceof Error ? err.message : String(err)
       if (/Timeout/i.test(message)) {
         // Synthetic CDP endpoints can miss the lifecycle event Playwright is
-        // awaiting even though Chrome completed a history navigation. Verify
-        // the resulting document before poisoning an otherwise healthy tab.
-        const after = dest.action
-          ? await page
-              .evaluate<{ readyState: string; timeOrigin: number }>(
-                '({ readyState: document.readyState, timeOrigin: performance.timeOrigin })',
-              )
-              .catch(() => undefined)
-          : undefined
-        const historyActionCompleted =
+        // awaiting even though Chrome completed the navigation. Verify the
+        // resulting document before poisoning an otherwise healthy tab.
+        const after = await page
+          .evaluate<{ readyState: string; timeOrigin: number }>(
+            '({ readyState: document.readyState, timeOrigin: performance.timeOrigin })',
+          )
+          .catch(() => undefined)
+        const navigationCompleted =
           after !== undefined &&
           after.readyState !== 'loading' &&
           (page.url() !== beforeUrl ||
             (beforeTimeOrigin !== undefined &&
               after.timeOrigin !== beforeTimeOrigin))
-        if (!historyActionCompleted) {
+        if (!navigationCompleted) {
           setTabPoisoned(targetId)
           throw new BrowserError(
-            `Navigation timed out. Stay on this tab — do not retry navigate. ${SNAPSHOT_STALL_NEXT}`,
+            'Navigation timed out and the resulting page state could not be verified. ' +
+              'Stay on this tab — do not retry navigate.\n' +
+              'Recovery action: stop and ask the user to inspect the browser tab',
           )
         }
       } else {
