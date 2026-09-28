@@ -12,6 +12,7 @@ import * as path from 'node:path'
 import { chromium } from 'playwright-core'
 import { createIsolatedBackend } from '../browser/backends/isolated.js'
 import { findChrome } from '../browser/chrome-path.js'
+import { DEFAULT_DOWNLOAD_DIR } from '../browser/paths.js'
 import { withHeavyMediaHidden } from '../browser/playwright/snapshot.js'
 import {
   closeBrowser,
@@ -19,7 +20,11 @@ import {
   getCurrentTabId,
   setBrowserBackendFactory,
 } from '../browser/manager.js'
-import { findInSnapshot } from '../browser/playwright/index.js'
+import {
+  downloadByRef,
+  findInSnapshot,
+  waitForDownload,
+} from '../browser/playwright/index.js'
 import {
   clickTool,
   cdpTool,
@@ -32,6 +37,7 @@ import {
   selectOptionTool,
   snapshotTool,
   typeTool,
+  waitForDownloadTool,
   waitForTool,
 } from '../tools/BrowserTool/BrowserTool.js'
 import type {
@@ -47,7 +53,11 @@ const HEADED = process.argv.includes('--headed')
 
 function toolContext(sessionId: string): ToolContext {
   return {
-    eventBus: { emit() {}, on() {}, off() {} } as unknown as ToolContext['eventBus'],
+    eventBus: {
+      emit() {},
+      on() {},
+      off() {},
+    } as unknown as ToolContext['eventBus'],
     wire: { emit() {} } as unknown as ToolContext['wire'],
     cwd: process.cwd(),
     sessionId,
@@ -58,14 +68,21 @@ async function run(
   def: ToolDefinition,
   args: Record<string, unknown>,
   sessionId: string,
+  abortSignal?: AbortSignal,
 ): Promise<DualChannelToolResult<Record<string, unknown>> | string> {
-  const instance = def.create(process.cwd(), toolContext(sessionId)) as AnyTool & {
+  const instance = def.create(
+    process.cwd(),
+    toolContext(sessionId),
+  ) as AnyTool & {
     execute: (
       a: unknown,
-      o: { toolCallId: string },
+      o: { toolCallId: string; abortSignal?: AbortSignal },
     ) => Promise<DualChannelToolResult<Record<string, unknown>> | string>
   }
-  return instance.execute(args, { toolCallId: 'pw-1' })
+  return instance.execute(args, {
+    toolCallId: `pw-${Math.random().toString(36).slice(2, 8)}`,
+    abortSignal,
+  })
 }
 
 function expectData(
@@ -115,11 +132,7 @@ async function checkHighDpiCoordinate(baseUrl: string): Promise<void> {
   )
   try {
     expectData(
-      await run(
-        navigateTool,
-        { url: `${baseUrl}coordinate` },
-        sessionId,
-      ),
+      await run(navigateTool, { url: `${baseUrl}coordinate` }, sessionId),
     )
     const dpr = expectData(
       await run(
@@ -138,20 +151,18 @@ async function checkHighDpiCoordinate(baseUrl: string): Promise<void> {
       (dpr.value as { result?: { value?: number } }).result?.value,
       2,
     )
-    const screenshot = expectData(
-      await run(screenshotTool, {}, sessionId),
-    )
+    const screenshot = expectData(await run(screenshotTool, {}, sessionId))
     const point = screenshotPoint(screenshot, 100, 120)
-    const clicked = expectData(
-      await run(mouseClickXYTool, point, sessionId),
-    )
+    const clicked = expectData(await run(mouseClickXYTool, point, sessionId))
     assert.match(yamlFromObserve(clicked), /Canvas clicked/)
   } finally {
     setBrowserBackendFactory(null)
     await closeBrowser(sessionId)
     fs.rmSync(profile, { recursive: true, force: true })
   }
-  console.log('ok [playwright] high-DPI screenshot coordinates map to CSS pixels')
+  console.log(
+    'ok [playwright] high-DPI screenshot coordinates map to CSS pixels',
+  )
 }
 
 function refFor(snapshot: string, role: string, name: string): string {
@@ -193,8 +204,9 @@ async function checkHeavyMediaDetach(): Promise<void> {
       page.evaluate(
         () =>
           document.querySelectorAll('iframe').length +
-          (document.getElementById('host')?.shadowRoot?.querySelectorAll('iframe')
-            .length ?? 0),
+          (document
+            .getElementById('host')
+            ?.shadowRoot?.querySelectorAll('iframe').length ?? 0),
       )
     const during = await withHeavyMediaHidden(page, count)
     const after = await count()
@@ -226,9 +238,7 @@ async function main() {
 
   try {
     const faultSessionId = 'browser-pw-navigation-close-test'
-    expectData(
-      await run(navigateTool, { url: server.url }, faultSessionId),
-    )
+    expectData(await run(navigateTool, { url: server.url }, faultSessionId))
     const faultBackend = await getBrowser(process.cwd(), faultSessionId)
     const closingTarget = getCurrentTabId(faultSessionId)
     assert.ok(closingTarget, 'navigation-close test must have a current tab')
@@ -253,12 +263,75 @@ async function main() {
       'string',
       'closing a tab during navigation must return an actionable error',
     )
-    expectData(
-      await run(navigateTool, { url: server.url }, faultSessionId),
-    )
+    expectData(await run(navigateTool, { url: server.url }, faultSessionId))
     await closeBrowser(faultSessionId)
     console.log(
       'ok [playwright] closing a tab interrupts navigation and the next navigate recovers',
+    )
+
+    const redirectSessionId = 'browser-pw-redirect-loop-test'
+    expectData(await run(navigateTool, { url: server.url }, redirectSessionId))
+    const redirectLoop = await run(
+      navigateTool,
+      { url: `${server.url}redirect/loop-a` },
+      redirectSessionId,
+    )
+    assert.equal(typeof redirectLoop, 'string')
+    assert.match(String(redirectLoop), /redirect|ERR_TOO_MANY/i)
+    const afterRedirectLoop = expectData(
+      await run(navigateTool, { url: server.url }, redirectSessionId),
+    )
+    assert.match(String(afterRedirectLoop.snapshot), /heading "Dashboard"/)
+
+    const beforeUnloadPage = expectData(
+      await run(
+        navigateTool,
+        { url: `${server.url}beforeunload` },
+        redirectSessionId,
+      ),
+    )
+    expectData(
+      await run(
+        clickTool,
+        {
+          ref: refFor(
+            String(beforeUnloadPage.snapshot),
+            'button',
+            'Arm before unload',
+          ),
+        },
+        redirectSessionId,
+      ),
+    )
+    expectData(
+      await run(
+        navigateTool,
+        { url: `${server.url}other?after=beforeunload` },
+        redirectSessionId,
+      ),
+    )
+    const tlsFailure = await run(
+      navigateTool,
+      { url: server.url.replace('http://', 'https://') },
+      redirectSessionId,
+    )
+    assert.equal(typeof tlsFailure, 'string')
+    assert.match(String(tlsFailure), /SSL|certificate|ERR_/i)
+    expectData(await run(navigateTool, { url: server.url }, redirectSessionId))
+    const dnsFailure = await run(
+      navigateTool,
+      { url: 'http://browser-agent-does-not-exist.invalid/' },
+      redirectSessionId,
+    )
+    assert.equal(typeof dnsFailure, 'string')
+    assert.match(
+      String(dnsFailure),
+      /NAME_NOT_RESOLVED|DNS|ERR_|Navigation timed out/i,
+    )
+    expectData(await run(navigateTool, { url: server.url }, redirectSessionId))
+    await closeBrowser(redirectSessionId)
+    console.log(
+      'ok [playwright] redirects, beforeunload and network failures recover',
     )
 
     const sessionId = 'browser-pw-test'
@@ -276,7 +349,107 @@ async function main() {
       snapshot,
     )
     console.log('ok [playwright] ariaSnapshot({ mode: "ai" }) returns refs')
-    console.log('\n--- playwright snapshot ---\n' + snapshot + '\n----------------\n')
+    console.log(
+      '\n--- playwright snapshot ---\n' + snapshot + '\n----------------\n',
+    )
+
+    const interruptedTypeRef = refFor(snapshot, 'textbox', 'Email address')
+    const interruptedTypeController = new AbortController()
+    const interruptedTypePending = run(
+      typeTool,
+      {
+        ref: interruptedTypeRef,
+        text: 'abcdefghijklmnopqrstuvwxyz',
+        slowly: true,
+      },
+      sessionId,
+      interruptedTypeController.signal,
+    )
+    await new Promise(resolve => setTimeout(resolve, 220))
+    interruptedTypeController.abort(new Error('test interrupted typing'))
+    const interruptedType = await interruptedTypePending
+    assert.equal(typeof interruptedType, 'string')
+    assert.match(String(interruptedType), /interrupted typing/)
+    const readEmailValue = async () => {
+      const result = expectData(
+        await run(
+          cdpTool,
+          {
+            method: 'Runtime.evaluate',
+            params: {
+              expression: 'document.querySelector("#email").value',
+              returnByValue: true,
+            },
+          },
+          sessionId,
+        ),
+      )
+      return (result.value as { result?: { value?: string } } | undefined)
+        ?.result?.value
+    }
+    const valueAfterTypeAbort = await readEmailValue()
+    await new Promise(resolve => setTimeout(resolve, 500))
+    assert.equal(
+      await readEmailValue(),
+      valueAfterTypeAbort,
+      'typing must not continue in the background after interruption returns',
+    )
+    assert.notEqual(valueAfterTypeAbort, 'abcdefghijklmnopqrstuvwxyz')
+    expectData(
+      await run(typeTool, { ref: interruptedTypeRef, text: '' }, sessionId),
+    )
+    console.log('ok [playwright] interrupted slow type stops before returning')
+
+    const interruptedCdpController = new AbortController()
+    const interruptedCdpStartedAt = Date.now()
+    const interruptedCdpPending = run(
+      cdpTool,
+      {
+        method: 'Runtime.evaluate',
+        params: {
+          expression:
+            'new Promise(resolve => setTimeout(() => resolve("late"), 750))',
+          awaitPromise: true,
+          returnByValue: true,
+        },
+      },
+      sessionId,
+      interruptedCdpController.signal,
+    )
+    await new Promise(resolve => setTimeout(resolve, 200))
+    interruptedCdpController.abort(new Error('test interrupted cdp'))
+    const interruptedCdp = await interruptedCdpPending
+    assert.equal(typeof interruptedCdp, 'string')
+    assert.match(String(interruptedCdp), /interrupted cdp|terminated/i)
+    assert.ok(
+      Date.now() - interruptedCdpStartedAt >= 600,
+      'an interrupted CDP evaluation must settle before the tool returns',
+    )
+    assert.ok(
+      Date.now() - interruptedCdpStartedAt < 2_000,
+      'an interrupted CDP evaluation must remain bounded',
+    )
+    const cdpAfterInterrupt = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: { expression: '6 * 7', returnByValue: true },
+        },
+        sessionId,
+      ),
+    )
+    assert.equal(
+      (
+        cdpAfterInterrupt.value as {
+          result?: { value?: number }
+        }
+      ).result?.value,
+      42,
+    )
+    console.log(
+      'ok [playwright] interrupted CDP evaluation settles and recovers',
+    )
 
     const counterRef = refFor(snapshot, 'button', 'Clicked 0 times')
     const clicked = expectData(
@@ -470,11 +643,7 @@ async function main() {
       `opening the list must show rows on the full page:\n${listSnap}`,
     )
     const threadOpened = expectData(
-      await run(
-        clickTool,
-        { ref: refNear(listSnap, 'Ada Reed') },
-        sessionId,
-      ),
+      await run(clickTool, { ref: refNear(listSnap, 'Ada Reed') }, sessionId),
     )
     const threadSnap = String(threadOpened.snapshot)
     assert.ok(
@@ -485,7 +654,9 @@ async function main() {
       threadSnap.includes('Conversations') && threadSnap.includes('Inbox home'),
       `the list and page chrome must still be in the same snapshot:\n${threadSnap.slice(0, 400)}`,
     )
-    console.log('ok [playwright] nested dialog click returns full page with composer')
+    console.log(
+      'ok [playwright] nested dialog click returns full page with composer',
+    )
 
     const errorNav = expectData(
       await run(navigateTool, { url: `${server.url}error-modal` }, sessionId),
@@ -621,7 +792,43 @@ async function main() {
       String(filled.snapshot).includes('6.00'),
       `readonly tax must still update from the app handler:\n${filled.snapshot}`,
     )
-    console.log('ok [playwright] fill_form writes a whole form and skips readonly')
+    console.log(
+      'ok [playwright] fill_form writes a whole form and skips readonly',
+    )
+
+    const partialFormSnapshot = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const partiallyFilled = await run(
+      fillFormTool,
+      {
+        fields: [
+          {
+            ref: refNear(partialFormSnapshot, 'Merchant'),
+            value: 'Partial write survives',
+          },
+          { ref: 'e999999', value: 'missing field' },
+        ],
+      },
+      sessionId,
+    )
+    assert.equal(
+      typeof partiallyFilled,
+      'object',
+      `one stale field must not abort the batch:\n${String(partiallyFilled)}`,
+    )
+    assert.match(
+      String(expectData(partiallyFilled).message),
+      /Filled 1\/2 fields/,
+    )
+    assert.match(String(expectData(partiallyFilled).message), /e999999.*failed/)
+    assert.match(
+      String(expectData(partiallyFilled).snapshot),
+      /Partial write survives/,
+    )
+    console.log(
+      'ok [playwright] fill_form preserves valid fields after a stale ref',
+    )
 
     const widgets = expectData(
       await run(navigateTool, { url: `${server.url}widgets` }, sessionId),
@@ -661,11 +868,7 @@ async function main() {
       `custom combobox error must explain the supported control:\n${notASelect}`,
     )
     assert.match(String(notASelect), /Recovery action: browser_snapshot/)
-    await run(
-      clickTool,
-      { ref: refNear(widgetSnap, 'Fruit') },
-      sessionId,
-    )
+    await run(clickTool, { ref: refNear(widgetSnap, 'Fruit') }, sessionId)
     const openSnap = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
@@ -686,7 +889,9 @@ async function main() {
       /Banana/,
       `custom dropdown selection must update page state:\n${banana.snapshot}`,
     )
-    console.log('ok [playwright] custom dropdown is snapshot + click, not select_option')
+    console.log(
+      'ok [playwright] custom dropdown is snapshot + click, not select_option',
+    )
 
     const armed = expectData(
       await run(handleDialogTool, { accept: true }, sessionId),
@@ -746,7 +951,10 @@ async function main() {
         sessionId,
       ),
     )
-    assert.match(String(promptArmed.message), /Next native dialog will be accepted/)
+    assert.match(
+      String(promptArmed.message),
+      /Next native dialog will be accepted/,
+    )
     const beforePrompt = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
@@ -854,7 +1062,9 @@ async function main() {
       !yamlFromObserve(nearbyUpload).includes('clip.txt'),
       'nearby upload must not use the disconnected global input',
     )
-    console.log('ok [playwright] file_upload recovers a widget button ref to a nearby hidden input')
+    console.log(
+      'ok [playwright] file_upload recovers a widget button ref to a nearby hidden input',
+    )
 
     const afterNearby = expectData(await run(snapshotTool, {}, sessionId))
     const clipUpload = expectData(
@@ -873,7 +1083,9 @@ async function main() {
       /clip\.txt/,
       `toolbar/paperclip ref must fall through to a page file input:\n${yamlFromObserve(clipUpload)}`,
     )
-    console.log('ok [playwright] file_upload ignores a non-file ref and uses a hidden input')
+    console.log(
+      'ok [playwright] file_upload ignores a non-file ref and uses a hidden input',
+    )
 
     const noRefFile = path.join(profile, 'noref.txt')
     fs.writeFileSync(noRefFile, 'noref')
@@ -901,15 +1113,20 @@ async function main() {
         pdfSnap.includes('Full-page snapshot timed out'),
       `a hung viewer iframe must not eat the host-page Save button:\n${pdfSnap.slice(0, 500)}`,
     )
-    console.log('ok [playwright] hung iframe snapshot still returns the host page')
+    console.log(
+      'ok [playwright] hung iframe snapshot still returns the host page',
+    )
 
-    expectData(await run(navigateTool, { url: `${server.url}widgets` }, sessionId))
+    expectData(
+      await run(navigateTool, { url: `${server.url}widgets` }, sessionId),
+    )
     const interactive = expectData(
       await run(snapshotTool, { interactive: true }, sessionId),
     )
     const interactiveSnap = String(interactive.snapshot)
     assert.ok(
-      interactiveSnap.includes('Confirm me') && interactiveSnap.includes('[ref='),
+      interactiveSnap.includes('Confirm me') &&
+        interactiveSnap.includes('[ref='),
       `interactive snapshot must keep the controls:\n${interactiveSnap}`,
     )
     console.log('ok [playwright] snapshot interactive keeps refs only')
@@ -945,7 +1162,11 @@ async function main() {
       `an intervening browser tool must invalidate the screenshot:\n${String(invalidated)}`,
     )
     expectData(await run(screenshotTool, { labels: true }, sessionId))
-    const afterLabels = await run(mouseClickXYTool, { x: 100, y: 120 }, sessionId)
+    const afterLabels = await run(
+      mouseClickXYTool,
+      { x: 100, y: 120 },
+      sessionId,
+    )
     assert.ok(
       typeof afterLabels === 'string' &&
         /needs a fresh viewport screenshot/i.test(afterLabels),
@@ -968,9 +1189,7 @@ async function main() {
       'a text-less hit is described by tag and attributes, not by coordinates',
     )
 
-    const rightScreenshot = expectData(
-      await run(screenshotTool, {}, sessionId),
-    )
+    const rightScreenshot = expectData(await run(screenshotTool, {}, sessionId))
     const rightPoint = screenshotPoint(rightScreenshot, 100, 120)
     const rightCoordinate = expectData(
       await run(
@@ -1015,6 +1234,200 @@ async function main() {
     )
     console.log(
       'ok [playwright] coordinate click requires a fresh screenshot and is viewport guarded',
+    )
+
+    const downloadPage = expectData(
+      await run(navigateTool, { url: `${server.url}download` }, sessionId),
+    )
+    const downloadSnapshot = String(downloadPage.snapshot)
+    const downloadBackend = await getBrowser(process.cwd(), sessionId)
+    const downloadTarget = getCurrentTabId(sessionId)
+    assert.ok(downloadTarget)
+    await assert.rejects(
+      downloadByRef(downloadBackend, downloadTarget, {
+        ref: refFor(downloadSnapshot, 'button', 'Ordinary button'),
+        timeoutMs: 300,
+      }),
+      /No download started within 300ms after clicking/,
+    )
+    await assert.rejects(
+      waitForDownload(downloadBackend, downloadTarget, { timeoutMs: 300 }),
+      /No download started within 300ms/,
+    )
+
+    const directPath = path.join(
+      DEFAULT_DOWNLOAD_DIR,
+      `agent-concurrent-direct-${Date.now()}.csv`,
+    )
+    const delayedPath = path.join(
+      DEFAULT_DOWNLOAD_DIR,
+      `agent-concurrent-delayed-${Date.now()}.csv`,
+    )
+    try {
+      const [directDownload, delayedDownload] = await Promise.all([
+        downloadByRef(downloadBackend, downloadTarget, {
+          ref: refFor(downloadSnapshot, 'link', 'Download report'),
+          path: directPath,
+          timeoutMs: 10_000,
+        }),
+        downloadByRef(downloadBackend, downloadTarget, {
+          ref: refFor(downloadSnapshot, 'button', 'Download after 5 seconds'),
+          path: delayedPath,
+          timeoutMs: 10_000,
+        }),
+      ])
+      assert.equal(directDownload.suggestedFilename, 'report.csv')
+      assert.equal(delayedDownload.suggestedFilename, 'delayed.csv')
+      assert.equal(
+        fs.readFileSync(directDownload.path, 'utf8'),
+        'id,name\n1,Alice\n2,Bob\n',
+      )
+      assert.equal(
+        fs.readFileSync(delayedDownload.path, 'utf8'),
+        'id,name\n3,Delayed\n',
+      )
+    } finally {
+      fs.rmSync(directPath, { force: true })
+      fs.rmSync(delayedPath, { force: true })
+    }
+    const toolDownloadSnapshot = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const toolDirectName = `agent-tool-direct-${Date.now()}.csv`
+    const toolDelayedName = `agent-tool-delayed-${Date.now()}.csv`
+    const toolDirectPath = path.join(DEFAULT_DOWNLOAD_DIR, toolDirectName)
+    const toolDelayedPath = path.join(DEFAULT_DOWNLOAD_DIR, toolDelayedName)
+    try {
+      const [toolDirect, toolDelayed] = await Promise.all([
+        run(
+          waitForDownloadTool,
+          {
+            ref: refFor(toolDownloadSnapshot, 'link', 'Download report'),
+            path: toolDirectName,
+            timeoutMs: 10_000,
+          },
+          sessionId,
+        ),
+        run(
+          waitForDownloadTool,
+          {
+            ref: refFor(
+              toolDownloadSnapshot,
+              'button',
+              'Download after 5 seconds',
+            ),
+            path: toolDelayedName,
+            timeoutMs: 10_000,
+          },
+          sessionId,
+        ),
+      ])
+      assert.equal(typeof toolDirect, 'object')
+      assert.equal(typeof toolDelayed, 'object')
+      assert.equal(
+        fs.readFileSync(String(expectData(toolDirect).downloadPath), 'utf8'),
+        'id,name\n1,Alice\n2,Bob\n',
+      )
+      assert.equal(
+        fs.readFileSync(String(expectData(toolDelayed).downloadPath), 'utf8'),
+        'id,name\n3,Delayed\n',
+      )
+    } finally {
+      fs.rmSync(toolDirectPath, { force: true })
+      fs.rmSync(toolDelayedPath, { force: true })
+    }
+    const abortSnapshot = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    const abortedName = `agent-tool-aborted-${Date.now()}.csv`
+    const afterAbortName = `agent-tool-after-abort-${Date.now()}.csv`
+    const abortedPath = path.join(DEFAULT_DOWNLOAD_DIR, abortedName)
+    const afterAbortPath = path.join(DEFAULT_DOWNLOAD_DIR, afterAbortName)
+    try {
+      const controller = new AbortController()
+      const abortedPending = run(
+        waitForDownloadTool,
+        {
+          ref: refFor(abortSnapshot, 'button', 'Download after 5 seconds'),
+          path: abortedName,
+          timeoutMs: 10_000,
+        },
+        sessionId,
+        controller.signal,
+      )
+      await new Promise(resolve => setTimeout(resolve, 300))
+      controller.abort()
+      const abortedDownload = await abortedPending
+      assert.equal(typeof abortedDownload, 'string')
+      assert.match(String(abortedDownload), /interrupted by user|cancelled/i)
+
+      const afterAbort = expectData(
+        await run(
+          waitForDownloadTool,
+          {
+            ref: refFor(abortSnapshot, 'link', 'Download report'),
+            path: afterAbortName,
+            timeoutMs: 10_000,
+          },
+          sessionId,
+        ),
+      )
+      assert.equal(
+        fs.readFileSync(String(afterAbort.downloadPath), 'utf8'),
+        'id,name\n1,Alice\n2,Bob\n',
+      )
+    } finally {
+      fs.rmSync(abortedPath, { force: true })
+      fs.rmSync(afterAbortPath, { force: true })
+    }
+    const beforeClickAbortPage = expectData(
+      await run(
+        navigateTool,
+        { url: `${server.url}download?before-click-abort=1` },
+        sessionId,
+      ),
+    )
+    const beforeClickAbort = new AbortController()
+    beforeClickAbort.abort()
+    const cancelledBeforeClick = await run(
+      waitForDownloadTool,
+      {
+        ref: refFor(
+          String(beforeClickAbortPage.snapshot),
+          'link',
+          'Download report',
+        ),
+        path: `agent-never-clicked-${Date.now()}.csv`,
+        timeoutMs: 10_000,
+      },
+      sessionId,
+      beforeClickAbort.signal,
+    )
+    assert.equal(typeof cancelledBeforeClick, 'string')
+    assert.match(String(cancelledBeforeClick), /interrupted by user/i)
+    const beforeClickAbortState = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression: 'document.querySelector("#download-state").textContent',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    assert.equal(
+      (
+        beforeClickAbortState.value as {
+          result?: { value?: string }
+        }
+      ).result?.value,
+      'idle',
+    )
+    console.log(
+      'ok [playwright] download timeout, concurrency and abort cleanup stay isolated',
     )
 
     expectData(

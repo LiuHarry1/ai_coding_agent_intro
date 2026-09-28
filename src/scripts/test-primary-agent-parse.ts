@@ -243,8 +243,8 @@ assert(
   'browser.md allowlists browser_mouse_click_xy',
 )
 assert(
-  !/^  - browser_cdp\s*$/m.test(browserMd),
-  'browser.md no longer allowlists browser_cdp',
+  /^  - browser_cdp\s*$/m.test(browserMd),
+  'browser.md allowlists the ownership-scoped browser_cdp tool',
 )
 assert(
   browserMd.includes('main source of truth'),

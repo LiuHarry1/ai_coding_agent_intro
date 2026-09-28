@@ -136,6 +136,15 @@ export function elementMatchesHint(
   const actualTag = (described.tag ?? '').toLowerCase()
   const actualText = described.name.replace(/\s+/g, ' ').trim().toLowerCase()
   const actualDescription = `${actualRole} "${actualText}"`
+  const parsed = parseExpectedDescription(h)
+
+  if (
+    parsed.role &&
+    parsed.role !== actualRole &&
+    parsed.role !== actualTag
+  ) {
+    return false
+  }
 
   const expectedMentionsButton = expectedLower.includes('button')
   const actualIsButton =
@@ -144,13 +153,18 @@ export function elementMatchesHint(
     actualDescription.includes('button')
   if (expectedMentionsButton && !actualIsButton) return false
 
-  const expectedWords = expectedLower
-    .replace(/button|link|input|checkbox|radio/g, '')
+  const expectedWords = (parsed.name ?? h)
+    .toLowerCase()
+    .replace(new RegExp(`\\b(?:${HINT_ROLES}|input)\\b`, 'g'), '')
+    // Models commonly copy the snapshot form: `button "Save"`. Quotes and
+    // punctuation describe the element; they are not part of its name.
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .split(/\s+/)
     .filter(w => w.length > 2)
-  if (expectedWords.length > 0 && actualText) {
-    return expectedWords.some(word => actualText.includes(word))
+  if (expectedWords.length > 0) {
+    return Boolean(actualText) &&
+      expectedWords.some(word => actualText.includes(word))
   }
   return true
 }

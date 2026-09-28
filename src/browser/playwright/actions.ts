@@ -8,7 +8,7 @@
  * navigates away leaves nothing to describe at all.
  */
 
-import type { Page } from 'playwright-core'
+import type { Locator, Page } from 'playwright-core'
 import { ensureScript } from '../page-inspect.js'
 import {
   ACTION_TIMEOUT_MS,
@@ -28,10 +28,12 @@ import {
   describeElement,
   editableLocator,
   mapPlaywrightError,
+  normalizeRef,
   targetLocator,
 } from './locator.js'
 import { pickValue } from './pick.js'
 import {
+  allowBeforeUnloadForNavigation,
   handleDialog,
   peekDialog,
   throwIfUnarmedDestructiveDialog,
@@ -65,6 +67,90 @@ import {
 import { captureViewport } from './viewport-capture.js'
 import type { ScrollExtent, ScrollOutcome } from '../scroll-report.js'
 
+const NAVIGATION_STATE_VERIFY_TIMEOUT_MS = 2_000
+const NAVIGATION_STOP_VERIFY_TIMEOUT_MS = 2_000
+const NAVIGATION_STOP_POLL_MS = 100
+
+function navigationAbortError(signal?: AbortSignal): Error {
+  const reason = signal?.reason
+  return reason instanceof Error
+    ? reason
+    : new BrowserError('Navigation interrupted by user.')
+}
+
+function throwIfActionAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return
+  const reason = signal.reason
+  throw reason instanceof Error
+    ? reason
+    : new BrowserError('Browser action interrupted by user.')
+}
+
+async function verifyCompletedNavigation(
+  page: Page,
+): Promise<{ readyState: string; timeOrigin: number } | undefined> {
+  let timer: number | undefined
+  try {
+    return await Promise.race([
+      page
+        .evaluate<{ readyState: string; timeOrigin: number }>(
+          '({ readyState: document.readyState, timeOrigin: performance.timeOrigin })',
+        )
+        .catch(() => undefined),
+      new Promise<undefined>(resolve => {
+        timer = setTimeout(resolve, NAVIGATION_STATE_VERIFY_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/**
+ * A failed Chromium navigation can keep transitioning to chrome-error:// after
+ * Playwright has already rejected page.goto(). Do not let that late transition
+ * interrupt the next browser_navigate call. This mirrors Cursor's pending
+ * navigation queue, which waits for did-stop-loading before applying the next
+ * URL and force-stops a navigation that does not settle.
+ */
+async function stopFailedNavigation(
+  backend: BrowserBackend,
+  targetId: string,
+  page: Page,
+): Promise<boolean> {
+  const waitForStableUrl = async (): Promise<boolean> => {
+    const deadline = Date.now() + NAVIGATION_STOP_VERIFY_TIMEOUT_MS
+    let previousUrl = page.url()
+    let stableSamples = 0
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, NAVIGATION_STOP_POLL_MS))
+      const currentUrl = page.url()
+      if (currentUrl === previousUrl) {
+        stableSamples += 1
+      } else {
+        previousUrl = currentUrl
+        stableSamples = 0
+      }
+      if (stableSamples >= 2) return true
+    }
+    return false
+  }
+
+  try {
+    await backend.send(targetId, 'Page.stopLoading')
+    if (await waitForStableUrl()) return true
+
+    // Some extension-driven redirect loops continue alternating error URLs
+    // after stopLoading acknowledges. Cursor resolves the equivalent state by
+    // force-applying its pending navigation. We do not have the next request
+    // yet, so move to a neutral document and leave the tab reusable.
+    await backend.send(targetId, 'Page.navigate', { url: 'about:blank' })
+    return await waitForStableUrl()
+  } catch {
+    return false
+  }
+}
+
 function staleRecovery(
   backend: BrowserBackend,
   targetId: string,
@@ -80,6 +166,7 @@ export async function navigate(
   backend: BrowserBackend,
   targetId: string,
   dest: { url?: string; action?: 'back' | 'forward' | 'reload' },
+  signal?: AbortSignal,
 ): Promise<void> {
   await ensureScript(backend, targetId)
   await withReadBoost(backend, targetId, async () => {
@@ -88,65 +175,108 @@ export async function navigate(
     const beforeTimeOrigin = await page
       .evaluate<number>('performance.timeOrigin')
       .catch(() => undefined)
-    try {
-      if (dest.action === 'back') {
-        await page.goBack({
-          waitUntil: 'domcontentloaded',
-          timeout: NAVIGATE_TIMEOUT_MS,
-        })
-      } else if (dest.action === 'forward') {
-        await page.goForward({
-          waitUntil: 'domcontentloaded',
-          timeout: NAVIGATE_TIMEOUT_MS,
-        })
-      } else if (dest.action === 'reload') {
-        await page.reload({
-          waitUntil: 'domcontentloaded',
-          timeout: NAVIGATE_TIMEOUT_MS,
-        })
-      } else {
-        if (!dest.url) {
-          throw new BrowserError(
-            'navigate requires a url, or action back/forward/reload.',
-          )
-        }
-        const href = assertNavigateUrl(dest.url)
-        await page.goto(href, {
-          waitUntil: 'domcontentloaded',
-          timeout: NAVIGATE_TIMEOUT_MS,
-        })
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (/Timeout/i.test(message)) {
-        // Synthetic CDP endpoints can miss the lifecycle event Playwright is
-        // awaiting even though Chrome completed the navigation. Verify the
-        // resulting document before poisoning an otherwise healthy tab.
-        const after = await page
-          .evaluate<{ readyState: string; timeOrigin: number }>(
-            '({ readyState: document.readyState, timeOrigin: performance.timeOrigin })',
-          )
-          .catch(() => undefined)
-        const navigationCompleted =
-          after !== undefined &&
-          after.readyState !== 'loading' &&
-          (page.url() !== beforeUrl ||
-            (beforeTimeOrigin !== undefined &&
-              after.timeOrigin !== beforeTimeOrigin))
-        if (!navigationCompleted) {
-          setTabPoisoned(targetId)
-          throw new BrowserError(
-            'Navigation timed out and the resulting page state could not be verified. ' +
-              'Stay on this tab — do not retry navigate.\n' +
-              'Recovery action: stop and ask the user to inspect the browser tab',
-          )
-        }
-      } else {
-        mapPlaywrightError(err)
-      }
+    const stopLoading = () => {
+      void backend.send(targetId, 'Page.stopLoading').catch(() => {})
     }
-    clearTabMemory(targetId)
-    await new Promise(r => setTimeout(r, NAVIGATE_SETTLE_MS))
+    if (signal?.aborted) {
+      stopLoading()
+      throw navigationAbortError(signal)
+    }
+    const clearBeforeUnloadAllowance = allowBeforeUnloadForNavigation(page)
+    signal?.addEventListener('abort', stopLoading, { once: true })
+    try {
+      try {
+        if (dest.action === 'back') {
+          await page.goBack({
+            waitUntil: 'domcontentloaded',
+            timeout: NAVIGATE_TIMEOUT_MS,
+          })
+        } else if (dest.action === 'forward') {
+          await page.goForward({
+            waitUntil: 'domcontentloaded',
+            timeout: NAVIGATE_TIMEOUT_MS,
+          })
+        } else if (dest.action === 'reload') {
+          await page.reload({
+            waitUntil: 'domcontentloaded',
+            timeout: NAVIGATE_TIMEOUT_MS,
+          })
+        } else {
+          if (!dest.url) {
+            throw new BrowserError(
+              'navigate requires a url, or action back/forward/reload.',
+            )
+          }
+          const href = assertNavigateUrl(dest.url)
+          await page.goto(href, {
+            waitUntil: 'domcontentloaded',
+            timeout: NAVIGATE_TIMEOUT_MS,
+          })
+        }
+      } catch (err) {
+        if (signal?.aborted) {
+          throw navigationAbortError(signal)
+        }
+        const message = err instanceof Error ? err.message : String(err)
+        if (/Timeout/i.test(message)) {
+          // Synthetic CDP endpoints can miss the lifecycle event Playwright is
+          // awaiting even though Chrome completed the navigation. Verify the
+          // resulting document before poisoning an otherwise healthy tab.
+          const after = await verifyCompletedNavigation(page)
+          const navigationCompleted =
+            after !== undefined &&
+            after.readyState !== 'loading' &&
+            (page.url() !== beforeUrl ||
+              (beforeTimeOrigin !== undefined &&
+                after.timeOrigin !== beforeTimeOrigin))
+          if (!navigationCompleted) {
+            setTabPoisoned(targetId)
+            throw new BrowserError(
+              'Navigation timed out and the resulting page state could not be verified. ' +
+                'This tab was marked unusable.\n' +
+                'Recovery action: retry browser_navigate; it will open a fresh tab',
+            )
+          }
+        } else {
+          if (
+            dest.url &&
+            /interrupted by another navigation to "chrome-error:/i.test(message)
+          ) {
+            // Cursor queues a requested URL until the previous failed load
+            // reaches did-stop-loading. Playwright has already issued this
+            // request, so stop the late chrome-error transition and retry it
+            // once on the same tab.
+            await stopFailedNavigation(backend, targetId, page)
+            await new Promise(resolve =>
+              setTimeout(resolve, NAVIGATE_SETTLE_MS),
+            )
+            try {
+              await page.goto(assertNavigateUrl(dest.url), {
+                waitUntil: 'domcontentloaded',
+                timeout: NAVIGATE_TIMEOUT_MS,
+              })
+              clearTabMemory(targetId)
+              await new Promise(resolve =>
+                setTimeout(resolve, NAVIGATE_SETTLE_MS),
+              )
+              if (signal?.aborted) throw navigationAbortError(signal)
+              return
+            } catch (retryErr) {
+              setTabPoisoned(targetId)
+              mapPlaywrightError(retryErr)
+            }
+          }
+          await stopFailedNavigation(backend, targetId, page)
+          mapPlaywrightError(err)
+        }
+      }
+      clearTabMemory(targetId)
+      await new Promise(r => setTimeout(r, NAVIGATE_SETTLE_MS))
+      if (signal?.aborted) throw navigationAbortError(signal)
+    } finally {
+      clearBeforeUnloadAllowance()
+      signal?.removeEventListener('abort', stopLoading)
+    }
   })
 }
 
@@ -183,6 +313,7 @@ export async function click(
     retryOnStaleRef?: boolean
     autoCloseDropdowns?: boolean
     retryWithOffset?: boolean
+    signal?: AbortSignal
   },
 ): Promise<ResolvedElement> {
   return withInputFocus(backend, targetId, async () => {
@@ -202,6 +333,7 @@ export async function click(
       retryWithOffset: opts.retryWithOffset,
     }
     try {
+      throwIfActionAborted(opts.signal)
       if (!opts.ref) {
         throw new BrowserError('Provide ref from the latest snapshot.')
       }
@@ -214,9 +346,11 @@ export async function click(
         staleRecovery(backend, targetId, opts.retryOnStaleRef),
       )
       const urlBefore = page.url()
+      throwIfActionAborted(opts.signal)
       await withActionWait(page, async () => {
         await clickLocatorRobust(page, loc, robust)
       })
+      throwIfActionAborted(opts.signal)
       throwIfUnarmedDestructiveDialog(page)
       await afterNavigationLikeAction(page, targetId, urlBefore)
       return { ...described, ref }
@@ -372,23 +506,104 @@ export async function drag(
   opts: { startRef: string; endRef: string },
 ): Promise<void> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    await ensureSnapshotFresh(backend, targetId)
-    const start = await targetLocator(page, { ref: opts.startRef })
-    const end = await targetLocator(page, { ref: opts.endRef })
-    await ensureInView(start, page)
-    await ensureInView(end, page)
-    const urlBefore = page.url()
-    await withActionWait(page, async () => {
-      await start.dragTo(end, { timeout: ACTION_TIMEOUT_MS })
-    })
-    throwIfUnarmedDestructiveDialog(page)
-    await afterNavigationLikeAction(page, targetId, urlBefore)
-  } catch (err) {
-    mapPlaywrightError(err, opts.startRef)
-  }
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      await ensureSnapshotFresh(backend, targetId)
+      const startFrame = normalizeRef(opts.startRef).match(/^(f\d+)?e\d+$/)?.[1]
+      const endFrame = normalizeRef(opts.endRef).match(/^(f\d+)?e\d+$/)?.[1]
+      if (startFrame !== endFrame) {
+        throw new BrowserError(
+          'Cross-frame drag is not supported. The drag source and target must belong to the same frame.',
+        )
+      }
+      const start = await targetLocator(page, { ref: opts.startRef })
+      const end = await targetLocator(page, { ref: opts.endRef })
+      await ensureInView(start, page)
+      const targetIsUnclipped = await end
+        .evaluate(element => {
+          const rect = element.getBoundingClientRect()
+          if (
+            rect.width <= 0 ||
+            rect.height <= 0 ||
+            rect.right <= 0 ||
+            rect.bottom <= 0 ||
+            rect.left >= innerWidth ||
+            rect.top >= innerHeight
+          ) {
+            return false
+          }
+          let parent = element.parentElement
+          while (parent) {
+            const style = getComputedStyle(parent)
+            const clipsX = /(auto|scroll|hidden|clip)/.test(style.overflowX)
+            const clipsY = /(auto|scroll|hidden|clip)/.test(style.overflowY)
+            if (clipsX || clipsY) {
+              const parentRect = parent.getBoundingClientRect()
+              if (
+                (clipsX &&
+                  (rect.right <= parentRect.left ||
+                    rect.left >= parentRect.right)) ||
+                (clipsY &&
+                  (rect.bottom <= parentRect.top ||
+                    rect.top >= parentRect.bottom))
+              ) {
+                return false
+              }
+            }
+            parent = parent.parentElement
+          }
+          return true
+        })
+        .catch(() => false)
+      const urlBefore = page.url()
+      await withActionWait(page, async () => {
+        if (targetIsUnclipped) {
+          await start.dragTo(end, { timeout: ACTION_TIMEOUT_MS })
+          return
+        }
+        await dragToClippedTarget(page, start, end)
+      })
+      throwIfUnarmedDestructiveDialog(page)
+      await afterNavigationLikeAction(page, targetId, urlBefore)
+    } catch (err) {
+      mapPlaywrightError(err, opts.startRef)
+    }
   })
+}
+
+async function dragToClippedTarget(
+  page: Page,
+  start: Locator,
+  end: Locator,
+): Promise<void> {
+  const source = await start.boundingBox({ timeout: ACTION_TIMEOUT_MS })
+  if (!source) throw new BrowserError('Drag source is not visible.')
+  const startX = source.x + source.width / 2
+  const startY = source.y + source.height / 2
+  const primeX = startX + Math.max(1, Math.min(8, source.width / 4))
+  let mouseIsDown = false
+  try {
+    await page.mouse.move(startX, startY)
+    await page.mouse.down()
+    mouseIsDown = true
+    // Start the native drag before scrolling moves the source out from under
+    // the pointer. Playwright's dragTo scrolls the target first, so distant
+    // targets in the same overflow container can otherwise report success
+    // without ever dispatching dragstart/drop.
+    await page.mouse.move(primeX, startY, { steps: 2 })
+    await end.scrollIntoViewIfNeeded({ timeout: ACTION_TIMEOUT_MS })
+    const target = await end.boundingBox({ timeout: ACTION_TIMEOUT_MS })
+    if (!target) throw new BrowserError('Drag target is not visible.')
+    await page.mouse.move(
+      target.x + target.width / 2,
+      target.y + target.height / 2,
+      { steps: 12 },
+    )
+    await page.mouse.up()
+    mouseIsDown = false
+  } finally {
+    if (mouseIsDown) await page.mouse.up().catch(() => {})
+  }
 }
 
 export async function hover(
@@ -397,24 +612,24 @@ export async function hover(
   opts: { ref: string; element?: string },
 ): Promise<ResolvedElement> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    await ensureSnapshotFresh(backend, targetId)
-    const { loc, ref, described } = await resolveClickTarget(
-      page,
-      targetId,
-      opts.ref,
-      opts.element,
-      staleRecovery(backend, targetId),
-    )
-    await withActionWait(page, async () => {
-      await ensureInView(loc, page)
-      await loc.hover({ timeout: ACTION_TIMEOUT_MS })
-    })
-    return { ...described, ref }
-  } catch (err) {
-    mapPlaywrightError(err, opts.ref)
-  }
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      await ensureSnapshotFresh(backend, targetId)
+      const { loc, ref, described } = await resolveClickTarget(
+        page,
+        targetId,
+        opts.ref,
+        opts.element,
+        staleRecovery(backend, targetId),
+      )
+      await withActionWait(page, async () => {
+        await ensureInView(loc, page)
+        await loc.hover({ timeout: ACTION_TIMEOUT_MS })
+      })
+      return { ...described, ref }
+    } catch (err) {
+      mapPlaywrightError(err, opts.ref)
+    }
   })
 }
 
@@ -427,51 +642,63 @@ export async function typeText(
     slowly?: boolean
     submit?: boolean
     element?: string
+    signal?: AbortSignal
   },
 ): Promise<ResolvedElement> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    await ensureSnapshotFresh(backend, targetId)
-    const { loc, ref, described } = await resolveClickTarget(
-      page,
-      targetId,
-      opts.ref,
-      opts.element,
-      staleRecovery(backend, targetId),
-    )
-    // A field the app computes rejects the write anyway. Returning its current
-    // value makes the refusal visible instead of looking like a silent no-op.
-    if (described.readOnly || described.disabled) return { ...described, ref }
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      throwIfActionAborted(opts.signal)
+      await ensureSnapshotFresh(backend, targetId)
+      const { loc, ref, described } = await resolveClickTarget(
+        page,
+        targetId,
+        opts.ref,
+        opts.element,
+        staleRecovery(backend, targetId),
+      )
+      // A field the app computes rejects the write anyway. Returning its current
+      // value makes the refusal visible instead of looking like a silent no-op.
+      if (described.readOnly || described.disabled) return { ...described, ref }
 
-    if (isTypedDateRange(described.name, opts.text)) {
-      throw new BrowserError(DATE_RANGE_CALENDAR_MSG)
-    }
-
-    const writeLoc = editableLocator(loc, described.field)
-    const value = await withActionWait(page, async () => {
-      const timeout = ACTION_TIMEOUT_MS
-      if (opts.slowly) {
-        await writeLoc.click({ timeout })
-        await writeLoc.type(opts.text, { timeout, delay: 75 })
-      } else {
-        await writeLoc.fill(opts.text, { timeout })
+      if (isTypedDateRange(described.name, opts.text)) {
+        throw new BrowserError(DATE_RANGE_CALENDAR_MSG)
       }
-      if (opts.submit) await writeLoc.press('Enter', { timeout })
-      return writeLoc
-        .evaluate(node => {
-          const t = node as HTMLInputElement
-          return t.isContentEditable
-            ? ((t as unknown as HTMLElement).innerText || '').trim()
-            : (t.value ?? '')
-        })
-        .catch(() => opts.text)
-    })
-    throwIfUnarmedDestructiveDialog(page)
-    return { ...described, ref, value }
-  } catch (err) {
-    mapPlaywrightError(err, opts.ref)
-  }
+
+      const writeLoc = editableLocator(loc, described.field)
+      const value = await withActionWait(page, async () => {
+        const timeout = ACTION_TIMEOUT_MS
+        if (opts.slowly) {
+          throwIfActionAborted(opts.signal)
+          await writeLoc.click({ timeout })
+          for (const character of Array.from(opts.text)) {
+            throwIfActionAborted(opts.signal)
+            await writeLoc.type(character, { timeout, delay: 75 })
+          }
+        } else {
+          throwIfActionAborted(opts.signal)
+          await writeLoc.fill(opts.text, { timeout })
+        }
+        throwIfActionAborted(opts.signal)
+        if (opts.submit) {
+          await writeLoc.press('Enter', { timeout })
+          throwIfActionAborted(opts.signal)
+        }
+        return writeLoc
+          .evaluate(node => {
+            const t = node as HTMLInputElement
+            return t.isContentEditable
+              ? ((t as unknown as HTMLElement).innerText || '').trim()
+              : (t.value ?? '')
+          })
+          .catch(() => opts.text)
+      })
+      throwIfActionAborted(opts.signal)
+      throwIfUnarmedDestructiveDialog(page)
+      return { ...described, ref, value }
+    } catch (err) {
+      mapPlaywrightError(err, opts.ref)
+    }
   })
 }
 
@@ -483,22 +710,22 @@ export async function selectOption(
   element?: string,
 ): Promise<{ selected: string[] }> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    await ensureSnapshotFresh(backend, targetId)
-    const { loc } = await resolveClickTarget(
-      page,
-      targetId,
-      ref,
-      element,
-      staleRecovery(backend, targetId),
-    )
-    const selected = await withActionWait(page, () => pickValue(loc, values))
-    throwIfUnarmedDestructiveDialog(page)
-    return selected
-  } catch (err) {
-    mapPlaywrightError(err, ref)
-  }
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      await ensureSnapshotFresh(backend, targetId)
+      const { loc } = await resolveClickTarget(
+        page,
+        targetId,
+        ref,
+        element,
+        staleRecovery(backend, targetId),
+      )
+      const selected = await withActionWait(page, () => pickValue(loc, values))
+      throwIfUnarmedDestructiveDialog(page)
+      return selected
+    } catch (err) {
+      mapPlaywrightError(err, ref)
+    }
   })
 }
 
@@ -537,14 +764,14 @@ export async function uploadFilesToPage(
   opts: { paths: string[]; ref?: string },
 ): Promise<{ files: string[]; cancelled: boolean }> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    // No network drain: attaching a file often starts a PDF/viewer fetch that
-    // never goes idle, and waiting for it is what made upload look hung.
-    return await uploadFiles(page, opts)
-  } catch (err) {
-    mapPlaywrightError(err, opts.ref)
-  }
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      // No network drain: attaching a file often starts a PDF/viewer fetch that
+      // never goes idle, and waiting for it is what made upload look hung.
+      return await uploadFiles(page, opts)
+    } catch (err) {
+      mapPlaywrightError(err, opts.ref)
+    }
   })
 }
 
@@ -555,16 +782,16 @@ export async function pressKey(
   modifiers?: string[],
 ): Promise<void> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  const combo = [...(modifiers ?? []), key].join('+')
-  try {
-    await withActionWait(page, async () => {
-      await page.keyboard.press(combo)
-    })
-    throwIfUnarmedDestructiveDialog(page)
-  } catch (err) {
-    mapPlaywrightError(err)
-  }
+    const page = await getPageForTarget(backend, targetId)
+    const combo = [...(modifiers ?? []), key].join('+')
+    try {
+      await withActionWait(page, async () => {
+        await page.keyboard.press(combo)
+      })
+      throwIfUnarmedDestructiveDialog(page)
+    } catch (err) {
+      mapPlaywrightError(err)
+    }
   })
 }
 
@@ -604,15 +831,15 @@ export async function scrollIntoView(
   element?: string,
 ): Promise<void> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    const loc = await targetLocator(page, { ref, element })
-    await loc.scrollIntoViewIfNeeded({
-      timeout: ACTION_TIMEOUT_MS,
-    })
-  } catch (err) {
-    mapPlaywrightError(err, ref)
-  }
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      const loc = await targetLocator(page, { ref, element })
+      await loc.scrollIntoViewIfNeeded({
+        timeout: ACTION_TIMEOUT_MS,
+      })
+    } catch (err) {
+      mapPlaywrightError(err, ref)
+    }
   })
 }
 
@@ -749,70 +976,87 @@ export async function scroll(
   const requested = { x: deltaX, y: deltaY }
 
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    if (!opts.ref) {
-      const res = await page
-        .locator(':root')
-        .evaluate(SCROLL_IN_PAGE, { dx: deltaX, dy: deltaY, mode: 'page' as const })
-      if (!res.found) throw new BrowserError('Could not read the page scroll position.')
-      if (!res.scrollable) {
-        await page.mouse.move(
-          res.extent.clientWidth / 2,
-          res.extent.clientHeight / 2,
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      if (!opts.ref) {
+        const res = await page
+          .locator(':root')
+          .evaluate(SCROLL_IN_PAGE, {
+            dx: deltaX,
+            dy: deltaY,
+            mode: 'page' as const,
+          })
+        if (!res.found)
+          throw new BrowserError('Could not read the page scroll position.')
+        if (!res.scrollable) {
+          await page.mouse.move(
+            res.extent.clientWidth / 2,
+            res.extent.clientHeight / 2,
+          )
+          await page.mouse.wheel(deltaX, deltaY)
+          return {
+            kind: 'wheel',
+            requested,
+            moved: { x: 0, y: 0 },
+            extent: res.extent,
+          }
+        }
+        return {
+          kind: res.container ? 'container' : 'page',
+          label: res.container ? res.label : undefined,
+          requested,
+          moved: res.moved,
+          extent: res.extent,
+        }
+      }
+
+      await ensureSnapshotFresh(backend, targetId)
+      const { loc, ref, described } = await resolveClickTarget(
+        page,
+        targetId,
+        opts.ref,
+        opts.element,
+        staleRecovery(backend, targetId),
+      )
+      if (intoView) {
+        await ensureInView(loc, page)
+        const res = await loc.evaluate(SCROLL_IN_PAGE, {
+          dx: 0,
+          dy: 0,
+          mode: 'page' as const,
+        })
+        if (!res.found)
+          throw new BrowserError('Could not read the page scroll position.')
+        return {
+          kind: 'into-view',
+          label: described.name
+            ? `${described.role} "${described.name}"`
+            : described.role,
+          requested,
+          moved: { x: 0, y: 0 },
+          extent: res.extent,
+        }
+      }
+      const res = await loc.evaluate(SCROLL_IN_PAGE, {
+        dx: deltaX,
+        dy: deltaY,
+        mode: 'container' as const,
+      })
+      if (!res.found) {
+        throw new BrowserError(
+          `${ref} is not inside a scrollable container. Omit ref to scroll the page, or pass scrollIntoView: true to bring it into view.\nRecovery action: browser_scroll without ref, or with scrollIntoView: true`,
         )
-        await page.mouse.wheel(deltaX, deltaY)
-        return { kind: 'wheel', requested, moved: { x: 0, y: 0 }, extent: res.extent }
       }
       return {
-        kind: res.container ? 'container' : 'page',
-        label: res.container ? res.label : undefined,
+        kind: 'container',
+        label: res.label,
         requested,
         moved: res.moved,
         extent: res.extent,
       }
+    } catch (err) {
+      mapPlaywrightError(err, opts.ref)
     }
-
-    await ensureSnapshotFresh(backend, targetId)
-    const { loc, ref, described } = await resolveClickTarget(
-      page,
-      targetId,
-      opts.ref,
-      opts.element,
-      staleRecovery(backend, targetId),
-    )
-    if (intoView) {
-      await ensureInView(loc, page)
-      const res = await loc.evaluate(SCROLL_IN_PAGE, { dx: 0, dy: 0, mode: 'page' as const })
-      if (!res.found) throw new BrowserError('Could not read the page scroll position.')
-      return {
-        kind: 'into-view',
-        label: described.name ? `${described.role} "${described.name}"` : described.role,
-        requested,
-        moved: { x: 0, y: 0 },
-        extent: res.extent,
-      }
-    }
-    const res = await loc.evaluate(SCROLL_IN_PAGE, {
-      dx: deltaX,
-      dy: deltaY,
-      mode: 'container' as const,
-    })
-    if (!res.found) {
-      throw new BrowserError(
-        `${ref} is not inside a scrollable container. Omit ref to scroll the page, or pass scrollIntoView: true to bring it into view.\nRecovery action: browser_scroll without ref, or with scrollIntoView: true`,
-      )
-    }
-    return {
-      kind: 'container',
-      label: res.label,
-      requested,
-      moved: res.moved,
-      extent: res.extent,
-    }
-  } catch (err) {
-    mapPlaywrightError(err, opts.ref)
-  }
   })
 }
 

@@ -450,7 +450,11 @@ async function main() {
       assert.match(String(unverifiable), /resulting page state could not be verified/)
       assert.match(
         String(unverifiable),
-        /Recovery action: stop and ask the user to inspect the browser tab/,
+        /A fresh blank tab \(\d+\) replaced unusable tab \d+ as the current target/,
+      )
+      assert.match(
+        String(unverifiable),
+        /Recovery action: retry browser_navigate to the requested URL/,
       )
       assert.doesNotMatch(String(unverifiable), /overlay|PDF|browser_snapshot/i)
 

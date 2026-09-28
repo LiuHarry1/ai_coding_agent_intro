@@ -14,6 +14,7 @@
  *    browser over a remote-debugging port
  */
 
+import { randomUUID } from 'node:crypto'
 import { BrowserError, type BrowserBackend, type BrowserTab } from '../types.js'
 import type { RelayServer } from '../relay/server.js'
 import type { RelayDownload, RelayTab } from '../relay/protocol.js'
@@ -125,12 +126,28 @@ export async function createExtensionBackend(
             'Reload the unpacked extension from chrome://extensions, then retry.',
         )
       }
-      return relay.request<RelayDownload | null>({
+      const waitId = randomUUID()
+      const pending = relay.request<RelayDownload | null>({
         method: 'downloads.wait',
         targetId,
         since: opts.since,
         timeoutMs: opts.timeoutMs,
+        waitId,
+        expectedUrl: opts.expectedUrl,
       })
+      const cancel = () => {
+        if (!relay.capabilities().has('downloads.cancel')) return
+        void relay
+          .request({ method: 'downloads.cancel', waitId })
+          .catch(() => {})
+      }
+      opts.signal?.addEventListener('abort', cancel, { once: true })
+      if (opts.signal?.aborted) cancel()
+      try {
+        return await pending
+      } finally {
+        opts.signal?.removeEventListener('abort', cancel)
+      }
     },
 
     async dispose() {

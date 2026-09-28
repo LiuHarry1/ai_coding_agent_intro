@@ -699,20 +699,39 @@ export async function waitFor(
     textGone?: string
     selector?: string
     url?: string
+    timeoutMs?: number
   },
 ): Promise<void> {
-  if (
-    !opts.text &&
-    !opts.textGone &&
-    opts.time == null &&
-    !opts.selector &&
-    !opts.url
-  ) {
+  const conditions = [
+    opts.time != null,
+    Boolean(opts.text),
+    Boolean(opts.textGone),
+    Boolean(opts.selector),
+    Boolean(opts.url),
+  ].filter(Boolean).length
+  if (conditions === 0) {
     throw new BrowserError(
       'Either time, text, textGone, selector or url must be provided.\n' +
         'Recovery action: retry browser_wait_for with at least one wait condition',
     )
   }
+  if (conditions > 1) {
+    throw new BrowserError(
+      'Provide exactly one of time, text, textGone, selector or url. ' +
+        'Use timeoutMs to bound text, selector, or URL waits.\n' +
+        'Recovery action: retry browser_wait_for with one wait condition',
+    )
+  }
+  if (opts.time != null && opts.timeoutMs != null) {
+    throw new BrowserError(
+      'timeoutMs does not apply to a time-only delay. Omit timeoutMs.\n' +
+        'Recovery action: retry browser_wait_for with time only',
+    )
+  }
+  const timeoutMs =
+    opts.timeoutMs == null || !Number.isFinite(opts.timeoutMs)
+      ? WAIT_FOR_TIMEOUT_MS
+      : Math.min(30_000, Math.max(100, opts.timeoutMs))
   const page = await getPageForTarget(backend, targetId)
   try {
     if (opts.time != null) {
@@ -723,22 +742,22 @@ export async function waitFor(
       await page
         .getByText(opts.textGone)
         .first()
-        .waitFor({ state: 'hidden', timeout: WAIT_FOR_TIMEOUT_MS })
+        .waitFor({ state: 'hidden', timeout: timeoutMs })
     }
     if (opts.text) {
       await page
         .getByText(opts.text)
         .first()
-        .waitFor({ state: 'visible', timeout: WAIT_FOR_TIMEOUT_MS })
+        .waitFor({ state: 'visible', timeout: timeoutMs })
     }
     if (opts.selector) {
       await page
         .locator(opts.selector)
         .first()
-        .waitFor({ state: 'visible', timeout: WAIT_FOR_TIMEOUT_MS })
+        .waitFor({ state: 'visible', timeout: timeoutMs })
     }
     if (opts.url) {
-      await page.waitForURL(opts.url, { timeout: WAIT_FOR_TIMEOUT_MS })
+      await page.waitForURL(opts.url, { timeout: timeoutMs })
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

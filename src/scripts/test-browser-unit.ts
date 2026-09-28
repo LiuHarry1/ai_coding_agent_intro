@@ -18,6 +18,7 @@ import {
   isRelayCdpEvent,
   isRelayHello,
   isRelayResponse,
+  isRelayTargetGone,
   isRelayUserControl,
   type RelayRequestBody,
 } from '../browser/relay/protocol.js'
@@ -41,6 +42,7 @@ import {
   recoverySuffixForError,
   type BrowserToolOutput,
 } from '../tools/BrowserTool/shared.js'
+import { withTimeout } from '../tools/BrowserTool/BrowserTool.js'
 import { PAGE_SCRIPT, PAGE_SCRIPT_VERSION } from '../browser/page-script.js'
 import { BrowserError } from '../browser/types.js'
 import { normalizeRef } from '../browser/playwright/locator.js'
@@ -71,6 +73,7 @@ import {
   resolveTab,
   setBrowserBackendFactory,
   setCurrentTab,
+  shouldUseExtensionBackend,
 } from '../browser/manager.js'
 import {
   isHeavyMediaFrame,
@@ -95,6 +98,7 @@ import { appendSnapshotUrls } from '../browser/snapshot-urls.js'
 import { formatScrollOutcome, scrollRemaining } from '../browser/scroll-report.js'
 import { sanitizeUntrustedFileName } from '../browser/fs-safe/filename.js'
 import { writeExternalFileWithinOutputRoot } from '../browser/output-files.js'
+import { createDownloadCaptureForPage } from '../browser/playwright/download-capture.js'
 import {
   elementMatchesHint,
   namesOverlap,
@@ -203,6 +207,22 @@ const ok = (msg: string) => console.log(`ok ${msg}`)
   assert(
     !isRelayCdpEvent({ type: 'cdpEvent', method: 'x' }),
     'cdpEvent requires targetId',
+  )
+  assert(
+    isRelayTargetGone({
+      type: 'targetGone',
+      targetId: '7',
+      reason: 'revoked',
+    }),
+    'targetGone is a target-scoped lifecycle frame',
+  )
+  assert(
+    !isRelayTargetGone({
+      type: 'targetGone',
+      targetId: '7',
+      reason: 'unknown',
+    }),
+    'targetGone validates its reason',
   )
   assert(
     isRelayUserControl({ type: 'userControl', hasControl: true }),
@@ -476,6 +496,28 @@ await withRelay(async relay => {
   ok('relay correlates concurrent requests and ignores stray replies')
 })
 
+await withRelay(async relay => {
+  const peer = await connectPeer(relay)
+  const gone = new Promise<{ targetId: string; reason: string }>(resolve => {
+    const unsubscribe = relay.onTargetGone(event => {
+      unsubscribe()
+      resolve(event)
+    })
+  })
+  peer.socket.send(
+    JSON.stringify({
+      type: 'targetGone',
+      targetId: '17',
+      reason: 'revoked',
+    }),
+  )
+  const event = await gone
+  eq(event.targetId, '17', 'target lifecycle event keeps its target')
+  eq(event.reason, 'revoked', 'target lifecycle event keeps its reason')
+  await peer.close()
+  ok('relay forwards target-scoped lifecycle events')
+})
+
 // ── relay: error propagation ─────────────────────────────
 
 await withRelay(async relay => {
@@ -681,7 +723,17 @@ await withRelay(async relay => {
   const peer = await connectPeer(relay)
   await waiting // resolves once the peer handshakes, rather than polling
   eq(relay.isConnected(), true, 'connected after the wait resolved')
+  const disconnected = new Promise<string>(resolve => {
+    const unsubscribe = relay.onDisconnect(reason => {
+      unsubscribe()
+      resolve(reason)
+    })
+  })
   await peer.close()
+  assert(
+    (await disconnected).includes('extension disconnected'),
+    'disconnect subscribers receive an actionable reason',
+  )
   ok('waitForExtension resolves on pairing and times out with guidance')
 })
 
@@ -718,6 +770,8 @@ function makeFakeRelay(opts: {
       return (opts.reply?.(req) ?? {}) as T
     },
     onCdpEvent: () => () => {},
+    onDisconnect: () => () => {},
+    onTargetGone: () => () => {},
     notifyLock: () => {},
     close: async () => {},
   }
@@ -1205,6 +1259,30 @@ function makeFakeRelay(opts: {
 }
 
 {
+  eq(
+    shouldUseExtensionBackend('auto', false),
+    false,
+    'auto mode silently falls back to isolated without a connected relay',
+  )
+  eq(
+    shouldUseExtensionBackend('auto', true),
+    true,
+    'auto mode adopts an extension that is already connected',
+  )
+  eq(
+    shouldUseExtensionBackend('extension', false),
+    true,
+    'explicit extension mode starts pairing before a relay connects',
+  )
+  eq(
+    shouldUseExtensionBackend('isolated', true),
+    false,
+    'isolated mode never adopts a connected extension',
+  )
+  ok('browser auto mode only adopts an already-connected extension')
+}
+
+{
   eq(normalizeRef('e12'), 'e12', 'bare ref')
   eq(normalizeRef('@e12'), 'e12', '@ prefix')
   eq(normalizeRef('ref=e12'), 'e12', 'ref= prefix')
@@ -1563,6 +1641,28 @@ function makeFakeRelay(opts: {
 }
 
 {
+  const controller = new AbortController()
+  let timeoutError = ''
+  try {
+    await withTimeout(
+      new Promise<never>(() => {}),
+      'browser_test_hung',
+      10,
+      controller.signal,
+      () => controller.abort(new Error('deadline reached')),
+    )
+  } catch (err) {
+    timeoutError = err instanceof Error ? err.message : String(err)
+  }
+  assert(controller.signal.aborted, 'tool deadline aborts the underlying operation')
+  assert(
+    timeoutError.includes('timed out after 0.01s'),
+    'deadline reports timeout instead of user interruption',
+  )
+  ok('browser tool deadline propagates cancellation')
+}
+
+{
   assert(isHeavyMediaFrame('https://cdn.example/invoice.pdf'), 'pdf url is heavy')
   assert(isHeavyMediaFrame('blob:https://app.example/uuid'), 'blob preview is heavy')
   assert(isHeavyMediaFrame('', 'application/pdf'), 'pdf mime is heavy')
@@ -1627,6 +1727,20 @@ function makeFakeRelay(opts: {
   assert(
     elementMatchesHint({ role: 'button', name: 'Apply changes' }, 'Apply changes'),
     'hint matches name',
+  )
+  assert(
+    elementMatchesHint(
+      { role: 'button', name: 'Clicked 0 times' },
+      'button "Clicked 0 times"',
+    ),
+    'snapshot-style role plus quoted name matches',
+  )
+  assert(
+    !elementMatchesHint(
+      { role: 'link', name: 'Clicked 0 times' },
+      'button "Clicked 0 times"',
+    ),
+    'explicit snapshot-style role must also match',
   )
   assert(
     elementMatchesHint({ role: 'button', name: 'Delete Bob' }, 'Delete Alice'),
@@ -1855,6 +1969,54 @@ function makeFakeRelay(opts: {
   assert(escaped, 'path escape rejected')
   fs.rmSync(dir, { recursive: true, force: true })
   ok('copied writeExternalFileWithinOutputRoot')
+}
+
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-agent-dl-abort-'))
+  const outputPath = path.join(dir, 'cancelled.csv')
+  const listeners = new Map<string, (value: unknown) => void>()
+  const page = {
+    on(event: string, handler: (value: unknown) => void) {
+      listeners.set(event, handler)
+    },
+    off(event: string, handler: (value: unknown) => void) {
+      if (listeners.get(event) === handler) listeners.delete(event)
+    },
+  } as unknown as Parameters<typeof createDownloadCaptureForPage>[0]
+  const controller = new AbortController()
+  const capture = createDownloadCaptureForPage(
+    page,
+    { downloadWaiterDepth: 0, waiters: [] },
+    1_000,
+    {
+      mode: 'explicit',
+      outputPath,
+      outputRoot: dir,
+      signal: controller.signal,
+    },
+  )
+  listeners.get('download')?.({
+    suggestedFilename: () => 'cancelled.csv',
+    saveAs: async (tempPath: string) => {
+      await new Promise(resolve => setTimeout(resolve, 200))
+      fs.writeFileSync(tempPath, 'should not be committed')
+    },
+  })
+  setTimeout(() => controller.abort(), 25)
+  let rejected = false
+  try {
+    await capture.promise
+  } catch {
+    rejected = true
+  }
+  const outputPublished = fs.existsSync(outputPath)
+  fs.rmSync(dir, { recursive: true, force: true })
+  assert(rejected, 'aborting while a download is being saved must reject')
+  assert(
+    !outputPublished,
+    'aborting while a download is being saved must not publish the output file',
+  )
+  ok('download capture aborts during save')
 }
 
 {

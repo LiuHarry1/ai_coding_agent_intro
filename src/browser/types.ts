@@ -41,7 +41,13 @@ export interface BrowserBackend {
    */
   waitForDownload?(
     targetId: string,
-    opts: { since: number; timeoutMs: number },
+    opts: {
+      since: number
+      timeoutMs: number
+      signal?: AbortSignal
+      /** Exact link URL when the initiating ref resolves to an anchor. */
+      expectedUrl?: string
+    },
   ): Promise<BackendDownload | null>
   dispose(): Promise<void>
 }

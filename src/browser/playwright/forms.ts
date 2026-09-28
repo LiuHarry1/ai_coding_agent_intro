@@ -15,7 +15,12 @@ import type {
   FormFieldKind,
   ResolvedElement,
 } from '../types.js'
-import { DATE_RANGE_CALENDAR_MSG, isTypedDateRange, valuesMatch, writeText } from './fields.js'
+import {
+  DATE_RANGE_CALENDAR_MSG,
+  isTypedDateRange,
+  valuesMatch,
+  writeText,
+} from './fields.js'
 import {
   briefError,
   describeElement,
@@ -32,18 +37,27 @@ export async function fillForm(
   backend: BrowserBackend,
   targetId: string,
   fields: FormField[],
+  signal?: AbortSignal,
 ): Promise<FilledField[]> {
   return withInputFocus(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  const results: FilledField[] = []
-  await withActionWait(page, async () => {
-    for (const field of fields) {
-      results.push(await fillOneField(page, field))
-    }
+    const page = await getPageForTarget(backend, targetId)
+    const results: FilledField[] = []
+    await withActionWait(page, async () => {
+      for (const field of fields) {
+        throwIfFormAborted(signal)
+        results.push(await fillOneField(page, field))
+      }
+    })
+    throwIfFormAborted(signal)
+    throwIfUnarmedDestructiveDialog(page)
+    return results
   })
-  throwIfUnarmedDestructiveDialog(page)
-  return results
-  })
+}
+
+function throwIfFormAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return
+  const reason = signal.reason
+  throw reason instanceof Error ? reason : new Error('Form fill was cancelled')
 }
 
 function isTruthy(value: string): boolean {
@@ -65,11 +79,7 @@ function isNativeEditable(el: ResolvedElement): boolean {
 function inferKind(el: ResolvedElement): FormFieldKind {
   if (el.role === 'checkbox' || el.role === 'switch') return 'checkbox'
   if (el.role === 'radio') return 'radio'
-  if (
-    el.tag === 'select' ||
-    el.role === 'combobox' ||
-    el.role === 'listbox'
-  ) {
+  if (el.tag === 'select' || el.role === 'combobox' || el.role === 'listbox') {
     return 'combobox'
   }
   return 'textbox'
@@ -79,10 +89,15 @@ async function fillOneField(
   page: Page,
   field: FormField,
 ): Promise<FilledField> {
-  const loc = await targetLocator(page, { ref: field.ref })
-  const el = await describeElement(loc, field.ref)
-  const base = { ref: field.ref, role: el.role, name: el.name }
+  let base = {
+    ref: field.ref,
+    role: field.kind ?? 'unknown',
+    name: '',
+  }
   try {
+    const loc = await targetLocator(page, { ref: field.ref })
+    const el = await describeElement(loc, field.ref)
+    base = { ref: field.ref, role: el.role, name: el.name }
     const kind = field.kind ?? inferKind(el)
 
     if (kind === 'checkbox' || kind === 'radio') {

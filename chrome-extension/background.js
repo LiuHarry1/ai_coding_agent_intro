@@ -59,6 +59,17 @@ async function dropOwned(tabId) {
   await saveOwned()
 }
 
+function emitTargetGone(tabId, reason) {
+  if (socket?.readyState !== WebSocket.OPEN) return
+  socket.send(
+    JSON.stringify({
+      type: 'targetGone',
+      targetId: String(tabId),
+      reason,
+    }),
+  )
+}
+
 function assertOwned(tabId) {
   if (!owned.has(tabId)) {
     throw new Error(
@@ -112,11 +123,9 @@ async function recoverExistingAttachment(tabId) {
     // A Service Worker restart clears our in-memory Set but Chrome can retain
     // this extension's debugger attachment. A harmless command distinguishes
     // that session from a tab attached by DevTools or another extension.
-    await chrome.debugger.sendCommand(
-      { tabId },
-      'Runtime.evaluate',
-      { expression: 'void 0' },
-    )
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: 'void 0',
+    })
     attached.add(tabId)
     return true
   } catch {
@@ -226,7 +235,10 @@ chrome.tabs.onCreated.addListener(tab => {
 
 chrome.tabs.onRemoved.addListener(tabId => {
   attached.delete(tabId)
-  if (owned.delete(tabId)) void saveOwned()
+  if (owned.delete(tabId)) {
+    void saveOwned()
+    emitTargetGone(tabId, 'closed')
+  }
 })
 
 // ── request handlers ─────────────────────────────────────
@@ -320,9 +332,11 @@ async function restoreTab(targetId) {
 /** Stay under the host's 30s relay request timeout. */
 const DOWNLOAD_WAIT_CAP_MS = 25000
 const DOWNLOAD_POLL_MS = 250
+const DOWNLOAD_URL_HINT_GRACE_MS = 750
 
 /** Download ids already handed to the agent, so two waits never share one. */
 const claimedDownloads = new Set()
+const cancelledDownloadWaits = new Set()
 
 /**
  * The site's own file name per download id. item.filename is the path Chrome
@@ -359,54 +373,86 @@ function startedByPage(item, pageOrigin) {
   return !item.referrer || originOf(item.referrer) === pageOrigin
 }
 
+function pickExpectedDownload(items, expectedUrl) {
+  if (!expectedUrl) return items[0]
+  const exact = items.find(
+    item => item.url === expectedUrl || item.finalUrl === expectedUrl,
+  )
+  if (exact) return exact
+  // href is only a hint: click handlers may prevent the default navigation
+  // and start a blob or generated URL instead. Give an exact direct download
+  // a short head start, then accept the page's oldest unclaimed candidate.
+  const now = Date.now()
+  return items.find(
+    item =>
+      Number.isFinite(Date.parse(item.startTime)) &&
+      now - Date.parse(item.startTime) >= DOWNLOAD_URL_HINT_GRACE_MS,
+  )
+}
+
 /**
  * Resolve with the first download this tab's page started at or after `since`
  * once Chrome has finished writing it, or null when none finished in time.
  */
-async function waitForDownload(targetId, since, timeoutMs) {
+async function waitForDownload(
+  targetId,
+  since,
+  timeoutMs,
+  waitId,
+  expectedUrl,
+) {
   const tabId = Number(targetId)
   assertOwned(tabId)
   const deadline = Date.now() + Math.min(timeoutMs, DOWNLOAD_WAIT_CAP_MS)
   let id = null
-  while (Date.now() < deadline) {
-    if (id == null) {
-      const tab = await chrome.tabs.get(tabId)
-      const pageOrigin = originOf(tab.url ?? '')
-      const items = await chrome.downloads.search({
-        startedAfter: new Date(since).toISOString(),
-        orderBy: ['startTime'],
-      })
-      const hit = items.find(
-        item => !claimedDownloads.has(item.id) && startedByPage(item, pageOrigin),
-      )
-      if (hit) {
-        id = hit.id
-        claimedDownloads.add(id)
-      }
-    }
-    if (id != null) {
-      const [item] = await chrome.downloads.search({ id })
-      if (!item) {
-        throw new Error(
-          "The download was removed from Chrome's download list before it finished.",
+  try {
+    while (Date.now() < deadline) {
+      if (waitId && cancelledDownloadWaits.has(waitId)) return null
+      if (id == null) {
+        const tab = await chrome.tabs.get(tabId)
+        const pageOrigin = originOf(tab.url ?? '')
+        const items = await chrome.downloads.search({
+          startedAfter: new Date(since).toISOString(),
+          orderBy: ['startTime'],
+        })
+        const candidates = items.filter(
+          item =>
+            !claimedDownloads.has(item.id) && startedByPage(item, pageOrigin),
         )
-      }
-      if (item.state === 'complete') {
-        const suggestedName = suggestedNames.get(id)
-        suggestedNames.delete(id)
-        return {
-          url: item.finalUrl || item.url,
-          filename: item.filename,
-          ...(suggestedName ? { suggestedName } : {}),
+        const hit = pickExpectedDownload(candidates, expectedUrl)
+        if (hit) {
+          id = hit.id
+          claimedDownloads.add(id)
         }
       }
-      if (item.state === 'interrupted') {
-        throw new Error(`The download was interrupted: ${item.error ?? 'unknown reason'}.`)
+      if (id != null) {
+        const [item] = await chrome.downloads.search({ id })
+        if (!item) {
+          throw new Error(
+            "The download was removed from Chrome's download list before it finished.",
+          )
+        }
+        if (item.state === 'complete') {
+          const suggestedName = suggestedNames.get(id)
+          suggestedNames.delete(id)
+          return {
+            url: item.finalUrl || item.url,
+            filename: item.filename,
+            ...(suggestedName ? { suggestedName } : {}),
+          }
+        }
+        if (item.state === 'interrupted') {
+          throw new Error(
+            `The download was interrupted: ${item.error ?? 'unknown reason'}.`,
+          )
+        }
       }
+      await new Promise(r => setTimeout(r, DOWNLOAD_POLL_MS))
     }
-    await new Promise(r => setTimeout(r, DOWNLOAD_POLL_MS))
+    return null
+  } finally {
+    if (waitId) cancelledDownloadWaits.delete(waitId)
   }
-  return null
 }
 
 // ── reflective chrome.* invocation ───────────────────────
@@ -437,11 +483,13 @@ const SEMANTIC_METHODS = [
   'tabs.focus',
   'tabs.restore',
   'downloads.wait',
+  'downloads.cancel',
 ]
 
 /** Announced in `hello` so the host can branch at handshake time. */
 const CAPABILITIES = [
   ...SEMANTIC_METHODS,
+  'targets.lifecycle',
   ...Object.keys(ALLOWED_CHROME_COMMANDS),
 ]
 
@@ -507,7 +555,20 @@ async function handle(req) {
     case 'tabs.restore':
       return restoreTab(req.targetId)
     case 'downloads.wait':
-      return waitForDownload(req.targetId, req.since, req.timeoutMs)
+      return waitForDownload(
+        req.targetId,
+        req.since,
+        req.timeoutMs,
+        req.waitId,
+        req.expectedUrl,
+      )
+    case 'downloads.cancel':
+      cancelledDownloadWaits.add(req.waitId)
+      setTimeout(
+        () => cancelledDownloadWaits.delete(req.waitId),
+        DOWNLOAD_WAIT_CAP_MS,
+      )
+      return {}
     default:
       if (ALLOWED_CHROME_COMMANDS[req.method]) {
         return invokeChrome(req.method, req.params ?? [])
@@ -832,6 +893,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const tabId = Number(msg.targetId)
         await detach(tabId)
         await dropOwned(tabId)
+        emitTargetGone(tabId, 'revoked')
         sendResponse({ ok: true })
         return
       }

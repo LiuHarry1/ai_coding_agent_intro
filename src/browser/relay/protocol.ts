@@ -56,7 +56,10 @@ export type RelayRequest =
       targetId: string
       since: number
       timeoutMs: number
+      waitId?: string
+      expectedUrl?: string
     }
+  | { id: number; method: 'downloads.cancel'; waitId: string }
   | { id: number; method: ChromeCommand; params: unknown[] }
 
 /** A download Chrome finished writing, as `chrome.downloads` reports it. */
@@ -106,6 +109,13 @@ export interface RelayCdpEvent {
   sessionId?: string
 }
 
+/** A previously owned tab was closed or explicitly unshared by the user. */
+export interface RelayTargetGone {
+  type: 'targetGone'
+  targetId: string
+  reason: 'closed' | 'revoked'
+}
+
 export function isRelayResponse(msg: unknown): msg is RelayResponse {
   return (
     typeof msg === 'object' &&
@@ -131,6 +141,17 @@ export function isRelayCdpEvent(msg: unknown): msg is RelayCdpEvent {
     (msg as { type?: unknown }).type === 'cdpEvent' &&
     typeof (msg as { targetId?: unknown }).targetId === 'string' &&
     typeof (msg as { method?: unknown }).method === 'string'
+  )
+}
+
+export function isRelayTargetGone(msg: unknown): msg is RelayTargetGone {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type?: unknown }).type === 'targetGone' &&
+    typeof (msg as { targetId?: unknown }).targetId === 'string' &&
+    ((msg as { reason?: unknown }).reason === 'closed' ||
+      (msg as { reason?: unknown }).reason === 'revoked')
   )
 }
 

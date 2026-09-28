@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict'
 import { defaultRegistry } from '../tools.js'
 import { assembleToolPool } from '../tools/assembleToolPool.js'
+import { loadWorkspaceContributions } from '../core/workspace-load.js'
 import {
   BROWSER_AGENT_TOOLS,
   BROWSER_AGENT_TYPE,
@@ -20,6 +21,7 @@ import {
   BROWSER_HIGHLIGHT_TOOL_NAME,
   BROWSER_CLICK_TOOL_NAME,
   BROWSER_MOUSE_CLICK_XY_TOOL_NAME,
+  BROWSER_RESIZE_TOOL_NAME,
   ENTER_PLAN_MODE_TOOL_NAME,
   LSP_TOOL_NAME,
   TOOL_SEARCH_TOOL_NAME,
@@ -103,6 +105,30 @@ assert.ok(!(TOOL_SEARCH_TOOL_NAME in browserPool.tools))
 assert.ok(!(ASK_USER_QUESTION_TOOL_NAME in browserPool.tools))
 assert.ok(!(ENTER_PLAN_MODE_TOOL_NAME in browserPool.tools))
 console.log('ok browser primary loads curated tool set')
+
+const workspace = await loadWorkspaceContributions(process.cwd())
+const loadedBrowserPool = assembleToolPool({
+  registry: defaultRegistry,
+  cwd: process.cwd(),
+  session: minimalSession(BROWSER_AGENT_TYPE),
+  toolContext: minimalToolContext(),
+  mcpTools: {},
+  activeAgents: workspace.agents.activeAgents,
+  toolEnablement: {},
+  browserConfig: {},
+})
+for (const name of [
+  BROWSER_RESIZE_TOOL_NAME,
+  BROWSER_HIGHLIGHT_TOOL_NAME,
+  BROWSER_GET_BOUNDING_BOX_TOOL_NAME,
+  BROWSER_CDP_TOOL_NAME,
+]) {
+  assert.ok(
+    name in loadedBrowserPool.tools,
+    `${name} must be available in a real browser-agent session`,
+  )
+}
+console.log('ok workspace browser profile exposes visual and CDP tools')
 
 const optedIn = poolFor(null, { enabled: true })
 assert.ok(!(BROWSER_CLICK_TOOL_NAME in optedIn.tools))

@@ -9,7 +9,12 @@
 import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
 import * as http from 'node:http'
-import { setBrowserBackendFactory, closeBrowser } from '../browser/manager.js'
+import {
+  closeBrowser,
+  getBrowser,
+  getCurrentTabId,
+  setBrowserBackendFactory,
+} from '../browser/manager.js'
 import type { BrowserBackend } from '../browser/types.js'
 import {
   cdpTool,
@@ -50,6 +55,7 @@ const PAGE = `<!doctype html>
   <p>Signed out.</p>
 
   <button id="counter">Clicked 0 times</button>
+  <button id="single-activation">Single activation 0</button>
 
   <!-- A fixed box past the viewport edge stays in the accessibility tree
        (only negative-coordinate parking is pruned) but must never be
@@ -149,6 +155,13 @@ const PAGE = `<!doctype html>
       n += 1;
       document.getElementById('counter').textContent = 'Clicked ' + n + ' times';
     });
+    let singleActivationCount = 0;
+    document.getElementById('single-activation').addEventListener('click', event => {
+      singleActivationCount += 1;
+      document.getElementById('single-activation').textContent =
+        'Single activation ' + singleActivationCount;
+      event.stopImmediatePropagation();
+    }, { capture: true });
     document.getElementById('ghost-yes').addEventListener('click', () => {
       document.getElementById('ghost-state').textContent = 'Ghost clicked';
     });
@@ -218,6 +231,25 @@ const PAGE = `<!doctype html>
 
 const OTHER_PAGE = `<!doctype html>
 <html><head><title>Other</title></head><body><h1>Other page</h1></body></html>`
+
+const BEFOREUNLOAD_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Before unload</title></head>
+<body>
+  <h1>Before unload</h1>
+  <button id="arm">Arm before unload</button>
+  <p id="state">not armed</p>
+  <script>
+    document.getElementById('arm').addEventListener('click', function () {
+      window.addEventListener('beforeunload', function (event) {
+        event.preventDefault();
+        event.returnValue = '';
+      });
+      document.getElementById('state').textContent = 'armed';
+    });
+  </script>
+</body>
+</html>`
 
 const COORDINATE_PAGE = `<!doctype html>
 <html>
@@ -542,7 +574,7 @@ const COMBOBOX_PAGE = `<!doctype html>
   <p id="prompt-state">prompt waiting</p>
   <button id="alert" type="button">Alert me</button>
   <p id="alert-state">alert waiting</p>
-  <input id="receipt" type="file" aria-label="Receipt upload">
+  <input id="receipt" type="file" multiple aria-label="Receipt upload">
   <p id="file-state">none</p>
   <script>
     var fruits = ['Apple', 'Banana', 'Cherry'];
@@ -587,7 +619,10 @@ const COMBOBOX_PAGE = `<!doctype html>
       document.getElementById('alert-state').textContent = 'alert closed';
     });
     document.getElementById('receipt').addEventListener('change', function () {
-      document.getElementById('file-state').textContent = this.files[0] ? this.files[0].name : 'none';
+      document.getElementById('file-state').textContent =
+        this.files.length ? Array.from(this.files).map(function (file) {
+          return file.name;
+        }).join(', ') : 'none';
     });
   </script>
 </body>
@@ -686,6 +721,139 @@ const INTERACTIONS_PAGE = `<!doctype html>
 </body>
 </html>`
 
+function interactionRacesPage(port: number): string {
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Interaction race matrix</title></head>
+<body>
+  <h1>Interaction race matrix</h1>
+  <div id="frame-source" draggable="true" role="button" tabindex="0">Cross frame source</div>
+  <iframe title="Cross frame drop area" src="http://localhost:${port}/frame-drag-target"></iframe>
+
+  <div id="drag-scroller" style="width:260px;height:120px;overflow:auto;border:1px solid">
+    <div id="scroll-source" draggable="true" role="button" tabindex="0">Scroll drag source</div>
+    <div style="height:500px"></div>
+    <div id="scroll-target" role="button" tabindex="0" style="height:60px">Scroll drag target</div>
+  </div>
+  <p id="scroll-drag-state">scroll drag idle</p>
+
+  <div id="detach-source" draggable="true" role="button" tabindex="0">Detach drag source</div>
+  <div id="detach-target" role="button" tabindex="0">Detach drag target</div>
+  <p id="detach-state">detach idle</p>
+
+  <button id="delayed-hover">Delayed hover menu</button>
+  <p id="hover-menu-state">menu hidden</p>
+  <button id="moving-hover" style="position:relative;animation:move 400ms linear">Moving hover target</button>
+  <p id="moving-hover-state">moving idle</p>
+  <button id="vanishing-hover">Vanishing hover target</button>
+  <p id="vanishing-hover-state">vanishing idle</p>
+  <style>@keyframes move { from { left: 0 } to { left: 80px } }</style>
+  <script>
+    document.getElementById('scroll-target').addEventListener('dragover', event => event.preventDefault());
+    document.getElementById('scroll-target').addEventListener('drop', event => {
+      event.preventDefault();
+      document.getElementById('scroll-drag-state').textContent = 'scroll drag dropped';
+    });
+    document.getElementById('detach-source').addEventListener('dragstart', () => {
+      document.getElementById('detach-target').remove();
+      document.getElementById('detach-state').textContent = 'detach target removed';
+    });
+    document.getElementById('delayed-hover').addEventListener('mouseover', () => {
+      setTimeout(() => {
+        document.getElementById('hover-menu-state').textContent = 'delayed menu visible';
+      }, 250);
+    });
+    document.getElementById('moving-hover').addEventListener('mouseover', () => {
+      document.getElementById('moving-hover-state').textContent = 'moving hovered';
+    });
+    document.getElementById('vanishing-hover').addEventListener('mouseover', event => {
+      document.getElementById('vanishing-hover-state').textContent = 'vanishing hovered and removed';
+      event.currentTarget.remove();
+    });
+  </script>
+</body>
+</html>`
+}
+
+const FRAME_DRAG_TARGET_PAGE = `<!doctype html>
+<html>
+<body>
+  <div id="frame-drop-target" role="button" tabindex="0" style="width:180px;height:80px;border:1px solid">Cross frame target</div>
+  <p id="frame-drop-state">cross frame idle</p>
+  <script>
+    document.getElementById('frame-drop-target').addEventListener('dragover', event => event.preventDefault());
+    document.getElementById('frame-drop-target').addEventListener('drop', event => {
+      event.preventDefault();
+      document.getElementById('frame-drop-state').textContent = 'cross frame dropped';
+    });
+  </script>
+</body>
+</html>`
+
+const FORM_RACES_PAGE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Form race matrix</title></head>
+<body>
+  <h1>Form race matrix</h1>
+  <label>Rerender trigger <input id="rerender-first" type="text"></label>
+  <label id="second-label">Rerendered field <input id="rerender-second" type="text"></label>
+  <p id="form-race-state">form idle</p>
+  <input id="race-upload" type="file" multiple aria-label="Race upload">
+  <p id="upload-race-state">upload idle</p>
+  <script>
+    document.getElementById('rerender-first').addEventListener('input', () => {
+      const old = document.getElementById('rerender-second');
+      const replacement = old.cloneNode();
+      old.replaceWith(replacement);
+      document.getElementById('form-race-state').textContent = 'second field replaced';
+    }, { once: true });
+    function wireUpload(input) {
+      input.addEventListener('change', function () {
+        document.getElementById('upload-race-state').textContent =
+          Array.from(this.files).map(file => file.name + ':' + file.size).join(', ');
+      });
+    }
+    wireUpload(document.getElementById('race-upload'));
+    window.replaceUploadSoon = function () {
+      setTimeout(() => {
+        const old = document.getElementById('race-upload');
+        const replacement = old.cloneNode();
+        old.replaceWith(replacement);
+        wireUpload(replacement);
+        document.getElementById('upload-race-state').textContent = 'upload input replaced';
+      }, 0);
+    };
+  </script>
+</body>
+</html>`
+
+const VISUAL_STRESS_PAGE = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"><title>Visual stress matrix</title>
+  <style>
+    body { margin: 0; min-height: 14000px; }
+    #fixed { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: 36px; background: rgba(20, 40, 80, .85); color: white; }
+    #sticky { position: sticky; top: 36px; height: 32px; background: #ddd; }
+    #animated { width: 100px; height: 50px; background: orange; animation: pulse 120ms infinite alternate; }
+    #transparent { position: absolute; top: 180px; left: 20px; width: 180px; height: 90px; background: rgba(0, 120, 255, .2); }
+    #scaled { position: absolute; top: 320px; left: 80px; width: 120px; height: 60px; transform: scale(2); transform-origin: top left; background: green; color: white; }
+    #bottom { position: absolute; top: 13800px; height: 100px; }
+    @keyframes pulse { from { transform: translateX(0) } to { transform: translateX(20px) } }
+  </style>
+</head>
+<body>
+  <header id="fixed">Fixed visual header</header>
+  <section style="height:800px;padding-top:50px">
+    <div id="sticky">Sticky visual bar</div>
+    <div id="animated" role="img" aria-label="Animated visual"></div>
+    <div id="transparent">Transparent visual layer</div>
+    <button id="scaled">Scaled visual target</button>
+  </section>
+  <div id="bottom">Visual bottom marker</div>
+</body>
+</html>`
+
 const SCROLL_MATRIX_PAGE = `<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Scroll matrix</title></head>
@@ -693,8 +861,10 @@ const SCROLL_MATRIX_PAGE = `<!doctype html>
   <h1>Scroll matrix</h1>
   <div id="scroller" aria-label="Results scroller" style="width:320px;height:180px;overflow:auto;border:1px solid">
     <div style="width:900px">
-      ${Array.from({ length: 30 }, (_, i) =>
-        `<p>Container row ${i + 1}${i === 24 ? ' <button id="container-target">Container target</button>' : ''}</p>`,
+      ${Array.from(
+        { length: 30 },
+        (_, i) =>
+          `<p>Container row ${i + 1}${i === 24 ? ' <button id="container-target">Container target</button>' : ''}</p>`,
       ).join('')}
     </div>
   </div>
@@ -740,17 +910,38 @@ const DOWNLOAD_PAGE = `<!doctype html>
 <body>
   <h1>Download matrix</h1>
   <a id="download" href="/files/report.csv" download>Download report</a>
+  <a id="scripted-download" href="/files/report.csv" download>Download scripted report</a>
+  <a id="large-download" href="/files/large.bin" download>Download large file</a>
+  <a id="interrupted-download" href="/files/interrupted.bin" download>Download interrupted file</a>
+  <a id="removable-download" href="/files/removable.csv" download>Download removable report</a>
+  <a id="slow-download" href="/files/slow.csv" download>Download slow report</a>
+  <a id="delayed-download" href="/files/delayed.csv" download hidden>Delayed report file</a>
   <button id="delayed">Download after 5 seconds</button>
   <button id="ordinary">Ordinary button</button>
   <p id="download-state">idle</p>
   <script>
+    document.getElementById('download').addEventListener('click', function () {
+      document.getElementById('download-state').textContent = 'direct clicked';
+    });
+    document.getElementById('scripted-download').addEventListener('click', function (event) {
+      event.preventDefault();
+      const href = URL.createObjectURL(
+        new Blob(['id,name\\n9,Scripted\\n'], { type: 'text/csv' }),
+      );
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = 'scripted.csv';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+      document.getElementById('download-state').textContent = 'scripted clicked';
+    });
     document.getElementById('ordinary').addEventListener('click', function () {
       document.getElementById('download-state').textContent = 'ordinary clicked';
     });
     document.getElementById('delayed').addEventListener('click', function () {
       document.getElementById('download-state').textContent = 'download scheduled';
       setTimeout(function () {
-        document.getElementById('download').click();
+        document.getElementById('delayed-download').click();
       }, 5000);
     });
   </script>
@@ -771,6 +962,43 @@ const FRAME_INNER_PAGE = `<!doctype html>
 </body>
 </html>`
 
+const FRAME_NESTED_PAGE = `<!doctype html>
+<html>
+<body>
+  <button id="nested-action">Nested frame action</button>
+  <p id="nested-state">nested untouched</p>
+  <script>
+    document.getElementById('nested-action').addEventListener('click', function () {
+      document.getElementById('nested-state').textContent = 'nested clicked';
+    });
+  </script>
+</body>
+</html>`
+
+const FRAME_SANDBOX_PAGE = `<!doctype html>
+<html>
+<body>
+  <button id="sandbox-action">Sandbox frame action</button>
+  <p id="sandbox-state">sandbox untouched</p>
+  <script>
+    document.getElementById('sandbox-action').addEventListener('click', function (event) {
+      document.getElementById('sandbox-state').textContent =
+        'sandbox clicked detail=' + event.detail;
+    });
+  </script>
+</body>
+</html>`
+
+function frameMidPage(port: number): string {
+  return `<!doctype html>
+<html>
+<body>
+  <h2>Middle frame</h2>
+  <iframe title="Nested controls" src="http://127.0.0.1:${port}/frame-nested"></iframe>
+</body>
+</html>`
+}
+
 function crossOriginPage(port: number): string {
   return `<!doctype html>
 <html>
@@ -779,13 +1007,87 @@ function crossOriginPage(port: number): string {
   <h1>Frame and shadow matrix</h1>
   <div id="shadow-host"></div>
   <p id="shadow-state">shadow untouched</p>
-  <iframe title="Cross origin controls" src="http://localhost:${port}/frame-inner"></iframe>
+  <button id="remove-frame">Remove inner frame</button>
+  <iframe id="inner-frame" title="Cross origin controls" src="http://localhost:${port}/frame-inner"></iframe>
+  <iframe title="Nested cross origin controls" src="http://localhost:${port}/frame-mid"></iframe>
+  <iframe title="Sandbox controls" sandbox="allow-scripts" src="/frame-sandbox"></iframe>
   <script>
     const root = document.getElementById('shadow-host').attachShadow({ mode: 'open' });
     root.innerHTML = '<button id="shadow-action">Shadow action</button>';
     root.getElementById('shadow-action').addEventListener('click', function () {
       document.getElementById('shadow-state').textContent = 'shadow clicked';
     });
+    document.getElementById('remove-frame').addEventListener('click', function () {
+      document.getElementById('inner-frame').remove();
+    });
+  </script>
+</body>
+</html>`
+}
+
+function dynamicDomPage(port: number): string {
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Dynamic DOM matrix</title></head>
+<body>
+  <h1>Dynamic DOM matrix</h1>
+  <div id="dynamic-frame"></div>
+  <div id="slot-host"></div>
+  <button id="slot-first" slot="first">Slotted first</button>
+  <button id="slot-second" slot="second">Slotted second</button>
+  <p id="churn-state">churn idle</p>
+  <div id="churn-root"></div>
+  <script>
+    const frameRoot = document.getElementById('dynamic-frame');
+    window.installDynamicFrame = function () {
+      frameRoot.innerHTML =
+        '<iframe title="Dynamic cross origin frame" src="http://localhost:${port}/frame-inner?dynamic=1"></iframe>';
+    };
+    window.churnDynamicFrame = function () {
+      let generation = 0;
+      const timer = setInterval(function () {
+        generation += 1;
+        if (generation % 2 === 0) {
+          frameRoot.innerHTML = '';
+        } else {
+          window.installDynamicFrame();
+        }
+        if (generation >= 30) {
+          clearInterval(timer);
+          window.installDynamicFrame();
+        }
+      }, 20);
+    };
+    window.installDynamicFrame();
+
+    const shadow = document.getElementById('slot-host').attachShadow({ mode: 'open' });
+    shadow.innerHTML =
+      '<section><slot name="first"></slot><div id="nested-host"></div><slot name="second"></slot></section>';
+    const nested = shadow.getElementById('nested-host').attachShadow({ mode: 'open' });
+    nested.innerHTML = '<p>Nested shadow marker</p>';
+    window.reorderSlots = function () {
+      document.getElementById('slot-first').slot = 'second';
+      document.getElementById('slot-second').slot = 'first';
+    };
+
+    window.startDomChurn = function () {
+      let generation = 0;
+      const root = document.getElementById('churn-root');
+      const state = document.getElementById('churn-state');
+      const timer = setInterval(function () {
+        generation += 1;
+        root.innerHTML =
+          '<button>Churn action ' + generation + '</button>' +
+          '<ul>' + Array.from({ length: 40 }, function (_, index) {
+            return '<li>generation ' + generation + ' row ' + index + '</li>';
+          }).join('') + '</ul>';
+        state.textContent = 'churn generation ' + generation;
+        if (generation >= 400) {
+          clearInterval(timer);
+          state.textContent = 'churn complete';
+        }
+      }, 5);
+    };
   </script>
 </body>
 </html>`
@@ -812,8 +1114,38 @@ export function startFixtureServer(): Promise<{
       setTimeout(() => {
         if (res.writableEnded) return
         res.setHeader('content-type', 'text/html; charset=utf-8')
-        res.end('<!doctype html><title>Slow navigation</title><h1>Slow navigation finished</h1>')
+        res.end(
+          '<!doctype html><title>Slow navigation</title><h1>Slow navigation finished</h1>',
+        )
       }, 20_000)
+      return
+    }
+    if (route === '/redirect/start') {
+      res.writeHead(302, { location: '/redirect/middle' })
+      res.end()
+      return
+    }
+    if (route === '/redirect/middle') {
+      res.writeHead(302, { location: '/other?redirect=same-origin' })
+      res.end()
+      return
+    }
+    if (route === '/redirect/cross-origin') {
+      const address = server.address() as { port: number }
+      res.writeHead(302, {
+        location: `http://localhost:${address.port}/other?redirect=cross-origin`,
+      })
+      res.end()
+      return
+    }
+    if (route === '/redirect/loop-a') {
+      res.writeHead(302, { location: '/redirect/loop-b' })
+      res.end()
+      return
+    }
+    if (route === '/redirect/loop-b') {
+      res.writeHead(302, { location: '/redirect/loop-a' })
+      res.end()
       return
     }
     if (route === '/files/report.csv') {
@@ -822,9 +1154,59 @@ export function startFixtureServer(): Promise<{
       res.end('id,name\n1,Alice\n2,Bob\n')
       return
     }
+    if (route === '/files/delayed.csv') {
+      res.setHeader('content-type', 'text/csv')
+      res.setHeader('content-disposition', 'attachment; filename="delayed.csv"')
+      res.end('id,name\n3,Delayed\n')
+      return
+    }
+    if (route === '/files/slow.csv') {
+      res.setHeader('content-type', 'text/csv')
+      res.setHeader('content-disposition', 'attachment; filename="slow.csv"')
+      res.write('id,name\n4,')
+      setTimeout(() => {
+        if (!res.writableEnded) res.end('Slow\n')
+      }, 5_000)
+      return
+    }
+    if (route === '/files/large.bin') {
+      const body = Buffer.alloc(8 * 1024 * 1024, 0x5a)
+      res.setHeader('content-type', 'application/octet-stream')
+      res.setHeader('content-disposition', 'attachment; filename="large.bin"')
+      res.setHeader('content-length', String(body.length))
+      res.end(body)
+      return
+    }
+    if (route === '/files/interrupted.bin') {
+      res.setHeader('content-type', 'application/octet-stream')
+      res.setHeader(
+        'content-disposition',
+        'attachment; filename="interrupted.bin"',
+      )
+      res.setHeader('content-length', String(1024 * 1024))
+      res.write(Buffer.alloc(32 * 1024, 0x49))
+      setTimeout(() => res.destroy(), 200)
+      return
+    }
+    if (route === '/files/removable.csv') {
+      res.setHeader('content-type', 'text/csv')
+      res.setHeader(
+        'content-disposition',
+        'attachment; filename="removable.csv"',
+      )
+      res.write('id,name\n5,')
+      setTimeout(() => {
+        if (!res.writableEnded) res.end('Removed\n')
+      }, 5_000)
+      return
+    }
     res.setHeader('content-type', 'text/html; charset=utf-8')
     if (route === '/other') {
       res.end(OTHER_PAGE)
+      return
+    }
+    if (route === '/beforeunload') {
+      res.end(BEFOREUNLOAD_PAGE)
       return
     }
     if (route === '/coordinate') {
@@ -912,8 +1294,43 @@ export function startFixtureServer(): Promise<{
       res.end(crossOriginPage(address.port))
       return
     }
+    if (route === '/dynamic-dom') {
+      const address = server.address() as { port: number }
+      res.end(dynamicDomPage(address.port))
+      return
+    }
+    if (route === '/interaction-races') {
+      const address = server.address() as { port: number }
+      res.end(interactionRacesPage(address.port))
+      return
+    }
+    if (route === '/frame-drag-target') {
+      res.end(FRAME_DRAG_TARGET_PAGE)
+      return
+    }
+    if (route === '/form-races') {
+      res.end(FORM_RACES_PAGE)
+      return
+    }
+    if (route === '/visual-stress') {
+      res.end(VISUAL_STRESS_PAGE)
+      return
+    }
     if (route === '/frame-inner') {
       res.end(FRAME_INNER_PAGE)
+      return
+    }
+    if (route === '/frame-mid') {
+      const address = server.address() as { port: number }
+      res.end(frameMidPage(address.port))
+      return
+    }
+    if (route === '/frame-nested') {
+      res.end(FRAME_NESTED_PAGE)
+      return
+    }
+    if (route === '/frame-sandbox') {
+      res.end(FRAME_SANDBOX_PAGE)
       return
     }
     if (route === '/hang-frame') {
@@ -1224,14 +1641,62 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('click dispatches trusted input')
 
+    const singleActivationRef = refFor(
+      String(clicked.snapshot),
+      'button',
+      'Single activation 0',
+    )
+    const singleActivation = expectData(
+      await run(clickTool, { ref: singleActivationRef }, sessionId),
+    )
+    assert.match(String(singleActivation.snapshot), /Single activation 1/)
+    assert.doesNotMatch(
+      String(singleActivation.snapshot),
+      /Single activation 2/,
+    )
+    ok('click probe never retries an already delivered activation')
+
+    const ghostRef = refFor(
+      String(singleActivation.snapshot),
+      'button',
+      'Ghost Yes',
+    )
+    for (const force of [false, true]) {
+      const ghostClick = await run(
+        clickTool,
+        { ref: ghostRef, ...(force ? { force: true } : {}) },
+        sessionId,
+      )
+      assert.ok(
+        typeof ghostClick === 'string' &&
+          /outside the visible viewport|offscreen/i.test(ghostClick),
+        `${force ? 'force' : 'normal'} click must reject an offscreen ref:\n${String(ghostClick)}`,
+      )
+    }
+    const afterGhost = String(
+      expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+    )
+    assert.ok(
+      afterGhost.includes('Ghost untouched') &&
+        !afterGhost.includes('Ghost clicked'),
+      `offscreen ref must not receive normal or force clicks:\n${afterGhost}`,
+    )
+    ok('offscreen refs are rejected even with force=true')
+
     // ── a changed label rotates the ref, old one stops working ──
     const staleCounter = await run(clickTool, { ref: counterRef }, sessionId)
     assert.ok(
       typeof staleCounter === 'string',
       'a ref captured before the label changed must not resolve',
     )
-    assert.ok(staleCounter.includes(`Element not found: ${counterRef}`), staleCounter)
-    assert.ok(staleCounter.includes('Recovery action: browser_snapshot'), staleCounter)
+    assert.ok(
+      staleCounter.includes(`Element not found: ${counterRef}`),
+      staleCounter,
+    )
+    assert.ok(
+      staleCounter.includes('Recovery action: browser_snapshot'),
+      staleCounter,
+    )
     const newCounterRef = refFor(
       String(clicked.snapshot),
       'button',
@@ -1349,7 +1814,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         sessionId,
       ),
     )
-    assert.ok(resized.screenshotPath, 'resize screenshotAfterwards must capture')
+    assert.ok(
+      resized.screenshotPath,
+      'resize screenshotAfterwards must capture',
+    )
     const viewportResult = expectData(
       await run(
         cdpTool,
@@ -1404,7 +1872,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         sessionId,
       ),
     )
-    assert.match(String(highlighted.message), /Highlighted select "Environment"/)
+    assert.match(
+      String(highlighted.message),
+      /Highlighted select "Environment"/,
+    )
     const outlineResult = expectData(
       await run(
         cdpTool,
@@ -1418,9 +1889,8 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         sessionId,
       ),
     )
-    const outline = (
-      outlineResult.value as { result?: { value?: string } }
-    ).result?.value
+    const outline = (outlineResult.value as { result?: { value?: string } })
+      .result?.value
     assert.match(String(outline), /solid/)
     assert.match(String(outline), /3px/)
     expectData(await run(waitForTool, { time: 1.7 }, sessionId))
@@ -1442,13 +1912,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ).result?.value
     assert.equal(clearedOutline, '')
 
-    expectData(
-      await run(
-        resizeTool,
-        { width: 1280, height: 800 },
-        sessionId,
-      ),
-    )
+    expectData(await run(resizeTool, { width: 1280, height: 800 }, sessionId))
     ok('resize, highlight, get_bounding_box and browser_cdp')
 
     for (const popup of [
@@ -1521,7 +1985,53 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         ),
       )
       assert.match(String(innerClicked.snapshot), /inner clicked/)
-      ok('shadow DOM and cross-origin iframe refs remain actionable')
+      const afterInner = String(
+        expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+      )
+      const nestedClicked = expectData(
+        await run(
+          clickTool,
+          {
+            ref: refFor(afterInner, 'button', 'Nested frame action'),
+          },
+          sessionId,
+        ),
+      )
+      assert.match(String(nestedClicked.snapshot), /nested clicked/)
+      const afterNested = String(
+        expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+      )
+      const sandboxClicked = expectData(
+        await run(
+          clickTool,
+          {
+            ref: refFor(afterNested, 'button', 'Sandbox frame action'),
+          },
+          sessionId,
+        ),
+      )
+      assert.match(String(sandboxClicked.snapshot), /sandbox clicked/)
+      const beforeDetach = String(
+        expectData(await run(snapshotTool, {}, sessionId)).snapshot,
+      )
+      const detachedRef = refFor(beforeDetach, 'button', 'Inner frame action')
+      expectData(
+        await run(
+          clickTool,
+          {
+            ref: refFor(beforeDetach, 'button', 'Remove inner frame'),
+          },
+          sessionId,
+        ),
+      )
+      const detachedClick = await run(
+        clickTool,
+        { ref: detachedRef },
+        sessionId,
+      )
+      assert.equal(typeof detachedClick, 'string')
+      assert.match(String(detachedClick), /stale|not found|snapshot/i)
+      ok('shadow, nested/sandbox OOPIF and detached refs behave correctly')
     } else {
       ok('shadow DOM refs remain actionable')
     }
@@ -1538,9 +2048,21 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
           fields: [
             { ref: refNear(formSnap, 'Merchant'), value: 'Suzhou Hotel' },
             { ref: refNear(formSnap, 'Total'), value: '100.00' },
-            { ref: refNear(formSnap, 'Billable'), value: 'true', kind: 'checkbox' },
-            { ref: refNear(formSnap, 'Personal'), value: 'true', kind: 'radio' },
-            { ref: refNear(formSnap, 'Currency'), value: 'USD', kind: 'combobox' },
+            {
+              ref: refNear(formSnap, 'Billable'),
+              value: 'true',
+              kind: 'checkbox',
+            },
+            {
+              ref: refNear(formSnap, 'Personal'),
+              value: 'true',
+              kind: 'radio',
+            },
+            {
+              ref: refNear(formSnap, 'Currency'),
+              value: 'USD',
+              kind: 'combobox',
+            },
           ],
         },
         sessionId,
@@ -1680,7 +2202,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         sessionId,
       ),
     )
-    assert.match(String(disabledTyped.message), /nothing typed: the field is disabled/)
+    assert.match(
+      String(disabledTyped.message),
+      /nothing typed: the field is disabled/,
+    )
     const beforeReadonly = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
@@ -1694,7 +2219,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         sessionId,
       ),
     )
-    assert.match(String(readonlyTyped.message), /nothing typed: the field is readonly/)
+    assert.match(
+      String(readonlyTyped.message),
+      /nothing typed: the field is readonly/,
+    )
     const dragged = expectData(
       await run(
         dragTool,
@@ -1745,7 +2273,11 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     const applyHost = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
-    await run(clickTool, { ref: refFor(applyHost, 'button', 'Rebuild apply') }, sessionId)
+    await run(
+      clickTool,
+      { ref: refFor(applyHost, 'button', 'Rebuild apply') },
+      sessionId,
+    )
     const staleApply = await run(
       clickTool,
       { ref: refFor(applyHost, 'button', 'Apply changes') },
@@ -1784,7 +2316,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       'a click blocked by a modal must come back as a recoverable error',
     )
     assert.ok(
-      /modal|intercept|timeout|not visible|obscur|interactable|covered/i.test(covered),
+      /modal|intercept|timeout|not visible|obscur|interactable|covered/i.test(
+        covered,
+      ),
       `blocker must be visible in the error:\n${covered}`,
     )
     ok('occluded click is refused with the blocker named')
@@ -1829,7 +2363,11 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     const bottomRef = refNear(beforeScroll, 'Bottom marker')
     const intoView = expectData(
-      await run(scrollTool, { ref: bottomRef, scrollIntoView: true }, sessionId),
+      await run(
+        scrollTool,
+        { ref: bottomRef, scrollIntoView: true },
+        sessionId,
+      ),
     )
     assert.match(String(intoView.message), /into view\. Page position: /)
     const afterScroll = String(
@@ -1844,7 +2382,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       String(up.message),
       /(reached the top of the page|already at the top of the page).*\[Top of page\]/,
     )
-    const again = expectData(await run(scrollTool, { direction: 'up' }, sessionId))
+    const again = expectData(
+      await run(scrollTool, { direction: 'up' }, sessionId),
+    )
     assert.match(String(again.message), /^Warning: no scroll occurred/)
     ok('scroll reports the actual delta, position and the top edge')
 
@@ -1923,7 +2463,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       failed: boolean
       pending: boolean
     }>
-    const okRow = rows.find(r => r.url.includes('/api/ok') && !r.url.includes('xhr'))
+    const okRow = rows.find(
+      r => r.url.includes('/api/ok') && !r.url.includes('xhr'),
+    )
     assert.ok(okRow, `no fetch row for /api/ok in ${JSON.stringify(rows)}`)
     assert.equal(okRow.status, 200)
     assert.equal(okRow.method, 'GET')
@@ -1958,12 +2500,14 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         sessionId,
       ),
     )
-    const dead = ((deadClick.network ?? []) as Array<{
-      failed: boolean
-      status: number
-      error: string
-      url: string
-    }>).find(r => r.url.includes('127.0.0.1:1'))
+    const dead = (
+      (deadClick.network ?? []) as Array<{
+        failed: boolean
+        status: number
+        error: string
+        url: string
+      }>
+    ).find(r => r.url.includes('127.0.0.1:1'))
     assert.ok(dead, 'a request to a dead host must be reported')
     assert.equal(dead.failed, true)
     assert.equal(dead.status, 0, 'never-sent requests have no status')
@@ -1974,7 +2518,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       await run(networkTool, { failedOnly: true }, sessionId),
     )
     const bad = onlyBad.network as Array<{ status: number; failed: boolean }>
-    assert.ok(bad.length >= 2, 'failedOnly should keep the 500 and the dead host')
+    assert.ok(
+      bad.length >= 2,
+      'failedOnly should keep the 500 and the dead host',
+    )
     assert.ok(
       bad.every(r => r.failed || r.status >= 400),
       'failedOnly must not return successful requests',
@@ -1986,11 +2533,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('network: failedOnly and urlContains filters')
 
     const diagnostics = expectData(
-      await run(
-        navigateTool,
-        { url: `${baseUrl}diagnostics` },
-        sessionId,
-      ),
+      await run(navigateTool, { url: `${baseUrl}diagnostics` }, sessionId),
     )
     const diagnosticsSnapshot = String(diagnostics.snapshot)
     expectData(
@@ -2009,9 +2552,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         await run(consoleTool, { level }, sessionId),
       )
       assert.ok(
-        (levelOutput.consoleErrors as Array<{ level: string; text: string }>).some(
-          entry => entry.level === level && entry.text.includes(text),
-        ),
+        (
+          levelOutput.consoleErrors as Array<{ level: string; text: string }>
+        ).some(entry => entry.level === level && entry.text.includes(text)),
         JSON.stringify(levelOutput.consoleErrors),
       )
     }
@@ -2038,11 +2581,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('console levels and console/network limits use real page diagnostics')
 
     const scrollMatrix = expectData(
-      await run(
-        navigateTool,
-        { url: `${baseUrl}scroll-matrix` },
-        sessionId,
-      ),
+      await run(navigateTool, { url: `${baseUrl}scroll-matrix` }, sessionId),
     )
     const containerTarget = refFor(
       String(scrollMatrix.snapshot),
@@ -2123,11 +2662,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('wrapper chain collapses to one generic ref per row')
 
     const panel = expectData(
-      await run(
-        snapshotTool,
-        { selector: '#chat-panel' },
-        sessionId,
-      ),
+      await run(snapshotTool, { selector: '#chat-panel' }, sessionId),
     )
     const panelText = String(panel.snapshot)
     assert.ok(panelText.includes('Alice: latest note'), panelText)
@@ -2159,11 +2694,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('mode=efficient clips the tree but keeps clickable rows')
 
     const interactiveOnly = expectData(
-      await run(
-        snapshotTool,
-        { mode: 'full', interactive: true },
-        sessionId,
-      ),
+      await run(snapshotTool, { mode: 'full', interactive: true }, sessionId),
     )
     const interactiveText = String(interactiveOnly.snapshot)
     assert.match(interactiveText, /Alice: latest note/)
@@ -2179,9 +2710,8 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     const boundedSnapshotText = String(boundedSnapshot.snapshot)
     assert.equal(boundedSnapshot.snapshotTruncated, true)
     assert.ok(
-      boundedSnapshotText
-        .split('\n')
-        .filter(line => line.includes('[ref=')).length <= 1,
+      boundedSnapshotText.split('\n').filter(line => line.includes('[ref='))
+        .length <= 1,
       boundedSnapshotText,
     )
     ok('snapshot honors interactive, maxChars and maxNodes options')
@@ -2205,7 +2735,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       dockRef,
       `fixed chrome must survive in the complete YAML:\n${overflowSnap.slice(-800)}`,
     )
-    ok('fixed overlay chrome is kept in the complete snapshot (inline or spilled file)')
+    ok(
+      'fixed overlay chrome is kept in the complete snapshot (inline or spilled file)',
+    )
 
     const boundedText = expectData(
       await run(getTextTool, { maxChars: 120 }, sessionId),
@@ -2214,11 +2746,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.equal(boundedText.snapshotTruncated, true)
     assert.equal(String(boundedText.snapshot).length, 120)
     const feedText = expectData(
-      await run(
-        getTextTool,
-        { selector: '#feed', maxChars: 1000 },
-        sessionId,
-      ),
+      await run(getTextTool, { selector: '#feed', maxChars: 1000 }, sessionId),
     )
     assert.match(String(feedText.snapshot), /^Filler paragraph 0/)
     assert.doesNotMatch(String(feedText.snapshot), /^Feed/)
@@ -2234,15 +2762,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('get_text bounds and honors explicit selectors')
 
     expectData(
-      await run(
-        navigateTool,
-        { url: `${baseUrl}text-regions` },
-        sessionId,
-      ),
+      await run(navigateTool, { url: `${baseUrl}text-regions` }, sessionId),
     )
-    const defaultText = expectData(
-      await run(getTextTool, {}, sessionId),
-    )
+    const defaultText = expectData(await run(getTextTool, {}, sessionId))
     assert.equal(String(defaultText.snapshot).trim(), 'Primary article text')
     assert.match(String(defaultText.message), /article/)
     ok('get_text prefers article over main and body')
@@ -2266,14 +2788,30 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
 
     if (opts.downloads !== false) {
       const downloadNav = expectData(
-        await run(
-          navigateTool,
-          { url: `${baseUrl}download` },
-          sessionId,
-        ),
+        await run(navigateTool, { url: `${baseUrl}download` }, sessionId),
       )
       const savedFiles: string[] = []
       try {
+        const noDownloadStarted = Date.now()
+        const noDownload = await run(
+          waitForDownloadTool,
+          {
+            ref: refFor(
+              String(downloadNav.snapshot),
+              'button',
+              'Ordinary button',
+            ),
+            timeoutMs: 150,
+          },
+          sessionId,
+        )
+        assert.equal(typeof noDownload, 'string')
+        assert.match(String(noDownload), /No download started/i)
+        assert.ok(
+          Date.now() - noDownloadStarted < 2_000,
+          'tool-level download timeout must not fall back to 25s',
+        )
+
         const direct = expectData(
           await run(
             waitForDownloadTool,
@@ -2301,11 +2839,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
           await run(
             waitForDownloadTool,
             {
-              ref: refFor(
-                afterDirect,
-                'button',
-                'Download after 5 seconds',
-              ),
+              ref: refFor(afterDirect, 'button', 'Download after 5 seconds'),
               path: `agent-browser-${sessionId}-delayed.csv`,
             },
             sessionId,
@@ -2314,9 +2848,9 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         savedFiles.push(String(delayed.downloadPath))
         assert.equal(
           fs.readFileSync(String(delayed.downloadPath), 'utf8'),
-          'id,name\n1,Alice\n2,Bob\n',
+          'id,name\n3,Delayed\n',
         )
-        ok('wait_for_download captures direct and delayed downloads')
+        ok('wait_for_download honors timeout and captures direct/delayed files')
       } finally {
         for (const file of savedFiles) fs.rmSync(file, { force: true })
       }
@@ -2336,7 +2870,11 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     const originalId = firstTabs[0].targetId
 
     const opened = expectData(
-      await run(tabsTool, { action: 'new', url: baseUrl }, sessionId),
+      await run(
+        tabsTool,
+        { action: 'new', url: `${baseUrl}?cdp-background=1` },
+        sessionId,
+      ),
     )
     const afterOpen = opened.tabs as TabRow[]
     assert.equal(afterOpen.length, 2, JSON.stringify(afterOpen))
@@ -2367,7 +2905,77 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
       (reselected.tabs as TabRow[]).find(t => t.targetId === originalId)
         ?.current,
     )
-    ok('tabs: select')
+    const backgroundLocation = expectData(
+      await run(
+        cdpTool,
+        {
+          viewId: newTab.targetId,
+          method: 'Runtime.evaluate',
+          params: {
+            expression: 'location.href',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    assert.match(
+      String(
+        (backgroundLocation.value as { result?: { value?: string } }).result
+          ?.value,
+      ),
+      /cdp-background=1/,
+    )
+    const currentLocation = expectData(
+      await run(
+        cdpTool,
+        {
+          method: 'Runtime.evaluate',
+          params: {
+            expression: 'location.href',
+            returnByValue: true,
+          },
+        },
+        sessionId,
+      ),
+    )
+    assert.match(
+      String(
+        (currentLocation.value as { result?: { value?: string } }).result
+          ?.value,
+      ),
+      /cdp-background=1/,
+    )
+    ok('tabs: select and explicit CDP view becomes last interacted')
+
+    const cdpVictim = expectData(
+      await run(
+        tabsTool,
+        { action: 'new', url: `${baseUrl}other?closed-cdp=1` },
+        sessionId,
+      ),
+    )
+    const cdpVictimId = (cdpVictim.tabs as TabRow[]).find(
+      tab => tab.current,
+    )!.targetId
+    expectData(
+      await run(tabsTool, { action: 'close', tabId: cdpVictimId }, sessionId),
+    )
+    const cdpOnClosedTab = await run(
+      cdpTool,
+      {
+        viewId: cdpVictimId,
+        method: 'Runtime.evaluate',
+        params: { expression: 'location.href', returnByValue: true },
+      },
+      sessionId,
+    )
+    assert.equal(typeof cdpOnClosedTab, 'string')
+    assert.match(String(cdpOnClosedTab), /No open tab with id/)
+    expectData(
+      await run(tabsTool, { action: 'select', tabId: originalId }, sessionId),
+    )
+    ok('cdp rejects an explicitly closed viewId')
 
     const temporary = expectData(
       await run(
@@ -2398,6 +3006,47 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('tabs: closing the current tab adopts a live neighbour')
 
+    const externallyClosed = expectData(
+      await run(
+        tabsTool,
+        { action: 'new', url: `${baseUrl}other?external-close=1` },
+        sessionId,
+      ),
+    )
+    const externallyClosedId = (externallyClosed.tabs as TabRow[]).find(
+      tab => tab.current,
+    )!.targetId
+    const directBackend = await getBrowser(process.cwd(), sessionId)
+    await directBackend.closeTab(externallyClosedId)
+    // The extension delivers targetGone asynchronously. Give it time to reach
+    // manager state so this catches accidental clearing of the tombstone.
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const afterExternalClose = await run(snapshotTool, {}, sessionId)
+    assert.equal(typeof afterExternalClose, 'string')
+    assert.match(
+      String(afterExternalClose),
+      /was closed or is no longer shared/,
+    )
+    assert.match(String(afterExternalClose), /Recovery action: browser_tabs/)
+    assert.equal(
+      getCurrentTabId(sessionId),
+      externallyClosedId,
+      'a dead current tab must not silently switch to a neighbour',
+    )
+    const recoveredFromExternalClose = expectData(
+      await run(navigateTool, { url: baseUrl }, sessionId),
+    )
+    assert.match(String(recoveredFromExternalClose.snapshot), /Dashboard/)
+    const recoveredId = getCurrentTabId(sessionId)
+    assert.ok(recoveredId && recoveredId !== externallyClosedId)
+    expectData(
+      await run(tabsTool, { action: 'close', tabId: recoveredId }, sessionId),
+    )
+    expectData(
+      await run(tabsTool, { action: 'select', tabId: originalId }, sessionId),
+    )
+    ok('externally closed current tab fails explicitly and navigate recovers')
+
     // ── input still lands after the tab has been backgrounded ──
     // Chrome drops Input.* aimed at a hidden tab, and opening the tab above
     // pushed this one behind it. That is also the state the extension backend
@@ -2406,8 +3055,14 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     const revisited = expectData(
       await run(navigateTool, { url: baseUrl }, sessionId),
     )
-    const bgRef = refFor(String(revisited.snapshot), 'button', 'Clicked 0 times')
-    const bgClicked = expectData(await run(clickTool, { ref: bgRef }, sessionId))
+    const bgRef = refFor(
+      String(revisited.snapshot),
+      'button',
+      'Clicked 0 times',
+    )
+    const bgClicked = expectData(
+      await run(clickTool, { ref: bgRef }, sessionId),
+    )
     assert.ok(
       String(bgClicked.snapshot).includes('Clicked 1 times'),
       'a click on a backgrounded tab must still reach the page',
@@ -2415,9 +3070,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     ok('input reaches a backgrounded tab')
 
     const beforeHandoff = String(bgClicked.snapshot)
-    expectData(
-      await run(lockTool, { action: 'unlock' }, sessionId),
-    )
+    expectData(await run(lockTool, { action: 'unlock' }, sessionId))
     const blockedDuringHandoff = await run(
       clickTool,
       {
@@ -2427,10 +3080,33 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     assert.equal(typeof blockedDuringHandoff, 'string')
     assert.match(String(blockedDuringHandoff), /user.*control|control.*user/i)
-    expectData(await run(tabsTool, { action: 'list' }, sessionId))
-    expectData(
-      await run(lockTool, { action: 'lock' }, sessionId),
+    const blockedNavigate = await run(
+      navigateTool,
+      { url: `${baseUrl}other?during-handoff=1` },
+      sessionId,
     )
+    assert.equal(typeof blockedNavigate, 'string')
+    assert.match(String(blockedNavigate), /user.*control|control.*user/i)
+    const blockedType = await run(
+      typeTool,
+      {
+        ref: refFor(beforeHandoff, 'textbox', 'Email address'),
+        text: 'must-not-be-typed@example.com',
+      },
+      sessionId,
+    )
+    assert.equal(typeof blockedType, 'string')
+    assert.match(String(blockedType), /user.*control|control.*user/i)
+    const observedDuringHandoff = expectData(
+      await run(snapshotTool, {}, sessionId),
+    )
+    assert.match(String(observedDuringHandoff.snapshot), /Dashboard/)
+    assert.doesNotMatch(
+      String(observedDuringHandoff.snapshot),
+      /must-not-be-typed@example\.com/,
+    )
+    expectData(await run(tabsTool, { action: 'list' }, sessionId))
+    expectData(await run(lockTool, { action: 'lock' }, sessionId))
     const afterRelock = String(
       expectData(await run(snapshotTool, {}, sessionId)).snapshot,
     )
@@ -2479,9 +3155,7 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     )
     ok('wait_for textGone')
 
-    const timed = expectData(
-      await run(waitForTool, { time: 0.2 }, sessionId),
-    )
+    const timed = expectData(await run(waitForTool, { time: 0.2 }, sessionId))
     assert.ok(
       String(timed.snapshot).includes('Wait fixture'),
       `time-only wait_for must still return a snapshot:\n${timed.snapshot}`,
@@ -2491,18 +3165,16 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     const selectorWaitNav = expectData(
       await run(
         navigateTool,
-        { url: `${baseUrl}wait-text?selector-wait=${encodeURIComponent(label)}` },
+        {
+          url: `${baseUrl}wait-text?selector-wait=${encodeURIComponent(label)}`,
+        },
         sessionId,
       ),
     )
     await run(
       clickTool,
       {
-        ref: refFor(
-          String(selectorWaitNav.snapshot),
-          'button',
-          'Reveal',
-        ),
+        ref: refFor(String(selectorWaitNav.snapshot), 'button', 'Reveal'),
       },
       sessionId,
     )
@@ -2534,18 +3206,32 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
     assert.doesNotMatch(String(emptyWait), /browser_snapshot/)
     ok('wait_for rejects an empty condition with the right recovery')
 
+    const ambiguousWait = await run(
+      waitForTool,
+      { time: 0.1, text: 'Never appears' },
+      sessionId,
+    )
+    assert.equal(typeof ambiguousWait, 'string')
+    assert.match(String(ambiguousWait), /exactly one|one wait condition/i)
+
+    const timeoutStarted = Date.now()
+    const shortTimeout = await run(
+      waitForTool,
+      { text: 'Never appears', timeoutMs: 150 },
+      sessionId,
+    )
+    assert.equal(typeof shortTimeout, 'string')
+    assert.match(String(shortTimeout), /timed out/i)
+    assert.ok(
+      Date.now() - timeoutStarted < 2_000,
+      'custom wait timeout must not fall back to the 20s default',
+    )
+    ok('wait_for rejects combined conditions and honors timeoutMs')
+
     const spaStart = expectData(
-      await run(
-        navigateTool,
-        { url: `${baseUrl}spa?route=one` },
-        sessionId,
-      ),
+      await run(navigateTool, { url: `${baseUrl}spa?route=one` }, sessionId),
     )
-    const routeRef = refFor(
-      String(spaStart.snapshot),
-      'button',
-      'Go SPA two',
-    )
+    const routeRef = refFor(String(spaStart.snapshot), 'button', 'Go SPA two')
     const spaChanged = expectData(
       await run(clickTool, { ref: routeRef }, sessionId),
     )
@@ -2592,7 +3278,10 @@ export async function runBrowserToolSuite(opts: SuiteOptions): Promise<void> {
         sessionId,
       ),
     )
-    assert.ok(reloaded.screenshotPath, 'reload screenshotAfterwards must capture')
+    assert.ok(
+      reloaded.screenshotPath,
+      'reload screenshotAfterwards must capture',
+    )
     ok('navigate back, forward and reload')
 
     const ambiguousNavigate = await run(

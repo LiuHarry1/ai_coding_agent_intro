@@ -37,6 +37,7 @@ import {
   setCurrentTab,
 } from '../../browser/manager.js'
 import { BrowserError, type BrowserBackend } from '../../browser/types.js'
+import { getExtensionRelay } from '../../browser/backends/extension.js'
 import {
   clearViewportScreenshot,
   rememberViewportScreenshot,
@@ -53,6 +54,7 @@ import {
 } from '../../browser/session-flags.js'
 import {
   assertBrowserAgentMayAct,
+  isBrowserToolBlockedByUserControl,
   trackActiveBrowserTool,
   untrackActiveBrowserTool,
 } from '../../browser/active-browser-tools.js'
@@ -108,6 +110,7 @@ interface RunContext {
   cwd: string
   sessionId?: string
   toolCallId: string
+  abortSignal?: AbortSignal
 }
 
 async function observeAfterAction(
@@ -194,27 +197,34 @@ async function observeAfterAction(
   }
 }
 
-function withTimeout<T>(
+export function withTimeout<T>(
   promise: Promise<T>,
   action: string,
   ms: number = CALL_TIMEOUT_MS,
   signal?: AbortSignal,
+  onTimeout?: (error: BrowserError) => void,
 ): Promise<T> {
+  const interruptionError = () => {
+    const reason = signal?.reason
+    return reason instanceof Error
+      ? reason
+      : new BrowserError(`${action} interrupted by user`)
+  }
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new BrowserError(`${action} interrupted by user`))
+      reject(interruptionError())
       return
     }
     const timer = setTimeout(() => {
-      reject(
-        new BrowserError(
-          `${action} timed out after ${ms / 1000}s. The page may be stuck loading; check the dev server or try browser_console.`,
-        ),
+      const error = new BrowserError(
+        `${action} timed out after ${ms / 1000}s. The page may be stuck loading; check the dev server or try browser_console.`,
       )
+      reject(error)
+      onTimeout?.(error)
     }, ms)
     const onAbort = () => {
       clearTimeout(timer)
-      reject(new BrowserError(`${action} interrupted by user`))
+      reject(interruptionError())
     }
     signal?.addEventListener('abort', onAbort, { once: true })
     promise.then(
@@ -228,6 +238,61 @@ function withTimeout<T>(
         signal?.removeEventListener('abort', onAbort)
         reject(err)
       },
+    )
+  })
+}
+
+function withRelayLifecycle<T>(
+  backend: BrowserBackend,
+  currentTargetId: () => string,
+  run: () => Promise<T>,
+  interrupt: (reason: BrowserError) => void,
+): Promise<T> {
+  const relay = getExtensionRelay(backend)
+  if (!relay) return run()
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    let unsubscribeDisconnect = () => {}
+    let unsubscribeTargetGone = () => {}
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      unsubscribeDisconnect()
+      unsubscribeTargetGone()
+      fn()
+    }
+    const disconnected = (reason: string) => {
+      const error = new BrowserError(reason)
+      finish(() => {
+        reject(error)
+        interrupt(error)
+      })
+    }
+    unsubscribeDisconnect = relay.onDisconnect(disconnected)
+    unsubscribeTargetGone = relay.onTargetGone(event => {
+      const targetId = currentTargetId()
+      if (!targetId || event.targetId !== targetId) return
+      const action =
+        event.reason === 'revoked' ? 'was unshared by the user' : 'was closed'
+      const error = new BrowserError(
+        `The current browser tab (${targetId}) ${action}. The in-flight browser operation was cancelled.\n` +
+          'Recovery action: browser_navigate to open a fresh tab, or browser_tabs with action "list"',
+      )
+      finish(() => {
+        reject(error)
+        interrupt(error)
+      })
+    })
+    if (!relay.isConnected()) {
+      disconnected(
+        'The browser extension disconnected. Reopen Chrome or re-enable the extension, then try again.',
+      )
+      return
+    }
+    run().then(
+      value => finish(() => resolve(value)),
+      err => finish(() => reject(err)),
     )
   })
 }
@@ -271,10 +336,27 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
         ): Promise<DualChannelToolResult<BrowserToolOutput> | string> => {
           const toolCallId = options?.toolCallId ?? randomUUID()
           const abortSignal = options?.abortSignal
+          const timeoutController = new AbortController()
+          const forwardAbort = () => {
+            const reason = abortSignal?.reason
+            timeoutController.abort(
+              reason instanceof Error && reason.name !== 'AbortError'
+                ? reason
+                : new BrowserError(`${cfg.name} interrupted by user`),
+            )
+          }
+          if (abortSignal?.aborted) forwardAbort()
+          else
+            abortSignal?.addEventListener('abort', forwardAbort, {
+              once: true,
+            })
+          const executionSignal = timeoutController.signal
+          const abortOnTimeout = (error: BrowserError) =>
+            timeoutController.abort(error)
           const sessionId = context.sessionId
           trackActiveBrowserTool(sessionId, toolCallId, cfg.name, args)
           try {
-            if (abortSignal?.aborted) {
+            if (executionSignal.aborted) {
               return browserErrorText(
                 getUserHasControl(sessionId)
                   ? new BrowserError(
@@ -294,7 +376,8 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
                   getBrowser(cwdNow, sessionId),
                   cfg.name,
                   CALL_TIMEOUT_MS,
-                  abortSignal,
+                  executionSignal,
+                  abortOnTimeout,
                 )
                 resolved = {
                   backend,
@@ -305,29 +388,55 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
                   resolveTab(cwdNow, undefined, sessionId),
                   cfg.name,
                   CALL_TIMEOUT_MS,
-                  abortSignal,
+                  executionSignal,
+                  abortOnTimeout,
                 )
               }
+              const active = resolved
               assertAgentMayAct(cfg.name, args, sessionId)
               if (cfg.name !== BROWSER_MOUSE_CLICK_XY_TOOL_NAME) {
-                clearViewportScreenshot(resolved.backend, resolved.targetId)
+                clearViewportScreenshot(active.backend, active.targetId)
               }
+              const mustSettleBeforeInterrupt =
+                isBrowserToolBlockedByUserControl(cfg.name, args)
+              const operation = withRelayLifecycle(
+                active.backend,
+                () =>
+                  cfg.name === BROWSER_TABS_TOOL_NAME
+                    ? ''
+                    : (getCurrentTabId(sessionId) ?? active.targetId),
+                () =>
+                  cfg.run(args, {
+                    backend: active.backend,
+                    targetId: active.targetId,
+                    cwd: cwdNow,
+                    sessionId,
+                    toolCallId,
+                    abortSignal: executionSignal,
+                  }),
+                error => timeoutController.abort(error),
+              )
               const data = await withTimeout(
-                cfg.run(args, {
-                  backend: resolved.backend,
-                  targetId: resolved.targetId,
-                  cwd: cwdNow,
-                  sessionId,
-                  toolCallId,
-                }),
+                mustSettleBeforeInterrupt
+                  ? operation.then(value => {
+                      if (executionSignal.aborted) {
+                        const reason = executionSignal.reason
+                        throw reason instanceof Error
+                          ? reason
+                          : new BrowserError(`${cfg.name} interrupted by user`)
+                      }
+                      return value
+                    })
+                  : operation,
                 cfg.name,
                 CALL_TIMEOUT_MS,
-                abortSignal,
+                mustSettleBeforeInterrupt ? undefined : executionSignal,
+                abortOnTimeout,
               )
               if (data.url || data.title) {
                 recordHandoff(sessionId, {
                   targetId:
-                    (getCurrentTabId(sessionId) ?? resolved.targetId) ||
+                    (getCurrentTabId(sessionId) ?? active.targetId) ||
                     undefined,
                   url: data.url,
                   title: data.title,
@@ -347,6 +456,7 @@ function defineBrowserTool<S extends z.ZodTypeAny>(cfg: {
               return browserErrorText(err, cfg.name)
             }
           } finally {
+            abortSignal?.removeEventListener('abort', forwardAbort)
             untrackActiveBrowserTool(sessionId, toolCallId)
           }
         },
@@ -383,8 +493,13 @@ export const navigateTool = defineBrowserTool({
     }
     let targetId = ctx.targetId
     if (targetId && isTabPoisoned(targetId)) {
+      const poisonedTargetId = targetId
       const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
       targetId = tab.targetId
+      await ctx.backend.closeTab(poisonedTargetId).catch(() => {})
+      clearTabMemory(poisonedTargetId)
+      resetConsoleWatermark(poisonedTargetId)
+      clearViewportScreenshot(ctx.backend, poisonedTargetId)
     }
     // The remembered tab may have been closed or revoked from the extension
     // popup since the last call; navigate then opens a fresh one.
@@ -399,7 +514,26 @@ export const navigateTool = defineBrowserTool({
       targetId = tab.targetId
     }
     resetConsoleWatermark(targetId)
-    await pw.navigate(ctx.backend, targetId, { url, action })
+    try {
+      await pw.navigate(ctx.backend, targetId, { url, action }, ctx.abortSignal)
+    } catch (err) {
+      if (!ctx.abortSignal?.aborted && targetId && isTabPoisoned(targetId)) {
+        const failedTargetId = targetId
+        const replacement = await openTab(ctx.cwd, undefined, ctx.sessionId)
+        await ctx.backend.closeTab(failedTargetId).catch(() => {})
+        clearTabMemory(failedTargetId)
+        resetConsoleWatermark(failedTargetId)
+        clearViewportScreenshot(ctx.backend, failedTargetId)
+        const reason = err instanceof Error ? err.message : String(err)
+        const summary = reason.split('\nRecovery action:')[0]
+        throw new BrowserError(
+          `${summary}\n` +
+            `A fresh blank tab (${replacement.targetId}) replaced unusable tab ${failedTargetId} as the current target.\n` +
+            'Recovery action: retry browser_navigate to the requested URL',
+        )
+      }
+      throw err
+    }
     const message = action
       ? action === 'reload'
         ? 'Reloaded the page'
@@ -594,6 +728,7 @@ export const clickTool = defineBrowserTool({
       button: args.button,
       modifiers: args.modifiers,
       force: args.force,
+      signal: ctx.abortSignal,
       offsetX: args.offsetX,
       offsetY: args.offsetY,
     })
@@ -686,6 +821,7 @@ export const typeTool = defineBrowserTool({
       element: args.element,
       submit: args.submit,
       slowly: args.slowly,
+      signal: ctx.abortSignal,
     })
     // An action that returned is not an action that worked: report what the
     // field actually holds so a silently rejected type is visible.
@@ -737,7 +873,12 @@ export const fillFormTool = defineBrowserTool({
     screenshotAfterwards: screenshotAfterwardsSchema,
   }),
   async run(args, ctx) {
-    const filled = await pw.fillForm(ctx.backend, ctx.targetId, args.fields)
+    const filled = await pw.fillForm(
+      ctx.backend,
+      ctx.targetId,
+      args.fields,
+      ctx.abortSignal,
+    )
     const ok = filled.filter(f => f.status === 'filled').length
     // Per-field lines, because a batch that "succeeded" can still have dropped
     // half its values, and only the page knows which half.
@@ -933,6 +1074,15 @@ export const waitForTool = defineBrowserTool({
       .optional()
       .describe('CSS selector to wait until visible'),
     url: z.string().optional().describe('URL glob to wait for'),
+    timeoutMs: z
+      .number()
+      .int()
+      .min(100)
+      .max(30_000)
+      .optional()
+      .describe(
+        'Timeout for text, textGone, selector, or url in milliseconds (default 20000, max 30000). Not used with time.',
+      ),
   }),
   async run(args, ctx) {
     await pw.waitFor(ctx.backend, ctx.targetId, {
@@ -941,6 +1091,7 @@ export const waitForTool = defineBrowserTool({
       textGone: args.textGone,
       selector: args.selector,
       url: args.url,
+      timeoutMs: args.timeoutMs,
     })
     const parts: string[] = []
     if (args.time != null) parts.push(`waited ${args.time}s`)
@@ -1007,7 +1158,9 @@ export const scrollTool = defineBrowserTool({
     scrollIntoView: z
       .boolean()
       .optional()
-      .describe('Bring the ref into view (default when ref is given without a delta)'),
+      .describe(
+        'Bring the ref into view (default when ref is given without a delta)',
+      ),
     direction: z
       .enum(['up', 'down', 'left', 'right'])
       .optional()
@@ -1224,9 +1377,35 @@ export const tabsTool = defineBrowserTool({
       case 'new': {
         // Create blank first so the page-inspection script is installed before
         // the destination's first console call or fetch/XHR can run.
+        const previousTargetId = getCurrentTabId(ctx.sessionId)
         const tab = await openTab(ctx.cwd, undefined, ctx.sessionId)
-        if (args.url) {
-          await pw.navigate(ctx.backend, tab.targetId, { url: args.url })
+        try {
+          if (args.url) {
+            await pw.navigate(
+              ctx.backend,
+              tab.targetId,
+              { url: args.url },
+              ctx.abortSignal,
+            )
+          }
+        } catch (err) {
+          // A tab created by this action has no useful prior state to preserve.
+          // Do not strand an unidentified poisoned about:blank tab when its
+          // initial navigation fails.
+          await ctx.backend.closeTab(tab.targetId).catch(() => {})
+          clearTabMemory(tab.targetId)
+          resetConsoleWatermark(tab.targetId)
+          clearViewportScreenshot(ctx.backend, tab.targetId)
+          const remaining = await ctx.backend.listTabs().catch(() => [])
+          if (
+            previousTargetId &&
+            remaining.some(candidate => candidate.targetId === previousTargetId)
+          ) {
+            setCurrentTab(previousTargetId, ctx.sessionId)
+          } else if (getCurrentTabId(ctx.sessionId) === tab.targetId) {
+            clearCurrentTab(ctx.sessionId)
+          }
+          throw err
         }
         message = args.url
           ? `Opened ${args.url} in a new tab`
@@ -1348,13 +1527,18 @@ export const waitForDownloadTool = defineBrowserTool({
     path: z
       .string()
       .optional()
-      .describe(
-        'Optional file path relative to the agent downloads directory',
-      ),
+      .describe('Optional file path relative to the agent downloads directory'),
     ref: z
       .string()
       .optional()
       .describe('If set, click this ref then wait for the download'),
+    timeoutMs: z
+      .number()
+      .int()
+      .min(100)
+      .max(30_000)
+      .optional()
+      .describe('Download timeout in milliseconds (default 25000, max 30000)'),
   }),
   async run(args, ctx) {
     const dest = args.path
@@ -1369,8 +1553,14 @@ export const waitForDownloadTool = defineBrowserTool({
       ? await pw.downloadByRef(ctx.backend, ctx.targetId, {
           ref: args.ref,
           path: dest,
+          timeoutMs: args.timeoutMs,
+          signal: ctx.abortSignal,
         })
-      : await pw.waitForDownload(ctx.backend, ctx.targetId, { path: dest })
+      : await pw.waitForDownload(ctx.backend, ctx.targetId, {
+          path: dest,
+          timeoutMs: args.timeoutMs,
+          signal: ctx.abortSignal,
+        })
     const out = await observeAfterAction(ctx.backend, ctx.targetId, {
       action: 'wait_for_download',
       message: `Saved download ${JSON.stringify(result.suggestedFilename)}`,
@@ -1462,13 +1652,42 @@ export const cdpTool = defineBrowserTool({
       const resolved = await resolveTab(ctx.cwd, args.viewId, ctx.sessionId)
       targetId = resolved.targetId
     }
-    const sent = await sendCdpCommand(
-      ctx.backend,
-      targetId,
-      args.method,
-      args.params,
-      ctx.sessionId,
-    )
+    const method = args.method.trim()
+    const interruptCdp = () => {
+      const cleanupMethod = /^Runtime\.(evaluate|callFunctionOn)$/.test(method)
+        ? 'Runtime.terminateExecution'
+        : method === 'Page.navigate'
+          ? 'Page.stopLoading'
+          : undefined
+      if (cleanupMethod) {
+        void ctx.backend.send(targetId, cleanupMethod).catch(() => {})
+      }
+    }
+    if (ctx.abortSignal?.aborted) {
+      const reason = ctx.abortSignal.reason
+      throw reason instanceof Error
+        ? reason
+        : new BrowserError('browser_cdp interrupted by user')
+    }
+    ctx.abortSignal?.addEventListener('abort', interruptCdp, { once: true })
+    let sent: Awaited<ReturnType<typeof sendCdpCommand>>
+    try {
+      sent = await sendCdpCommand(
+        ctx.backend,
+        targetId,
+        method,
+        args.params,
+        ctx.sessionId,
+      )
+      if (ctx.abortSignal?.aborted) {
+        const reason = ctx.abortSignal.reason
+        throw reason instanceof Error
+          ? reason
+          : new BrowserError('browser_cdp interrupted by user')
+      }
+    } finally {
+      ctx.abortSignal?.removeEventListener('abort', interruptCdp)
+    }
     const message = sent.overflow
       ? `${sent.reason}\nFile: ${sent.filePath}`
       : `CDP ${args.method.trim()}`

@@ -23,10 +23,12 @@ import {
   isRelayCdpEvent,
   isRelayHello,
   isRelayResponse,
+  isRelayTargetGone,
   isRelayUserControl,
   RELAY_PROTOCOL_VERSION,
   type RelayCdpEvent,
   type RelayRequestBody,
+  type RelayTargetGone,
 } from './protocol.js'
 import {
   anyUserHasControl,
@@ -55,6 +57,10 @@ export interface RelayServer {
   request<T>(req: RelayRequestBody): Promise<T>
   /** Subscribe to CDP events the extension forwards. Returns an unsubscribe. */
   onCdpEvent(handler: (event: RelayCdpEvent) => void): () => void
+  /** Subscribe to extension disconnects. Returns an unsubscribe. */
+  onDisconnect(handler: (reason: string) => void): () => void
+  /** Subscribe when one previously owned tab is closed or unshared. */
+  onTargetGone(handler: (event: RelayTargetGone) => void): () => void
   /** Tell the extension whether the user currently has control. */
   notifyLock(userHasControl: boolean): void
   close(): Promise<void>
@@ -149,6 +155,8 @@ export async function startRelayServer(
   const pending = new Map<number, Pending>()
   const waiters: Array<() => void> = []
   const eventHandlers = new Set<(event: RelayCdpEvent) => void>()
+  const disconnectHandlers = new Set<(reason: string) => void>()
+  const targetGoneHandlers = new Set<(event: RelayTargetGone) => void>()
 
   function failAllPending(reason: string): void {
     for (const [, p] of pending) {
@@ -205,6 +213,10 @@ export async function startRelayServer(
         for (const handler of eventHandlers) handler(msg)
         return
       }
+      if (isRelayTargetGone(msg)) {
+        for (const handler of targetGoneHandlers) handler(msg)
+        return
+      }
       if (isRelayUserControl(msg)) {
         setUserHasControlEverywhere(msg.hasControl)
         return
@@ -223,9 +235,10 @@ export async function startRelayServer(
       peer = undefined
       peerName = undefined
       peerCapabilities = new Set()
-      failAllPending(
-        'The browser extension disconnected. Reopen Chrome or re-enable the extension, then try again.',
-      )
+      const reason =
+        'The browser extension disconnected. Reopen Chrome or re-enable the extension, then try again.'
+      failAllPending(reason)
+      for (const handler of disconnectHandlers) handler(reason)
     })
 
     socket.on('error', () => {
@@ -315,6 +328,20 @@ export async function startRelayServer(
       }
     },
 
+    onDisconnect(handler) {
+      disconnectHandlers.add(handler)
+      return () => {
+        disconnectHandlers.delete(handler)
+      }
+    },
+
+    onTargetGone(handler) {
+      targetGoneHandlers.add(handler)
+      return () => {
+        targetGoneHandlers.delete(handler)
+      }
+    },
+
     notifyLock(userHasControl: boolean) {
       if (peer && peer.readyState === peer.OPEN) {
         peer.send(JSON.stringify({ type: 'lockState', userHasControl }))
@@ -322,7 +349,9 @@ export async function startRelayServer(
     },
 
     async close() {
-      failAllPending('The browser relay was shut down.')
+      const reason = 'The browser relay was shut down.'
+      failAllPending(reason)
+      for (const handler of disconnectHandlers) handler(reason)
       // An upgraded socket still counts as an open connection to the underlying
       // http server, so a polite close() would block shutdown until the
       // extension happens to hang up. Drop them.

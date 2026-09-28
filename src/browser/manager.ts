@@ -25,6 +25,7 @@ import {
   detachPlaywright,
 } from './playwright/connect.js'
 import { applyFocusConfig, flushTabRestore } from './playwright/focus.js'
+import { clearViewportScreenshot } from './viewport-screenshot-cache.js'
 import {
   EXTENSION_TOKEN_ENV,
   openConnectPage,
@@ -129,13 +130,26 @@ async function sweepOrphanedProfiles(): Promise<void> {
 interface SharedExtension {
   backend: BrowserBackend
   users: Set<string>
+  unsubscribeTargetGone: () => void
 }
 
 let sharedExtension: SharedExtension | null = null
 let sharedExtensionStarting: Promise<BrowserBackend> | null = null
 
+function isSharedExtensionConnected(
+  shared: SharedExtension | null = sharedExtension,
+): boolean {
+  if (!shared) return false
+  return (
+    getExtensionRelay(shared.backend)?.isConnected() ??
+    relay?.isConnected() ??
+    false
+  )
+}
+
 /** Test seam: swap in a fake backend without launching Chrome. */
 let backendFactory: (() => Promise<BrowserBackend>) | null = null
+let backendFactoryScope: 'session' | 'shared' = 'session'
 
 export function browserSessionKey(sessionId?: string): string {
   return sessionId && sessionId.length > 0
@@ -164,8 +178,10 @@ export function isBrowserLive(sessionId?: string): boolean {
 
 export function setBrowserBackendFactory(
   factory: (() => Promise<BrowserBackend>) | null,
+  options: { scope?: 'session' | 'shared' } = {},
 ): void {
   backendFactory = factory
+  backendFactoryScope = factory ? (options.scope ?? 'session') : 'session'
 }
 
 function scheduleIdleSweep(live: Live): void {
@@ -241,37 +257,70 @@ async function getSharedExtensionBackend(cwd: string): Promise<BrowserBackend> {
   if (!sharedExtensionStarting) {
     sharedExtensionStarting = (async () => {
       const config = resolveSettings(cwd).config.browser ?? {}
-      const relayInst = await getRelay(config.relayPort)
+      const injected =
+        backendFactory && backendFactoryScope === 'shared'
+          ? await backendFactory()
+          : null
+      if (injected && injected.kind !== 'extension') {
+        throw new BrowserError(
+          'A shared browser backend factory must return an extension backend.',
+        )
+      }
+      const relayInst =
+        (injected && getExtensionRelay(injected)) ??
+        (await getRelay(config.relayPort))
 
       // Ask for access only when we actually need the browser, and only if
       // nobody has granted it yet. Once the tab is up the wait is unbounded:
       // the user is being asked a question and may not answer immediately.
       // With a token nobody is asked, so a long silence means it was refused.
-      let connectTimeoutMs = EXTENSION_HANDSHAKE_TIMEOUT_MS
-      const pairingToken = resolveExtensionToken(config)
-      if (!relayInst.isConnected()) {
-        openConnectPage(relayInst, { pairingToken })
-        if (!pairingToken) connectTimeoutMs = 0
-      }
+      let backend = injected
+      if (!backend) {
+        let connectTimeoutMs = EXTENSION_HANDSHAKE_TIMEOUT_MS
+        const pairingToken = resolveExtensionToken(config)
+        if (!relayInst.isConnected()) {
+          openConnectPage(relayInst, { pairingToken })
+          if (!pairingToken) connectTimeoutMs = 0
+        }
 
-      const backend = await createExtensionBackend({
-        relay: relayInst,
-        connectTimeoutMs,
-      }).catch((err: unknown) => {
-        if (!pairingToken) throw err
-        throw new BrowserError(
-          'The browser extension did not auto-connect. If the connect tab says the token ' +
-            `does not match, copy it again from the extension popup into browser.extensionToken ` +
-            `(or ${EXTENSION_TOKEN_ENV}). Otherwise check the extension is installed in the ` +
-            'Chrome profile that opened.\n' +
-            'Recovery action: stop and ask the user to check the extension token and connection; browser tools cannot fix this',
-        )
-      })
+        backend = await createExtensionBackend({
+          relay: relayInst,
+          connectTimeoutMs,
+        }).catch((err: unknown) => {
+          if (!pairingToken) throw err
+          throw new BrowserError(
+            'The browser extension did not auto-connect. If the connect tab says the token ' +
+              `does not match, copy it again from the extension popup into browser.extensionToken ` +
+              `(or ${EXTENSION_TOKEN_ENV}). Otherwise check the extension is installed in the ` +
+              'Chrome profile that opened.\n' +
+              'Recovery action: stop and ask the user to check the extension token and connection; browser tools cannot fix this',
+          )
+        })
+      }
       await attachExtensionPlaywright(
         backend,
         getExtensionRelay(backend) ?? relayInst,
       )
-      if (!sharedExtension) sharedExtension = { backend, users: new Set() }
+      if (!sharedExtension) {
+        const unsubscribeTargetGone = relayInst.onTargetGone(event => {
+          clearTabMemory(event.targetId)
+          clearViewportScreenshot(backend, event.targetId)
+          for (const live of lives.values()) {
+            if (
+              live.backend === backend &&
+              live.currentTargetId === event.targetId
+            ) {
+              live.lastUrl = undefined
+              live.lastTitle = undefined
+            }
+          }
+        })
+        sharedExtension = {
+          backend,
+          users: new Set(),
+          unsubscribeTargetGone,
+        }
+      }
       return backend
     })().finally(() => {
       sharedExtensionStarting = null
@@ -290,13 +339,16 @@ async function reconnectSharedExtension(
   key: string,
 ): Promise<BrowserBackend> {
   const stale = sharedExtension
-  if (stale && !(relay?.isConnected() ?? false)) {
+  if (stale && !isSharedExtensionConnected(stale)) {
     sharedExtension = null
+    stale.unsubscribeTargetGone()
     await detachPlaywright(stale.backend).catch(() => {})
     await stale.backend.dispose().catch(() => {})
   }
   const backend = await getSharedExtensionBackend(cwd)
-  for (const user of stale?.users ?? []) sharedExtension?.users.add(user)
+  for (const user of stale?.users ?? []) {
+    if (lives.has(user)) sharedExtension?.users.add(user)
+  }
   sharedExtension?.users.add(key)
   return backend
 }
@@ -307,6 +359,18 @@ async function start(cwd: string, key: string): Promise<Live> {
   const idleTtlMs = Number.isFinite(ttl) && ttl > 0 ? ttl : IDLE_TTL_MS
 
   if (backendFactory) {
+    if (backendFactoryScope === 'shared') {
+      const backend = await getSharedExtensionBackend(cwd)
+      sharedExtension?.users.add(key)
+      return {
+        key,
+        backend,
+        lastUsed: Date.now(),
+        ownsBackend: false,
+        idleTimer: null,
+        idleTtlMs,
+      }
+    }
     const backend = await backendFactory()
     if (backend.kind === 'extension') {
       const relayInst =
@@ -326,9 +390,10 @@ async function start(cwd: string, key: string): Promise<Live> {
   // "auto" uses the user's browser only if they have already offered it —
   // a silent fallback to isolated, never a prompt. "extension" is the mode
   // that goes and asks.
-  const useExtension =
-    config.mode === 'extension' ||
-    (config.mode === 'auto' && (relay?.isConnected() ?? false))
+  const useExtension = shouldUseExtensionBackend(
+    config.mode,
+    relay?.isConnected() ?? false,
+  )
 
   if (useExtension) {
     const backend = await getSharedExtensionBackend(cwd)
@@ -355,6 +420,13 @@ async function start(cwd: string, key: string): Promise<Live> {
   }
 }
 
+export function shouldUseExtensionBackend(
+  mode: unknown,
+  relayConnected: boolean,
+): boolean {
+  return mode === 'extension' || (mode === 'auto' && relayConnected)
+}
+
 export async function getBrowser(
   cwd: string,
   sessionId?: string,
@@ -366,7 +438,7 @@ export async function getBrowser(
     if (
       !existing.ownsBackend &&
       (existing.backend !== sharedExtension?.backend ||
-        !(relay?.isConnected() ?? false))
+        !isSharedExtensionConnected())
     ) {
       existing.backend = await reconnectSharedExtension(cwd, key)
     }
@@ -405,6 +477,7 @@ async function disposeLive(live: Live): Promise<void> {
     sharedExtension.users.delete(live.key)
     if (sharedExtension.users.size === 0) {
       const backend = sharedExtension.backend
+      sharedExtension.unsubscribeTargetGone()
       sharedExtension = null
       await detachPlaywright(backend).catch(() => {})
       await backend.dispose().catch(() => {})

@@ -346,7 +346,11 @@ export async function dismissBlockingDropdown(
       .catch(() => false)
 
   const settle = () => loc.page().waitForTimeout(DROPDOWN_SETTLE_MS)
-  let result: DropdownDismissal = { detected: true, closed: false, dropdown: label }
+  let result: DropdownDismissal = {
+    detected: true,
+    closed: false,
+    dropdown: label,
+  }
   try {
     await loc.evaluate(target => {
       const doc = target.ownerDocument
@@ -402,9 +406,7 @@ export async function dismissBlockingDropdown(
   } finally {
     await loc
       .evaluate((target, attr) => {
-        target.ownerDocument
-          .querySelector(`[${attr}]`)
-          ?.removeAttribute(attr)
+        target.ownerDocument.querySelector(`[${attr}]`)?.removeAttribute(attr)
       }, DROPDOWN_ATTR)
       .catch(() => {})
   }
@@ -415,35 +417,199 @@ async function pointHitsLocator(
   offset: { x: number; y: number },
 ): Promise<boolean> {
   return loc
+    .evaluate((el, position) => {
+      const rect = el.getBoundingClientRect()
+      const x = rect.left + position.x
+      const y = rect.top + position.y
+      let top = document.elementFromPoint(x, y)
+      if (!top) return false
+      // Match Cursor's deep hit test for controls inside open shadow roots.
+      while ((top as HTMLElement).shadowRoot) {
+        const inner = (top as HTMLElement).shadowRoot!.elementFromPoint(x, y)
+        if (!inner || inner === top) break
+        top = inner
+      }
+      let current: Node | null = top
+      while (current) {
+        if (current === el) return true
+        const root = current.getRootNode()
+        current =
+          current.parentNode ?? (root instanceof ShadowRoot ? root.host : null)
+      }
+      return false
+    }, offset)
+    .catch(() => false)
+}
+
+async function visibleFragmentCenter(
+  loc: Locator,
+): Promise<{ x: number; y: number } | undefined> {
+  return loc
+    .evaluate(el => {
+      const bounds = el.getBoundingClientRect()
+      const clientRects = Array.from(el.getClientRects())
+      // Preserve the long-tested bounding-box path for ordinary elements.
+      // Fragment selection is only needed for wrapped inline content, whose
+      // union bounding box can include points that belong to other elements.
+      if (clientRects.length <= 1) return undefined
+      const fragments = clientRects
+        .map(rect => {
+          const left = Math.max(0, rect.left)
+          const top = Math.max(0, rect.top)
+          const right = Math.min(innerWidth, rect.right)
+          const bottom = Math.min(innerHeight, rect.bottom)
+          return {
+            left,
+            top,
+            width: Math.max(0, right - left),
+            height: Math.max(0, bottom - top),
+          }
+        })
+        .filter(rect => rect.width > 0 && rect.height > 0)
+        .sort((a, b) => b.width * b.height - a.width * a.height)
+      const best = fragments[0]
+      if (!best) return undefined
+      return {
+        x: best.left + best.width / 2 - bounds.left,
+        y: best.top + best.height / 2 - bounds.top,
+      }
+    })
+    .catch(() => undefined)
+}
+
+type ClickProbeState = 'seen' | 'pending' | 'missing'
+
+async function armClickProbe(loc: Locator): Promise<string | undefined> {
+  const key = `__aiAgentClickProbe_${Math.random().toString(36).slice(2)}`
+  const armed = await loc
+    .evaluate((el, probeKey) => {
+      const target = el as unknown as Element & Record<string, unknown>
+      const probe = {
+        seen: false,
+        listeners: [] as Array<{
+          type: 'pointerdown' | 'click'
+          listener: EventListener
+        }>,
+        timer: 0,
+      }
+      const listen = (type: 'pointerdown' | 'click') => {
+        const listener: EventListener = event => {
+          if (event.composedPath().includes(el)) probe.seen = true
+        }
+        probe.listeners.push({ type, listener })
+        window.addEventListener(type, listener, { capture: true })
+      }
+      listen('pointerdown')
+      listen('click')
+      probe.timer = window.setTimeout(() => {
+        for (const { type, listener } of probe.listeners) {
+          window.removeEventListener(type, listener, { capture: true })
+        }
+        delete target[probeKey]
+      }, 10_000)
+      target[probeKey] = probe
+      return true
+    }, key)
+    .catch(() => false)
+  return armed ? key : undefined
+}
+
+async function readClickProbe(
+  loc: Locator,
+  key: string,
+  cleanup: boolean,
+): Promise<ClickProbeState> {
+  return (
+    loc
+      .evaluate(
+        (el, args) => {
+          const target = el as unknown as Element & Record<string, unknown>
+          const probe = target[args.key] as
+            | {
+                seen: boolean
+                listeners: Array<{
+                  type: 'pointerdown' | 'click'
+                  listener: EventListener
+                }>
+                timer: number
+              }
+            | undefined
+          if (!probe) return 'missing'
+          const state = probe.seen ? 'seen' : 'pending'
+          if (args.cleanup) {
+            for (const { type, listener } of probe.listeners) {
+              window.removeEventListener(type, listener, { capture: true })
+            }
+            clearTimeout(probe.timer)
+            delete target[args.key]
+          }
+          return state
+        },
+        { key, cleanup },
+      )
+      // Navigation, removal, or replacement after the action is itself evidence
+      // that the click was delivered; only a still-pending probe is a failure.
+      .catch(() => 'missing')
+  )
+}
+
+async function canActivateWithEnter(loc: Locator): Promise<boolean> {
+  return loc
     .evaluate(
-      (el, position) => {
-        const rect = el.getBoundingClientRect()
-        const x = rect.left + position.x
-        const y = rect.top + position.y
-        let top = document.elementFromPoint(x, y)
-        if (!top) return false
-        // Match Cursor's deep hit test for controls inside open shadow roots.
-        while ((top as HTMLElement).shadowRoot) {
-          const inner = (top as HTMLElement).shadowRoot!.elementFromPoint(
-            x,
-            y,
+      el => {
+        const node = el as HTMLElement
+        const tag = node.tagName.toLowerCase()
+        if (tag === 'button') return !node.hasAttribute('disabled')
+        if (tag === 'a') return node.hasAttribute('href')
+        if (tag === 'input') {
+          return /^(button|submit|reset|image)$/i.test(
+            (node as HTMLInputElement).type,
           )
-          if (!inner || inner === top) break
-          top = inner
         }
-        let current: Node | null = top
-        while (current) {
-          if (current === el) return true
-          const root = current.getRootNode()
-          current =
-            current.parentNode ??
-            (root instanceof ShadowRoot ? root.host : null)
-        }
-        return false
+        return node.getAttribute('role') === 'button'
       },
-      offset,
+      undefined,
+      { timeout: 1_000 },
     )
     .catch(() => false)
+}
+
+/**
+ * chrome.debugger can acknowledge root-session mouse input that only focuses
+ * a sandboxed OOPIF instead of reaching its control. Observe the actual click;
+ * for keyboard-activatable controls, retry with trusted Enter input.
+ */
+async function performVerifiedClick(
+  loc: Locator,
+  click: () => Promise<void>,
+): Promise<void> {
+  const probeKey = await armClickProbe(loc)
+  try {
+    await click()
+  } catch (err) {
+    if (probeKey) await readClickProbe(loc, probeKey, true)
+    throw err
+  }
+  if (!probeKey) return
+
+  const first = await readClickProbe(loc, probeKey, false)
+  if (first !== 'pending') {
+    if (first === 'seen') await readClickProbe(loc, probeKey, true)
+    return
+  }
+  if (await canActivateWithEnter(loc)) {
+    await loc.focus({ timeout: 8_000 })
+    await loc.press('Enter', { timeout: 8_000 })
+    const retried = await readClickProbe(loc, probeKey, true)
+    if (retried !== 'pending') return
+  } else {
+    await readClickProbe(loc, probeKey, true)
+  }
+  throw new BrowserError(
+    'The browser acknowledged the mouse input, but no click reached the target. ' +
+      'The control may be inside a sandboxed frame that rejected root-session mouse input. ' +
+      'Capture a new snapshot and retry.',
+  )
 }
 
 export interface ClickIntercept {
@@ -698,9 +864,13 @@ export async function clickLocatorRobust(
     )
   }
 
+  const fragmentCenter =
+    opts.offsetX === undefined && opts.offsetY === undefined
+      ? await visibleFragmentCenter(loc)
+      : undefined
   const preferredPosition = {
-    x: opts.offsetX ?? box.width / 2,
-    y: opts.offsetY ?? box.height / 2,
+    x: opts.offsetX ?? fragmentCenter?.x ?? box.width / 2,
+    y: opts.offsetY ?? fragmentCenter?.y ?? box.height / 2,
   }
   const position = visibleClickPosition(box, viewport, preferredPosition)
   const clickArgs = {
@@ -712,8 +882,16 @@ export async function clickLocatorRobust(
   }
 
   const performClick = async () => {
-    if (opts.doubleClick) await loc.dblclick(clickArgs)
-    else await loc.click(clickArgs)
+    if (
+      opts.doubleClick ||
+      opts.button === 'right' ||
+      opts.button === 'middle'
+    ) {
+      if (opts.doubleClick) await loc.dblclick(clickArgs)
+      else await loc.click(clickArgs)
+      return
+    }
+    await performVerifiedClick(loc, () => loc.click(clickArgs))
   }
 
   if (opts.force) {
@@ -735,10 +913,7 @@ export async function clickLocatorRobust(
           ? `closed the covering dropdown${which} via ${dismissal.method}`
           : `the covering dropdown${which} did not close`,
       )
-      if (
-        dismissal.closed &&
-        (await pointHitsLocator(loc, position))
-      ) {
+      if (dismissal.closed && (await pointHitsLocator(loc, position))) {
         await performClick()
         return
       }

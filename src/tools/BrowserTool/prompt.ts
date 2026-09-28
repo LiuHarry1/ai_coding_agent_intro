@@ -58,7 +58,7 @@ export const PRESS_KEY_DESCRIPTION =
 
 /** BaiX-only (not in Cursor MCP tool list). */
 export const WAIT_FOR_DESCRIPTION =
-  'Wait for text, a CSS selector, a URL, or a short time. Avoid for settle after click/type/navigate — those already wait. time is capped at 30s.'
+  'Wait for exactly one condition: text, textGone, selector, url, or a short time. Use timeoutMs to bound condition waits; time is only a pure delay. Avoid for settle after click/type/navigate — those already wait.'
 
 /** Cursor has hover internally; not in the short MCP catalog list. */
 export const HOVER_DESCRIPTION =
@@ -107,7 +107,7 @@ export const RESIZE_DESCRIPTION = 'Resize the browser viewport.'
 
 /** BaiX-only. */
 export const WAIT_FOR_DOWNLOAD_DESCRIPTION =
-  'Wait for a download to finish and save it. Pass ref to click first; omit ref if a click already started the download.'
+  'Wait for a download to finish and save it. Pass ref to click first; omit ref if a click already started the download. Use timeoutMs to bound sites that may not download.'
 
 /**
  * Cursor lock is a pane mutex for the whole automation turn.

@@ -37,23 +37,39 @@ const pendingChooser = new WeakMap<Page, FileChooser>()
 const armedFiles = new WeakMap<Page, string[]>()
 const nextIntent = new WeakMap<Page, DialogIntent>()
 const lastNote = new WeakMap<Page, DialogNote>()
+const navigationBeforeUnload = new WeakSet<Page>()
 
 async function settleDialog(page: Page, dialog: Dialog): Promise<void> {
   const armed = nextIntent.get(page)
   nextIntent.delete(page)
   const kind = dialog.type()
+  const navigationAllowed =
+    kind === 'beforeunload' && navigationBeforeUnload.has(page)
+  if (navigationAllowed) navigationBeforeUnload.delete(page)
   // alert is informational — accept so the page unfreezes.
   // confirm/prompt/beforeunload without a prior handle_dialog: dismiss so
   // the click can return, then the action fails (see throwIfUnarmedDestructiveDialog).
-  const accept = armed ? armed.accept : kind === 'alert'
+  const accept = armed
+    ? armed.accept
+    : kind === 'alert' || navigationAllowed
   lastNote.set(page, {
     type: kind,
     message: dialog.message(),
     accepted: accept,
-    unarmed: !armed,
+    unarmed: !armed && !navigationAllowed,
   })
   if (accept) await dialog.accept(armed?.promptText)
   else await dialog.dismiss()
+}
+
+/**
+ * An explicit browser_navigate is already authorization to leave the page.
+ * Accept only the beforeunload raised by that operation; clicks keep the
+ * existing pre-authorization requirement for destructive dialogs.
+ */
+export function allowBeforeUnloadForNavigation(page: Page): () => void {
+  navigationBeforeUnload.add(page)
+  return () => navigationBeforeUnload.delete(page)
 }
 
 /**
@@ -95,6 +111,7 @@ export function watchPage(page: Page): Page {
     armedFiles.delete(page)
     nextIntent.delete(page)
     lastNote.delete(page)
+    navigationBeforeUnload.delete(page)
     watched.delete(page)
   })
   return page

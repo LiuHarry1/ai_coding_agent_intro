@@ -37,7 +37,11 @@ tools:
   - browser_network
   - browser_tabs
   - browser_lock
+  - browser_resize
   - browser_wait_for_download
+  - browser_highlight
+  - browser_get_bounding_box
+  - browser_cdp
   - Bash
   - Skill
   - Read

@@ -10,6 +10,7 @@
  * extension in the user's everyday Chrome is a manual, one-time step by design.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
+import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocket } from 'ws'
@@ -29,11 +30,22 @@ export class MinimalCdp {
   private nextId = 1
   private pending = new Map<
     number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void }
+    {
+      resolve: (v: unknown) => void
+      reject: (e: Error) => void
+      timer: NodeJS.Timeout
+    }
   >()
 
   private constructor(ws: WebSocket) {
     this.ws = ws
+    const rejectPending = (reason: Error) => {
+      for (const entry of this.pending.values()) {
+        clearTimeout(entry.timer)
+        entry.reject(reason)
+      }
+      this.pending.clear()
+    }
     ws.on('message', raw => {
       const msg = JSON.parse(String(raw)) as {
         id?: number
@@ -44,9 +56,14 @@ export class MinimalCdp {
       const entry = this.pending.get(msg.id)
       if (!entry) return
       this.pending.delete(msg.id)
+      clearTimeout(entry.timer)
       if (msg.error) entry.reject(new Error(JSON.stringify(msg.error)))
       else entry.resolve(msg.result)
     })
+    ws.on('close', () =>
+      rejectPending(new Error('Chrome DevTools connection closed')),
+    )
+    ws.on('error', err => rejectPending(err))
   }
 
   static async connect(url: string): Promise<MinimalCdp> {
@@ -65,14 +82,22 @@ export class MinimalCdp {
   ): Promise<T> {
     const id = this.nextId++
     return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) reject(new Error(`${method} timed out`))
+      }, 20_000)
+      timer.unref?.()
       this.pending.set(id, {
         resolve: resolve as (v: unknown) => void,
         reject,
+        timer,
       })
-      this.ws.send(JSON.stringify({ id, method, params, sessionId }))
-      setTimeout(() => {
-        if (this.pending.delete(id)) reject(new Error(`${method} timed out`))
-      }, 20_000)
+      try {
+        this.ws.send(JSON.stringify({ id, method, params, sessionId }))
+      } catch (err) {
+        clearTimeout(timer)
+        this.pending.delete(id)
+        reject(err instanceof Error ? err : new Error(String(err)))
+      }
     })
   }
 
@@ -110,6 +135,29 @@ async function devToolsUrl(port: number, timeoutMs = 20_000): Promise<string> {
   throw new Error(`Chrome DevTools endpoint never came up: ${lastError}`)
 }
 
+async function waitForAllocatedDebugPort(
+  userDataDir: string,
+  timeoutMs = 20_000,
+): Promise<number> {
+  const activePortFile = path.join(userDataDir, 'DevToolsActivePort')
+  const deadline = Date.now() + timeoutMs
+  let lastError = 'file was not created'
+  while (Date.now() < deadline) {
+    try {
+      const [line] = fs.readFileSync(activePortFile, 'utf8').split(/\r?\n/)
+      const port = Number(line)
+      if (Number.isInteger(port) && port > 0 && port <= 65_535) return port
+      lastError = `invalid port ${JSON.stringify(line)}`
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+    }
+    await new Promise(r => setTimeout(r, 100))
+  }
+  throw new Error(
+    `Chrome did not publish an allocated debug port: ${lastError}`,
+  )
+}
+
 export interface LaunchedChrome {
   process: ChildProcess
   cdp: MinimalCdp
@@ -121,7 +169,8 @@ export interface LaunchedChrome {
 
 export interface LaunchOptions {
   userDataDir: string
-  debugPort: number
+  /** Omit to let Chrome allocate a free remote-debugging port. */
+  debugPort?: number
   headless?: boolean
   /**
    * Drives the extension's own connect page, the same way a user would. Kept
@@ -129,6 +178,58 @@ export interface LaunchOptions {
    * runs exercise what ships.
    */
   pair?: { connectUrl: string }
+}
+
+function waitForChildExit(
+  proc: ChildProcess,
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise(resolve => {
+    if (proc.exitCode !== null) {
+      resolve(true)
+      return
+    }
+    const finish = (exited: boolean) => {
+      clearTimeout(timer)
+      proc.off('exit', onExit)
+      resolve(exited)
+    }
+    const onExit = () => finish(true)
+    const timer = setTimeout(() => finish(false), timeoutMs)
+    proc.once('exit', onExit)
+  })
+}
+
+async function settleWithin(
+  promise: Promise<unknown>,
+  timeoutMs: number,
+): Promise<void> {
+  await new Promise(resolve => {
+    const timer = setTimeout(resolve, timeoutMs)
+    void promise.finally(() => {
+      clearTimeout(timer)
+      resolve(undefined)
+    })
+  })
+}
+
+async function stopLaunchedChrome(
+  proc: ChildProcess,
+  cdp?: MinimalCdp,
+): Promise<void> {
+  if (cdp) {
+    await settleWithin(
+      cdp.send('Browser.close').catch(() => {}),
+      2_000,
+    )
+    cdp.close()
+  }
+  if (proc.exitCode !== null) return
+  proc.kill('SIGTERM')
+  if (!(await waitForChildExit(proc, 5_000))) {
+    proc.kill('SIGKILL')
+    await waitForChildExit(proc, 2_000)
+  }
 }
 
 /** Open the extension's connect page and press its Allow button. */
@@ -166,11 +267,12 @@ async function approveConnectPage(
 export async function launchChromeWithExtension(
   opts: LaunchOptions,
 ): Promise<LaunchedChrome> {
+  const requestedDebugPort = opts.debugPort ?? 0
   const proc = spawn(
     chromePath(),
     [
       `--user-data-dir=${opts.userDataDir}`,
-      `--remote-debugging-port=${opts.debugPort}`,
+      `--remote-debugging-port=${requestedDebugPort}`,
       '--enable-unsafe-extension-debugging',
       '--no-first-run',
       '--no-default-browser-check',
@@ -181,60 +283,58 @@ export async function launchChromeWithExtension(
     { stdio: 'ignore' },
   )
 
-  const cdp = await MinimalCdp.connect(await devToolsUrl(opts.debugPort))
+  let cdp: MinimalCdp | undefined
+  try {
+    const debugPort =
+      requestedDebugPort || (await waitForAllocatedDebugPort(opts.userDataDir))
+    cdp = await MinimalCdp.connect(await devToolsUrl(debugPort))
 
-  const { id: extensionId } = await cdp.send<{ id: string }>(
-    'Extensions.loadUnpacked',
-    { path: EXTENSION_DIR },
-  )
-  if (!extensionId) throw new Error('Extensions.loadUnpacked returned no id')
-  // The whole connect-page scheme depends on the host being able to name the
-  // extension before it has ever spoken to it. If the manifest `key` is lost,
-  // fail here rather than in a confusing connection timeout.
-  if (extensionId !== BRIDGE_EXTENSION_ID) {
-    throw new Error(
-      `Extension id drifted: loaded "${extensionId}", expected "${BRIDGE_EXTENSION_ID}". ` +
-        'Check the "key" field in chrome-extension/manifest.json.',
+    const { id: extensionId } = await cdp.send<{ id: string }>(
+      'Extensions.loadUnpacked',
+      { path: EXTENSION_DIR },
     )
-  }
-
-  // The service worker starts lazily.
-  let workerSession = ''
-  await waitFor('extension service worker', async () => {
-    const { targetInfos } = await cdp.send<{
-      targetInfos: Array<{ targetId: string; type: string; url: string }>
-    }>('Target.getTargets')
-    const sw = targetInfos.find(
-      t => t.type === 'service_worker' && t.url.includes(extensionId),
-    )
-    if (!sw) return false
-    const { sessionId } = await cdp.send<{ sessionId: string }>(
-      'Target.attachToTarget',
-      { targetId: sw.targetId, flatten: true },
-    )
-    workerSession = sessionId
-    return true
-  })
-
-  if (opts.pair) {
-    await approveConnectPage(cdp, opts.pair.connectUrl)
-  }
-
-  return {
-    process: proc,
-    cdp,
-    extensionId,
-    workerSession,
-    close: async () => {
-      cdp.close()
-      if (proc.exitCode !== null) return
-      // Chrome keeps writing its profile briefly after SIGTERM; callers that
-      // delete the directory need it to be really gone first.
-      const exited = new Promise<void>(resolve =>
-        proc.once('exit', () => resolve()),
+    if (!extensionId) throw new Error('Extensions.loadUnpacked returned no id')
+    // The whole connect-page scheme depends on the host being able to name the
+    // extension before it has ever spoken to it. If the manifest `key` is lost,
+    // fail here rather than in a confusing connection timeout.
+    if (extensionId !== BRIDGE_EXTENSION_ID) {
+      throw new Error(
+        `Extension id drifted: loaded "${extensionId}", expected "${BRIDGE_EXTENSION_ID}". ` +
+          'Check the "key" field in chrome-extension/manifest.json.',
       )
-      proc.kill()
-      await Promise.race([exited, new Promise(r => setTimeout(r, 5000))])
-    },
+    }
+
+    // The service worker starts lazily.
+    let workerSession = ''
+    await waitFor('extension service worker', async () => {
+      const { targetInfos } = await cdp!.send<{
+        targetInfos: Array<{ targetId: string; type: string; url: string }>
+      }>('Target.getTargets')
+      const sw = targetInfos.find(
+        t => t.type === 'service_worker' && t.url.includes(extensionId),
+      )
+      if (!sw) return false
+      const { sessionId } = await cdp!.send<{ sessionId: string }>(
+        'Target.attachToTarget',
+        { targetId: sw.targetId, flatten: true },
+      )
+      workerSession = sessionId
+      return true
+    })
+
+    if (opts.pair) {
+      await approveConnectPage(cdp, opts.pair.connectUrl)
+    }
+
+    return {
+      process: proc,
+      cdp,
+      extensionId,
+      workerSession,
+      close: () => stopLaunchedChrome(proc, cdp),
+    }
+  } catch (err) {
+    await stopLaunchedChrome(proc, cdp).catch(() => {})
+    throw err
   }
 }
