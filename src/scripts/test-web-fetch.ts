@@ -7,7 +7,10 @@
  */
 import * as http from 'http'
 import type { AddressInfo } from 'net'
-import { definition as webFetch } from '../tools/WebFetchTool/WebFetchTool.js'
+import {
+  createWebFetchDefinition,
+  definition as webFetch,
+} from '../tools/WebFetchTool/WebFetchTool.js'
 import { isPreapprovedHost } from '../tools/WebFetchTool/preapproved.js'
 import type { ToolContext } from '../core/types.js'
 import {
@@ -247,7 +250,7 @@ try {
   const tool = webFetch.create(process.cwd(), context) as unknown as {
     execute: (
       args: { url: string; prompt: string },
-      options?: { toolCallId?: string },
+      options?: { toolCallId?: string; abortSignal?: AbortSignal },
     ) => Promise<unknown>
   }
 
@@ -267,6 +270,147 @@ try {
     assert(
       typeof out === 'string' && out.includes('Invalid URL'),
       'validateURL rejection surfaces as Error string',
+    )
+  }
+
+  {
+    const controller = new AbortController()
+    controller.abort()
+    const out = await tool.execute(
+      { url: 'https://react.dev/learn', prompt: 'p' },
+      { abortSignal: controller.signal },
+    )
+    assert(
+      typeof out === 'string' && out.includes('web fetch aborted'),
+      'pre-aborted fetch returns a stable error',
+    )
+  }
+
+  {
+    const injected = createWebFetchDefinition({
+      fetchContent: async url => {
+        if (url.includes('redirect')) {
+          return {
+            type: 'redirect',
+            originalUrl: url,
+            redirectUrl: 'https://other.example/target',
+            statusCode: 301,
+          }
+        }
+        if (url.includes('cancel')) {
+          const error = new Error('cancelled')
+          error.name = 'CanceledError'
+          throw error
+        }
+        if (url.includes('failure')) throw new Error('fixture failure')
+        return {
+          content: url.includes('long') ? 'x'.repeat(120_000) : '# Fixture\n',
+          bytes: 128,
+          code: 200,
+          codeText: 'OK',
+          contentType: url.includes('markdown')
+            ? 'text/markdown'
+            : 'text/html',
+          ...(url.includes('binary')
+            ? {
+                persistedPath: '/tmp/fixture.pdf',
+                persistedSize: 2 * 1024 * 1024,
+                contentType: 'application/pdf',
+              }
+            : {}),
+        }
+      },
+      isPreapproved: url => url.includes('preapproved'),
+      applyPrompt: async ({ prompt, isPreapprovedDomain }) =>
+        `summary:${prompt}:${isPreapprovedDomain}`,
+    })
+    const injectedTool = injected.create(process.cwd(), {
+      sessionId: 'web-fetch-injected',
+      models: {
+        provider: () => ({}) as never,
+        profile: () => ({ model: 'fixture-model' }) as never,
+      },
+    } as unknown as ToolContext) as unknown as {
+      execute: (
+        args: { url: string; prompt: string },
+        options?: { toolCallId?: string; abortSignal?: AbortSignal },
+      ) => Promise<unknown>
+    }
+
+    const preapproved = (await injectedTool.execute({
+      url: 'https://preapproved.example/markdown',
+      prompt: 'unused',
+    })) as { data: { result: string } }
+    assert(
+      preapproved.data.result === '# Fixture\n',
+      'preapproved markdown bypasses the summarizer',
+    )
+
+    const summarized = (await injectedTool.execute({
+      url: 'https://normal.example/page',
+      prompt: 'distill',
+    })) as { data: { result: string } }
+    assert(
+      summarized.data.result === 'summary:distill:false',
+      'non-preapproved content uses the scoped small model',
+    )
+
+    const binary = (await injectedTool.execute({
+      url: 'https://normal.example/binary',
+      prompt: 'binary',
+    })) as { data: { result: string } }
+    assert(
+      binary.data.result.includes('2.0MB') &&
+        binary.data.result.includes('/tmp/fixture.pdf'),
+      'binary persistence metadata is appended',
+    )
+
+    const redirected = (await injectedTool.execute({
+      url: 'https://normal.example/redirect',
+      prompt: 'follow',
+    })) as { data: { code: number; codeText: string; result: string } }
+    assert(redirected.data.code === 301, 'redirect code is preserved')
+    assert(
+      redirected.data.codeText === 'Moved Permanently',
+      'redirect status is formatted',
+    )
+    assert(
+      redirected.data.result.includes('other.example/target'),
+      'redirect target is returned to the model',
+    )
+
+    assert(
+      String(
+        await injectedTool.execute({
+          url: 'https://normal.example/cancel',
+          prompt: 'p',
+        }),
+      ).includes('web fetch aborted'),
+      'CanceledError maps to a stable abort result',
+    )
+    assert(
+      String(
+        await injectedTool.execute({
+          url: 'https://normal.example/failure',
+          prompt: 'p',
+        }),
+      ).includes('fixture failure'),
+      'unexpected fetch failures include their cause',
+    )
+
+    const noModelTool = injected.create(
+      process.cwd(),
+      {} as ToolContext,
+    ) as unknown as {
+      execute: (args: { url: string; prompt: string }) => Promise<unknown>
+    }
+    const truncated = (await noModelTool.execute({
+      url: 'https://normal.example/long',
+      prompt: 'p',
+    })) as { data: { result: string } }
+    assert(
+      truncated.data.result.includes('Content truncated'),
+      'large content is capped when no model registry exists',
     )
   }
 

@@ -42,6 +42,8 @@ desktop.ini
 agent-stderr.log
 *.tmp
 *.temp
+coverage/
+coding-tools-ui-e2e-*/
 
 # Python
 __pycache__/

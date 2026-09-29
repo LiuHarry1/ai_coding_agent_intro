@@ -36,15 +36,24 @@ export default function ToolRowHeader({
   showSuccess,
 }) {
   const stop = e => e.stopPropagation()
+  const onKeyDown = e => {
+    if (!onToggle || e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onToggle()
+    }
+  }
   const dur = typeof duration === 'string' ? duration : formatDuration(duration)
   const showSlot = showChevron || chevronSlot
 
   return (
-    <button
-      type='button'
+    <div
+      role={onToggle ? 'button' : undefined}
+      tabIndex={onToggle ? 0 : undefined}
       className='tool-row-header'
       onClick={onToggle}
-      aria-expanded={expanded}
+      onKeyDown={onKeyDown}
+      aria-expanded={onToggle ? expanded : undefined}
       aria-disabled={!onToggle || undefined}
     >
       {showSlot && (
@@ -104,6 +113,6 @@ export default function ToolRowHeader({
           {'\u2713'}
         </span>
       )}
-    </button>
+    </div>
   )
 }

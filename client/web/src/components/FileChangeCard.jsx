@@ -245,6 +245,26 @@ export default function FileChangeCard({ part, nested = false }) {
       (typeof args.new_string === 'string' ||
         typeof args.old_string === 'string'))
   const hasAnythingToShow = hasLivePreview || hasArgsContent || hasTurBody
+
+  const previewSource = hasLivePreview
+    ? part.livePreview
+    : afterContent ||
+      (isWrite ? args.content : args.new_string) ||
+      null
+  const changedLineCount = previewSource
+    ? (previewSource.match(/\n/g)?.length ?? 0) + 1
+    : 0
+  const shouldAutoExpand =
+    !isDone ||
+    hasLivePreview ||
+    isError ||
+    (!nested && changedLineCount <= ALWAYS_OPEN_LINE_THRESHOLD)
+  const [expanded, setExpanded] = useState(shouldAutoExpand)
+  const [userToggled, setUserToggled] = useState(false)
+  useEffect(() => {
+    if (!userToggled) setExpanded(shouldAutoExpand)
+  }, [shouldAutoExpand, userToggled])
+
   if (!filePath && !hasAnythingToShow) {
     return (
       <FileChangeStub
@@ -265,25 +285,6 @@ export default function FileChangeCard({ part, nested = false }) {
     fileName(filePath) ||
     filePath ||
     (isDone ? '(missing file_path)' : 'writing…')
-
-  const previewSource = hasLivePreview
-    ? part.livePreview
-    : afterContent ||
-      (isWrite ? args.content : args.new_string) ||
-      null
-  const changedLineCount = previewSource
-    ? (previewSource.match(/\n/g)?.length ?? 0) + 1
-    : 0
-  const shouldAutoExpand =
-    !isDone ||
-    hasLivePreview ||
-    isError ||
-    (!nested && changedLineCount <= ALWAYS_OPEN_LINE_THRESHOLD)
-  const [expanded, setExpanded] = useState(shouldAutoExpand)
-  const [userToggled, setUserToggled] = useState(false)
-  useEffect(() => {
-    if (!userToggled) setExpanded(shouldAutoExpand)
-  }, [shouldAutoExpand, userToggled])
 
   let body = null
   let copyText = null
@@ -368,16 +369,25 @@ export default function FileChangeCard({ part, nested = false }) {
     setUserToggled(true)
     setExpanded(v => !v)
   }
+  const onHeaderKeyDown = e => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggle()
+    }
+  }
   const stop = e => e.stopPropagation()
 
   return (
     <div
       className={`file-change-card file-change-card--${kind} ${isError ? 'has-error' : ''} ${nested ? 'file-change-card--nested' : ''}`}
     >
-      <button
-        type='button'
+      <div
+        role='button'
+        tabIndex={0}
         className='file-change-header'
         onClick={toggle}
+        onKeyDown={onHeaderKeyDown}
         aria-expanded={expanded}
       >
         <span
@@ -422,7 +432,7 @@ export default function FileChangeCard({ part, nested = false }) {
         ) : (
           <span className='spinner spinner-sm' />
         )}
-      </button>
+      </div>
 
       {expanded && body && <div className='file-change-body'>{body}</div>}
       {!expanded && isDone && previewSource && (

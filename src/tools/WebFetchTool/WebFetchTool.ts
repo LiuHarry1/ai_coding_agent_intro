@@ -75,7 +75,21 @@ function controllerFromSignal(
   return controller
 }
 
-export const definition: ToolDefinition = {
+export type WebFetchDependencies = {
+  fetchContent?: typeof getURLMarkdownContent
+  isPreapproved?: typeof isPreapprovedUrl
+  applyPrompt?: typeof applyPromptToMarkdown
+}
+
+/** Dependency injection keeps network/model branches deterministic in tests. */
+export function createWebFetchDefinition(
+  dependencies: WebFetchDependencies = {},
+): ToolDefinition {
+  const fetchContent = dependencies.fetchContent ?? getURLMarkdownContent
+  const isPreapproved = dependencies.isPreapproved ?? isPreapprovedUrl
+  const applyPrompt = dependencies.applyPrompt ?? applyPromptToMarkdown
+
+  return {
   name: WEB_FETCH_TOOL_NAME,
   description: 'Fetch a URL and process its content with a prompt',
   shouldDefer: true,
@@ -118,7 +132,7 @@ export const definition: ToolDefinition = {
         const abortController = controllerFromSignal(signal)
 
         try {
-          const response = await getURLMarkdownContent(
+          const response = await fetchContent(
             url,
             abortController,
             context.sessionId,
@@ -159,23 +173,23 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
             persistedSize,
           } = response as FetchedContent
 
-          const isPreapproved = isPreapprovedUrl(url)
+          const preapproved = isPreapproved(url)
 
           let result: string
           if (
-            isPreapproved &&
+            preapproved &&
             contentType.includes('text/markdown') &&
             content.length < MAX_MARKDOWN_LENGTH
           ) {
             result = content
           } else if (context.models) {
-            result = await applyPromptToMarkdown({
+            result = await applyPrompt({
               prompt,
               markdownContent: content,
               provider: context.models.provider('small'),
               modelId: context.models.profile('small').model,
               signal: abortController.signal,
-              isPreapprovedDomain: isPreapproved,
+              isPreapprovedDomain: preapproved,
             })
           } else {
             // No request-scoped model registry (e.g. a bare tool harness):
@@ -220,4 +234,7 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
       },
     })
   },
+  }
 }
+
+export const definition = createWebFetchDefinition()
