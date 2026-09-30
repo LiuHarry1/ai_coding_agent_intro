@@ -3,7 +3,7 @@
  *
  * A file dropped in the composer takes the same branch the Read tool would
  * take for it (`utils/read/index.ts`): image, pdf, text, or opaque binary.
- * Classification is extension-first like Claude Code; callers sniff content
+ * Classification is extension-first; callers sniff content
  * afterwards and downgrade `text` → `binary` when the bytes disagree.
  */
 

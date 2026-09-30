@@ -109,9 +109,9 @@ async function verifyCompletedNavigation(
 /**
  * A failed Chromium navigation can keep transitioning to chrome-error:// after
  * Playwright has already rejected page.goto(). Do not let that late transition
- * interrupt the next browser_navigate call. This mirrors Cursor's pending
- * navigation queue, which waits for did-stop-loading before applying the next
- * URL and force-stops a navigation that does not settle.
+ * interrupt the next browser_navigate call. We wait for did-stop-loading
+ * before applying the next URL and force-stop a navigation that does not
+ * settle.
  */
 async function stopFailedNavigation(
   backend: BrowserBackend,
@@ -141,9 +141,8 @@ async function stopFailedNavigation(
     if (await waitForStableUrl()) return true
 
     // Some extension-driven redirect loops continue alternating error URLs
-    // after stopLoading acknowledges. Cursor resolves the equivalent state by
-    // force-applying its pending navigation. We do not have the next request
-    // yet, so move to a neutral document and leave the tab reusable.
+    // after stopLoading acknowledges. We do not have the next request yet, so
+    // move to a neutral document and leave the tab reusable.
     await backend.send(targetId, 'Page.navigate', { url: 'about:blank' })
     return await waitForStableUrl()
   } catch {
@@ -242,7 +241,7 @@ export async function navigate(
             dest.url &&
             /interrupted by another navigation to "chrome-error:/i.test(message)
           ) {
-            // Cursor queues a requested URL until the previous failed load
+            // A requested URL has to wait until the previous failed load
             // reaches did-stop-loading. Playwright has already issued this
             // request, so stop the late chrome-error transition and retry it
             // once on the same tab.
@@ -942,7 +941,7 @@ const SCROLL_IN_PAGE = (
 }
 
 /**
- * Scroll and report what actually moved (Cursor's browser_scroll contract):
+ * Scroll and report what actually moved (the browser_scroll contract):
  * no ref scrolls the page, a ref with a delta scrolls its nearest scrollable
  * container, and a ref alone is brought into view.
  */

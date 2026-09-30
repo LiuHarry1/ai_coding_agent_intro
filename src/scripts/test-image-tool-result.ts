@@ -1,5 +1,5 @@
 /**
- * Smoke test: image blocks inside tool_result (CC parity).
+ * Smoke test: image blocks inside tool_result.
  * Run: npx tsx src/scripts/test-image-tool-result.ts
  */
 import assert from 'node:assert/strict'

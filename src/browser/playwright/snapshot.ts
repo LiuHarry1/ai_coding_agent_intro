@@ -1,6 +1,6 @@
 /**
  * How the model sees the page: Playwright's own AI aria snapshot, with `eN`
- * refs stamped on the live DOM. Full trees stay complete (Cursor); only
+ * refs stamped on the live DOM. Full trees stay complete; only
  * `mode=efficient` spends a char/node budget by priority.
  */
 
@@ -97,7 +97,7 @@ const FRAMES_OMITTED_PREFIX =
 
 /**
  * Playwright AI snapshots recurse into every iframe (`enter-frame`). display:none
- * does not stop that, so a PDF viewer still hangs the tree. Cursor never enters
+ * does not stop that, so a PDF viewer still hangs the tree. We never enter
  * iframes. Detach heavy (or all) embeds for the duration of the capture.
  */
 function collectSnapshotFrames(page: Page): Frame[] {
@@ -557,7 +557,7 @@ async function snapshotInner(
   const pack = async (raw: string, prefix = ''): Promise<SnapshotResult> => {
     const grouped = groupBadgeLabels(dropRedundantWrapperNames(raw))
     const scoped = opts.interactive ? keepInteractive(grouped) : grouped
-    // Cursor default: complete YAML. Char/node clip is only mode=efficient.
+    // Default: complete YAML. Char/node clip is only mode=efficient.
     const efficient = opts.mode === 'efficient'
     const { text, truncated } = efficient
       ? prioritizeAriaSnapshot(scoped, {
@@ -602,7 +602,7 @@ async function snapshotInner(
       if (dialog) return finish(await packDialog(dialog))
       return finish(await emptyDialogPack())
     }
-    // Cursor default maxDepth is 30. Depth 6 on compact trees dropped nested
+    // Default maxDepth is 30. Depth 6 on compact trees dropped nested
     // ExtJS comboboxes (and open dialogs became Close + title) without setting
     // truncated. Selector-scoped still uses the same default unless overridden.
     const depth = opts.depth ?? DEFAULT_SNAPSHOT_DEPTH
@@ -625,7 +625,7 @@ async function snapshotInner(
       )
     } else if (!skipIframeWalk) {
       // Detach PDF/receipt iframes first. Playwright AI mode still enter-frames
-      // display:none iframes; Cursor never snapshots iframe contents.
+      // display:none iframes; we never snapshot iframe contents.
       raw = await raceMs(
         SNAPSHOT_TIMEOUT_MS + 500,
         withHeavyMediaHidden(page, () =>

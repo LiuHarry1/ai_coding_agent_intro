@@ -13,7 +13,7 @@ import {
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
- * Cursor-style Grep — compact file hit list (≈ Composer grepToolCall body).
+ * Grep — compact file hit list.
  * files_with_matches: filename + `dir -- N matches`
  * content: path header + match/context lines (path + line + snippet)
  */
@@ -87,7 +87,7 @@ function fromToolUseResult(toolUseResult) {
   }
 }
 
-/** Cursor secondary: `dir -- N matches` | `N matches` | `dir` */
+/** Secondary: `dir -- N matches` | `N matches` | `dir` */
 function fileSecondary(dir, matchCount) {
   const n = typeof matchCount === 'number' ? matchCount : 0
   const matchPart =
@@ -190,7 +190,7 @@ export default function GrepCard({ part, nested = false }) {
     return parseContentLines(parsed.content, args.path)
   }, [parsed, args.path])
 
-  /** Unified file-hit list for all modes (Cursor composer density). */
+  /** Unified file-hit list for all modes. */
   const fileHits = useMemo(() => {
     if (!parsed || parsed.empty) return []
     if (parsed.mode === 'content') {

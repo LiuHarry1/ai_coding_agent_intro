@@ -6,7 +6,7 @@ import { generateText, Output } from 'ai'
 import { jsonSchema, type FlexibleSchema } from '@ai-sdk/provider-utils'
 import type { IProvider } from '../../core/llm/types.js'
 
-/** CC findRelevantMemories output_format.schema */
+/** Output schema for the memory relevance selection side query. */
 export const selectedMemoriesJsonSchema = jsonSchema<{
   selected_memories: string[]
 }>({
@@ -33,7 +33,7 @@ export type SideQueryJsonOpts<T> = {
 }
 
 /**
- * CC-style side query: system + user messages, strict json_schema via Output.object.
+ * Side query: system + user messages, strict json_schema via Output.object.
  * Does not use streamTextExtras — scoped to side queries only.
  */
 export async function sideQueryJson<T>(

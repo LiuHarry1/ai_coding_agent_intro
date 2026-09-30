@@ -107,7 +107,7 @@ assert(
 // ── html → markdown ────────────────────────────
 
 {
-  // Turndown defaults (as CC ships them): setext h1/h2, ATX h3+, indented code.
+  // Turndown defaults: setext h1/h2, ATX h3+, indented code.
   const md = await htmlToMarkdown(
     '<h1>Title</h1><h3>Sub</h3><p>Body <a href="https://x.dev">link</a></p><pre><code>const a = 1</code></pre>',
   )
@@ -439,7 +439,7 @@ try {
       durationMs: 1,
       url: 'https://react.dev',
     })
-    assert(parsed.success, 'outputSchema accepts CC-shaped output')
+    assert(parsed.success, 'outputSchema accepts the expected output shape')
   }
 } finally {
   await new Promise<void>(resolve => server.close(() => resolve()))

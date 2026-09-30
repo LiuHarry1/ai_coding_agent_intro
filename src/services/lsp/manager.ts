@@ -10,7 +10,7 @@ import { normalizeWorkspacePath } from '../../core/workspace-path.js'
 
 const managers = new Map<string, LspServerManager>()
 
-/** Status row for Workspace panel / GET /lsp (Claude Code getAllServers shape). */
+/** Status row for Workspace panel / GET /lsp. */
 export type LspServerStatus = {
   name: string
   state: LspServerState
@@ -73,7 +73,7 @@ export function peekLspManager(
 
 /**
  * List configured LSP servers for a workspace with live runtime state.
- * Never-started servers report `stopped` (same lazy model as Claude Code).
+ * Never-started servers report `stopped` (servers start lazily).
  */
 export function getLspStatusForCwd(
   cwd: string,

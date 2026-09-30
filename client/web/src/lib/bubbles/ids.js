@@ -1,5 +1,5 @@
 /**
- * Stable bubble ids for the Cursor-like transcript store.
+ * Stable bubble ids for the flat transcript store.
  */
 
 export function toolBubbleId(toolCallId) {

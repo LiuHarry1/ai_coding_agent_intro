@@ -1,8 +1,8 @@
 /**
- * In-process background shell — lean stand-in for CC `utils/ShellCommand.ts`
- * when ExecutionBackend / Worker is absent (tests, scripts).
+ * In-process background shell — lean stand-in used when ExecutionBackend /
+ * Worker is absent (tests, scripts).
  *
- * Output uses file-fd mode (CC tool path): stdout+stderr → task `.output` file.
+ * Output uses file-fd mode: stdout+stderr → task `.output` file.
  */
 import type { ChildProcess } from 'child_process'
 import { forceKillChild } from '../core/platform.js'
@@ -76,7 +76,7 @@ export function spawnInProcessBackground(opts: {
     cleanupCwdFile(prepared.cwdFileNative)
     throw err
   }
-  // Parent closes its copy — child has a dup (CC Shell.ts).
+  // Parent closes its copy — child has a dup.
   closeShellOutputFdSync(outputFd)
   child.stdin?.end()
 

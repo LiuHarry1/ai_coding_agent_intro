@@ -116,7 +116,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
     name: AGENT_TOOL_NAME,
     description,
     isSubagent: true,
-    // Explore is read-only — safe to run several in parallel (Cursor-style).
+    // Explore is read-only — safe to run several in parallel.
     // Plan / general-purpose stay serial.
     isConcurrencySafe: (input: unknown) => {
       const t =

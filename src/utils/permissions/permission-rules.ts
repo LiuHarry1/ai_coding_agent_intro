@@ -1,5 +1,5 @@
 /**
- * Claude Code–style permission rules: `Tool` or `Tool(pattern)`.
+ * Permission rules: `Tool` or `Tool(pattern)`.
  *
  * File-tool subset only (Read / Grep / Glob / LSP / Edit / Write).
  * Bash / PowerShell strings are parsed but ignored by the filesystem checker.
@@ -156,7 +156,7 @@ function absolutePatternMatches(absPath: string, pattern: string): boolean {
 }
 
 /**
- * CC: a single leading `/` is relative to the settings/project root
+ * A single leading `/` is relative to the settings/project root
  * (`Read(/src/**)`), not the filesystem root. True absolutes: `~/`,
  * Windows drive (`C:\`), UNC (`//` / `\\`).
  */
@@ -165,7 +165,7 @@ export function isFilesystemAbsolutePattern(pattern: string): boolean {
   if (expanded.startsWith('~/') || expanded === '~') return true
   if (expanded.startsWith('//') || expanded.startsWith('\\\\')) return true
   if (/^[a-zA-Z]:[\\/]/.test(expanded)) return true
-  // Lone leading `/foo` is project-relative (CC), not FS-absolute.
+  // Lone leading `/foo` is project-relative, not FS-absolute.
   if (expanded.startsWith('/') && !expanded.startsWith('//')) return false
   return path.isAbsolute(expanded)
 }

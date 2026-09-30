@@ -1,5 +1,5 @@
 /**
- * Non-blocking relevant-memory prefetch (CC startRelevantMemoryPrefetch).
+ * Non-blocking relevant-memory prefetch.
  */
 import type {
   AttachmentMessage,
@@ -205,7 +205,7 @@ export type StartPrefetchOpts = {
   /** Default auto-memory directory when no @agent mention overrides. */
   memPath: string
   /**
-   * Optional override directories (CC: @agent → agent memory dirs only).
+   * Optional override directories (@agent → agent memory dirs only).
    * When set and non-empty, search these instead of memPath.
    */
   memPaths?: string[]
@@ -313,7 +313,7 @@ export function startRelevantMemoryPrefetch(
       ? [{ type: 'relevant_memories' as const, memories: fastMemories }]
       : []
 
-  // Keep CC's cheap short-query suppression for the model lane only. Exact
+  // Keep the cheap short-query suppression for the model lane only. Exact
   // filenames, identifiers, and short CJK prompts still reach the fast lane.
   const skipSemantic =
     immediateStrong || (!/\s/.test(trimmed) && trimmed.length < 10)

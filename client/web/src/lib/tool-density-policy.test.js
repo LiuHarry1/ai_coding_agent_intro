@@ -117,7 +117,7 @@ describe('TOOL_META density', () => {
 })
 
 describe('summarizeExploredDetails', () => {
-  it('formats mixed read+grep like Cursor', () => {
+  it('formats mixed read+grep', () => {
     const s = summarizeExploredDetails([
       { name: READ },
       { name: GREP },
@@ -136,7 +136,7 @@ describe('summarizeExploredDetails', () => {
 describe('coalesceToolRuns', () => {
   const part = name => ({ type: 'tool_call', name })
 
-  it('keeps two Reads as singles (Cursor Pol ≥ 3)', () => {
+  it('keeps two Reads as singles (fold needs ≥ 3)', () => {
     const runs = coalesceToolRuns([part(READ), part(READ)])
     assert.equal(runs.length, 2)
     assert.ok(runs.every(r => r.type === 'tool'))

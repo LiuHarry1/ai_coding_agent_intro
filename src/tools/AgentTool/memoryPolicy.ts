@@ -2,7 +2,7 @@
  * Normalize the `memory:` frontmatter key into a MemoryPolicy.
  *
  * Two surfaces collapse into one internal shape:
- *   - `memory: project`                      — CC short form (subagent parity)
+ *   - `memory: project`                      — short form (scope only)
  *   - `memory: { mode, scope, vocabulary }`  — extended form (primary + subagent)
  *
  * The object form defaults to `mode: private`, because `shared` is already the
@@ -44,7 +44,7 @@ function parseVocabulary(raw: unknown): MemoryVocabulary | undefined {
 
 export type MemoryPolicyParseResult = {
   policy?: MemoryPolicy
-  /** CC short-form scope, set only for a private policy. */
+  /** Short-form scope, set only for a private policy. */
   scope?: AgentMemoryScope
   warnings: string[]
 }

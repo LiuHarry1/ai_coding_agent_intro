@@ -13,7 +13,7 @@ export function toolPartKey(part, fallback = 'tool') {
 }
 
 /**
- * Cursor `Q8c` / `g0m`: duration detail as "for Ns" (ceil to whole seconds).
+ * Duration detail as "for Ns" (ceil to whole seconds).
  * @param {number} [ms]
  * @returns {string | undefined}
  */

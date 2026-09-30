@@ -3,7 +3,7 @@ import type { AnyTool, ToolDefinition } from '../types.js'
 import type { WireEmitter } from '../wire-emitter.js'
 
 /**
- * Per-turn tool execution context (CC ToolUseContext subset).
+ * Per-turn tool execution context.
  */
 export interface ToolUseContext {
   tools: Record<string, AnyTool>

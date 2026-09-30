@@ -78,7 +78,7 @@ export function normalizeFetchResult(result, requestUrl) {
     }
   }
 
-  // Built-in web_fetch JSON (sessions predating the CC-style plain-text result)
+  // Built-in web_fetch JSON (sessions predating the plain-text result)
   if (result.startsWith('{')) {
     try {
       const parsed = JSON.parse(result)

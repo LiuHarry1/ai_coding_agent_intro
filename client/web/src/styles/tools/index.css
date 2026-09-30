@@ -1,6 +1,6 @@
 /* Chat tool UI styles.
  *
- * Layering (aligned with Cursor Composer conversation output):
+ * Layering (conversation output):
  *   shared    ≈ ui-tool-call-line
  *   work-group / explored ≈ turn + explore density
  *   card      ≈ composer-tool-call / ui-tool-call-card shell

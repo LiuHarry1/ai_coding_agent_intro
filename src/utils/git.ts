@@ -1,10 +1,10 @@
 /**
- * Minimal git helpers — naming aligned with Claude Code `utils/git.ts`.
+ * Minimal git helpers.
  */
 import { spawnSync } from 'child_process'
 import { getCwd } from './cwd.js'
 
-/** Whether `getCwd()` is inside a git work tree. CC: `getIsGit`. */
+/** Whether `getCwd()` is inside a git work tree. */
 export async function getIsGit(): Promise<boolean> {
   try {
     const r = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], {

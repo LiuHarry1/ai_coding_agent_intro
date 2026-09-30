@@ -1,5 +1,5 @@
 /**
- * Claude Code–style filesystem permission check.
+ * Filesystem permission check.
  *
  * Resolve is separate (always succeeds for valid paths). This module decides
  * allow / ask / deny. `dontAsk` (SSO) maps remaining ask → deny in canUseTool.
@@ -30,7 +30,7 @@ export const PERMISSION_DEFAULT_MODES = [
   'bypassPermissions',
 ] as const
 
-/** CC `permissions.defaultMode` (settings.json) — implemented subset. */
+/** `permissions.defaultMode` (settings.json) — implemented subset. */
 export type PermissionDefaultMode = (typeof PERMISSION_DEFAULT_MODES)[number]
 
 /** Runtime File-tool path policy derived from AUTH + defaultMode. */
@@ -47,11 +47,11 @@ export interface FilesystemPermissionContext {
   root: string
   extraReadRoots: string[]
   extraWriteRoots: string[]
-  /** Session “Always allow” directories (CC additionalWorkingDirectories). */
+  /** Session “Always allow” directories. */
   additionalWorkingDirectories: string[]
-  /** CC `permissions.allow` — File-tool rules. Ignored under dontAsk. */
+  /** `permissions.allow` — File-tool rules. Ignored under dontAsk. */
   allow: string[]
-  /** CC `permissions.deny` — File-tool rules. Always applied. */
+  /** `permissions.deny` — File-tool rules. Always applied. */
   deny: string[]
 }
 
@@ -277,7 +277,7 @@ export function checkReadPermission(
     return { behavior: 'deny', message: denyMessage(abs, 'read') }
   }
   if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
-  // Agent memory directories (any scope) — CC isAgentMemoryPath carve-out.
+  // Agent memory directories (any scope) — isAgentMemoryPath carve-out.
   if (pathsToCheck.some(p => isAgentMemoryPath(p, ctx.root))) {
     return { behavior: 'allow' }
   }
@@ -299,7 +299,7 @@ export function checkWritePermission(
     return { behavior: 'deny', message: denyMessage(abs, 'write') }
   }
   if (ctx.mode === 'bypassPermissions') return { behavior: 'allow' }
-  // Agent memory directories (any scope) — CC isAgentMemoryPath carve-out.
+  // Agent memory directories (any scope) — isAgentMemoryPath carve-out.
   if (pathsToCheck.some(p => isAgentMemoryPath(p, ctx.root))) {
     return { behavior: 'allow' }
   }
@@ -432,7 +432,7 @@ function resolveInputPath(
   return { abs: resolved.abs }
 }
 
-/** CC `checkReadPermissionForTool` — resolve then checkRead. */
+/** Resolve the input path, then checkRead. */
 export function checkReadPermissionForTool(
   cwd: string,
   permissionContext: FilesystemPermissionContext | undefined,
@@ -453,7 +453,7 @@ export function checkReadPermissionForTool(
   )
 }
 
-/** CC `checkWritePermissionForTool` — resolve then checkWrite. */
+/** Resolve the input path, then checkWrite. */
 export function checkWritePermissionForTool(
   cwd: string,
   permissionContext: FilesystemPermissionContext | undefined,

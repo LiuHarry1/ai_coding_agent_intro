@@ -7,7 +7,7 @@ import { toolPartKey } from '../lib/timeline.js'
 const STEP_PREVIEW_LIMIT = 6
 
 /**
- * Render nested tool_call steps with Cursor-style Explored coalescing.
+ * Render nested tool_call steps with Explored coalescing.
  */
 export default function NestedToolRuns({
   steps,

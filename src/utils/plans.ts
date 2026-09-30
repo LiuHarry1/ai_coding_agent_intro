@@ -1,5 +1,5 @@
 /**
- * Plan file management — aligned with Claude Code `utils/plans.ts`.
+ * Plan file management.
  *
  * Default: `{agentHome}/.ai-agent/plans/{slug}.md` (NOT the project cwd).
  */
@@ -53,7 +53,7 @@ function generateWordSlug(): string {
   return `${pick(ADJECTIVES)}-${pick(NOUNS)}`
 }
 
-/** Default home plans root: `~/.ai-agent/plans` (CC: `~/.claude/plans`). */
+/** Default home plans root: `~/.ai-agent/plans`. */
 export function getDefaultPlansDirectory(): string {
   return path.join(resolveAgentHome(), getAppDirName(), 'plans')
 }

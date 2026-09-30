@@ -39,12 +39,12 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  /* Cursor stacks ui-tool-call-line with ~0 gap; prose spacing is on .content */
+  /* Tool rows stack with ~0 gap; prose spacing is on .content */
   gap: 0;
 }
 
 /*
- * Bottom inset (Cursor agent transcript): stick-to-bottom lands on this spacer
+ * Bottom inset: stick-to-bottom lands on this spacer
  * so the newest lines sit mid-lower — height is set in px from JS (pane-based,
  * not window vh).
  */
@@ -514,7 +514,7 @@
 }
 
 /*
- * Tool rows must stack densely (Cursor ui-tool-call-line). Spacing belongs on
+ * Tool rows must stack densely (ui-tool-call-line). Spacing belongs on
  * prose / user turns only — not on every .msg-assistant wrapper.
  */
 .msg-assistant:has(> .content),
@@ -657,7 +657,7 @@
   font-size: 13px;
 }
 
-/* Match tool-row density during early turn (Cursor-like one-liner). */
+/* Match tool-row density during early turn (one-liner). */
 .thinking-indicator--dense {
   gap: 6px;
   padding: 1px 4px;
@@ -819,7 +819,7 @@
   opacity: 0.85;
 }
 
-/* ── Todo List Card (Cursor-style) ───────── */
+/* ── Todo List Card ──────────────────────── */
 .todo-card {
   margin: 8px 0;
   padding: 10px 12px;

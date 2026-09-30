@@ -1,5 +1,5 @@
 /**
- * Select relevant topic memory files for a user query (CC findRelevantMemories).
+ * Select relevant topic memory files for a user query.
  */
 import type { IProvider } from '../../core/llm/types.js'
 import { FILE_READ_TOOL_NAME } from '../../constants/tool_names.js'

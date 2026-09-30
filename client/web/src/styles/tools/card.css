@@ -1,4 +1,4 @@
-/* Fallback tool-card chrome (≈ Cursor composer-tool-call shell) */
+/* Fallback tool-card chrome */
 .tool-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -245,7 +245,7 @@
 .live-terminal-output::-webkit-scrollbar-track { background: transparent; }
 .live-terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 
-/* ── Cursor ShellToolCallView chrome (ui-shell-tool-call*) ── */
+/* ── Shell tool call chrome (ui-shell-tool-call*) ─────────── */
 .ui-shell-tool-call__glass-stop {
   margin-right: 2px;
   display: inline-flex;

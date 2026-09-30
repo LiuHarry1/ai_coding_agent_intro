@@ -1,5 +1,5 @@
 /**
- * Claude Code–style ripgrep on the Worker: execFile argv, exit 0/1 = success.
+ * Ripgrep on the Worker: execFile argv, exit 0/1 = success.
  * No shell, no `rg || grep` fallthrough.
  */
 import { execFile, type ExecFileException } from 'node:child_process'

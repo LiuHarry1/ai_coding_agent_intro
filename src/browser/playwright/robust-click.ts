@@ -1,5 +1,5 @@
 /**
- * Cursor-style click prep: scroll into view, stale-ref recovery, dropdown dismiss,
+ * Click prep: scroll into view, stale-ref recovery, dropdown dismiss,
  * offset retry, and intercept diagnosis when a layer still blocks the target.
  */
 
@@ -35,8 +35,8 @@ export interface ViewportLike {
 }
 
 /**
- * Cursor accepts a small edge tolerance after scrolling, but never treats a
- * detached popup parked thousands of pixels offscreen as interactable.
+ * Accept a small edge tolerance after scrolling, but never treat a detached
+ * popup parked thousands of pixels offscreen as interactable.
  * An axis longer than the viewport can never be fully contained, so on that
  * axis any overlap counts and the click lands in the visible intersection.
  */
@@ -233,8 +233,8 @@ export interface DropdownDismissal {
 }
 
 /**
- * Cursor's `attemptDropdownClose`: act only when the layer covering the target
- * is a dropdown, and never with a trusted key press or a real mouse click.
+ * Act only when the layer covering the target is a dropdown, and never with a
+ * trusted key press or a real mouse click.
  * Legacy apps (Concur/ExtJS) bind a document-level Escape to "cancel edit",
  * and a real click at a fixed corner can hit arbitrary chrome, so a blind
  * Escape + corner click used to open "Your changes may be lost" itself.
@@ -423,7 +423,7 @@ async function pointHitsLocator(
       const y = rect.top + position.y
       let top = document.elementFromPoint(x, y)
       if (!top) return false
-      // Match Cursor's deep hit test for controls inside open shadow roots.
+      // Deep hit test for controls inside open shadow roots.
       while ((top as HTMLElement).shadowRoot) {
         const inner = (top as HTMLElement).shadowRoot!.elementFromPoint(x, y)
         if (!inner || inner === top) break

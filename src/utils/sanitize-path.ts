@@ -1,6 +1,6 @@
 /**
  * Make an absolute path safe as a single directory name
- * (Claude Code / auto-memory / session projects bucket).
+ * (auto-memory / session projects bucket).
  */
 
 const MAX_SANITIZED_LENGTH = 200

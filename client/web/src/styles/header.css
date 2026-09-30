@@ -1,5 +1,5 @@
 /* ── Header ────────────────────────────────── */
-/* Left-packed toolbar (Cursor-like): brand · sessions · workspace · remote */
+/* Left-packed toolbar: brand · sessions · workspace · remote */
 .header {
   display: flex;
   align-items: center;

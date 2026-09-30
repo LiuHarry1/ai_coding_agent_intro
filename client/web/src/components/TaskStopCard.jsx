@@ -6,7 +6,7 @@ import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
- * ≈ Cursor kill / stop background shell — compact action row.
+ * Kill / stop background shell — compact action row.
  */
 export default function TaskStopCard({ part }) {
   const args = part.args || {}

@@ -1,5 +1,5 @@
 /**
- * Tests for CC-style interrupt + turn abort controller.
+ * Tests for interrupt + turn abort controller.
  */
 import assert from 'node:assert/strict'
 import {

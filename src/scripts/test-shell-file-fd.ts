@@ -1,5 +1,5 @@
 /**
- * Shell file-fd capture (aligned with Claude Code Shell.ts tool mode).
+ * Shell file-fd capture in tool mode.
  * Covers stdout/stderr merge, grandchild pipe hang avoidance, cwd trailer, timeout.
  *
  * Run:

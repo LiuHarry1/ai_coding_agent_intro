@@ -99,37 +99,37 @@ export interface ToolContext {
 export type ImageMediaType =
   'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
 
-/** CC/Anthropic `Base64ImageSource`. `data` is bare base64, no data: prefix. */
+/** Anthropic `Base64ImageSource`. `data` is bare base64, no data: prefix. */
 export interface Base64ImageSource {
   type: 'base64'
   media_type: ImageMediaType
   data: string
 }
 
-/** CC/Anthropic `ImageBlockParam`. */
+/** Anthropic `ImageBlockParam`. */
 export interface ImageBlockParam {
   type: 'image'
   source: Base64ImageSource
 }
 
 /**
- * Blocks allowed inside `tool_result.content`. CC additionally permits
+ * Blocks allowed inside `tool_result.content`. The wire format also permits
  * search_result / document blocks; we carry the two the agent produces.
  */
 export type ToolResultContentBlockParam = TextPart | ImageBlockParam
 
-/** Claude Code–style API tool_result block produced by a mapper. */
+/** API tool_result block produced by a mapper. */
 export interface ToolResultBlockParam {
   tool_use_id: string
   type: 'tool_result'
   /**
-   * String for text-only results, or CC-style blocks when the tool returns
+   * String for text-only results, or content blocks when the tool returns
    * images (screenshots, image reads). Image blocks bypass tool-result disk
    * persistence and are dropped when `is_error` is set — the API rejects
    * non-text content on error results.
    */
   content: string | ToolResultContentBlockParam[]
-  /** When true, tool_result is an error for the model / wire (CC Bash interrupt). */
+  /** When true, tool_result is an error for the model / wire (Bash interrupt). */
   is_error?: boolean
 }
 
@@ -163,12 +163,12 @@ export interface ToolDefinition {
    */
   isConcurrencySafe?: (input: unknown) => boolean
   /**
-   * CC: whether ESC/interrupt cancels an in-flight tool ('cancel') or blocks
+   * Whether ESC/interrupt cancels an in-flight tool ('cancel') or blocks
    * until it finishes ('block'). Mutating tools default to block.
    */
   interruptBehavior?: () => 'cancel' | 'block'
   /**
-   * Filesystem permission check (CC `checkPermissions`). Read/Write tools
+   * Filesystem permission check. Read/Write tools
    * return allow / ask / deny; `createCanUseTool` maps ask under `dontAsk`.
    */
   checkPermissions?: (
@@ -183,7 +183,7 @@ export interface ToolDefinition {
   /** Path argument used for Always-allow working-dir grants. */
   getPath?: (input: unknown) => string | undefined
   /**
-   * CC-style: map structured `data` → model-facing tool_result text.
+   * Map structured `data` → model-facing tool_result text.
    * Required on built-in dual-channel tools; framework calls after execute.
    * Projection modes (document per tool):
    *   A — model gets body; UI gets chrome (Read, Web*)
@@ -196,7 +196,7 @@ export interface ToolDefinition {
     toolUseID: string,
   ) => ToolResultBlockParam
   /**
-   * Validate Out before UI sees toolUseResult (CC outputSchema).
+   * Validate Out before UI sees toolUseResult.
    * Built-in tools should set this; failed parse omits TUR (model text still OK).
    */
   outputSchema?: {
@@ -234,7 +234,7 @@ export interface ImagePart {
 }
 
 /**
- * Claude Code / Anthropic document block for native PDF input.
+ * Anthropic document block for native PDF input.
  * Prefer claim-check refs (`file://` or upload URL) in session; hydrate to
  * Buffer in `projectMessagesForApi` / `reviveBuffersInMessages`.
  */
@@ -340,9 +340,9 @@ export type ToolResultOutputContentPart =
   | { type: 'image-data'; data: string; mediaType: string }
 
 /**
- * AI SDK `ToolResultOutput`. `content` carries multimodal results (CC sends
- * image blocks nested in `tool_result.content`; the SDK equivalent is a
- * content array with `image-data` parts).
+ * AI SDK `ToolResultOutput`. `content` carries multimodal results (the wire
+ * format nests image blocks in `tool_result.content`; the SDK equivalent is
+ * a content array with `image-data` parts).
  */
 export type ToolResultOutput =
   | { type: 'text'; value: string }
@@ -354,7 +354,7 @@ export interface ToolResultPart {
   toolName: string
   output: ToolResultOutput
   /**
-   * CC envelope sibling: structured tool Output for UI / session reload.
+   * Envelope sibling: structured tool Output for UI / session reload.
    * Never sent to the model (stripped by projectMessagesForApi).
    */
   toolUseResult?: unknown
@@ -413,7 +413,7 @@ export type Message =
   | SystemCompactBoundaryMessage
 
 /**
- * Dual-channel tool execute return (CC `ToolResult<T>`).
+ * Dual-channel tool execute return.
  * Model text comes from `mapToolResultToToolResultBlockParam`, not from here.
  */
 export interface DualChannelToolResult<T = unknown> {
@@ -681,12 +681,12 @@ export interface Session {
    */
   workspace?: import('../execution/types.js').WorkspaceHandle
   /**
-   * Session “Always allow” directories (CC additionalWorkingDirectories).
+   * Session “Always allow” directories.
    * Later Reads/Writes under these trees auto-allow for this session.
    */
   additionalWorkingDirectories?: string[]
   /**
-   * Inline skills invoked this session (CC invokedSkills). Not written as its
+   * Inline skills invoked this session. Not written as its
    * own jsonl event — durable copy is the post-compact `invoked_skills`
    * attachment, restored on getSession.
    */
@@ -695,7 +695,7 @@ export interface Session {
     import('../skills/invoked-skills.js').InvokedSkillInfo
   >
   /**
-   * CC sentSkillNames: skill_listing is fire-once and survives compact so the
+   * skill_listing is fire-once and survives compact so the
    * catalog is not re-injected after summarization.
    */
   skillListingAnnounced?: boolean
@@ -736,7 +736,7 @@ export type AgentSource = 'built-in' | 'plugin' | 'user' | 'project' | 'managed'
 /** Whether a disk agent is a ModePicker primary or AgentTool-only subagent. */
 export type AgentMode = 'primary' | 'subagent'
 
-/** Persistent Agent Memory scope (CC-aligned). */
+/** Persistent Agent Memory scope. */
 export type AgentMemoryScope = 'user' | 'project' | 'local'
 
 /**
@@ -814,7 +814,7 @@ export interface AgentDefinition {
   /** Display label used in the UI's SubagentCard. Defaults to titlecased agentType. */
   label?: string
   /**
-   * Skip injecting project rules (AGENTS.md / CLAUDE.md / .cursor/rules/*)
+   * Skip injecting project rules (AGENTS.md / .ai-agent/rules/*)
    * into this subagent's system prompt. Set true for fast read-only
    * exploration agents — the rules carry commit/PR/lint guidance the
    * subagent will never act on, and the parent already interprets results
@@ -822,7 +822,7 @@ export interface AgentDefinition {
    */
   omitProjectRules?: boolean
   /**
-   * Persistent Agent Memory scope (CC-aligned short form). Set for subagents
+   * Persistent Agent Memory scope (short form). Set for subagents
    * with a private memdir; AgentTool spawn reads this directly.
    * Gated by AutoMemoryConfig.enabled at spawn / prefetch time.
    */
@@ -943,7 +943,7 @@ export interface SessionMemoryConfig {
  *
  * Preferred nested surface under `autoMemory`:
  *   - `enabled`, `directory` (trusted scopes), `cacheSafe`, `modelTier`
- * CC-compatible flat aliases still accepted:
+ * Flat compatibility aliases still accepted:
  *   - `autoMemoryEnabled`, `autoMemoryDirectory`
  * Legacy flat agent aliases: `autoMemoryCacheSafe` / `autoMemoryModelTier`.
  */
@@ -965,10 +965,10 @@ export interface AutoMemoryConfig {
   modelTier?: ModelTier
   /**
    * When true (default), prefetch relevant topic memories each turn and do
-   * not inject MEMORY.md into the system prompt (CC tengu_moth_copse).
+   * not inject MEMORY.md into the system prompt.
    */
   prefetchEnabled: boolean
-  /** Selector model tier; default small (product choice vs CC Sonnet). */
+  /** Selector model tier; default small. */
   prefetchModelTier: ModelTier
 }
 
@@ -978,19 +978,19 @@ export interface AppConfig {
   compaction: CompactionConfig
   sessionMemory: SessionMemoryConfig
   /**
-   * Enable auto-memory. Claude Code–compatible flat key (`autoMemoryEnabled`).
+   * Enable auto-memory. Flat compatibility key (`autoMemoryEnabled`).
    * Prefer nested `autoMemory.enabled` in settings.json.
    */
   autoMemoryEnabled: boolean
   /**
-   * Custom auto-memory directory. Claude Code–compatible (`autoMemoryDirectory`).
+   * Custom auto-memory directory. Flat compatibility key (`autoMemoryDirectory`).
    * Trusted scopes only: user / local settings — never project settings.
    * Prefer nested `autoMemory.directory`.
    */
   autoMemoryDirectory?: string
   /**
    * Agent extension: when false, extract uses `autoMemoryModelTier`.
-   * Prefer settings nested `autoMemory.cacheSafe` (CC does not define this flat key).
+   * Prefer settings nested `autoMemory.cacheSafe`.
    * Flat `autoMemoryCacheSafe` kept for backward compatibility.
    */
   autoMemoryCacheSafe?: boolean
@@ -1002,7 +1002,7 @@ export interface AppConfig {
   autoMemoryModelTier?: ModelTier
   /**
    * Nested auto-memory settings (prefetch, cacheSafe, …).
-   * Flat CC keys still win when set; nested fills the rest.
+   * Flat keys still win when set; nested fills the rest.
    */
   autoMemory?: {
     enabled?: boolean
@@ -1043,7 +1043,7 @@ export interface AppConfig {
     }
   }
   /**
-   * Filesystem permission rules (CC `permissions`).
+   * Filesystem permission rules.
    * `additionalDirectories` / `allow` are desktop Always-allow; SSO ignores them.
    * `deny` always applies and wins over allow / working dirs.
    */

@@ -166,7 +166,7 @@ export const definition: ToolDefinition = {
         const start = Date.now()
         const execution = context.execution
         // Local Worker uses native glob below. Remote (SSH) uses Worker `rg`
-        // RPC — argv spawn, exit 0/1 = success (Claude Code style).
+        // RPC — argv spawn, exit 0/1 = success.
         const useRemoteRg =
           !!execution &&
           !(
@@ -281,7 +281,7 @@ export const definition: ToolDefinition = {
 
         // Hidden paths (.ai-agent, etc.) are included via rg --hidden in
         // utils/glob.ts (GLOB_HIDDEN defaults true). No extra dot-segment
-        // post-filter — matches Claude Code GlobTool behavior.
+        // post-filter here — only excluded directories are dropped below.
         const allKept = allFilenames.filter(p => !isInsideExcludedDir(p))
         const filteredCount = allFilenames.length - allKept.length
         const filenames = allKept.slice(0, DEFAULT_LIMIT)

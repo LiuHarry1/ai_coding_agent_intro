@@ -12,7 +12,7 @@ export function valuesMatch(expected: string, actual: string): boolean {
 }
 
 /** Typed `MM/DD/YYYY - MM/DD/YYYY` does not bind Concur Date Range / Nights.
- *  Not in Cursor — Baize overlay for this skill's calendar widgets. */
+ *  Baize overlay for this skill's calendar widgets. */
 export function isTypedDateRange(name: string, value: string): boolean {
   if (!/date\s*range|日期范围/i.test(name)) return false
   return /\d{1,2}\/\d{1,2}\/\d{2,4}\s*[-–—]\s*\d{1,2}\/\d{1,2}/.test(value)

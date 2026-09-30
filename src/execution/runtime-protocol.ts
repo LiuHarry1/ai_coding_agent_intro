@@ -38,7 +38,7 @@ export type WorkerFsOp =
     }
   | { op: 'exec_bg_poll'; taskId: string }
   | { op: 'exec_bg_kill'; taskId: string }
-  /** Claude Code–style: spawn `rg` with argv; exit 0/1 both succeed. */
+  /** Spawn `rg` with argv; exit 0/1 both succeed. */
   | {
       op: 'rg'
       args: string[]

@@ -84,7 +84,7 @@ function privatePolicyOf(
 }
 
 /**
- * CC: an @-mentioned agent with its own memdir narrows recall to that memdir.
+ * An @-mentioned agent with its own memdir narrows recall to that memdir.
  * Mentions never move the write target.
  */
 function mentionedMemoryDirs(opts: ResolveMemoryBindingOpts): string[] {

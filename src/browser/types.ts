@@ -94,7 +94,7 @@ export interface SnapshotOpts {
   maxChars?: number
   /** CSS selector; snapshot this subtree instead of the whole page. */
   selector?: string
-  /** Explicit depth override (default DEFAULT_SNAPSHOT_DEPTH / Cursor maxDepth 30). */
+  /** Explicit depth override (default DEFAULT_SNAPSHOT_DEPTH, i.e. maxDepth 30). */
   depth?: number
   /** Only keep ref-bearing nodes (and their ancestors). Cheaper for driving actions. */
   interactive?: boolean
@@ -171,7 +171,7 @@ export interface NetworkEntry {
 export interface BrowserConfig {
   /**
    * When false (default), the default coding agent has no browser_* tools.
-   * Set true to restore deferred browser tools on non-browser profiles (CC-style opt-in).
+   * Set true to restore deferred browser tools on non-browser profiles.
    * The `browser` primary agent always has browser tools regardless of this flag.
    */
   enabled?: boolean

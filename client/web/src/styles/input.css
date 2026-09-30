@@ -490,7 +490,7 @@
 [data-theme="light"] .mode-pill:hover,
 [data-theme="light"] .mode-pill--open { background: #e8eaed; }
 
-/* ── Mode picker (Cursor-style) ───────────── */
+/* ── Mode picker ──────────────────────────── */
 .mode-picker {
   position: relative;
   flex-shrink: 0;
@@ -543,7 +543,7 @@
   transform: rotate(180deg);
 }
 
-/* Cursor-style: tip floats left of a fixed name-only menu */
+/* Tip floats left of a fixed name-only menu */
 .mode-picker__flyout {
   position: absolute;
   bottom: calc(100% + 8px);

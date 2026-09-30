@@ -139,7 +139,7 @@ async function runFsOp(op: WorkerFsOp): Promise<unknown> {
         cleanupCwdFile(prepared.cwdFileNative)
         throw err
       }
-      // Parent closes its copy — child has a dup (CC Shell.ts).
+      // Parent closes its copy — child has a dup.
       await closeShellOutputHandle(outputHandle)
       child.stdin?.end()
 

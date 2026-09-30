@@ -36,7 +36,7 @@ export type MaxTokensContextOverflow = {
 }
 
 /**
- * CC `parseMaxTokensContextOverflowError` (withRetry.ts).
+ * Parse provider errors where input + `max_tokens` exceeds the context limit.
  * Anthropic: "input length and `max_tokens` exceed context limit: 188059 + 20000 > 200000"
  * LiteLLM:  "maximum context length is 262144 ... requested 128000 output tokens
  *            ... prompt contains at least 134145 input tokens"

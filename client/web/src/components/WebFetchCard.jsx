@@ -12,7 +12,7 @@ import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
  * - built-in `WebFetch` (processed `result` text + HTTP status/size chrome)
  * - MCP fetch tools like `mcp_server_fetch` (markdown / content blocks)
  *
- * Cursor show a compact row (action + URL/title), not
+ * Show a compact row (action + URL/title), not
  * `tool_name {"url":…}` plus an empty Arguments panel.
  */
 
@@ -66,7 +66,7 @@ export default function WebFetchCard({ part, nested = false }) {
           error: undefined,
         }
       }
-      // Article payload from sessions predating the CC-style output
+      // Article payload from sessions predating the plain-text output
       return {
         text: tur.text || '',
         title: tur.title || '',

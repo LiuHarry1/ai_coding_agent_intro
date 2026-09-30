@@ -1,5 +1,5 @@
 /**
- * LocalShellTask — Claude Code `spawnShellTask` (explicit background only).
+ * LocalShellTask — explicit background shell tasks only.
  */
 import type { ExecutionBackend } from '../../execution/execution-backend.js'
 import {
@@ -184,7 +184,6 @@ export type SpawnShellTaskContext = {
 
 /**
  * Start a background shell task. Returns immediately with taskId.
- * CC: `spawnShellTask`.
  */
 export async function spawnShellTask(
   input: LocalShellSpawnInput,

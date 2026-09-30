@@ -260,7 +260,7 @@ export class WireEmitter {
     this.emit(resultErrorMessage(message, this.#env))
   }
 
-  /** CC Esc/Stop ? UI shows Interrupted; transcript has the user marker. */
+  /** Esc/Stop ? UI shows Interrupted; transcript has the user marker. */
   interrupted(input: { tool_use?: boolean; text?: string }): void {
     this.emit(interruptedMessage(input, this.#env))
   }

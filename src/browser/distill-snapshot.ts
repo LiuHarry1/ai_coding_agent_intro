@@ -10,9 +10,9 @@
  * 3. the budget itself — see below.
  *
  * Clip passes stay text-in, text-out. `formatSnapshotFileLine` uses `node:url`
- * so the spill path matches Cursor's markdown `file://` link.
+ * so the spill path is a well-formed markdown `file://` link.
  *
- * Full / Cursor-default trees are not clipped here: the complete YAML is
+ * Full / default-depth trees are not clipped here: the complete YAML is
  * returned (or spilled to disk above SNAPSHOT_INLINE_MAX_BYTES). This budget
  * clip is only `mode=efficient`.
  *
@@ -44,7 +44,7 @@ export function isBlockingMessageBox(yaml: string): boolean {
 const OMITTED =
   '# … middle omitted; open dialogs and end-of-tree widgets were kept. Pass selector to snapshot a subtree.'
 
-/** Cursor: first N lines shown inline when the complete YAML is on disk. */
+/** First N lines shown inline when the complete YAML is on disk. */
 export function snapshotPreviewLines(
   yaml: string,
   maxLines: number,
@@ -54,7 +54,7 @@ export function snapshotPreviewLines(
   return { preview: lines.slice(0, n).join('\n'), totalLines: lines.length }
 }
 
-/** Cursor: `Snapshot File: [absPath](file://…)` — label is the on-disk path. */
+/** `Snapshot File: [absPath](file://…)` — label is the on-disk path. */
 export function formatSnapshotFileLine(absPath: string): string {
   const resolved = path.resolve(absPath)
   return `Snapshot File: [${resolved}](${pathToFileURL(resolved).href})`

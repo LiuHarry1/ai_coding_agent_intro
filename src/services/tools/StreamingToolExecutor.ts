@@ -1,5 +1,5 @@
 /**
- * CC-aligned streaming tool executor.
+ * Streaming tool executor.
  * Tools start as soon as tool_use blocks arrive during model streaming.
  */
 import type { CanUseToolFn } from '../../core/can-use-tool.js'

@@ -1,5 +1,5 @@
 /**
- * Subagent Agent Memory — CC-aligned paths, parse, prompt, permissions, mentions.
+ * Subagent Agent Memory — paths, parse, prompt, permissions, mentions.
  */
 import * as fs from 'fs'
 import * as os from 'os'
@@ -125,12 +125,12 @@ try {
       prompt.includes(
         'is always loaded into your conversation context — lines after 200 will be truncated',
       ),
-      'CC truncation wording',
+      'truncation wording',
     )
     assert(prompt.includes('AGENTS.md files'), 'AGENTS.md exclusion (product rename)')
     assert(
       !prompt.includes('## Searching past context'),
-      'no Searching section when CC gate off',
+      'no Searching section when the gate is off',
     )
 
     // ── permission carve-out ──

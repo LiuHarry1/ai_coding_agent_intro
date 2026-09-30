@@ -1,6 +1,6 @@
 import type { AgentOptions, Message } from '../types.js'
 
-/** Reason the query loop stopped (CC-aligned). */
+/** Reason the query loop stopped. */
 export type QueryStopReason =
   | 'completed'
   | 'aborted'

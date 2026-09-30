@@ -1,5 +1,5 @@
 /**
- * Task IDs and base state — aligned with Claude Code `src/Task.ts`.
+ * Task IDs and base state.
  */
 import { randomBytes } from 'crypto'
 import { getTaskOutputPath } from './utils/task/diskOutput.js'
@@ -46,7 +46,7 @@ export type LocalShellSpawnInput = {
 }
 
 /**
- * Polymorphic task impl — CC `Task` (kill only; spawn is typed per-impl).
+ * Polymorphic task impl (kill only; spawn is typed per-impl).
  * Local: sessionId + optional ExecutionBackend instead of setAppState.
  */
 export type Task = {

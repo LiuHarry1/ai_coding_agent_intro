@@ -8,8 +8,7 @@ import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 /**
  * Dedicated card for the `web_search` tool. Replaces the generic ToolCallCard's
  * `web_search {"query":"…","max_results":8}` JSON header with a query-first,
- * results-list-second layout — the same shape Cursor use for
- * search-result rendering.
+ * results-list-second layout for search-result rendering.
  *
  * Result-string shape (from src/tools/WebSearchTool/WebSearchTool.ts:execute):
  *   JSON.stringify({ query, source, totalResults, answers?, suggestions?,

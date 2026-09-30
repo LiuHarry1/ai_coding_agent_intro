@@ -8,7 +8,7 @@
 export const NESTED_STEP_INDENT_PX = 14
 
 /**
- * Props every nested tool card should honor for Cursor flat density.
+ * Props every nested tool card should honor for flat density.
  * @returns {{ nested: true }}
  */
 export function nestedStepCardProps() {

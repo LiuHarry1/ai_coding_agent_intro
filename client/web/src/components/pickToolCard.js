@@ -1,5 +1,5 @@
 /**
- * Tool card registry + picker (≈ Cursor ComposerToolFormer routing).
+ * Tool card registry + picker.
  *
  * Metadata (chrome / exploreGroupable) lives in lib/tool-registry-meta.js;
  * this module binds React components and resolves special cases

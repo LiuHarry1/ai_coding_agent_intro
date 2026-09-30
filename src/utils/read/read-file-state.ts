@@ -1,5 +1,5 @@
 /**
- * Session readFileState helpers — CC-style Read dedup + Edit/Write bookkeeping.
+ * Session readFileState helpers — Read dedup + Edit/Write bookkeeping.
  *
  * Dedup only applies to entries with `offset !== undefined` (came from Read).
  * Edit/Write set offset/limit to undefined so they never false-stub against

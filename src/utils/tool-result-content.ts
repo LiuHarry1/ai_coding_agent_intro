@@ -1,6 +1,6 @@
 /**
- * Helpers for tool results whose content is CC-style blocks rather than a
- * plain string (`ToolResultBlockParam.content: string | blocks[]`).
+ * Helpers for tool results whose content is blocks rather than a plain string
+ * (`ToolResultBlockParam.content: string | blocks[]`).
  *
  * Two projections exist for every result:
  *   - blocks  → what the model receives (`ToolResultOutput.type = 'content'`)
@@ -39,7 +39,7 @@ export function hasImageBlock(
   )
 }
 
-/** CC: `is_error` tool_results must contain only text blocks. */
+/** `is_error` tool_results must contain only text blocks. */
 export function stripImageBlocks(
   blocks: ToolResultContentBlockParam[],
 ): ToolResultContentBlockParam[] {

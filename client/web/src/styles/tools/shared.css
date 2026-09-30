@@ -1,4 +1,4 @@
-/* Shared tool-row / ToolCallLine primitives (≈ Cursor ui-tool-call-line) + copy/show-more */
+/* Shared tool-row / ToolCallLine primitives (ui-tool-call-line) + copy/show-more */
 /* ── Tool Call Cards ───────────────────────── */
 .tool-group {
   margin: 0;
@@ -54,7 +54,7 @@
   font-size: 11px;
 }
 
-/* Cursor-style: row actions (copy) appear on hover / focus, not always on. */
+/* Row actions (copy) appear on hover / focus, not always on. */
 .tool-row-header .tool-row-actions,
 .tool-row-header .copy-btn--inline {
   opacity: 0;
@@ -81,7 +81,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  /* Cursor ui-tool-call-line: tight vertical padding, ~20px row */
+  /* ui-tool-call-line: tight vertical padding, ~20px row */
   padding: 1px 4px;
   width: 100%;
   background: transparent;
@@ -119,13 +119,13 @@
 
 .tool-row-icon { font-size: 12px; opacity: 0.85; flex-shrink: 0; }
 .tool-row-label {
-  /* Cursor: bold action verb */
+  /* Bold action verb */
   color: var(--text-primary);
   font-weight: 600;
   flex-shrink: 0;
 }
 .tool-row-title {
-  /* Cursor: quieter details after the verb */
+  /* Quieter details after the verb */
   color: var(--text-muted);
   font-weight: 400;
   white-space: nowrap;
@@ -192,7 +192,7 @@
   flex-shrink: 0;
 }
 
-/* Nested rows inside Explored / subagent — same type scale as Cursor flat list. */
+/* Nested rows inside Explored / subagent — same type scale as the flat list. */
 .tool-row--nested .tool-row-header {
   padding: 1px 4px;
   font-size: 12.5px;

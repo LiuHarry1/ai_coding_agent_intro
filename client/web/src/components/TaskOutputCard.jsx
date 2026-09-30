@@ -6,7 +6,7 @@ import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
- * ≈ Cursor awaitToolCall / Waiting→Waited.
+ * Wait row — Waiting→Waited.
  * Body prefers TUR.output; model text may include XML wrappers.
  */
 

@@ -1,5 +1,5 @@
 /**
- * PowerShell tool prompt — Claude Code `tools/PowerShellTool/prompt.ts` `getPrompt`.
+ * PowerShell tool prompt — `getPrompt`.
  */
 import {
   EDIT_FILE_TOOL_NAME,
@@ -142,5 +142,5 @@ ${sleepGuidance ? sleepGuidance + '\n' : ''}\
 
 export { POWERSHELL_TOOL_NAME }
 
-/** Static description for tool registration (CC uses async `prompt()` → getPrompt). */
+/** Static description for tool registration. */
 export const DESCRIPTION = getPrompt()

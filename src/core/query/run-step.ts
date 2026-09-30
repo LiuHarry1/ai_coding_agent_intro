@@ -216,7 +216,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
         messages: apiMessages,
         tools: apiTools,
         ...(toolChoice !== undefined ? { toolChoice } : {}),
-        // CC claude.ts: retry override > call override > model default.
+        // Precedence: retry override > call override > model default.
         // Do not cap against a local prompt estimate on the first request.
         maxOutputTokens:
           maxTokensOverride ??

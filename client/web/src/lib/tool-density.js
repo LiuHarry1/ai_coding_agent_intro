@@ -1,9 +1,9 @@
 /**
- * Cursor-style chat density helpers.
+ * Chat density helpers.
  *
  * Explored groups only fold built-in explore tools — never real MCP calls
  * (merged as `${server}_${tool}` in mcp-manager).
- * Consecutive `browser_*` tools fold into Cursor's `browser-group`
+ * Consecutive `browser_*` tools fold into a `browser-group`
  * (`Ran N browser actions`, N ≥ 2).
  */
 
@@ -64,13 +64,13 @@ export const BUILT_IN_TOOLS = new Set([
 ])
 
 /**
- * Built-ins that fold into "Explored N tools" (Cursor Conversation Density).
+ * Built-ins that fold into "Explored N tools".
  * Derived from TOOL_META.exploreGroupable in tool-registry-meta.js.
  */
 export const EXPLORE_BUILTINS = EXPLORE_GROUPABLE_NAMES
 
 /**
- * Cursor `Pol`: pure read/ls groups need ≥ 3 steps before folding.
+ * Pure read/ls groups need ≥ 3 steps before folding.
  * Grep / glob / web mix folds at N ≥ 2.
  */
 const PURE_FILE_EXPLORE_NAMES = new Set([
@@ -124,8 +124,8 @@ export function isMcpTool(part) {
  * Coalesce consecutive explore / browser built-ins into density groups.
  *
  * Subagents are deliberately NOT coalesced: they always render as their own
- * row, matching Cursor (`taskToolCall` is excluded from the groupable set and
- * force-flushes the pending group). Turn-level folding is WorkGroup's job.
+ * row (`isSubagent` parts are excluded from the groupable set and force-flush
+ * the pending group). Turn-level folding is WorkGroup's job.
  *
  * @param {object[]} items tool_call parts or tool bubbles
  * @returns {Array<{ type: 'explored_run'|'browser_run', items: object[] } | { type: 'tool', part: object }>}
@@ -298,12 +298,12 @@ export function summarizeToolSteps(steps) {
       phrases.push(`${counts[key]} ${counts[key] > 1 ? plur : sing}`)
   }
   if (phrases.length === 0) return null
-  // Cursor transcript: "3 searches, 17 browser actions"
+  // e.g. "3 searches, 17 browser actions"
   return phrases.join(', ')
 }
 
 /**
- * Cursor collapsed explore line details.
+ * Collapsed explore line details.
  * Prefer "9 files" / "1 file, 1 search" — never "1 read, 1 search, 1 tool search".
  */
 export function summarizeExploredDetails(steps) {
@@ -344,7 +344,7 @@ export function summarizeExploredDetails(steps) {
     }
   }
 
-  // Pure file reads/globs/ls → "9 files" (Cursor default-chat).
+  // Pure file reads/globs/ls → "9 files" (default chat).
   if (files === list.length) {
     return `${files} file${files === 1 ? '' : 's'}`
   }

@@ -1,13 +1,13 @@
 /**
- * Dump-prompts — port of Claude Code `services/api/dumpPrompts.ts`.
+ * Dump-prompts.
  *
  * Incremental JSONL of the *real* API-bound request/response for each LLM
- * call in the agent loop. Same state machine / record types as CC:
+ * call in the agent loop. State machine / record types:
  *   init | system_update | message | response
  *
- * CC hooks Anthropic `fetch`; Baize calls `dumpRequest` / `dumpResponse`
- * from `runOneStep` with the post-sanitize `streamText` payload (equivalent
- * interception point for multi-provider AI SDK).
+ * Baize calls `dumpRequest` / `dumpResponse` from `runOneStep` with the
+ * post-sanitize `streamText` payload (the interception point for the
+ * multi-provider AI SDK).
  *
  * Enable:  DUMP_PROMPTS=1
  * Path:    ~/.ai-agent/dump-prompts/{sessionKey}.jsonl
@@ -37,12 +37,12 @@ function envTruthy(v: string | undefined): boolean {
   return t === '1' || t === 'true' || t === 'yes' || t === 'on'
 }
 
-/** Gate — mirrors CC `config.gates.isAnt` for dump write path. */
+/** Gate for the dump write path. */
 export function isDumpPromptsEnabled(): boolean {
   return envTruthy(process.env.DUMP_PROMPTS)
 }
 
-// Cache last few API requests (CC: ant /issue). Useful for local debug too.
+// Cache last few API requests. Useful for local debug too.
 const MAX_CACHED_REQUESTS = 5
 const cachedApiRequests: Array<{ timestamp: string; request: unknown }> = []
 
@@ -123,7 +123,7 @@ function initFingerprint(req: Record<string, unknown>): string {
 }
 
 /**
- * CC dumpRequest — body is JSON string of the API-bound request object.
+ * Body is a JSON string of the API-bound request object.
  * Async via setImmediate from the recorder so stringify does not block TTFB.
  */
 function dumpRequest(
@@ -160,7 +160,7 @@ function dumpRequest(
       }
     }
 
-    // CC: only new user messages (assistant captured in response).
+    // Only new user messages (assistant captured in response).
     // Baize AI SDK also places tool results on role:"tool" — include those
     // so tool trajectory is visible in the same incremental stream.
     for (const msg of messages.slice(state.messageCountSeen)) {
@@ -194,7 +194,7 @@ function dumpResponseToFile(
     .catch(() => {})
 }
 
-/** Shape passed into dump (mirrors CC POST JSON body fields we care about). */
+/** Shape passed into dump (the POST JSON body fields we care about). */
 export type ApiRequestLike = {
   model: string
   system: string | unknown[]
@@ -204,7 +204,7 @@ export type ApiRequestLike = {
 }
 
 export type DumpPromptsRecorder = {
-  /** Fire-and-forget; same as CC setImmediate(dumpRequest, body, …). */
+  /** Fire-and-forget; defers the write via setImmediate. */
   dumpRequest: (req: ApiRequestLike) => string
   dumpResponse: (timestamp: string, data: unknown) => void
   path: string
@@ -214,7 +214,7 @@ export type DumpPromptsRecorder = {
 const announced = new Set<string>()
 
 /**
- * CC `createDumpPromptsFetch` equivalent — one recorder per query/agent run.
+ * One recorder per query/agent run.
  * Call once in `runAgent`, reuse across steps (preserves DumpState).
  */
 export function createDumpPromptsRecorder(
@@ -244,7 +244,7 @@ export function createDumpPromptsRecorder(
       dumpState.set(sessionKey, state)
 
       const body = jsonStringify(req)
-      // Parsing + stringifying can take hundreds of ms — defer like CC.
+      // Parsing + stringifying can take hundreds of ms — defer.
       setImmediate(dumpRequest, body, timestamp, state, filePath)
       return timestamp
     },

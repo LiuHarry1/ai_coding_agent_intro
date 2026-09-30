@@ -8,7 +8,7 @@ export const FILE_UNCHANGED_STUB =
 export const EMPTY_FILE_READ_REMINDER =
   'Warning: the file exists but the contents are empty.'
 
-/** Model-facing stub when offset is past EOF (CC-compatible wording). */
+/** Model-facing stub when offset is past EOF. */
 export function offsetBeyondEofReminder(
   startLine: number,
   totalLines: number,

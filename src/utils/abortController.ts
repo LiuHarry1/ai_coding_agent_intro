@@ -13,7 +13,7 @@ export function createAbortController(
 
 /**
  * Child AbortController that aborts when `parent` aborts.
- * Aborting the child does NOT abort the parent (CC createChildAbortController).
+ * Aborting the child does NOT abort the parent.
  */
 export function createChildAbortController(
   parent: AbortController | AbortSignal,

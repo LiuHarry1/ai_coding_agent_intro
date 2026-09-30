@@ -13,7 +13,7 @@ import {
 import { getAgentHome } from './request-scope.js'
 
 /**
- * Instructions loader (CC memory + rules, with managed policy layer).
+ * Instructions loader (memory + rules, with managed policy layer).
  *
  *   {managed}/AGENTS.md (+ {managed}/.ai-agent/rules/)  — policy (first)
  *   ~/.ai-agent/AGENTS.md (+ rules/)                    — user
@@ -377,8 +377,8 @@ function formatRuleSources(sources: RuleSource[], scopeLabel: string): string {
 }
 
 /**
- * Managed / policy rules — CC `getMemoryPath('Managed')` + `getManagedClaudeRulesDir`.
- * Root entry: `{managed}/AGENTS.md`, else `{managed}/CLAUDE.md` (CC name).
+ * Managed / policy rules.
+ * Root entry: `{managed}/AGENTS.md`, else `{managed}/CLAUDE.md`.
  */
 export function loadManagedRules(): string {
   const sources: RuleSource[] = []

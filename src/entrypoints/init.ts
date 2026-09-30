@@ -1,5 +1,5 @@
 /**
- * Shared process bootstrap (Claude Code–style entrypoints/init).
+ * Shared process bootstrap.
  * Mode adapters call this once before loading agent/server/cli/acp.
  */
 import { resolveDefaultWorkspace } from '../core/workspace.js'

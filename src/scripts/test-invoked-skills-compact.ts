@@ -394,7 +394,7 @@ async function testPostCompactInvokedSkills(): Promise<void> {
   const text = JSON.stringify(api)
   assert.ok(
     text.includes('Continue to follow these guidelines'),
-    'API expansion uses CC invoked_skills prompt',
+    'API expansion uses the invoked_skills prompt',
   )
   assert.ok(text.includes('### Skill: demo'))
   assert.ok(text.includes('body-one'))
@@ -521,15 +521,15 @@ function testSkillToolPromptMatchesCcContract(): void {
   const prompt = getSkillToolPrompt()
   assert.ok(
     prompt.includes('BLOCKING REQUIREMENT'),
-    'CC invoke-first contract in Skill tool prompt',
+    'invoke-first contract in Skill tool prompt',
   )
-  assert.ok(prompt.includes('skill: "pdf"'), 'CC skill field example')
-  assert.ok(prompt.includes('args:'), 'CC args field example')
+  assert.ok(prompt.includes('skill: "pdf"'), 'skill field example')
+  assert.ok(prompt.includes('args:'), 'args field example')
   assert.ok(
     prompt.includes(`<${COMMAND_NAME_TAG}>`),
     'already-loaded command-name hint',
   )
-  console.log('[ok] Skill tool prompt matches CC invoke-first contract')
+  console.log('[ok] Skill tool prompt matches the invoke-first contract')
 }
 
 function testFormatSkillListingDiscoveryOnly(): void {
@@ -547,7 +547,7 @@ function testFormatSkillListingDiscoveryOnly(): void {
     },
   ])
   assert.equal(listing.startsWith('- concur-expense: '), true)
-  assert.equal(listing.includes('(inline)'), false, 'CC listing has no context mode')
+  assert.equal(listing.includes('(inline)'), false, 'listing has no context mode')
   const desc = listing.slice('- concur-expense: '.length)
   assert.ok(
     desc.length <= MAX_LISTING_DESC_CHARS,

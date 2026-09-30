@@ -81,7 +81,7 @@ export const useChatStore = create((set, get) => {
     /** Bound WorkspaceHandle from execution plane. */
     workspaceHandle: null,
 
-    // ── Transcript (Cursor-like flat bubbles) ──
+    // ── Transcript (flat bubbles) ──────────────
     bubbleOrder: [],
     bubblesById: {},
     activeTurnId: null,
@@ -542,7 +542,7 @@ export const useChatStore = create((set, get) => {
 
     stopStreaming: async () => {
       const { abortController, currentSessionId } = get()
-      // Cursor Esc: settle tools + show Interrupted immediately, then cancel.
+      // On Esc: settle tools + show Interrupted immediately, then cancel.
       get()._onInterrupted({ tool_use: true })
       set({
         isStreaming: false,

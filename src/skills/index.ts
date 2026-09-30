@@ -19,7 +19,6 @@ export type { InvokedSkillInfo } from './invoked-skills.js'
 // ── Skill listing for <system-reminder> injection ────────────────────────
 
 // Skill listing gets 1% of the context window (in characters)
-// CC: tools/SkillTool/prompt.ts
 export const SKILL_BUDGET_CONTEXT_PERCENT = 0.01
 export const CHARS_PER_TOKEN = 4
 export const DEFAULT_CHAR_BUDGET = 8_000
@@ -49,7 +48,7 @@ function listingDescription(desc: string): string {
 
 /**
  * Format a skill listing suitable for `<system-reminder>` injection.
- * CC `formatCommandsWithinBudget` / `formatCommandDescription`: `- name: desc`.
+ * Each entry is formatted within budget as `- name: desc`.
  */
 export function formatSkillListing(
   skills: readonly SkillDefinition[],

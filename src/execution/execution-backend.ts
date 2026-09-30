@@ -48,7 +48,7 @@ export interface ExecutionBackend {
   }>
   execBgKill?(taskId: string): Promise<void>
   /**
-   * Claude Code–style ripgrep: argv spawn on the Worker.
+   * Ripgrep: argv spawn on the Worker.
    * Exit codes 0 and 1 both succeed (1 = no matches → empty lines).
    */
   rg(

@@ -5,7 +5,7 @@
  * with bundled assets, not flat `.md` files — but both share the project
  * directory walk in `utils/app-dir.ts`.
  *
- * Directory layout (CC markdownConfigLoader + managedPath):
+ * Directory layout:
  *
  *   {managed}/.ai-agent/agents|commands/   # policySettings
  *   ~/.ai-agent/agents|commands/
@@ -29,13 +29,13 @@ export type FlatMarkdownKind = 'agents' | 'commands'
 
 /**
  * Where an extension was discovered. `"plugin"` is lowest; `"managed"` is
- * policy (CC `policySettings`) and highest (see `sourceRank`).
+ * policy and highest (see `sourceRank`).
  */
 export type ExtensionSource = 'plugin' | 'user' | 'project' | 'managed'
 
 /**
  * Override precedence (higher wins on duplicate name):
- * managed > project > user > plugin (CC policySettings spirit).
+ * managed > project > user > plugin.
  */
 export function sourceRank(source: ExtensionSource): number {
   switch (source) {
@@ -178,7 +178,7 @@ export async function loadMarkdownFile(
 
 /**
  * Load all `.md` files for a flat extension kind.
- * CC always loads managed; then user + project (when enabled).
+ * Managed is always loaded; then user + project (when enabled).
  *
  * Returned list is unordered for merge purposes — callers sort via
  * `sourceRank` (managed wins on name collision).

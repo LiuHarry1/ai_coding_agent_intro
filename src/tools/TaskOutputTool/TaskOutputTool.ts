@@ -1,5 +1,5 @@
 /**
- * TaskOutput — Claude Code TaskOutputTool (simplified).
+ * TaskOutput — retrieve output from a background shell task.
  */
 import { tool } from 'ai'
 import { z } from 'zod'
@@ -33,7 +33,6 @@ export const TaskOutputToolResultSchema = z.object({
   task_status: z.string().optional(),
 })
 
-// Aligned with Claude Code TaskOutputTool.prompt() + long-lived note
 const DESCRIPTION = `DEPRECATED: Prefer using the Read tool on the task's output file path instead. Background tasks return their output file path in the tool result, and you receive a <task-notification> with the same path when the task completes — Read that file directly (session task output paths are allowed even when outside the project cwd).
 
 - Retrieves output from a running or completed background shell task
@@ -75,7 +74,6 @@ export const definition: ToolDefinition = {
     return tool({
       description: DESCRIPTION,
       inputSchema: z.object({
-        // Schema text matches Claude Code TaskOutputTool inputSchema
         task_id: z.string().describe('The task ID to get output from'),
         block: z
           .boolean()

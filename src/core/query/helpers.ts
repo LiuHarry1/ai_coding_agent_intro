@@ -32,11 +32,11 @@ import {
 export { DEFAULT_MAX_OUTPUT_TOKENS, applyMaxTokensToChatBody, getMaxOutputTokens }
 
 export const MAX_TRANSIENT_RETRIES = 2
-/** CC `withRetry.ts` DEFAULT_MAX_RETRIES for overflow max_tokens adjustment */
+/** Max retry attempts for overflow max_tokens adjustment */
 export const MAX_OVERFLOW_RETRIES = 10
-/** CC `withRetry.ts` FLOOR_OUTPUT_TOKENS */
+/** Lowest max_tokens an output budget is ever shrunk to */
 export const FLOOR_OUTPUT_TOKENS = 3_000
-/** CC `withRetry.ts` safetyBuffer */
+/** Headroom kept between the input tokens and the output budget */
 export const OUTPUT_SAFETY_BUFFER = 1_000
 
 /** Default / resolve console tag: `[agent:main]` or `[agent:session_memory]`. */
@@ -45,9 +45,9 @@ export function agentLogTag(logLabel?: string): string {
 }
 
 /**
- * CC `withRetry.ts`: shrink max_tokens so input + output fits the window.
- * Returns undefined when remaining budget is below FLOOR — CC throws; we
- * do not raise max_tokens up to the floor.
+ * Shrink max_tokens so input + output fits the window.
+ * Returns undefined when remaining budget is below FLOOR; we do not raise
+ * max_tokens up to the floor.
  */
 export function adjustMaxTokensForContextOverflow(
   overflow: MaxTokensContextOverflow,

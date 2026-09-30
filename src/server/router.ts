@@ -465,7 +465,7 @@ export function createRouter({ staticDir }: RouterOptions) {
       return
     }
 
-    // Background shell tasks (CC BackgroundTasksDialog / Cursor background terminals)
+    // Background shell tasks
     const tasksListMatch = url?.match(/^\/sessions\/([^/]+)\/tasks$/)
     if (method === 'GET' && tasksListMatch) {
       const id = tasksListMatch[1]!

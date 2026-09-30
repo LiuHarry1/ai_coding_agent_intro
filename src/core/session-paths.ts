@@ -1,6 +1,6 @@
 /**
- * Session storage under `{agentHome}/.ai-agent/projects/<sanitized>/`
- * (Claude Code layout). Pure path builders + location cache.
+ * Session storage under `{agentHome}/.ai-agent/projects/<sanitized>/`.
+ * Pure path builders + location cache.
  *
  * Callers must register a SessionLocation before using sessionId-based helpers.
  * Miss does NOT invent a location.
@@ -164,7 +164,7 @@ export function getScratchDataDir(kind: string): string {
   return path.join(resolveAgentHome(), getAppDirName(), 'scratch', safe)
 }
 
-/** `{agentHome}/.ai-agent/browser-logs` — Cursor-style spill (not under projects/). */
+/** `{agentHome}/.ai-agent/browser-logs` — spill dir (not under projects/). */
 export function getBrowserLogsDir(agentHome?: string): string {
   return path.join(resolveAgentHome(agentHome), getAppDirName(), 'browser-logs')
 }

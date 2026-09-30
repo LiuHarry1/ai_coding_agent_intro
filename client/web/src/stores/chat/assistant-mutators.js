@@ -1,5 +1,5 @@
 /**
- * Assistant transcript mutators — Cursor-like flat bubble store.
+ * Assistant transcript mutators — flat bubble store.
  * Tool patches touch only bubblesById[id]; order pushes only on first insert.
  */
 import { newId } from '../../lib/utils.js'

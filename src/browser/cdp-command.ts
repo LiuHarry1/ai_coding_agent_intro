@@ -1,5 +1,5 @@
 /**
- * Send one CDP command through BrowserBackend, with Cursor's deny list and
+ * Send one CDP command through BrowserBackend, with the deny list and
  * overflow-to-file behaviour (CDP_INLINE_MAX_CHARS, or always for Profiler.stop).
  */
 

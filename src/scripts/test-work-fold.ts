@@ -56,7 +56,7 @@ const tool = (id: string, extra: Partial<Bubble> = {}): Bubble => ({
 })
 
 {
-  // Streaming: Cursor Gug !completed — no workGroup; tools stay flat.
+  // Streaming: turn not completed — no workGroup; tools stay flat.
   const out = flat(
     [
       tool('a', { status: 'done' }),
@@ -83,7 +83,7 @@ const tool = (id: string, extra: Partial<Bubble> = {}): Bubble => ({
 }
 
 {
-  // Done turn, single tool: Cursor $ug unwraps one-row workGroup.
+  // Done turn, single tool: unwrap the one-row workGroup.
   const out = flat(
     [
       tool('a', { startTime: 1000, endTime: 8000 }),
@@ -142,7 +142,7 @@ const tool = (id: string, extra: Partial<Bubble> = {}): Bubble => ({
 }
 
 {
-  // Three Reads coalesce to one explore group → Cursor keeps Worked.
+  // Three Reads coalesce to one explore group → keep Worked.
   const out = flat(
     [
       tool('r1', { name: 'Read' }),
@@ -157,7 +157,7 @@ const tool = (id: string, extra: Partial<Bubble> = {}): Bubble => ({
 }
 
 {
-  // Tool-only completed turn — no work_group (Cursor: no final reply).
+  // Tool-only completed turn — no work_group (no final reply).
   const out = flat([tool('a')], { isStreaming: false })
   assert.ok(out.every(r => r.type !== 'work_group'))
 }

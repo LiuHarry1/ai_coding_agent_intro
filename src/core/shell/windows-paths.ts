@@ -1,6 +1,6 @@
 /**
- * Windows paths + shell binary resolution (aligned with Claude Code
- * `utils/windowsPaths.ts` + powershell detection).
+ * Windows paths + shell binary resolution (Git Bash and powershell
+ * detection).
  *
  * Bash trailers use POSIX paths; Node I/O uses native Windows paths.
  */
@@ -45,7 +45,7 @@ export function posixPathToWindowsPath(posixPath: string): string {
     return letter + ':' + (rest || '\\')
   }
   // Already Windows (`C:/Users/…`) or leftover MSYS (`/tmp` → `\tmp`).
-  // Callers (CC `setCwd` / `readCwdAfter`) realpath the result and ignore
+  // Callers such as `readCwdAfter` realpath the result and ignore
   // conversions that do not exist on disk.
   return posixPath.replace(/\//g, '\\')
 }
@@ -55,7 +55,7 @@ export function posixPathToWindowsPath(posixPath: string): string {
 let cachedGitBash: string | null | undefined
 
 /**
- * CC `pathWin32.join(gitPath, '..', '..', 'bin', 'bash.exe')`.
+ * Derive `bin\bash.exe` from a `git.exe` path.
  * `gitExe` must include the filename (`Git\cmd\git.exe`), not its dirname —
  * an extra `path.dirname` would resolve AppData installs to `Programs\bin`.
  */
@@ -64,7 +64,7 @@ export function bashExeFromGitExe(gitExe: string): string {
 }
 
 /**
- * Locate `git.exe` (CC `findExecutable('git')`).
+ * Locate `git.exe`.
  * Prefers `Git\cmd\git.exe` (env-wrapped), never `mingw64\bin\git.exe`.
  */
 function isUnsafeGitExe(gitExe: string): boolean {
@@ -114,7 +114,7 @@ function findGitExecutable(): string | null {
 }
 
 /**
- * Locate Git for Windows bash.exe (CC `findGitBashPath`).
+ * Locate Git for Windows bash.exe.
  * Order: GIT_BASH_PATH → Program Files / %LOCALAPPDATA% `cmd\git.exe` → where git.
  * Returns null if missing — never fall back to System32/WSL bash.
  */

@@ -9,7 +9,7 @@ import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
- * ≈ Cursor `ShellToolCallView` (`ui-shell-tool-call`):
+ * Shell tool card (`ui-shell-tool-call`):
  *   action: Running | Ran | Run(error) | Shell(backgrounded)
  *   details: description ?? "Running/Ran command" (not raw command by default)
  * Done body prefers TUR stdout/stderr; model `text` may include wrappers.
@@ -89,7 +89,7 @@ function shellDisplayParts(part) {
   }
 }
 
-/** Cursor-style first-pass truncate (~5 lines / 2k chars). */
+/** First-pass truncate (~5 lines / 2k chars). */
 function truncateShellText(text) {
   if (typeof text !== 'string' || !text) {
     return { preview: '', truncated: false }
@@ -149,7 +149,7 @@ export default function BashCard({ part, onStopTool }) {
   const command = typeof args?.command === 'string' ? args.command.trim() : ''
   const description =
     typeof args?.description === 'string' ? args.description.trim() : ''
-  // Cursor: prefer description; else generic phrase (not raw command in details)
+  // Prefer description; else generic phrase (not raw command in details)
   const rawDetails =
     description ||
     (!isDone ? 'Running command' : failed ? 'Run command' : 'Ran command')

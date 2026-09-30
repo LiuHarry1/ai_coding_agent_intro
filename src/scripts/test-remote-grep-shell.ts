@@ -1,5 +1,5 @@
 /**
- * Ensure remote Grep/Glob use Worker `rg` RPC (CC-style), not shell fallthrough.
+ * Ensure remote Grep/Glob use Worker `rg` RPC, not shell fallthrough.
  * Run: npx tsx src/scripts/test-remote-grep-shell.ts
  */
 import assert from 'node:assert/strict'
@@ -56,4 +56,4 @@ assert.ok(
   'Glob should skip remote rg for local Worker',
 )
 
-console.log('ok remote grep/glob use CC-style Worker rg RPC')
+console.log('ok remote grep/glob use Worker rg RPC')

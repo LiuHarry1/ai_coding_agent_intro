@@ -4,8 +4,8 @@ import { formatDuration } from '../lib/utils.js'
 /**
  * Shared single-row tool header (implementation of ToolCallLine).
  *
- * Prefer importing `ToolCallLine` in new code — same component, Cursor-aligned name
- * (≈ `ui-tool-call-line`).
+ * Prefer importing `ToolCallLine` in new code — same component, canonical name
+ * (`ui-tool-call-line`).
  *
  * Slot layout (left → right):
  *

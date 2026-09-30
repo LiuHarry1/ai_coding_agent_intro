@@ -3,7 +3,7 @@ import { useChatStore } from '../stores/chat-store.js'
 import { agentApi } from '../lib/api/agent.js'
 
 /**
- * ≈ Cursor Composer footer: "N background terminals"
+ * Footer summary: "N background terminals"
  * Poll while the session is live so mid-stream bg shells appear promptly.
  * Long-lived servers stay listed as running until Stop — that is intentional.
  */

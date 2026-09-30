@@ -1,6 +1,5 @@
 /**
- * Cursor's browser_cdp deny list, copied from the installed app
- * (`out/main.js` `nx()` / `Tx` / `kx`).
+ * browser_cdp deny list.
  *
  * Domain blocks: Browser, Input, Storage, SystemInfo, Target, Tethering.
  * Method blocks: cookie/cache, file-input, and CDP navigation/history.

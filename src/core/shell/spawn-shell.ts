@@ -1,10 +1,10 @@
 /**
- * Shared shell spawn (aligned with Claude Code `utils/Shell.ts` + providers).
+ * Shared shell spawn.
  * Worker `exec` and in-process shell-runner both call this — one wrap/args/cwd story.
  *
- * Default output capture is **file fd** (CC tool mode): stdout+stderr → one file;
+ * Default output capture is **file fd** (tool mode): stdout+stderr → one file;
  * Windows opens with `'w'` so Git Bash/MSYS does not silently discard output.
- * Pass `usePipeMode: true` for real-time stream callbacks (CC hooks path).
+ * Pass `usePipeMode: true` for real-time stream callbacks (hooks path).
  */
 import { spawn, type ChildProcess, type StdioOptions } from 'child_process'
 import * as fs from 'fs'
@@ -69,10 +69,10 @@ function makeTempPath(prefix: string): string {
 }
 
 /**
- * CC `bashProvider.buildExecCommand`: rewrite `>nul`, quote for eval, optional
- * `< /dev/null`, then write cwd with `pwd -P` (CC) — on Git Bash `pwd -P` is an
- * MSYS path like `/tmp/...`, which is not `process.cwd()`, so prefer `pwd -W`
- * when it exists (same native path CC's `setCwd`/`realpathSync` expect).
+ * Rewrite `>nul`, quote for eval, optional `< /dev/null`, then write cwd with
+ * `pwd -P` — on Git Bash `pwd -P` is an MSYS path like `/tmp/...`, which is
+ * not `process.cwd()`, so prefer `pwd -W` when it exists (the same native
+ * path `readCwdAfter`'s `realpathSync` expects).
  */
 function wrapBash(userCmd: string, cwdFileForBash: string): string {
   const normalized = rewriteWindowsNullRedirect(userCmd)
@@ -141,9 +141,9 @@ export function prepareShellSpawn(opts: {
 }
 
 /**
- * Read cwd trailer. Windows bash: POSIX → native (CC `posixPathToWindowsPath`),
- * then `realpathSync` like CC `setCwd` so a mangled MSYS path that is not a
- * real directory does not replace the session cwd.
+ * Read cwd trailer. Windows bash: POSIX → native (`posixPathToWindowsPath`),
+ * then `realpathSync` so a mangled MSYS path that is not a real directory
+ * does not replace the session cwd.
  */
 export function readCwdAfter(
   cwdFileNative: string,
@@ -175,7 +175,7 @@ export function cleanupCwdFile(cwdFileNative: string): void {
 }
 
 /**
- * Open an output file for shell stdout+stderr (CC `Shell.ts` file mode).
+ * Open an output file for shell stdout+stderr (file mode).
  * Windows: `'w'` — MSYS needs FILE_WRITE_DATA or it silently discards output.
  * POSIX: O_APPEND so interleaved stdout/stderr writes stay atomic.
  */
@@ -250,12 +250,12 @@ export type SpawnPreparedShellOpts = {
   prepared: PreparedShellSpawn
   cwd: string
   /**
-   * When set, stdout+stderr are redirected to this fd (CC file mode).
+   * When set, stdout+stderr are redirected to this fd (file mode).
    * Caller opens via `openShellOutputHandle` / `openShellOutputFdSync` and
    * must close the **parent** copy after spawn (child has its own dup).
    */
   outputFd?: number
-  /** CC pipe mode — real-time stream callbacks. Mutually exclusive with outputFd. */
+  /** Pipe mode — real-time stream callbacks. Mutually exclusive with outputFd. */
   usePipeMode?: boolean
   detached?: boolean
 }
@@ -277,7 +277,7 @@ export function spawnPreparedShell(opts: SpawnPreparedShellOpts): ChildProcess {
       ? ['pipe', outputFd, outputFd]
       : ['pipe', 'pipe', 'pipe']
 
-  // CC bashProvider.detached = true: new process group, and on Windows a GUI
+  // Detached bash: new process group, and on Windows a GUI
   // parent (Electron / no console) will not block Git Bash on an inherited tty.
   const useDetached = detached ?? prepared.shellKind === 'bash'
 
@@ -292,7 +292,7 @@ export function spawnPreparedShell(opts: SpawnPreparedShellOpts): ChildProcess {
 
 /**
  * Foreground shell exec for Worker / shell-runner.
- * Default: file-fd capture (aligned with Claude Code tool path).
+ * Default: file-fd capture.
  */
 export async function runShellCommand(opts: {
   shell: ShellKind
@@ -351,7 +351,7 @@ export async function runShellCommand(opts: {
     throw err
   }
 
-  // Parent closes its copy — child has a dup (CC Shell.ts).
+  // Parent closes its copy — child has a dup.
   await closeShellOutputHandle(outputHandle)
   outputHandle = undefined
 

@@ -1,5 +1,5 @@
 /**
- * Session working directory — mirrors Claude Code `utils/cwd.ts` (`getCwd`).
+ * Session working directory.
  * Prompt builders (`computeEnvInfo` / `computeSimpleEnvInfo`) read cwd from here.
  */
 let cwdState: string = process.cwd()

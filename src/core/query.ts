@@ -41,7 +41,7 @@ const PLAN_IMPLEMENTATION_TOOLS = new Set([
 ])
 
 /**
- * Unified agent query loop (CC `query()`).
+ * Unified agent query loop.
  * Callers seed `messages` before invoking; `runAgent` appends the user turn.
  */
 export async function query(opts: QueryOptions): Promise<QueryResult> {

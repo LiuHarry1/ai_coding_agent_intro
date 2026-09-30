@@ -1,8 +1,7 @@
 import { COMMAND_NAME_TAG } from '../../constants/xml.js'
 
 /**
- * Model-facing Skill tool prompt. Claude Code `getPrompt` in
- * tools/SkillTool/prompt.ts.
+ * Model-facing Skill tool prompt.
  */
 export function getSkillToolPrompt(): string {
   return `Execute a skill within the main conversation

@@ -79,10 +79,10 @@ const AUTO_MEMORY_RUNTIME_DEFAULTS = {
 } as const
 
 /**
- * Resolve runtime AutoMemoryConfig from Claude Code–compatible flat fields
+ * Resolve runtime AutoMemoryConfig from the compatibility flat fields
  * plus agent extensions under nested `autoMemory` (or legacy flat keys).
  *
- * CC surface: autoMemoryEnabled / autoMemoryDirectory
+ * Flat surface: autoMemoryEnabled / autoMemoryDirectory
  * Agent-only: autoMemory.cacheSafe / autoMemory.modelTier / prefetch*
  */
 export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
@@ -118,10 +118,10 @@ export function resolveAutoMemoryConfig(config: AppConfig): AutoMemoryConfig {
   }
 }
 
-/** Writable scopes — excludes managed (CC EditableSettingSource). */
+/** Writable scopes — excludes managed. */
 export type WritableSettingsScope = 'user' | 'project' | 'local'
 
-/** All settings sources including policy/managed (CC SettingSource). */
+/** All settings sources including policy/managed. */
 export type SettingsScope = WritableSettingsScope | 'managed'
 
 export interface SettingsSource {
@@ -198,7 +198,7 @@ export function resolveSettingsPaths(cwd: string): {
 }
 
 /**
- * List managed settings files in CC order: managed-settings.json first, then
+ * List managed settings files in load order: managed-settings.json first, then
  * managed-settings.d/*.json sorted alphabetically (drop-ins override base).
  * Used for mtime cache keys; prefer `loadManagedFileSettings` for merge.
  */
@@ -231,7 +231,7 @@ export function listManagedSettingsFiles(): string[] {
 }
 
 /**
- * CC `loadManagedFileSettings`: merge base + drop-ins into one object.
+ * Merge base + drop-ins into one object.
  * Base first, then drop-ins alphabetically (later wins on key collision via
  * applyLayer semantics when applied as a single layer).
  */
@@ -569,7 +569,7 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
   }
 
   // Prefer nested autoMemory.{enabled,directory,cacheSafe,modelTier}.
-  // Flat autoMemoryEnabled / autoMemoryDirectory remain CC-compatible aliases;
+  // Flat autoMemoryEnabled / autoMemoryDirectory remain supported aliases;
   // flat autoMemoryCacheSafe / autoMemoryModelTier are legacy agent aliases.
   if (typeof layer.autoMemoryEnabled === 'boolean') {
     config.autoMemoryEnabled = layer.autoMemoryEnabled
@@ -711,7 +711,7 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
   const paths = resolveSettingsPaths(cwd)
   const config = cloneDefaults()
   const validationErrors: ValidationError[] = []
-  // CC order: user → project → local → flag → policy(managed last).
+  // Merge order: user → project → local → flag → policy(managed last).
   // We have no flag layer; managed is policySettings.
   // SSO: cwd === agent home → userPath === projectPath; apply once as user
   // (trusted — may carry autoMemory.directory). Still load local separately.
@@ -742,7 +742,7 @@ function resolveSettingsFromDisk(cwd: string): ResolvedSettings {
     applySettingsSource(config, source, validationErrors)
   }
 
-  // Managed / policySettings — CC loadManagedFileSettings then one apply.
+  // Managed / policySettings — loadManagedFileSettings then one apply.
   const managed = loadManagedFileSettings()
   validationErrors.push(...managed.validationErrors)
   const managedSource: SettingsSource = {
@@ -834,7 +834,7 @@ export function getSafeSettings(resolved: ResolvedSettings): AppConfig {
 }
 
 /**
- * EditableSettingSource excludes read-only policy/managed (CC).
+ * EditableSettingSource excludes read-only policy/managed.
  * SSO may write `user` or `project` — when paths collapse they hit the same file.
  * `opts.ssoMode` is retained for call-site compatibility (no longer blocks user).
  */
@@ -982,7 +982,7 @@ export function patchSettings(
   return resolveSettings(cwd)
 }
 
-/** Persist Always-allow to user `settings.json` (CC `permissions.additionalDirectories`). */
+/** Persist Always-allow to user `settings.json` (`permissions.additionalDirectories`). */
 export function persistAlwaysAllowDirectory(
   cwd: string,
   absDir: string,

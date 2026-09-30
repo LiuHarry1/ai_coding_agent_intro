@@ -1,5 +1,5 @@
 /**
- * Managed skills / agents / commands / rules (CC policy dirs).
+ * Managed skills / agents / commands / rules (policy dirs).
  *   conda activate llm_ft && npx tsx src/scripts/test-managed-extensions.ts
  */
 import * as fs from 'fs'

@@ -2,10 +2,10 @@ import React, { useState } from 'react'
 import { formatWorkedDuration } from '../lib/timeline.js'
 
 /**
- * Cursor default-chat `workGroup` disclosure (completed turn only).
+ * Default-chat `workGroup` disclosure (completed turn only).
  *
- * Label ≈ action "Worked" + details `g0m(durationMs)` → "for 7s".
- * With running tasks: "N working" (Cursor `runningTaskCount`).
+ * Label ≈ action "Worked" + details `formatWorkedDuration(durationMs)` → "for 7s".
+ * With running tasks: "N working" (`runningTaskCount`).
  *
  * Controlled open via `open` + `onOpenChange` (parent keys by stable rowId).
  */

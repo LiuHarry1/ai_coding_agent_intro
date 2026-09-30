@@ -1,5 +1,5 @@
 /**
- * Task type registry — Claude Code `src/tasks.ts`.
+ * Task type registry.
  */
 import type { Task, TaskType } from './Task.js'
 import { LocalShellTask } from './tasks/LocalShellTask/LocalShellTask.js'

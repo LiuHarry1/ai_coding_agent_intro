@@ -1,7 +1,6 @@
 /**
- * Cursor-style tool action labels: { loading, completed, error }.
+ * Tool action labels: { loading, completed, error }.
  * One card flips the verb — not two separate UI steps.
- * Aligned with Cursor `tool-action-labels.js` (Mdc / Pdc / hNc).
  */
 
 const LABELS = {
@@ -12,7 +11,7 @@ const LABELS = {
   shellBackground: { loading: 'Running', completed: 'Shell', error: 'Run' },
   read: { loading: 'Reading', completed: 'Read', error: 'Read' },
   grep: { loading: 'Grepping', completed: 'Grepped', error: 'Grep' },
-  // Cursor globToolCall: Searching files / Searched files / Search files
+  // Glob: Searching files / Searched files / Search files
   glob: {
     loading: 'Searching files',
     completed: 'Searched files',
@@ -77,7 +76,7 @@ export function toolActionLabel(toolCase, opts = {}) {
 }
 
 /**
- * Cursor error polish (`Iue`): keep path/description when useful,
+ * Error polish: keep path/description when useful,
  * otherwise details become "attempted".
  * @param {string | null | undefined} details
  * @param {boolean} hasError

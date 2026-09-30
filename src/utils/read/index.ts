@@ -65,15 +65,15 @@ export interface ReadFileResult {
 }
 
 /**
- * Expand a tool path the way Claude Code `expandPath` does: relative to
- * `cwd`, `~`, or an already-absolute path. Never fails because the result
- * is outside the workspace — permission checks happen afterwards.
+ * Expand a tool path: relative to `cwd`, `~`, or an already-absolute path.
+ * Never fails because the result is outside the workspace — permission checks
+ * happen afterwards.
  */
 export type ResolveFileInCwdOptions = {
   /**
    * When true, absolute paths outside cwd are returned and the caller must
-   * enforce sandbox. Default false keeps Claude Code-style workspace-only
-   * resolution (except session task-output internals).
+   * enforce sandbox. Default false keeps workspace-only resolution (except
+   * session task-output internals).
    */
   allowOutsideWorkspace?: boolean
 }
@@ -176,7 +176,7 @@ export async function readFileCore(
 }
 
 /**
- * Claude Code FileReadTool PDF branch:
+ * PDF read branch:
  * 1. pages → pdftoppm → image follow-ups
  * 2. pageCount > 10 → error (must use pages)
  * 3. native PDF supported → document follow-up
@@ -355,7 +355,7 @@ export function formatReadOutputAsToolString(output: ReadOutput): string {
     case 'notebook':
       return `${output.file.filePath} (${output.file.cells.length} cells)\n${JSON.stringify(output.file.cells, null, 2)}`
     case 'pdf':
-      // Metadata only — document bytes are in the follow-up (CC DocumentBlockParam).
+      // Metadata only — document bytes are in the follow-up.
       return `PDF file read: ${output.file.filePath} (${formatPdfFileSize(output.file.originalSize)})`
     case 'parts':
       return `PDF pages extracted: ${output.file.count} page(s) from ${output.file.filePath} (${formatPdfFileSize(output.file.originalSize)})`

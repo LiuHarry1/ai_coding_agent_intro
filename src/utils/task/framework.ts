@@ -1,6 +1,5 @@
 /**
- * Session-scoped task map — Claude Code `utils/task/framework.ts`
- * (AppState.tasks replaced by per-session Map).
+ * Session-scoped task map — one Map per session rather than global app state.
  */
 import type { TaskStateBase, TaskStatus, TaskType } from '../../Task.js'
 import { isTerminalTaskStatus } from '../../Task.js'

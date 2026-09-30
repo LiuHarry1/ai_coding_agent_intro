@@ -2,11 +2,11 @@
  * Single dispatcher tool exposing all loaded skills. Mirrors the `task`
  * tool's "one tool, many subagent_types" pattern.
  *
- * The model calls `Skill({ skill, args })` (CC field names) and we either:
+ * The model calls `Skill({ skill, args })` and we either:
  *
  *   - inline:  expand the skill body ($ARGUMENTS / $1 / $name + !`shell` +
  *              @file), return `Launching skill: name` as the tool result,
- *              and inject the body as a meta user message (CC newMessages).
+ *              and inject the body as a meta user message.
  *
  *   - fork:    spin up a fresh subagent run with the expanded body as the
  *              system prompt. Used for skills that need many tool calls —
@@ -144,7 +144,7 @@ export function createSkillTool(
             throw e
           }
 
-          // ── inline ── CC: short tool_result + body as meta newMessages.
+          // ── inline ── short tool_result + body as a meta message.
           if (skill.context === 'inline') {
             if (context.session) {
               addInvokedSkill(

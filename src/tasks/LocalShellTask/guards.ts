@@ -1,5 +1,5 @@
 /**
- * LocalShellTask state — Claude Code `tasks/LocalShellTask/guards.ts`.
+ * LocalShellTask state + type guards.
  */
 import type { TaskStateBase } from '../../Task.js'
 import type { ShellKind } from '../../core/shell/spawn-shell.js'

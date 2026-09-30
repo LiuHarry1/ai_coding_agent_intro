@@ -1,5 +1,5 @@
 /**
- * Unit smoke for CC-aligned dump-prompts (no live LLM required).
+ * Unit smoke for dump-prompts (no live LLM required).
  * Run: DUMP_PROMPTS=1 npx tsx src/scripts/test-dump-prompts.ts
  */
 import assert from 'node:assert/strict'

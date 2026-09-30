@@ -7,7 +7,7 @@ import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 
 /**
  * Compact row for real MCP tool calls (never folded into Explored).
- * Cursor keeps these as their own rows with a clear server/tool label.
+ * These keep their own rows with a clear server/tool label.
  */
 
 function argHint(args) {

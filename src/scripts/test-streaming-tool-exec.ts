@@ -1,5 +1,5 @@
 /**
- * StreamingToolExecutor — concurrency-safe tools run in parallel (CC-aligned).
+ * StreamingToolExecutor — concurrency-safe tools run in parallel.
  */
 import assert from 'node:assert/strict'
 import { StreamingToolExecutor } from '../services/tools/StreamingToolExecutor.js'

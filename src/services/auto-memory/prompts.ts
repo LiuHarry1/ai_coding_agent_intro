@@ -1,6 +1,6 @@
 /**
- * Auto-memory system + extract prompts, and CC-aligned buildMemoryPrompt
- * used by Agent Memory (memdir.ts parity — no extra bullets).
+ * Auto-memory system + extract prompts, and the buildMemoryPrompt
+ * used by Agent Memory (no extra bullets).
  * Prefetch mode uses skipIndex (no MEMORY.md Step 2 / no index inject).
  */
 import * as fs from 'fs'
@@ -53,13 +53,14 @@ function rememberSaveGuidance(vocabulary: MemoryVocabulary): string {
   return 'If the user explicitly asks you to remember something, save it immediately as whichever type fits best. Preserve exact facts, names, paths, identifiers, codes, and literal values verbatim; do not generalize them away. If they ask you to forget something, find and remove the relevant entry.'
 }
 
-/** Guidance when the memory directory already exists. (CC DIR_EXISTS_GUIDANCE) */
+/** Guidance when the memory directory already exists. */
 export const DIR_EXISTS_GUIDANCE =
   'This directory already exists — write to it directly with the Write tool (do not run mkdir or check for its existence).'
 
 /**
- * CC buildSearchingPastContextSection — gated by tengu_coral_fern (default off).
- * Keep the hook so agent memory lines match CC structure; return [] when off.
+ * Past-context search section — gated by tengu_coral_fern (default off);
+ * returns [] when off. Keep the hook so agent memory lines keep a stable
+ * structure.
  */
 export function buildSearchingPastContextSection(
   _memoryDir: string,
@@ -68,8 +69,8 @@ export function buildSearchingPastContextSection(
 }
 
 /**
- * CC buildMemoryLines — shared by Agent Memory (includes MEMORY.md content)
- * and the typed-memory guide. Do not add product-only bullets here.
+ * Shared by Agent Memory (includes MEMORY.md content) and the typed-memory
+ * guide. Do not add product-only bullets here.
  */
 export function buildMemoryLines(
   displayName: string,
@@ -144,7 +145,7 @@ export function buildMemoryLines(
 }
 
 /**
- * CC buildMemoryPrompt — Agent Memory (no getClaudeMds equivalent).
+ * Agent Memory prompt.
  * Embeds MEMORY.md index content when present.
  */
 export function buildMemoryPrompt(params: {

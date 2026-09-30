@@ -1,5 +1,5 @@
 /**
- * Visual grounding helpers (Cursor-style highlight + bounding box).
+ * Visual grounding helpers (highlight + bounding box).
  */
 
 import type { BrowserBackend } from '../types.js'

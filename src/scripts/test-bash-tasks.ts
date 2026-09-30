@@ -47,7 +47,7 @@ async function main() {
   assert.equal(getTaskOutput(id), 'hello\nworld\n')
   assert.ok(getTaskOutputPath(id).endsWith(`${id}.output`))
 
-  // Read must allow session task outputs outside project cwd (CC project-temp).
+  // Read must allow session task outputs outside project cwd (project-temp).
   const outPath = getTaskOutputPath(id)
   assert.equal(isReadableInternalPath(outPath), true)
   const foreignCwd = path.resolve('/tmp/other-project-not-agent')

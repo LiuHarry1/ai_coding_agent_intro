@@ -155,7 +155,7 @@ export function resolveWorkerLaunch(): WorkerLaunch {
   // Compiled binaries re-run their embedded entry, so `execPath worker.cjs
   // --stdio` would start the chat stdio agent and never send `ready` — the
   // Control Plane would then wait out the whole bind timeout on every turn.
-  // Dispatch on our own flag instead (CC: ripgrep.ts / computerUse/setup.ts).
+  // Dispatch on our own flag instead.
   if (isInBundledMode()) {
     return {
       command: process.execPath,

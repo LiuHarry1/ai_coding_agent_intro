@@ -21,7 +21,7 @@
   cursor: default;
 }
 
-/* ── Cursor-style subagent timeline row (flat tool-row tier) ───── */
+/* ── Subagent timeline row (flat tool-row tier) ────────────────── */
 .subagent-timeline-row {
   margin: 0;
 }

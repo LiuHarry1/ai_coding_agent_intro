@@ -1,5 +1,5 @@
 /**
- * CC-aligned tool permission gate.
+ * Tool permission gate.
  *
  * `createCanUseTool` runs `tool.checkPermissions`, then:
  *   - allow → execute
@@ -103,7 +103,7 @@ function applyAlwaysAllow(
 }
 
 /**
- * CC `hasPermissionsToUseTool`: checkPermissions → dontAsk maps ask to deny
+ * Permission pipeline: checkPermissions → dontAsk maps ask to deny
  * → default mode prompts Allow / Always / Reject.
  */
 export function createCanUseTool(opts: CreateCanUseToolOptions): CanUseToolFn {

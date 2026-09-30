@@ -52,7 +52,7 @@ export type ReadPdfPagesOutput = {
   }
 }
 
-/** Claude Code `parts` — PDF pages rendered to JPEG under `outputDir`. */
+/** `parts` — PDF pages rendered to JPEG under `outputDir`. */
 export type ReadPdfPartsOutput = {
   type: 'parts'
   file: {
@@ -78,7 +78,7 @@ export type ReadOutput =
   | ReadPdfPartsOutput
   | ReadFileUnchangedOutput
 
-/** Loose schema for UI/wire validation (CC-style outputSchema gate). */
+/** Loose schema for UI/wire validation. */
 export const ReadOutputSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('text'),

@@ -74,7 +74,7 @@ export interface IProvider {
    */
   supportsToolResultContentBlocks?(): boolean
   /**
-   * Whether the model accepts native PDF document / file parts (Claude Code
+   * Whether the model accepts native PDF document / file parts (the
    * `document` block). When false, Read(PDF) renders pages via pdftoppm and
    * attaches images instead. Omitted → false.
    */

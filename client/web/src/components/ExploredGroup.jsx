@@ -15,7 +15,7 @@ import { toolActionLabel } from '../lib/tool-action-labels.js'
 const NESTED_RENDER_CAP = 40
 
 /**
- * Cursor explore / browser density:
+ * Explore / browser density:
  *   collapsed → muted "Explored N files" / "Ran N browser actions"
  *   expanded  → nested tool rows (bodies still collapsed)
  *

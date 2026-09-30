@@ -4,7 +4,7 @@ import { agentApi } from '../lib/api/agent.js'
 
 /**
  * Shown while a browser session is live. The user can take the page back
- * (Cursor Take Control) without waiting for the model to call browser_lock.
+ * without waiting for the model to call browser_lock.
  *
  * Poll `/browser/lock` only for the browser specialist. Default / SSO
  * agents deny `browser_*` tools — a 2s poll would still hit the API and

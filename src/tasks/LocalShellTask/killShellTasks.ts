@@ -1,5 +1,5 @@
 /**
- * Kill helpers — Claude Code `tasks/LocalShellTask/killShellTasks.ts`.
+ * Kill helpers for local shell tasks.
  */
 import type { ExecutionBackend } from '../../execution/execution-backend.js'
 import { getTask, updateTaskState } from '../../utils/task/framework.js'
@@ -37,7 +37,7 @@ export function killTask(
         code: t.result?.code ?? null,
         interrupted: true,
       },
-      notified: true, // suppress duplicate completion XML (CC TaskStop behavior)
+      notified: true, // suppress duplicate completion XML after an explicit stop
     }
   })
 }

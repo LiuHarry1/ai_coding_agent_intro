@@ -1,14 +1,13 @@
 /**
- * Managed (policy) paths — aligned with Claude Code
- * `utils/settings/managedPath.ts` + `getSkillsPath('policySettings', …)`.
+ * Managed (policy) paths.
  *
  * Layout (Linux default):
  *
  *   /etc/ai-agent/
  *     managed-settings.json
  *     managed-settings.d/
- *     AGENTS.md | CLAUDE.md     # CC: CLAUDE.md at managed root
- *     .ai-agent/                # CC: .claude/ under managed root
+ *     AGENTS.md | CLAUDE.md
+ *     .ai-agent/
  *       skills/ commands/ agents/ rules/
  *
  * Never under user HOME / getUserAppDir().
@@ -22,29 +21,28 @@ import {
   type AppSubdir,
 } from './app-dir.js'
 
-/** Filename for the base managed settings file (CC: managed-settings.json). */
+/** Filename for the base managed settings file. */
 export const MANAGED_SETTINGS_FILE_NAME = 'managed-settings.json'
 
-/** Drop-in directory basename (CC: managed-settings.d). */
+/** Drop-in directory basename. */
 export const MANAGED_SETTINGS_DROPIN_DIRNAME = 'managed-settings.d'
 
-/** Managed memory entry (product name). CC uses CLAUDE.md at managed root. */
+/** Preferred managed memory filename. */
 export const MANAGED_AGENTS_MD_FILE_NAME = 'AGENTS.md'
 
-/** CC managed memory filename — also accepted as alias. */
+/** Alternate managed memory filename — also accepted as an alias. */
 export const MANAGED_CLAUDE_MD_FILE_NAME = 'CLAUDE.md'
 
-/** Subdirs under `{managed}/.ai-agent/` (CC: `{managed}/.claude/`). */
+/** Subdirs under `{managed}/.ai-agent/`. */
 export type ManagedAppSubdir = AppSubdir | 'rules'
 
-/** Disk scopes for extension directories (CC SettingSource subset). */
+/** Disk scopes for extension directories. */
 export type ExtensionDirSource = 'managed' | 'user' | 'project'
 
 let cachedManagedDir: string | undefined
 
 /**
- * Override for tests. CC uses CLAUDE_CODE_MANAGED_SETTINGS_PATH (ant-only);
- * we always honor AI_AGENT_MANAGED_DIR.
+ * Override for tests: we always honor AI_AGENT_MANAGED_DIR.
  */
 export function getManagedDir(): string {
   const override = process.env.AI_AGENT_MANAGED_DIR?.trim()
@@ -77,22 +75,19 @@ export function getManagedSettingsDropInDir(): string {
 }
 
 /**
- * CC: `join(getManagedFilePath(), '.claude')`
- * Product: `join(getManagedDir(), getAppDirName())` e.g. `/etc/ai-agent/.ai-agent`.
+ * Managed app dir — `join(getManagedDir(), getAppDirName())`,
+ * e.g. `/etc/ai-agent/.ai-agent`.
  */
 export function getManagedAppDir(): string {
   return join(getManagedDir(), getAppDirName())
 }
 
-/**
- * CC: `getSkillsPath('policySettings', dir)` →
- * `join(getManagedFilePath(), '.claude', dir)`.
- */
+/** Absolute path to `{managed}/.ai-agent/<kind>`. */
 export function getManagedSubdir(kind: ManagedAppSubdir): string {
   return join(getManagedAppDir(), kind)
 }
 
-/** CC: `getManagedClaudeRulesDir()` */
+/** Absolute path to the managed rules directory. */
 export function getManagedRulesDir(): string {
   return getManagedSubdir('rules')
 }
@@ -104,7 +99,7 @@ export function getManagedAgentsMdPath(): string {
 
 /**
  * Candidate managed memory files in load order (first existing wins).
- * CC: `{managed}/CLAUDE.md`; we prefer `AGENTS.md`, then `CLAUDE.md`.
+ * We prefer `AGENTS.md`, then `CLAUDE.md`.
  */
 export function getManagedMemoryEntryPaths(): string[] {
   const root = getManagedDir()
@@ -115,7 +110,7 @@ export function getManagedMemoryEntryPaths(): string[] {
 }
 
 /**
- * CC-style resolver for extension directories (skills / agents / commands / rules).
+ * Resolver for extension directories (skills / agents / commands / rules).
  *
  * - managed → `{managedDir}/.ai-agent/<kind>`
  * - user → `~/.ai-agent/<kind>` (rules: `~/.ai-agent/rules`)
@@ -142,8 +137,7 @@ export function getExtensionDir(
 }
 
 /**
- * CC: `CLAUDE_CODE_DISABLE_POLICY_SKILLS` — skip managed skills discovery.
- * Same env name for strict alignment.
+ * Honors `CLAUDE_CODE_DISABLE_POLICY_SKILLS` to skip managed skills discovery.
  */
 export function isPolicySkillsDisabled(): boolean {
   const v = process.env.CLAUDE_CODE_DISABLE_POLICY_SKILLS

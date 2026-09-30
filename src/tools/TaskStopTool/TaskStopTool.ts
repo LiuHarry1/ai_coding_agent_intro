@@ -1,5 +1,5 @@
 /**
- * TaskStop — Claude Code TaskStopTool / KillShell.
+ * TaskStop — stop a background shell task.
  */
 import { tool } from 'ai'
 import { z } from 'zod'

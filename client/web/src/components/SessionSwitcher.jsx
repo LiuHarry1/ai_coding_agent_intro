@@ -5,7 +5,7 @@ import { relativeTime } from '../lib/utils.js'
 import { getUser, isSuperUser } from '../lib/auth.js'
 
 /**
- * Cursor-style session switcher pill that lives in the chat header. Click
+ * Session switcher pill that lives in the chat header. Click
  * opens a floating dropdown with the session list, search, and "+ New".
  * Replaces the old left-side Sidebar.
  */

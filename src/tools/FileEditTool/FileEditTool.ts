@@ -22,7 +22,7 @@ import {
 } from '../../utils/read/read-file-state.js'
 import type { ReadFileState } from '../../utils/read/types.js'
 
-/** Mode B: model gets `message` ACK; UI gets before/after for Cursor-style diff. */
+/** Mode B: model gets `message` ACK; UI gets before/after for the diff view. */
 export const EditFileOutputSchema = z.object({
   type: z.literal('update'),
   filePath: z.string(),

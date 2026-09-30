@@ -19,7 +19,7 @@ import { isCompactBoundaryMessage } from '../messages/compact-boundary.js'
  * Needed for chat-completions providers, which `JSON.stringify` a `content`
  * output — the base64 would land in the prompt as text the model can't see.
  * The relocated form is the same channel Read already uses for image files,
- * and mirrors how CC delivers extracted PDF pages.
+ * and the same one extracted PDF pages are delivered on.
  */
 function relocateToolResultImages(messages: RoleMessage[]): RoleMessage[] {
   const out: RoleMessage[] = []
@@ -68,8 +68,8 @@ function relocateToolResultImages(messages: RoleMessage[]): RoleMessage[] {
 /**
  * Drop UI-only `toolUseResult` from tool-result parts before the AI SDK /
  * provider sees them. Session JSONL and in-memory history keep the field;
- * this is the equivalent of Claude Code only sending `message.content` to
- * the API while keeping `toolUseResult` on the envelope.
+ * only `message.content` reaches the API while `toolUseResult` stays on
+ * the envelope.
  *
  * Also downgrades multimodal tool results for providers that can't carry
  * them. History keeps the blocks either way, so switching providers changes

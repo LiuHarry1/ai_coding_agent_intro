@@ -5,7 +5,7 @@ import rehypeHighlight from 'rehype-highlight'
 import { getMdComponents } from '../lib/markdown-components.jsx'
 
 /**
- * Cursor-like thinking row: one-line label while streaming; body only when
+ * Thinking row: one-line label while streaming; body only when
  * the user expands. Never auto-open — stream updates must not dump reasoning
  * (or leaked system-reminder / tool-prompt text) into the transcript.
  */

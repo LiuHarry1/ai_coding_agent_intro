@@ -1,9 +1,9 @@
 /**
- * Bash quoting helpers aligned with Claude Code `utils/bash/shellQuoting.ts`.
+ * Bash quoting helpers.
  *
  * We do not depend on `shell-quote` (see `argumentSubstitution.ts`). The
- * eval-wrapper uses POSIX single-quoting, which is what CC uses for heredocs
- * and as the shell-quote fallback.
+ * eval-wrapper uses POSIX single-quoting for heredocs and as the shell-quote
+ * fallback.
  */
 
 function quoteForEval(command: string): string {
@@ -37,8 +37,8 @@ function containsMultilineString(command: string): boolean {
 
 /**
  * Insert `< /dev/null` before the first top-level `|` (not `||`).
- * CC `rearrangePipeCommand`: redirect must apply to the first command, not
- * the last stage of the pipeline (otherwise `rg | wc` reads /dev/null).
+ * The redirect must apply to the first command, not the last stage of the
+ * pipeline (otherwise `rg | wc` reads /dev/null).
  */
 function insertStdinRedirectBeforeFirstPipe(command: string): string | null {
   let single = false
@@ -73,7 +73,7 @@ function insertStdinRedirectBeforeFirstPipe(command: string): string | null {
 }
 
 /**
- * Quotes a command for `eval …` (CC `quoteShellCommand`).
+ * Quotes a command for `eval …`.
  * Regular commands: `'cmd' '<' /dev/null` so eval concatenates a redirect.
  * Pipes: bake `< /dev/null` into the first stage, then single-quote the whole string.
  */
@@ -110,7 +110,6 @@ export function shouldAddStdinRedirect(command: string): boolean {
 
 /**
  * Rewrites Windows CMD-style `>nul` redirects to POSIX `/dev/null`.
- * See anthropics/claude-code#4928 / CC `rewriteWindowsNullRedirect`.
  */
 const NUL_REDIRECT_REGEX = /(\d?&?>+\s*)[Nn][Uu][Ll](?=\s|$|[|&;)\n])/g
 

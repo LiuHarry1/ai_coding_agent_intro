@@ -42,8 +42,7 @@ export function extractRecentlyReadFiles(
  *
  * Files the model can still see as Read results in `preservedMessages` are
  * skipped: the preserved tail already carries that content, so restoring it
- * again is pure duplication (CC applies the same diff in
- * `createPostCompactFileAttachments`).
+ * again is pure duplication.
  */
 export function restoreRecentFiles(
   recentPaths: string[],

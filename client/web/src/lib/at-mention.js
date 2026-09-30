@@ -90,7 +90,7 @@ export function formatAtMentionReplacement(displayPath, options) {
   return `${displayPath}${suffix}`
 }
 
-/** Format replacement for a subagent mention (CC @"type (agent)" / @agent-type). */
+/** Format replacement for a subagent mention (@"type (agent)" / @agent-type). */
 export function formatAgentMentionReplacement(agentType, options = {}) {
   const { quoted = true } = options
   if (quoted) {

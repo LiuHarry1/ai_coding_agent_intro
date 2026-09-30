@@ -1,5 +1,5 @@
 /**
- * Unit checks for CC-aligned filesystem permissions.
+ * Unit checks for filesystem permissions.
  * Run: npx tsx src/scripts/test-filesystem-permissions.ts
  */
 import * as fs from 'fs'
@@ -134,7 +134,7 @@ try {
     throw new Error('relative allow should match under additionalWorkingDirectories')
   }
 
-  // CC: leading `/` is project-root-relative, not filesystem-absolute.
+  // A leading `/` is project-root-relative, not filesystem-absolute.
   const nestedDir = path.join(root, 'nested')
   const nestedFile = path.join(nestedDir, 'a.txt')
   fs.mkdirSync(nestedDir, { recursive: true })

@@ -1,5 +1,5 @@
 /**
- * When browser_* tools are available on the main thread (CC-style opt-in).
+ * When browser_* tools are available on the main thread.
  *
  * - `browser` primary agent → always on (eager load in assembleToolPool)
  * - everyone else → off unless `browser.enabled: true` (deferred + ToolSearch)

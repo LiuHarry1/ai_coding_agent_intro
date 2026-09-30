@@ -1,5 +1,5 @@
 /* Explored density group */
-/* ── Explored N tools (Cursor-style density group) ─────────────── */
+/* ── Explored N tools (density group) ──────────────────────────── */
 .explored-group-body {
   /* Indent under the Explored label (past the group chevron) */
   margin: 1px 0 2px 14px;
@@ -17,7 +17,7 @@
 .explored-group-step > .tool-card {
   margin: 0;
 }
-/* Cursor: whole "Explored 9 files" line is muted secondary text */
+/* The whole "Explored 9 files" line is muted secondary text */
 .explored-group .tool-row-label,
 .explored-group .tool-row-title {
   color: var(--text-muted);

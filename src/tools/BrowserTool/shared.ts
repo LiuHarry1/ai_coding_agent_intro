@@ -3,7 +3,7 @@
  * projection, one error funnel.
  *
  * Three-layer budgets:
- * - Capture fills complete YAML on BrowserToolOutput (Cursor: no middle-omit)
+ * - Capture fills complete YAML on BrowserToolOutput (no middle-omit)
  * - Over SNAPSHOT_INLINE_MAX_BYTES the full tree is spilled; mapBrowserOutput
  *   wraps remaining text to BROWSER_MODEL_RESULT_MAX_CHARS
  * - projectBrowserWireDetails builds SSE/session details without raw trees
@@ -245,7 +245,7 @@ function utf8Bytes(text: string): number {
 }
 
 /**
- * Persist a snapshot sidecar when the complete YAML exceeds Cursor's 25.6KB
+ * Persist a snapshot sidecar when the complete YAML exceeds the 25.6KB
  * inline cap. The file is the full tree (including middle form fields). The
  * model-facing `snapshot` is replaced with the first SNAPSHOT_PREVIEW_LINES.
  */
@@ -431,7 +431,7 @@ export async function observe(
   const mode: SnapshotMode =
     opts.mode ?? (opts.compact ? 'efficient' : 'full')
   const efficient = mode === 'efficient'
-  // Cursor keeps compact budgeting and interactive-only filtering orthogonal.
+  // Compact budgeting and interactive-only filtering stay orthogonal.
   // Post-action snapshots need status text such as "saved" or an uploaded file
   // name, so only an explicit interactive=true may remove content nodes.
   const interactive = opts.interactive ?? false
@@ -725,9 +725,9 @@ export function mapBrowserOutput(
 
 /**
  * Browser failures are almost always recoverable by re-observing the page, so
- * they come back as tool text rather than thrown errors. Cursor does not dump
- * a YAML tree here — a short classified error plus Recovery action forces a
- * dedicated snapshot so refs stay canonical.
+ * they come back as tool text rather than thrown errors. We do not dump a YAML
+ * tree here — a short classified error plus Recovery action forces a dedicated
+ * snapshot so refs stay canonical.
  */
 const RECOVERY_RULES: Array<{
   patterns: string[]

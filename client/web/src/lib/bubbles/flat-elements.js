@@ -1,5 +1,5 @@
 /**
- * View-model over canonical flat bubbles (Cursor flatElements / density).
+ * View-model over canonical flat bubbles (flatElements / density).
  * Does NOT write groups back into the store.
  */
 
@@ -105,7 +105,7 @@ function hasRealWork(ids, byId) {
 }
 
 /**
- * Cursor `$ug`: unwrap a workGroup that only contains one row, unless that
+ * Unwrap a workGroup that only contains one row, unless that
  * row is an explore/browser group with multiple members.
  */
 function keepWorkGroup(viewRows) {
@@ -180,7 +180,7 @@ export function buildFlatElements(
       i++
     }
 
-    // Cursor Gug (default chat, not project): while the turn is generating,
+    // Default chat (not project): while the turn is generating,
     // do not emit workGroup — tools/thinking stay flat. Worked wraps the
     // prefix only after a completed turn has a final assistant reply.
     const liveTurn =

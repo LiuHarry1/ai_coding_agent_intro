@@ -6,7 +6,7 @@ import BubbleRow from './BubbleRow.jsx'
 import ToolGroupRow from './ToolGroupRow.jsx'
 
 /**
- * Cursor "Worked for …" disclosure — body rows subscribe by bubble/group id.
+ * "Worked for …" disclosure — body rows subscribe by bubble/group id.
  */
 function WorkGroupRow({
   memberIds,
@@ -16,7 +16,7 @@ function WorkGroupRow({
 }) {
   const [open, setOpen] = useState(defaultOpen)
 
-  // Cursor: last turn stays open only while it is last. A new user message
+  // The last turn stays open only while it is last. A new user message
   // makes this group not-last (defaultOpen false) and it collapses.
   useEffect(() => {
     if (!defaultOpen) setOpen(false)

@@ -1,5 +1,5 @@
-/* Turn-level Worked fold (Cursor workGroup) */
-/* ── Turn-level work fold (Cursor default `workGroup`) ──────────
+/* Turn-level Worked fold (workGroup) */
+/* ── Turn-level work fold (default `workGroup`) ─────────────────
    Only on completed turns; final answer stays outside the fold. */
 .work-group {
   margin: 2px 0 4px;
@@ -55,7 +55,7 @@
   gap: 0.35em;
 }
 .work-group-action {
-  /* Cursor ui-step-group tertiary: whole "Worked for Ns" is muted */
+  /* Tertiary: the whole "Worked for Ns" line is muted */
   color: var(--text-muted);
   font-weight: 400;
 }
@@ -67,7 +67,7 @@
   margin-left: 2px;
 }
 .work-group-body {
-  /* Cursor: shallow indent — flat status lines, not a file-tree */
+  /* Shallow indent — flat status lines, not a file-tree */
   margin: 1px 0 2px 10px;
   display: flex;
   flex-direction: column;
@@ -77,7 +77,7 @@
   display: none !important;
 }
 
-/* Cursor Worked children: muted one-liners, no grey pill bars / cards. */
+/* Worked children: muted one-liners, no grey pill bars / cards. */
 .work-group-body .tool-row-header {
   background: transparent !important;
   padding: 1px 0;

@@ -1,7 +1,7 @@
 /**
  * Frames that stall Playwright's accessibility snapshot (PDF viewers, blob
  * previews). Playwright `ariaSnapshot({ mode: "ai" })` recursively
- * `enter-frame`s every iframe; Cursor's browser does not (iframe content is
+ * `enter-frame`s every iframe; we never descend into them (iframe content is
  * not accessible). Detach these before snapshot/screenshot.
  */
 

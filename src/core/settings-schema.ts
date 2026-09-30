@@ -1,5 +1,5 @@
 /**
- * Strict Zod schema for settings files (CC-aligned field names).
+ * Strict Zod schema for settings files.
  * Invalid files are rejected — no silent coercion.
  */
 import { z } from 'zod'
@@ -131,14 +131,14 @@ const AgentsConfigSchema = z.object({
 })
 
 const PermissionsSchema = z.object({
-  /** Directories auto-allowed for File tools (CC Always allow / working dirs). */
+  /** Directories auto-allowed for File tools (Always allow / working dirs). */
   additionalDirectories: z.array(z.string()).optional(),
-  /** CC `Tool` / `Tool(pattern)` rules that auto-allow (desktop only). */
+  /** `Tool` / `Tool(pattern)` rules that auto-allow (desktop only). */
   allow: z.array(z.string()).optional(),
-  /** CC `Tool` / `Tool(pattern)` rules that always deny (deny wins). */
+  /** `Tool` / `Tool(pattern)` rules that always deny (deny wins). */
   deny: z.array(z.string()).optional(),
   /**
-   * Filesystem defaultMode (implemented subset of CC).
+   * Filesystem defaultMode (implemented subset).
    * `default` → ask outside; `dontAsk` → deny outside;
    * `bypassPermissions` → allow outside (deny still wins).
    * Legacy `acceptEdits` / `plan` coerce to `default`.

@@ -1,9 +1,9 @@
 /**
- * Session-scoped invoked-skill registry (CC STATE.invokedSkills).
+ * Session-scoped invoked-skill registry.
  *
  * Inline Skill / `/skill` register the expanded body here so full compact
  * can re-inject it as an `invoked_skills` attachment. Multi-session HTTP
- * cannot use CC's process-global Map — the Session object is the owner.
+ * cannot use a process-global Map — the Session object is the owner.
  */
 import {
   isAttachmentMessage,
@@ -54,8 +54,8 @@ export function getInvokedSkillsForAgent(
 
 /**
  * Rebuild invokedSkills (and the skill-listing fire-once latch) from the
- * transcript. CC `restoreSkillStateFromMessages` — needed so a compact after
- * resume still has skill bodies to re-attach.
+ * transcript. Needed so a compact after resume still has skill bodies to
+ * re-attach.
  */
 export function restoreInvokedSkillsFromMessages(
   session: Session,

@@ -1,5 +1,5 @@
 /**
- * Format task output for the model — Claude Code `outputFormatting.ts`.
+ * Format task output for the model.
  */
 import { getTaskOutputPath } from './diskOutput.js'
 

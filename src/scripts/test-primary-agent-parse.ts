@@ -81,7 +81,7 @@ assert(findPrimaryAgent([sub.agent!], 'helper') === null, 'sub not primary')
 const isolated = browserAgentSessionSection('isolated')
 assert(isolated.includes('agent-only Chrome'), 'isolated names the profile')
 assert(isolated.includes('browser_navigate'), 'isolated starts with navigate')
-assert(!isolated.includes('Electron'), 'session is not Cursor-host CDP copy')
+assert(!isolated.includes('Electron'), 'session is not a host-app CDP copy')
 assert(
   !isolated.includes('Runtime.evaluate'),
   'CDP usage lives on the tool, not the session',
@@ -95,7 +95,7 @@ assert(
 assert(extension.includes('browser_lock'), 'extension names lock for captcha')
 assert(
   !extension.includes('Electron'),
-  'extension session is not Cursor-host copy',
+  'extension session is not a host-app copy',
 )
 assert(
   !extension.includes('browser.mode'),
@@ -121,15 +121,15 @@ assert(
 )
 assert(
   CDP_DESCRIPTION.includes('Do not use CDP Input'),
-  'CDP description matches Cursor Input.* denial',
+  'CDP description states the Input.* denial',
 )
 assert(
   !CDP_DESCRIPTION.includes('Electron'),
-  'CDP description is not Cursor-host copy',
+  'CDP description is not a host-app copy',
 )
 assert(
   !CDP_DESCRIPTION.includes('DOM.getDocument'),
-  'cdp tool description stays Cursor-short; DOM tree denial is runtime policy',
+  'cdp tool description stays short; DOM tree denial is runtime policy',
 )
 assert(LOCK_DESCRIPTION.includes('unlock'), 'lock prompt names unlock')
 assert(LOCK_DESCRIPTION.includes('lock'), 'lock prompt names lock')
@@ -148,7 +148,7 @@ assert(
 )
 assert(
   !CLICK_DESCRIPTION.includes('x/y') && CLICK_DESCRIPTION.includes('by ref'),
-  'click is ref-only like Cursor',
+  'click is ref-only',
 )
 assert(
   MOUSE_CLICK_XY_DESCRIPTION.includes('visual-only') &&
@@ -158,7 +158,7 @@ assert(
 )
 assert(
   TYPE_DESCRIPTION.toLowerCase().includes('replace'),
-  'type documents BaiX fill-replace default (Cursor splits type/fill)',
+  'type documents BaiX fill-replace default (no split type/fill)',
 )
 assert(
   !TYPE_DESCRIPTION.includes('do not reuse old refs'),
@@ -170,7 +170,7 @@ assert(
 )
 assert(
   SNAPSHOT_DESCRIPTION.includes('better than screenshot'),
-  'snapshot matches Cursor one-liner role',
+  'snapshot keeps its one-liner role',
 )
 assert(
   !SNAPSHOT_DESCRIPTION.includes('never full'),
@@ -182,7 +182,7 @@ assert(
 )
 assert(
   !SNAPSHOT_DESCRIPTION.includes('Cursor'),
-  'snapshot tool description is not Cursor-branded',
+  'snapshot tool description carries no vendor branding',
 )
 
 const browserMd = readFileSync(
@@ -224,7 +224,7 @@ assert(
 )
 assert(
   !browserMd.replaceAll('Cursor defaults', '').includes('Cursor'),
-  'browser.md is not Cursor-branded',
+  'browser.md carries no vendor branding',
 )
 assert(
   !browserMd.includes('never full'),
@@ -248,7 +248,7 @@ assert(
 )
 assert(
   browserMd.includes('main source of truth'),
-  'browser.md matches Cursor snapshot-as-source-of-truth note',
+  'browser.md keeps the snapshot-as-source-of-truth note',
 )
 assert(
   browserMd.includes('Do not use this as fallback') ||

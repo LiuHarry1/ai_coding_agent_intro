@@ -12,7 +12,7 @@ import { isPowerShellToolEnabled } from '../../core/shell/shell-utils.js'
 
 export { FILE_READ_TOOL_NAME }
 
-/** Short registry / search hint (CC `DESCRIPTION`). */
+/** Short registry / search hint. */
 export const DESCRIPTION = 'Read a file from the local filesystem.'
 
 const LINE_FORMAT_INSTRUCTION =
@@ -28,9 +28,9 @@ function directoryListTool(): string {
 }
 
 /**
- * Model-facing Read prompt (CC `renderPromptTemplate`).
+ * Model-facing Read prompt.
  *
- * Deltas we keep because they match this runtime:
+ * Behavior specific to this runtime:
  * - `file_path` may be absolute or workspace-relative (`resolvePath`).
  * - PDF is always available (native document or page images).
  */

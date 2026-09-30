@@ -62,7 +62,7 @@ function redirectStatusText(statusCode: number): string {
   }
 }
 
-/** Bridge the per-tool abort registry signal onto CC's AbortController API. */
+/** Bridge the per-tool abort registry signal onto an `AbortController`. */
 function controllerFromSignal(
   signal: AbortSignal | undefined,
 ): AbortController {

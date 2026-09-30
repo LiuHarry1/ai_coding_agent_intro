@@ -1,6 +1,5 @@
 /**
- * Task output on disk — aligned with Claude Code `utils/task/diskOutput.ts`
- * (simplified: no O_NOFOLLOW / symlink init).
+ * Task output on disk (simplified: no O_NOFOLLOW / symlink init).
  */
 import { mkdirSync, appendFileSync, existsSync, readFileSync, unlinkSync, statSync } from 'fs'
 import { join } from 'path'
@@ -132,5 +131,5 @@ export function cleanupTaskOutput(taskId: string): void {
 
 /** Evict after notification — keep file for Read; no-op cleanup optional later. */
 export async function evictTaskOutput(_taskId: string): Promise<void> {
-  // CC evicts from memory caches; we keep the file for TaskOutput/Read.
+  // Keep the file for TaskOutput/Read rather than evicting it.
 }

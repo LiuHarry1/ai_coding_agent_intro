@@ -1,5 +1,5 @@
 /**
- * stopTask — Claude Code `tasks/stopTask.ts`.
+ * stopTask — kill a running task by id and report the outcome.
  */
 import type { ExecutionBackend } from '../execution/execution-backend.js'
 import { getTaskByType } from '../tasks.js'

@@ -2,10 +2,10 @@
  * Grep tool — regex search across files, backed by ripgrep (with pure-Node
  * fallback when `rg` isn't installed).
  *
- * Dual-channel (Claude Code):
+ * Dual-channel:
  *   execute → `{ data: GrepOutput }`
  *   mapToolResultToToolResultBlockParam → model-facing text
- *   UI reads `toolUseResult` (includes per-file matchCount for Cursor-style cards)
+ *   UI reads `toolUseResult` (includes per-file matchCount for result cards)
  */
 
 import { tool } from 'ai'
@@ -478,7 +478,7 @@ export const definition: ToolDefinition = {
 
         const execution = toolContext.execution
         // Local Worker uses native ripGrep below. Remote (SSH) uses Worker
-        // `rg` RPC — argv spawn, exit 0/1 = success (Claude Code style).
+        // `rg` RPC — argv spawn, exit 0/1 = success.
         const useRemoteRg =
           !!execution &&
           !(

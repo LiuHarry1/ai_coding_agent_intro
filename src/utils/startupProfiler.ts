@@ -1,6 +1,5 @@
 /**
- * Startup / turn checkpoints — CC `utils/startupProfiler.ts` + `queryProfiler.ts`,
- * trimmed to console output (no analytics backend here).
+ * Startup / turn checkpoints — console output only, no analytics backend.
  *
  * Off unless AGENT_PROFILE_STARTUP=1, so non-profiling runs pay one boolean
  * per checkpoint. Answers "is the first turn slow in the worker, in prepare,

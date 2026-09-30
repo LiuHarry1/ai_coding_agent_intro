@@ -54,7 +54,7 @@
 }
 /* Make the active tab visually "lift" out of the strip by hiding the
    bottom 1px border (the editor body's border-top is also 1px so this
-   reads as a continuous surface — VSCode/Cursor pattern). */
+   reads as a continuous surface — VSCode pattern). */
 .editor-tab.active::after {
   content: "";
   position: absolute;

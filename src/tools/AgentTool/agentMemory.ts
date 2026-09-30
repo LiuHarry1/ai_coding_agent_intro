@@ -1,7 +1,7 @@
 /**
- * Persistent per-subagent memory (aligned with Claude Code agentMemory.ts).
- * Paths use `.ai-agent` instead of `.claude`; user scope under agent home.
- * Prompt text comes from CC buildMemoryPrompt (no local additions).
+ * Persistent per-subagent memory.
+ * Paths live under `.ai-agent`; user scope under agent home.
+ * Prompt text comes from `buildMemoryPrompt` with no local additions.
  */
 import * as fs from 'fs'
 import { join, normalize, sep } from 'path'
@@ -153,7 +153,7 @@ export function ensureAgentMemoryDirExists(memoryDir: string): void {
 /**
  * Load persistent memory for an agent with memory enabled.
  * Creates the memory directory if needed and returns a prompt with memory contents.
- * Prompt body is CC buildMemoryPrompt (scope notes only as extraGuidelines).
+ * Prompt body is `buildMemoryPrompt` (scope notes only as extraGuidelines).
  */
 export function loadAgentMemoryPrompt(
   agentType: string,

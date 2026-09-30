@@ -266,7 +266,7 @@ function absFromToolUseResult(tur: unknown, cwd?: string): string | undefined {
  * Granularity is one id per tool call, not one per tool message. A step that
  * issues four parallel Reads lands in a single `tool` message, so counting
  * messages would treat the whole batch as one recent item and never clear any
- * of it. CC keeps the last N compactable tool ids for the same reason.
+ * of it. Keeping the last N compactable tool ids avoids that.
  */
 function collectCompactableToolIds(messages: Message[]): string[] {
   const ids: string[] = []

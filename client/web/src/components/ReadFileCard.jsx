@@ -11,7 +11,7 @@ import {
 } from '../lib/api/workspace.js'
 
 /**
- * Read row — Cursor default-chat density:
+ * Read row — default-chat density:
  * success text reads are header-only ("Read package.json L1–76").
  * Click opens the file in the workspace IDE; no in-chat file dump.
  * Errors / images still expand inline.

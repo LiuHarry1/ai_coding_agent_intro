@@ -1,6 +1,6 @@
 /**
- * Worker prewarm — CC `prewarmModifiers()` shape: guarded, fire-and-forget,
- * swallows its own errors, never blocks the caller.
+ * Worker prewarm — guarded, fire-and-forget, swallows its own errors, never
+ * blocks the caller.
  *
  * Spawning the Worker Runtime on the first `/chat` puts a process launch on
  * the critical path of the user's first message. `RuntimeBroker` keys runtimes

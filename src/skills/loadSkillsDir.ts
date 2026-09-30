@@ -7,14 +7,14 @@
  * as `baseDir` so the skill body can reference its own bundled assets via
  * `${SKILL_DIR}` substitution in `tools/SkillTool/SkillTool.ts`.
  *
- * Layout (CC loadSkillsDir + managedPath):
+ * Layout:
  *
  *   {managed}/.ai-agent/skills/<name>/SKILL.md   # policy / managed
  *   ~/.ai-agent/skills/<name>/SKILL.md             # user
  *   <ancestor>/.ai-agent/skills/<name>/SKILL.md    # project
  *
  * Precedence on duplicate name (highest wins): managed → deepest project →
- * user. Set CLAUDE_CODE_DISABLE_POLICY_SKILLS to skip managed (CC env name).
+ * user. Set CLAUDE_CODE_DISABLE_POLICY_SKILLS to skip managed.
  *
  * Frontmatter:
  *
@@ -301,8 +301,8 @@ function getProjectSkillsDirsUpToHome(cwd: string): string[] {
  * Scan managed + user + project skill directories.
  *
  * Precedence on duplicate **name** (highest wins): managed → deepest project
- * → user. (CC dedupes by inode and may keep same-name skills from different
- * files; we collapse by name for a single skill tool catalog.)
+ * → user. Same-name skills from different files collapse by name, so the
+ * skill tool catalog holds one entry per name.
  *
  * This is intentionally unmemoized — the router calls it per chat request
  * so a user editing a SKILL.md sees the change on the next message

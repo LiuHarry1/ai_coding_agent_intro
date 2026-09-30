@@ -1,6 +1,5 @@
 /**
  * Scan topic files + MEMORY.md index helpers.
- * Manifest format aligned with Claude Code memoryScan.ts.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -13,19 +12,19 @@ import {
 } from './paths.js'
 import { parseMemoryType, type MemoryType } from './types.js'
 
-/** CC memdir.MAX_ENTRYPOINT_LINES */
+/** Maximum number of index lines read from the memdir entrypoint. */
 export const MAX_ENTRYPOINT_LINES = 200
-/** CC memdir.MAX_ENTRYPOINT_BYTES */
+/** Maximum number of bytes read from the memdir entrypoint. */
 export const MAX_ENTRYPOINT_BYTES = 25_000
 const MAX_INDEX_LINES = MAX_ENTRYPOINT_LINES
 const MAX_INDEX_BYTES = MAX_ENTRYPOINT_BYTES
 const MAX_SCAN_FILES = 200
 
-/** Topic file header (CC MemoryHeader + legacy absPath/relPath aliases). */
+/** Topic file header (plus legacy absPath/relPath aliases). */
 export type MemoryFileMeta = {
-  /** Relative path under memdir (CC `filename`). */
+  /** Relative path under memdir. */
   filename: string
-  /** Absolute path (CC `filePath`). */
+  /** Absolute path. */
   filePath: string
   /** @deprecated use filePath */
   absPath: string
@@ -134,7 +133,7 @@ export function scanMemoryFiles(memPath: string): MemoryFileMeta[] {
     for (const ent of entries) {
       const abs = path.join(dir, ent.name)
       if (ent.isDirectory()) {
-        // Skip CC team/logs plus local hold/backup dirs (e.g. _backup_*).
+        // Skip team/logs plus local hold/backup dirs (e.g. _backup_*).
         if (
           ent.name === 'team' ||
           ent.name === 'logs' ||
@@ -239,7 +238,7 @@ export function repairMemoryFrontmatterFiles(
 }
 
 /**
- * CC format: `- [type] filename (ISO): description`
+ * Format: `- [type] filename (ISO): description`
  */
 export function formatMemoryManifest(files: MemoryFileMeta[]): string {
   if (files.length === 0) return ''

@@ -8,7 +8,7 @@ import { fileName, shortDisplayPath, truncateEnd } from '../lib/utils.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
- * Cursor-style Glob card — Searching/Searched files + clickable paths.
+ * Glob card — Searching/Searched files + clickable paths.
  */
 
 function splitPathParts(filePath) {

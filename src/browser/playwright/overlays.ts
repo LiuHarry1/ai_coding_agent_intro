@@ -205,9 +205,9 @@ async function fileInputById(page: Page, id: string): Promise<Locator | null> {
 /**
  * `ref` is a hint, not a hard target. Sites hide the real <input type=file>
  * behind a paperclip / "Upload" control that is not itself a file input —
- * Playwright MCP only drains a pending chooser (no ref); Cursor's IDE browser
- * has no upload tool. We resolve the actual file input so a wrong visible
- * ref still uploads instead of timing out on setInputFiles.
+ * Playwright MCP only drains a pending chooser (no ref). We resolve the
+ * actual file input so a wrong visible ref still uploads instead of timing
+ * out on setInputFiles.
  *
  * Do not click the trigger: that opens a native OS dialog we cannot drive.
  */

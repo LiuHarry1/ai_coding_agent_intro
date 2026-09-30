@@ -1,6 +1,5 @@
 /**
- * Project snapshot → local user-scope agent memory sync
- * (aligned with Claude Code agentMemorySnapshot.ts).
+ * Project snapshot → local user-scope agent memory sync.
  */
 import { mkdir, readdir, readFile, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'

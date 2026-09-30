@@ -11,7 +11,7 @@ export const IMAGE_MAX_HEIGHT = 2000
 
 /**
  * Model-facing Read images (matplotlib charts, diagrams, PDF pages, scans).
- * Matches CC FileReadTool: use the file-read maxTokens budget (~25k), not the
+ * Sized from the file-read maxTokens budget (~25k), not the
  * much tighter screenshot budget. Invoice/scan JPEGs never fit ~15KB.
  */
 export const READ_IMAGE_MAX_WIDTH = 1600
@@ -22,7 +22,7 @@ export const PDF_TARGET_RAW_SIZE = 20 * 1024 * 1024
 export const PDF_AT_MENTION_INLINE_THRESHOLD = 10
 export const PDF_MAX_PAGES_PER_READ = 20
 export const PDF_EXTRACT_SIZE_THRESHOLD = 3 * 1024 * 1024
-/** Max raw PDF size for pdftoppm page extraction (CC `PDF_MAX_EXTRACT_SIZE`). */
+/** Max raw PDF size for pdftoppm page extraction. */
 export const PDF_MAX_EXTRACT_SIZE = 100 * 1024 * 1024
 
 export const MAX_DIR_ENTRIES = 1000

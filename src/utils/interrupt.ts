@@ -1,5 +1,5 @@
 /**
- * Claude Code–style turn interrupt markers and transcript repair.
+ * Turn interrupt markers and transcript repair.
  *
  * Transcript shape on Esc/Stop:
  *   [user prompt] → [assistant partial / tool_use…] → [tool_result…] →
@@ -55,7 +55,7 @@ export function createUserInterruptionMessage(opts?: {
   return ensureMessageUuid({ role: 'user', content })
 }
 
-/** CC yieldMissingToolResultBlocks — one error result per unpaired tool_use. */
+/** One error result per unpaired tool_use. */
 export function missingToolResultsForAssistant(
   content: AssistantContentPart[],
   errorMessage: string = TOOL_INTERRUPT_RESULT,
@@ -143,7 +143,7 @@ export function commitPartialStreamToHistory(
 
 export type InterruptOpts = {
   toolUse?: boolean
-  /** CC skips the interrupt marker when reason is submit-interrupt. */
+  /** The interrupt marker is skipped when reason is submit-interrupt. */
   reason?: TurnAbortReason
   signal?: AbortSignal
 }
@@ -154,7 +154,7 @@ function resolveReason(opts?: InterruptOpts): TurnAbortReason | undefined {
 }
 
 /**
- * Append the CC interrupt user marker and notify the wire/UI.
+ * Append the interrupt user marker and notify the wire/UI.
  * Skips if transcript already ends on an interrupt, or reason === 'interrupt'.
  */
 export function appendUserInterruption(

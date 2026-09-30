@@ -960,7 +960,7 @@ function makeFakeRelay(opts: {
   const stale = browserErrorText(new BrowserError('Ref e3 is stale.'), 'click')
   assert(stale.startsWith('Error: Ref e3 is stale.'), stale)
   assert(stale.includes('Recovery action: browser_snapshot'), stale)
-  assert(!stale.includes('Current page snapshot'), 'Cursor-style: no YAML dump')
+  assert(!stale.includes('Current page snapshot'), 'no YAML dump')
   const unexpected = browserErrorText(new Error('socket hang up'), 'click')
   assert(unexpected.startsWith('Error: click failed: socket hang up'), unexpected)
   assert(unexpected.includes('Recovery action:'), unexpected)
@@ -1034,7 +1034,7 @@ function makeFakeRelay(opts: {
   const viewport = { width: 1280, height: 800 }
   assert(
     isBoxInViewport({ x: -5, y: 20, width: 80, height: 30 }, viewport),
-    'small Cursor-style edge tolerance should remain interactable',
+    'small edge tolerance should remain interactable',
   )
   assert(
     !isBoxInViewport({ x: -9581, y: -9869, width: 41, height: 24 }, viewport),
@@ -1110,7 +1110,7 @@ function makeFakeRelay(opts: {
   eq(
     denyCdpMethod('Page.reload'),
     undefined,
-    'Page.reload is not on Cursor deny list',
+    'Page.reload is not on the deny list',
   )
   assert(
     /Input\.\*/.test(String(denyCdpMethod('Input.dispatchMouseEvent'))),
@@ -1141,7 +1141,7 @@ function makeFakeRelay(opts: {
     "CDP method 'DOM.setFileInputFiles' is not allowed",
     'file input is blocked',
   )
-  ok('cdp deny list matches Cursor')
+  ok('cdp deny list matches the expected methods')
 }
 
 {
@@ -1527,13 +1527,13 @@ function makeFakeRelay(opts: {
   eq(preview.split('\n').length, 50, 'preview keeps first 50 lines')
   assert(preview.startsWith('- text: line 0'), 'preview is the head of the yaml')
   assert(!preview.includes('line 79'), 'preview does not include the tail')
-  ok('Cursor-style snapshot preview is the first N lines, not a middle omit')
+  ok('snapshot preview is the first N lines, not a middle omit')
 
   const spill = path.resolve('snapshot-1.txt')
   const line = formatSnapshotFileLine(spill)
   assert(line.startsWith(`Snapshot File: [${spill}](`), line)
   assert(line.includes('file:'), line)
-  ok('Cursor-style Snapshot File is a markdown file:// link')
+  ok('Snapshot File is a markdown file:// link')
 
   assert(isAriaRefCssSelector('[ref=e12]'), 'ref attr is not CSS')
   assert(isAriaRefCssSelector('aria-ref=e12'), 'aria-ref is not CSS')
@@ -1546,7 +1546,7 @@ function makeFakeRelay(opts: {
 }
 
 {
-  eq(DEFAULT_SNAPSHOT_DEPTH, 30, 'Cursor injected default maxDepth is 30')
+  eq(DEFAULT_SNAPSHOT_DEPTH, 30, 'injected default maxDepth is 30')
   eq(SCREENSHOT_TIMEOUT_MS, 20_000, 'screenshot capture has its own 20s budget')
   assert(
     SCREENSHOT_TIMEOUT_MS > ACTION_TIMEOUT_MS,
@@ -1571,7 +1571,7 @@ function makeFakeRelay(opts: {
     )
     assert(
       out.snapshotArtifactPath!.endsWith('.log'),
-      'Cursor-style snapshot extension is .log',
+      'snapshot extension is .log',
     )
     assert(!out.snapshotArtifactPath!.includes(`${path.sep}projects${path.sep}`), 'not under projects/')
     assert(fs.existsSync(out.snapshotArtifactPath!), 'spill file exists')
@@ -1744,11 +1744,11 @@ function makeFakeRelay(opts: {
   )
   assert(
     elementMatchesHint({ role: 'button', name: 'Delete Bob' }, 'Delete Alice'),
-    'Cursor some(): a shared word (delete) is enough',
+    'some(): a shared word (delete) is enough',
   )
   assert(
     !elementMatchesHint({ role: 'button', name: 'Cancel' }, 'Delete Alice'),
-    'Cursor some(): no shared word fails',
+    'some(): no shared word fails',
   )
   assert(
     elementMatchesHint(
@@ -1758,25 +1758,25 @@ function makeFakeRelay(opts: {
       },
       '深圳内审及苏州公务 report link',
     ),
-    'Cursor-style tokens match concatenated report-row name',
+    'tokens match concatenated report-row name',
   )
   assert(
     !elementMatchesHint(
       { role: 'heading', name: 'Save Expense' },
       'Save Expense button',
     ),
-    'Cursor: hint that says button rejects a non-button',
+    'hint that says button rejects a non-button',
   )
   assert(
     !elementMatchesHint(
       { role: 'table', name: 'Save' },
       'Save button to save itinerary',
     ),
-    'Cursor: table Save is not a button — element should be "Save" without button',
+    'table Save is not a button — element should be "Save" without button',
   )
   assert(
     elementMatchesHint({ role: 'table', name: 'Save' }, 'Save'),
-    'Cursor: table Save matches element "Save" (no button word)',
+    'table Save matches element "Save" (no button word)',
   )
   eq(
     parseExpectedDescription('button "Save Itemization"').role,

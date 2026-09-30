@@ -2,7 +2,7 @@ import React from 'react'
 import ToolCallLine from './ToolCallLine.jsx'
 
 /**
- * Shared tool-row shell (≈ Cursor ui-tool-call-line chrome).
+ * Shared tool-row shell (ui-tool-call-line chrome).
  *
  * Cards own header copy + body content; this owns:
  *   `.tool-row` modifiers · `ToolCallLine` · expand gating for children

@@ -1,4 +1,4 @@
-/* Glob / Grep — Cursor composer file-hit list density */
+/* Glob / Grep — file-hit list density */
 .grep-results {
   list-style: none;
   margin: 1px 0 0 18px;
@@ -55,7 +55,7 @@ button.grep-file-row {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Cursor secondary: `dir -- N matches` (also used as plain dir for Glob) */
+/* Secondary: `dir -- N matches` (also used as plain dir for Glob) */
 .grep-file-secondary,
 .grep-file-dir {
   color: var(--text-muted);

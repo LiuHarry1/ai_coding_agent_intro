@@ -2,8 +2,8 @@
  * Re-announce agent listings + invoked skills after full compaction.
  * Compaction drops prior attachment messages; inject fresh deltas before the
  * next agent step. Skill catalog (`skill_listing`) is intentionally NOT
- * re-injected — CC keeps Skill in the tool schema and restores used skill
- * bodies via `invoked_skills`.
+ * re-injected — Skill stays in the tool schema and used skill bodies are
+ * restored via `invoked_skills`.
  */
 import type { AttachmentMessage, Message, ToolUseContext } from '../../core/types.js'
 import { isAttachmentMessage } from '../../core/types.js'
@@ -13,9 +13,9 @@ import { getAgentListingDeltaAttachments } from '../../tools/AgentTool/agentList
 import { createAttachmentMessage } from '../../utils/attachments.js'
 import type { InvokedSkillInfo } from '../../skills/invoked-skills.js'
 
-/** CC compact.ts — per-skill cap after full compact. */
+/** Per-skill cap after full compact. */
 export const POST_COMPACT_MAX_TOKENS_PER_SKILL = 5_000
-/** CC compact.ts — total budget across invoked skills. */
+/** Total budget across invoked skills. */
 export const POST_COMPACT_SKILLS_TOKEN_BUDGET = 25_000
 
 const SKILL_TRUNCATION_MARKER =
@@ -42,7 +42,7 @@ function truncateToTokens(content: string, maxTokens: number): string {
 }
 
 /**
- * CC `createSkillAttachmentIfNeeded`. Sorted most-recent-first so budget
+ * Build the invoked-skills attachment. Sorted most-recent-first so budget
  * pressure drops the least-recent skills. Per-skill truncation keeps the head.
  */
 export function createSkillAttachmentIfNeeded(

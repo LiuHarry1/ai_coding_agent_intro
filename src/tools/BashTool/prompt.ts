@@ -1,8 +1,8 @@
 /**
- * Bash tool prompt — Claude Code `tools/BashTool/prompt.ts` `getSimplePrompt`.
+ * Bash tool prompt — `getSimplePrompt`.
  * Non-embedded / non-ant / non-MONITOR_TOOL path only (BaiX has no those gates).
- * Omits `getSimpleSandboxSection` / `getCommitAndPRInstructions` (CC helpers
- * not ported here; workspace/git guidance lives in system prompt).
+ * Omits the sandbox and commit/PR sections; workspace/git guidance lives in
+ * the system prompt.
  */
 import { prependBullets } from '../../constants/prompts.js'
 import {
@@ -96,5 +96,5 @@ export function getSimplePrompt(): string {
   ].join('\n')
 }
 
-/** Static description for tool registration (CC uses `prompt()` → getSimplePrompt). */
+/** Static description for tool registration. */
 export const DESCRIPTION = getSimplePrompt()

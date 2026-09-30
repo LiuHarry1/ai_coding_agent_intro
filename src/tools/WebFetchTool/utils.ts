@@ -1,7 +1,7 @@
 /**
- * WebFetch internals, ported from Claude Code's WebFetchTool/utils.ts.
+ * WebFetch internals.
  *
- * Ported: URL validation, manual redirect handling (same-host only), 15-minute
+ * Covers: URL validation, manual redirect handling (same-host only), 15-minute
  * LRU cache, turndown HTML→markdown, binary persistence, secondary-model
  * distillation of the fetched markdown.
  *

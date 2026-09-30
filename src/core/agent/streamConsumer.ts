@@ -19,7 +19,7 @@ export interface StreamResult {
     input: Record<string, unknown>
   }>
   toolResults: ExecutedToolResult[]
-  /** True when the upstream stream was aborted mid-turn (CC salvage path). */
+  /** True when the upstream stream was aborted mid-turn (salvage path). */
   aborted?: boolean
 }
 
@@ -51,7 +51,7 @@ function readInputDelta(event: unknown): { id?: string; delta?: string } {
 }
 
 export interface ConsumeStreamOptions {
-  /** CC streaming tool execution — start tools as tool_use blocks arrive. */
+  /** Streaming tool execution — start tools as tool_use blocks arrive. */
   streamingExecutor?: StreamingToolExecutor
 }
 
@@ -230,7 +230,7 @@ export async function consumeStream(
           wire.error(String(event.error))
           break
       }
-      // CC query.ts: drain completed tool results after every stream event so
+      // Drain completed tool results after every stream event so
       // the UI sees tool_result while the model is still generating.
       drainStreamingResults(streamingExecutor, toolResults)
     }
@@ -244,7 +244,7 @@ export async function consumeStream(
     if (!aborted) throw err
 
     flushReasoning()
-    // Incomplete tool-input streams: close with interrupt results (CC).
+    // Incomplete tool-input streams: close with interrupt results.
     for (const [id, toolName] of startedInputs.entries()) {
       synthesizePair(
         id,

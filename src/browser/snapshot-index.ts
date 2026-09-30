@@ -37,8 +37,8 @@ const HINT_ROLES =
   'button|link|textbox|checkbox|radio|combobox|listbox|menuitem|option|slider|switch|tab'
 
 /**
- * Cursor `parseExpectedDescription`: pull role/name out of the model's
- * `element` hint so a stale ref can be rematched on the live snapshot.
+ * Pull role/name out of the model's `element` hint so a stale ref can be
+ * rematched on the live snapshot.
  */
 export function parseExpectedDescription(description?: string): {
   role: string | null
@@ -68,7 +68,7 @@ export function parseExpectedDescription(description?: string): {
   return { role, name: name || null }
 }
 
-/** Cursor `attemptRefRecovery` scoring. Threshold is 50. */
+/** Ref-recovery scoring. Threshold is 50. */
 export function scoreRefMatch(
   candidate: RefMeta,
   expected: { role?: string | null; name?: string | null },
@@ -93,7 +93,7 @@ export function scoreRefMatch(
 
 /**
  * Pick a different snapshot ref whose role/name match the stale target.
- * Cursor requires score >= 50; if a name was given, also require a name hit.
+ * Require score >= 50; if a name was given, also require a name hit.
  */
 export function pickRecoveredRef(
   candidates: RefMeta[],
@@ -117,7 +117,7 @@ export function pickRecoveredRef(
 }
 
 /**
- * Cursor `assertDescriptionMatches` (cursor-browser-automation):
+ * Check the model's `element` hint against the live node:
  * 1. If the hint contains "button", the live node must be a button
  *    (tag/role/description). ExtJS `table "Save"` is not a button — pass
  *    element: "Save", not "Save button".

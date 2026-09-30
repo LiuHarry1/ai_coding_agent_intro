@@ -1,5 +1,5 @@
 /**
- * CC-aligned settings validation error formatting.
+ * Settings validation error formatting.
  */
 import type { ZodError, ZodIssue } from 'zod'
 import { SettingsFileSchema } from './settings-schema.js'

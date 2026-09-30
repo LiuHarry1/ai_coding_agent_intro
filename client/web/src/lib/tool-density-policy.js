@@ -1,5 +1,5 @@
 /**
- * Single source of truth for Cursor-style transcript density.
+ * Single source of truth for transcript density.
  *
  * Cards should call `useToolDensityExpand(kind, ctx)` + `resolveChevron(kind, ctx)`
  * instead of inventing per-file showChevron / expandOnceWhen ternaries.

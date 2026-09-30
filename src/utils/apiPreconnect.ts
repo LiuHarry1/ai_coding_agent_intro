@@ -1,5 +1,5 @@
 /**
- * Preconnect to the configured model endpoints — CC `utils/apiPreconnect.ts`.
+ * Preconnect to the configured model endpoints.
  *
  * The TCP+TLS handshake is ~100-200ms that otherwise happens inside the first
  * completion request, i.e. squarely on the critical path of the user's first

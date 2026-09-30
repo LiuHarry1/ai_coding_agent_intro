@@ -12,7 +12,7 @@ import { getTur } from '../lib/tool-result.js'
 import { toolActionLabel } from '../lib/tool-action-labels.js'
 
 /**
- * File-centric card for Write / Edit (Cursor edit chrome):
+ * File-centric card for Write / Edit (edit chrome):
  * verb + path + +/- counts, expandable preview/diff.
  * Done body prefers toolUseResult (TUR); running uses args + livePreview.
  */
@@ -45,7 +45,7 @@ function LivePreviewInline({ text, startTime }) {
   )
 }
 
-/** LCS-style line add/remove counts for badge (Cursor +/-). */
+/** LCS-style line add/remove counts for badge. */
 function diffLineCounts(oldStr, newStr) {
   const a = (oldStr ?? '').split('\n')
   const b = (newStr ?? '').split('\n')
@@ -122,7 +122,7 @@ function ContentPreview({ text }) {
   return <pre className='file-change-collapsed-preview'>{lines.join('\n')}</pre>
 }
 
-/** Prefer the changed region for collapsed teasers (Cursor-style). */
+/** Prefer the changed region for collapsed teasers. */
 function collapsedTeaserText({ isWrite, args, beforeContent, afterContent, previewSource }) {
   if (!isWrite && typeof args?.new_string === 'string') return args.new_string
   if (

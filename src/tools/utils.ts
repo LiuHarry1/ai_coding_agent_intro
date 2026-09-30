@@ -42,7 +42,7 @@ export function unwrapJoinedWindowsAbsolute(
 }
 
 /**
- * Resolve a tool file path (Claude Code `expandPath` semantics).
+ * Resolve a tool file path.
  *
  * - Absolute paths are normalized as-is (never joined onto cwd).
  * - Relative paths resolve against cwd.

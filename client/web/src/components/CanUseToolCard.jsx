@@ -8,7 +8,7 @@ function parentDir(filePath) {
   return normalized.slice(0, idx) || normalized
 }
 
-/** Parse path from ask message (supports current + legacy Claude-branded copy). */
+/** Parse path from ask message (supports current + legacy copy). */
 function parseAskTarget(description) {
   if (typeof description !== 'string' || !description.trim()) return null
   const match = description.match(

@@ -1,5 +1,5 @@
 /**
- * Managed (policy) settings — CC-aligned merge + non-writable scope.
+ * Managed (policy) settings — merge + non-writable scope.
  *   conda activate llm_ft && npx tsx src/scripts/test-managed-settings.ts
  */
 import * as fs from 'fs'
@@ -31,7 +31,7 @@ _resetManagedDirCacheForTest()
 resetSettingsCache()
 
 try {
-  // Project sets model id; managed must win (CC policy last).
+  // Project sets model id; managed must win (policy last).
   fs.writeFileSync(
     path.join(cwd, '.ai-agent', 'settings.json'),
     JSON.stringify({
@@ -97,11 +97,11 @@ try {
   const managedSources = resolved.sources.filter(s => s.scope === 'managed')
   assert(
     managedSources.length === 1 && managedSources[0]!.applied,
-    'managed should appear as a single applied source (CC loadManagedFileSettings)',
+    'managed should appear as a single applied source',
   )
   console.log('ok: managed-settings.d drop-ins merge in order')
 
-  // Not writable (CC EditableSettingSource excludes policy)
+  // Not writable (the editable setting sources exclude policy)
   let threw = false
   try {
     parseWritableScope('managed', { ssoMode: false })

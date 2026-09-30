@@ -18,7 +18,7 @@ const EMPTY_RESULTS_WARNING =
   'Tell the user the search found nothing and suggest retrying with a simpler query ' +
   'or switching WEB_SEARCH_PROVIDER (exa vs searxng).'
 
-/** CC-style model text: prose + source reminder. Structured JSON stays in toolUseResult. */
+/** Model-facing text: prose + source reminder. Structured JSON stays in toolUseResult. */
 function formatWebSearchOutput(
   output: WebSearchPayload & { warning?: string },
 ): string {

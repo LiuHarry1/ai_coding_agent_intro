@@ -1,5 +1,5 @@
 /**
- * Memory freshness helpers (aligned with Claude Code memdir/memoryAge.ts).
+ * Memory freshness helpers.
  */
 
 /** Floor days since mtime; future/clock-skew clamps to 0. */

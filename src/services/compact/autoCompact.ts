@@ -212,9 +212,9 @@ function afterMicro(original: Message[], working: Message[]): CompactOutcome {
 /**
  * Main compaction entry point. Called before each agent step.
  *
- * Flow (Claude Code query.ts): microcompact first (API-view only), then
- * session-memory / full LLM if still over threshold. Summarizing outcomes
- * expose append-only compact events; microcompact remains an API-view only.
+ * Flow: microcompact first (API-view only), then session-memory / full LLM
+ * if still over threshold. Summarizing outcomes expose append-only compact
+ * events; microcompact remains an API-view only.
  */
 export async function compactIfNeeded(
   messages: Message[],

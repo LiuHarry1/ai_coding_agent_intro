@@ -120,7 +120,7 @@ export default function DiffViewer({
   const fName = fileName(filePath)
   const rootRef = useRef(null)
 
-  // Cursor edit chrome: jump the card body to the first changed hunk so a
+  // Edit chrome: jump the card body to the first changed hunk so a
   // +1 edit mid-file isn't buried under unchanged lines at the top.
   useEffect(() => {
     if (!embedded) return
@@ -166,7 +166,7 @@ export default function DiffViewer({
         splitView={false}
         useDarkTheme={isDark}
         compareMethod={DiffMethod.LINES}
-        // Embedded file-change cards: show the hunk (+ context), like Cursor.
+        // Embedded file-change cards: show the hunk (+ context).
         // Standalone diffs keep the full file for review.
         showDiffOnly={embedded}
         extraLinesSurroundingDiff={4}

@@ -113,7 +113,7 @@ export type AgentListingDeltaAttachment = {
   isInitial: boolean
 }
 
-/** User @-mentioned a subagent (CC agent_mention). */
+/** User @-mentioned a subagent. */
 export type AgentMentionAttachment = {
   type: 'agent_mention'
   agentType: string
@@ -129,7 +129,7 @@ export type TaskNotificationAttachment = {
   rawXml: string
 }
 
-/** Prefetched auto-memory topic files (CC relevant_memories). */
+/** Prefetched auto-memory topic files. */
 export type RelevantMemoriesAttachment = {
   type: 'relevant_memories'
   memories: Array<{

@@ -1,5 +1,5 @@
 /**
- * Path suggestions when Read misses a file (CC-style UX).
+ * Path suggestions when Read misses a file.
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -29,7 +29,7 @@ export function findSimilarFile(filePath: string): string | undefined {
  * "Dropped repo folder" pattern: path is under cwd's parent but not under cwd.
  * If the same relative path under cwd exists, suggest that.
  *
- * Example (CC):
+ * Example:
  *   cwd = /Users/zeeg/src/currentRepo
  *   requested = /Users/zeeg/src/foobar
  *   → /Users/zeeg/src/currentRepo/foobar (if it exists)

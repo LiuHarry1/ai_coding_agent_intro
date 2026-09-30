@@ -16,7 +16,7 @@ const MCP_STATUS_BADGE = {
   disconnected: { className: 'ws-badge--shadow', label: 'disconnected' },
 }
 
-/** Aligns with Claude Code LspServerState + Workspace badge language. */
+/** LSP server state + Workspace badge language. */
 const LSP_STATUS_BADGE = {
   running: { className: 'ws-badge--active', label: 'running' },
   starting: { className: 'ws-badge--active', label: 'starting' },

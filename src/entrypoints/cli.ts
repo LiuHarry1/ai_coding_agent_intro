@@ -1,6 +1,5 @@
 /**
  * Mode dispatcher — peek argv, init once, dynamic-import only what that mode needs.
- * Mirrors Claude Code entrypoints/cli.tsx (without Commander / feature gates).
  */
 import { init, type BootMode } from './init.js'
 

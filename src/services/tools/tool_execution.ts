@@ -112,7 +112,7 @@ export async function executeOneTool(
     })
 
     // If the tool finished successfully, keep its result even if the turn
-    // abort raced in afterward (CC: completed tools stay in transcript).
+    // abort raced in afterward: completed tools stay in the transcript.
 
     const def = lookup(tc.toolName)
     let result: string

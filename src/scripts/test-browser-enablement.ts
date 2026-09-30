@@ -1,5 +1,5 @@
 /**
- * Browser main-thread enablement (CC-style opt-in).
+ * Browser main-thread enablement (opt-in).
  * Run: npx tsx src/scripts/test-browser-enablement.ts
  */
 import assert from 'node:assert/strict'

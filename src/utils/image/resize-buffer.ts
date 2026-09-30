@@ -1,7 +1,7 @@
 /**
- * Buffer-level image downscaling for tool results, ported from CC's
- * `utils/imageResizer.ts`. `read-image.ts` covers the file-read path; this
- * covers images a tool produces in memory (screenshots, canvas exports).
+ * Buffer-level image downscaling for tool results. `read-image.ts` covers the
+ * file-read path; this covers images a tool produces in memory (screenshots,
+ * canvas exports).
  *
  * sharp is imported dynamically so the agent still runs when the optional
  * native binary is unavailable — callers get the original buffer back if it
@@ -20,7 +20,7 @@ import { buildImageBlock } from '../tool-result-content.js'
 
 declare const __filename: string | undefined
 
-/** Base64 chars per token, matching CC's `base64.length * 0.125` estimate. */
+/** Base64 chars per token, i.e. the `base64.length * 0.125` estimate. */
 const TOKENS_PER_BASE64_CHAR = 0.125
 
 const JPEG_QUALITY_LADDER = [75, 55, 35, 20] as const
@@ -414,7 +414,7 @@ export async function fallbackImageForModel(
 
 /**
  * Bring a buffer under the API's 5MB base64 / 2000px limits. Returns the
- * input untouched when it already fits (CC's fast path).
+ * input untouched when it already fits.
  */
 export async function maybeResizeAndDownsampleImageBuffer(
   buffer: Buffer,
@@ -487,7 +487,7 @@ export async function maybeResizeAndDownsampleImageBuffer(
   )
 }
 
-/** CC `compressImageBufferWithTokenLimit`: budget expressed in model tokens. */
+/** Compress a buffer to a budget expressed in model tokens. */
 export async function compressImageBufferWithTokenLimit(
   buffer: Buffer,
   maxTokens: number,

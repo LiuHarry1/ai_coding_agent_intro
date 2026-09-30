@@ -1,6 +1,5 @@
 /**
  * Pending `<task-notification>` queue — drained into attachments each agent step.
- * Local stand-in for CC `enqueuePendingNotification({ mode: 'task-notification' })`.
  */
 export type TaskNotificationPayload = {
   taskId: string

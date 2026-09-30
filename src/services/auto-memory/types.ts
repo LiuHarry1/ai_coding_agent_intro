@@ -1,7 +1,6 @@
 /**
  * Auto-memory content types and prompt section constants.
  * (INDIVIDUAL / auto-only; no team <scope>).
- * Prompt copy aligns with Claude Code memoryTypes.ts; CLAUDE.md → AGENTS.md.
  */
 
 export const MEMORY_TYPES = [
@@ -50,7 +49,7 @@ export const WHAT_NOT_TO_SAVE_SECTION = [
  * WHAT_NOT_TO_SAVE_SECTION above to switch, and swap
  * TYPES_SECTION_INDIVIDUAL_EXTERNAL with TYPES_SECTION_INDIVIDUAL too.
  *
- * Same bullets as the CC baseline, plus a paragraph naming the test the
+ * Same bullets as the baseline above, plus a paragraph naming the test the
  * bullets already imply. A hard-won path through a web UI reads as a "fix
  * recipe", but the stated reason for that exclusion — the fix is in the code,
  * the context is in the commit — has no counterpart outside the repo, so the
@@ -177,16 +176,16 @@ export const TYPES_SECTION_INDIVIDUAL = [
  * Opt-in variant of the type blocks. Inactive: swap this name with
  * TYPES_SECTION_INDIVIDUAL above to switch.
  *
- * Identical to the CC baseline except for the `reference` block, which also
- * covers external systems you operate rather than read. CC's own example for
- * this type is a Grafana dashboard, so the type already reaches outside the
- * repo; what it did not cover is the case where getting at the information
- * takes a non-obvious sequence of actions. Left implicit, a browser agent
- * rediscovers the same dead ends on every visit: the path is not in the code,
- * the page does not state it, and nothing else persists it.
+ * Identical to the baseline except for the `reference` block, which also
+ * covers external systems you operate rather than read. The baseline's own
+ * example for this type is a Grafana dashboard, so the type already reaches
+ * outside the repo; what it did not cover is the case where getting at the
+ * information takes a non-obvious sequence of actions. Left implicit, a
+ * browser agent rediscovers the same dead ends on every visit: the path is
+ * not in the code, the page does not state it, and nothing else persists it.
  *
- * Duplicated flat rather than spliced from the baseline, matching CC's own
- * note on TYPES_SECTION_*: per-variant edits stay trivial to read.
+ * Duplicated flat rather than spliced from the baseline so that per-variant
+ * edits on TYPES_SECTION_* stay trivial to read.
  */
 export const TYPES_SECTION_INDIVIDUAL_EXTERNAL = [
   '## Types of memory',

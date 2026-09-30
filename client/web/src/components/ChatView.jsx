@@ -32,7 +32,7 @@ const LOAD_MORE_STEP = 40
 const LIVE_TAIL = 8
 const LIVE_TAIL_STREAMING = 16
 /**
- * Cursor `Mqg` air below the live edge (composer is outside this pane, so
+ * Air below the live edge (composer is outside this pane, so
  * overlayHeight / inputAreaGap stay 0). 20% of the chat column, 80–240px.
  */
 const BOTTOM_INSET_RATIO = 0.2
@@ -51,7 +51,7 @@ function computeBottomInsetPx(paneHeight) {
   )
 }
 
-/** Cursor: distanceFromBottom − overscroll. The air gap still counts as "at bottom". */
+/** distanceFromBottom − overscroll. The air gap still counts as "at bottom". */
 function logicalDistanceFromBottom(dist, insetPx) {
   return Math.max(0, dist - insetPx)
 }
@@ -81,7 +81,7 @@ export default function ChatView() {
   const isStreaming = useChatStore(s => s.isStreaming)
   const activeTurnId = useChatStore(s => s.activeTurnId)
 
-  // Cursor sawLiveWork: sticky for this session view after we watch a generate.
+  // sawLiveWork: sticky for this session view after we watch a generate.
   const sawLiveSessionRef = useRef(null)
   const sawLiveWorkRef = useRef(false)
   if (sawLiveSessionRef.current !== currentSessionId) {
@@ -176,7 +176,7 @@ export default function ChatView() {
   const hiddenCount = startIndex
 
   /**
-   * Cursor-style follow: coalesce to animation frames, but keep a dirty bit so
+   * Follow: coalesce to animation frames, but keep a dirty bit so
    * growth that lands after this frame's stick still gets a trailing follow.
    */
   const scheduleStickToBottom = useCallback(() => {
@@ -414,7 +414,7 @@ export default function ChatView() {
               })}
             </Suspense>
             {/*
-              Cursor Mqg air: stick-to-bottom lands on this spacer so the live
+              Bottom inset air: stick-to-bottom lands on this spacer so the live
               edge sits mid-lower, not flush on the input.
             */}
             <div

@@ -19,7 +19,7 @@ import {
 
 /**
  * Shared execution for Bash / PowerShell.
- * Background uses CC-style task_id via spawnShellTask (not OS pid on the tool).
+ * Background returns a task_id from spawnShellTask (not the OS pid).
  */
 
 /**
@@ -122,7 +122,6 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
             .describe(
               'Max time in ms before killing. Default 120000 (2 min). Ignored when run_in_background is true.',
             ),
-          // Claude Code BashTool: "Use Read to read the output later."
           run_in_background: z
             .boolean()
             .optional()
@@ -165,7 +164,7 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
           const sessionId = context.sessionId ?? 'default'
           setTaskSessionId(sessionId)
 
-          // ── Background (CC: run_in_background → spawnShellTask) ──
+          // ── Background (run_in_background → spawnShellTask) ──
           if (run_in_background) {
             if (stdin != null && stdin.length > 0) {
               return 'Error: stdin piping is not supported with run_in_background.'
@@ -182,8 +181,6 @@ export function createShellTool(opts: ShellToolOptions): ToolDefinition {
                 },
                 { execution: context.execution },
               )
-              // Claude Code BashTool.mapToolResultToToolResultBlockParam:
-              // "Command running in background with ID: …. Output is being written to: …"
               const outPath = getTaskOutputPath(handle.taskId)
               const text = `Command running in background with ID: ${handle.taskId}. Output is being written to: ${outPath}`
               return shellOk({

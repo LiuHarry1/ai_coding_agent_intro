@@ -18,7 +18,7 @@ import {
 } from './pickToolCard.js'
 
 /**
- * Cursor-style Task / Explorer row: one typography line when collapsed.
+ * Task / Explorer row: one typography line when collapsed.
  * Nested steps stay collapsed after the task finishes (flat Worked timeline).
  */
 

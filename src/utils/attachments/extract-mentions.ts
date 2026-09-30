@@ -37,7 +37,7 @@ export function extractAtMentionedFiles(content: string): string[] {
 }
 
 /**
- * Extract agent mentions (CC extractAgentMentions).
+ * Extract agent mentions.
  * Returns agentType strings (without `agent-` prefix for unquoted form).
  * Formats:
  * - `@agent-<type>` → type

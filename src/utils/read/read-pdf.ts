@@ -1,5 +1,5 @@
 /**
- * PDF read helpers aligned with Claude Code `utils/pdf.ts` + FileReadTool.
+ * PDF read helpers.
  *
  * - Small / native-PDF providers: file:// document follow-up (hydrate at API)
  * - `pages` / non-native providers: `pdftoppm` → JPEG page images → image follow-ups
@@ -42,7 +42,7 @@ export function formatPdfFileSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-/** CC `parsePDFPageRange` — supports `5`, `1-10`, `3-`. */
+/** Parse a page range — supports `5`, `1-10`, `3-`. */
 export function parsePdfPageRange(pages: string): PdfPageRange | null {
   const trimmed = pages.trim()
   if (!trimmed) return null
@@ -252,7 +252,7 @@ function pdfExtractOutputRoot(sessionId?: string): string {
 }
 
 /**
- * Extract PDF pages as JPEG images using pdftoppm (Claude Code path).
+ * Extract PDF pages as JPEG images using pdftoppm.
  */
 export async function extractPDFPages(
   absPath: string,

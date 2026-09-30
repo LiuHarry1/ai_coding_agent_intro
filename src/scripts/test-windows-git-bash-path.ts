@@ -1,5 +1,5 @@
 /**
- * Git Bash path derivation — CC `pathWin32.join(git.exe, '..', '..', 'bin', 'bash.exe')`.
+ * Git Bash path derivation — `pathWin32.join(git.exe, '..', '..', 'bin', 'bash.exe')`.
  */
 import { bashExeFromGitExe, findGitBashPath } from '../core/shell/windows-paths.js'
 

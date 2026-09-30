@@ -1,7 +1,6 @@
 /**
- * System-prompt helpers — naming / structure aligned with Claude Code
- * `src/constants/prompts.ts` (`computeEnvInfo`, `computeSimpleEnvInfo`,
- * `enhanceSystemPromptWithEnvDetails`, `getUnameSR`, `prependBullets`).
+ * System-prompt helpers: `computeEnvInfo`, `computeSimpleEnvInfo`,
+ * `enhanceSystemPromptWithEnvDetails`, `getUnameSR`, `prependBullets`.
  *
  * Do NOT use `enhanceSystemPromptWithEnvDetails` on cache-sharing forks
  * (`runForkedAgent` / `CacheSafeParams`) — those must reuse the parent
@@ -13,7 +12,7 @@ import { getIsGit } from '../utils/git.js'
 
 const isWindows = process.platform === 'win32'
 
-/** Platform string for env blocks — CC `env.platform`. */
+/** Platform string for env blocks. */
 function platform(): string {
   return process.platform
 }
@@ -50,7 +49,6 @@ function getShellInfoLine(): string {
 
 /**
  * `Darwin 24.6.0` / `Linux …` / Windows friendly version.
- * CC: `getUnameSR()`.
  */
 export function getUnameSR(): string {
   if (isWindows) {
@@ -61,7 +59,7 @@ export function getUnameSR(): string {
 
 /**
  * Compact `<env>` block for subagents.
- * CC: `computeEnvInfo` (model / knowledge-cutoff lines omitted when modelId empty).
+ * Model / knowledge-cutoff lines are omitted when modelId is empty.
  */
 export async function computeEnvInfo(
   modelId: string,
@@ -92,7 +90,6 @@ ${modelDescription}`
 
 /**
  * Markdown `# Environment` block for the main session.
- * CC: `computeSimpleEnvInfo` (product marketing lines omitted).
  */
 export async function computeSimpleEnvInfo(
   modelId: string,
@@ -131,7 +128,6 @@ export async function computeSimpleEnvInfo(
 
 /**
  * Append notes + `<env>` to a subagent role prompt.
- * CC: `enhanceSystemPromptWithEnvDetails`.
  *
  * Not for cache-safe forks — those must keep the parent system prompt.
  */
