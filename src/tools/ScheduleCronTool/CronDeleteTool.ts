@@ -2,7 +2,8 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { CRON_DELETE_TOOL_NAME } from '../../constants/tool_names.js'
-import { cancelCronTask } from '../../services/cron/index.js'
+// Avoid the cron barrel: it eagerly loads scheduler -> fire -> tools.ts.
+import { cancelCronTask } from '../../services/cron/schedule.js'
 import { CRON_DELETE_DESCRIPTION } from './prompt.js'
 
 export const CronDeleteOutputSchema = z.object({

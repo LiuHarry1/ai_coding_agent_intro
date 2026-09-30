@@ -332,6 +332,7 @@ export async function runForkedAgent(
   try {
     const text = await runWithForkedReadFileState(forkReadFileState, () =>
       params.runAgent(params.prompt, {
+        throwOnError: true,
         tools,
         systemPrompt,
         eventBus: isolated.eventBus,

@@ -451,6 +451,12 @@ export interface ToolUseContext {
 export interface AgentOptions {
   /** Current agent-loop entry, injected for cache-safe side-path forks. */
   runAgent?: RunAgentFn
+  /**
+   * Throw when the query loop stops because of an LLM/stream error.
+   * Main chat keeps the default graceful SSE behavior; subagents and
+   * side-path forks enable this so failures are not reported as empty success.
+   */
+  throwOnError?: boolean
   tools: Record<string, AnyTool>
   systemPrompt: string
   eventBus: IEventBus

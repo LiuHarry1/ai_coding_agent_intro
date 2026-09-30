@@ -320,6 +320,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
 
           try {
             const result = await runAgent(prompt, {
+              throwOnError: true,
               tools: subTools,
               systemPrompt: subSystemPrompt,
               eventBus,

@@ -2,10 +2,10 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { CRON_LIST_TOOL_NAME } from '../../constants/tool_names.js'
-import {
-  cronToHuman,
-  listCronTasksForSession,
-} from '../../services/cron/index.js'
+// Leaf imports prevent scheduler -> fire -> run-chat-turn -> tools.ts from
+// cycling back into this module during ESM initialization.
+import { cronToHuman } from '../../services/cron/parse.js'
+import { listCronTasksForSession } from '../../services/cron/store.js'
 import { CRON_LIST_DESCRIPTION } from './prompt.js'
 
 export const CronListOutputSchema = z.object({

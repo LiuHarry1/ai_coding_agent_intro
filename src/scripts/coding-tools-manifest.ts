@@ -2,6 +2,9 @@ import {
   AGENT_TOOL_NAME,
   ASK_USER_QUESTION_TOOL_NAME,
   BASH_TOOL_NAME,
+  CRON_CREATE_TOOL_NAME,
+  CRON_DELETE_TOOL_NAME,
+  CRON_LIST_TOOL_NAME,
   EDIT_FILE_TOOL_NAME,
   ENTER_PLAN_MODE_TOOL_NAME,
   EXIT_PLAN_MODE_TOOL_NAME,
@@ -31,8 +34,8 @@ export type CodingToolManifestEntry = {
 
 /**
  * The explicit scope of the coding-tool conformance suite.
- * Browser automation tools, Cron tools, and runtime MCP/plugin tools are
- * intentionally outside this manifest.
+ * Browser automation tools and runtime MCP/plugin tools are intentionally
+ * outside this manifest.
  */
 export const CODING_TOOL_MANIFEST: readonly CodingToolManifestEntry[] = [
   {
@@ -133,6 +136,24 @@ export const CODING_TOOL_MANIFEST: readonly CodingToolManifestEntry[] = [
     name: EXIT_PLAN_MODE_TOOL_NAME,
     category: 'workflow',
     registration: 'mode',
+  },
+  {
+    name: CRON_CREATE_TOOL_NAME,
+    category: 'workflow',
+    registration: 'registry',
+    deferred: true,
+  },
+  {
+    name: CRON_LIST_TOOL_NAME,
+    category: 'workflow',
+    registration: 'registry',
+    deferred: true,
+  },
+  {
+    name: CRON_DELETE_TOOL_NAME,
+    category: 'workflow',
+    registration: 'registry',
+    deferred: true,
   },
 ] as const
 

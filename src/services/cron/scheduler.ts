@@ -6,7 +6,16 @@ import {
 } from './types.js'
 import { isScheduledTasksEnabled } from './settings.js'
 import { readCronTasks } from './store.js'
-import { fireScheduledTask } from './fire.js'
+
+async function fireScheduledTaskLazy(
+  task: ScheduledTask,
+  nowMs: number,
+): Promise<FireResult> {
+  // fire.ts reaches run-chat-turn -> tools.ts. Keep that path out of scheduler
+  // initialization so Cron tool definitions can safely import schedule.ts.
+  const { fireScheduledTask } = await import('./fire.js')
+  return fireScheduledTask(task, nowMs)
+}
 
 export type CronSchedulerDeps = {
   nowMs?: () => number
@@ -25,7 +34,7 @@ export type CronScheduler = {
 
 export function createCronScheduler(deps: CronSchedulerDeps = {}): CronScheduler {
   const nowMs = deps.nowMs ?? (() => Date.now())
-  const fire = deps.fire ?? fireScheduledTask
+  const fire = deps.fire ?? fireScheduledTaskLazy
   const setTimeoutFn = deps.setTimeoutFn ?? setTimeout
   const clearTimeoutFn = deps.clearTimeoutFn ?? clearTimeout
 

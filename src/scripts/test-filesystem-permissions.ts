@@ -17,6 +17,7 @@ import { FILE_READ_TOOL_NAME } from '../constants/tool_names.js'
 import { definition as fileReadDef } from '../tools/FileReadTool/FileReadTool.js'
 import { createCanUseTool } from '../core/can-use-tool.js'
 import { noopWireEmitter } from '../core/wire-emitter.js'
+import { runWithRequestScope } from '../utils/request-scope.js'
 import {
   addAlwaysAllowDirectory,
   assertAccessible,
@@ -284,6 +285,7 @@ try {
   }
 
   process.env.AUTH_ENABLED = 'true'
+  await runWithRequestScope({ agentHome: root, cwd: root }, async () => {
   const cloud = createFilesystemPermissionContext(root)
   if (cloud.mode !== 'dontAsk') throw new Error('cloud mode')
   assertAccessible(inside, cloud, 'read')
@@ -370,6 +372,7 @@ try {
       fs.unlinkSync(link)
     } catch {}
   }
+  })
 
   fs.unlinkSync(outside)
   fs.rmSync(extraDir, { recursive: true, force: true })

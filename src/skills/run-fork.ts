@@ -132,6 +132,7 @@ export async function runSkillFork(opts: RunSkillForkOptions): Promise<string> {
   ).join('\n\n')
 
   const result = await runAgent(combined, {
+    throwOnError: true,
     tools: subTools,
     systemPrompt,
     eventBus,

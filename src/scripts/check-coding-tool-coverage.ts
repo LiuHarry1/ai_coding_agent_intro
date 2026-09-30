@@ -30,6 +30,9 @@ const requiredFiles: Record<string, string> = {
   Skill: 'src/tools/SkillTool/SkillTool.ts',
   EnterPlanMode: 'src/tools/EnterPlanModeTool/EnterPlanModeTool.ts',
   ExitPlanMode: 'src/tools/ExitPlanModeTool/ExitPlanModeTool.ts',
+  CronCreate: 'src/tools/ScheduleCronTool/CronCreateTool.ts',
+  CronList: 'src/tools/ScheduleCronTool/CronListTool.ts',
+  CronDelete: 'src/tools/ScheduleCronTool/CronDeleteTool.ts',
 }
 
 const report = JSON.parse(

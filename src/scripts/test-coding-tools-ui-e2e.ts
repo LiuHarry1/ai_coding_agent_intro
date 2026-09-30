@@ -16,6 +16,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { chromium, type Page } from 'playwright-core'
 import { findChrome } from '../browser/chrome-path.js'
+import { resolveSettings } from '../core/settings-manager.js'
 
 const REPLAY_SESSION_ID =
   process.env.CODING_TOOLS_E2E_REPLAY_SESSION?.trim() ?? ''
@@ -30,6 +31,12 @@ const TIMEOUT_MS = parsePositiveInt(
   5 * 60_000,
 )
 const HEADED = process.env.CODING_TOOLS_E2E_HEADED === '1'
+const AUTO_ALLOW = process.env.CODING_TOOLS_E2E_AUTO_ALLOW === '1'
+const AUTO_ANSWER = process.env.CODING_TOOLS_E2E_AUTO_ANSWER === '1'
+const AUTO_APPROVE_PLAN =
+  process.env.CODING_TOOLS_E2E_AUTO_APPROVE_PLAN === '1'
+const INITIAL_MODE =
+  process.env.CODING_TOOLS_E2E_INITIAL_MODE?.trim() ?? ''
 const ARTIFACT_DIR =
   process.env.CODING_TOOLS_E2E_ARTIFACT_DIR ??
   path.join(os.tmpdir(), 'coding-tools-ui-e2e')
@@ -41,6 +48,10 @@ const EXPECTED_CARDS = (process.env.CODING_TOOLS_E2E_EXPECTED_CARDS ?? '')
   .split(',')
   .map(value => value.trim())
   .filter(Boolean)
+const EXPECTED_FILE =
+  process.env.CODING_TOOLS_E2E_EXPECTED_FILE?.trim() ?? ''
+const EXPECTED_FILE_CONTENT =
+  process.env.CODING_TOOLS_E2E_EXPECTED_FILE_CONTENT
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback
@@ -84,6 +95,29 @@ async function requireReachable(
 function joinWorkspacePath(root: string, child: string): string {
   const separator = root.includes('\\') ? '\\' : '/'
   return `${root.replace(/[\\/]+$/, '')}${separator}${child}`
+}
+
+function seedTemporaryModelSettings(workspace: string): void {
+  const settingsSource =
+    process.env.CODING_TOOLS_E2E_SETTINGS_CWD ?? process.cwd()
+  const models = resolveSettings(settingsSource).config.models
+  const settingsDir = path.join(workspace, '.ai-agent')
+  fs.mkdirSync(settingsDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(settingsDir, 'settings.json'),
+    `${JSON.stringify({ models }, null, 2)}\n`,
+    { encoding: 'utf8', mode: 0o600 },
+  )
+}
+
+function removeTemporaryModelSettings(workspace: string): void {
+  const settingsDir = path.join(workspace, '.ai-agent')
+  fs.rmSync(path.join(settingsDir, 'settings.json'), { force: true })
+  try {
+    fs.rmdirSync(settingsDir)
+  } catch {
+    // Keep other test artifacts for failure investigation.
+  }
 }
 
 async function api<T>(
@@ -131,6 +165,7 @@ async function useTemporaryWorkspace(
     method: 'POST',
     body: { path: workspace },
   })
+  seedTemporaryModelSettings(workspace)
 
   const chip = page.locator('.workspace-chip').first()
   await chip.click()
@@ -170,6 +205,64 @@ async function createFreshSession(page: Page): Promise<string> {
   return sessionId
 }
 
+async function setInitialMode(
+  page: Page,
+  sessionId: string,
+  workspace: string,
+): Promise<void> {
+  if (!INITIAL_MODE) return
+  assert.ok(
+    ['agent', 'ask', 'plan'].includes(INITIAL_MODE),
+    `Unsupported CODING_TOOLS_E2E_INITIAL_MODE "${INITIAL_MODE}"`,
+  )
+  await page.locator('.mode-pill').click()
+  await page
+    .getByRole('option', {
+      name: INITIAL_MODE[0]!.toUpperCase() + INITIAL_MODE.slice(1),
+      exact: true,
+    })
+    .click()
+  await page.waitForFunction(
+    expectedMode =>
+      localStorage.getItem('coding_agent_mode') === expectedMode &&
+      !localStorage.getItem('coding_agent_type'),
+    INITIAL_MODE,
+  )
+  const response = await api<{ mode: string }>(
+    page,
+    endpoint(AGENT_URL, 'session/mode'),
+    {
+      method: 'POST',
+      body: {
+        session_id: sessionId,
+        mode: INITIAL_MODE,
+        workspace,
+      },
+    },
+  )
+  assert.equal(response.mode, INITIAL_MODE)
+}
+
+function transcriptToolNames(transcript: { messages: unknown[] }): string[] {
+  const names: string[] = []
+  for (const message of transcript.messages) {
+    if (!message || typeof message !== 'object') continue
+    const parts = (message as { parts?: unknown[] }).parts
+    if (!Array.isArray(parts)) continue
+    for (const part of parts) {
+      if (
+        part &&
+        typeof part === 'object' &&
+        (part as { type?: unknown }).type === 'tool_call' &&
+        typeof (part as { name?: unknown }).name === 'string'
+      ) {
+        names.push((part as { name: string }).name)
+      }
+    }
+  }
+  return names
+}
+
 async function toolCardSummaries(page: Page): Promise<string[]> {
   return page
     .locator(
@@ -180,6 +273,59 @@ async function toolCardSummaries(page: Page): Promise<string[]> {
         .map(node => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
         .filter(Boolean),
     )
+}
+
+async function waitForCompletion(page: Page): Promise<void> {
+  const send = page.locator('.composer-btn--send')
+  const deadline = Date.now() + TIMEOUT_MS
+  while (Date.now() < deadline) {
+    if (await send.isVisible().catch(() => false)) return
+    if (AUTO_ALLOW) {
+      const allow = page
+        .locator('.perm-card')
+        .getByRole('button', { name: 'Allow', exact: true })
+        .last()
+      if (
+        (await allow.isVisible().catch(() => false)) &&
+        (await allow.isEnabled().catch(() => false))
+      ) {
+        await allow.click()
+        continue
+      }
+    }
+    if (AUTO_ANSWER) {
+      const askCard = page.locator('.ask-card:not(.ask-card--done)').last()
+      const firstOption = askCard.locator('.ask-option').first()
+      if (
+        (await firstOption.isVisible().catch(() => false)) &&
+        (await firstOption.isEnabled().catch(() => false))
+      ) {
+        await firstOption.click()
+        const submit = askCard.locator('.ask-card__submit')
+        await submit.click()
+        continue
+      }
+    }
+    if (AUTO_APPROVE_PLAN) {
+      const build = page
+        .locator('.plan-card')
+        .getByRole('button', { name: 'Build', exact: true })
+        .last()
+      if (
+        (await build.isVisible().catch(() => false)) &&
+        (await build.isEnabled().catch(() => false))
+      ) {
+        await build.click()
+        continue
+      }
+    }
+    await page.waitForTimeout(200)
+  }
+  throw new Error(
+    AUTO_ALLOW
+      ? `Agent did not complete within ${TIMEOUT_MS}ms`
+      : `Agent did not complete within ${TIMEOUT_MS}ms; if a permission card is expected, set CODING_TOOLS_E2E_AUTO_ALLOW=1`,
+  )
 }
 
 async function removeTemporaryWorkspace(
@@ -323,24 +469,25 @@ async function run(): Promise<void> {
 
     sessionId = await createFreshSession(page)
     console.log(`session: ${sessionId}`)
+    await setInitialMode(page, sessionId, temporary.workspace)
 
     const composer = page.locator('.input-textarea')
     await composer.fill(PROMPT)
     await page.locator('.composer-btn--send').click()
     await page.locator('.msg-user').filter({ hasText: PROMPT }).waitFor()
 
-    // Completion restores the send button. Interaction prompts deliberately
-    // keep a cancel button visible and therefore time out with a screenshot.
-    await page
-      .locator('.composer-btn--send')
-      .waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+    // Completion restores the send button. Mutating-tool tests can opt in to
+    // approving each one-time filesystem permission prompt.
+    await waitForCompletion(page)
     await page.locator('.msg-assistant').last().waitFor({ state: 'visible' })
 
     const cards = await toolCardSummaries(page)
-    assert.ok(
-      cards.length > 0,
-      'The model completed without rendering a coding tool card; use a prompt that requires tools',
-    )
+    if (EXPECTED_CARDS.length > 0) {
+      assert.ok(
+        cards.length > 0,
+        'The model completed without rendering an expected coding tool card',
+      )
+    }
     for (const expected of EXPECTED_CARDS) {
       assert.ok(
         cards.some(card =>
@@ -364,18 +511,41 @@ async function run(): Promise<void> {
       page,
       endpoint(UI_URL, `sessions/${sessionId}/messages`),
     )
-    const transcriptText = JSON.stringify(transcript)
+    const calledTools = transcriptToolNames(transcript)
     for (const expected of EXPECTED_TOOLS) {
-      assert.match(
-        transcriptText,
-        new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
-        `Session transcript is missing "${expected}"`,
+      assert.ok(
+        calledTools.some(name => name.toLowerCase() === expected.toLowerCase()),
+        `Session transcript is missing a "${expected}" tool call; called: ${calledTools.join(', ')}`,
       )
     }
     fs.writeFileSync(
       path.join(ARTIFACT_DIR, `${sessionId}-messages.json`),
       JSON.stringify(transcript, null, 2),
     )
+
+    if (EXPECTED_FILE) {
+      assert.ok(
+        temporaryWorkspace,
+        'Expected-file validation requires a temporary workspace',
+      )
+      const expectedPath = path.resolve(temporaryWorkspace, EXPECTED_FILE)
+      const relative = path.relative(temporaryWorkspace, expectedPath)
+      assert.ok(
+        relative && !relative.startsWith('..') && !path.isAbsolute(relative),
+        `Expected file must stay inside the temporary workspace: ${EXPECTED_FILE}`,
+      )
+      assert.ok(
+        fs.existsSync(expectedPath),
+        `Expected file was not created in the temporary workspace: ${EXPECTED_FILE}`,
+      )
+      if (EXPECTED_FILE_CONTENT !== undefined) {
+        assert.equal(
+          fs.readFileSync(expectedPath, 'utf8'),
+          EXPECTED_FILE_CONTENT,
+          `Unexpected content in ${EXPECTED_FILE}`,
+        )
+      }
+    }
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.locator('.input-textarea').waitFor({ state: 'visible' })
@@ -436,6 +606,9 @@ async function run(): Promise<void> {
     console.error(`failure screenshot: ${screenshotPath}`)
     throw error
   } finally {
+    if (temporaryWorkspace) {
+      removeTemporaryModelSettings(temporaryWorkspace)
+    }
     if (passed && temporaryWorkspace) {
       await removeTemporaryWorkspace(page, temporaryWorkspace).catch(error => {
         console.warn(

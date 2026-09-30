@@ -7,6 +7,7 @@ import {
   createPathScopedEditCanUseTool,
   createSubagentContext,
   createCacheSafeParams,
+  runForkedAgent,
 } from '../core/forked-agent.js'
 import { EventBus } from '../core/event-bus.js'
 import { noopWireEmitter } from '../core/wire-emitter.js'
@@ -76,6 +77,22 @@ async function main(): Promise<void> {
   })
   assert(params.systemPrompt === 'sys', 'cache-safe params shape')
   assert(params.model === 'm', 'cache-safe model')
+
+  let forkThrowsOnError = false
+  const forkResult = await runForkedAgent({
+    prompt: 'fixture',
+    runAgent: async (_prompt, options) => {
+      forkThrowsOnError = options.throwOnError === true
+      return 'fixture result'
+    },
+    systemPrompt: 'fixture system',
+    tools: { Edit: fakeTool },
+    provider: {} as never,
+    model: 'fixture-model',
+    forkLabel: 'throw-on-error-test',
+  })
+  assert(forkThrowsOnError, 'fork requests query error propagation')
+  assert(forkResult.text === 'fixture result', 'fork returns successful text')
 
   // Stale inFlight must be cleared by wait
   const {

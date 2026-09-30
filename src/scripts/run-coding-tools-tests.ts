@@ -18,6 +18,7 @@ const integration = [
   'src/scripts/test-forked-agent.ts',
   'src/scripts/test-agent-loading.ts',
   'src/scripts/test-coding-tools-agent-skill.ts',
+  'src/scripts/test-coding-tools-cron.ts',
 ]
 
 const suite = process.argv[2] ?? 'all'

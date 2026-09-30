@@ -2,7 +2,9 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { CRON_CREATE_TOOL_NAME } from '../../constants/tool_names.js'
-import { scheduleCronTask } from '../../services/cron/index.js'
+// Import the leaf module: the cron barrel also exports the scheduler, whose
+// fire path imports run-chat-turn -> tools.ts and creates an ESM cycle here.
+import { scheduleCronTask } from '../../services/cron/schedule.js'
 import { CRON_CREATE_DESCRIPTION, CRON_CREATE_PROMPT } from './prompt.js'
 
 export const CronCreateOutputSchema = z.object({

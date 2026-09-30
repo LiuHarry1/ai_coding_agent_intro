@@ -41,5 +41,13 @@ export async function runAgent(
   ensureMessageUuids(messages)
 
   const result = await query({ ...opts, runAgent, messages })
+  if (opts.throwOnError && result.reason === 'error') {
+    const detail = result.finalText.trim()
+    throw new Error(
+      detail
+        ? `Agent query failed: ${detail}`
+        : 'Agent query failed before producing a final response.',
+    )
+  }
   return result.finalText
 }

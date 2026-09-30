@@ -115,9 +115,13 @@ const fixtureContext = {
   provider: {
     defaultModelId: () => 'fixture-model',
   },
-  runAgent: async (prompt: string, options: { tools: Record<string, AnyTool> }) => {
+  runAgent: async (
+    prompt: string,
+    options: { tools: Record<string, AnyTool>; throwOnError?: boolean },
+  ) => {
     runPrompts.push(prompt)
     assert.deepEqual(Object.keys(options.tools), ['ReadFixture'])
+    assert.equal(options.throwOnError, true)
     return 'fixture result'
   },
 } as unknown as ToolContext

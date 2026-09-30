@@ -6,7 +6,6 @@
  * Requires: npm start on :4567, working LLM proxy.
  */
 import * as fs from 'fs'
-import * as os from 'os'
 import * as path from 'path'
 import { runAgent } from '../core/agent.js'
 import { runForkedAgent } from '../core/forked-agent.js'
@@ -107,14 +106,24 @@ async function chatSSE(
   return { status: res.status, events, text: collectText(events) }
 }
 
-function setupForkSkillWorkspace(): { dir: string; cleanup: () => void } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'query-paths-fork-'))
-  const skillDir = path.join(dir, '.ai-agent', 'skills', 'pong-fork-test')
+function setupForkSkillWorkspace(): {
+  dir: string
+  skillName: string
+  cleanup: () => void
+} {
+  // Keep the configured project workspace: a fresh temp workspace has no
+  // model settings and silently falls back to the optional localhost proxy.
+  // Only the uniquely named skill fixture is temporary.
+  const dir = path.resolve(
+    process.env.QUERY_PATHS_E2E_WORKSPACE ?? process.cwd(),
+  )
+  const skillName = `pong-fork-test-${process.pid}-${Date.now()}`
+  const skillDir = path.join(dir, '.ai-agent', 'skills', skillName)
   fs.mkdirSync(skillDir, { recursive: true })
   fs.writeFileSync(
     path.join(skillDir, 'SKILL.md'),
     `---
-name: pong-fork-test
+name: ${skillName}
 description: E2E fork skill test — reply with fork-pong
 context: fork
 agent: general-purpose
@@ -124,7 +133,14 @@ Reply with exactly the word fork-pong and nothing else.
   )
   return {
     dir,
-    cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
+    skillName,
+    cleanup: () =>
+      fs.rmSync(skillDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      }),
   }
 }
 
@@ -150,9 +166,13 @@ async function main(): Promise<void> {
 
   // 1. Skill fork (runSkillFork → runAgent → query)
   {
-    const { dir, cleanup } = setupForkSkillWorkspace()
+    const { dir, skillName, cleanup } = setupForkSkillWorkspace()
     try {
-      const { status, events, text } = await chatSSE('/pong-fork-test', undefined, dir)
+      const { status, events, text } = await chatSSE(
+        `/${skillName}`,
+        undefined,
+        dir,
+      )
       const hasSkillStart = events.some(
         e => e.type === 'system' && e.subtype === 'skill_start',
       )
