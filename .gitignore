@@ -48,6 +48,7 @@ coding-tools-ui-e2e-*/
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
 
