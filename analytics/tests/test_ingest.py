@@ -40,6 +40,14 @@ def test_batch_and_idempotent_event_id(client):
     assert client.get("/v1/stats/summary").json()["calls"] == 2
 
 
+def test_long_provider_is_clipped(client):
+    provider = "openai-compatible model=qwen3.6-35b-a3b structuredOutputs=true vision=true " * 10
+    r = client.post("/v1/usage", json={"provider": provider, "input_tokens": 1})
+    assert r.status_code == 200
+    rows = client.get("/v1/stats/usage", params={"group_by": "provider"}).json()
+    assert [len(row["key"]) for row in rows] == [255]
+
+
 def test_unknown_model_zero_cost(client):
     client.post("/v1/usage", json={"model": "mystery-llm", "input_tokens": 100, "output_tokens": 100})
     assert client.get("/v1/stats/summary").json()["cost_usd"] == 0.0

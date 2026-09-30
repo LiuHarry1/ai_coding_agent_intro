@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS usage_records (
     session_id           VARCHAR(64)     NULL,
     turn_index           INT             NULL,
     model                VARCHAR(128)    NULL,
-    provider             VARCHAR(64)     NULL,
+    provider             VARCHAR(255)    NULL,
     source               VARCHAR(32)     NULL,
     input_tokens         INT             NOT NULL DEFAULT 0,
     output_tokens        INT             NOT NULL DEFAULT 0,

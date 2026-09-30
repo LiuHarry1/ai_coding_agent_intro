@@ -46,7 +46,7 @@ class UsageRecord(Base):
     turn_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)

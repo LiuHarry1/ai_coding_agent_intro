@@ -37,6 +37,12 @@ def _enforce_batch_size(n: int) -> None:
         )
 
 
+def _clip(value: str | None, column) -> str | None:
+    if value is None:
+        return None
+    return value[: column.type.length]
+
+
 def _usage_to_row(u: UsageIn) -> UsageRecord:
     total = u.total_tokens if u.total_tokens is not None else u.input_tokens + u.output_tokens
     cost = compute_cost_usd(
@@ -47,9 +53,9 @@ def _usage_to_row(u: UsageIn) -> UsageRecord:
         "user_email": u.user_email,
         "session_id": u.session_id,
         "turn_index": u.turn_index,
-        "model": u.model,
-        "provider": u.provider,
-        "source": u.source,
+        "model": _clip(u.model, UsageRecord.__table__.c.model),
+        "provider": _clip(u.provider, UsageRecord.__table__.c.provider),
+        "source": _clip(u.source, UsageRecord.__table__.c.source),
         "input_tokens": u.input_tokens,
         "output_tokens": u.output_tokens,
         "cached_input_tokens": u.cached_input_tokens,
