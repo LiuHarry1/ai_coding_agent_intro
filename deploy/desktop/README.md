@@ -67,8 +67,26 @@ Electron 在 packaged / 开发态会设置 `WORKSPACE_SEED_DIR`；agent 首次�
 
 ```bash
 npm run desktop:pack        # 当前平台
-npm run desktop:pack:win    # Windows
+npm run desktop:pack:win    # Windows x64
+npm run desktop:pack:mac:x64
+npm run desktop:pack:mac:arm64
 ```
+
+### 内置 Ripgrep
+
+打包脚本会先运行 `scripts/stage-ripgrep.cjs`，下载清单固定的
+Ripgrep 版本，校验归档 SHA-256，并且只把目标平台的 `rg` / `rg.exe`
+放进 `resources/ripgrep`。安装和首次启动都不访问网络。
+
+默认从 GitHub Release 下载；构建网络无法访问 GitHub 时，可以将
+`RIPGREP_BASE_URL` 指向包含相同归档文件的镜像。镜像不能覆盖清单中的
+SHA-256。归档缓存和暂存结果位于被 git 忽略的 `dist/`，可用以下命令检查：
+
+```bash
+npm run check:ripgrep -- --target darwin-arm64
+```
+
+发行资源同时包含上游的 `LICENSE-MIT` 和 `UNLICENSE`。
 
 ## 验收清单
 
