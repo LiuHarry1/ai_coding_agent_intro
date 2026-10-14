@@ -31,6 +31,8 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             client/web/package-lock.json
+            protocol/package-lock.json
+            client-sdk/package-lock.json
 
       # GrepTool shells out to `rg`; the runner image does not ship it.
       - name: Install ripgrep
@@ -40,9 +42,11 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm ci --ignore-scripts --prefix client/web
+          npm ci --ignore-scripts --prefix protocol
+          npm ci --ignore-scripts --prefix client-sdk
 
-      - name: Typecheck server
-        run: npx tsc --noEmit -p src/tsconfig.json
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Build web client
         run: npm run build:web
