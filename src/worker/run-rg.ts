@@ -4,9 +4,11 @@
  */
 import { execFile, type ExecFileException } from 'node:child_process'
 import { isWindows } from '../core/platform.js'
+import { resolveRgCommand } from '../utils/resolve-rg-command.js'
 
 const MAX_BUFFER_SIZE = 20 * 1024 * 1024
 const DEFAULT_TIMEOUT_MS = 20_000
+const RG_COMMAND = resolveRgCommand()
 
 function parseLines(stdout: string): string[] {
   return stdout
@@ -28,7 +30,7 @@ export function runRg(opts: {
 
   return new Promise((resolve, reject) => {
     execFile(
-      'rg',
+      RG_COMMAND,
       fullArgs,
       {
         maxBuffer: MAX_BUFFER_SIZE,

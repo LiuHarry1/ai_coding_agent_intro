@@ -42,6 +42,11 @@ module.exports = {
       to: 'chrome-extension',
       filter: ['**/*', '!**/*.pem', '!**/*.crx'],
     },
+    {
+      from: 'dist/desktop-resources/ripgrep',
+      to: 'ripgrep',
+      filter: ['**/*'],
+    },
   ],
   asar: false,
   win: {

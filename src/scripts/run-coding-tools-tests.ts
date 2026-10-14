@@ -6,6 +6,7 @@ const unit = [
   'src/scripts/test-coding-tools-core.ts',
   'src/scripts/test-coding-tools-platform.ts',
   'src/scripts/test-coding-tools-orchestration.ts',
+  'src/scripts/test-bundled-ripgrep.ts',
   'src/scripts/test-file-change-card-dom.mjs',
 ]
 
@@ -52,5 +53,6 @@ for (const script of scripts) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
-console.log(`\n[coding-tools] ${suite} suite passed (${scripts.length} scripts)`)
-
+console.log(
+  `\n[coding-tools] ${suite} suite passed (${scripts.length} scripts)`,
+)

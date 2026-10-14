@@ -34,6 +34,22 @@ export function resolveWorkspaceSeedDir(
   return null
 }
 
+/** Trusted ripgrep shipped beside the packaged app (outside app.asar). */
+export function resolveBundledRipgrepPath({
+  packaged = false,
+  resourcesPath,
+  platform = process.platform,
+} = {}) {
+  if (!packaged || !resourcesPath) return null
+  const executable = platform === 'win32' ? 'rg.exe' : 'rg'
+  const candidate = path.join(resourcesPath, 'ripgrep', executable)
+  try {
+    return fs.statSync(candidate).isFile() ? candidate : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * App-dir basename for user state (mirrors src/utils/app-dir.ts).
  * Override with AI_AGENT_DIR (leading dot added if missing).
@@ -68,6 +84,16 @@ export function buildAgentSpawnEnv(
     ...baseEnv,
     PORT: String(port),
     AGENT_ROOT: appRoot,
+  }
+  // Packaged desktop owns this reserved variable. Never accept an inherited
+  // path in that mode; only expose the file under Electron's resourcesPath.
+  if (packaged) {
+    delete env.BUNDLED_RG_PATH
+    const bundledRg = resolveBundledRipgrepPath({
+      packaged,
+      resourcesPath,
+    })
+    if (bundledRg) env.BUNDLED_RG_PATH = bundledRg
   }
   if (workspace && env.WORKSPACE == null) {
     env.WORKSPACE = workspace

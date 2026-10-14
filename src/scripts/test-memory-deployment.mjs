@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
 import {
   buildAgentSpawnEnv,
+  resolveBundledRipgrepPath,
   resolveDefaultDesktopWorkspace,
 } from '../../electron/agent-launch.mjs'
 
@@ -44,5 +47,78 @@ assert.equal(
   '/explicit-workspace',
   'explicit Electron workspace override must win',
 )
+
+const resourcesPath = fs.mkdtempSync(
+  path.join(os.tmpdir(), 'desktop-ripgrep-env-'),
+)
+try {
+  const ripgrepDir = path.join(resourcesPath, 'ripgrep')
+  fs.mkdirSync(ripgrepDir, { recursive: true })
+  fs.writeFileSync(path.join(ripgrepDir, 'rg'), 'mac fixture')
+  fs.writeFileSync(path.join(ripgrepDir, 'rg.exe'), 'windows fixture')
+
+  assert.equal(
+    resolveBundledRipgrepPath({
+      packaged: true,
+      resourcesPath,
+      platform: 'darwin',
+    }),
+    path.join(ripgrepDir, 'rg'),
+    'macOS packaged desktop must resolve the bundled rg',
+  )
+  assert.equal(
+    resolveBundledRipgrepPath({
+      packaged: true,
+      resourcesPath,
+      platform: 'win32',
+    }),
+    path.join(ripgrepDir, 'rg.exe'),
+    'Windows packaged desktop must resolve the bundled rg.exe',
+  )
+  assert.equal(
+    resolveBundledRipgrepPath({
+      packaged: false,
+      resourcesPath,
+      platform: 'darwin',
+    }),
+    null,
+    'unpackaged desktop must not claim a bundled ripgrep resource',
+  )
+
+  const bundledEnv = buildAgentSpawnEnv(
+    '/read-only/app',
+    4567,
+    { HOME: home, BUNDLED_RG_PATH: '/untrusted/inherited/rg' },
+    {
+      packaged: true,
+      resourcesPath,
+      workspace,
+    },
+  )
+  assert.equal(
+    bundledEnv.BUNDLED_RG_PATH,
+    path.join(ripgrepDir, process.platform === 'win32' ? 'rg.exe' : 'rg'),
+    'packaged Electron must replace inherited rg paths with its own resource',
+  )
+
+  fs.rmSync(ripgrepDir, { recursive: true, force: true })
+  const missingEnv = buildAgentSpawnEnv(
+    '/read-only/app',
+    4567,
+    { HOME: home, BUNDLED_RG_PATH: '/untrusted/inherited/rg' },
+    {
+      packaged: true,
+      resourcesPath,
+      workspace,
+    },
+  )
+  assert.equal(
+    missingEnv.BUNDLED_RG_PATH,
+    undefined,
+    'packaged Electron must clear inherited rg paths when its resource is missing',
+  )
+} finally {
+  fs.rmSync(resourcesPath, { recursive: true, force: true })
+}
 
 console.log('All memory deployment checks passed.')

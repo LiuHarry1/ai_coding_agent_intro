@@ -24,6 +24,7 @@ import type { ChildProcess, ExecFileException } from 'child_process'
 import { execFile } from 'child_process'
 import { isWindows } from '../core/platform.js'
 import { ripGrepFallback } from './ripgrep-fallback.js'
+import { resolveRgCommand } from './resolve-rg-command.js'
 
 const MAX_BUFFER_SIZE = 20_000_000 // 20MB; large monorepos can have 200k+ files
 
@@ -85,11 +86,10 @@ function markRgMissing(): void {
   }
 }
 
-// SECURITY: Use the bare command name 'rg' instead of an absolute path
-// resolved by `which`. If we used a resolved path, a malicious `./rg.exe`
-// in cwd could be executed; with just 'rg' the OS resolves it safely
-// (NoDefaultCurrentDirectoryInExePath on Windows etc.).
-const RG_COMMAND = 'rg'
+// Packaged Electron injects an absolute path under its trusted resources
+// directory. Otherwise use the bare command name instead of resolving through
+// `which`, which could accidentally trust an executable from the workspace.
+const RG_COMMAND = resolveRgCommand()
 
 function ripGrepRaw(
   args: string[],
