@@ -474,19 +474,17 @@ function testRestoreRoundTrip(): void {
 
 async function testSlashInlineRegisters(): Promise<void> {
   const session = makeSession()
-  const slash = await resolveSlashCommand(
-    '/concur-expense',
-    REPO_ROOT,
-    session,
-  )
+  // echarts-chart is the only skill tracked in git (see .gitignore); every
+  // other entry under .ai-agent/skills is machine-local.
+  const slash = await resolveSlashCommand('/echarts-chart', REPO_ROOT, session)
   assert.equal(slash.forkSkill, null)
   assert.ok(
-    slash.effectiveMessage.includes('Never Submit'),
+    slash.effectiveMessage.includes('reproducible data charts'),
     'slash inline expands skill body into the user prompt',
   )
   const registered = getInvokedSkillsForAgent(session, null)
   assert.equal(registered.length, 1)
-  assert.equal(registered[0]!.skillName, 'concur-expense')
+  assert.equal(registered[0]!.skillName, 'echarts-chart')
   console.log('[ok] slash inline skill registers invokedSkills')
 }
 

@@ -803,7 +803,7 @@ Purely local compact regression tests (do not start a server or call a real mode
 npm run test:compact
 ```
 
-This covers compact boundaries/repeated active model projections, the Full cache-safe fork and fallback, Micro/reactive behavior, manual compact semantics, Session Memory and SM→Full fallback, append-only restart and legacy checkpoints, attachment/agent-listing recovery, and invalidation of Read deduplication state. It also asserts that every tool reaches the session map through `activeReadFileState()` — fork isolation is an async scope rather than a type-level guarantee, so a tool touching `context.session.readFileState` directly would compile and silently leak. Old E2E scripts that require a real server, fixed external workspace, or real provider are not included in the default aggregate, including `test-compaction-new-session.ts`, `test-compaction-checkpoint-persist.ts`, and `test-compaction-attachments.ts`.
+This covers compact boundaries/repeated active model projections, the Full cache-safe fork and fallback, Micro/reactive behavior, manual compact semantics, Session Memory and SM→Full fallback, append-only restart and legacy checkpoints, attachment/agent-listing recovery, and invalidation of Read deduplication state. It also asserts that every tool reaches the session map through `activeReadFileState()` — fork isolation is an async scope rather than a type-level guarantee, so a tool touching `context.session.readFileState` directly would compile and silently leak. E2E scripts that require a running server (such as `test-compaction-new-session.ts`) live under `npm run test:live` and are not part of the default `npm test` aggregate.
 
 ## 13. Code map
 
