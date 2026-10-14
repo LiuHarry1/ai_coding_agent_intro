@@ -104,9 +104,7 @@ function startAgent() {
     packaged: app.isPackaged,
   })
   const electronNode = nodeExec === process.execPath
-  const nodeEnv = electronNode
-    ? { ...env, ELECTRON_RUN_AS_NODE: '1' }
-    : env
+  const nodeEnv = electronNode ? { ...env, ELECTRON_RUN_AS_NODE: '1' } : env
   const launchHeader =
     `[desktop] agent launch kind=${launch.kind} entry=${launchEntry}` +
     ` node=${nodeExec}` +

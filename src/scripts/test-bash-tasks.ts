@@ -5,10 +5,7 @@
 import assert from 'assert'
 import * as os from 'os'
 import * as path from 'path'
-import {
-  generateTaskId,
-  isTerminalTaskStatus,
-} from '../Task.js'
+import { generateTaskId, isTerminalTaskStatus } from '../Task.js'
 import {
   _resetTaskOutputDirForTest,
   appendTaskOutput,
@@ -19,7 +16,12 @@ import {
 } from '../utils/task/diskOutput.js'
 import { formatTaskOutput } from '../utils/task/outputFormatting.js'
 import { resolveFileInCwd } from '../utils/read/index.js'
-import { isReadableInternalPath, getProjectsRoot, registerSessionLocation, computeProjectKey } from '../core/session-paths.js'
+import {
+  isReadableInternalPath,
+  getProjectsRoot,
+  registerSessionLocation,
+  computeProjectKey,
+} from '../core/session-paths.js'
 import { resolveAgentHome } from '../utils/request-scope.js'
 import { spawnShellTask } from '../tasks/LocalShellTask/LocalShellTask.js'
 import { stopTask } from '../tasks/stopTask.js'

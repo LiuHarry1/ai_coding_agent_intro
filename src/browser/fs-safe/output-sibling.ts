@@ -17,7 +17,10 @@ const OPEN_READ_WRITE_NOFOLLOW =
     : 0)
 
 function safeFallbackFileName(fallbackFileName?: string): string {
-  return sanitizeUntrustedFileName(fallbackFileName ?? 'output.bin', 'output.bin')
+  return sanitizeUntrustedFileName(
+    fallbackFileName ?? 'output.bin',
+    'output.bin',
+  )
 }
 
 function buildSiblingTempPath(
@@ -68,7 +71,10 @@ function assertStagedFile(
 async function openPinnedStagedFile(tempPath: string, maxBytes?: number) {
   const preview = await fs.lstat(tempPath)
   if (preview.isSymbolicLink()) {
-    throw new FsSafeError('symlink', 'symlink sibling-staged output not allowed')
+    throw new FsSafeError(
+      'symlink',
+      'symlink sibling-staged output not allowed',
+    )
   }
   const handle = await fs.open(tempPath, OPEN_READ_WRITE_NOFOLLOW)
   try {
@@ -128,7 +134,11 @@ export async function writeExternalFileViaSibling(params: {
       }
       await syncFile(pinned.handle)
       const currentIdentity = await pinned.handle.stat()
-      assertStagedFile(await fs.lstat(tempPath), currentIdentity, params.maxBytes)
+      assertStagedFile(
+        await fs.lstat(tempPath),
+        currentIdentity,
+        params.maxBytes,
+      )
       if (!sameFileIdentity(currentIdentity, stagedIdentity)) {
         throw new FsSafeError(
           'path-mismatch',

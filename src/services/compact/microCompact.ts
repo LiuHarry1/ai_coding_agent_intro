@@ -275,7 +275,8 @@ function collectCompactableToolIds(messages: Message[]): string[] {
     if (m.role === 'tool') {
       for (const part of m.content) {
         const text = toolResultOutputToText(part.output)
-        if (text === MICRO_COMPACT_MARKER || isPersistedReference(text)) continue
+        if (text === MICRO_COMPACT_MARKER || isPersistedReference(text))
+          continue
         if (
           CLEARABLE_TOOL_RESULTS.has(part.toolName) ||
           text.length >= CLEARABLE_MIN_CHARS

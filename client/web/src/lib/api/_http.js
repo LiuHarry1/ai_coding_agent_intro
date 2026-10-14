@@ -20,7 +20,8 @@ const PUBLIC_MOUNT = '/code'
  */
 function inferredPublicBase() {
   const p = globalThis.location?.pathname || ''
-  if (p === PUBLIC_MOUNT || p.startsWith(`${PUBLIC_MOUNT}/`)) return PUBLIC_MOUNT
+  if (p === PUBLIC_MOUNT || p.startsWith(`${PUBLIC_MOUNT}/`))
+    return PUBLIC_MOUNT
   return ''
 }
 

@@ -117,7 +117,10 @@ export function mergeSshHosts(
 }
 
 /** Build `ssh` CLI argv prefix (without remote command). */
-export function buildSshArgs(host: ParsedSshHost, extra: string[] = []): string[] {
+export function buildSshArgs(
+  host: ParsedSshHost,
+  extra: string[] = [],
+): string[] {
   const args: string[] = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15']
   if (host.port) args.push('-p', String(host.port))
   if (host.identityFile) args.push('-i', host.identityFile)

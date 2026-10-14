@@ -22,7 +22,11 @@ let workspaceCwd = ''
 let sendEvent: ((msg: RuntimeServerMessage) => void) | undefined
 const pendingDiagnostics = new Map<
   string,
-  { serverName: string; files: DiagnosticFile[]; timer: ReturnType<typeof setTimeout> }
+  {
+    serverName: string
+    files: DiagnosticFile[]
+    timer: ReturnType<typeof setTimeout>
+  }
 >()
 
 function stableStringify(value: unknown): string {

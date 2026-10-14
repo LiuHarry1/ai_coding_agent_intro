@@ -174,64 +174,64 @@ export default function WebSearchCard({ part, nested = false }) {
       }
     >
       <div className='web-search-body'>
-          {isError && <div className='web-search-error'>{result}</div>}
-          {!isError && answers.length > 0 && (
-            <div className='web-search-answers'>
-              {answers.map((a, i) => (
-                <div key={i} className='web-search-answer'>
-                  {'\u26A1'} {a}
-                </div>
-              ))}
-            </div>
-          )}
-          {!isError && results.length > 0 && (
-            <ol className='web-search-results'>
-              {visibleResults.map((item, i) => (
-                <ResultRow key={i} item={item} />
-              ))}
-            </ol>
-          )}
-          {!isError && !showAll && results.length > PREVIEW_LIMIT && (
-            <button
-              type='button'
-              className='web-search-more'
-              onClick={e => {
-                e.stopPropagation()
-                setShowAll(true)
-              }}
-            >
-              Show all {results.length} results
-            </button>
-          )}
-          {!isError && suggestions.length > 0 && (
-            <div className='web-search-suggestions'>
-              <span className='web-search-suggestions-label'>Related:</span>
-              {suggestions.map((s, i) => (
-                <span key={i} className='web-search-suggestion'>
-                  {s}
-                </span>
-              ))}
-            </div>
-          )}
-          {!isError && parsed?.content && results.length === 0 && (
-            <pre className='web-search-raw'>{parsed.content}</pre>
-          )}
-          {!isError &&
-            isDone &&
-            results.length === 0 &&
-            parsed &&
-            !parsed.content && (
-              <div className='web-search-empty'>
-                No results for {query ? `"${query}"` : 'this query'}.
+        {isError && <div className='web-search-error'>{result}</div>}
+        {!isError && answers.length > 0 && (
+          <div className='web-search-answers'>
+            {answers.map((a, i) => (
+              <div key={i} className='web-search-answer'>
+                {'\u26A1'} {a}
               </div>
-            )}
-          {!isError && !parsed && isDone && (
-            // Raw result couldn't be parsed as the documented JSON shape
-            // (likely an MCP-provided search tool with different output).
-            // Show the text verbatim rather than rendering nothing.
-            <pre className='web-search-raw'>{result}</pre>
+            ))}
+          </div>
+        )}
+        {!isError && results.length > 0 && (
+          <ol className='web-search-results'>
+            {visibleResults.map((item, i) => (
+              <ResultRow key={i} item={item} />
+            ))}
+          </ol>
+        )}
+        {!isError && !showAll && results.length > PREVIEW_LIMIT && (
+          <button
+            type='button'
+            className='web-search-more'
+            onClick={e => {
+              e.stopPropagation()
+              setShowAll(true)
+            }}
+          >
+            Show all {results.length} results
+          </button>
+        )}
+        {!isError && suggestions.length > 0 && (
+          <div className='web-search-suggestions'>
+            <span className='web-search-suggestions-label'>Related:</span>
+            {suggestions.map((s, i) => (
+              <span key={i} className='web-search-suggestion'>
+                {s}
+              </span>
+            ))}
+          </div>
+        )}
+        {!isError && parsed?.content && results.length === 0 && (
+          <pre className='web-search-raw'>{parsed.content}</pre>
+        )}
+        {!isError &&
+          isDone &&
+          results.length === 0 &&
+          parsed &&
+          !parsed.content && (
+            <div className='web-search-empty'>
+              No results for {query ? `"${query}"` : 'this query'}.
+            </div>
           )}
-        </div>
+        {!isError && !parsed && isDone && (
+          // Raw result couldn't be parsed as the documented JSON shape
+          // (likely an MCP-provided search tool with different output).
+          // Show the text verbatim rather than rendering nothing.
+          <pre className='web-search-raw'>{result}</pre>
+        )}
+      </div>
     </ToolChrome>
   )
 }

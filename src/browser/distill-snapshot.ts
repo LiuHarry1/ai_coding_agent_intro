@@ -258,7 +258,8 @@ export function prioritizeAriaSnapshot(
   if (text.length > maxChars || countRefs(text) > maxNodes) {
     // Budget is smaller than the reserved block: keep its start (dialog title +
     // first rows), not the page head.
-    const prefix = headEnd > 0 ? `${lines.slice(0, headEnd).join('\n')}\n${OMITTED}\n` : ''
+    const prefix =
+      headEnd > 0 ? `${lines.slice(0, headEnd).join('\n')}\n${OMITTED}\n` : ''
     text =
       prefix +
       clipToBudget(
@@ -340,7 +341,8 @@ function mergeRanges(ranges: Range[]): Range[] {
   const out: Range[] = []
   for (const range of sorted) {
     const last = out[out.length - 1]
-    if (last && range.start <= last.end) last.end = Math.max(last.end, range.end)
+    if (last && range.start <= last.end)
+      last.end = Math.max(last.end, range.end)
     else out.push({ ...range })
   }
   return out
@@ -396,8 +398,7 @@ function clipToBudget(
 
 const BADGE_CHILD =
   /^(\s*)- (emphasis|generic|text)(?: \[[^\]]+\])* \[ref=([^\]]+)\](?: \[[^\]]+\])*: ["']?(\d+)["']?\s*$/
-const LABEL_CHILD =
-  /^(\s*)- (generic|text)(?: ((?:\[[^\]]+\] ?)*))?: (.+)\s*$/
+const LABEL_CHILD = /^(\s*)- (generic|text)(?: ((?:\[[^\]]+\] ?)*))?: (.+)\s*$/
 
 /**
  * Playwright stamps a ref on a numeric badge and leaves the visible label as a
@@ -480,8 +481,7 @@ export function groupBadgeLabels(raw: string): string {
       continue
     }
 
-    const parentRef =
-      /\[ref=([^\]]+)\]/.exec(parent)?.[1] ?? badge?.ref ?? 'e0'
+    const parentRef = /\[ref=([^\]]+)\]/.exec(parent)?.[1] ?? badge?.ref ?? 'e0'
     out.push(promoteParent(parent, parentRef, label.name))
 
     const skip = new Set<number>()
@@ -518,7 +518,11 @@ export function groupBadgeLabels(raw: string): string {
   return out.join('\n')
 }
 
-function promoteParent(parent: string, parentRef: string, name: string): string {
+function promoteParent(
+  parent: string,
+  parentRef: string,
+  name: string,
+): string {
   const stripped = parent
     .replace(/\[cursor=pointer\]\s*/g, '')
     .replace(/\s*:?\s*$/, '')
@@ -548,15 +552,19 @@ function subtreeEndFrom(lines: string[], start: number, limit: number): number {
 
 function matchBadge(
   line: string,
-): { line: string; indent: string; role: string; ref: string; digits: string } | null {
+): {
+  line: string
+  indent: string
+  role: string
+  ref: string
+  digits: string
+} | null {
   const m = BADGE_CHILD.exec(line)
   if (!m) return null
   return { line, indent: m[1], role: m[2], ref: m[3], digits: m[4] }
 }
 
-function matchLabel(
-  line: string,
-): { line: string; name: string } | null {
+function matchLabel(line: string): { line: string; name: string } | null {
   const m = LABEL_CHILD.exec(line)
   if (!m) return null
   const name = m[4].replace(/^["']|["']$/g, '').trim()

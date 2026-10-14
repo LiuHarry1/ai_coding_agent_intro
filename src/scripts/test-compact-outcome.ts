@@ -149,9 +149,12 @@ async function main(): Promise<void> {
       0,
       'full compact active view has no verbatim tail',
     )
-    console.log('[ok] full compact appends boundary without replacing transcript')
+    console.log(
+      '[ok] full compact appends boundary without replacing transcript',
+    )
   } finally {
-    if (prevOverride === undefined) delete process.env.COMPACT_THRESHOLD_OVERRIDE
+    if (prevOverride === undefined)
+      delete process.env.COMPACT_THRESHOLD_OVERRIDE
     else process.env.COMPACT_THRESHOLD_OVERRIDE = prevOverride
     resetCompactionFailures()
   }

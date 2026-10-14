@@ -90,7 +90,9 @@ async function connectExtension(backend: BrowserBackend): Promise<Browser> {
 }
 
 function allPages(browser: Browser): Page[] {
-  return browser.contexts().flatMap(ctx => ctx.pages().filter(p => !p.isClosed()))
+  return browser
+    .contexts()
+    .flatMap(ctx => ctx.pages().filter(p => !p.isClosed()))
 }
 
 /**
@@ -115,7 +117,10 @@ async function pageMarkedForTab(
   for (const page of candidates) {
     const seen = await Promise.race([
       page
-        .evaluate(key => (window as unknown as Record<string, unknown>)[key], TAB_TOKEN_KEY)
+        .evaluate(
+          key => (window as unknown as Record<string, unknown>)[key],
+          TAB_TOKEN_KEY,
+        )
         .catch(() => undefined),
       new Promise<undefined>(resolve =>
         setTimeout(() => resolve(undefined), TAB_TOKEN_PROBE_MS),
@@ -190,7 +195,9 @@ async function findPage(
 }
 
 export function isRecoverablePlaywrightDisconnectError(err: unknown): boolean {
-  const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  const message = (
+    err instanceof Error ? err.message : String(err)
+  ).toLowerCase()
   return (
     message.includes('target page, context or browser has been closed') ||
     message.includes('browser has been closed') ||
@@ -203,7 +210,9 @@ export function isRecoverablePlaywrightDisconnectError(err: unknown): boolean {
 }
 
 function isConnectOverCDPTimeout(err: unknown): boolean {
-  const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  const message = (
+    err instanceof Error ? err.message : String(err)
+  ).toLowerCase()
   return message.includes('connectovercdp') && message.includes('timeout')
 }
 
@@ -220,7 +229,9 @@ function isRecoverableStalePageSelectionError(
   ) {
     return true
   }
-  const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  const message = (
+    err instanceof Error ? err.message : String(err)
+  ).toLowerCase()
   return (
     message.includes('tab not found') ||
     message.includes('no open tab with id') ||

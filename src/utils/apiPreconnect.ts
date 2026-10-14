@@ -17,10 +17,10 @@ let fired = false
 function hasCustomTransport(): boolean {
   return Boolean(
     process.env.HTTPS_PROXY ||
-      process.env.https_proxy ||
-      process.env.HTTP_PROXY ||
-      process.env.http_proxy ||
-      process.env.NODE_EXTRA_CA_CERTS,
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.NODE_EXTRA_CA_CERTS,
   )
 }
 

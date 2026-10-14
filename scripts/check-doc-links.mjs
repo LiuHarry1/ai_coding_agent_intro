@@ -18,10 +18,18 @@ const linkPattern = /!?\[[^\]]*]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g
 function candidatesFor(target) {
   const out = [target]
   if (!path.extname(target)) {
-    out.push(`${target}.md`, path.join(target, 'index.md'), path.join(target, 'README.md'))
+    out.push(
+      `${target}.md`,
+      path.join(target, 'index.md'),
+      path.join(target, 'README.md'),
+    )
   }
   if (target.endsWith('/')) {
-    out.push(path.join(target, 'index.md'), path.join(target, 'README.md'), path.join(target, 'index.html'))
+    out.push(
+      path.join(target, 'index.md'),
+      path.join(target, 'README.md'),
+      path.join(target, 'index.html'),
+    )
   }
   return out
 }

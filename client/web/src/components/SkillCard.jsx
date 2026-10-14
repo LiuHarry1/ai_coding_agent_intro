@@ -13,10 +13,7 @@ import {
   pickLiveMember,
   summarizeToolSteps,
 } from '../lib/tool-density.js'
-import {
-  SUPPRESSED_TOOL_CARDS,
-  SUBAGENT_SUPPRESSED,
-} from './pickToolCard.js'
+import { SUPPRESSED_TOOL_CARDS, SUBAGENT_SUPPRESSED } from './pickToolCard.js'
 import { toolActionLabel, toolErrorDetails } from '../lib/tool-action-labels.js'
 
 /**
@@ -162,32 +159,32 @@ export default function SkillCard({ part, nested = false }) {
       }
     >
       <div className='subagent-expanded'>
-          {steps.length > 0 && stepsOpen && (
-            <NestedToolRuns
-              steps={steps}
-              showAllSteps={showAllSteps}
-              onShowAll={() => setShowAllSteps(true)}
-            />
-          )}
+        {steps.length > 0 && stepsOpen && (
+          <NestedToolRuns
+            steps={steps}
+            showAllSteps={showAllSteps}
+            onShowAll={() => setShowAllSteps(true)}
+          />
+        )}
 
-          {isError && (
-            <div className='tool-row-body tool-row-body--error'>{result}</div>
-          )}
-          {!isError && hasReport && isFork && (
-            <div className='subagent-result'>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={mdComponents}
-              >
-                {result}
-              </ReactMarkdown>
-            </div>
-          )}
-          {!isError && hasBody && !isFork && (
-            <pre className='tool-row-body'>{body}</pre>
-          )}
-        </div>
+        {isError && (
+          <div className='tool-row-body tool-row-body--error'>{result}</div>
+        )}
+        {!isError && hasReport && isFork && (
+          <div className='subagent-result'>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+              components={mdComponents}
+            >
+              {result}
+            </ReactMarkdown>
+          </div>
+        )}
+        {!isError && hasBody && !isFork && (
+          <pre className='tool-row-body'>{body}</pre>
+        )}
+      </div>
     </ToolChrome>
   )
 }

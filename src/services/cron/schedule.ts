@@ -135,7 +135,11 @@ export function scheduleCronTask(
       return { ok: false, code: 'invalid', message: `Invalid at time '${at}'` }
     }
     if (atMs <= Date.now()) {
-      return { ok: false, code: 'invalid', message: 'at time must be in the future' }
+      return {
+        ok: false,
+        code: 'invalid',
+        message: 'at time must be in the future',
+      }
     }
     storeInput.atMs = atMs
     storeInput.recurring = false

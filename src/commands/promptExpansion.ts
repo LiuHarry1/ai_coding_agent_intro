@@ -68,7 +68,9 @@ async function runInlineShell(cmd: string, cwd: string): Promise<string> {
 
 async function inlineFile(relPath: string, cwd: string): Promise<string> {
   // path.resolve — never path.join (win32 join(cwd, abs) concatenates).
-  const abs = path.isAbsolute(relPath) ? path.normalize(relPath) : path.resolve(cwd, relPath)
+  const abs = path.isAbsolute(relPath)
+    ? path.normalize(relPath)
+    : path.resolve(cwd, relPath)
 
   let raw: string
   try {

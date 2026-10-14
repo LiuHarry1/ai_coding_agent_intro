@@ -8,13 +8,11 @@ import {
 import type { WorkspaceHandle } from './types.js'
 import { getDefaultWorkspace } from '../core/workspace.js'
 
-export function isRemoteWorkspace(
-  workspace?: WorkspaceHandle | null,
-): boolean {
+export function isRemoteWorkspace(workspace?: WorkspaceHandle | null): boolean {
   return Boolean(
     workspace &&
-      workspace.environmentId !== 'local' &&
-      workspace.environmentId.startsWith('ssh:'),
+    workspace.environmentId !== 'local' &&
+    workspace.environmentId.startsWith('ssh:'),
   )
 }
 

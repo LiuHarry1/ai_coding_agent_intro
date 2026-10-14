@@ -53,7 +53,9 @@ export function init(mode: BootMode): Promise<void> {
         const workspace = resolveDefaultWorkspace()
         bootLog(`[start] workspace = ${workspace}`)
       } catch (err) {
-        bootLog(`[start] Failed to resolve workspace: ${(err as Error).message}`)
+        bootLog(
+          `[start] Failed to resolve workspace: ${(err as Error).message}`,
+        )
         process.exit(1)
       }
     })()

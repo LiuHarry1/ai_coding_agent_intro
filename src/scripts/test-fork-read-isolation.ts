@@ -101,7 +101,10 @@ try {
     runForkedAgent({
       prompt: 'extract',
       runAgent: async () => {
-        activeReadFileState(throwingState)!.set('/memdir/leaked.md', entry('memory'))
+        activeReadFileState(throwingState)!.set(
+          '/memdir/leaked.md',
+          entry('memory'),
+        )
         throw new Error('fork blew up')
       },
       systemPrompt: 'test',
@@ -126,7 +129,10 @@ try {
   const forkRun = runForkedAgent({
     prompt: 'extract',
     runAgent: async () => {
-      activeReadFileState(concurrentState)!.set('/memdir/scanned.md', entry('m'))
+      activeReadFileState(concurrentState)!.set(
+        '/memdir/scanned.md',
+        entry('m'),
+      )
       forkStarted()
       await held
       return 'done'
@@ -141,7 +147,10 @@ try {
 
   await started
   // Main loop, outside the fork's async scope — resolves to the session map.
-  activeReadFileState(concurrentState)!.set('/repo/src/next-turn.ts', entry('t2'))
+  activeReadFileState(concurrentState)!.set(
+    '/repo/src/next-turn.ts',
+    entry('t2'),
+  )
   releaseFork()
   await forkRun
 
@@ -196,7 +205,10 @@ try {
   console.log('[ok] tail diffing resolves relative paths')
 
   // A tail that covers every recent file collapses the section entirely.
-  const allPreserved: Message[] = [readCall('t3', kept), readCall('t4', dropped)]
+  const allPreserved: Message[] = [
+    readCall('t3', kept),
+    readCall('t4', dropped),
+  ]
   assert.equal(
     restoreRecentFiles(recent, dir, budget, allPreserved),
     '',
@@ -254,7 +266,9 @@ try {
     'a four-read batch in one tool message must clear all but the most recent',
   )
   assert.ok(micro.tokensFreed > 0, 'clearing must free tokens')
-  const survivors = (micro.messages[2] as { content: { output: { value: string } }[] }).content
+  const survivors = (
+    micro.messages[2] as { content: { output: { value: string } }[] }
+  ).content
   assert.equal(
     survivors[3].output.value.length,
     4_000,

@@ -45,10 +45,7 @@ export const definition: ToolDefinition = {
     return tool({
       description: DESCRIPTION,
       inputSchema: z.object({
-        task_id: z
-          .string()
-          .optional()
-          .describe('Background task id to stop'),
+        task_id: z.string().optional().describe('Background task id to stop'),
         shell_id: z
           .string()
           .optional()

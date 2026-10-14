@@ -67,7 +67,9 @@ export class EnvironmentRegistry {
     if (
       trimmed.startsWith('ssh:') ||
       trimmed.includes('@') ||
-      (!trimmed.includes('://') && !trimmed.includes('/') && !trimmed.includes('\\'))
+      (!trimmed.includes('://') &&
+        !trimmed.includes('/') &&
+        !trimmed.includes('\\'))
     ) {
       const ssh = this.providers.get('ssh')
       if (ssh) {
@@ -97,8 +99,8 @@ export class EnvironmentRegistry {
   ): Promise<EnvironmentConnection> {
     const env =
       typeof envOrId === 'string'
-        ? (await this.listAll()).find(e => e.id === envOrId) ??
-          (await this.resolve(envOrId))
+        ? ((await this.listAll()).find(e => e.id === envOrId) ??
+          (await this.resolve(envOrId)))
         : envOrId
 
     const existingId = this.envConnection.get(env.id)

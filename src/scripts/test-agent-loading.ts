@@ -73,10 +73,15 @@ function testAgentListingDelta(): void {
   ]
   const ctx: ToolUseContext = {
     cwd: repoRoot,
-    session: { id: 't', permissionMode: { mode: 'agent' } } as ToolUseContext['session'],
+    session: {
+      id: 't',
+      permissionMode: { mode: 'agent' },
+    } as ToolUseContext['session'],
     readFileState: new Map(),
     agentDefinitions: { activeAgents: agents },
-    options: { tools: { Agent: {} as ToolUseContext['options']['tools'][string] } },
+    options: {
+      tools: { Agent: {} as ToolUseContext['options']['tools'][string] },
+    },
   }
   const deltas = getAgentListingDeltaAttachments(ctx, [])
   if (!shouldInjectAgentListInMessages()) {

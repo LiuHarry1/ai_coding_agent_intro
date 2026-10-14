@@ -34,7 +34,8 @@ try {
     exec: async (command: string) => {
       if (command === 'throw') throw new Error('worker unavailable')
       return {
-        stdout: command === 'fail' || command === 'timeout' ? '' : 'worker-ok\n',
+        stdout:
+          command === 'fail' || command === 'timeout' ? '' : 'worker-ok\n',
         stderr: command === 'fail' ? 'worker-failed\n' : '',
         code: command === 'timeout' ? null : command === 'fail' ? 7 : 0,
         cwdAfter: root,
@@ -96,7 +97,10 @@ try {
     )) as { data: { interrupted: boolean; outcome: string } }
     assert.equal(aborted.data.interrupted, true)
     assert.equal(aborted.data.outcome, 'aborted')
-    assert.equal(await shell.execute({ command: ' ' }), 'Error: provide `command` to run.')
+    assert.equal(
+      await shell.execute({ command: ' ' }),
+      'Error: provide `command` to run.',
+    )
   }
 
   const backgroundSessionId = `coding-tools-background-${Date.now()}`
@@ -153,11 +157,7 @@ try {
     },
     { toolCallId: 'background-fixture' },
   )) as { data: { backgroundTaskId: string; backgrounded: boolean } }
-  assert.equal(
-    background.data.backgrounded,
-    true,
-    JSON.stringify(background),
-  )
+  assert.equal(background.data.backgrounded, true, JSON.stringify(background))
   assert.ok(background.data.backgroundTaskId)
   const localTaskOutput = taskOutputDefinition.create(
     root,
@@ -241,10 +241,7 @@ try {
       lspOpenFile: async () => {
         remoteFileOpen = true
       },
-      lspRequest: async (
-        _file: string,
-        method: string,
-      ): Promise<unknown> => {
+      lspRequest: async (_file: string, method: string): Promise<unknown> => {
         if (method === 'textDocument/definition') return location
         if (method === 'textDocument/references') return [location, location]
         if (method === 'textDocument/hover') {
@@ -361,9 +358,7 @@ try {
       }),
     )
   })
-  await new Promise<void>(resolve =>
-    webServer!.listen(0, '127.0.0.1', resolve),
-  )
+  await new Promise<void>(resolve => webServer!.listen(0, '127.0.0.1', resolve))
   const port = (webServer.address() as AddressInfo).port
   const previousProvider = process.env.WEB_SEARCH_PROVIDER
   const previousUrl = process.env.SEARXNG_URL
@@ -474,4 +469,3 @@ try {
   }
   await rm(root, { recursive: true, force: true })
 }
-

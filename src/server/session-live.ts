@@ -3,10 +3,7 @@
  * non-POST /chat) turns. Fan-out lives in session-live-hub.
  */
 import type { IncomingMessage, ServerResponse } from 'http'
-import {
-  canAccessSession,
-  getSession,
-} from './session.js'
+import { canAccessSession, getSession } from './session.js'
 import type { AuthedRequest } from './auth/identity.js'
 import { sendJSON } from './http.js'
 import {

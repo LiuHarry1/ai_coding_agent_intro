@@ -89,7 +89,8 @@ export function assembleToolPool(
   )
 
   const mainThreadProfile = findPrimaryAgent(activeAgents, session.agentType)
-  const mainAgentType = mainThreadProfile?.agentType ?? session.agentType ?? null
+  const mainAgentType =
+    mainThreadProfile?.agentType ?? session.agentType ?? null
   const denyGlobs = [
     ...browserDenyGlobsForMainThread(mainAgentType, browserConfig),
     ...(mainThreadProfile?.disallowedTools ?? []),
@@ -99,7 +100,10 @@ export function assembleToolPool(
     active = filterToolsRecordByDisallowedGlobs(active, denyGlobs)
     deferred = filterToolsRecordByDisallowedGlobs(deferred, denyGlobs)
     deferredDefs = filterDeferredDefsByDisallowedGlobs(deferredDefs, denyGlobs)
-    if (mainThreadProfile || !isBrowserEnabledForMainThread(mainAgentType, browserConfig)) {
+    if (
+      mainThreadProfile ||
+      !isBrowserEnabledForMainThread(mainAgentType, browserConfig)
+    ) {
       console.log(
         `[server] agentType=${mainAgentType ?? 'default'} denied globs=[${denyGlobs.join(', ')}]`,
       )
@@ -121,9 +125,7 @@ export function assembleToolPool(
   // sibling calls fail because activation only happens on the next step.
   if (mainThreadProfile?.agentType === BROWSER_AGENT_TYPE) {
     const promote =
-      allowList && allowList.length > 0
-        ? allowList
-        : [...BROWSER_TOOL_NAMES]
+      allowList && allowList.length > 0 ? allowList : [...BROWSER_TOOL_NAMES]
     for (const name of promote) {
       if (deferred[name]) {
         active[name] = deferred[name]!

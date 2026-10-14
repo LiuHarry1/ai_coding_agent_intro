@@ -58,19 +58,29 @@ try {
   _setCronStorePathForTest(storePath)
   resetSettingsCache()
 
-  const create = createDefinition.create(root, context('session-a')) as unknown as
-    ExecutableTool<
-      { cron?: string; at?: string; prompt: string; recurring?: boolean },
-      CronCreateOutput
-    >
-  const listA = listDefinition.create(root, context('session-a')) as unknown as
-    ExecutableTool<Record<string, never>, CronListOutput>
-  const listB = listDefinition.create(root, context('session-b')) as unknown as
-    ExecutableTool<Record<string, never>, CronListOutput>
-  const deleteA = deleteDefinition.create(root, context('session-a')) as unknown as
-    ExecutableTool<{ id: string }, CronDeleteOutput>
-  const deleteB = deleteDefinition.create(root, context('session-b')) as unknown as
-    ExecutableTool<{ id: string }, CronDeleteOutput>
+  const create = createDefinition.create(
+    root,
+    context('session-a'),
+  ) as unknown as ExecutableTool<
+    { cron?: string; at?: string; prompt: string; recurring?: boolean },
+    CronCreateOutput
+  >
+  const listA = listDefinition.create(
+    root,
+    context('session-a'),
+  ) as unknown as ExecutableTool<Record<string, never>, CronListOutput>
+  const listB = listDefinition.create(
+    root,
+    context('session-b'),
+  ) as unknown as ExecutableTool<Record<string, never>, CronListOutput>
+  const deleteA = deleteDefinition.create(
+    root,
+    context('session-a'),
+  ) as unknown as ExecutableTool<{ id: string }, CronDeleteOutput>
+  const deleteB = deleteDefinition.create(
+    root,
+    context('session-b'),
+  ) as unknown as ExecutableTool<{ id: string }, CronDeleteOutput>
 
   assert.equal(
     create.inputSchema.safeParse({
@@ -122,7 +132,10 @@ try {
   assert.equal(removed.data.removed, true)
   assert.match(removed.data.message, /Cancelled scheduled task/)
   assert.ok(deleteDefinition.outputSchema?.safeParse(removed.data).success)
-  assert.equal((await deleteA.execute({ id: recurring.data.id })).data.removed, false)
+  assert.equal(
+    (await deleteA.execute({ id: recurring.data.id })).data.removed,
+    false,
+  )
 
   const oneShot = await create.execute({
     at: new Date(Date.now() + 60_000).toISOString(),

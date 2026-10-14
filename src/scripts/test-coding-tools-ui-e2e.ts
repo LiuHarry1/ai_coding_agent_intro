@@ -23,8 +23,7 @@ const REPLAY_SESSION_ID =
 const ENABLED =
   process.env.RUN_CODING_TOOLS_E2E === '1' || Boolean(REPLAY_SESSION_ID)
 const UI_URL = process.env.CODING_TOOLS_UI_URL ?? 'http://localhost:5173'
-const AGENT_URL =
-  process.env.CODING_TOOLS_AGENT_URL ?? 'http://localhost:4567'
+const AGENT_URL = process.env.CODING_TOOLS_AGENT_URL ?? 'http://localhost:4567'
 const PROMPT = process.env.CODING_TOOLS_E2E_PROMPT?.trim() ?? ''
 const TIMEOUT_MS = parsePositiveInt(
   process.env.CODING_TOOLS_E2E_TIMEOUT_MS,
@@ -33,10 +32,8 @@ const TIMEOUT_MS = parsePositiveInt(
 const HEADED = process.env.CODING_TOOLS_E2E_HEADED === '1'
 const AUTO_ALLOW = process.env.CODING_TOOLS_E2E_AUTO_ALLOW === '1'
 const AUTO_ANSWER = process.env.CODING_TOOLS_E2E_AUTO_ANSWER === '1'
-const AUTO_APPROVE_PLAN =
-  process.env.CODING_TOOLS_E2E_AUTO_APPROVE_PLAN === '1'
-const INITIAL_MODE =
-  process.env.CODING_TOOLS_E2E_INITIAL_MODE?.trim() ?? ''
+const AUTO_APPROVE_PLAN = process.env.CODING_TOOLS_E2E_AUTO_APPROVE_PLAN === '1'
+const INITIAL_MODE = process.env.CODING_TOOLS_E2E_INITIAL_MODE?.trim() ?? ''
 const ARTIFACT_DIR =
   process.env.CODING_TOOLS_E2E_ARTIFACT_DIR ??
   path.join(os.tmpdir(), 'coding-tools-ui-e2e')
@@ -48,10 +45,8 @@ const EXPECTED_CARDS = (process.env.CODING_TOOLS_E2E_EXPECTED_CARDS ?? '')
   .split(',')
   .map(value => value.trim())
   .filter(Boolean)
-const EXPECTED_FILE =
-  process.env.CODING_TOOLS_E2E_EXPECTED_FILE?.trim() ?? ''
-const EXPECTED_FILE_CONTENT =
-  process.env.CODING_TOOLS_E2E_EXPECTED_FILE_CONTENT
+const EXPECTED_FILE = process.env.CODING_TOOLS_E2E_EXPECTED_FILE?.trim() ?? ''
+const EXPECTED_FILE_CONTENT = process.env.CODING_TOOLS_E2E_EXPECTED_FILE_CONTENT
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback
@@ -191,13 +186,10 @@ async function createFreshSession(page: Page): Promise<string> {
   )
   await page.locator('.session-icon-btn').click()
   await page.getByRole('button', { name: 'New session' }).click()
-  await page.waitForFunction(
-    previous => {
-      const current = localStorage.getItem('coding_agent_session_id')
-      return Boolean(current && current !== previous)
-    },
-    oldSessionId,
-  )
+  await page.waitForFunction(previous => {
+    const current = localStorage.getItem('coding_agent_session_id')
+    return Boolean(current && current !== previous)
+  }, oldSessionId)
   const sessionId = await page.evaluate(() =>
     localStorage.getItem('coding_agent_session_id'),
   )
@@ -421,13 +413,17 @@ async function run(): Promise<void> {
       await page.reload({ waitUntil: 'domcontentloaded' })
       await page.locator('.input-textarea').waitFor({ state: 'visible' })
       await page.waitForFunction(
-        expected => localStorage.getItem('coding_agent_session_id') === expected,
+        expected =>
+          localStorage.getItem('coding_agent_session_id') === expected,
         sessionId,
       )
-      await page.locator('.messages[aria-busy="true"]').waitFor({
-        state: 'detached',
-        timeout: 30_000,
-      }).catch(() => {})
+      await page
+        .locator('.messages[aria-busy="true"]')
+        .waitFor({
+          state: 'detached',
+          timeout: 30_000,
+        })
+        .catch(() => {})
       await page.waitForFunction(
         () =>
           document.querySelectorAll(
@@ -438,7 +434,10 @@ async function run(): Promise<void> {
       )
 
       const cards = await toolCardSummaries(page)
-      assert.ok(cards.length > 0, 'The replayed session has no coding tool cards')
+      assert.ok(
+        cards.length > 0,
+        'The replayed session has no coding tool cards',
+      )
       for (const expected of EXPECTED_CARDS) {
         assert.ok(
           cards.some(card =>
@@ -490,9 +489,7 @@ async function run(): Promise<void> {
     }
     for (const expected of EXPECTED_CARDS) {
       assert.ok(
-        cards.some(card =>
-          card.toLowerCase().includes(expected.toLowerCase()),
-        ),
+        cards.some(card => card.toLowerCase().includes(expected.toLowerCase())),
         `Expected tool card "${expected}", rendered: ${cards.join(' | ')}`,
       )
     }
@@ -554,10 +551,13 @@ async function run(): Promise<void> {
       sessionId,
     )
     await page.locator('.msg-user').filter({ hasText: PROMPT }).waitFor()
-    await page.locator('.messages[aria-busy="true"]').waitFor({
-      state: 'detached',
-      timeout: 30_000,
-    }).catch(() => {})
+    await page
+      .locator('.messages[aria-busy="true"]')
+      .waitFor({
+        state: 'detached',
+        timeout: 30_000,
+      })
+      .catch(() => {})
 
     const replayedCards = await toolCardSummaries(page)
     assert.equal(

@@ -7,11 +7,7 @@ import { getTaskOutputPath } from './utils/task/diskOutput.js'
 export type TaskType = 'local_bash'
 
 export type TaskStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'killed'
+  'pending' | 'running' | 'completed' | 'failed' | 'killed'
 
 export function isTerminalTaskStatus(status: TaskStatus): boolean {
   return status === 'completed' || status === 'failed' || status === 'killed'

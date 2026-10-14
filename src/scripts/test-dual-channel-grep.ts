@@ -3,15 +3,16 @@
  * Run: npx tsx src/scripts/test-dual-channel-grep.ts
  */
 import assert from 'node:assert/strict'
-import { definition as grepDef, type GrepOutput } from '../tools/GrepTool/GrepTool.js'
+import {
+  definition as grepDef,
+  type GrepOutput,
+} from '../tools/GrepTool/GrepTool.js'
 import { buildToolMessage } from '../services/tools/tool_execution.js'
 import { projectMessagesForApi } from '../core/agent/messageSanitize.js'
 import type { Message, ToolResultContentBlockParam } from '../core/types.js'
 import { toolResultBlocksToText } from '../utils/tool-result-content.js'
 
-function mappedText(
-  content: string | ToolResultContentBlockParam[],
-): string {
+function mappedText(content: string | ToolResultContentBlockParam[]): string {
   return typeof content === 'string' ? content : toolResultBlocksToText(content)
 }
 

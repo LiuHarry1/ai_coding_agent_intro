@@ -15,7 +15,9 @@ export const WORKER_BUNDLE_NAME = `${APP_SLUG}-worker.cjs`
 export const AGENT_BUNDLE_NAME = `${APP_SLUG}-agent.cjs`
 
 /** Native compiled agent (Bun --compile), e.g. baize-agent.exe on Windows */
-export function agentNativeFileName(platform: NodeJS.Platform = process.platform): string {
+export function agentNativeFileName(
+  platform: NodeJS.Platform = process.platform,
+): string {
   return platform === 'win32' ? `${APP_SLUG}-agent.exe` : `${APP_SLUG}-agent`
 }
 

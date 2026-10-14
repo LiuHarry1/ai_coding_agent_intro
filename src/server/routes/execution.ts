@@ -35,7 +35,10 @@ export function createExecutionRouter() {
     const url = req.url ?? ''
     const pathOnly = url.split('?')[0]
 
-    if (!pathOnly.startsWith('/environments') && !isSessionWorkspacePath(pathOnly)) {
+    if (
+      !pathOnly.startsWith('/environments') &&
+      !isSessionWorkspacePath(pathOnly)
+    ) {
       return false
     }
 
@@ -117,9 +120,7 @@ export function createExecutionRouter() {
         const envs = await plane.registry.listAll()
         const env = envs.find(e => e.id === environmentId)
         const cwd =
-          dirPath ||
-          env?.defaultCwd ||
-          (environmentId === 'local' ? '.' : '~')
+          dirPath || env?.defaultCwd || (environmentId === 'local' ? '.' : '~')
         const { dir, entries } = await plane.workspaces.listWithDir(
           { environmentId, cwd },
           cwd,

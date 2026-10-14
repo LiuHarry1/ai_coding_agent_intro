@@ -5,7 +5,10 @@ import { ensureAbsoluteDirectory } from './fs-safe/ensure-absolute-directory.js'
 
 async function resolveSystemDirectoryAlias(dirPath: string): Promise<string> {
   for (const aliasRoot of ['/tmp', '/var']) {
-    if (dirPath !== aliasRoot && !dirPath.startsWith(`${aliasRoot}${path.sep}`)) {
+    if (
+      dirPath !== aliasRoot &&
+      !dirPath.startsWith(`${aliasRoot}${path.sep}`)
+    ) {
       continue
     }
     try {

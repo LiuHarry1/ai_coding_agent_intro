@@ -4,8 +4,14 @@ import {
   attachTokenUsage,
   compactIfNeeded,
 } from '../../services/compact/index.js'
-import type { AttachedTokenUsage, CompactEnrichment } from '../../services/compact/index.js'
-import { ensureMessageUuid, ensureMessageUuids } from '../../services/session-memory/index.js'
+import type {
+  AttachedTokenUsage,
+  CompactEnrichment,
+} from '../../services/compact/index.js'
+import {
+  ensureMessageUuid,
+  ensureMessageUuids,
+} from '../../services/session-memory/index.js'
 import {
   isContextLengthError,
   isTransientStreamError,
@@ -175,7 +181,10 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
       abortController: toolAbortController,
       concurrencyPolicy,
     }
-    return new StreamingToolExecutor(canUseTool ?? allowAllTools, toolUseContext)
+    return new StreamingToolExecutor(
+      canUseTool ?? allowAllTools,
+      toolUseContext,
+    )
   }
   streamingExecutor = createStreamingExecutor()
 
@@ -279,7 +288,9 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
       ensureMessageUuids(sdkMessages)
 
       if (stepResult.toolResults.length > 0) {
-        messages.push(ensureMessageUuid(buildToolMessage(stepResult.toolResults)))
+        messages.push(
+          ensureMessageUuid(buildToolMessage(stepResult.toolResults)),
+        )
         for (const tr of stepResult.toolResults) {
           if (tr.followUpMessages?.length) {
             for (const fm of tr.followUpMessages) {
@@ -363,10 +374,7 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
       const overflow = parseMaxTokensContextOverflowError(err)
       if (overflow) {
         const adjusted = maxTokensOverrideFromError(err)
-        if (
-          adjusted !== undefined &&
-          overflowAttempt < MAX_OVERFLOW_RETRIES
-        ) {
+        if (adjusted !== undefined && overflowAttempt < MAX_OVERFLOW_RETRIES) {
           overflowAttempt++
           const errMsg = err instanceof Error ? err.message : String(err)
           console.warn(

@@ -26,8 +26,7 @@ export function extractRecentlyReadFiles(
         continue
       const filePath =
         ((part.input as Record<string, unknown>)?.file_path as
-          | string
-          | undefined) ??
+          string | undefined) ??
         ((part.input as Record<string, unknown>)?.path as string | undefined)
       if (filePath && !files.includes(filePath)) {
         files.push(filePath)
@@ -52,8 +51,7 @@ export function restoreRecentFiles(
 ): string {
   if (recentPaths.length === 0) return ''
 
-  const resolve = (p: string) =>
-    path.isAbsolute(p) ? p : path.resolve(cwd, p)
+  const resolve = (p: string) => (path.isAbsolute(p) ? p : path.resolve(cwd, p))
   const preserved = new Set(
     extractRecentlyReadFiles(
       preservedMessages as Message[],

@@ -96,9 +96,7 @@ export function reviveBuffersInMessages(messages: Message[]): Message[] {
           const mediaType = (part as { mediaType?: string }).mediaType
           const fromTag = reviveBufferValue(image)
           if (Buffer.isBuffer(fromTag)) {
-            return fromTag !== image
-              ? { ...part, image: fromTag }
-              : part
+            return fromTag !== image ? { ...part, image: fromTag } : part
           }
           if (typeof image === 'string') {
             try {
@@ -173,6 +171,8 @@ export function parseSessionJsonLine(line: string): Record<string, unknown> {
   return JSON.parse(line, sessionJsonReviver) as Record<string, unknown>
 }
 
-export function stringifySessionJsonLine(data: Record<string, unknown>): string {
+export function stringifySessionJsonLine(
+  data: Record<string, unknown>,
+): string {
   return JSON.stringify(data, sessionJsonReplacer)
 }

@@ -51,7 +51,9 @@ function parseSSEEvents(body: string): Array<Record<string, unknown>> {
     const dataLine = block.split('\n').find(l => l.startsWith('data:'))
     if (!dataLine) continue
     try {
-      events.push(JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>)
+      events.push(
+        JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>,
+      )
     } catch {
       /* skip */
     }
@@ -176,7 +178,11 @@ async function main(): Promise<void> {
       const hasSkillStart = events.some(
         e => e.type === 'system' && e.subtype === 'skill_start',
       )
-      if (status === 200 && hasSkillStart && text.toLowerCase().includes('fork-pong')) {
+      if (
+        status === 200 &&
+        hasSkillStart &&
+        text.toLowerCase().includes('fork-pong')
+      ) {
         pass('skill fork', `skill_start ok, text=${text.trim().slice(0, 40)}`)
       } else {
         fail(
@@ -241,7 +247,8 @@ async function main(): Promise<void> {
       }
       const tools = defaultRegistry.createAll(cwd, ctx)
       const { text } = await runForkedAgent({
-        prompt: 'Reply with exactly the word fork-direct-pong and nothing else.',
+        prompt:
+          'Reply with exactly the word fork-direct-pong and nothing else.',
         runAgent,
         systemPrompt:
           'You are a forked side-path agent. Reply briefly in plain text only.',

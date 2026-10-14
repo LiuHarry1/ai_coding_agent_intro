@@ -23,9 +23,7 @@ export const DEFAULT_WETRACK_QUERY =
 export function createClient(): AgentClient {
   return new AgentClient({
     baseURL: process.env.AGENT_BASE_URL ?? 'http://localhost:4567',
-    jwtSecret:
-      process.env.AGENT_JWT_SECRET ??
-      'xxx-secret',
+    jwtSecret: process.env.AGENT_JWT_SECRET ?? 'xxx-secret',
     email: process.env.AGENT_EMAIL ?? 'harry.liu@xxx.com',
   })
 }

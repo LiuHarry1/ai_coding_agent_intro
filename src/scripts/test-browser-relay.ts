@@ -168,7 +168,12 @@ async function startFakeExtension(
         void adoptPopup(String((params as { url?: unknown })?.url ?? ''))
       }
       ws.send(
-        JSON.stringify({ type: 'cdpEvent', targetId: String(tabId), method, params }),
+        JSON.stringify({
+          type: 'cdpEvent',
+          targetId: String(tabId),
+          method,
+          params,
+        }),
       )
     })
   }
@@ -327,7 +332,11 @@ async function runTool(
   abortSignal?: AbortSignal,
 ): Promise<DualChannelToolResult<Record<string, unknown>> | string> {
   const context: ToolContext = {
-    eventBus: { emit() {}, on() {}, off() {} } as unknown as ToolContext['eventBus'],
+    eventBus: {
+      emit() {},
+      on() {},
+      off() {},
+    } as unknown as ToolContext['eventBus'],
     wire: { emit() {} } as unknown as ToolContext['wire'],
     cwd: process.cwd(),
     sessionId,
@@ -438,16 +447,16 @@ async function main() {
       assert.notEqual(typeof historyEnd, 'string', String(historyEnd))
       extension.setDropLifecycleEvents(true)
       extension.setFailNavigationStateEvaluation(true)
-      const unverifiable = await runNavigate(
-        { action: 'back' },
-        faultSessionId,
-      )
+      const unverifiable = await runNavigate({ action: 'back' }, faultSessionId)
       assert.equal(
         typeof unverifiable,
         'string',
         'an unverifiable timed-out navigation must fail',
       )
-      assert.match(String(unverifiable), /resulting page state could not be verified/)
+      assert.match(
+        String(unverifiable),
+        /resulting page state could not be verified/,
+      )
       assert.match(
         String(unverifiable),
         /A fresh blank tab \(\d+\) replaced unusable tab \d+ as the current target/,
@@ -516,11 +525,7 @@ async function main() {
       assert.equal(recovered.url, identityUrl)
       for (const tabId of [firstCandidate.targetId, secondCandidate.targetId]) {
         expectData(
-          await runTool(
-            tabsTool,
-            { action: 'close', tabId },
-            identitySession,
-          ),
+          await runTool(tabsTool, { action: 'close', tabId }, identitySession),
         )
       }
       console.log(
@@ -546,17 +551,17 @@ async function main() {
       const targetA = getCurrentTabId(sessionA)
       const targetB = getCurrentTabId(sessionB)
       assert.ok(targetA && targetB, 'both sessions must remember a current tab')
-      assert.notEqual(targetA, targetB, 'sessions must own distinct current tabs')
+      assert.notEqual(
+        targetA,
+        targetB,
+        'sessions must own distinct current tabs',
+      )
 
       const clickA = expectData(
         await runTool(
           clickTool,
           {
-            ref: refFor(
-              String(dataA.snapshot),
-              'button',
-              'Clicked 0 times',
-            ),
+            ref: refFor(String(dataA.snapshot), 'button', 'Clicked 0 times'),
           },
           sessionA,
         ),
@@ -576,10 +581,7 @@ async function main() {
       )
     } finally {
       setBrowserBackendFactory(null)
-      await Promise.all([
-        closeBrowser(sessionA),
-        closeBrowser(sessionB),
-      ])
+      await Promise.all([closeBrowser(sessionA), closeBrowser(sessionB)])
     }
 
     // The consent model held. The suite ends by deliberately closing an
@@ -642,9 +644,7 @@ async function main() {
     setBrowserBackendFactory(() => createExtensionBackend({ relay }))
     const disconnectAbort = new AbortController()
     let disconnectedNavigation:
-      | DualChannelToolResult<Record<string, unknown>>
-      | string
-      | 'hung' = 'hung'
+      DualChannelToolResult<Record<string, unknown>> | string | 'hung' = 'hung'
     try {
       expectData(
         await runNavigate(
@@ -680,7 +680,9 @@ async function main() {
       'an in-flight navigation must fail promptly when the extension disconnects',
     )
     assert.equal(typeof disconnectedNavigation, 'string')
-    console.log('ok [relay] extension disconnect interrupts in-flight navigation')
+    console.log(
+      'ok [relay] extension disconnect interrupts in-flight navigation',
+    )
 
     // A disconnected extension must fail loudly rather than hang.
     await new Promise(r => setTimeout(r, 100))

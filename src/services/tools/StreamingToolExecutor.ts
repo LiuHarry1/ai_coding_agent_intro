@@ -21,7 +21,8 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
 
 function resolveToolName(name: string, ctx: ToolUseContext): string {
   if (ctx.getDefinition?.(name) || ctx.tools[name]) return name
-  const aliased = TOOL_NAME_ALIASES[name] ?? TOOL_NAME_ALIASES[name.toLowerCase()]
+  const aliased =
+    TOOL_NAME_ALIASES[name] ?? TOOL_NAME_ALIASES[name.toLowerCase()]
   if (aliased && (ctx.getDefinition?.(aliased) || ctx.tools[aliased])) {
     return aliased
   }
@@ -220,8 +221,7 @@ export class StreamingToolExecutor {
     if (reason === 'user_interrupted') {
       result = 'User rejected tool use'
     } else if (reason === 'streaming_fallback') {
-      result =
-        'Error: Streaming fallback - tool execution discarded'
+      result = 'Error: Streaming fallback - tool execution discarded'
     } else {
       result = this.#erroredToolDescription
         ? `Cancelled: parallel tool call ${this.#erroredToolDescription} errored`

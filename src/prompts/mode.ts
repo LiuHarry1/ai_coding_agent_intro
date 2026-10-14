@@ -19,10 +19,15 @@ export async function getSystemPromptForMode(
     case 'ask':
       return askSystemPrompt(cwd, projectRules, modelId)
     case 'plan':
-      return planSystemPrompt(cwd, projectRules, {
-        planFilePath: options.planFilePath ?? '~/.ai-agent/plans/plan.md',
-        planExists: options.planExists ?? false,
-      }, modelId)
+      return planSystemPrompt(
+        cwd,
+        projectRules,
+        {
+          planFilePath: options.planFilePath ?? '~/.ai-agent/plans/plan.md',
+          planExists: options.planExists ?? false,
+        },
+        modelId,
+      )
     default:
       return systemPrompt(cwd, projectRules, modelId)
   }

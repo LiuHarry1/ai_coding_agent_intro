@@ -39,8 +39,7 @@ export async function planSystemPrompt(
 ): Promise<string> {
   setCwd(cwd)
   const env =
-    (await computeSimpleEnvInfo(modelId)) +
-    workspaceBoundaryPromptSection(cwd)
+    (await computeSimpleEnvInfo(modelId)) + workspaceBoundaryPromptSection(cwd)
 
   const { planFilePath, planExists } = options
   const agentCount = getPlanModeAgentCount()

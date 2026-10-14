@@ -706,7 +706,9 @@ export default function InputArea() {
                     @{entry.path}
                     {entry.isDir ? '/' : ''}
                   </span>
-                  {entry.isDir && <span className='slash-menu__badge'>dir</span>}
+                  {entry.isDir && (
+                    <span className='slash-menu__badge'>dir</span>
+                  )}
                 </div>
               </button>
             ),
@@ -741,7 +743,9 @@ export default function InputArea() {
                   className='file-chip'
                   title={`${att.name} · ${formatBytes(att.size)}`}
                 >
-                  <span className={`file-chip__kind file-chip__kind--${att.kind}`}>
+                  <span
+                    className={`file-chip__kind file-chip__kind--${att.kind}`}
+                  >
                     {KIND_LABEL[att.kind] ?? 'FILE'}
                   </span>
                   <span className='file-chip__name'>{att.name}</span>

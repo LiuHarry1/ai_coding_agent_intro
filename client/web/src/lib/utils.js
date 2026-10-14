@@ -114,7 +114,10 @@ export function detectError(name, result) {
  */
 export function newId() {
   try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    if (
+      typeof crypto !== 'undefined' &&
+      typeof crypto.randomUUID === 'function'
+    ) {
       return crypto.randomUUID()
     }
   } catch {

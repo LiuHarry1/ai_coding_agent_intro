@@ -57,7 +57,10 @@ function isDualChannelReturn(raw: unknown): raw is DualChannelToolResult {
   )
 }
 
-function cancelledToolResult(tc: ToolCallRef, wire: WireEmitter): ExecutedToolResult {
+function cancelledToolResult(
+  tc: ToolCallRef,
+  wire: WireEmitter,
+): ExecutedToolResult {
   const errResult = TOOL_INTERRUPT_RESULT
   wire.toolResult({
     tool_use_id: tc.toolCallId,
@@ -92,7 +95,11 @@ export async function executeOneTool(
       result: errResult,
       is_error: true,
     })
-    return { toolCallId: tc.toolCallId, toolName: tc.toolName, result: errResult }
+    return {
+      toolCallId: tc.toolCallId,
+      toolName: tc.toolName,
+      result: errResult,
+    }
   }
 
   const toolSignal =
@@ -121,10 +128,7 @@ export async function executeOneTool(
     let followUpMessages: Message[] | undefined
     let isError = false
 
-    if (
-      def?.mapToolResultToToolResultBlockParam &&
-      isDualChannelReturn(raw)
-    ) {
+    if (def?.mapToolResultToToolResultBlockParam && isDualChannelReturn(raw)) {
       followUpMessages = raw.newMessages
       const mapped = def.mapToolResultToToolResultBlockParam(
         raw.data,
@@ -202,8 +206,7 @@ export async function executeOneTool(
     }
   } catch (err) {
     const aborted =
-      toolSignal?.aborted ||
-      (err instanceof Error && err.name === 'AbortError')
+      toolSignal?.aborted || (err instanceof Error && err.name === 'AbortError')
     if (aborted) return cancelledToolResult(tc, wire)
     const result = `Error: ${formatToolError(tc.toolName, err)}`
     wire.toolResult({

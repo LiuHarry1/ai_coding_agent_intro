@@ -13,10 +13,7 @@ export type {
   DirEntry,
   FileStat,
 } from './types.js'
-export {
-  formatWorkspaceLabel,
-  isWorkspaceHandle,
-} from './types.js'
+export { formatWorkspaceLabel, isWorkspaceHandle } from './types.js'
 export type {
   RuntimeClientMessage,
   RuntimeServerMessage,

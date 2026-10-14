@@ -64,7 +64,10 @@ function parseLikeAiSdk(sse: string): ParsedTool[] {
 }
 
 function sse(events: unknown[]): string {
-  return events.map(e => `data: ${JSON.stringify(e)}`).join('\n') + '\n\ndata: [DONE]\n'
+  return (
+    events.map(e => `data: ${JSON.stringify(e)}`).join('\n') +
+    '\n\ndata: [DONE]\n'
+  )
 }
 
 function chunk(
@@ -133,9 +136,7 @@ function assertThrowsFirstChunk(raw: string): void {
         function: { name: 'Read', arguments: '{"path":"a.pdf"}' },
       },
     ]),
-    chunk([
-      { function: { arguments: '{"path":"b.jpg"}' } },
-    ]),
+    chunk([{ function: { arguments: '{"path":"b.jpg"}' } }]),
   ])
   assertThrowsFirstChunk(raw)
   const parsed = parseLikeAiSdk(normalizeOpenAICompatibleSse(raw))
@@ -254,7 +255,9 @@ function assertThrowsFirstChunk(raw: string): void {
   const parsed = parseLikeAiSdk(normalizeOpenAICompatibleSse(raw))
   assert.equal(parsed.length, 1)
   assert.equal(parsed[0]?.id, 'call_a')
-  console.log('[ok] nameless leftover at stream end is dropped, first tool kept')
+  console.log(
+    '[ok] nameless leftover at stream end is dropped, first tool kept',
+  )
 }
 
 {
@@ -291,11 +294,7 @@ function assertThrowsFirstChunk(raw: string): void {
     ]),
   ]
   const full = sse(events)
-  const pieces = [
-    full.slice(0, 40),
-    full.slice(40, 90),
-    full.slice(90),
-  ]
+  const pieces = [full.slice(0, 40), full.slice(40, 90), full.slice(90)]
   const transform = createOpenAIToolCallNormalizeTransform()
   const writer = transform.writable.getWriter()
   const reader = transform.readable.getReader()

@@ -8,7 +8,10 @@ import {
 } from './previewStream.js'
 import { formatToolError } from './toolErrors.js'
 
-import type { ExecutedToolResult, ToolCallRef } from '../../services/tools/tool_execution.js'
+import type {
+  ExecutedToolResult,
+  ToolCallRef,
+} from '../../services/tools/tool_execution.js'
 import type { StreamingToolExecutor } from '../../services/tools/StreamingToolExecutor.js'
 
 export interface StreamResult {
@@ -112,7 +115,11 @@ export async function consumeStream(
 
   try {
     for await (const event of stream.fullStream) {
-      if (timing && !timing.firstEventMs && CONTENT_EVENT_TYPES.has(event.type)) {
+      if (
+        timing &&
+        !timing.firstEventMs &&
+        CONTENT_EVENT_TYPES.has(event.type)
+      ) {
         timing.firstEventMs = Date.now()
       }
       switch (event.type) {
@@ -246,12 +253,7 @@ export async function consumeStream(
     flushReasoning()
     // Incomplete tool-input streams: close with interrupt results.
     for (const [id, toolName] of startedInputs.entries()) {
-      synthesizePair(
-        id,
-        toolName ?? 'unknown',
-        {},
-        'Interrupted by user',
-      )
+      synthesizePair(id, toolName ?? 'unknown', {}, 'Interrupted by user')
     }
     return { text, toolCalls, toolResults, aborted: true }
   }

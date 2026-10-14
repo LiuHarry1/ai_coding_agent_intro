@@ -71,10 +71,7 @@ export class WorkerExecutionBackend implements ExecutionBackend {
     this.workspaceKey = getLspWorkspaceKey(this.cwd, this.lspServers)
     this.unsub = runtime.onMessage(msg => {
       if (msg.type === 'lsp_event' && msg.event === 'diagnostics') {
-        const count = msg.files.reduce(
-          (n, f) => n + f.diagnostics.length,
-          0,
-        )
+        const count = msg.files.reduce((n, f) => n + f.diagnostics.length, 0)
         console.error(
           `[lsp:diagnostics:verify] cp recv lsp_event env=${this.environmentId} server=${msg.serverName} files=${msg.files.length} diagnostics=${count} workspaceKey=${this.workspaceKey ? this.workspaceKey.slice(0, 12) + '…' : '(empty)'}`,
         )
@@ -249,9 +246,7 @@ export class WorkerExecutionBackend implements ExecutionBackend {
     return result.lines
   }
 
-  async configureLsp(
-    servers: Record<string, LspServerConfig>,
-  ): Promise<void> {
+  async configureLsp(servers: Record<string, LspServerConfig>): Promise<void> {
     this.lspServers = servers
     this.workspaceKey = getLspWorkspaceKey(this.cwd, servers)
     await this.requestLsp({ op: 'configure', servers })

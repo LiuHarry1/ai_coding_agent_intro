@@ -95,9 +95,4 @@ export const FILE_MUTATING_TOOLS = new Set([
 ])
 
 /** Shell tools that may indirectly change the workspace tree. */
-export const SHELL_TOOLS = new Set([
-  BASH,
-  POWERSHELL,
-  'bash',
-  'powershell',
-])
+export const SHELL_TOOLS = new Set([BASH, POWERSHELL, 'bash', 'powershell'])

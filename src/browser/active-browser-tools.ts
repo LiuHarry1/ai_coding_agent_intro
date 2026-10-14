@@ -128,7 +128,9 @@ function abortSessionBlocked(sessionId: string): number {
  * Called when the user takes control. Aborts in-flight browser tools that
  * mutate the page (same policy as assertBrowserAgentMayAct).
  */
-export function abortBlockedBrowserTools(sessionId: string | undefined): number {
+export function abortBlockedBrowserTools(
+  sessionId: string | undefined,
+): number {
   if (!sessionId) return 0
   return abortSessionBlocked(sessionId)
 }

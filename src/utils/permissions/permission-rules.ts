@@ -35,13 +35,14 @@ const WRITE_FAMILY = new Set([EDIT_FILE_TOOL_NAME, WRITE_FILE_TOOL_NAME])
 const ignoreCache = new Map<string, ReturnType<typeof ignore>>()
 
 function unescapeRuleContent(raw: string): string {
-  return raw
-    .replace(/\\\(/g, '(')
-    .replace(/\\\)/g, ')')
-    .replace(/\\\\/g, '\\')
+  return raw.replace(/\\\(/g, '(').replace(/\\\)/g, ')').replace(/\\\\/g, '\\')
 }
 
-function findUnescapedChar(str: string, char: string, fromEnd: boolean): number {
+function findUnescapedChar(
+  str: string,
+  char: string,
+  fromEnd: boolean,
+): number {
   const start = fromEnd ? str.length - 1 : 0
   const step = fromEnd ? -1 : 1
   for (let i = start; fromEnd ? i >= 0 : i < str.length; i += step) {
@@ -149,7 +150,9 @@ function absolutePatternMatches(absPath: string, pattern: string): boolean {
   if (wildcard) pat = pat.replace(/[/\\]\*\*$/, '')
   const resolvedPat = path.resolve(pat)
   const resolvedFile = path.resolve(absPath)
-  if (toPosix(resolvedFile).toLowerCase() === toPosix(resolvedPat).toLowerCase()) {
+  if (
+    toPosix(resolvedFile).toLowerCase() === toPosix(resolvedPat).toLowerCase()
+  ) {
     return true
   }
   return isPathInWorkspace(resolvedFile, resolvedPat)

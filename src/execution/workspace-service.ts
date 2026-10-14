@@ -34,12 +34,12 @@ export class WorkspaceService {
     return { environmentId: handle.environmentId, cwd }
   }
 
-  async list(
-    handle: WorkspaceHandle,
-    dirPath?: string,
-  ): Promise<DirEntry[]> {
+  async list(handle: WorkspaceHandle, dirPath?: string): Promise<DirEntry[]> {
     const fs = await this.ensureFs(handle.environmentId)
-    if ('listResolved' in fs && typeof (fs as { listResolved?: unknown }).listResolved === 'function') {
+    if (
+      'listResolved' in fs &&
+      typeof (fs as { listResolved?: unknown }).listResolved === 'function'
+    ) {
       const result = await (
         fs as {
           listResolved: (

@@ -72,7 +72,8 @@ export class StdioRuntimePort implements RuntimePort {
 
     opts.stderr?.on('data', (d: Buffer) => {
       const text = d.toString('utf8').trim()
-      if (text) console.error(`[worker:${this.workspace.environmentId}] ${text}`)
+      if (text)
+        console.error(`[worker:${this.workspace.environmentId}] ${text}`)
     })
 
     // Spawn failures (ENOENT, EACCES) emit 'error' and may never emit 'exit'.

@@ -76,10 +76,8 @@ export async function handleSessionChatUploads(
       })
     })
   } catch (err) {
-    const partial = (((req as any).files as MulterFile[]) || [])
-    await Promise.allSettled(
-      partial.map(file => fs.promises.unlink(file.path)),
-    )
+    const partial = ((req as any).files as MulterFile[]) || []
+    await Promise.allSettled(partial.map(file => fs.promises.unlink(file.path)))
     sendJSON(res, 400, {
       error: err instanceof Error ? err.message : String(err),
     })

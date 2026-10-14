@@ -14,10 +14,7 @@ import {
   cleanupCwdFile,
   type ShellKind,
 } from '../core/shell/spawn-shell.js'
-import {
-  getTaskOutputPath,
-  initTaskOutput,
-} from './task/diskOutput.js'
+import { getTaskOutputPath, initTaskOutput } from './task/diskOutput.js'
 
 type InProcessBg = {
   taskId: string

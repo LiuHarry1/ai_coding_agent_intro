@@ -80,9 +80,7 @@ async function loadPdfParse(): Promise<PdfParseFn | null> {
 }
 
 /** Prefer poppler `pdfinfo`; fall back to pdf-parse. */
-export async function getPdfPageCount(
-  absPath: string,
-): Promise<number | null> {
+export async function getPdfPageCount(absPath: string): Promise<number | null> {
   try {
     const { stdout } = await execFileAsync('pdfinfo', [absPath], {
       timeout: 10_000,
@@ -125,7 +123,9 @@ export async function extractPdfText(
     const data = await pdfParse(fs.readFileSync(absPath))
     const text = data.text?.trim()
     if (!text) return null
-    return text.length > maxChars ? `${text.slice(0, maxChars)}\n…[truncated]` : text
+    return text.length > maxChars
+      ? `${text.slice(0, maxChars)}\n…[truncated]`
+      : text
   } catch {
     return null
   }
@@ -302,7 +302,10 @@ export async function extractPDFPages(
     }
 
     const uuid = randomUUID()
-    const outputDir = path.join(pdfExtractOutputRoot(options?.sessionId), `pdf-${uuid}`)
+    const outputDir = path.join(
+      pdfExtractOutputRoot(options?.sessionId),
+      `pdf-${uuid}`,
+    )
     await fsp.mkdir(outputDir, { recursive: true })
 
     const prefix = path.join(outputDir, 'page')
@@ -374,7 +377,10 @@ export async function extractPDFPages(
       options.lastPage !== Infinity
         ? options.lastPage - options.firstPage + 1
         : imageFiles.length
-    if (rangePages > PDF_MAX_PAGES_PER_READ && imageFiles.length > PDF_MAX_PAGES_PER_READ) {
+    if (
+      rangePages > PDF_MAX_PAGES_PER_READ &&
+      imageFiles.length > PDF_MAX_PAGES_PER_READ
+    ) {
       // Safety: if open-ended range produced too many pages, keep first N.
       const keep = imageFiles.slice(0, PDF_MAX_PAGES_PER_READ)
       for (const f of imageFiles.slice(PDF_MAX_PAGES_PER_READ)) {

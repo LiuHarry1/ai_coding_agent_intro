@@ -33,8 +33,7 @@ export default function ListDirCard({ part, nested = false }) {
   if (fileCount != null) meta.push(`${fileCount} files`)
 
   const liveSub = !isDone ? liveToolSubtitle(part) : null
-  const subtitle =
-    liveSub || (meta.length > 0 ? meta.join(' \u00B7 ') : null)
+  const subtitle = liveSub || (meta.length > 0 ? meta.join(' \u00B7 ') : null)
   const hasBody = isDone && typeof result === 'string'
 
   const [expanded, toggleExpanded, chevron] = useToolDensityExpand(

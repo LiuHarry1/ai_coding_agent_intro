@@ -19,7 +19,7 @@ function needsAdaptive(modelId: string): boolean {
     m.includes('haiku-4-')
   )
     return true
- if (/claude-[^/]+-4-[6-9]/.test(m)) return true
+  if (/claude-[^/]+-4-[6-9]/.test(m)) return true
   return false
 }
 

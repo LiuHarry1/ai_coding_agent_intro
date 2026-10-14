@@ -131,7 +131,9 @@ export default function DiffViewer({
         root.querySelector(
           '[class*="diff-added"], [class*="diff-removed"], .diff-line-add, .diff-line-delete',
         ) ||
-        root.querySelector('td[style*="rgba(63,185,80"], td[style*="rgba(248,81,73"]')
+        root.querySelector(
+          'td[style*="rgba(63,185,80"], td[style*="rgba(248,81,73"]',
+        )
       const scroller = root.closest('.file-change-body') || root
       if (firstChange && typeof firstChange.scrollIntoView === 'function') {
         firstChange.scrollIntoView({ block: 'center', inline: 'nearest' })

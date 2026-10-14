@@ -44,7 +44,7 @@ assert.ok(
   'Grep must not shell out to grep fallback',
 )
 assert.ok(
-  !globSrc.includes('rg || find') && !globSrc.includes("find . -type f"),
+  !globSrc.includes('rg || find') && !globSrc.includes('find . -type f'),
   'Glob must not shell out to find fallback',
 )
 assert.ok(

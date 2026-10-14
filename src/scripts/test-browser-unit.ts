@@ -95,7 +95,10 @@ import {
   scaleAnnotations,
 } from '../browser/screenshot-annotate.js'
 import { appendSnapshotUrls } from '../browser/snapshot-urls.js'
-import { formatScrollOutcome, scrollRemaining } from '../browser/scroll-report.js'
+import {
+  formatScrollOutcome,
+  scrollRemaining,
+} from '../browser/scroll-report.js'
 import { sanitizeUntrustedFileName } from '../browser/fs-safe/filename.js'
 import { writeExternalFileWithinOutputRoot } from '../browser/output-files.js'
 import { createDownloadCaptureForPage } from '../browser/playwright/download-capture.js'
@@ -375,7 +378,10 @@ await withRelay(async relay => {
   const withToken = new URL(relay.connectUrl('Some Client', token))
   const proof = withToken.searchParams.get('proof')
   eq(proof, pairingProof(token, relay.wsUrl), 'proof is HMAC(token, wsUrl)')
-  assert(!withToken.href.includes(token), 'the token itself never goes on the url')
+  assert(
+    !withToken.href.includes(token),
+    'the token itself never goes on the url',
+  )
   const extensionPairing = (await import(
     pathToFileURL(path.resolve('chrome-extension/pairing.js')).href
   )) as {
@@ -388,7 +394,10 @@ await withRelay(async relay => {
     proof,
     'the extension computes the same proof as the agent',
   )
-  assert(extensionPairing.sameProof(proof!, proof!), 'sameProof accepts a match')
+  assert(
+    extensionPairing.sameProof(proof!, proof!),
+    'sameProof accepts a match',
+  )
   assert(
     !extensionPairing.sameProof(proof!, pairingProof('other', relay.wsUrl)),
     'sameProof rejects a different token',
@@ -450,7 +459,10 @@ await withRelay(async relay => {
   )
 
   eq(
-    await expectRejected(relay, JSON.stringify({ id: 1, ok: true, result: {} })),
+    await expectRejected(
+      relay,
+      JSON.stringify({ id: 1, ok: true, result: {} }),
+    ),
     1008,
     'a response before the handshake must be rejected',
   )
@@ -551,11 +563,20 @@ await withRelay(async relay => {
   // No port or token to quote any more; what is actionable is the tab the
   // user was asked to approve, and the way to opt out entirely.
   assert(msg.includes('approve it there'), 'error points at the consent tab')
-  assert(msg.includes('chrome-extension/README.md'), 'error says how to install')
+  assert(
+    msg.includes('chrome-extension/README.md'),
+    'error says how to install',
+  )
   assert(msg.includes('"isolated"'), 'error offers the fallback')
   const shown = String(browserErrorText(new BrowserError(msg), 'navigate'))
-  assert(shown.includes('Recovery action: stop and ask the user'), 'recovery is to ask the user')
-  assert(!shown.includes('browser_snapshot'), 'no snapshot advice when nothing is connected')
+  assert(
+    shown.includes('Recovery action: stop and ask the user'),
+    'recovery is to ask the user',
+  )
+  assert(
+    !shown.includes('browser_snapshot'),
+    'no snapshot advice when nothing is connected',
+  )
   ok('requesting with no peer explains both ways out')
 })
 
@@ -705,7 +726,10 @@ await withRelay(async relay => {
     new Promise(r => setTimeout(() => r('timeout'), 3000)),
   ])
   eq(closed, 'closed', 'close() must not wait for the peer to hang up')
-  assert(String(await pending).includes('shut down'), 'pending work fails on shutdown')
+  assert(
+    String(await pending).includes('shut down'),
+    'pending work fails on shutdown',
+  )
   await peer.close()
   ok('relay shutdown never blocks on a connected extension')
 }
@@ -950,7 +974,10 @@ function makeFakeRelay(opts: {
   ).content as string
   assert(listing.includes('Console messages (2):'), listing)
   assert(!listing.includes('Console errors during this action'), listing)
-  assert(listing.includes('[error] boom') && listing.includes('[log] hello'), listing)
+  assert(
+    listing.includes('[error] boom') && listing.includes('[log] hello'),
+    listing,
+  )
   ok('browser_console lists every level with its label, not as errors')
 }
 
@@ -962,7 +989,10 @@ function makeFakeRelay(opts: {
   assert(stale.includes('Recovery action: browser_snapshot'), stale)
   assert(!stale.includes('Current page snapshot'), 'no YAML dump')
   const unexpected = browserErrorText(new Error('socket hang up'), 'click')
-  assert(unexpected.startsWith('Error: click failed: socket hang up'), unexpected)
+  assert(
+    unexpected.startsWith('Error: click failed: socket hang up'),
+    unexpected,
+  )
   assert(unexpected.includes('Recovery action:'), unexpected)
   const weird = browserErrorText('weird', 'scroll')
   assert(weird.startsWith('Error: scroll failed: weird'), weird)
@@ -1010,10 +1040,15 @@ function makeFakeRelay(opts: {
     'file_upload',
   )
   assert(
-    noFile.includes('Recovery action: browser_file_upload with paths only (omit ref)'),
+    noFile.includes(
+      'Recovery action: browser_file_upload with paths only (omit ref)',
+    ),
     noFile,
   )
-  assert(!noFile.includes('Current page snapshot'), 'no YAML dump on upload miss')
+  assert(
+    !noFile.includes('Current page snapshot'),
+    'no YAML dump on upload miss',
+  )
   ok('file_upload miss points at omit-ref, not a snapshot dump')
 }
 
@@ -1025,7 +1060,10 @@ function makeFakeRelay(opts: {
     error: 'Click would hit a modal/dialog instead of the target element.',
     suggestion: 'Close the modal first.',
   })
-  assert(formatted.includes('Recovery action: browser_click with ref "e44"'), formatted)
+  assert(
+    formatted.includes('Recovery action: browser_click with ref "e44"'),
+    formatted,
+  )
   assert(formatted.includes('[ref=e44]'), formatted)
   ok('click intercept diagnosis names the covering ref')
 }
@@ -1176,12 +1214,10 @@ function makeFakeRelay(opts: {
     async dispose() {},
   }
 
-  const evaled = await sendCdpCommand(
-    backend,
-    't',
-    'Runtime.evaluate',
-    { expression: '1+1', returnByValue: true },
-  )
+  const evaled = await sendCdpCommand(backend, 't', 'Runtime.evaluate', {
+    expression: '1+1',
+    returnByValue: true,
+  })
   assert(evaled.overflow === false, 'small evaluate stays inline')
   if (evaled.overflow === false) {
     eq(
@@ -1212,7 +1248,10 @@ function makeFakeRelay(opts: {
   }
 
   const spilled = await sendCdpCommand(backend, 't', 'huge', {})
-  assert(spilled.overflow === true, 'responses over the inline cap spill to a file')
+  assert(
+    spilled.overflow === true,
+    'responses over the inline cap spill to a file',
+  )
   if (spilled.overflow === true) {
     assert(
       spilled.reason.includes(`${CDP_INLINE_MAX_CHARS} characters`),
@@ -1399,7 +1438,10 @@ function makeFakeRelay(opts: {
     '- dialog [ref=e10]:',
     '  - heading "我的沟通" [ref=e11]',
     '  - button "Close" [ref=e12]',
-    ...Array.from({ length: 50 }, (_, i) => `  - button "Person ${i}" [ref=e${100 + i}]`),
+    ...Array.from(
+      { length: 50 },
+      (_, i) => `  - button "Person ${i}" [ref=e${100 + i}]`,
+    ),
   ].join('\n')
   assert(
     !isBlockingMessageBox(inboxSheet),
@@ -1444,7 +1486,10 @@ function makeFakeRelay(opts: {
     maxChars: 200_000,
     maxNodes: 12,
   })
-  assert(capped.truncated, 'a node cap below the tree marks the result truncated')
+  assert(
+    capped.truncated,
+    'a node cap below the tree marks the result truncated',
+  )
   assert(
     countRefs(capped.text) <= 12,
     `node cap must bound ref-bearing nodes, got ${countRefs(capped.text)}`,
@@ -1454,7 +1499,11 @@ function makeFakeRelay(opts: {
     `a tight node cap must still spend itself on the dialog:\n${capped.text}`,
   )
   const uncapped = prioritizeAriaSnapshot(yaml, { maxChars: 200_000 })
-  eq(uncapped.truncated, false, 'no node cap, no truncation at a huge char budget')
+  eq(
+    uncapped.truncated,
+    false,
+    'no node cap, no truncation at a huge char budget',
+  )
   ok('snapshot node cap bounds refs and keeps the dialog')
 
   const interactive = keepInteractive(yaml)
@@ -1521,11 +1570,16 @@ function makeFakeRelay(opts: {
 }
 
 {
-  const yaml = Array.from({ length: 80 }, (_, i) => `- text: line ${i}`).join('\n')
+  const yaml = Array.from({ length: 80 }, (_, i) => `- text: line ${i}`).join(
+    '\n',
+  )
   const { preview, totalLines } = snapshotPreviewLines(yaml, 50)
   eq(totalLines, 80, 'preview reports full line count')
   eq(preview.split('\n').length, 50, 'preview keeps first 50 lines')
-  assert(preview.startsWith('- text: line 0'), 'preview is the head of the yaml')
+  assert(
+    preview.startsWith('- text: line 0'),
+    'preview is the head of the yaml',
+  )
   assert(!preview.includes('line 79'), 'preview does not include the tail')
   ok('snapshot preview is the first N lines, not a middle omit')
 
@@ -1539,9 +1593,18 @@ function makeFakeRelay(opts: {
   assert(isAriaRefCssSelector('aria-ref=e12'), 'aria-ref is not CSS')
   assert(!isAriaRefCssSelector('#main'), 'real CSS is allowed')
   const refMsg = ariaRefCssSelectorMessage('[ref=e12]')
-  assert(refMsg.includes('not a snapshot ref'), 'ref selector error names the mistake')
-  assert(refMsg.includes('without selector'), 'recovery is a fresh snapshot, not Read')
-  assert(!/spilled snapshot file|\bRead\b/i.test(refMsg), 'must not send the model to Read a log')
+  assert(
+    refMsg.includes('not a snapshot ref'),
+    'ref selector error names the mistake',
+  )
+  assert(
+    refMsg.includes('without selector'),
+    'recovery is a fresh snapshot, not Read',
+  )
+  assert(
+    !/spilled snapshot file|\bRead\b/i.test(refMsg),
+    'must not send the model to Read a log',
+  )
   ok('snapshot selector rejects [ref=eN]')
 }
 
@@ -1573,7 +1636,10 @@ function makeFakeRelay(opts: {
       out.snapshotArtifactPath!.endsWith('.log'),
       'snapshot extension is .log',
     )
-    assert(!out.snapshotArtifactPath!.includes(`${path.sep}projects${path.sep}`), 'not under projects/')
+    assert(
+      !out.snapshotArtifactPath!.includes(`${path.sep}projects${path.sep}`),
+      'not under projects/',
+    )
     assert(fs.existsSync(out.snapshotArtifactPath!), 'spill file exists')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
@@ -1584,10 +1650,25 @@ function makeFakeRelay(opts: {
 // ── Playwright page matching: never pages[0] ─────────────
 
 {
-  assert(urlsRoughlyEqual('https://www.example.com/a', 'https://www.example.com/a?utm=1'), 'ignore query')
-  assert(urlsRoughlyEqual('https://www.example.com/a#x', 'https://www.example.com/a'), 'ignore hash')
   assert(
-    !urlsRoughlyEqual('https://www.example.com/', 'https://www.example.com/other'),
+    urlsRoughlyEqual(
+      'https://www.example.com/a',
+      'https://www.example.com/a?utm=1',
+    ),
+    'ignore query',
+  )
+  assert(
+    urlsRoughlyEqual(
+      'https://www.example.com/a#x',
+      'https://www.example.com/a',
+    ),
+    'ignore hash',
+  )
+  assert(
+    !urlsRoughlyEqual(
+      'https://www.example.com/',
+      'https://www.example.com/other',
+    ),
     'different paths are not the same tab',
   )
 
@@ -1654,7 +1735,10 @@ function makeFakeRelay(opts: {
   } catch (err) {
     timeoutError = err instanceof Error ? err.message : String(err)
   }
-  assert(controller.signal.aborted, 'tool deadline aborts the underlying operation')
+  assert(
+    controller.signal.aborted,
+    'tool deadline aborts the underlying operation',
+  )
   assert(
     timeoutError.includes('timed out after 0.01s'),
     'deadline reports timeout instead of user interruption',
@@ -1663,8 +1747,14 @@ function makeFakeRelay(opts: {
 }
 
 {
-  assert(isHeavyMediaFrame('https://cdn.example/invoice.pdf'), 'pdf url is heavy')
-  assert(isHeavyMediaFrame('blob:https://app.example/uuid'), 'blob preview is heavy')
+  assert(
+    isHeavyMediaFrame('https://cdn.example/invoice.pdf'),
+    'pdf url is heavy',
+  )
+  assert(
+    isHeavyMediaFrame('blob:https://app.example/uuid'),
+    'blob preview is heavy',
+  )
   assert(isHeavyMediaFrame('', 'application/pdf'), 'pdf mime is heavy')
   assert(
     isHeavyMediaFrame(
@@ -1672,7 +1762,10 @@ function makeFakeRelay(opts: {
     ),
     'chrome pdf viewer is heavy',
   )
-  assert(!isHeavyMediaFrame('https://app.example/nui/expense'), 'app frame is not heavy')
+  assert(
+    !isHeavyMediaFrame('https://app.example/nui/expense'),
+    'app frame is not heavy',
+  )
   assert(
     isHeavyMediaFrame('https://us2.concursolutions.com/receiptimages/abc'),
     'concur receipt preview url is heavy',
@@ -1708,7 +1801,10 @@ function makeFakeRelay(opts: {
     'Delete Bob',
     'ref meta tracks the latest snapshot',
   )
-  assert(getLastSnapshot('t1')?.includes('Delete Bob'), 'last snapshot yaml updates')
+  assert(
+    getLastSnapshot('t1')?.includes('Delete Bob'),
+    'last snapshot yaml updates',
+  )
   resetSessionFlags()
   assert(!getUserHasControl(), 'close/reset returns control to the agent')
   assert(!getRefMeta('t1', 'e12'), 'reset clears ref memory')
@@ -1725,7 +1821,10 @@ function makeFakeRelay(opts: {
   assert(namesOverlap('Delete Alice', 'delete alice'), 'names overlap')
   assert(!namesOverlap('Delete Alice', 'Delete Bob'), 'Alice is not Bob')
   assert(
-    elementMatchesHint({ role: 'button', name: 'Apply changes' }, 'Apply changes'),
+    elementMatchesHint(
+      { role: 'button', name: 'Apply changes' },
+      'Apply changes',
+    ),
     'hint matches name',
   )
   assert(
@@ -1901,8 +2000,16 @@ function makeFakeRelay(opts: {
   eq(plan.skipped, 0, 'none skipped without viewport size')
   const off = planAnnotations({
     inputs: [
-      { ref: 'e1', role: 'button', doc: { x: 10, y: 50, width: 40, height: 20 } },
-      { ref: 'e2', role: 'link', doc: { x: 10, y: 5000, width: 40, height: 20 } },
+      {
+        ref: 'e1',
+        role: 'button',
+        doc: { x: 10, y: 50, width: 40, height: 20 },
+      },
+      {
+        ref: 'e2',
+        role: 'link',
+        doc: { x: 10, y: 5000, width: 40, height: 20 },
+      },
     ],
     space: 'viewport',
     scroll: { x: 0, y: 0 },
@@ -2084,7 +2191,11 @@ function makeFakeRelay(opts: {
     async restoreTab() {},
     async dispose() {},
   }))
-  eq((await resolveTab(process.cwd(), undefined, 'sess-c')).targetId, 'tab-1', 'first tab adopted')
+  eq(
+    (await resolveTab(process.cwd(), undefined, 'sess-c')).targetId,
+    'tab-1',
+    'first tab adopted',
+  )
   // The user closes the agent's tab; exactly one other tab is left behind.
   open.splice(0, 1, { targetId: 'tab-2', url: 'http://x.test/2', title: '2' })
   let err = ''
@@ -2093,13 +2204,27 @@ function makeFakeRelay(opts: {
   } catch (e) {
     err = e instanceof Error ? e.message : String(e)
   }
-  assert(/was closed or is no longer shared/.test(err), `closed current tab must fail, got: ${err}`)
-  assert(/Recovery action: browser_tabs/.test(err), 'closed current tab names the recovery')
+  assert(
+    /was closed or is no longer shared/.test(err),
+    `closed current tab must fail, got: ${err}`,
+  )
+  assert(
+    /Recovery action: browser_tabs/.test(err),
+    'closed current tab names the recovery',
+  )
   eq(getCurrentTabId('sess-c'), 'tab-1', 'no silent switch to the leftover tab')
   setCurrentTab('tab-2', 'sess-c')
-  eq((await resolveTab(process.cwd(), undefined, 'sess-c')).targetId, 'tab-2', 'explicit select recovers')
+  eq(
+    (await resolveTab(process.cwd(), undefined, 'sess-c')).targetId,
+    'tab-2',
+    'explicit select recovers',
+  )
   clearCurrentTab('sess-c')
-  eq((await resolveTab(process.cwd(), undefined, 'sess-c')).targetId, 'tab-2', 'no current tab falls back to the only one')
+  eq(
+    (await resolveTab(process.cwd(), undefined, 'sess-c')).targetId,
+    'tab-2',
+    'no current tab falls back to the only one',
+  )
   await closeBrowser()
   setBrowserBackendFactory(null)
   ok('a closed current tab is reported, never silently replaced')
@@ -2134,7 +2259,10 @@ function makeFakeRelay(opts: {
     moved: { x: 0, y: 400 },
     extent: page(2400),
   })
-  assert(partial.includes('by (0px, 400px); reached the bottom of the page'), partial)
+  assert(
+    partial.includes('by (0px, 400px); reached the bottom of the page'),
+    partial,
+  )
   assert(partial.endsWith('[End of page]'), partial)
 
   const stuck = formatScrollOutcome({
@@ -2143,7 +2271,12 @@ function makeFakeRelay(opts: {
     moved: { x: 0, y: 0 },
     extent: page(2400),
   })
-  assert(stuck.startsWith('Warning: no scroll occurred — already at the bottom of the page'), stuck)
+  assert(
+    stuck.startsWith(
+      'Warning: no scroll occurred — already at the bottom of the page',
+    ),
+    stuck,
+  )
 
   const flat = formatScrollOutcome({
     kind: 'page',
@@ -2159,9 +2292,19 @@ function makeFakeRelay(opts: {
     label: 'div#results',
     requested: { x: 0, y: 200 },
     moved: { x: 0, y: 200 },
-    extent: { x: 0, y: 200, clientWidth: 400, clientHeight: 400, scrollWidth: 400, scrollHeight: 1000 },
+    extent: {
+      x: 0,
+      y: 200,
+      clientWidth: 400,
+      clientHeight: 400,
+      scrollWidth: 400,
+      scrollHeight: 1000,
+    },
   })
-  assert(container.startsWith('Scrolled container div#results by (0px, 200px)'), container)
+  assert(
+    container.startsWith('Scrolled container div#results by (0px, 200px)'),
+    container,
+  )
   assert(container.includes('0.5 pages above, 1.0 pages below'), container)
 
   eq(

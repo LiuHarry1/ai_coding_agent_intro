@@ -8,8 +8,7 @@ export interface RefMeta {
   name: string
 }
 
-const REF_LINE =
-  /^\s*- (\S+)(?: "((?:\\.|[^"\\])*)")?.*\[ref=([^\]]+)\]/
+const REF_LINE = /^\s*- (\S+)(?: "((?:\\.|[^"\\])*)")?.*\[ref=([^\]]+)\]/
 
 export function parseRefMeta(yaml: string): RefMeta[] {
   const out: RefMeta[] = []
@@ -138,11 +137,7 @@ export function elementMatchesHint(
   const actualDescription = `${actualRole} "${actualText}"`
   const parsed = parseExpectedDescription(h)
 
-  if (
-    parsed.role &&
-    parsed.role !== actualRole &&
-    parsed.role !== actualTag
-  ) {
+  if (parsed.role && parsed.role !== actualRole && parsed.role !== actualTag) {
     return false
   }
 
@@ -163,8 +158,10 @@ export function elementMatchesHint(
     .split(/\s+/)
     .filter(w => w.length > 2)
   if (expectedWords.length > 0) {
-    return Boolean(actualText) &&
+    return (
+      Boolean(actualText) &&
       expectedWords.some(word => actualText.includes(word))
+    )
   }
   return true
 }
@@ -199,7 +196,9 @@ export function snapshotDiff(previous: string, next: string): string {
   }
   const parts: string[] = []
   if (removed.length) {
-    parts.push(`Removed (${removed.length}):\n${removed.slice(0, 80).join('\n')}`)
+    parts.push(
+      `Removed (${removed.length}):\n${removed.slice(0, 80).join('\n')}`,
+    )
   }
   if (added.length) {
     parts.push(`Added (${added.length}):\n${added.slice(0, 80).join('\n')}`)

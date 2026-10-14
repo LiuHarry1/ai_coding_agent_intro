@@ -1,6 +1,4 @@
-import type {
-  PermissionDecision,
-} from './runtime-protocol.js'
+import type { PermissionDecision } from './runtime-protocol.js'
 
 export type PermissionAsk = {
   requestId: string

@@ -123,7 +123,13 @@ function ContentPreview({ text }) {
 }
 
 /** Prefer the changed region for collapsed teasers. */
-function collapsedTeaserText({ isWrite, args, beforeContent, afterContent, previewSource }) {
+function collapsedTeaserText({
+  isWrite,
+  args,
+  beforeContent,
+  afterContent,
+  previewSource,
+}) {
   if (!isWrite && typeof args?.new_string === 'string') return args.new_string
   if (
     typeof beforeContent === 'string' &&
@@ -196,8 +202,7 @@ export default function FileChangeCard({ part, nested = false }) {
   const isError =
     isDone && typeof result === 'string' && result.startsWith('Error:')
   const duration = formatDuration(part.duration)
-  const filePath =
-    tur?.filePath || args.file_path || args.path || null
+  const filePath = tur?.filePath || args.file_path || args.path || null
   const isWrite = name === 'Write' || name === 'write_file'
   const kind = isWrite ? 'write' : 'edit'
   const writeType = tur?.type === 'update' ? 'update' : 'create'
@@ -248,9 +253,7 @@ export default function FileChangeCard({ part, nested = false }) {
 
   const previewSource = hasLivePreview
     ? part.livePreview
-    : afterContent ||
-      (isWrite ? args.content : args.new_string) ||
-      null
+    : afterContent || (isWrite ? args.content : args.new_string) || null
   const changedLineCount = previewSource
     ? (previewSource.match(/\n/g)?.length ?? 0) + 1
     : 0
@@ -312,9 +315,7 @@ export default function FileChangeCard({ part, nested = false }) {
       )
       copyText = afterContent
     } else if (typeof afterContent === 'string') {
-      body = (
-        <FilePreview content={afterContent} filePath={filePath} embedded />
-      )
+      body = <FilePreview content={afterContent} filePath={filePath} embedded />
       copyText = afterContent
       const lines = afterContent.split('\n')
       const visible = afterContent.endsWith('\n')

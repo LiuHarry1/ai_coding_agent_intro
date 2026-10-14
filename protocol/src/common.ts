@@ -20,7 +20,7 @@ export const envelopeFields = {
   uuid: z.string().optional(),
   /**
    * When set, this message belongs to a nested subagent/tool invocation.
- * Mirrors the `parent_tool_use_id` on SDK messages.
+   * Mirrors the `parent_tool_use_id` on SDK messages.
    */
   parent_tool_use_id: z.string().optional(),
 }

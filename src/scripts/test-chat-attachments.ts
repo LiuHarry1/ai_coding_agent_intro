@@ -95,7 +95,14 @@ try {
   assert.equal(classifyAttachment('photo.heic', 'image/heic'), 'binary')
   assert.equal(classifyAttachment('logo.svg', 'image/svg+xml'), 'text')
   assert.equal(classifyAttachment('logo.svg'), 'text')
-  const specialized = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf'])
+  const specialized = new Set([
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+    '.pdf',
+  ])
   for (const ext of BINARY_EXTENSIONS) {
     if (specialized.has(ext)) continue
     const name = `attachment${ext}`
@@ -124,7 +131,9 @@ try {
   // ── save + claim-check round trip ─────────────────────
   const csvRows = ['id,name,amount,created_at']
   for (let i = 1; i <= 500; i++) {
-    csvRows.push(`${i},cust-${i},${(i * 1.5).toFixed(2)},2026-01-${(i % 28) + 1}`)
+    csvRows.push(
+      `${i},cust-${i},${(i * 1.5).toFixed(2)},2026-01-${(i % 28) + 1}`,
+    )
   }
   const csv = await saveChatAttachment(
     SESSION_ID,
@@ -303,7 +312,9 @@ try {
   )
   assert.equal(noVision.imageRefs.length, 0, 'text-only model gets no images')
   assert.ok(noVision.warnings.some(w => w.includes('shot.png')))
-  assert.ok(renderedText(noVision.preludeMessages).includes('cannot see images'))
+  assert.ok(
+    renderedText(noVision.preludeMessages).includes('cannot see images'),
+  )
   console.log('[ok] vision capability gate')
 
   // ── pdf ───────────────────────────────────────────────
@@ -363,7 +374,10 @@ try {
   )
   const cjkText = renderedText(cjkResolved.preludeMessages)
   const cjkDisk = toModelFilePath(cjk.absPath)
-  assert.ok(cjkText.includes(cjkDisk), 'CJK display name still maps to hash path')
+  assert.ok(
+    cjkText.includes(cjkDisk),
+    'CJK display name still maps to hash path',
+  )
   assert.ok(cjkText.includes(cjk.fileName), 'saved hash name is in the prelude')
   assert.ok(
     !cjkText.includes('uploads/中国移不动.pdf'),
@@ -393,7 +407,8 @@ try {
     SESSION_ID,
   )
   assert.ok(
-    legacyAbs && legacyAbs.replace(/\\/g, '/').endsWith(`uploads/${legacyName}`),
+    legacyAbs &&
+      legacyAbs.replace(/\\/g, '/').endsWith(`uploads/${legacyName}`),
     'readers fall back to the pre-move session-data uploads dir',
   )
 

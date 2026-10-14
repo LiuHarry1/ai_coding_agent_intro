@@ -308,9 +308,7 @@ try {
           bytes: 128,
           code: 200,
           codeText: 'OK',
-          contentType: url.includes('markdown')
-            ? 'text/markdown'
-            : 'text/html',
+          contentType: url.includes('markdown') ? 'text/markdown' : 'text/html',
           ...(url.includes('binary')
             ? {
                 persistedPath: '/tmp/fixture.pdf',

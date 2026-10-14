@@ -2,11 +2,7 @@ import type { IProvider, LlmProfile, ProviderId } from './types.js'
 import { anthropicStrategy } from './strategies/anthropic.js'
 import { openaiStrategy } from './strategies/openai.js'
 import { openaiCompatibleStrategy } from './strategies/openai-compatible.js'
-import {
-  DEFAULT_PROFILE,
-  profileToRecord,
-  resolveProfile,
-} from './resolve.js'
+import { DEFAULT_PROFILE, profileToRecord, resolveProfile } from './resolve.js'
 
 const STRATEGIES = {
   openai: openaiStrategy,

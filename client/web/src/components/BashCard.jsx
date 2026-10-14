@@ -143,8 +143,7 @@ export default function BashCard({ part, onStopTool }) {
     (typeof display.exitCode === 'number' && display.exitCode !== 0) ||
     detectError(part.name || 'Bash', modelText)
   const failed =
-    isDone &&
-    (display.outcome ? display.outcome !== 'success' : legacyFailed)
+    isDone && (display.outcome ? display.outcome !== 'success' : legacyFailed)
 
   const command = typeof args?.command === 'string' ? args.command.trim() : ''
   const description =
@@ -239,9 +238,7 @@ export default function BashCard({ part, onStopTool }) {
   }
 
   const exitBadge =
-    isDone &&
-    display.exitCode != null &&
-    display.exitCode !== 0 ? (
+    isDone && display.exitCode != null && display.exitCode !== 0 ? (
       <span className='tool-row-meta-badge' title='Exit code'>
         exit {display.exitCode}
       </span>
@@ -339,7 +336,9 @@ export default function BashCard({ part, onStopTool }) {
             </pre>
           ) : null}
           {display.stderr ? (
-            <pre className={`tool-row-body tool-row-body--stderr ui-shell-tool-call__stderr ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}>
+            <pre
+              className={`tool-row-body tool-row-body--stderr ui-shell-tool-call__stderr ${showFullOutput ? 'ui-shell-tool-call__output--full' : ''}`}
+            >
               {showFullOutput ? display.stderr : stderrTrunc.preview}
               {!showFullOutput && stderrTrunc.truncated ? '\n…' : ''}
             </pre>

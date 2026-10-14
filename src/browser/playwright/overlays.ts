@@ -49,9 +49,7 @@ async function settleDialog(page: Page, dialog: Dialog): Promise<void> {
   // alert is informational — accept so the page unfreezes.
   // confirm/prompt/beforeunload without a prior handle_dialog: dismiss so
   // the click can return, then the action fails (see throwIfUnarmedDestructiveDialog).
-  const accept = armed
-    ? armed.accept
-    : kind === 'alert' || navigationAllowed
+  const accept = armed ? armed.accept : kind === 'alert' || navigationAllowed
   lastNote.set(page, {
     type: kind,
     message: dialog.message(),
@@ -186,9 +184,7 @@ async function locatorCount(loc: Locator): Promise<number> {
 async function isFileInput(loc: Locator): Promise<boolean> {
   if ((await locatorCount(loc)) === 0) return false
   return loc
-    .evaluate(
-      el => el instanceof HTMLInputElement && el.type === 'file',
-    )
+    .evaluate(el => el instanceof HTMLInputElement && el.type === 'file')
     .catch(() => false)
 }
 
@@ -246,10 +242,7 @@ async function fileInputFromRef(
   return fileInputById(page, forId)
 }
 
-async function setFilesOnInput(
-  loc: Locator,
-  paths: string[],
-): Promise<void> {
+async function setFilesOnInput(loc: Locator, paths: string[]): Promise<void> {
   await loc.setInputFiles(paths, { timeout: ACTION_TIMEOUT_MS })
   await loc
     .evaluate(el => {

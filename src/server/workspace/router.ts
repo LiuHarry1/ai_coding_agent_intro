@@ -126,7 +126,9 @@ export function createWorkspaceRouter(opts: WorkspaceRouterOptions) {
         } catch (err) {
           throw new FsOpError(
             'EACCES',
-            err instanceof Error ? err.message : 'Path is outside your workspace',
+            err instanceof Error
+              ? err.message
+              : 'Path is outside your workspace',
           )
         }
       } else if (pinned && !isPathInWorkspace(abs, root)) {

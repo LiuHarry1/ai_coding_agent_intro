@@ -9,7 +9,11 @@ import { createToolSearchDefinition } from '../tools/ToolSearchTool/ToolSearchTo
 import { CODING_TOOL_MANIFEST } from './coding-tools-manifest.js'
 
 const names = CODING_TOOL_MANIFEST.map(entry => entry.name)
-assert.equal(new Set(names).size, names.length, 'manifest tool names must be unique')
+assert.equal(
+  new Set(names).size,
+  names.length,
+  'manifest tool names must be unique',
+)
 
 for (const excluded of BROWSER_TOOL_NAMES) {
   assert.ok(!names.includes(excluded), `${excluded} is explicitly out of scope`)
@@ -71,4 +75,3 @@ assert.deepEqual(
 )
 
 console.log(`ok coding-tool manifest (${CODING_TOOL_MANIFEST.length} tools)`)
-

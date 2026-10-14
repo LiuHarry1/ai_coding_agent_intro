@@ -32,7 +32,10 @@ function formatIssue(issue: ZodIssue): string {
   return issue.message
 }
 
-export function formatZodError(error: ZodError, file: string): ValidationError[] {
+export function formatZodError(
+  error: ZodError,
+  file: string,
+): ValidationError[] {
   return error.issues.map(issue => ({
     file,
     path: issuePath(issue),

@@ -2,7 +2,10 @@
  * Read-only agent discovery — load disk/plugin agents and merge with
  * built-ins without mutating the tool registry.
  */
-import type { AgentDefinitionsResult, AgentDefinition } from '../../core/types.js'
+import type {
+  AgentDefinitionsResult,
+  AgentDefinition,
+} from '../../core/types.js'
 import {
   loadMarkdownConfigs,
   type MarkdownFile,

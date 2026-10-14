@@ -59,7 +59,9 @@ try {
 
   const resolvedOutside = resolveFileInCwd(root, outside)
   if ('error' in resolvedOutside) {
-    throw new Error(`resolve should succeed outside cwd: ${resolvedOutside.error}`)
+    throw new Error(
+      `resolve should succeed outside cwd: ${resolvedOutside.error}`,
+    )
   }
   if (path.resolve(resolvedOutside.abs) !== path.resolve(outside)) {
     throw new Error('resolve outside cwd should keep absolute path')
@@ -122,7 +124,9 @@ try {
     allow: ['Read', `Read(${outside.replace(/\\/g, '/')})`],
   })
   if (checkReadPermission(outside, withAllow).behavior !== 'allow') {
-    throw new Error('tool-wide / absolute allow should grant outside path on desktop')
+    throw new Error(
+      'tool-wide / absolute allow should grant outside path on desktop',
+    )
   }
 
   // Relative allow rules use all working dirs (same as deny).
@@ -131,7 +135,9 @@ try {
     allow: ['Read(ok.txt)'],
   })
   if (checkReadPermission(extraFile, withRelAllow).behavior !== 'allow') {
-    throw new Error('relative allow should match under additionalWorkingDirectories')
+    throw new Error(
+      'relative allow should match under additionalWorkingDirectories',
+    )
   }
 
   // A leading `/` is project-root-relative, not filesystem-absolute.
@@ -186,7 +192,9 @@ try {
     file_path: outside,
   })
   if (lockedDenied.behavior !== 'deny') {
-    throw new Error('defaultMode dontAsk should deny File tools outside workspace')
+    throw new Error(
+      'defaultMode dontAsk should deny File tools outside workspace',
+    )
   }
 
   const planOpts = settingsPermissionOpts({
@@ -199,7 +207,9 @@ try {
     defaultMode: 'acceptEdits' as 'default',
   })
   if (acceptOpts.mode !== 'default') {
-    throw new Error('legacy defaultMode acceptEdits should map to filesystem default')
+    throw new Error(
+      'legacy defaultMode acceptEdits should map to filesystem default',
+    )
   }
   const bypassOpts = settingsPermissionOpts({
     defaultMode: 'bypassPermissions',
@@ -286,92 +296,93 @@ try {
 
   process.env.AUTH_ENABLED = 'true'
   await runWithRequestScope({ agentHome: root, cwd: root }, async () => {
-  const cloud = createFilesystemPermissionContext(root)
-  if (cloud.mode !== 'dontAsk') throw new Error('cloud mode')
-  assertAccessible(inside, cloud, 'read')
-  assertAccessible(inside, cloud, 'write')
-  expectThrow(
-    () => assertAccessible(outside, cloud, 'read'),
-    'dontAsk read outside',
-  )
-  expectThrow(
-    () => assertAccessible(outside, cloud, 'write'),
-    'dontAsk write outside',
-  )
-
-  const canUse = createCanUseTool({
-    cwd: root,
-    permissionContext: cloud,
-    getDefinition: name => (name === FILE_READ_TOOL_NAME ? fileReadDef : undefined),
-    wire: noopWireEmitter,
-  })
-  const denied = await canUse(FILE_READ_TOOL_NAME, { file_path: outside })
-  if (denied.behavior !== 'deny') {
-    throw new Error('dontAsk createCanUseTool should deny outside path')
-  }
-  const allowed = await canUse(FILE_READ_TOOL_NAME, { file_path: inside })
-  if (allowed.behavior !== 'allow') {
-    throw new Error('dontAsk createCanUseTool should allow in-cwd')
-  }
-
-  const ssoOpts = settingsPermissionOpts({
-    additionalDirectories: [extraDir],
-    allow: ['Read'],
-    deny: ['Read(.env)'],
-    defaultMode: 'bypassPermissions',
-  })
-  if (ssoOpts.mode !== 'dontAsk') {
-    throw new Error('SSO should force dontAsk over bypassPermissions')
-  }
-  if ((ssoOpts.allow ?? []).length !== 0) {
-    throw new Error('SSO should drop allow')
-  }
-  if ((ssoOpts.additionalWorkingDirectories ?? []).length !== 0) {
-    throw new Error('SSO should drop additionalDirectories')
-  }
-  if (!ssoOpts.deny?.includes('Read(.env)')) {
-    throw new Error('SSO should keep deny')
-  }
-
-  const cloudDeny = createFilesystemPermissionContext(root, {
-    deny: ['Read(.env)'],
-    allow: ['Read'],
-  })
-  if (checkReadPermission(envInside, cloudDeny).behavior !== 'deny') {
-    throw new Error('dontAsk should still honor deny inside workspace')
-  }
-  if (checkReadPermission(outside, cloudDeny).behavior !== 'ask') {
-    throw new Error('dontAsk should ignore allow rules')
-  }
-  expectThrow(
-    () => assertAccessible(envInside, cloudDeny, 'read'),
-    'dontAsk deny .env',
-  )
-
-  const link = path.join(root, 'escape-link')
-  try {
-    fs.symlinkSync(outside, link)
+    const cloud = createFilesystemPermissionContext(root)
+    if (cloud.mode !== 'dontAsk') throw new Error('cloud mode')
+    assertAccessible(inside, cloud, 'read')
+    assertAccessible(inside, cloud, 'write')
     expectThrow(
-      () => assertAccessibleResolved(link, cloud, 'read'),
-      'symlink realpath',
+      () => assertAccessible(outside, cloud, 'read'),
+      'dontAsk read outside',
     )
-    const linkDecision = checkReadPermission(link, cloud)
-    if (linkDecision.behavior !== 'ask') {
-      throw new Error('workspace symlink to outside should not auto-allow')
+    expectThrow(
+      () => assertAccessible(outside, cloud, 'write'),
+      'dontAsk write outside',
+    )
+
+    const canUse = createCanUseTool({
+      cwd: root,
+      permissionContext: cloud,
+      getDefinition: name =>
+        name === FILE_READ_TOOL_NAME ? fileReadDef : undefined,
+      wire: noopWireEmitter,
+    })
+    const denied = await canUse(FILE_READ_TOOL_NAME, { file_path: outside })
+    if (denied.behavior !== 'deny') {
+      throw new Error('dontAsk createCanUseTool should deny outside path')
     }
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'EPERM') {
-      console.log('skip symlink test (EPERM on this platform)')
-    } else if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
-      console.log('skip symlink test (EEXIST)')
-    } else {
-      throw e
+    const allowed = await canUse(FILE_READ_TOOL_NAME, { file_path: inside })
+    if (allowed.behavior !== 'allow') {
+      throw new Error('dontAsk createCanUseTool should allow in-cwd')
     }
-  } finally {
+
+    const ssoOpts = settingsPermissionOpts({
+      additionalDirectories: [extraDir],
+      allow: ['Read'],
+      deny: ['Read(.env)'],
+      defaultMode: 'bypassPermissions',
+    })
+    if (ssoOpts.mode !== 'dontAsk') {
+      throw new Error('SSO should force dontAsk over bypassPermissions')
+    }
+    if ((ssoOpts.allow ?? []).length !== 0) {
+      throw new Error('SSO should drop allow')
+    }
+    if ((ssoOpts.additionalWorkingDirectories ?? []).length !== 0) {
+      throw new Error('SSO should drop additionalDirectories')
+    }
+    if (!ssoOpts.deny?.includes('Read(.env)')) {
+      throw new Error('SSO should keep deny')
+    }
+
+    const cloudDeny = createFilesystemPermissionContext(root, {
+      deny: ['Read(.env)'],
+      allow: ['Read'],
+    })
+    if (checkReadPermission(envInside, cloudDeny).behavior !== 'deny') {
+      throw new Error('dontAsk should still honor deny inside workspace')
+    }
+    if (checkReadPermission(outside, cloudDeny).behavior !== 'ask') {
+      throw new Error('dontAsk should ignore allow rules')
+    }
+    expectThrow(
+      () => assertAccessible(envInside, cloudDeny, 'read'),
+      'dontAsk deny .env',
+    )
+
+    const link = path.join(root, 'escape-link')
     try {
-      fs.unlinkSync(link)
-    } catch {}
-  }
+      fs.symlinkSync(outside, link)
+      expectThrow(
+        () => assertAccessibleResolved(link, cloud, 'read'),
+        'symlink realpath',
+      )
+      const linkDecision = checkReadPermission(link, cloud)
+      if (linkDecision.behavior !== 'ask') {
+        throw new Error('workspace symlink to outside should not auto-allow')
+      }
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'EPERM') {
+        console.log('skip symlink test (EPERM on this platform)')
+      } else if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
+        console.log('skip symlink test (EEXIST)')
+      } else {
+        throw e
+      }
+    } finally {
+      try {
+        fs.unlinkSync(link)
+      } catch {}
+    }
   })
 
   fs.unlinkSync(outside)
@@ -380,7 +391,15 @@ try {
   const wrongKey = 'C--Users-harry.liu--ws'
   const realKey = 'C--Users-harry-liu--ws'
   const coerced = coerceSanitizedProjectsPath(
-    path.join(root, '.ai-agent', 'projects', wrongKey, 'sid', 'browser', 'snap.txt'),
+    path.join(
+      root,
+      '.ai-agent',
+      'projects',
+      wrongKey,
+      'sid',
+      'browser',
+      'snap.txt',
+    ),
   )
   const coercedKey = coerced
     ? coerced.split(path.sep).find((_, i, arr) => arr[i - 1] === 'projects')
@@ -388,14 +407,31 @@ try {
   if (coercedKey !== realKey) {
     throw new Error(`coerceSanitizedProjectsPath failed: ${coerced}`)
   }
-  const snapDir = path.join(root, '.ai-agent', 'projects', realKey, 'sid', 'browser')
+  const snapDir = path.join(
+    root,
+    '.ai-agent',
+    'projects',
+    realKey,
+    'sid',
+    'browser',
+  )
   fs.mkdirSync(snapDir, { recursive: true })
   const snapFile = path.join(snapDir, 'snap.txt')
   fs.writeFileSync(snapFile, 'ok')
-  const asked = path.join(root, '.ai-agent', 'projects', wrongKey, 'sid', 'browser', 'snap.txt')
+  const asked = path.join(
+    root,
+    '.ai-agent',
+    'projects',
+    wrongKey,
+    'sid',
+    'browser',
+    'snap.txt',
+  )
   const hit = resolveFileInCwd(root, asked, { allowOutsideWorkspace: true })
   if ('error' in hit || path.normalize(hit.abs) !== path.normalize(snapFile)) {
-    throw new Error(`Read should follow sanitized project key, got ${JSON.stringify(hit)}`)
+    throw new Error(
+      `Read should follow sanitized project key, got ${JSON.stringify(hit)}`,
+    )
   }
 
   const sid = '59a89bca-a1ed-4fe6-932f-f822b19e0409'

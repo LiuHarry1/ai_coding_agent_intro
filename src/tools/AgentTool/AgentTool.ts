@@ -30,10 +30,7 @@ import {
   clearToolAbort,
   registerToolAbort,
 } from '../../core/tool-abort-registry.js'
-import {
-  getAgentMemoryDir,
-  loadAgentMemoryPrompt,
-} from './agentMemory.js'
+import { getAgentMemoryDir, loadAgentMemoryPrompt } from './agentMemory.js'
 
 const SUBAGENT_STOPPED = 'Error: Subagent stopped by user.'
 

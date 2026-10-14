@@ -100,7 +100,10 @@ export function attachmentMediaType(fileName: string, hint?: string): string {
   return 'text/plain'
 }
 
-export function classifyAttachment(fileName: string, hint?: string): AttachmentKind {
+export function classifyAttachment(
+  fileName: string,
+  hint?: string,
+): AttachmentKind {
   const ext = normalizeExt(fileName)
   const mime = attachmentMediaType(fileName, hint)
 
@@ -121,7 +124,10 @@ export function formatAttachmentSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function assertAttachmentSize(kind: AttachmentKind, bytes: number): void {
+export function assertAttachmentSize(
+  kind: AttachmentKind,
+  bytes: number,
+): void {
   if (bytes <= 0) throw new Error('Empty attachment')
   const max = ATTACHMENT_MAX_BYTES[kind]
   if (bytes > max) {

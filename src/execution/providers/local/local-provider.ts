@@ -22,10 +22,7 @@ import {
   getRepoRoot,
   buildAgentSpawnEnv,
 } from '../../worker-paths.js'
-import {
-  StdioRuntimePort,
-  bindStdioRuntime,
-} from '../../stdio-runtime-port.js'
+import { StdioRuntimePort, bindStdioRuntime } from '../../stdio-runtime-port.js'
 import { getAgentHome } from '../../../utils/request-scope.js'
 
 /**

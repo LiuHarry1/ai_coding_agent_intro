@@ -34,7 +34,10 @@ async function main(): Promise<void> {
   console.log('')
 
   try {
-    openConnectPage(relay, { clientName: 'Baize (browser check)', pairingToken })
+    openConnectPage(relay, {
+      clientName: 'Baize (browser check)',
+      pairingToken,
+    })
   } catch (err) {
     console.error(`  ${err instanceof Error ? err.message : String(err)}`)
     process.exitCode = 1

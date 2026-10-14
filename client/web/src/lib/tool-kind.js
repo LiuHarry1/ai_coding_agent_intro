@@ -46,13 +46,7 @@ export function parseMcpToolName(name) {
     }
   }
 
-  const suffixes = [
-    'WebSearch',
-    'WebFetch',
-    'web_search',
-    'fetch',
-    'search',
-  ]
+  const suffixes = ['WebSearch', 'WebFetch', 'web_search', 'fetch', 'search']
   for (const suffix of suffixes) {
     const marker = `_${suffix}`
     if (name.endsWith(marker) && name.length > marker.length) {

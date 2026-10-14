@@ -4,11 +4,7 @@ import FilePreview from './FilePreview.jsx'
 import CopyButton from './CopyButton.jsx'
 import LiveTerminal from './LiveTerminal.jsx'
 import ToolChrome from './ToolChrome.jsx'
-import {
-  fileName,
-  formatBytes,
-  detectError,
-} from '../lib/utils.js'
+import { fileName, formatBytes, detectError } from '../lib/utils.js'
 import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 
 function formatArgs(name, args) {

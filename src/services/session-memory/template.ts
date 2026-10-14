@@ -104,7 +104,8 @@ export function repairSessionMemoryStructure(
   const repaired: string[] = []
 
   for (const header of SESSION_MEMORY_SECTION_HEADERS) {
-    const section = candidateSections.get(header) ?? fallbackSections.get(header)
+    const section =
+      candidateSections.get(header) ?? fallbackSections.get(header)
     if (!section) return undefined
     repaired.push(section)
   }

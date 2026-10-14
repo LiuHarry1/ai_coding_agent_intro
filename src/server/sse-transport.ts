@@ -3,7 +3,7 @@ import type { SSETransport } from '../core/types.js'
 import type { OutgoingMessage } from '../../protocol/src/wire.js'
 import type { ProtocolSink } from '../core/protocol-sink.js'
 
-/** SSE event name for a protocol message: `system.init`, `tool_call`, â€?*/
+/** SSE event name for a protocol message: `system.init`, `tool_call`, ï¿½?*/
 export function protocolEventName(msg: OutgoingMessage): string {
   if (msg.type === 'control_request' || msg.type === 'control_response') {
     return msg.type
@@ -14,8 +14,8 @@ export function protocolEventName(msg: OutgoingMessage): string {
 }
 
 /**
- * SSE transport â€?dumb serializer for `@ai-agent/protocol` messages.
- * 
+ * SSE transport ï¿½?dumb serializer for `@ai-agent/protocol` messages.
+ *
  */
 export function createSSETransport(
   res: ServerResponse,

@@ -283,10 +283,16 @@ function isExternalMode(value: unknown): value is ExternalMode {
   return value === 'agent' || value === 'ask' || value === 'plan'
 }
 
-function modeFromIndexLine(line: Record<string, unknown>): ExternalMode | undefined {
+function modeFromIndexLine(
+  line: Record<string, unknown>,
+): ExternalMode | undefined {
   const pm = line.permissionMode
   if (isExternalMode(pm)) return pm
-  if (pm && typeof pm === 'object' && isExternalMode((pm as { mode?: unknown }).mode)) {
+  if (
+    pm &&
+    typeof pm === 'object' &&
+    isExternalMode((pm as { mode?: unknown }).mode)
+  ) {
     return (pm as { mode: ExternalMode }).mode
   }
   return undefined

@@ -82,9 +82,7 @@ export function isAgentMemoryPath(absolutePath: string, cwd?: string): boolean {
     return true
   }
 
-  if (
-    normalizedPath.startsWith(join(root, app, AGENT_MEMORY_DIRNAME) + sep)
-  ) {
+  if (normalizedPath.startsWith(join(root, app, AGENT_MEMORY_DIRNAME) + sep)) {
     return true
   }
 
@@ -98,9 +96,7 @@ export function isAgentMemoryPath(absolutePath: string, cwd?: string): boolean {
       return true
     }
   } else if (
-    normalizedPath.startsWith(
-      join(root, app, AGENT_MEMORY_LOCAL_DIRNAME) + sep,
-    )
+    normalizedPath.startsWith(join(root, app, AGENT_MEMORY_LOCAL_DIRNAME) + sep)
   ) {
     return true
   }

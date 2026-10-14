@@ -131,10 +131,7 @@ export function readCronTasks(): ScheduledTask[] {
 function atomicWriteFile(filePath: string, contents: string): void {
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
-  const tmp = path.join(
-    dir,
-    `.${path.basename(filePath)}.${process.pid}.tmp`,
-  )
+  const tmp = path.join(dir, `.${path.basename(filePath)}.${process.pid}.tmp`)
   fs.writeFileSync(tmp, contents, 'utf-8')
   try {
     fs.renameSync(tmp, filePath)

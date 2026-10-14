@@ -156,4 +156,3 @@ export const CODING_TOOL_MANIFEST: readonly CodingToolManifestEntry[] = [
     deferred: true,
   },
 ] as const
-

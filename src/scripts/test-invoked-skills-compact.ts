@@ -36,10 +36,7 @@ import type { SkillDefinition } from '../skills/types.js'
 import { createSkillTool } from '../tools/SkillTool/SkillTool.js'
 import { getSkillToolPrompt } from '../tools/SkillTool/prompt.js'
 import { COMMAND_NAME_TAG } from '../constants/xml.js'
-import {
-  formatSkillListing,
-  MAX_LISTING_DESC_CHARS,
-} from '../skills/index.js'
+import { formatSkillListing, MAX_LISTING_DESC_CHARS } from '../skills/index.js'
 import { loadSkillsFromDisk } from '../skills/loadSkillsDir.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
 import { expandAttachmentMessagesForAPI } from '../utils/messages.js'
@@ -81,9 +78,7 @@ function forkSkill(name: string, body: string): SkillDefinition {
   }
 }
 
-function isDual(
-  raw: unknown,
-): raw is DualChannelToolResult<{
+function isDual(raw: unknown): raw is DualChannelToolResult<{
   success?: boolean
   skill_name?: string
   mode?: string
@@ -209,7 +204,8 @@ function testMicroCompactLeavesSkillBody(): void {
   const result = microCompact(messages, 5)
   assert.ok(result.cleared > 0, 'micro cleared old bash results')
   const meta = result.messages.find(
-    m => isRoleMessage(m) && m.role === 'user' && m.isMeta && m.content === body,
+    m =>
+      isRoleMessage(m) && m.role === 'user' && m.isMeta && m.content === body,
   )
   assert.ok(meta, 'skill body in meta user message survives micro compact')
   const skillResult = result.messages.find(
@@ -349,7 +345,8 @@ async function testRealSkillMicroContrast(): Promise<void> {
   const newAfter = microCompact(newPath, 0)
   assert.ok(newAfter.cleared > 0, 'micro still clears old bash')
   const kept = newAfter.messages.find(
-    m => isRoleMessage(m) && m.role === 'user' && m.isMeta && m.content === body,
+    m =>
+      isRoleMessage(m) && m.role === 'user' && m.isMeta && m.content === body,
   )
   assert.ok(kept, 'real SKILL.md in newMessages survives micro compact')
   const launch = newAfter.messages.find(
@@ -384,9 +381,7 @@ async function testPostCompactInvokedSkills(): Promise<void> {
     toolNames: ['Read'],
     getInvokedSkills: () => getInvokedSkillsForAgent(session, null),
   })
-  const types = msgs
-    .filter(isAttachmentMessage)
-    .map(m => m.attachment.type)
+  const types = msgs.filter(isAttachmentMessage).map(m => m.attachment.type)
   assert.ok(types.includes('invoked_skills'), 'invoked_skills present')
   assert.ok(!types.includes('skill_listing'), 'skill_listing not restored')
 
@@ -545,14 +540,20 @@ function testFormatSkillListingDiscoveryOnly(): void {
     },
   ])
   assert.equal(listing.startsWith('- concur-expense: '), true)
-  assert.equal(listing.includes('(inline)'), false, 'listing has no context mode')
+  assert.equal(
+    listing.includes('(inline)'),
+    false,
+    'listing has no context mode',
+  )
   const desc = listing.slice('- concur-expense: '.length)
   assert.ok(
     desc.length <= MAX_LISTING_DESC_CHARS,
     `listing desc ${desc.length} <= ${MAX_LISTING_DESC_CHARS}`,
   )
   assert.ok(desc.endsWith('\u2026'))
-  console.log('[ok] skill listing is discovery-only (250 char cap, - name: desc)')
+  console.log(
+    '[ok] skill listing is discovery-only (250 char cap, - name: desc)',
+  )
 }
 
 async function main(): Promise<void> {

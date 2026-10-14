@@ -39,9 +39,7 @@ export default function TaskStopCard({ part }) {
     loading: !isDone,
     hasError: isError,
   })
-  const title = isError
-    ? toolErrorDetails(taskId || '…', true)
-    : taskId || '…'
+  const title = isError ? toolErrorDetails(taskId || '…', true) : taskId || '…'
 
   return (
     <ToolChrome

@@ -4,10 +4,7 @@
  */
 import { describe, it } from 'vitest'
 import assert from 'node:assert/strict'
-import {
-  resolveExpandArgs,
-  resolveChevron,
-} from './tool-density-policy.js'
+import { resolveExpandArgs, resolveChevron } from './tool-density-policy.js'
 import {
   getToolDensityKind,
   listSuppressTranscriptNames,
@@ -30,10 +27,10 @@ describe('resolveExpandArgs', () => {
       resolveExpandArgs('explore-group', { isRunning: true, hasBody: true }),
       { isRunning: true, expandOnceWhen: false },
     )
-    assert.deepEqual(
-      resolveExpandArgs('explore-group', { isDone: true }),
-      { isRunning: false, expandOnceWhen: false },
-    )
+    assert.deepEqual(resolveExpandArgs('explore-group', { isDone: true }), {
+      isRunning: false,
+      expandOnceWhen: false,
+    })
   })
 
   it('explore-line never auto-opens on success', () => {
@@ -118,10 +115,7 @@ describe('TOOL_META density', () => {
 
 describe('summarizeExploredDetails', () => {
   it('formats mixed read+grep', () => {
-    const s = summarizeExploredDetails([
-      { name: READ },
-      { name: GREP },
-    ])
+    const s = summarizeExploredDetails([{ name: READ }, { name: GREP }])
     assert.equal(s, '1 file, 1 search')
   })
 

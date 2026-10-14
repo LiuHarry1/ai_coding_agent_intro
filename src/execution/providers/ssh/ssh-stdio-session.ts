@@ -4,10 +4,7 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { buildSshArgs, type ParsedSshHost } from './ssh-config.js'
 import { remoteWorkerStdioCommand } from './ssh-deploy.js'
-import {
-  StdioRuntimePort,
-  bindStdioRuntime,
-} from '../../stdio-runtime-port.js'
+import { StdioRuntimePort, bindStdioRuntime } from '../../stdio-runtime-port.js'
 import type { RuntimeAuth, RuntimePort, WorkspaceHandle } from '../../types.js'
 
 export async function openSshWorkerRuntime(

@@ -100,9 +100,7 @@ export function toAIFriendlyMessage(error: unknown, selector: string): string {
     message.includes('not an HTMLInputElement') ||
     message.includes('Node is not an HTMLInputElement')
   ) {
-    return (
-      `Ref is not an <input type=file>. Call browser_file_upload with paths only (omit ref) — do not click Upload.`
-    )
+    return `Ref is not an <input type=file>. Call browser_file_upload with paths only (omit ref) — do not click Upload.`
   }
 
   if (
@@ -125,7 +123,10 @@ export function mapPlaywrightError(err: unknown, ref?: string): never {
 }
 
 export function briefError(err: unknown, ref: string): string {
-  return toAIFriendlyMessage(err, ref).split('\n')[0] ?? toAIFriendlyMessage(err, ref)
+  return (
+    toAIFriendlyMessage(err, ref).split('\n')[0] ??
+    toAIFriendlyMessage(err, ref)
+  )
 }
 
 const EDITABLE_PARTS = [
@@ -216,7 +217,8 @@ export async function describeElement(
         // A form control's text lives in its <label>, not inside the element.
         ((self as HTMLInputElement).labels?.[0]?.textContent ?? '') ||
         (self instanceof HTMLInputElement ? self.placeholder : '') ||
-        (self.textContent || '')
+        self.textContent ||
+        ''
       )
         .replace(/\s+/g, ' ')
         .trim()
@@ -245,4 +247,3 @@ export async function describeElement(
   }
   return { ref, ...info }
 }
-

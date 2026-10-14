@@ -70,16 +70,16 @@ export default function BrowserLockBar() {
   return (
     <div
       className={`browser-lock-bar ${userHasControl ? 'is-user' : 'is-agent'}`}
-      role="status"
+      role='status'
     >
-      <span className="browser-lock-bar-text">
+      <span className='browser-lock-bar-text'>
         {userHasControl
           ? 'Agent actions paused — you can use the page freely.'
           : 'Agent is operating the browser (you can still interact; pause to avoid conflicts).'}
       </span>
       <button
-        type="button"
-        className="browser-lock-bar-btn"
+        type='button'
+        className='browser-lock-bar-btn'
         disabled={busy}
         onClick={() => handoff(!userHasControl)}
       >

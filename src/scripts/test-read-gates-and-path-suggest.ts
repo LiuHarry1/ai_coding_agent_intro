@@ -24,7 +24,10 @@ try {
   // Line gate: many short lines, under byte cap
   const manyLines = path.join(dir, 'many.txt')
   const n = MAX_LINES_TO_READ + 50
-  fs.writeFileSync(manyLines, Array.from({ length: n }, (_, i) => `L${i}`).join('\n'))
+  fs.writeFileSync(
+    manyLines,
+    Array.from({ length: n }, (_, i) => `L${i}`).join('\n'),
+  )
   assert.throws(
     () => readTextFile(manyLines, 'many.txt'),
     (e: unknown) => e instanceof MaxFileReadLinesExceededError,

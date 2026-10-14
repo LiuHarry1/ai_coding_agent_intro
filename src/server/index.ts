@@ -122,8 +122,12 @@ export function startServer(_opts: ServerOptions = {}): void {
       console.log(`[server]   POST /chat         -- chat (SSE stream)`)
       console.log(`[server]   POST /chat/cancel  -- stop in-flight turn`)
       console.log(`[server]   POST /tool/abort   -- abort one tool/subagent`)
-      console.log(`[server]   GET  /environments -- list execution environments`)
-      console.log(`[server]   GET/POST /scheduled-tasks -- UI timers (settings-gated)`)
+      console.log(
+        `[server]   GET  /environments -- list execution environments`,
+      )
+      console.log(
+        `[server]   GET/POST /scheduled-tasks -- UI timers (settings-gated)`,
+      )
       if (staticDir) {
         console.log(`[server]   Static files from: ${distDir}`)
       }

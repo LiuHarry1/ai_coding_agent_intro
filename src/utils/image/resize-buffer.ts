@@ -25,7 +25,9 @@ const TOKENS_PER_BASE64_CHAR = 0.125
 
 const JPEG_QUALITY_LADDER = [75, 55, 35, 20] as const
 /** Square bounding boxes. Width-only ladders leave tall receipts (水单) huge. */
-const RESIZE_BOX_LADDER = [1600, 1280, 1024, 768, 512, 384, 256, 192, 128] as const
+const RESIZE_BOX_LADDER = [
+  1600, 1280, 1024, 768, 512, 384, 256, 192, 128,
+] as const
 const LAST_RESORT_BOX = 128
 
 export class ImageResizeError extends Error {
@@ -177,8 +179,7 @@ async function compressToBytes(
   for (const box of boxes) {
     const pipeline = () => {
       const image = openImage(sharp, buffer)
-      const needsResize =
-        box.width < sourceWidth || box.height < sourceHeight
+      const needsResize = box.width < sourceWidth || box.height < sourceHeight
       return needsResize
         ? image.resize(box.width, box.height, {
             fit: 'inside',
@@ -340,10 +341,7 @@ async function jsCompressToJpeg(
       height,
     )
     for (const quality of qualities) {
-      const encoded = jpeg.encode(
-        { data: rgba, width, height },
-        quality,
-      )
+      const encoded = jpeg.encode({ data: rgba, width, height }, quality)
       if (encoded.data.length <= maxBytes) {
         return { buffer: encoded.data, mediaType: 'image/jpeg' }
       }
@@ -389,7 +387,10 @@ export async function encodeTinyJpeg(buffer: Buffer): Promise<{
 }
 
 export function fitsApiImageLimit(buffer: Buffer): boolean {
-  return buffer.length > 0 && base64Length(buffer.length) <= API_IMAGE_MAX_BASE64_SIZE
+  return (
+    buffer.length > 0 &&
+    base64Length(buffer.length) <= API_IMAGE_MAX_BASE64_SIZE
+  )
 }
 
 /**

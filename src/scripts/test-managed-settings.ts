@@ -36,7 +36,11 @@ try {
     path.join(cwd, '.ai-agent', 'settings.json'),
     JSON.stringify({
       models: {
-        large: { model: 'project-model', baseURL: 'http://project', apiKey: 'p' },
+        large: {
+          model: 'project-model',
+          baseURL: 'http://project',
+          apiKey: 'p',
+        },
       },
       disabledTools: ['web_fetch'],
     }) + '\n',
@@ -46,7 +50,11 @@ try {
     getManagedSettingsPath(),
     JSON.stringify({
       models: {
-        large: { model: 'managed-model', baseURL: 'http://managed', apiKey: 'm' },
+        large: {
+          model: 'managed-model',
+          baseURL: 'http://managed',
+          apiKey: 'm',
+        },
       },
       disabledTools: ['Bash'],
     }) + '\n',
@@ -115,10 +123,7 @@ try {
   assert(threw, 'parseWritableScope(managed) must throw')
   console.log('ok: managed scope not writable')
 
-  assert(
-    resolved.managedDir === managedDir,
-    'managedDir on ResolvedSettings',
-  )
+  assert(resolved.managedDir === managedDir, 'managedDir on ResolvedSettings')
   assert(
     resolved.managedPath === getManagedSettingsPath(),
     'managedPath on ResolvedSettings',

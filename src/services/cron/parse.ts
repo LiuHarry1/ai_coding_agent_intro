@@ -185,14 +185,19 @@ export function cronToHuman(cron: string): string {
     dayOfWeek === '*'
   ) {
     const m = parseInt(minute, 10)
-    return m === 0 ? 'Every hour' : `Every hour at :${m.toString().padStart(2, '0')}`
+    return m === 0
+      ? 'Every hour'
+      : `Every hour at :${m.toString().padStart(2, '0')}`
   }
 
   if (!/^\d+$/.test(minute) || !/^\d+$/.test(hour)) return cron
   const m = parseInt(minute, 10)
   const h = parseInt(hour, 10)
   const d = new Date(2000, 0, 1, h, m)
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const time = d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
     return `Every day at ${time}`

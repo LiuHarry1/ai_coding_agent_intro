@@ -112,7 +112,11 @@ function collectSnapshotFrames(page: Page): Frame[] {
   return out
 }
 
-async function hideByAttr(page: Page, attr: string, all: boolean): Promise<void> {
+async function hideByAttr(
+  page: Page,
+  attr: string,
+  all: boolean,
+): Promise<void> {
   await Promise.all(
     collectSnapshotFrames(page).map(frame =>
       raceMs(
@@ -206,8 +210,7 @@ async function unhideByAttr(page: Page, attr: string): Promise<void> {
             const storeKey = `__snapDetach_${attr}`
             const w = window as unknown as Record<string, unknown>
             const slots = w[storeKey] as
-              | { el: Element; parent: Node; next: Node | null }[]
-              | undefined
+              { el: Element; parent: Node; next: Node | null }[] | undefined
             if (!Array.isArray(slots)) return
             for (let i = slots.length - 1; i >= 0; i--) {
               const slot = slots[i]
@@ -255,32 +258,32 @@ async function markParkedOffscreen(page: Page): Promise<Frame[]> {
       raceMs(
         HIDE_EVAL_MS,
         frame.evaluate(attr => {
-            const FAR = 500
-            const all = document.body?.querySelectorAll('*') ?? []
-            const parked: HTMLElement[] = []
-            for (let i = 0; i < all.length; i++) {
-              const el = all[i] as HTMLElement
-              if (parked.some(p => p.contains(el))) continue
-              const style = window.getComputedStyle(el)
-              if (style.position !== 'absolute' && style.position !== 'fixed') {
-                continue
-              }
-              if (style.display === 'none') continue
-              const rect = el.getBoundingClientRect()
-              if (rect.width <= 1 || rect.height <= 1) continue
-              const right = rect.right + window.scrollX
-              const bottom = rect.bottom + window.scrollY
-              if (right > -FAR && bottom > -FAR) continue
-              parked.push(el)
+          const FAR = 500
+          const all = document.body?.querySelectorAll('*') ?? []
+          const parked: HTMLElement[] = []
+          for (let i = 0; i < all.length; i++) {
+            const el = all[i] as HTMLElement
+            if (parked.some(p => p.contains(el))) continue
+            const style = window.getComputedStyle(el)
+            if (style.position !== 'absolute' && style.position !== 'fixed') {
+              continue
             }
-            for (const el of parked) {
-              const prev = el.style.getPropertyValue('display')
-              const priority = el.style.getPropertyPriority('display')
-              el.setAttribute(attr, JSON.stringify([prev, priority]))
-              el.style.setProperty('display', 'none', 'important')
-            }
-            return parked.length
-          }, PARKED_ATTR),
+            if (style.display === 'none') continue
+            const rect = el.getBoundingClientRect()
+            if (rect.width <= 1 || rect.height <= 1) continue
+            const right = rect.right + window.scrollX
+            const bottom = rect.bottom + window.scrollY
+            if (right > -FAR && bottom > -FAR) continue
+            parked.push(el)
+          }
+          for (const el of parked) {
+            const prev = el.style.getPropertyValue('display')
+            const priority = el.style.getPropertyPriority('display')
+            el.setAttribute(attr, JSON.stringify([prev, priority]))
+            el.style.setProperty('display', 'none', 'important')
+          }
+          return parked.length
+        }, PARKED_ATTR),
         // A timed-out evaluate can still apply display:none after the race,
         // so that frame must be unmarked too.
         -1,

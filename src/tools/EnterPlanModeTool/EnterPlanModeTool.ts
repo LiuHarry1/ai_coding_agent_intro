@@ -44,7 +44,9 @@ Do NOT use for simple, obvious tasks — execute directly instead.`,
       > => {
         const session = context.session
         if (!session) {
-          return { data: { message: 'EnterPlanMode requires an active session.' } }
+          return {
+            data: { message: 'EnterPlanMode requires an active session.' },
+          }
         }
 
         const from = session.permissionMode.mode

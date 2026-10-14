@@ -90,59 +90,61 @@ export function createWebFetchDefinition(
   const applyPrompt = dependencies.applyPrompt ?? applyPromptToMarkdown
 
   return {
-  name: WEB_FETCH_TOOL_NAME,
-  description: 'Fetch a URL and process its content with a prompt',
-  shouldDefer: true,
-  isConcurrencySafe: () => true,
-  // Mode A -- model gets the processed result; UI gets size/status chrome.
-  outputSchema: WebFetchOutputSchema,
-  mapToolResultToToolResultBlockParam(output, toolUseID) {
-    const { result } = output as WebFetchOutput
-    return {
-      tool_use_id: toolUseID,
-      type: 'tool_result',
-      content: result,
-    }
-  },
-  create(_cwd: string, context: ToolContext) {
-    return tool({
-      description: TOOL_DESCRIPTION,
-      inputSchema: z.object({
-        url: z.string().url().describe('The URL to fetch content from'),
-        prompt: z.string().describe('The prompt to run on the fetched content'),
-      }),
-      execute: async (
-        args: { url: string; prompt: string },
-        options?: { toolCallId?: string; abortSignal?: AbortSignal },
-      ): Promise<DualChannelToolResult<WebFetchOutput> | string> => {
-        const { url, prompt } = args
-        const start = Date.now()
+    name: WEB_FETCH_TOOL_NAME,
+    description: 'Fetch a URL and process its content with a prompt',
+    shouldDefer: true,
+    isConcurrencySafe: () => true,
+    // Mode A -- model gets the processed result; UI gets size/status chrome.
+    outputSchema: WebFetchOutputSchema,
+    mapToolResultToToolResultBlockParam(output, toolUseID) {
+      const { result } = output as WebFetchOutput
+      return {
+        tool_use_id: toolUseID,
+        type: 'tool_result',
+        content: result,
+      }
+    },
+    create(_cwd: string, context: ToolContext) {
+      return tool({
+        description: TOOL_DESCRIPTION,
+        inputSchema: z.object({
+          url: z.string().url().describe('The URL to fetch content from'),
+          prompt: z
+            .string()
+            .describe('The prompt to run on the fetched content'),
+        }),
+        execute: async (
+          args: { url: string; prompt: string },
+          options?: { toolCallId?: string; abortSignal?: AbortSignal },
+        ): Promise<DualChannelToolResult<WebFetchOutput> | string> => {
+          const { url, prompt } = args
+          const start = Date.now()
 
-        try {
-          new URL(url)
-        } catch {
-          return `Error: Invalid URL "${url}". The URL provided could not be parsed.`
-        }
+          try {
+            new URL(url)
+          } catch {
+            return `Error: Invalid URL "${url}". The URL provided could not be parsed.`
+          }
 
-        const sessionId = context.sessionId ?? ''
-        const toolUseId = options?.toolCallId ?? randomUUID()
-        const signal =
-          options?.abortSignal ??
-          (sessionId ? registerToolAbort(sessionId, toolUseId) : undefined)
-        const abortController = controllerFromSignal(signal)
+          const sessionId = context.sessionId ?? ''
+          const toolUseId = options?.toolCallId ?? randomUUID()
+          const signal =
+            options?.abortSignal ??
+            (sessionId ? registerToolAbort(sessionId, toolUseId) : undefined)
+          const abortController = controllerFromSignal(signal)
 
-        try {
-          const response = await fetchContent(
-            url,
-            abortController,
-            context.sessionId,
-          )
+          try {
+            const response = await fetchContent(
+              url,
+              abortController,
+              context.sessionId,
+            )
 
-          // Check if we got a redirect to a different host
-          if ('type' in response && response.type === 'redirect') {
-            const statusText = redirectStatusText(response.statusCode)
+            // Check if we got a redirect to a different host
+            if ('type' in response && response.type === 'redirect') {
+              const statusText = redirectStatusText(response.statusCode)
 
-            const message = `REDIRECT DETECTED: The URL redirects to a different host.
+              const message = `REDIRECT DETECTED: The URL redirects to a different host.
 
 Original URL: ${response.originalUrl}
 Redirect URL: ${response.redirectUrl}
@@ -152,88 +154,88 @@ To complete your request, I need to fetch content from the redirected URL. Pleas
 - url: "${response.redirectUrl}"
 - prompt: "${prompt}"`
 
+              const data: WebFetchOutput = {
+                bytes: Buffer.byteLength(message),
+                code: response.statusCode,
+                codeText: statusText,
+                result: message,
+                durationMs: Date.now() - start,
+                url,
+              }
+              return { data }
+            }
+
+            const {
+              content,
+              bytes,
+              code,
+              codeText,
+              contentType,
+              persistedPath,
+              persistedSize,
+            } = response as FetchedContent
+
+            const preapproved = isPreapproved(url)
+
+            let result: string
+            if (
+              preapproved &&
+              contentType.includes('text/markdown') &&
+              content.length < MAX_MARKDOWN_LENGTH
+            ) {
+              result = content
+            } else if (context.models) {
+              result = await applyPrompt({
+                prompt,
+                markdownContent: content,
+                provider: context.models.provider('small'),
+                modelId: context.models.profile('small').model,
+                signal: abortController.signal,
+                isPreapprovedDomain: preapproved,
+              })
+            } else {
+              // No request-scoped model registry (e.g. a bare tool harness):
+              // hand back the markdown instead of failing the fetch.
+              result =
+                content.length > MAX_MARKDOWN_LENGTH
+                  ? content.slice(0, MAX_MARKDOWN_LENGTH) +
+                    '\n\n[Content truncated due to length...]'
+                  : content
+            }
+
+            // Binary content (PDFs, etc.) was additionally saved to disk with a
+            // mime-derived extension. Note it so the model can inspect the raw
+            // file if the summary above isn't enough.
+            if (persistedPath) {
+              result += `\n\n[Binary content (${contentType}, ${formatFileSize(persistedSize ?? bytes)}) also saved to ${persistedPath}]`
+            }
+
             const data: WebFetchOutput = {
-              bytes: Buffer.byteLength(message),
-              code: response.statusCode,
-              codeText: statusText,
-              result: message,
+              bytes,
+              code,
+              codeText,
+              result,
               durationMs: Date.now() - start,
               url,
             }
             return { data }
+          } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+              return `Error: web fetch aborted. URL: ${url}`
+            }
+            if (err instanceof Error && err.name === 'CanceledError') {
+              return `Error: web fetch aborted. URL: ${url}`
+            }
+            const message = err instanceof Error ? err.message : String(err)
+            return `Error: web fetch failed: ${message}. URL: ${url}`
+          } finally {
+            if (sessionId && !options?.abortSignal) {
+              clearToolAbort(sessionId, toolUseId)
+            }
           }
-
-          const {
-            content,
-            bytes,
-            code,
-            codeText,
-            contentType,
-            persistedPath,
-            persistedSize,
-          } = response as FetchedContent
-
-          const preapproved = isPreapproved(url)
-
-          let result: string
-          if (
-            preapproved &&
-            contentType.includes('text/markdown') &&
-            content.length < MAX_MARKDOWN_LENGTH
-          ) {
-            result = content
-          } else if (context.models) {
-            result = await applyPrompt({
-              prompt,
-              markdownContent: content,
-              provider: context.models.provider('small'),
-              modelId: context.models.profile('small').model,
-              signal: abortController.signal,
-              isPreapprovedDomain: preapproved,
-            })
-          } else {
-            // No request-scoped model registry (e.g. a bare tool harness):
-            // hand back the markdown instead of failing the fetch.
-            result =
-              content.length > MAX_MARKDOWN_LENGTH
-                ? content.slice(0, MAX_MARKDOWN_LENGTH) +
-                  '\n\n[Content truncated due to length...]'
-                : content
-          }
-
-          // Binary content (PDFs, etc.) was additionally saved to disk with a
-          // mime-derived extension. Note it so the model can inspect the raw
-          // file if the summary above isn't enough.
-          if (persistedPath) {
-            result += `\n\n[Binary content (${contentType}, ${formatFileSize(persistedSize ?? bytes)}) also saved to ${persistedPath}]`
-          }
-
-          const data: WebFetchOutput = {
-            bytes,
-            code,
-            codeText,
-            result,
-            durationMs: Date.now() - start,
-            url,
-          }
-          return { data }
-        } catch (err) {
-          if (err instanceof Error && err.name === 'AbortError') {
-            return `Error: web fetch aborted. URL: ${url}`
-          }
-          if (err instanceof Error && err.name === 'CanceledError') {
-            return `Error: web fetch aborted. URL: ${url}`
-          }
-          const message = err instanceof Error ? err.message : String(err)
-          return `Error: web fetch failed: ${message}. URL: ${url}`
-        } finally {
-          if (sessionId && !options?.abortSignal) {
-            clearToolAbort(sessionId, toolUseId)
-          }
-        }
-      },
-    })
-  },
+        },
+      })
+    },
   }
 }
 

@@ -12,10 +12,7 @@ import {
   pickLiveMember,
   summarizeToolSteps,
 } from '../lib/tool-density.js'
-import {
-  SUPPRESSED_TOOL_CARDS,
-  SUBAGENT_SUPPRESSED,
-} from './pickToolCard.js'
+import { SUPPRESSED_TOOL_CARDS, SUBAGENT_SUPPRESSED } from './pickToolCard.js'
 
 /**
  * Task / Explorer row: one typography line when collapsed.

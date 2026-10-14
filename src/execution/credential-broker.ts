@@ -87,9 +87,9 @@ export class CredentialBroker {
   async startAuthProxy(preferredPort = 0): Promise<number> {
     if (this.proxyServer && this.proxyPort != null) return this.proxyPort
 
-    const server = createServer((socket) => {
+    const server = createServer(socket => {
       let buf = ''
-      socket.on('data', (chunk) => {
+      socket.on('data', chunk => {
         buf += chunk.toString('utf8')
         if (!buf.includes('\r\n\r\n')) return
         const auth = /^Authorization:\s*Bearer\s+(\S+)/im.exec(buf)
@@ -132,6 +132,6 @@ export class CredentialBroker {
     this.proxyServer = null
     this.proxyPort = null
     if (!server) return
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await new Promise<void>(resolve => server.close(() => resolve()))
   }
 }

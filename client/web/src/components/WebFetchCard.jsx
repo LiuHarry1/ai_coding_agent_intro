@@ -158,66 +158,64 @@ export default function WebFetchCard({ part, nested = false }) {
       }
     >
       <div className='web-fetch-body'>
-          {isError && (
-            <div className='web-fetch-error'>
-              {compactFetchError(normalized.error, articleUrl || requestUrl)}
-            </div>
-          )}
+        {isError && (
+          <div className='web-fetch-error'>
+            {compactFetchError(normalized.error, articleUrl || requestUrl)}
+          </div>
+        )}
 
-          {!isError && articleUrl && (
-            <a
-              href={articleUrl}
-              target='_blank'
-              rel='noreferrer noopener'
-              className='web-fetch-link'
-              title={articleUrl}
-              onClick={e => e.stopPropagation()}
-            >
-              {urlHeadline(articleUrl)}
-            </a>
-          )}
+        {!isError && articleUrl && (
+          <a
+            href={articleUrl}
+            target='_blank'
+            rel='noreferrer noopener'
+            className='web-fetch-link'
+            title={articleUrl}
+            onClick={e => e.stopPropagation()}
+          >
+            {urlHeadline(articleUrl)}
+          </a>
+        )}
 
-          {!isError && normalized.excerpt && (
-            <div className='web-fetch-excerpt'>{normalized.excerpt}</div>
-          )}
+        {!isError && normalized.excerpt && (
+          <div className='web-fetch-excerpt'>{normalized.excerpt}</div>
+        )}
 
-          {!isError && normalized.note && (
-            <div className='web-fetch-note'>{normalized.note}</div>
-          )}
+        {!isError && normalized.note && (
+          <div className='web-fetch-note'>{normalized.note}</div>
+        )}
 
-          {!isError && text && (
-            <div className='web-fetch-text'>
-              {previewText}
-              {hasMore && !showFull ? '…' : ''}
-            </div>
-          )}
+        {!isError && text && (
+          <div className='web-fetch-text'>
+            {previewText}
+            {hasMore && !showFull ? '…' : ''}
+          </div>
+        )}
 
-          {!isError && hasMore && (
-            <button
-              type='button'
-              className='web-fetch-more'
-              onClick={e => {
-                e.stopPropagation()
-                setShowAll(v => !v)
-              }}
-            >
-              {showFull
-                ? 'Show less'
-                : `Show full (${formatBytes(text.length)})`}
-            </button>
-          )}
+        {!isError && hasMore && (
+          <button
+            type='button'
+            className='web-fetch-more'
+            onClick={e => {
+              e.stopPropagation()
+              setShowAll(v => !v)
+            }}
+          >
+            {showFull ? 'Show less' : `Show full (${formatBytes(text.length)})`}
+          </button>
+        )}
 
-          {!isError && !text && isDone && typeof result === 'string' && (
-            <pre className='web-fetch-raw'>{result}</pre>
-          )}
+        {!isError && !text && isDone && typeof result === 'string' && (
+          <pre className='web-fetch-raw'>{result}</pre>
+        )}
 
-          {!isError && !isDone && (
-            <div className='web-fetch-loading'>
-              <span className='spinner spinner-sm' />
-              Fetching…
-            </div>
-          )}
-        </div>
+        {!isError && !isDone && (
+          <div className='web-fetch-loading'>
+            <span className='spinner spinner-sm' />
+            Fetching…
+          </div>
+        )}
+      </div>
     </ToolChrome>
   )
 }

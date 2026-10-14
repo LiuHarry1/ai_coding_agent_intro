@@ -6,10 +6,7 @@ import {
 } from './extract-mentions.js'
 import type { Attachment } from './types.js'
 import type { ReadFileState } from '../read/types.js'
-import {
-  readFileCore,
-  resolveFileInCwd,
-} from '../read/index.js'
+import { readFileCore, resolveFileInCwd } from '../read/index.js'
 import { listDirectoryEntries } from '../fs/list-dir.js'
 import {
   readTextFileTruncated,

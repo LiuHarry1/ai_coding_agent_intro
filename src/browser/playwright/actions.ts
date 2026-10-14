@@ -978,13 +978,11 @@ export async function scroll(
     const page = await getPageForTarget(backend, targetId)
     try {
       if (!opts.ref) {
-        const res = await page
-          .locator(':root')
-          .evaluate(SCROLL_IN_PAGE, {
-            dx: deltaX,
-            dy: deltaY,
-            mode: 'page' as const,
-          })
+        const res = await page.locator(':root').evaluate(SCROLL_IN_PAGE, {
+          dx: deltaX,
+          dy: deltaY,
+          mode: 'page' as const,
+        })
         if (!res.found)
           throw new BrowserError('Could not read the page scroll position.')
         if (!res.scrollable) {

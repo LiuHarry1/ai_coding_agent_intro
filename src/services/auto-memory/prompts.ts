@@ -62,9 +62,7 @@ export const DIR_EXISTS_GUIDANCE =
  * returns [] when off. Keep the hook so agent memory lines keep a stable
  * structure.
  */
-export function buildSearchingPastContextSection(
-  _memoryDir: string,
-): string[] {
+export function buildSearchingPastContextSection(_memoryDir: string): string[] {
   return []
 }
 

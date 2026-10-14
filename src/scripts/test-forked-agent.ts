@@ -95,10 +95,8 @@ async function main(): Promise<void> {
   assert(forkResult.text === 'fixture result', 'fork returns successful text')
 
   // Stale inFlight must be cleared by wait
-  const {
-    getSessionMemoryState,
-    waitForSessionMemoryExtraction,
-  } = await import('../services/session-memory/state.js')
+  const { getSessionMemoryState, waitForSessionMemoryExtraction } =
+    await import('../services/session-memory/state.js')
   const sid = 'wait-stale-test'
   const st = getSessionMemoryState(sid)
   st.inFlight = true

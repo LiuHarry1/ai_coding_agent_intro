@@ -109,7 +109,8 @@ function findToolResult(
 
 function resultText(ev: SseEvent | undefined): string {
   if (!ev) return ''
-  const tur = ev.tool_use_result as { text?: string; backgroundTaskId?: string } | undefined
+  const tur = ev.tool_use_result as
+    { text?: string; backgroundTaskId?: string } | undefined
   if (tur?.text) return tur.text
   if (typeof ev.result === 'string') return ev.result
   if (typeof ev.content === 'string') return ev.content
@@ -173,14 +174,20 @@ async function main() {
     const running = listed.tasks.filter(
       t => t.status === 'running' || t.status === 'pending',
     )
-    assert.ok(running.length >= 1, `expected running task, got ${JSON.stringify(listed)}`)
+    assert.ok(
+      running.length >= 1,
+      `expected running task, got ${JSON.stringify(listed)}`,
+    )
     const taskId = running[0]!.id
     const stop = await stopTaskHttp(sid, taskId)
     assert.equal(stop.status, 200, JSON.stringify(stop.body))
     listed = await listTasks(sid)
     const still = listed.tasks.find(t => t.id === taskId)
     assert.ok(
-      !still || still.status === 'killed' || still.status === 'completed' || still.status === 'failed',
+      !still ||
+        still.status === 'killed' ||
+        still.status === 'completed' ||
+        still.status === 'failed',
       JSON.stringify(still),
     )
   }

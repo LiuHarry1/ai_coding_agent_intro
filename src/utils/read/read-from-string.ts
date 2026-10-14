@@ -2,10 +2,7 @@
  * Slice an in-memory text buffer into Read Out (raw lines, dual-channel).
  * Shared by local disk reads and remote/SSH `readText` paths.
  */
-import {
-  DEFAULT_MAX_OUTPUT_TOKENS,
-  MAX_LINES_TO_READ,
-} from './limits.js'
+import { DEFAULT_MAX_OUTPUT_TOKENS, MAX_LINES_TO_READ } from './limits.js'
 import type { ReadTextOutput } from './types.js'
 import {
   MaxFileReadLinesExceededError,

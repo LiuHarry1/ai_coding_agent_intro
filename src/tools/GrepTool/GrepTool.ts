@@ -139,7 +139,12 @@ interface GrepArgs {
 function parseRgContentLine(
   raw: string,
   fallbackPath?: string,
-): { file: string; lineNo: string; kind: 'match' | 'context'; text: string } | null {
+): {
+  file: string
+  lineNo: string
+  kind: 'match' | 'context'
+  text: string
+} | null {
   if (!raw || raw === '--') return null
   if (raw.startsWith('[Showing results')) return null
   if (raw === 'No matches found') return null
@@ -494,7 +499,8 @@ export const definition: ToolDefinition = {
             if (case_insensitive) rgArgs.push('-i')
             if (output_mode === 'files_with_matches') rgArgs.push('-l')
             else if (output_mode === 'count') rgArgs.push('-c')
-            if (show_line_numbers && output_mode === 'content') rgArgs.push('-n')
+            if (show_line_numbers && output_mode === 'content')
+              rgArgs.push('-n')
             const ctx = context ?? context_c
             if (output_mode === 'content') {
               if (ctx !== undefined) rgArgs.push('-C', String(ctx))
@@ -548,11 +554,7 @@ export const definition: ToolDefinition = {
             } else if (offset) {
               out = out.split('\n').slice(offset).join('\n')
             }
-            const data = parseRemoteStdoutToOutput(
-              out,
-              output_mode,
-              inputPath,
-            )
+            const data = parseRemoteStdoutToOutput(out, output_mode, inputPath)
             return { data }
           } catch (err) {
             return `Error: ${err instanceof Error ? err.message : String(err)}`
@@ -588,7 +590,8 @@ export const definition: ToolDefinition = {
         if (show_line_numbers && output_mode === 'content') args.push('-n')
         if (output_mode === 'content') {
           if (context !== undefined) args.push('-C', context.toString())
-          else if (context_c !== undefined) args.push('-C', context_c.toString())
+          else if (context_c !== undefined)
+            args.push('-C', context_c.toString())
           else {
             if (context_before !== undefined)
               args.push('-B', context_before.toString())

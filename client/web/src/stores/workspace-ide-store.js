@@ -12,8 +12,8 @@ const DEFAULT_TREE_WIDTH = 260
 function isRemoteEnvironmentId(environmentId) {
   return Boolean(
     environmentId &&
-      environmentId !== 'local' &&
-      !String(environmentId).startsWith('local'),
+    environmentId !== 'local' &&
+    !String(environmentId).startsWith('local'),
   )
 }
 

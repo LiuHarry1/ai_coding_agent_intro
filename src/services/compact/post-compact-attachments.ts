@@ -5,7 +5,11 @@
  * re-injected — Skill stays in the tool schema and used skill bodies are
  * restored via `invoked_skills`.
  */
-import type { AttachmentMessage, Message, ToolUseContext } from '../../core/types.js'
+import type {
+  AttachmentMessage,
+  Message,
+  ToolUseContext,
+} from '../../core/types.js'
 import { isAttachmentMessage } from '../../core/types.js'
 import { AGENT_TOOL_NAME } from '../../constants/tool_names.js'
 import { loadAgentDefinitionsForWorkspace } from '../../tools/AgentTool/loadAgents.js'
@@ -85,7 +89,10 @@ export async function buildPostCompactAttachmentMessages(
   if (!enrichment) return []
 
   const tools = Object.fromEntries(
-    enrichment.toolNames.map(name => [name, {} as ToolUseContext['options']['tools'][string]]),
+    enrichment.toolNames.map(name => [
+      name,
+      {} as ToolUseContext['options']['tools'][string],
+    ]),
   ) as ToolUseContext['options']['tools']
 
   const out: AttachmentMessage[] = []
@@ -120,7 +127,6 @@ export function countPostCompactAgentListing(
   messages: readonly Message[],
 ): number {
   return messages.filter(
-    m =>
-      isAttachmentMessage(m) && m.attachment.type === 'agent_listing_delta',
+    m => isAttachmentMessage(m) && m.attachment.type === 'agent_listing_delta',
   ).length
 }

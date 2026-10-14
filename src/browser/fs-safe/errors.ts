@@ -13,9 +13,7 @@ const OPERATIONAL_CODES = new Set([
 
 export type FsSafeErrorCode = string
 
-export function categorizeFsSafeError(
-  code: string,
-): 'operational' | 'policy' {
+export function categorizeFsSafeError(code: string): 'operational' | 'policy' {
   return OPERATIONAL_CODES.has(code) ? 'operational' : 'policy'
 }
 

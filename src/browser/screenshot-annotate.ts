@@ -5,91 +5,95 @@
 
 const ANNOTATION_OVERLAY_ATTR = 'data-browser-labels'
 const ANNOTATION_OVERLAY_ROOT_ID = '__browser-annotations__'
-export const ANNOTATION_MAX_LABELS_DEFAULT = 150;
+export const ANNOTATION_MAX_LABELS_DEFAULT = 150
 
-export type CoordinateSpace = "viewport" | "fullpage" | "element";
+export type CoordinateSpace = 'viewport' | 'fullpage' | 'element'
 
 export interface RawAnnotationInput {
-  ref: string;
-  role: string;
-  name?: string;
+  ref: string
+  role: string
+  name?: string
   /** Bounding box in document coordinates (viewport top-left + scroll). */
-  doc: { x: number; y: number; width: number; height: number };
+  doc: { x: number; y: number; width: number; height: number }
 }
 
 interface AnnotationBox {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface AnnotationItem {
-  ref: string;
-  number: number;
-  role: string;
-  name?: string;
-  box: AnnotationBox;
+  ref: string
+  number: number
+  role: string
+  name?: string
+  box: AnnotationBox
 }
 
 interface OverlayItem {
-  ref: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+  ref: string
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 interface AnnotationPlan {
   /** Always document-space items, fed to buildOverlayInjectionScript. */
-  overlayItems: OverlayItem[];
+  overlayItems: OverlayItem[]
   /** Items projected into the capture mode's image-space coordinates. */
-  annotations: AnnotationItem[];
+  annotations: AnnotationItem[]
   /** Refs dropped because of maxLabels truncation. */
-  skipped: number;
+  skipped: number
 }
 
 interface PlanAnnotationsParams {
-  inputs: RawAnnotationInput[];
-  space: CoordinateSpace;
+  inputs: RawAnnotationInput[]
+  space: CoordinateSpace
   /** Required when space === "viewport". */
-  scroll?: { x: number; y: number };
+  scroll?: { x: number; y: number }
   /**
    * Viewport size (CSS px). Only meaningful when space === "viewport". When
    * provided, refs whose document box falls outside the current viewport rect
    * (`scroll` + this size) are counted as skipped instead of drawn, preserving
    * the shipped `labelsSkipped` contract. Omit it to disable that accounting.
    */
-  viewport?: { width: number; height: number };
+  viewport?: { width: number; height: number }
   /** Required when space === "element". */
-  elementRect?: { x: number; y: number; width: number; height: number };
-  maxLabels?: number;
+  elementRect?: { x: number; y: number; width: number; height: number }
+  maxLabels?: number
 }
 
 function refToNumber(ref: string): number {
-  const match = ref.match(/(\d+)/);
+  const match = ref.match(/(\d+)/)
   if (!match) {
-    return 0;
+    return 0
   }
-  const n = Number(match[1]);
-  return Number.isFinite(n) ? n : 0;
+  const n = Number(match[1])
+  return Number.isFinite(n) ? n : 0
 }
 
 export function planAnnotations(params: PlanAnnotationsParams): AnnotationPlan {
-  const maxLabels = params.maxLabels ?? ANNOTATION_MAX_LABELS_DEFAULT;
+  const maxLabels = params.maxLabels ?? ANNOTATION_MAX_LABELS_DEFAULT
 
-  if (params.space === "viewport" && !params.scroll) {
-    throw new Error("planAnnotations: scroll is required when space is 'viewport'");
+  if (params.space === 'viewport' && !params.scroll) {
+    throw new Error(
+      "planAnnotations: scroll is required when space is 'viewport'",
+    )
   }
-  if (params.space === "element" && !params.elementRect) {
-    throw new Error("planAnnotations: elementRect is required when space is 'element'");
+  if (params.space === 'element' && !params.elementRect) {
+    throw new Error(
+      "planAnnotations: elementRect is required when space is 'element'",
+    )
   }
 
   // Element-mode filter: discard inputs that do not overlap the element rect.
-  let kept = params.inputs;
-  if (params.space === "element" && params.elementRect) {
-    const er = params.elementRect;
-    kept = params.inputs.filter((input) => rectsOverlap(input.doc, er));
+  let kept = params.inputs
+  if (params.space === 'element' && params.elementRect) {
+    const er = params.elementRect
+    kept = params.inputs.filter(input => rectsOverlap(input.doc, er))
   }
 
   // Viewport capture only shows refs inside the current viewport rect. An
@@ -100,30 +104,30 @@ export function planAnnotations(params: PlanAnnotationsParams): AnnotationPlan {
   // narrowing it. Only applied when the caller supplies the viewport size;
   // without it we cannot decide off-screen state and skip nothing.
   const viewportRect =
-    params.space === "viewport" && params.scroll && params.viewport
+    params.space === 'viewport' && params.scroll && params.viewport
       ? {
           x: params.scroll.x,
           y: params.scroll.y,
           width: params.viewport.width,
           height: params.viewport.height,
         }
-      : undefined;
+      : undefined
 
-  const overlayItems: OverlayItem[] = [];
-  const annotations: AnnotationItem[] = [];
-  let skipped = 0;
+  const overlayItems: OverlayItem[] = []
+  const annotations: AnnotationItem[] = []
+  let skipped = 0
 
   for (const input of kept) {
     if (viewportRect && !rectsOverlap(input.doc, viewportRect)) {
       // Outside the captured viewport: count as skipped (compat) but still
       // report the annotation; do not draw it or consume the label budget.
-      skipped += 1;
-      annotations.push(toAnnotation(input, params));
-      continue;
+      skipped += 1
+      annotations.push(toAnnotation(input, params))
+      continue
     }
     if (overlayItems.length >= maxLabels) {
-      skipped += 1;
-      continue;
+      skipped += 1
+      continue
     }
     overlayItems.push({
       ref: input.ref,
@@ -131,38 +135,41 @@ export function planAnnotations(params: PlanAnnotationsParams): AnnotationPlan {
       y: input.doc.y,
       w: input.doc.width,
       h: input.doc.height,
-    });
-    annotations.push(toAnnotation(input, params));
+    })
+    annotations.push(toAnnotation(input, params))
   }
 
-  return { overlayItems, annotations, skipped };
+  return { overlayItems, annotations, skipped }
 }
 
-function toAnnotation(input: RawAnnotationInput, params: PlanAnnotationsParams): AnnotationItem {
+function toAnnotation(
+  input: RawAnnotationInput,
+  params: PlanAnnotationsParams,
+): AnnotationItem {
   return {
     ref: input.ref,
     number: refToNumber(input.ref),
     role: input.role,
     ...(input.name ? { name: input.name } : {}),
     box: projectBox(input.doc, params),
-  };
+  }
 }
 
 function projectBox(
   doc: { x: number; y: number; width: number; height: number },
   params: PlanAnnotationsParams,
 ): AnnotationBox {
-  if (params.space === "viewport") {
-    const scroll = params.scroll!;
+  if (params.space === 'viewport') {
+    const scroll = params.scroll!
     return {
       x: doc.x - scroll.x,
       y: doc.y - scroll.y,
       width: doc.width,
       height: doc.height,
-    };
+    }
   }
-  if (params.space === "element") {
-    const er = params.elementRect!;
+  if (params.space === 'element') {
+    const er = params.elementRect!
     // NOTE: width/height pass through unchanged even when the input rect
     // partially extends past the element. The capture backend (e.g.
     // locator.screenshot) is responsible for clipping; the box may have
@@ -172,35 +179,42 @@ function projectBox(
       y: doc.y - er.y,
       width: doc.width,
       height: doc.height,
-    };
+    }
   }
   // fullpage: document coordinates as-is
-  return { x: doc.x, y: doc.y, width: doc.width, height: doc.height };
+  return { x: doc.x, y: doc.y, width: doc.width, height: doc.height }
 }
 
 function rectsOverlap(
   a: { x: number; y: number; width: number; height: number },
   b: { x: number; y: number; width: number; height: number },
 ): boolean {
-  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  )
 }
 
 export function buildOverlayInjectionScript(params: {
-  items: OverlayItem[];
-  captureY?: number;
+  items: OverlayItem[]
+  captureY?: number
 }): string {
   const itemsJson = JSON.stringify(
-    params.items.map((it) => ({
+    params.items.map(it => ({
       ref: it.ref,
       x: round(it.x),
       y: round(it.y),
       w: Math.max(1, round(it.w)),
       h: Math.max(1, round(it.h)),
     })),
-  );
-  const attr = ANNOTATION_OVERLAY_ATTR;
-  const rootId = ANNOTATION_OVERLAY_ROOT_ID;
-  const captureY = Number.isFinite(params.captureY) ? round(params.captureY ?? 0) : 0;
+  )
+  const attr = ANNOTATION_OVERLAY_ATTR
+  const rootId = ANNOTATION_OVERLAY_ROOT_ID
+  const captureY = Number.isFinite(params.captureY)
+    ? round(params.captureY ?? 0)
+    : 0
   return `(() => {
   var items = ${itemsJson};
   var captureY = ${captureY};
@@ -226,16 +240,16 @@ export function buildOverlayInjectionScript(params: {
   }
   document.documentElement.appendChild(root);
   return true;
-})();`;
+})();`
 }
 
 export function buildOverlayClearScript(): string {
-  const attr = ANNOTATION_OVERLAY_ATTR;
+  const attr = ANNOTATION_OVERLAY_ATTR
   return `(() => {
   var existing = document.querySelectorAll("[${attr}]");
   for (var k = 0; k < existing.length; k++) existing[k].remove();
   return true;
-})();`;
+})();`
 }
 
 /**
@@ -252,13 +266,18 @@ export function scaleAnnotations(
   scaleX: number,
   scaleY: number,
 ): AnnotationItem[] {
-  if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY) || scaleX <= 0 || scaleY <= 0) {
-    return items.map((it) => ({ ...it, box: { ...it.box } }));
+  if (
+    !Number.isFinite(scaleX) ||
+    !Number.isFinite(scaleY) ||
+    scaleX <= 0 ||
+    scaleY <= 0
+  ) {
+    return items.map(it => ({ ...it, box: { ...it.box } }))
   }
   if (scaleX === 1 && scaleY === 1) {
-    return items.map((it) => ({ ...it, box: { ...it.box } }));
+    return items.map(it => ({ ...it, box: { ...it.box } }))
   }
-  return items.map((it) => ({
+  return items.map(it => ({
     ...it,
     box: {
       x: round(it.box.x * scaleX),
@@ -266,9 +285,9 @@ export function scaleAnnotations(
       width: Math.max(1, round(it.box.width * scaleX)),
       height: Math.max(1, round(it.box.height * scaleY)),
     },
-  }));
+  }))
 }
 
 function round(v: number): number {
-  return Math.round(v);
+  return Math.round(v)
 }

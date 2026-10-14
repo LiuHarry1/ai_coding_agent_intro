@@ -127,7 +127,10 @@ try {
       ),
       'truncation wording',
     )
-    assert(prompt.includes('AGENTS.md files'), 'AGENTS.md exclusion (product rename)')
+    assert(
+      prompt.includes('AGENTS.md files'),
+      'AGENTS.md exclusion (product rename)',
+    )
     assert(
       !prompt.includes('## Searching past context'),
       'no Searching section when the gate is off',

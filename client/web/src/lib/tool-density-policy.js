@@ -42,8 +42,7 @@ export function resolveExpandArgs(kind, ctx = {}) {
   const isDone = Boolean(ctx.isDone)
   const isError = Boolean(ctx.isError)
   const nested = Boolean(ctx.nested)
-  const isRunning =
-    ctx.isRunning != null ? Boolean(ctx.isRunning) : !isDone
+  const isRunning = ctx.isRunning != null ? Boolean(ctx.isRunning) : !isDone
   const hasBody = ctx.hasBody !== false
 
   switch (kind) {
@@ -71,23 +70,19 @@ export function resolveExpandArgs(kind, ctx = {}) {
     case 'explore-line':
       return {
         isRunning: false,
-        expandOnceWhen:
-          (isDone && isError) || Boolean(ctx.forceExpandOnce),
+        expandOnceWhen: (isDone && isError) || Boolean(ctx.forceExpandOnce),
       }
     case 'shell':
       return {
         isRunning:
-          isRunning &&
-          Boolean(ctx.hasLiveOutput) &&
-          !ctx.isBackgrounded,
+          isRunning && Boolean(ctx.hasLiveOutput) && !ctx.isBackgrounded,
         expandOnceWhen: isDone && !ctx.isBackgrounded && isError,
       }
     case 'default':
     default:
       return {
         isRunning: !nested && isRunning,
-        expandOnceWhen:
-          (isDone && isError) || Boolean(ctx.forceExpandOnce),
+        expandOnceWhen: (isDone && isError) || Boolean(ctx.forceExpandOnce),
       }
   }
 }

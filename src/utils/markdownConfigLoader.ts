@@ -198,9 +198,7 @@ export async function loadMarkdownConfigs(
   const [managedPaths, userPaths, ...projectPathLists] = await Promise.all([
     listMarkdownFiles(managedDir),
     listMarkdownFiles(userDir),
-    ...projectAppDirs.map(appDir =>
-      listMarkdownFiles(path.join(appDir, kind)),
-    ),
+    ...projectAppDirs.map(appDir => listMarkdownFiles(path.join(appDir, kind))),
   ])
 
   const managedFiles = await Promise.all(

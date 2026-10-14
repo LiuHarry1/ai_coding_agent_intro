@@ -51,7 +51,7 @@ function bootLog(message: string): void {
   console.error(message)
 }
 
-void main().catch((err) => {
+void main().catch(err => {
   console.error(`[start] Fatal: ${(err as Error).message}`)
   process.exit(1)
 })

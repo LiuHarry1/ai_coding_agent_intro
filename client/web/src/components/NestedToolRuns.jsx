@@ -33,10 +33,7 @@ export default function NestedToolRuns({
     shown += weight
     if (isGroup) {
       const first = toolPartKey(run.items[0], `nex-a-${i}`)
-      const last = toolPartKey(
-        run.items[run.items.length - 1],
-        `nex-b-${i}`,
-      )
+      const last = toolPartKey(run.items[run.items.length - 1], `nex-b-${i}`)
       nodes.push(
         <ExploredGroup
           key={`${run.type}-${first}-${last}`}

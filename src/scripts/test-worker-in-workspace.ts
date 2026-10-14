@@ -21,12 +21,7 @@ const noopRuntime = {
 } as RuntimePort
 
 const cwd = path.resolve(process.cwd())
-const backend = new WorkerExecutionBackend(
-  'local',
-  noopRuntime,
-  'local',
-  cwd,
-)
+const backend = new WorkerExecutionBackend('local', noopRuntime, 'local', cwd)
 
 backend.assertInWorkspace(cwd, cwd, 'read')
 backend.assertInWorkspace(cwd, path.join(cwd, 'src'), 'read')

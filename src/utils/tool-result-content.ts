@@ -34,9 +34,7 @@ export function buildImageBlock(
 export function hasImageBlock(
   content: string | ToolResultContentBlockParam[],
 ): boolean {
-  return (
-    Array.isArray(content) && content.some(block => block.type === 'image')
-  )
+  return Array.isArray(content) && content.some(block => block.type === 'image')
 }
 
 /** `is_error` tool_results must contain only text blocks. */
@@ -50,9 +48,7 @@ export function toolResultBlocksToText(
   blocks: ToolResultContentBlockParam[],
 ): string {
   return blocks
-    .map(block =>
-      block.type === 'text' ? block.text : IMAGE_TEXT_PLACEHOLDER,
-    )
+    .map(block => (block.type === 'text' ? block.text : IMAGE_TEXT_PLACEHOLDER))
     .filter(Boolean)
     .join('\n')
 }
@@ -82,14 +78,14 @@ export function toolResultOutputToText(
   if (!output) return ''
   if (output.type === 'text') return output.value
   return output.value
-    .map(part =>
-      part.type === 'text' ? part.text : IMAGE_TEXT_PLACEHOLDER,
-    )
+    .map(part => (part.type === 'text' ? part.text : IMAGE_TEXT_PLACEHOLDER))
     .filter(Boolean)
     .join('\n')
 }
 
-export function countOutputImages(output: ToolResultOutput | undefined): number {
+export function countOutputImages(
+  output: ToolResultOutput | undefined,
+): number {
   if (!output || output.type !== 'content') return 0
   return output.value.filter(part => part.type === 'image-data').length
 }

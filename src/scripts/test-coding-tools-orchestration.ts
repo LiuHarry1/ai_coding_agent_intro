@@ -32,7 +32,10 @@ import type {
   ToolDefinition,
 } from '../core/types.js'
 import type { WireEmitter } from '../core/wire-emitter.js'
-import { answerQuestion, rejectQuestion } from '../core/brokers/question-broker.js'
+import {
+  answerQuestion,
+  rejectQuestion,
+} from '../core/brokers/question-broker.js'
 import { answerPlanApproval } from '../core/brokers/plan-approval-broker.js'
 import { assembleToolPool } from '../tools/assembleToolPool.js'
 import { createToolSearchDefinition } from '../tools/ToolSearchTool/ToolSearchTool.js'
@@ -156,10 +159,17 @@ function testModeRestrictionsAndAssembly(): void {
   assert.deepEqual(Object.keys(applyModeRestrictions('ask', raw)), [
     FILE_READ_TOOL_NAME,
   ])
-  assert.ok(applyModeRestrictions('agent', raw, extras)[ENTER_PLAN_MODE_TOOL_NAME])
-  assert.ok(!applyModeRestrictions('agent', raw, extras)[EXIT_PLAN_MODE_TOOL_NAME])
+  assert.ok(
+    applyModeRestrictions('agent', raw, extras)[ENTER_PLAN_MODE_TOOL_NAME],
+  )
+  assert.ok(
+    !applyModeRestrictions('agent', raw, extras)[EXIT_PLAN_MODE_TOOL_NAME],
+  )
   const plan = applyModeRestrictions('plan', raw, extras)
-  assert.ok(plan[WRITE_FILE_TOOL_NAME], 'plan keeps writes for the plan-file guard')
+  assert.ok(
+    plan[WRITE_FILE_TOOL_NAME],
+    'plan keeps writes for the plan-file guard',
+  )
   assert.ok(plan[ASK_USER_QUESTION_TOOL_NAME])
   assert.ok(plan[EXIT_PLAN_MODE_TOOL_NAME])
   assert.ok(!plan[BASH_TOOL_NAME])
@@ -223,7 +233,10 @@ async function testToolSearch(): Promise<void> {
   const selected = (await execute(tool, {
     query: 'select:search_1,missing',
   })) as { data: { text: string; matches: Array<{ name: string }> } }
-  assert.deepEqual(selected.data.matches.map(match => match.name), ['search_1'])
+  assert.deepEqual(
+    selected.data.matches.map(match => match.name),
+    ['search_1'],
+  )
   assert.match(selected.data.text, /Not found: missing/)
 
   const bareSelect = (await execute(tool, {
@@ -254,7 +267,11 @@ async function testTodoWrite(): Promise<void> {
   const events: Array<{ event: string; data: unknown }> = []
   const tool = todoDefinition.create(
     process.cwd(),
-    context({ todoUpdate: todos => wireUpdates.push(todos) }, undefined, events),
+    context(
+      { todoUpdate: todos => wireUpdates.push(todos) },
+      undefined,
+      events,
+    ),
   )
   const first = (await execute(tool, {
     todos: [
@@ -263,7 +280,10 @@ async function testTodoWrite(): Promise<void> {
     ],
     merge: false,
   })) as { data: { todos: Array<{ id: string }>; message: string } }
-  assert.deepEqual(first.data.todos.map(todo => todo.id), ['work', 'done'])
+  assert.deepEqual(
+    first.data.todos.map(todo => todo.id),
+    ['work', 'done'],
+  )
   assert.equal(
     first.data.message,
     'Updated 2 todos: 1 in_progress, 1 completed',
@@ -273,11 +293,10 @@ async function testTodoWrite(): Promise<void> {
     todos: [{ id: 'next', content: 'Next', status: 'pending' }],
     merge: true,
   })) as { data: { todos: Array<{ id: string }> } }
-  assert.deepEqual(merged.data.todos.map(todo => todo.id), [
-    'work',
-    'next',
-    'done',
-  ])
+  assert.deepEqual(
+    merged.data.todos.map(todo => todo.id),
+    ['work', 'next', 'done'],
+  )
   assert.equal(wireUpdates.length, 2)
   assert.equal(events.filter(item => item.event === 'todo_update').length, 2)
 }
@@ -348,7 +367,10 @@ async function testPlanModeTools(): Promise<void> {
   const noSession = (await execute(
     enterPlanDefinition.create(process.cwd(), context()),
   )) as { data: { message: string } }
-  assert.equal(noSession.data.message, 'EnterPlanMode requires an active session.')
+  assert.equal(
+    noSession.data.message,
+    'EnterPlanMode requires an active session.',
+  )
 
   const activeSession = session('agent')
   const modeEvents: string[] = []
@@ -377,10 +399,7 @@ async function testPlanModeTools(): Promise<void> {
   assert.equal(missingExit, 'Error: missing session context for ExitPlanMode.')
   const wrongModeSession = session('agent')
   const wrongModeExit = await execute(
-    exitPlanDefinition.create(
-      process.cwd(),
-      context({}, wrongModeSession),
-    ),
+    exitPlanDefinition.create(process.cwd(), context({}, wrongModeSession)),
   )
   assert.equal(
     wrongModeExit,
@@ -480,8 +499,8 @@ async function testExecuteOneTool(): Promise<void> {
     call('structured'),
     {
       structured: runtimeTool(async () => ({
-          result: 'structured ok',
-          followUpMessages: [{ role: 'user', content: 'follow up' }],
+        result: 'structured ok',
+        followUpMessages: [{ role: 'user', content: 'follow up' }],
       })),
     },
     wire,
@@ -535,7 +554,7 @@ async function testExecuteOneTool(): Promise<void> {
     call('throws'),
     {
       throws: runtimeTool(async () => {
-          throw new Error('boom')
+        throw new Error('boom')
       }),
     },
     wire,
@@ -550,8 +569,8 @@ async function testExecuteOneTool(): Promise<void> {
     call('neverRuns'),
     {
       neverRuns: runtimeTool(async () => {
-          invoked = true
-          return 'unexpected'
+        invoked = true
+        return 'unexpected'
       }),
     },
     wire,
@@ -567,9 +586,9 @@ async function testExecuteOneTool(): Promise<void> {
     call('abortError'),
     {
       abortError: runtimeTool(async () => {
-          const error = new Error('cancelled')
-          error.name = 'AbortError'
-          throw error
+        const error = new Error('cancelled')
+        error.name = 'AbortError'
+        throw error
       }),
     },
     wire,

@@ -48,7 +48,9 @@ export const definition: ToolDefinition = {
         }
         const tasks = listCronTasksForSession(sessionId).map(t => ({
           id: t.id,
-          schedule: t.cron ? cronToHuman(t.cron) : new Date(t.atMs!).toLocaleString(),
+          schedule: t.cron
+            ? cronToHuman(t.cron)
+            : new Date(t.atMs!).toLocaleString(),
           prompt: t.prompt,
           recurring: t.recurring,
           nextRunAtMs: t.nextRunAtMs,

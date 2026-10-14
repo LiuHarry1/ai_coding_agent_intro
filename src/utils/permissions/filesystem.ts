@@ -34,7 +34,8 @@ export const PERMISSION_DEFAULT_MODES = [
 export type PermissionDefaultMode = (typeof PERMISSION_DEFAULT_MODES)[number]
 
 /** Runtime File-tool path policy derived from AUTH + defaultMode. */
-export type FilesystemPermissionMode = 'default' | 'dontAsk' | 'bypassPermissions'
+export type FilesystemPermissionMode =
+  'default' | 'dontAsk' | 'bypassPermissions'
 
 export type FsPermissionDecision =
   | { behavior: 'allow' }
@@ -69,11 +70,10 @@ function isAuthEnabledEnv(): boolean {
  * `SANDBOX_EXTRA_READ_ROOTS`.
  */
 function parseExtraReadRoots(): string[] {
-  const raw = (
+  const raw =
     process.env.PERMISSION_EXTRA_READ_ROOTS?.trim() ||
     process.env.SANDBOX_EXTRA_READ_ROOTS?.trim() ||
     ''
-  )
   if (!raw) return []
   return raw
     .split(',')
@@ -119,7 +119,9 @@ export type SettingsPermissions = {
  * Desktop `defaultMode: dontAsk` keeps additionalDirectories (extra working
  * trees) but still maps remaining outside paths to deny.
  */
-export function settingsPermissionOpts(permissions?: SettingsPermissions): Pick<
+export function settingsPermissionOpts(
+  permissions?: SettingsPermissions,
+): Pick<
   CreateFilesystemPermissionContextOptions,
   'additionalWorkingDirectories' | 'allow' | 'deny' | 'mode'
 > {
@@ -167,9 +169,7 @@ export function createFilesystemPermissionContext(
   }
 }
 
-export function workingDirectories(
-  ctx: FilesystemPermissionContext,
-): string[] {
+export function workingDirectories(ctx: FilesystemPermissionContext): string[] {
   return [ctx.root, ...ctx.additionalWorkingDirectories]
 }
 
@@ -209,8 +209,7 @@ function allowRoots(
   ctx: FilesystemPermissionContext,
   access: 'read' | 'write',
 ): string[] {
-  const extras =
-    access === 'read' ? ctx.extraReadRoots : ctx.extraWriteRoots
+  const extras = access === 'read' ? ctx.extraReadRoots : ctx.extraWriteRoots
   return [...workingDirectories(ctx), ...extras]
 }
 

@@ -27,7 +27,7 @@ export async function pickValue(
             value: option.value,
             label: option.label.replace(/\s+/g, ' ').trim(),
             text: option.text.replace(/\s+/g, ' ').trim(),
-          disabled: option.disabled,
+            disabled: option.disabled,
           }))
         : [],
   }))
@@ -62,7 +62,9 @@ export async function pickValue(
     if (!exact && partial.length > 1) {
       const matches = partial
         .slice(0, MAX_OPTIONS_IN_ERROR)
-        .map(option => JSON.stringify(option.label || option.text || option.value))
+        .map(option =>
+          JSON.stringify(option.label || option.text || option.value),
+        )
         .join(', ')
       const more =
         partial.length > MAX_OPTIONS_IN_ERROR

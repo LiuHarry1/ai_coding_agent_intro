@@ -278,11 +278,7 @@ function normalizeConfig(
 function resolveAgentRelativePath(value: string): string {
   if (!value || path.isAbsolute(value)) return value
   // Bare executables on PATH (no path separator, no relative prefix)
-  if (
-    !value.includes('/') &&
-    !value.includes('\\') &&
-    !value.startsWith('.')
-  ) {
+  if (!value.includes('/') && !value.includes('\\') && !value.startsWith('.')) {
     return value
   }
   return path.resolve(AGENT_PACKAGE_ROOT(), value)

@@ -81,8 +81,7 @@ export default function AskUserQuestionCard({ part, onAnswer }) {
   )
   const allAnswered = useMemo(
     () =>
-      questions.length > 0 &&
-      questions.every(q => answers[q.question]?.trim()),
+      questions.length > 0 && questions.every(q => answers[q.question]?.trim()),
     [questions, answers],
   )
 
@@ -94,11 +93,7 @@ export default function AskUserQuestionCard({ part, onAnswer }) {
     if (!allAnswered || submitting || done) return
     setSubmitting(true)
     try {
-      await submitAnswer(
-        part.id,
-        answers,
-        notes.trim() ? { notes } : undefined,
-      )
+      await submitAnswer(part.id, answers, notes.trim() ? { notes } : undefined)
       setDone(true)
     } catch (err) {
       console.error('[AskUserQuestion] submit failed:', err)

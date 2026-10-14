@@ -43,7 +43,10 @@ assert.ok(agentDefinition)
 assert.equal(agentDefinition.isSubagent, true)
 assert.ok(agentDefinition.outputSchema)
 assert.ok(agentDefinition.mapToolResultToToolResultBlockParam)
-assert.equal(agentDefinition.isConcurrencySafe?.({ subagent_type: 'explore' }), true)
+assert.equal(
+  agentDefinition.isConcurrencySafe?.({ subagent_type: 'explore' }),
+  true,
+)
 assert.equal(
   agentDefinition.isConcurrencySafe?.({ subagent_type: 'general-purpose' }),
   false,
@@ -203,10 +206,10 @@ const forkSkill: SkillDefinition = {
   agent: 'fixture-agent',
   loadBody: async () => 'Fork body for $ARGUMENTS.',
 }
-const missingForkContext = createSkillTool(
-  [forkSkill],
-  [fixtureAgent],
-).create(process.cwd(), context(session())) as ExecutableTool
+const missingForkContext = createSkillTool([forkSkill], [fixtureAgent]).create(
+  process.cwd(),
+  context(session()),
+) as ExecutableTool
 assert.equal(
   await missingForkContext.execute({
     skill: 'coding-tools-fork',
@@ -216,4 +219,3 @@ assert.equal(
 )
 
 console.log('ok Agent registration/guards and inline Skill execution')
-

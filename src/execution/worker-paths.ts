@@ -66,9 +66,7 @@ export function readAgentVersion(): string {
     /* fall through */
   }
   return (
-    process.env.WORKER_VERSION ??
-    process.env.npm_package_version ??
-    '1.0.0'
+    process.env.WORKER_VERSION ?? process.env.npm_package_version ?? '1.0.0'
   )
 }
 
@@ -99,9 +97,7 @@ export function readWorkerVersion(): string {
     /* fall through */
   }
   return (
-    process.env.WORKER_VERSION ??
-    process.env.npm_package_version ??
-    '1.0.0'
+    process.env.WORKER_VERSION ?? process.env.npm_package_version ?? '1.0.0'
   )
 }
 

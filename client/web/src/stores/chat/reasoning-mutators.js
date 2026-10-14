@@ -125,7 +125,9 @@ export function createReasoningMutators(set, get) {
             b.turnId === turnId &&
             b.status === 'streaming'
           ) {
-            const elapsed = Math.round((Date.now() - (b.startTime || Date.now())) / 1000)
+            const elapsed = Math.round(
+              (Date.now() - (b.startTime || Date.now())) / 1000,
+            )
             return patchBubble(s, b.id, { status: 'done', duration: elapsed })
           }
         }

@@ -119,7 +119,10 @@ async function main(): Promise<void> {
     .split('\n')
     .map(l => (JSON.parse(l) as { type: string }).type)
   assert.ok(types2.includes('init'))
-  assert.ok(types2.includes('system_update'), `expected system_update, got ${types2}`)
+  assert.ok(
+    types2.includes('system_update'),
+    `expected system_update, got ${types2}`,
+  )
 
   console.log('OK dump-prompts unit smoke')
   console.log('wrote:', rec.path)

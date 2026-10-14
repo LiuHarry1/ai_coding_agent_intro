@@ -15,7 +15,9 @@ const args = process.argv.slice(2)
 function readPackageVersion(): string {
   try {
     const pkgPath = join(getRepoRoot(), 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string }
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
+      version?: string
+    }
     return pkg.version ?? '1.0.0'
   } catch {
     return '1.0.0'

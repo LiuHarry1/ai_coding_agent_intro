@@ -293,8 +293,11 @@ export function startRelevantMemoryPrefetch(
   const searchDirs = resolveSearchDirs(opts)
   // Strong hit if any dir had a strong exclusive result — recompute per dir.
   let immediateStrong = false
-  const strongFromDirs: Array<{ path: string; mtimeMs: number; score: number }> =
-    []
+  const strongFromDirs: Array<{
+    path: string
+    mtimeMs: number
+    score: number
+  }> = []
   for (const dir of searchDirs) {
     const fast = findFastRelevantMemories(trimmed, dir, unavailablePaths)
     if (fast.strong) {

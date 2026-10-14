@@ -24,9 +24,4 @@ export type ScheduledTask = {
 export type CronFile = { tasks: ScheduledTask[] }
 
 export type FireResult =
-  | 'fired'
-  | 'busy'
-  | 'missing'
-  | 'disabled'
-  | 'error'
-  | 'quota'
+  'fired' | 'busy' | 'missing' | 'disabled' | 'error' | 'quota'

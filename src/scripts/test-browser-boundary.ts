@@ -10,10 +10,7 @@
 import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import {
-  closeBrowser,
-  setBrowserBackendFactory,
-} from '../browser/manager.js'
+import { closeBrowser, setBrowserBackendFactory } from '../browser/manager.js'
 import type { BrowserBackend } from '../browser/types.js'
 import {
   cdpTool,
@@ -115,7 +112,10 @@ function createFakeBackend(state: FakeState): BrowserBackend {
           } as never
         }
         return {
-          result: { type: 'object', value: evaluate(String(params?.expression)) },
+          result: {
+            type: 'object',
+            value: evaluate(String(params?.expression)),
+          },
         } as never
       }
       if (method === 'DOM.getDocument') {
@@ -134,7 +134,11 @@ function createFakeBackend(state: FakeState): BrowserBackend {
 
 function fakeContext(): ToolContext {
   return {
-    eventBus: { emit() {}, on() {}, off() {} } as unknown as ToolContext['eventBus'],
+    eventBus: {
+      emit() {},
+      on() {},
+      off() {},
+    } as unknown as ToolContext['eventBus'],
     wire: { emit() {} } as unknown as ToolContext['wire'],
     cwd: process.cwd(),
   }
@@ -182,7 +186,11 @@ async function main() {
   })
   const logs = expectData(await run(consoleTool, { level: 'error' }))
   assert.equal((logs.consoleErrors as unknown[]).length, 1)
-  assert.equal(logs.snapshot, undefined, 'console tool should not pay for a snapshot')
+  assert.equal(
+    logs.snapshot,
+    undefined,
+    'console tool should not pay for a snapshot',
+  )
   assert.ok(
     state.calls.some(c => c.method === 'Page.addScriptToEvaluateOnNewDocument'),
     'script must be registered so console capture survives reload',
@@ -206,10 +214,16 @@ async function main() {
   })
   const net = expectData(await run(networkTool, {}))
   assert.equal((net.network as unknown[]).length, 1)
-  assert.equal(net.snapshot, undefined, 'network tool should not pay for a snapshot')
+  assert.equal(
+    net.snapshot,
+    undefined,
+    'network tool should not pay for a snapshot',
+  )
   const usedSince = state.calls.slice(before).map(c => c.method)
   assert.ok(
-    usedSince.every(m => m === 'Runtime.evaluate' || ALLOWED_CDP_METHODS.has(m)),
+    usedSince.every(
+      m => m === 'Runtime.evaluate' || ALLOWED_CDP_METHODS.has(m),
+    ),
     `network reading introduced new CDP methods: ${usedSince.join(', ')}`,
   )
   console.log('ok network tool adds no new CDP methods')
@@ -235,7 +249,10 @@ async function main() {
     aborted.signal,
   )
   assert.match(String(interrupted), /interrupted because the user took control/)
-  assert.match(String(interrupted), /Recovery action: stop and wait for the user/)
+  assert.match(
+    String(interrupted),
+    /Recovery action: stop and wait for the user/,
+  )
   assert.doesNotMatch(String(interrupted), /browser_snapshot|fresh ref/)
   expectData(await run(tabsTool, { action: 'list' }))
   const relocked = expectData(await run(lockTool, { action: 'lock' }))
@@ -349,7 +366,9 @@ async function main() {
       `${rel} must stay Playwright-free; move the code into playwright/ instead`,
     )
   }
-  console.log('ok pure snapshot text and the relay CDP endpoint stay Playwright-free')
+  console.log(
+    'ok pure snapshot text and the relay CDP endpoint stay Playwright-free',
+  )
 
   setBrowserBackendFactory(null)
   await closeBrowser()

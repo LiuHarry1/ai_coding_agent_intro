@@ -42,8 +42,14 @@ function assert(cond: boolean, msg: string) {
 {
   const r = resolveAgentPicker(undefined, agents)
   assert(r.modes.length === 3, 'default modes')
-  assert(r.primaries.map(a => a.agentType).join(',') === 'browser,reviewer', 'all primaries')
-  assert(r.default.mode === 'agent' && r.default.agentType === null, 'default coding')
+  assert(
+    r.primaries.map(a => a.agentType).join(',') === 'browser,reviewer',
+    'all primaries',
+  )
+  assert(
+    r.default.mode === 'agent' && r.default.agentType === null,
+    'default coding',
+  )
 }
 
 // Browser-only
@@ -56,12 +62,18 @@ function assert(cond: boolean, msg: string) {
     agents,
   )
   assert(r.modes.length === 0, 'no mode rows')
-  assert(r.primaries.length === 1 && r.primaries[0]!.agentType === 'browser', 'browser only')
+  assert(
+    r.primaries.length === 1 && r.primaries[0]!.agentType === 'browser',
+    'browser only',
+  )
   assert(r.default.agentType === 'browser', 'default browser')
   assert(isModeAllowedByPicker(r, 'agent'), 'agent still allowed')
   assert(!isModeAllowedByPicker(r, 'ask'), 'ask blocked')
   assert(isSpecialistOnlyPicker(r), 'specialist-only')
-  assert(!isAgentTypeAllowedByPicker(r, null), 'null blocked when specialist-only')
+  assert(
+    !isAgentTypeAllowedByPicker(r, null),
+    'null blocked when specialist-only',
+  )
   assert(isAgentTypeAllowedByPicker(r, 'browser'), 'browser allowed')
   assert(!isAgentTypeAllowedByPicker(r, 'reviewer'), 'reviewer blocked')
 }

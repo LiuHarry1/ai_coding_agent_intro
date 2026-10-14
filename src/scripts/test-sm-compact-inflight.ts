@@ -23,7 +23,8 @@ process.chdir(REPO_ROOT)
 
 const SERVER = process.env.SERVER_URL ?? 'http://localhost:4567'
 const WORKSPACE = process.env.WORKSPACE ?? REPO_ROOT
-const LOG_PATH = process.env.SERVER_LOG ?? path.join(REPO_ROOT, 'server-smfix.log')
+const LOG_PATH =
+  process.env.SERVER_LOG ?? path.join(REPO_ROOT, 'server-smfix.log')
 
 const IN_FLIGHT_LINE = 'compacting from previous generation'
 
@@ -72,7 +73,12 @@ function readLog(): string {
   if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
     return buf.subarray(2).toString('utf16le')
   }
-  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+  if (
+    buf.length >= 3 &&
+    buf[0] === 0xef &&
+    buf[1] === 0xbb &&
+    buf[2] === 0xbf
+  ) {
     return buf.subarray(3).toString('utf8')
   }
   return buf.toString('utf8')
@@ -104,7 +110,9 @@ async function main(): Promise<void> {
     const t0 = Date.now()
     const out = await chat(message, sessionId)
     sessionId = out.sessionId
-    console.log(`turn ${i + 1} done in ${Date.now() - t0}ms (session ${sessionId})`)
+    console.log(
+      `turn ${i + 1} done in ${Date.now() - t0}ms (session ${sessionId})`,
+    )
     // No delay: the extract that just started must still be running when the
     // next turn's pre-turn compaction check happens.
   }
@@ -117,7 +125,9 @@ async function main(): Promise<void> {
 
   const inFlightHits = lines.filter(l => l.includes(IN_FLIGHT_LINE))
   const smDone = lines.filter(l => l.includes('session-memory compact DONE'))
-  const smSkipped = lines.filter(l => l.includes('session-memory compact skipped'))
+  const smSkipped = lines.filter(l =>
+    l.includes('session-memory compact skipped'),
+  )
   const fullCompacts = lines.filter(l => l.includes('source=full'))
 
   console.log('')

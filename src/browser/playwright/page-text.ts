@@ -3,10 +3,7 @@
  * Prefer this over a full accessibility snapshot when the goal is reading copy.
  */
 
-import {
-  DEFAULT_MAX_CHARS,
-  SNAPSHOT_TIMEOUT_MS,
-} from '../limits.js'
+import { DEFAULT_MAX_CHARS, SNAPSHOT_TIMEOUT_MS } from '../limits.js'
 import { BrowserError, type BrowserBackend } from '../types.js'
 import {
   ariaRefCssSelectorMessage,
@@ -43,9 +40,7 @@ export async function getPageText(
     }
   }
 
-  const candidates = opts.selector
-    ? [opts.selector]
-    : [...DEFAULT_SELECTORS]
+  const candidates = opts.selector ? [opts.selector] : [...DEFAULT_SELECTORS]
 
   let text = ''
   let selectorUsed = candidates[0] ?? 'body'

@@ -6,10 +6,7 @@ import { createAbortController } from '../utils/abortController.js'
 import { abortAllToolsForSession } from './tool-abort-registry.js'
 
 export type TurnAbortReason =
-  | 'user-cancel'
-  | 'interrupt'
-  | 'disconnect'
-  | 'external'
+  'user-cancel' | 'interrupt' | 'disconnect' | 'external'
 
 interface TurnEntry {
   controller: AbortController

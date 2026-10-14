@@ -46,7 +46,11 @@ function testNoBoundaryReturnsFullHistory(): void {
   const projected = getMessagesAfterCompactBoundary(history)
 
   assert.deepEqual(projected, history)
-  assert.notEqual(projected, history, 'projection should return a safe array copy')
+  assert.notEqual(
+    projected,
+    history,
+    'projection should return a safe array copy',
+  )
   assert.equal(findLastCompactBoundaryIndex(history), -1)
 }
 

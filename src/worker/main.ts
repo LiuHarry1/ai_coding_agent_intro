@@ -37,9 +37,7 @@ import {
 } from '../brand.js'
 
 const WORKER_VERSION =
-  process.env.WORKER_VERSION ??
-  process.env.npm_package_version ??
-  '1.0.0'
+  process.env.WORKER_VERSION ?? process.env.npm_package_version ?? '1.0.0'
 
 let boundCwd: string | null = null
 let boundEnvId = 'local'

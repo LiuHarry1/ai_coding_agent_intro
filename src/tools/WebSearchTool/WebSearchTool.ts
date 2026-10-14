@@ -22,7 +22,10 @@ const EMPTY_RESULTS_WARNING =
 function formatWebSearchOutput(
   output: WebSearchPayload & { warning?: string },
 ): string {
-  const lines: string[] = [`Web search results for query: "${output.query}"`, '']
+  const lines: string[] = [
+    `Web search results for query: "${output.query}"`,
+    '',
+  ]
 
   if (output.warning) {
     lines.push(output.warning, '')
@@ -91,15 +94,17 @@ export const definition: ToolDefinition = {
   shouldDefer: true,
   isConcurrencySafe: () => true,
   // Mode A — structured results for UI; prose + reminder for model
-  outputSchema: z.object({
-    query: z.string(),
-    results: z.array(z.record(z.string(), z.unknown())).optional(),
-    answers: z.array(z.string()).optional(),
-    suggestions: z.array(z.string()).optional(),
-    content: z.string().optional(),
-    note: z.string().optional(),
-    warning: z.string().optional(),
-  }).passthrough(),
+  outputSchema: z
+    .object({
+      query: z.string(),
+      results: z.array(z.record(z.string(), z.unknown())).optional(),
+      answers: z.array(z.string()).optional(),
+      suggestions: z.array(z.string()).optional(),
+      content: z.string().optional(),
+      note: z.string().optional(),
+      warning: z.string().optional(),
+    })
+    .passthrough(),
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     return {
       tool_use_id: toolUseID,

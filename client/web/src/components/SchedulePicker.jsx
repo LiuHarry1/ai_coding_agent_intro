@@ -81,8 +81,12 @@ export default function SchedulePicker() {
   const [tasks, setTasks] = useState([])
   const [kind, setKind] = useState('once')
   const [chipId, setChipId] = useState('5m')
-  const [customDate, setCustomDate] = useState(() => toDateValue(defaultCustom()))
-  const [customTime, setCustomTime] = useState(() => toTimeValue(defaultCustom()))
+  const [customDate, setCustomDate] = useState(() =>
+    toDateValue(defaultCustom()),
+  )
+  const [customTime, setCustomTime] = useState(() =>
+    toTimeValue(defaultCustom()),
+  )
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -279,7 +283,11 @@ export default function SchedulePicker() {
         )}
       </button>
       {open && (
-        <div className='schedule-picker__flyout' role='dialog' aria-label='Scheduled'>
+        <div
+          className='schedule-picker__flyout'
+          role='dialog'
+          aria-label='Scheduled'
+        >
           <div className='schedule-picker__head'>
             <span className='schedule-picker__title'>Scheduled</span>
             {tasks.length > 0 && (

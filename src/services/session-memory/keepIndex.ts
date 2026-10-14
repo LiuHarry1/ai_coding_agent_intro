@@ -90,11 +90,7 @@ export function adjustIndexToPreserveAssistantResponse(
   const responseIds = new Set<string>()
   for (let i = startIndex; i < messages.length; i++) {
     const message = messages[i]!
-    if (
-      isRoleMessage(message) &&
-      message.role === 'assistant' &&
-      message.id
-    ) {
+    if (isRoleMessage(message) && message.role === 'assistant' && message.id) {
       responseIds.add(message.id)
     }
   }
@@ -154,20 +150,14 @@ export function calculateMessagesToKeepIndex(
 
   // Tail already over budget → forward-trim oldest kept messages.
   if (totalTokens > config.maxTokens) {
-    while (
-      startIndex < messages.length &&
-      totalTokens > config.maxTokens
-    ) {
+    while (startIndex < messages.length && totalTokens > config.maxTokens) {
       totalTokens -= estimateMessageTokens(messages[startIndex]!)
       startIndex++
     }
     return adjustIndexToPreserveToolPairs(messages, startIndex)
   }
 
-  if (
-    totalTokens >= config.minTokens &&
-    textCount >= config.minTextMessages
-  ) {
+  if (totalTokens >= config.minTokens && textCount >= config.minTextMessages) {
     return adjustIndexToPreserveToolPairs(messages, startIndex)
   }
 
@@ -187,10 +177,7 @@ export function calculateMessagesToKeepIndex(
 
   // Expanding back may have overshot maxTokens — trim forward again.
   if (totalTokens > config.maxTokens) {
-    while (
-      startIndex < messages.length &&
-      totalTokens > config.maxTokens
-    ) {
+    while (startIndex < messages.length && totalTokens > config.maxTokens) {
       totalTokens -= estimateMessageTokens(messages[startIndex]!)
       startIndex++
     }

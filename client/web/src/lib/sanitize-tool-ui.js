@@ -126,7 +126,11 @@ export function sanitizeToolUseResult(tur, opts = {}) {
   let changed = false
   const browser = Boolean(opts.browser)
 
-  if (typeof next.type === 'string' && next.file && typeof next.file === 'object') {
+  if (
+    typeof next.type === 'string' &&
+    next.file &&
+    typeof next.file === 'object'
+  ) {
     const file = next.file
     const needsStrip =
       (typeof file.content === 'string' && file.content.length > 1) ||
@@ -170,7 +174,11 @@ export function sanitizeToolUseResult(tur, opts = {}) {
     changed = true
   }
 
-  if (browser && Array.isArray(next.consoleErrors) && next.consoleErrors.length > 8) {
+  if (
+    browser &&
+    Array.isArray(next.consoleErrors) &&
+    next.consoleErrors.length > 8
+  ) {
     next.consoleErrors = next.consoleErrors.slice(0, 8)
     changed = true
   }
@@ -254,7 +262,10 @@ export function sanitizeMessagesForUi(messages) {
         return {
           ...msg,
           summary: truncateString(msg.summary, 4_000),
-          summaryLength: Math.min(msg.summaryLength ?? msg.summary.length, 4_000),
+          summaryLength: Math.min(
+            msg.summaryLength ?? msg.summary.length,
+            4_000,
+          ),
         }
       }
       return msg

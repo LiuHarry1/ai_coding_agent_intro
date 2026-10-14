@@ -12,11 +12,7 @@ import {
   trackTurnTokens,
 } from '../../server/quota.js'
 import { attachUsageTelemetry, flushUsage } from '../../server/telemetry.js'
-import {
-  endTurn,
-  getSession,
-  tryBeginTurn,
-} from '../../session/store.js'
+import { endTurn, getSession, tryBeginTurn } from '../../session/store.js'
 import { findSessionLocation } from '../../session/session-index.js'
 import { formatScheduledPrompt } from './scheduled-prompt.js'
 import { isScheduledTasksEnabled } from './settings.js'
@@ -45,9 +41,8 @@ export async function fireScheduledTask(
   }
 
   const agentHome = loc.agentHome
-  const session = runWithRequestScope(
-    { agentHome, cwd: task.cwd },
-    () => getSession(task.sessionId, { agentHome }),
+  const session = runWithRequestScope({ agentHome, cwd: task.cwd }, () =>
+    getSession(task.sessionId, { agentHome }),
   )
   if (!session) {
     removeCronTasks([task.id])
@@ -100,9 +95,7 @@ export async function fireScheduledTask(
     const runAgent = await getRunAgent()
     const transport = createSessionLiveTransport(session.id)
     const prompt = formatScheduledPrompt(task, new Date(nowMs))
-    transport.emit(
-      scheduledTurnMessage(prompt, { session_id: session.id }),
-    )
+    transport.emit(scheduledTurnMessage(prompt, { session_id: session.id }))
     await runWithRequestScope({ agentHome, cwd }, () =>
       runChatTurn({
         message: prompt,

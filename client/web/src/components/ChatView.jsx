@@ -202,7 +202,10 @@ export default function ChatView() {
         if (!pinToBottomRef.current) return
         const el2 = scrollRef.current
         if (!el2) return
-        if (distanceFromBottom(el2) > ALREADY_BOTTOM_PX || stickDirtyRef.current) {
+        if (
+          distanceFromBottom(el2) > ALREADY_BOTTOM_PX ||
+          stickDirtyRef.current
+        ) {
           stickDirtyRef.current = false
           programmaticScrollRef.current = true
           el2.scrollTop = el2.scrollHeight
@@ -251,7 +254,13 @@ export default function ChatView() {
 
   useLayoutEffect(() => {
     scheduleStickToBottom()
-  }, [flatStructureKey, streamFollowKey, visibleCount, bottomInsetPx, scheduleStickToBottom])
+  }, [
+    flatStructureKey,
+    streamFollowKey,
+    visibleCount,
+    bottomInsetPx,
+    scheduleStickToBottom,
+  ])
 
   // Resize of the transcript (and live slots) → follow. Re-bind when the
   // structure changes so newly mounted live slots are observed.
@@ -363,9 +372,7 @@ export default function ChatView() {
   return (
     <div className='chat-view-wrap'>
       <div
-        className={
-          isStreaming ? 'chat-view chat-view--streaming' : 'chat-view'
-        }
+        className={isStreaming ? 'chat-view chat-view--streaming' : 'chat-view'}
         ref={scrollRef}
         onScroll={handleScroll}
         onWheel={handleWheel}
@@ -386,9 +393,7 @@ export default function ChatView() {
                 onClick={loadEarlier}
               >
                 Show {Math.min(LOAD_MORE_STEP, hiddenCount)} earlier
-                {hiddenCount > LOAD_MORE_STEP
-                  ? ` (${hiddenCount} hidden)`
-                  : ''}
+                {hiddenCount > LOAD_MORE_STEP ? ` (${hiddenCount} hidden)` : ''}
               </button>
             )}
             <Suspense fallback={null}>

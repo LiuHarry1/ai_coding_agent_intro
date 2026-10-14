@@ -52,7 +52,10 @@ async function testPostCompactAttachments(): Promise<void> {
     throw new Error(`expected 1 agent_listing_delta, got ${msgs.length}`)
   }
   const att = msgs[0]!
-  if (!isAttachmentMessage(att) || att.attachment.type !== 'agent_listing_delta') {
+  if (
+    !isAttachmentMessage(att) ||
+    att.attachment.type !== 'agent_listing_delta'
+  ) {
     throw new Error('expected agent_listing_delta attachment')
   }
   if (!att.attachment.isInitial) {
@@ -61,7 +64,9 @@ async function testPostCompactAttachments(): Promise<void> {
   const api = expandAttachmentMessagesForAPI([att])
   const text = JSON.stringify(api)
   if (!text.includes('system-reminder') || !text.includes('Explore')) {
-    throw new Error('agent listing not expanded to system-reminder with Explore')
+    throw new Error(
+      'agent listing not expanded to system-reminder with Explore',
+    )
   }
   console.log('[ok] post-compact agent_listing_delta → system-reminder')
 

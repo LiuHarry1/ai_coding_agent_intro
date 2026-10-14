@@ -57,9 +57,7 @@ function WorkGroupRow({
               />
             )
           }
-          return (
-            <BubbleRow key={el.id} bubbleId={el.bubbleId} embedded />
-          )
+          return <BubbleRow key={el.id} bubbleId={el.bubbleId} embedded />
         })}
       </WorkGroup>
     </div>

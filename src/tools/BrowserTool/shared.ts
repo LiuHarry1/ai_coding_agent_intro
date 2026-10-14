@@ -27,7 +27,10 @@ import {
   WIRE_DETAIL_STRING_MAX,
   WIRE_NETWORK_MAX,
 } from '../../browser/limits.js'
-import { getLastSnapshot, isSnapshotDegraded } from '../../browser/session-flags.js'
+import {
+  getLastSnapshot,
+  isSnapshotDegraded,
+} from '../../browser/session-flags.js'
 import { snapshotDiff } from '../../browser/snapshot-index.js'
 import {
   formatSnapshotFileLine,
@@ -102,7 +105,12 @@ export interface BrowserToolOutput {
   network?: NetworkRow[]
   /** Set when `network` is a filtered view, so the card can say so. */
   networkTotal?: number
-  tabs?: Array<{ targetId: string; url: string; title: string; current: boolean }>
+  tabs?: Array<{
+    targetId: string
+    url: string
+    title: string
+    current: boolean
+  }>
   value?: unknown
   screenshotPath?: string
   /** Server-relative URL the UI can load the on-disk screenshot from. */
@@ -218,12 +226,18 @@ export function wrapModelToolText(
   return `${text.slice(0, budget)}${MODEL_TRUNCATION_MARKER}`
 }
 
-function wireTruncateString(value: string, max = WIRE_DETAIL_STRING_MAX): string {
+function wireTruncateString(
+  value: string,
+  max = WIRE_DETAIL_STRING_MAX,
+): string {
   if (value.length <= max) return value
   return `${value.slice(0, Math.max(0, max - 1))}…`
 }
 
-function wireTruncateUnknown(value: unknown, max = WIRE_DETAIL_STRING_MAX): unknown {
+function wireTruncateUnknown(
+  value: unknown,
+  max = WIRE_DETAIL_STRING_MAX,
+): unknown {
   if (value === undefined || value === null) return value
   if (typeof value === 'string') return wireTruncateString(value, max)
   if (typeof value === 'number' || typeof value === 'boolean') return value
@@ -278,7 +292,8 @@ export async function maybePersistSnapshotArtifact(
 
 export function attachPageState(out: BrowserToolOutput): void {
   if (out.snapshot === undefined && !out.pageState) return
-  const mode = out.snapshotMode ?? (out.snapshot !== undefined ? 'efficient' : 'none')
+  const mode =
+    out.snapshotMode ?? (out.snapshot !== undefined ? 'efficient' : 'none')
   out.pageState = {
     truncated: Boolean(out.snapshotTruncated),
     chars: out.snapshot?.length ?? out.pageState?.chars ?? 0,
@@ -294,7 +309,9 @@ export function attachPageState(out: BrowserToolOutput): void {
 /**
  * Build the compact UI/session payload. Never includes `snapshot` or base64.
  */
-export function projectBrowserWireDetails(output: unknown): Record<string, unknown> {
+export function projectBrowserWireDetails(
+  output: unknown,
+): Record<string, unknown> {
   const out = (output ?? {}) as BrowserToolOutput
   attachPageState(out)
 
@@ -319,10 +336,12 @@ export function projectBrowserWireDetails(output: unknown): Record<string, unkno
     projected.snapshotTruncated = out.snapshotTruncated
   }
   if (out.consoleErrors?.length) {
-    projected.consoleErrors = out.consoleErrors.slice(0, WIRE_CONSOLE_MAX).map(e => ({
-      level: wireTruncateString(e.level, 32),
-      text: wireTruncateString(e.text),
-    }))
+    projected.consoleErrors = out.consoleErrors
+      .slice(0, WIRE_CONSOLE_MAX)
+      .map(e => ({
+        level: wireTruncateString(e.level, 32),
+        text: wireTruncateString(e.text),
+      }))
   }
   if (out.network?.length) {
     projected.network = out.network.slice(0, WIRE_NETWORK_MAX).map(r => ({
@@ -428,8 +447,7 @@ export async function observe(
     toolCallId?: string
   },
 ): Promise<BrowserToolOutput> {
-  const mode: SnapshotMode =
-    opts.mode ?? (opts.compact ? 'efficient' : 'full')
+  const mode: SnapshotMode = opts.mode ?? (opts.compact ? 'efficient' : 'full')
   const efficient = mode === 'efficient'
   // Compact budgeting and interactive-only filtering stay orthogonal.
   // Post-action snapshots need status text such as "saved" or an uploaded file
@@ -679,7 +697,10 @@ function renderText(out: BrowserToolOutput): string {
     lines.push(out.snapshot || '(no visible content)')
     if (
       out.snapshotTruncated &&
-      !(out.snapshotFullBytes && out.snapshotFullBytes > SNAPSHOT_INLINE_MAX_BYTES)
+      !(
+        out.snapshotFullBytes &&
+        out.snapshotFullBytes > SNAPSHOT_INLINE_MAX_BYTES
+      )
     ) {
       lines.push(
         '… snapshot truncated. Named controls may be missing. Call browser_snapshot again (raise maxDepth, pass selector, or mode=full). Do not treat an empty generic as unautomatable.',
@@ -799,11 +820,10 @@ const RECOVERY_RULES: Array<{
 export function recoverySuffixForError(message: string): string {
   if (/Recovery action:/i.test(message)) return ''
   const lower = message.toLowerCase()
-  const rule = RECOVERY_RULES.find(r =>
-    r.patterns.some(p => lower.includes(p)),
-  )
-  const suggestion = rule?.suggestion
-    ?? 'Take a snapshot to see the current page, then retry with a fresh ref.'
+  const rule = RECOVERY_RULES.find(r => r.patterns.some(p => lower.includes(p)))
+  const suggestion =
+    rule?.suggestion ??
+    'Take a snapshot to see the current page, then retry with a fresh ref.'
   const recovery = rule?.recovery ?? 'browser_snapshot'
   return `${suggestion}\nRecovery action: ${recovery}`
 }

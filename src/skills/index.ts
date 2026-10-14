@@ -4,7 +4,10 @@ import {
   filterSkillsByPaths,
   mergeSkillsByName,
 } from './loadSkillsDir.js'
-import { createSkillTool, SKILL_TOOL_NAME } from '../tools/SkillTool/SkillTool.js'
+import {
+  createSkillTool,
+  SKILL_TOOL_NAME,
+} from '../tools/SkillTool/SkillTool.js'
 import type { SkillDefinition } from './types.js'
 
 export { SKILL_TOOL_NAME, filterSkillsByPaths }

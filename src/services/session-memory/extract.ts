@@ -187,7 +187,7 @@ async function runSessionMemoryExtract(
     const template = loadSessionMemoryTemplate(cwd)
     const validCurrent = validateSessionMemoryStructure(current)
       ? current
-      : repairSessionMemoryStructure(current, template) ?? template
+      : (repairSessionMemoryStructure(current, template) ?? template)
     if (validCurrent !== current) {
       fs.writeFileSync(memoryPath, validCurrent, 'utf-8')
       console.warn(

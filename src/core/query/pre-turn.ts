@@ -19,10 +19,7 @@ import type { IProvider } from '../llm/types.js'
 import { createCacheSafeParams } from '../forked-agent.js'
 import type { WireEmitter } from '../wire-emitter.js'
 import type { CompactionConfig, SessionMemoryConfig } from '../types.js'
-import {
-  agentLogTag,
-  attachTodoReminderAfterCompaction,
-} from './helpers.js'
+import { agentLogTag, attachTodoReminderAfterCompaction } from './helpers.js'
 import { getMessagesAfterCompactBoundary } from '../messages/compact-boundary.js'
 
 export function applyFullCompaction(

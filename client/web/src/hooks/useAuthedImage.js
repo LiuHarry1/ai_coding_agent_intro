@@ -32,7 +32,9 @@ export function useAuthedImage(path) {
     let objectUrl = null
 
     fetch(apiUrl(path), withAuth())
-      .then(res => (res.ok ? res.blob() : Promise.reject(new Error(res.status))))
+      .then(res =>
+        res.ok ? res.blob() : Promise.reject(new Error(res.status)),
+      )
       .then(blob => {
         if (revoked) return
         objectUrl = URL.createObjectURL(blob)

@@ -18,7 +18,11 @@ export interface ExecutionBackend {
   readonly kind: 'worker'
   readonly environmentId: EnvironmentId
   resolve(cwd: string, filePath: string): string
-  assertInWorkspace(cwd: string, absPath: string, access: 'read' | 'write'): void
+  assertInWorkspace(
+    cwd: string,
+    absPath: string,
+    access: 'read' | 'write',
+  ): void
   readText(absPath: string): Promise<string>
   writeText(absPath: string, content: string): Promise<void>
   mkdirp(dirPath: string): Promise<void>

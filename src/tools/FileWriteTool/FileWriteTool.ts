@@ -9,13 +9,13 @@ import {
   filePathFromInput,
   policyFromContext,
 } from '../../utils/permissions/filesystem.js'
-import type {
-  DualChannelToolResult,
-  ToolDefinition,
-} from '../../core/types.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { WRITE_FILE_TOOL_NAME } from '../../constants/tool_names.js'
 import { clearDeliveredDiagnosticsForFile } from '../../services/lsp/LSPDiagnosticRegistry.js'
-import { getLspManager, getLspWorkspaceKey } from '../../services/lsp/manager.js'
+import {
+  getLspManager,
+  getLspWorkspaceKey,
+} from '../../services/lsp/manager.js'
 import { isWorkerExecutionBackend } from '../../execution/worker-execution-backend.js'
 import {
   activeReadFileState,
@@ -105,8 +105,7 @@ export const definition: ToolDefinition = {
         // through Worker RPC + assertInWorkspace.
         // Match FileReadTool: gate on environmentId, not isWorkerExecutionBackend
         // (that helper also requires configureLsp).
-        const useRemoteFs =
-          !!execution && execution.environmentId !== 'local'
+        const useRemoteFs = !!execution && execution.environmentId !== 'local'
         if (useRemoteFs && execution) {
           try {
             const abs = execution.resolve(cwd, file_path)
@@ -123,10 +122,7 @@ export const definition: ToolDefinition = {
             await execution.writeText(abs, content)
             if (isWorkerExecutionBackend(execution)) {
               try {
-                const workspaceKey = getLspWorkspaceKey(
-                  cwd,
-                  context.lspServers,
-                )
+                const workspaceKey = getLspWorkspaceKey(cwd, context.lspServers)
                 clearDeliveredDiagnosticsForFile(workspaceKey, abs)
                 await execution.lspChangeFile(abs, content)
                 await execution.lspSaveFile(abs)

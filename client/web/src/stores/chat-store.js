@@ -68,8 +68,7 @@ function applyLocalPickerSelection(set, { mode, agentType }) {
 export const useChatStore = create((set, get) => {
   const mutators = createAssistantMutators(set, get)
 
-  const handleSse = data =>
-    applySseEvent(data, { set, get, mutators })
+  const handleSse = data => applySseEvent(data, { set, get, mutators })
 
   return {
     // ── Sessions ────────────────────────────────
@@ -452,7 +451,10 @@ export const useChatStore = create((set, get) => {
               onEvent: data => {
                 if (stopped || get().currentSessionId !== sessionId) return
                 handleSse(data)
-                if (data.type === 'system' && data.subtype === 'scheduled_turn') {
+                if (
+                  data.type === 'system' &&
+                  data.subtype === 'scheduled_turn'
+                ) {
                   void get().refreshSessions()
                 }
                 if (data.type === 'result') settleScheduledTurn()
@@ -499,9 +501,7 @@ export const useChatStore = create((set, get) => {
         ])
         if (get().currentSessionId !== id) return
         const msgs = sanitizeMessagesForUi(
-          (data.messages || []).map(m =>
-            m.id ? m : { ...m, id: newId() },
-          ),
+          (data.messages || []).map(m => (m.id ? m : { ...m, id: newId() })),
         )
         const next = messagesToBubbles(msgs)
         const tasks = Array.isArray(scheduled?.tasks) ? scheduled.tasks : []
@@ -688,9 +688,7 @@ export const useChatStore = create((set, get) => {
           }
           set(s => {
             let next = {
-              bubbleOrder: s.bubbleOrder.filter(
-                id => id !== userMsgId,
-              ),
+              bubbleOrder: s.bubbleOrder.filter(id => id !== userMsgId),
               bubblesById: { ...s.bubblesById },
             }
             delete next.bubblesById[userMsgId]
@@ -755,10 +753,13 @@ export const useChatStore = create((set, get) => {
           onHttpError: ({ status, message }) => {
             get()._appendPart({
               type: 'error',
-              message:
-                status === 404 ? `HTTP ${status}: ${message}` : message,
+              message: status === 404 ? `HTTP ${status}: ${message}` : message,
             })
-            set({ isStreaming: false, abortController: null, activeTurnId: null })
+            set({
+              isStreaming: false,
+              abortController: null,
+              activeTurnId: null,
+            })
           },
         })
 

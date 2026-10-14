@@ -79,7 +79,7 @@ function findParentToolId(bubblesById, bubbleOrder, parentToolCallId) {
     const active = running.filter(
       id => (bubblesById[id].subagentParts?.length ?? 0) > 0,
     )
-    return (active.length === 1 ? active[0] : running[0])
+    return active.length === 1 ? active[0] : running[0]
   }
   for (let i = bubbleOrder.length - 1; i >= 0; i--) {
     const b = bubblesById[bubbleOrder[i]]
@@ -396,7 +396,9 @@ export function createAssistantMutators(set, get) {
               status: 'streaming-input',
             })
           }
-          return transcriptPatch(patchBubble(s, parentId, { subagentParts: sub }))
+          return transcriptPatch(
+            patchBubble(s, parentId, { subagentParts: sub }),
+          )
         }
         if (ev.type === 'tool_call') {
           const idx = sub.findIndex(x => x.toolCallId === ev.toolCallId)
@@ -553,12 +555,18 @@ export function createAssistantMutators(set, get) {
         if (toolCallId) {
           const id = toolBubbleId(toolCallId)
           if (s.bubblesById[id]?.kind === 'tool') {
-            return transcriptPatch(patchBubble(s, id, { duration: data.duration }))
+            return transcriptPatch(
+              patchBubble(s, id, { duration: data.duration }),
+            )
           }
         } else if (data.name) {
           for (let i = s.bubbleOrder.length - 1; i >= 0; i--) {
             const b = s.bubblesById[s.bubbleOrder[i]]
-            if (b?.kind === 'tool' && b.name === data.name && b.duration == null) {
+            if (
+              b?.kind === 'tool' &&
+              b.name === data.name &&
+              b.duration == null
+            ) {
               return transcriptPatch(
                 patchBubble(s, b.id, { duration: data.duration }),
               )

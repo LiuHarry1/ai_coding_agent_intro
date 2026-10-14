@@ -65,11 +65,12 @@ export function toolActionLabel(toolCase, opts = {}) {
   if (toolCase === 'shell' && backgrounded && !loading && !hasError) {
     key = 'shellBackground'
   }
-  const map = LABELS[key] || LABELS[toolCase] || {
-    loading: 'Working',
-    completed: 'Done',
-    error: 'Failed',
-  }
+  const map = LABELS[key] ||
+    LABELS[toolCase] || {
+      loading: 'Working',
+      completed: 'Done',
+      error: 'Failed',
+    }
   if (loading) return map.loading
   if (hasError) return map.error
   return map.completed

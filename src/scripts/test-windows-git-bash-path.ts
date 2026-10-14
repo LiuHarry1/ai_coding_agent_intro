@@ -1,7 +1,10 @@
 /**
  * Git Bash path derivation — `pathWin32.join(git.exe, '..', '..', 'bin', 'bash.exe')`.
  */
-import { bashExeFromGitExe, findGitBashPath } from '../core/shell/windows-paths.js'
+import {
+  bashExeFromGitExe,
+  findGitBashPath,
+} from '../core/shell/windows-paths.js'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)

@@ -47,8 +47,7 @@ export default function GlobCard({ part, nested = false }) {
   )
 
   const hasBody =
-    isError ||
-    (!!parsed && (parsed.empty || parsed.files.length > 0))
+    isError || (!!parsed && (parsed.empty || parsed.files.length > 0))
 
   const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
     'explore-line',

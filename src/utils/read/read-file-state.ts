@@ -54,9 +54,7 @@ export function rangeEquals(
   limit: number | undefined,
 ): boolean {
   if (entry.offset === undefined) return false
-  return (
-    entry.offset === normalizeReadOffset(offset) && entry.limit === limit
-  )
+  return entry.offset === normalizeReadOffset(offset) && entry.limit === limit
 }
 
 /**

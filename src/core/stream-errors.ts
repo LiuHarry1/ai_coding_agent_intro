@@ -102,7 +102,11 @@ export function isContextLengthError(err: unknown): boolean {
   // tokens per minute", "token limit exceeded") — those need a retry/backoff,
   // NOT compaction. Misclassifying them fires a full LLM summarization on
   // every throttled turn.
-  if (status === 429 || msg.includes('rate limit') || msg.includes('rate_limit')) {
+  if (
+    status === 429 ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit')
+  ) {
     return false
   }
   return (

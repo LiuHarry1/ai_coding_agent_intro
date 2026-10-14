@@ -54,9 +54,7 @@ export default function WorkGroup({
           ) : (
             <>
               <span className='work-group-action'>Worked</span>
-              {dur ? (
-                <span className='work-group-details'>{dur}</span>
-              ) : null}
+              {dur ? <span className='work-group-details'>{dur}</span> : null}
             </>
           )}
         </span>
@@ -65,11 +63,7 @@ export default function WorkGroup({
         )}
       </button>
 
-      <div
-        className='work-group-body'
-        hidden={!open}
-        aria-hidden={!open}
-      >
+      <div className='work-group-body' hidden={!open} aria-hidden={!open}>
         {children}
       </div>
     </div>

@@ -148,10 +148,7 @@ export async function startCdpEndpoint(opts: {
     })
   }
 
-  function announceTo(
-    socket: WebSocket,
-    tab: TabSession,
-  ): void {
+  function announceTo(socket: WebSocket, tab: TabSession): void {
     socket.send(
       JSON.stringify({
         method: 'Target.attachedToTarget',
@@ -202,7 +199,9 @@ export async function startCdpEndpoint(opts: {
     }
   }
 
-  function tabForSession(sessionId: string | undefined): TabSession | undefined {
+  function tabForSession(
+    sessionId: string | undefined,
+  ): TabSession | undefined {
     if (!sessionId) return undefined
     const direct = sessionById.get(sessionId)
     if (direct) return direct
@@ -419,7 +418,10 @@ export async function startCdpEndpoint(opts: {
       return
     }
 
-    if (request.method === 'Target.getTargetInfo' && !request.params?.targetId) {
+    if (
+      request.method === 'Target.getTargetInfo' &&
+      !request.params?.targetId
+    ) {
       respond(socket, request, { targetInfo: targetInfo(tab) })
       return
     }
@@ -518,7 +520,10 @@ export async function startCdpEndpoint(opts: {
       } catch {
         return
       }
-      if (typeof request.id !== 'number' || typeof request.method !== 'string') {
+      if (
+        typeof request.id !== 'number' ||
+        typeof request.method !== 'string'
+      ) {
         return
       }
       const handle = request.sessionId

@@ -1,11 +1,18 @@
-import { ensureMessageUuid, ensureMessageUuids } from '../services/session-memory/index.js'
+import {
+  ensureMessageUuid,
+  ensureMessageUuids,
+} from '../services/session-memory/index.js'
 import { getAttachmentMessages } from '../utils/attachments.js'
 import type { AgentOptions } from './types.js'
 import { buildUserMessage } from './query/helpers.js'
 import { query } from './query.js'
 
 export { query } from './query.js'
-export type { QueryOptions, QueryResult, QueryStopReason } from './query/types.js'
+export type {
+  QueryOptions,
+  QueryResult,
+  QueryStopReason,
+} from './query/types.js'
 
 /**
  * High-level entry: append user message + attachments, then run the unified

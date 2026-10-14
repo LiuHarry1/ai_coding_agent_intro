@@ -32,7 +32,9 @@ export type CronScheduler = {
   tick: () => Promise<void>
 }
 
-export function createCronScheduler(deps: CronSchedulerDeps = {}): CronScheduler {
+export function createCronScheduler(
+  deps: CronSchedulerDeps = {},
+): CronScheduler {
   const nowMs = deps.nowMs ?? (() => Date.now())
   const fire = deps.fire ?? fireScheduledTaskLazy
   const setTimeoutFn = deps.setTimeoutFn ?? setTimeout

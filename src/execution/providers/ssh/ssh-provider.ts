@@ -125,7 +125,10 @@ export class SshProvider implements EnvironmentProvider {
 
     const hosts = this.allHosts()
     const byAlias = hosts.find(
-      h => h.alias === raw || h.hostName === raw || environmentIdForAlias(h.alias) === input.trim(),
+      h =>
+        h.alias === raw ||
+        h.hostName === raw ||
+        environmentIdForAlias(h.alias) === input.trim(),
     )
     if (byAlias) return toDescriptor(byAlias)
 

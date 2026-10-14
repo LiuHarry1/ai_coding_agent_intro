@@ -36,14 +36,18 @@ export function shouldInjectAgentListInMessages(): boolean {
   return true
 }
 
-export function buildAgentListSection(agents: readonly AgentDefinition[]): string {
+export function buildAgentListSection(
+  agents: readonly AgentDefinition[],
+): string {
   if (shouldInjectAgentListInMessages()) {
     return `Available agent types are listed in <system-reminder> messages in the conversation.`
   }
   return `Available agent types and the tools they have access to:\n${agents.map(formatAgentLine).join('\n')}`
 }
 
-function reconstructAnnouncedAgentTypes(messages: Message[] | undefined): Set<string> {
+function reconstructAnnouncedAgentTypes(
+  messages: Message[] | undefined,
+): Set<string> {
   const announced = new Set<string>()
   for (const msg of messages ?? []) {
     if (!isAttachmentMessage(msg)) continue
@@ -68,7 +72,12 @@ export function getAgentListingDeltaAttachments(
   const activeAgents = toolUseContext.agentDefinitions?.activeAgents
   if (!activeAgents?.length) return []
 
-  if (!Object.prototype.hasOwnProperty.call(toolUseContext.options.tools, AGENT_TOOL_NAME)) {
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      toolUseContext.options.tools,
+      AGENT_TOOL_NAME,
+    )
+  ) {
     return []
   }
 

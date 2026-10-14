@@ -23,9 +23,7 @@ export default function ToolSearchCard({ part, nested = false }) {
   const hasMatches = matches && matches.length > 0
   // `select:Foo,Bar` is wire syntax, not something worth showing verbatim.
   const queryLabel = query.replace(/^select:/i, '').replace(/,\s*/g, ', ')
-  const summary = hasMatches
-    ? matches.map(m => m.name).join(', ')
-    : queryLabel
+  const summary = hasMatches ? matches.map(m => m.name).join(', ') : queryLabel
   const hasTextFallback =
     !hasMatches && typeof result === 'string' && result.trim()
   const hasBody = isError || hasMatches || hasTextFallback

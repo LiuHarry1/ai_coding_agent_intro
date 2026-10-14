@@ -72,7 +72,8 @@ export function formatScrollOutcome(o: ScrollOutcome): string {
   }
 
   const noun = o.kind === 'container' ? 'container' : 'page'
-  const where = o.kind === 'container' ? `container ${o.label ?? ''}`.trim() : 'page'
+  const where =
+    o.kind === 'container' ? `container ${o.label ?? ''}`.trim() : 'page'
   const remaining = scrollRemaining(o.extent)
   const axes = [
     {

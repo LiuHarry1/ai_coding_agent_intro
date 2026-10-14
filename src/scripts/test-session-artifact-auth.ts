@@ -114,7 +114,8 @@ async function main() {
       'same-origin preview navigation can auth via cookie',
     )
     assert.equal(
-      (await fetch(`${base}/code${preview}`, { headers: cookie(alice) })).status,
+      (await fetch(`${base}/code${preview}`, { headers: cookie(alice) }))
+        .status,
       200,
       'KnowBot /code/ mount still auths preview via cookie',
     )

@@ -71,8 +71,7 @@ async function captureWithLabels(
   const scroll = { x: view.x, y: view.y }
 
   let elementRect:
-    | { x: number; y: number; width: number; height: number }
-    | undefined
+    { x: number; y: number; width: number; height: number } | undefined
   if (space === 'element') {
     const box = await resolveElementBoundingBoxForLabels(page, refKey)
     if (!box) {

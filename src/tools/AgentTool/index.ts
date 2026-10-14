@@ -1,4 +1,8 @@
-import type { AgentDefinition, AgentDefinitionsResult, IToolRegistry } from '../../core/types.js'
+import type {
+  AgentDefinition,
+  AgentDefinitionsResult,
+  IToolRegistry,
+} from '../../core/types.js'
 import { definition as exploreDef } from './built-in/exploreAgent.js'
 import { definition as planDef } from './built-in/planAgent.js'
 import { definition as generalPurposeDef } from './built-in/generalPurposeAgent.js'

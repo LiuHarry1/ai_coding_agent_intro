@@ -66,10 +66,7 @@ export function registerPermission(
   })
 }
 
-export function answerPermission(
-  id: string,
-  value: PermissionAnswer,
-): boolean {
+export function answerPermission(id: string, value: PermissionAnswer): boolean {
   const p = pending.get(id)
   if (!p) return false
   p.resolve({ answered: true, value })

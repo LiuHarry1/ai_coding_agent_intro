@@ -13,11 +13,7 @@ import {
   GREP_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
 } from '../constants/tool_names.js'
-import type {
-  AnyTool,
-  ToolContext,
-  ToolDefinition,
-} from '../core/types.js'
+import type { AnyTool, ToolContext, ToolDefinition } from '../core/types.js'
 import { noopWireEmitter } from '../core/wire-emitter.js'
 import {
   executeOneTool,
@@ -60,9 +56,7 @@ function toolData<T>(result: ExecutedToolResult): T {
 }
 
 async function main(): Promise<void> {
-  const workspace = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'coding-tools-core-'),
-  )
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-tools-core-'))
   const readFileState: ReadFileState = new Map()
   const context = {
     wire: noopWireEmitter,
@@ -242,7 +236,10 @@ async function main(): Promise<void> {
       new_string: 'azure',
     })
     assert.equal(identical.isError, true)
-    assert.match(identical.result, /^Error: old_string and new_string are identical/)
+    assert.match(
+      identical.result,
+      /^Error: old_string and new_string are identical/,
+    )
     assert.equal(fs.readFileSync(editPath, 'utf8'), identicalBefore)
 
     const missingEdit = await run(EDIT_FILE_TOOL_NAME, {
@@ -262,10 +259,10 @@ async function main(): Promise<void> {
       numFiles: number
       truncated: boolean
     }>(glob)
-    assert.deepEqual(
-      [...globData.filenames].sort(),
-      ['src/alpha.ts', 'src/nested/beta.ts'],
-    )
+    assert.deepEqual([...globData.filenames].sort(), [
+      'src/alpha.ts',
+      'src/nested/beta.ts',
+    ])
     assert.equal(globData.numFiles, 2)
     assert.equal(globData.truncated, false)
     assert.match(glob.result, /src\/alpha\.ts/)
@@ -296,10 +293,10 @@ async function main(): Promise<void> {
       files: Array<{ path: string; matchCount: number }>
     }>(grepFiles)
     assert.equal(grepFilesData.mode, 'files_with_matches')
-    assert.deepEqual(
-      [...grepFilesData.filenames].sort(),
-      ['src/alpha.ts', 'src/nested/beta.ts'],
-    )
+    assert.deepEqual([...grepFilesData.filenames].sort(), [
+      'src/alpha.ts',
+      'src/nested/beta.ts',
+    ])
     assert.deepEqual(
       [...grepFilesData.files]
         .sort((a, b) => a.path.localeCompare(b.path))
@@ -412,7 +409,10 @@ async function main(): Promise<void> {
         definition.create('/remote/ws', remoteContext),
       ]),
     ) as Record<string, AnyTool>
-    const runRemote = async (toolName: string, input: Record<string, unknown>) =>
+    const runRemote = async (
+      toolName: string,
+      input: Record<string, unknown>,
+    ) =>
       executeOneTool(
         {
           toolCallId: `remote-${++callNumber}`,
@@ -440,10 +440,7 @@ async function main(): Promise<void> {
       old_string: 'remote = 2',
       new_string: 'remote = 3',
     })
-    assert.equal(
-      toolData<{ replacements: number }>(remoteEdit).replacements,
-      1,
-    )
+    assert.equal(toolData<{ replacements: number }>(remoteEdit).replacements, 1)
     const remoteMissingEdit = await runRemote(EDIT_FILE_TOOL_NAME, {
       file_path: 'remote/missing.ts',
       old_string: 'x',
@@ -454,10 +451,10 @@ async function main(): Promise<void> {
       pattern: '**/*.ts',
       path: 'remote',
     })
-    assert.deepEqual(
-      toolData<{ filenames: string[] }>(remoteGlob).filenames,
-      ['remote/a.ts', 'remote/b.ts'],
-    )
+    assert.deepEqual(toolData<{ filenames: string[] }>(remoteGlob).filenames, [
+      'remote/a.ts',
+      'remote/b.ts',
+    ])
 
     for (const definition of definitions.values()) {
       assert.ok(definition.outputSchema, `${definition.name} schema missing`)

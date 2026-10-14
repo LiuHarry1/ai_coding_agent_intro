@@ -37,11 +37,7 @@ type FlatElement = {
 function flat(bubbles: Bubble[], opts: FlatOptions = {}): FlatElement[] {
   const bubbleOrder = bubbles.map(b => b.id)
   const bubblesById = Object.fromEntries(bubbles.map(b => [b.id, b]))
-  return buildFlatElements(
-    bubbleOrder,
-    bubblesById,
-    opts,
-  ) as FlatElement[]
+  return buildFlatElements(bubbleOrder, bubblesById, opts) as FlatElement[]
 }
 
 const tool = (id: string, extra: Partial<Bubble> = {}): Bubble => ({
@@ -73,10 +69,10 @@ const tool = (id: string, extra: Partial<Bubble> = {}): Bubble => ({
 
 {
   // Streaming: thinking stays visible; still no Worked header.
-  const out = flat(
-    [tool('a'), { id: 'th', kind: 'thinking', turnId: 't1' }],
-    { isStreaming: true, activeTurnId: 't1' },
-  )
+  const out = flat([tool('a'), { id: 'th', kind: 'thinking', turnId: 't1' }], {
+    isStreaming: true,
+    activeTurnId: 't1',
+  })
   assert.ok(out.every(r => r.type !== 'work_group'))
   assert.equal(out[0].bubbleId, 'a')
   assert.equal(out[1].bubbleId, 'th')

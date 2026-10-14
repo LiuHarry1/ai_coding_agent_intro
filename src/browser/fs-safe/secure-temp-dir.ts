@@ -48,12 +48,15 @@ export function resolveSecureTempRoot(
     options.getuid ??
     (() => {
       try {
-        return typeof process.getuid === 'function' ? process.getuid() : undefined
+        return typeof process.getuid === 'function'
+          ? process.getuid()
+          : undefined
       } catch {
         return undefined
       }
     })
-  const tmpdir = typeof options.tmpdir === 'function' ? options.tmpdir : getOsTmpDir
+  const tmpdir =
+    typeof options.tmpdir === 'function' ? options.tmpdir : getOsTmpDir
   const platform = options.platform ?? process.platform
   const uid = getuid()
   const isSecureDirForUser = (st: fs.Stats) => {
@@ -70,7 +73,8 @@ export function resolveSecureTempRoot(
   }
   const fallback = () => {
     const base = tmpdir()
-    const suffix = uid === undefined ? fallbackPrefix : `${fallbackPrefix}-${uid}`
+    const suffix =
+      uid === undefined ? fallbackPrefix : `${fallbackPrefix}-${uid}`
     const joiner = platform === 'win32' ? path.win32.join : path.join
     return joiner(base, suffix)
   }
@@ -119,7 +123,9 @@ export function resolveSecureTempRoot(
         }
         throw chmodErr
       }
-      warn(`${warningPrefix} tightened permissions on temp dir: ${candidatePath}`)
+      warn(
+        `${warningPrefix} tightened permissions on temp dir: ${candidatePath}`,
+      )
       return resolveDirState(candidatePath) === 'available'
     } catch {
       return false

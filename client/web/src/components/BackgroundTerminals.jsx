@@ -109,10 +109,7 @@ export default function BackgroundTerminals() {
                   aria-hidden='true'
                   title='Still running'
                 />
-                <span
-                  className='background-terminals__icon'
-                  aria-hidden='true'
-                >
+                <span className='background-terminals__icon' aria-hidden='true'>
                   {'>_'}
                 </span>
                 <span

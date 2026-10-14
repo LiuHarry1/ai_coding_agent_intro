@@ -29,9 +29,7 @@ function getSyncedJsonPath(
   return join(getAgentMemoryDir(agentType, scope, cwd), SYNCED_JSON)
 }
 
-async function readJsonFile<T extends object>(
-  path: string,
-): Promise<T | null> {
+async function readJsonFile<T extends object>(path: string): Promise<T | null> {
   try {
     const content = await readFile(path, { encoding: 'utf-8' })
     const parsed = JSON.parse(content) as T

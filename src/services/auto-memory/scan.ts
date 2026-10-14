@@ -110,9 +110,7 @@ function normalizeIndentedMemoryKeys(content: string): string | undefined {
   const header = content
     .slice(0, end)
     .split('\n')
-    .map(line =>
-      line.replace(/^[ \t]+(name|description|type):[ \t]*/i, '$1: '),
-    )
+    .map(line => line.replace(/^[ \t]+(name|description|type):[ \t]*/i, '$1: '))
     .join('\n')
   const next = quoteProblematicMemoryValues(header + content.slice(end))
   return next === content ? undefined : next

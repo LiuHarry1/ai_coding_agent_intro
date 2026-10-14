@@ -104,9 +104,7 @@ export function isBrowserTool(part) {
 }
 
 function isPureFileExplore(buf) {
-  return (
-    buf.length > 0 && buf.every(p => PURE_FILE_EXPLORE_NAMES.has(p.name))
-  )
+  return buf.length > 0 && buf.every(p => PURE_FILE_EXPLORE_NAMES.has(p.name))
 }
 
 /**
@@ -268,7 +266,8 @@ export function summarizeToolSteps(steps) {
   for (const s of steps || []) {
     const n = s.name || 'other'
     let bucket = n
-    if (typeof n === 'string' && n.startsWith('browser_')) bucket = '__browser__'
+    if (typeof n === 'string' && n.startsWith('browser_'))
+      bucket = '__browser__'
     else if (n.endsWith('_fetch')) bucket = '__fetch__'
     else if (n.endsWith('_search') || n.endsWith('_web_search'))
       bucket = '__search__'
@@ -313,7 +312,9 @@ export function summarizeExploredDetails(steps) {
     return n > 0 ? `${n} tool${n === 1 ? '' : 's'}` : null
   }
 
-  if (list.every(s => typeof s.name === 'string' && s.name.startsWith('browser_'))) {
+  if (
+    list.every(s => typeof s.name === 'string' && s.name.startsWith('browser_'))
+  ) {
     const n = list.length
     return `${n} browser action${n === 1 ? '' : 's'}`
   }
@@ -326,12 +327,7 @@ export function summarizeExploredDetails(steps) {
 
   for (const s of list) {
     const n = s.name
-    if (
-      n === READ ||
-      n === GLOB ||
-      n === LIST_DIR ||
-      n === 'list_directory'
-    ) {
+    if (n === READ || n === GLOB || n === LIST_DIR || n === 'list_directory') {
       files += 1
     } else if (n === GREP) {
       searches += 1
@@ -357,11 +353,8 @@ export function summarizeExploredDetails(steps) {
   if (searches > 0)
     phrases.push(`${searches} search${searches === 1 ? '' : 'es'}`)
   if (webSearches > 0)
-    phrases.push(
-      `${webSearches} web search${webSearches === 1 ? '' : 'es'}`,
-    )
-  if (fetches > 0)
-    phrases.push(`${fetches} fetch${fetches === 1 ? '' : 'es'}`)
+    phrases.push(`${webSearches} web search${webSearches === 1 ? '' : 'es'}`)
+  if (fetches > 0) phrases.push(`${fetches} fetch${fetches === 1 ? '' : 'es'}`)
   if (other > 0 && phrases.length === 0) {
     return summarizeToolSteps(list)
   }

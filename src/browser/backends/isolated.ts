@@ -41,7 +41,8 @@ export function onIsolatedCdpEvent(
   if (!session) throw new BrowserError(`Unknown tab "${targetId}".`)
   const emit = session.emit.bind(session)
   session.emit = (event, ...args) => {
-    if (typeof event === 'string' && event.includes('.')) listener(event, args[0])
+    if (typeof event === 'string' && event.includes('.'))
+      listener(event, args[0])
     return emit(event, ...args)
   }
 }

@@ -156,9 +156,7 @@ Available deferred tools: ${nameList}`
           // Keyword search
           const keywords = trimmed.toLowerCase().split(/\s+/).filter(Boolean)
           if (keywords.length === 0) {
-            return wrap(
-              `Empty query. Available deferred tools: ${nameList}`,
-            )
+            return wrap(`Empty query. Available deferred tools: ${nameList}`)
           }
 
           const hits = deferredDefs
@@ -166,9 +164,7 @@ Available deferred tools: ${nameList}`
             .slice(0, MAX_KEYWORD_RESULTS)
 
           if (hits.length === 0) {
-            return wrap(
-              `No matches for "${trimmed}". Available: ${nameList}`,
-            )
+            return wrap(`No matches for "${trimmed}". Available: ${nameList}`)
           }
 
           const details = hits

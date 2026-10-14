@@ -3,11 +3,10 @@ function isZero(value: number | bigint): boolean {
   return value === 0 || value === 0n
 }
 
-function sameStatValue(
-  left: number | bigint,
-  right: number | bigint,
-): boolean {
-  return typeof left === typeof right ? left === right : BigInt(left) === BigInt(right)
+function sameStatValue(left: number | bigint, right: number | bigint): boolean {
+  return typeof left === typeof right
+    ? left === right
+    : BigInt(left) === BigInt(right)
 }
 
 function isStatValueProvablyDifferent(

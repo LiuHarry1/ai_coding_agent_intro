@@ -70,7 +70,9 @@ function scpUploadRecursive(
       if (code === 0) resolve()
       else
         reject(
-          new Error(stderr.trim() || `scp -r exited ${code} uploading integrations`),
+          new Error(
+            stderr.trim() || `scp -r exited ${code} uploading integrations`,
+          ),
         )
     })
   })
@@ -137,23 +139,13 @@ export async function ensureRemoteWorker(
   const needUpload = installed !== version
 
   if (needUpload) {
-    await sshExecOk(
-      host,
-      `mkdir -p "$HOME/${homeDir}/${version}"`,
-      { timeoutMs: 20_000 },
-    )
-    await scpUpload(
-      host,
-      localBundle,
-      `${homeDir}/${version}/${bundleName}`,
-    )
+    await sshExecOk(host, `mkdir -p "$HOME/${homeDir}/${version}"`, {
+      timeoutMs: 20_000,
+    })
+    await scpUpload(host, localBundle, `${homeDir}/${version}/${bundleName}`)
     const verLocal = path.join(path.dirname(localBundle), 'version.json')
     if (fs.existsSync(verLocal)) {
-      await scpUpload(
-        host,
-        verLocal,
-        `${homeDir}/${version}/version.json`,
-      )
+      await scpUpload(host, verLocal, `${homeDir}/${version}/version.json`)
     }
 
     await sshExecOk(
@@ -165,11 +157,9 @@ export async function ensureRemoteWorker(
 
   const bridgeUploaded = await ensureRemoteBridge(host, homeDir, version)
 
-  await sshExecOk(
-    host,
-    `test -f "$HOME/${homeDir}/${version}/${bundleName}"`,
-    { timeoutMs: 15_000 },
-  )
+  await sshExecOk(host, `test -f "$HOME/${homeDir}/${version}/${bundleName}"`, {
+    timeoutMs: 15_000,
+  })
 
   return {
     version,

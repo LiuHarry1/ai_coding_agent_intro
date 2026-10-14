@@ -1,7 +1,14 @@
 /**
  * Task output on disk (simplified: no O_NOFOLLOW / symlink init).
  */
-import { mkdirSync, appendFileSync, existsSync, readFileSync, unlinkSync, statSync } from 'fs'
+import {
+  mkdirSync,
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  unlinkSync,
+  statSync,
+} from 'fs'
 import { join } from 'path'
 import { getSessionDataDir } from '../../core/session-paths.js'
 

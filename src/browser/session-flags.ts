@@ -4,10 +4,7 @@
  */
 
 import { SNAPSHOT_TTL_MS } from './limits.js'
-import {
-  parseRefMeta,
-  type RefMeta,
-} from './snapshot-index.js'
+import { parseRefMeta, type RefMeta } from './snapshot-index.js'
 import {
   abortBlockedBrowserTools,
   abortBlockedBrowserToolsEverywhere,
@@ -66,10 +63,7 @@ export function isSnapshotStale(targetId: string): boolean {
   return Date.now() - at > SNAPSHOT_TTL_MS
 }
 
-export function getRefMeta(
-  targetId: string,
-  ref: string,
-): RefMeta | undefined {
+export function getRefMeta(targetId: string, ref: string): RefMeta | undefined {
   return refMetaByTarget.get(targetId)?.get(ref)
 }
 
@@ -102,10 +96,7 @@ export function clearTabMemory(targetId: string): void {
   refMetaByTarget.delete(targetId)
 }
 
-export function setUserHasControl(
-  value: boolean,
-  sessionId?: string,
-): void {
+export function setUserHasControl(value: boolean, sessionId?: string): void {
   const key = lockKey(sessionId)
   const prev = controlBySession.get(key) === true
   if (prev === value) return

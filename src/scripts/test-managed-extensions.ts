@@ -8,10 +8,7 @@ import * as path from 'path'
 import { loadMarkdownConfigs } from '../utils/markdownConfigLoader.js'
 import { loadSkillsFromDisk } from '../skills/loadSkillsDir.js'
 import { loadAgentDefinitions } from '../tools/AgentTool/loadAgents.js'
-import {
-  loadAllAgentRules,
-  loadManagedRules,
-} from '../utils/rules-loader.js'
+import { loadAllAgentRules, loadManagedRules } from '../utils/rules-loader.js'
 import {
   _resetManagedDirCacheForTest,
   getManagedAgentsMdPath,

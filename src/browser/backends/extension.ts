@@ -28,7 +28,9 @@ export interface ExtensionBackendOptions {
 }
 
 /** The relay a given extension backend is speaking through, if any. */
-export function getExtensionRelay(backend: BrowserBackend): RelayServer | undefined {
+export function getExtensionRelay(
+  backend: BrowserBackend,
+): RelayServer | undefined {
   return relays.get(backend)
 }
 

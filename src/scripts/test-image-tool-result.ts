@@ -155,7 +155,9 @@ async function testStrictImageBudget() {
     estimateImageTokens(block.source.data) <= maxTokens,
     'strict image budget must never return an oversized original',
   )
-  const metadata = await sharp(Buffer.from(block.source.data, 'base64')).metadata()
+  const metadata = await sharp(
+    Buffer.from(block.source.data, 'base64'),
+  ).metadata()
   assert.ok((metadata.width ?? Infinity) <= 1280)
   assert.ok((metadata.height ?? Infinity) <= 1280)
   console.log(
@@ -231,9 +233,7 @@ async function testJsFallbackWithoutSharp() {
       result.buffer.length <= 150_000,
       `JS fallback still ${result.buffer.length} bytes`,
     )
-    console.log(
-      `ok JS fallback without sharp (${result.buffer.length} bytes)`,
-    )
+    console.log(`ok JS fallback without sharp (${result.buffer.length} bytes)`)
 
     const pngPixels = Buffer.allocUnsafe(1280 * 800 * 3)
     for (let i = 0; i < pngPixels.length; i++) {
@@ -325,9 +325,7 @@ async function testChatCompletionsProviderRelocatesImage() {
   const relocated = projected[1] as UserMessage
   assert.equal(relocated.role, 'user')
   assert.equal(relocated.isMeta, true)
-  const image = (relocated.content as ImagePart[]).find(
-    p => p.type === 'image',
-  )
+  const image = (relocated.content as ImagePart[]).find(p => p.type === 'image')
   assert.ok(image, 'expected a relocated image part')
   assert.equal(image.mediaType, 'image/png')
   assert.ok(Buffer.isBuffer(image.image))

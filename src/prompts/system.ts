@@ -49,8 +49,7 @@ export async function systemPrompt(
 ): Promise<string> {
   setCwd(cwd)
   const env =
-    (await computeSimpleEnvInfo(modelId)) +
-    workspaceBoundaryPromptSection(cwd)
+    (await computeSimpleEnvInfo(modelId)) + workspaceBoundaryPromptSection(cwd)
   const rulesAppend = projectRules ? `\n\n${projectRules}` : ''
 
   return `You are an interactive agent1 that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.

@@ -35,7 +35,9 @@ export function readSessionIndex(agentHome?: string): SessionIndexFile {
   const filePath = getSessionIndexPath(resolveAgentHome(agentHome))
   if (!fs.existsSync(filePath)) return emptyIndex()
   try {
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as SessionIndexFile
+    const raw = JSON.parse(
+      fs.readFileSync(filePath, 'utf-8'),
+    ) as SessionIndexFile
     if (!raw || raw.version !== 1 || typeof raw.sessions !== 'object') {
       return emptyIndex()
     }
@@ -150,10 +152,7 @@ export function findSessionLocation(
 
   for (const home of listSessionAgentHomes()) {
     if (path.resolve(home) === path.resolve(current)) continue
-    if (
-      preferredHome &&
-      path.resolve(home) === path.resolve(preferredHome)
-    ) {
+    if (preferredHome && path.resolve(home) === path.resolve(preferredHome)) {
       continue
     }
     const e = lookupSessionIndexEntry(sessionId, home)

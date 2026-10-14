@@ -31,11 +31,7 @@ export function dispatchControlResponse(msg: ControlResponse): boolean {
           ? payload.behavior
           : ''
     const behavior =
-      raw === 'always'
-        ? 'always'
-        : raw === 'allow'
-          ? 'allow'
-          : 'deny'
+      raw === 'always' ? 'always' : raw === 'allow' ? 'allow' : 'deny'
     return answerPermission(requestId, { behavior })
   }
 

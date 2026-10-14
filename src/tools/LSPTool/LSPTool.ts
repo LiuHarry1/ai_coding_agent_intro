@@ -12,10 +12,7 @@ import type {
   MarkupContent,
   SymbolInformation,
 } from 'vscode-languageserver-types'
-import type {
-  DualChannelToolResult,
-  ToolDefinition,
-} from '../../core/types.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
 import { LSP_TOOL_NAME } from '../../constants/tool_names.js'
 import { getLspManager } from '../../services/lsp/manager.js'
 import { resolvePath } from '../utils.js'
@@ -169,7 +166,9 @@ Requires lspServers configuration in .ai-agent/settings.json for the file extens
             const opened = await worker.lspIsFileOpen(absolutePath)
             if (!opened) {
               const content = await worker.readText(absolutePath)
-              if (Buffer.byteLength(content, 'utf8') > MAX_LSP_FILE_SIZE_BYTES) {
+              if (
+                Buffer.byteLength(content, 'utf8') > MAX_LSP_FILE_SIZE_BYTES
+              ) {
                 return `File too large for LSP analysis (${Math.ceil(Buffer.byteLength(content, 'utf8') / 1_000_000)}MB exceeds 10MB limit).`
               }
               await worker.lspOpenFile(absolutePath, content)

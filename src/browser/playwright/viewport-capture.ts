@@ -59,7 +59,9 @@ export async function captureViewport(
         setTimeout(
           () =>
             reject(
-              new Error(`Page.captureScreenshot: Timeout ${timeoutMs}ms exceeded.`),
+              new Error(
+                `Page.captureScreenshot: Timeout ${timeoutMs}ms exceeded.`,
+              ),
             ),
           timeoutMs,
         ),

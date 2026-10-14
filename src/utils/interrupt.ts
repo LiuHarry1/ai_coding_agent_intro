@@ -41,9 +41,7 @@ export function isInterruptMessage(msg: Message): boolean {
           )
           .map(p => p.text)
           .join('')
-  return (
-    text === INTERRUPT_MESSAGE || text === INTERRUPT_MESSAGE_FOR_TOOL_USE
-  )
+  return text === INTERRUPT_MESSAGE || text === INTERRUPT_MESSAGE_FOR_TOOL_USE
 }
 
 export function createUserInterruptionMessage(opts?: {
@@ -166,15 +164,12 @@ export function appendUserInterruption(
 
   const last = messages.at(-1)
   if (last && isInterruptMessage(last)) {
-    return opts?.toolUse
-      ? INTERRUPT_MESSAGE_FOR_TOOL_USE
-      : INTERRUPT_MESSAGE
+    return opts?.toolUse ? INTERRUPT_MESSAGE_FOR_TOOL_USE : INTERRUPT_MESSAGE
   }
 
   const msg = createUserInterruptionMessage(opts)
   messages.push(msg)
-  const text =
-    typeof msg.content === 'string' ? msg.content : INTERRUPT_MESSAGE
+  const text = typeof msg.content === 'string' ? msg.content : INTERRUPT_MESSAGE
   wire.interrupted({ tool_use: opts?.toolUse === true, text })
   return text
 }

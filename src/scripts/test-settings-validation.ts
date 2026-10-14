@@ -31,8 +31,15 @@ withTempDir(dir => {
     }),
   )
   const resolved = resolveSettings(dir)
-  assert.ok(resolved.validationErrors.length > 0, 'invalid enabled type rejected')
-  assert.equal(resolved.config.compaction.enabled, true, 'defaults kept when layer invalid')
+  assert.ok(
+    resolved.validationErrors.length > 0,
+    'invalid enabled type rejected',
+  )
+  assert.equal(
+    resolved.config.compaction.enabled,
+    true,
+    'defaults kept when layer invalid',
+  )
   console.log('[ok] invalid compaction.enabled rejected')
 })
 
@@ -108,7 +115,9 @@ withTempDir(dir => {
     'deny applied',
   )
   assert.equal(resolved.config.permissions?.defaultMode, 'dontAsk')
-  console.log('[ok] permissions.allow / deny / additionalDirectories / defaultMode applied')
+  console.log(
+    '[ok] permissions.allow / deny / additionalDirectories / defaultMode applied',
+  )
 })
 
 withTempDir(dir => {
@@ -154,7 +163,11 @@ withTempDir(dir => {
   const projectErrors = resolved.validationErrors.filter(e =>
     e.file.includes(dir),
   )
-  assert.equal(projectErrors.length, 0, 'jdtls without extensionToLanguage is valid')
+  assert.equal(
+    projectErrors.length,
+    0,
+    'jdtls without extensionToLanguage is valid',
+  )
   assert.deepEqual(resolved.config.disabledTools, ['Bash'])
   console.log('[ok] disabled LSP entry without extensionToLanguage loads')
 })

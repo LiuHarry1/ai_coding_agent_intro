@@ -49,8 +49,7 @@ const EXT_TO_MIME: Record<string, ImageMediaType> = {
 }
 
 /** Image-only filename allowlist (ImagePart refs, `hydrateImageBytes`). */
-export const CHAT_UPLOAD_FILE_RE =
-  /^[A-Za-z0-9_-]+\.(png|jpe?g|gif|webp)$/
+export const CHAT_UPLOAD_FILE_RE = /^[A-Za-z0-9_-]+\.(png|jpe?g|gif|webp)$/
 
 /**
  * Filename allowlist for GET /sessions/:id/uploads/:file and non-image
@@ -58,7 +57,8 @@ export const CHAT_UPLOAD_FILE_RE =
  * character class doubles as path-traversal defence (no dots, no separators
  * in the stem).
  */
-export const CHAT_UPLOAD_ANY_FILE_RE = /^[A-Za-z0-9_-]{1,120}\.[A-Za-z0-9]{1,12}$/
+export const CHAT_UPLOAD_ANY_FILE_RE =
+  /^[A-Za-z0-9_-]{1,120}\.[A-Za-z0-9]{1,12}$/
 
 export function normalizeImageMediaType(raw: string): ImageMediaType {
   const mime = raw.toLowerCase().split(';')[0]!.trim()
@@ -267,7 +267,9 @@ export async function saveChatAttachment(
   const mediaType = attachmentMediaType(originalName, meta.mediaType)
   // Images must land on a CHAT_UPLOAD_FILE_RE name (`jpg` → `jpeg`) so
   // buildUserMessage / hydrateImageBytes accept the claim-check URL.
-  let ext = normalizeExt(originalName).replace(/[^a-z0-9]/g, '').slice(0, 12)
+  let ext = normalizeExt(originalName)
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 12)
   if (kind === 'image') ext = imageUploadExt(ext, mediaType)
   const fileName = `${randomUUID().replace(/-/g, '').slice(0, 12)}-${sanitizeUploadStem(originalName)}.${ext || 'bin'}`
 
@@ -366,17 +368,13 @@ export function hydrateImageBytes(
   if (Buffer.isBuffer(image)) {
     return {
       buffer: image,
-      mediaType: mediaType
-        ? normalizeImageMediaType(mediaType)
-        : 'image/png',
+      mediaType: mediaType ? normalizeImageMediaType(mediaType) : 'image/png',
     }
   }
   if (image instanceof Uint8Array) {
     return {
       buffer: Buffer.from(image),
-      mediaType: mediaType
-        ? normalizeImageMediaType(mediaType)
-        : 'image/png',
+      mediaType: mediaType ? normalizeImageMediaType(mediaType) : 'image/png',
     }
   }
   if (typeof image === 'string') {

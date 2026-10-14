@@ -11,9 +11,7 @@ import {
 } from '../../core/agent-picker-workspace.js'
 import { getDefaultWorkspace } from '../../core/workspace.js'
 import { normalizeWorkspacePath } from '../../core/workspace-path.js'
-import {
-  isValidExternalMode,
-} from '../../core/permission-mode.js'
+import { isValidExternalMode } from '../../core/permission-mode.js'
 import { isScheduledTasksEnabled } from '../../services/cron/settings.js'
 import {
   cancelCronTask,
@@ -57,7 +55,11 @@ async function ensureSession(
   agentType?: unknown,
   mode?: unknown,
 ): Promise<
-  | { ok: true; session: NonNullable<ReturnType<typeof getSession>>; created: boolean }
+  | {
+      ok: true
+      session: NonNullable<ReturnType<typeof getSession>>
+      created: boolean
+    }
   | { ok: false; status: number; error: string }
 > {
   const authed = req as AuthedRequest
@@ -66,10 +68,7 @@ async function ensureSession(
 
   if (typeof sessionId === 'string' && sessionId.length > 0) {
     const session = getSession(sessionId)
-    if (
-      !session ||
-      !canAccessSession(session, requesterEmail, requesterRole)
-    ) {
+    if (!session || !canAccessSession(session, requesterEmail, requesterRole)) {
       return { ok: false, status: 404, error: 'Session not found' }
     }
     return { ok: true, session, created: false }
@@ -97,7 +96,10 @@ async function ensureSession(
         : typeof agentType === 'string'
           ? agentType
           : undefined
-    if (requestedType !== undefined && !pickerAgentTypeError(picker, requestedType)) {
+    if (
+      requestedType !== undefined &&
+      !pickerAgentTypeError(picker, requestedType)
+    ) {
       session.agentType = requestedType
     }
     appendModeChange(session.id, session)
@@ -197,7 +199,8 @@ export async function handleScheduledTasks(
       prompt: typeof body.prompt === 'string' ? body.prompt : '',
       cron: typeof body.cron === 'string' ? body.cron : undefined,
       at: typeof body.at === 'string' ? body.at : undefined,
-      recurring: typeof body.recurring === 'boolean' ? body.recurring : undefined,
+      recurring:
+        typeof body.recurring === 'boolean' ? body.recurring : undefined,
       environmentId:
         session.workspace?.environmentId ??
         (typeof body.environmentId === 'string'

@@ -30,9 +30,7 @@ function TranscriptRow({ element, streamingTail = false }) {
     )
   }
 
-  return (
-    <BubbleRow bubbleId={element.bubbleId} streamingTail={streamingTail} />
-  )
+  return <BubbleRow bubbleId={element.bubbleId} streamingTail={streamingTail} />
 }
 
 export default memo(TranscriptRow, (prev, next) => {

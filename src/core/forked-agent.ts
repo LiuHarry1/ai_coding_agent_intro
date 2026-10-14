@@ -83,11 +83,7 @@ export function createSubagentContext(
   parent?: ToolContext,
   overrides?: SubagentContextOverrides,
 ): ToolContext {
-  const {
-    shareEventBus,
-    shareWire,
-    ...fieldOverrides
-  } = overrides ?? {}
+  const { shareEventBus, shareWire, ...fieldOverrides } = overrides ?? {}
 
   return {
     eventBus:
@@ -112,7 +108,8 @@ export function createSubagentContext(
     sessionId: fieldOverrides.sessionId ?? parent?.sessionId,
     session: fieldOverrides.session,
     cwd: fieldOverrides.cwd ?? parent?.cwd,
-    permissionContext: fieldOverrides.permissionContext ?? parent?.permissionContext,
+    permissionContext:
+      fieldOverrides.permissionContext ?? parent?.permissionContext,
   }
 }
 
@@ -155,10 +152,7 @@ export function applyCanUseTool(
   return out
 }
 
-type ToolExecute = (
-  args: unknown,
-  options?: unknown,
-) => Promise<unknown>
+type ToolExecute = (args: unknown, options?: unknown) => Promise<unknown>
 
 /**
  * Replace one tool's `execute` while keeping description/inputSchema.
@@ -286,7 +280,8 @@ export async function runForkedAgent(
     eventBus: params.eventBus ?? params.contextOverrides?.eventBus,
     wire: params.wire ?? params.contextOverrides?.wire,
     provider,
-    cwd: params.cwd ?? params.contextOverrides?.cwd ?? cache?.toolUseContext?.cwd,
+    cwd:
+      params.cwd ?? params.contextOverrides?.cwd ?? cache?.toolUseContext?.cwd,
     sessionId:
       params.sessionId ??
       params.contextOverrides?.sessionId ??
@@ -386,10 +381,7 @@ export async function runForkedAgent(
  * Resolve a tool file_path against an allowed absolute path.
  * Used by canUseTool gates and path-locked Edit tools.
  */
-export function resolveToolFilePath(
-  filePath: string,
-  cwd?: string,
-): string {
+export function resolveToolFilePath(filePath: string, cwd?: string): string {
   if (path.isAbsolute(filePath)) return path.normalize(filePath)
   return path.resolve(cwd ?? process.cwd(), filePath)
 }

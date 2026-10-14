@@ -151,14 +151,17 @@ export function createDownloadCaptureForPage(
       }
       page.on('download', state.handler as never)
     }
-    timer = setTimeout(() => {
-      if (done) {
-        return
-      }
-      done = true
-      cleanup()
-      reject(new Error(opts.timeoutMessage ?? 'Timeout waiting for download'))
-    }, Math.max(1, timeoutMs))
+    timer = setTimeout(
+      () => {
+        if (done) {
+          return
+        }
+        done = true
+        cleanup()
+        reject(new Error(opts.timeoutMessage ?? 'Timeout waiting for download'))
+      },
+      Math.max(1, timeoutMs),
+    )
     timer.unref?.()
     abort = () => {
       if (done) {

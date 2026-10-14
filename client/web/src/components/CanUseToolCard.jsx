@@ -3,7 +3,10 @@ import { useChatActions } from '../lib/chat-actions.jsx'
 
 function parentDir(filePath) {
   const normalized = filePath.replace(/[/\\]+$/, '')
-  const idx = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
+  const idx = Math.max(
+    normalized.lastIndexOf('/'),
+    normalized.lastIndexOf('\\'),
+  )
   if (idx <= 0) return normalized
   return normalized.slice(0, idx) || normalized
 }
@@ -82,9 +85,7 @@ export default function CanUseToolCard({ part }) {
     <div className='ask-card perm-card'>
       <div className='perm-card__header'>
         <span className='perm-card__title'>{toolLabel}</span>
-        {outside && (
-          <span className='perm-card__badge'>Outside workspace</span>
-        )}
+        {outside && <span className='perm-card__badge'>Outside workspace</span>}
       </div>
       {target ? (
         <code className='perm-card__path'>{target}</code>

@@ -58,10 +58,7 @@ export class Middleware implements IMiddleware {
   }
 }
 
-export function createTimingMiddleware(
-  wire: WireEmitter,
-  logLabel = 'main',
-) {
+export function createTimingMiddleware(wire: WireEmitter, logLabel = 'main') {
   const tag = `agent:${logLabel}`
   return {
     afterTool(ctx: MiddlewareContext): void {

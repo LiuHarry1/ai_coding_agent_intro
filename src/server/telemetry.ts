@@ -109,9 +109,7 @@ async function postIngest(path: string, body: unknown): Promise<void> {
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    debugWarn(
-      `[telemetry] ${path} HTTP ${res.status}: ${text.slice(0, 200)}`,
-    )
+    debugWarn(`[telemetry] ${path} HTTP ${res.status}: ${text.slice(0, 200)}`)
   }
 }
 

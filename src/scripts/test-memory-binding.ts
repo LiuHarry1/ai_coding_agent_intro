@@ -204,7 +204,10 @@ try {
       privateGuide.includes('external system'),
       'external vocabulary in prompt',
     )
-    assert(!privateGuide.includes(autoDir), 'private prompt does not name shared')
+    assert(
+      !privateGuide.includes(autoDir),
+      'private prompt does not name shared',
+    )
     assert(
       privateBind.prompt.dir === privateBind.writeDir &&
         privateBind.writeDir === privateBind.roots.write[0] &&
@@ -224,10 +227,7 @@ try {
     const reviewerDir = getAgentMemoryDir('code-reviewer', 'project', cwd)
     assert(mentioned.readDirs[0] === reviewerDir, 'mention switches read')
     assert(mentioned.writeDir === autoDir, 'mention keeps shared write')
-    assert(
-      mentioned.prompt.dir === autoDir,
-      'mention does not move prompt dir',
-    )
+    assert(mentioned.prompt.dir === autoDir, 'mention does not move prompt dir')
     assert(mentioned.extract.enabled === true, 'mention extract still on')
     assert(
       mentioned.roots.write[0] === autoDir,

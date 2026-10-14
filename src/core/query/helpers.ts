@@ -12,7 +12,10 @@ import type {
 import { isRoleMessage } from '../types.js'
 import type { WireEmitter } from '../wire-emitter.js'
 import { emitTodoUpdate } from '../wire-internal.js'
-import { TOOL_SEARCH_TOOL_NAME, TODO_WRITE_TOOL_NAME } from '../../constants/tool_names.js'
+import {
+  TOOL_SEARCH_TOOL_NAME,
+  TODO_WRITE_TOOL_NAME,
+} from '../../constants/tool_names.js'
 import type { StreamResult } from '../agent/streamConsumer.js'
 import {
   mediaTypeForExt,
@@ -29,7 +32,11 @@ import {
   getMaxOutputTokens,
 } from '../llm/max-tokens.js'
 
-export { DEFAULT_MAX_OUTPUT_TOKENS, applyMaxTokensToChatBody, getMaxOutputTokens }
+export {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  applyMaxTokensToChatBody,
+  getMaxOutputTokens,
+}
 
 export const MAX_TRANSIENT_RETRIES = 2
 /** Max retry attempts for overflow max_tokens adjustment */

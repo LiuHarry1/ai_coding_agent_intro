@@ -42,7 +42,8 @@ function extractJsonTitle(text: string): string | null {
     .split('\n')
     .map(l => l.trim())
     .find(l => l && !l.startsWith('{'))
-  if (line && line.split(/\s+/).length <= 10) return line.replace(/^["']|["']$/g, '')
+  if (line && line.split(/\s+/).length <= 10)
+    return line.replace(/^["']|["']$/g, '')
   return null
 }
 

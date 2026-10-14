@@ -1,8 +1,5 @@
 import { useStreamingExpanded } from './use-streaming-expanded.js'
-import {
-  resolveExpandArgs,
-  resolveChevron,
-} from './tool-density-policy.js'
+import { resolveExpandArgs, resolveChevron } from './tool-density-policy.js'
 
 /**
  * Hook: density-aware expand state for tool rows.

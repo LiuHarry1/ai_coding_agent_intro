@@ -78,10 +78,7 @@ async function main() {
       )
       assert.strictEqual(okRes.status, 200)
       assert.match(okRes.headers.get('content-type') || '', /text\/html/)
-      assert.match(
-        okRes.headers.get('content-disposition') || '',
-        /inline/i,
-      )
+      assert.match(okRes.headers.get('content-disposition') || '', /inline/i)
       assert.equal(
         okRes.headers.get('content-security-policy'),
         'sandbox allow-scripts allow-downloads',

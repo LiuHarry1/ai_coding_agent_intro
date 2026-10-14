@@ -77,12 +77,10 @@ export function createThrottledSet(set, get, ms = TOOL_STREAM_THROTTLE_MS) {
     return { ...base, ...patch }
   }
 
-  const compose =
-    (a, b) =>
-    s => {
-      const mid = merge(s, a(s))
-      return merge(mid, b(mid))
-    }
+  const compose = (a, b) => s => {
+    const mid = merge(s, a(s))
+    return merge(mid, b(mid))
+  }
 
   const flush = () => {
     if (timer != null) {

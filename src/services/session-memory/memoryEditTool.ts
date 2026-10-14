@@ -8,7 +8,10 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { AnyTool } from '../../core/types.js'
 import { EDIT_FILE_TOOL_NAME } from '../../constants/tool_names.js'
-import { pathsMatchExact, resolveToolFilePath } from '../../core/forked-agent.js'
+import {
+  pathsMatchExact,
+  resolveToolFilePath,
+} from '../../core/forked-agent.js'
 
 function countOccurrences(text: string, search: string): number {
   let count = 0
@@ -56,9 +59,7 @@ export function createMemoryFileEditTool(memoryPath: string): AnyTool {
       `ONLY file_path=${allowed} is allowed. ` +
       'old_string must match exactly (whitespace matters) and be unique unless replace_all is true.',
     inputSchema: z.object({
-      file_path: z
-        .string()
-        .describe(`Must be exactly: ${allowed}`),
+      file_path: z.string().describe(`Must be exactly: ${allowed}`),
       old_string: z
         .string()
         .describe(
@@ -93,8 +94,7 @@ export function createMemoryFileEditTool(memoryPath: string): AnyTool {
         return `Error: ${file_path} is a directory`
       if (old_string === new_string)
         return `Error: old_string and new_string are identical`
-      if (!old_string)
-        return `Error: old_string cannot be empty`
+      if (!old_string) return `Error: old_string cannot be empty`
 
       const content = fs.readFileSync(abs, 'utf-8')
 

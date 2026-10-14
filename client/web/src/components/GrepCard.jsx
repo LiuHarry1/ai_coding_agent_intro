@@ -90,8 +90,7 @@ function fromToolUseResult(toolUseResult) {
 /** Secondary: `dir -- N matches` | `N matches` | `dir` */
 function fileSecondary(dir, matchCount) {
   const n = typeof matchCount === 'number' ? matchCount : 0
-  const matchPart =
-    n > 0 ? `${n} ${n === 1 ? 'match' : 'matches'}` : null
+  const matchPart = n > 0 ? `${n} ${n === 1 ? 'match' : 'matches'}` : null
   if (dir && matchPart) return `${dir} -- ${matchPart}`
   if (matchPart) return matchPart
   return dir || null
@@ -205,8 +204,7 @@ export default function GrepCard({ part, nested = false }) {
     }))
   }, [parsed, contentGroups])
 
-  const hasBody =
-    isError || (!!parsed && (parsed.empty || fileHits.length > 0))
+  const hasBody = isError || (!!parsed && (parsed.empty || fileHits.length > 0))
 
   const [expanded, toggleExpanded, chevron] = useToolDensityExpand(
     'explore-line',
@@ -243,8 +241,7 @@ export default function GrepCard({ part, nested = false }) {
   }
 
   const subtitle = filterBits.length > 0 ? filterBits.join(' \u00B7 ') : null
-  const emptyHint =
-    isDone && !isError && parsed?.empty ? 'No matches' : null
+  const emptyHint = isDone && !isError && parsed?.empty ? 'No matches' : null
 
   const action = toolActionLabel('grep', {
     loading: !isDone,
@@ -321,21 +318,18 @@ export default function GrepCard({ part, nested = false }) {
         </ul>
       )}
 
-      {isDone &&
-        !isError &&
-        !isContentMode &&
-        fileHits.length > 0 && (
-          <ul className='grep-results'>
-            {fileHits.map(f => (
-              <GrepFileRow
-                key={f.path}
-                path={f.path}
-                matchCount={f.matchCount}
-                onOpen={handleOpen}
-              />
-            ))}
-          </ul>
-        )}
+      {isDone && !isError && !isContentMode && fileHits.length > 0 && (
+        <ul className='grep-results'>
+          {fileHits.map(f => (
+            <GrepFileRow
+              key={f.path}
+              path={f.path}
+              matchCount={f.matchCount}
+              onOpen={handleOpen}
+            />
+          ))}
+        </ul>
+      )}
 
       {isDone && !isError && parsed?.empty && (
         <div className='grep-empty'>No matches</div>

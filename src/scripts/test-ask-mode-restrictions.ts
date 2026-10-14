@@ -53,7 +53,10 @@ const afterDeny = filterToolsRecordByDisallowedGlobs(plan, [
   'Edit',
   'Write',
 ])
-assert(!afterDeny[EXIT_PLAN_MODE_TOOL_NAME], 'deny after mode drops ExitPlanMode')
+assert(
+  !afterDeny[EXIT_PLAN_MODE_TOOL_NAME],
+  'deny after mode drops ExitPlanMode',
+)
 assert(!afterDeny[EDIT_FILE_TOOL_NAME], 'deny after mode drops Edit')
 assert(!afterDeny[WRITE_FILE_TOOL_NAME], 'deny after mode drops Write')
 

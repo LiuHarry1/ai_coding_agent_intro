@@ -36,7 +36,10 @@ import type {
   UserContentPart,
   UserFileAttachment,
 } from '../../core/types.js'
-import { resolveChatAttachmentAbsPath, saveChatUpload } from '../chat-uploads.js'
+import {
+  resolveChatAttachmentAbsPath,
+  saveChatUpload,
+} from '../chat-uploads.js'
 import {
   fallbackImageForModel,
   isImageResizeError,
@@ -82,7 +85,9 @@ export type ResolvedChatAttachments = {
   warnings: string[]
 }
 
-export function isChatAttachmentRef(value: unknown): value is ChatAttachmentRef {
+export function isChatAttachmentRef(
+  value: unknown,
+): value is ChatAttachmentRef {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -144,7 +149,10 @@ async function pdfPageImageMessages(
   for (const page of pages) {
     const imgPath = path.join(dir, page)
     const raw = fs.readFileSync(imgPath)
-    let resized: { buffer: Buffer; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' }
+    let resized: {
+      buffer: Buffer
+      mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+    }
     try {
       resized = await maybeResizeAndDownsampleImageBuffer(raw, 'image/jpeg')
     } catch (err) {
@@ -215,10 +223,7 @@ async function resolvePdfAttachment(
         },
       ]
       return {
-        messages: [
-          ...header,
-          { role: 'user', content: parts, isMeta: true },
-        ],
+        messages: [...header, { role: 'user', content: parts, isMeta: true }],
       }
     }
     // Oversized/corrupt for a document block — fall through to page images.
@@ -343,9 +348,7 @@ export async function resolveChatAttachments(
   }
   if (!refs?.length) return result
   if (refs.length > CHAT_ATTACHMENT_MAX_COUNT) {
-    throw new Error(
-      `Too many attachments (max ${CHAT_ATTACHMENT_MAX_COUNT})`,
-    )
+    throw new Error(`Too many attachments (max ${CHAT_ATTACHMENT_MAX_COUNT})`)
   }
 
   for (const ref of refs) {
@@ -398,7 +401,10 @@ export async function resolveChatAttachments(
       }
 
       if (kind === 'text') {
-        const { messages, warning } = resolveTextAttachment(absPath, displayName)
+        const { messages, warning } = resolveTextAttachment(
+          absPath,
+          displayName,
+        )
         result.preludeMessages.push(...messages)
         if (warning) result.warnings.push(warning)
         continue

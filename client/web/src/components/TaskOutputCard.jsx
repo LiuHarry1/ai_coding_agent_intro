@@ -42,8 +42,7 @@ export default function TaskOutputCard({ part }) {
   const args = part.args || {}
   const tur = getTur(part)
   const taskId = tur?.task_id || args.task_id || args.shell_id || ''
-  const result =
-    typeof tur?.text === 'string' ? tur.text : part.result
+  const result = typeof tur?.text === 'string' ? tur.text : part.result
   const isDone = part.status === 'done'
   const isError =
     isDone &&
@@ -61,10 +60,7 @@ export default function TaskOutputCard({ part }) {
 
   const hasOutput = typeof displayBody === 'string' && displayBody.length > 0
   const shortSuccess =
-    isDone &&
-    !isError &&
-    hasOutput &&
-    displayBody.length <= SHORT_OUTPUT_CHARS
+    isDone && !isError && hasOutput && displayBody.length <= SHORT_OUTPUT_CHARS
   const retrieval = tur?.retrieval_status ?? null
   const taskStatus = tur?.task_status ?? null
 

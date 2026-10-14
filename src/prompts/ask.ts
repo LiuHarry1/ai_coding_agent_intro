@@ -19,8 +19,7 @@ export async function askSystemPrompt(
 ): Promise<string> {
   setCwd(cwd)
   const env =
-    (await computeSimpleEnvInfo(modelId)) +
-    workspaceBoundaryPromptSection(cwd)
+    (await computeSimpleEnvInfo(modelId)) + workspaceBoundaryPromptSection(cwd)
 
   const sections = [
     `You are an expert coding assistant in **Ask mode**.`,

@@ -63,4 +63,3 @@ assert.equal(failures.length, 0, failures.join('\n'))
 console.log(
   `ok per-tool coverage gate (${Object.keys(requiredFiles).length} implementation files)`,
 )
-

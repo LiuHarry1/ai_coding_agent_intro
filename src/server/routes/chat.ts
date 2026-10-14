@@ -70,17 +70,17 @@ export async function handleChat(
     agentType,
     environmentId,
   } = body as {
-      message?: string
-      workspace?: string
-      session_id?: string
-      /** @deprecated Image-only predecessor of `attachments`. */
-      images?: string[]
-      attachments?: unknown[]
-      mode?: string
-      agentType?: string | null
-      /** Optional: bind/use execution environment (default local). */
-      environmentId?: string
-    }
+    message?: string
+    workspace?: string
+    session_id?: string
+    /** @deprecated Image-only predecessor of `attachments`. */
+    images?: string[]
+    attachments?: unknown[]
+    mode?: string
+    agentType?: string | null
+    /** Optional: bind/use execution environment (default local). */
+    environmentId?: string
+  }
   if (!message) {
     sendJSON(res, 400, { error: "Missing 'message' field" })
     return
@@ -136,7 +136,11 @@ export async function handleChat(
       typeof workspace === 'string' && workspace.length > 0 ? workspace : cwd
     if (envId !== 'local') {
       // Remote: require an absolute-looking remote path from the picker.
-      if (!bindCwd || bindCwd.includes('\\') || (!bindCwd.startsWith('/') && !bindCwd.startsWith('~'))) {
+      if (
+        !bindCwd ||
+        bindCwd.includes('\\') ||
+        (!bindCwd.startsWith('/') && !bindCwd.startsWith('~'))
+      ) {
         sendJSON(res, 400, {
           error:
             'Remote workspace not bound. Use Remote picker to connect and Open Folder first.',
@@ -225,11 +229,7 @@ async function handleChatLocked(
   const isFreshSession = session.messages.length === 0
 
   // New session with no client override → workspace picker defaults.
-  if (
-    isFreshSession &&
-    mode === undefined &&
-    agentType === undefined
-  ) {
+  if (isFreshSession && mode === undefined && agentType === undefined) {
     applyPickerDefaultsToSession(session, picker)
   }
 

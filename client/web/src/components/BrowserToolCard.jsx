@@ -183,16 +183,19 @@ function BrowserToolCard({ part, nested = false }) {
   const toolName = part.name || ''
   const args = part.args || {}
   const isDone = part.status === 'done'
-  const tur = part.toolUseResult && typeof part.toolUseResult === 'object'
-    ? part.toolUseResult
-    : null
+  const tur =
+    part.toolUseResult && typeof part.toolUseResult === 'object'
+      ? part.toolUseResult
+      : null
 
   const isError =
     isDone &&
     (part.isError === true ||
       (typeof part.result === 'string' && part.result.startsWith('Error:')))
 
-  const { src: shotSrc, failed: shotFailed } = useAuthedImage(tur?.screenshotUrl)
+  const { src: shotSrc, failed: shotFailed } = useAuthedImage(
+    tur?.screenshotUrl,
+  )
 
   const consoleErrors = useMemo(
     () => (Array.isArray(tur?.consoleErrors) ? tur.consoleErrors : []),
@@ -243,7 +246,8 @@ function BrowserToolCard({ part, nested = false }) {
       ? browserErrorBody(part.result)
       : null
 
-  const pageState = tur?.pageState && typeof tur.pageState === 'object' ? tur.pageState : null
+  const pageState =
+    tur?.pageState && typeof tur.pageState === 'object' ? tur.pageState : null
 
   return (
     <ToolChrome
@@ -272,114 +276,117 @@ function BrowserToolCard({ part, nested = false }) {
       showSuccess={false}
     >
       <div className='browser-body'>
-          {errorDetail && <div className='browser-error'>{errorDetail}</div>}
+        {errorDetail && <div className='browser-error'>{errorDetail}</div>}
 
-          {pageState && (
-            <div className='browser-page-state'>
-              <span>
-                {pageState.mode || 'snapshot'}
-                {typeof pageState.chars === 'number' ? ` · ${pageState.chars} chars` : ''}
-                {pageState.truncated ? ' · truncated' : ''}
+        {pageState && (
+          <div className='browser-page-state'>
+            <span>
+              {pageState.mode || 'snapshot'}
+              {typeof pageState.chars === 'number'
+                ? ` · ${pageState.chars} chars`
+                : ''}
+              {pageState.truncated ? ' · truncated' : ''}
+            </span>
+            {pageState.artifactPath ? (
+              <span
+                className='browser-page-state-path'
+                title={pageState.artifactPath}
+              >
+                {pageState.artifactPath}
               </span>
-              {pageState.artifactPath ? (
-                <span className='browser-page-state-path' title={pageState.artifactPath}>
-                  {pageState.artifactPath}
+            ) : null}
+          </div>
+        )}
+
+        {tur?.screenshotUrl && !shotFailed && (
+          <div className='browser-shot'>
+            {shotSrc ? (
+              <img src={shotSrc} alt={tur.message || 'Browser screenshot'} />
+            ) : (
+              <div className='browser-shot-loading'>
+                <span className='spinner spinner-sm' />
+                Loading screenshot…
+              </div>
+            )}
+          </div>
+        )}
+
+        {consoleErrors.length > 0 && (
+          <ul className='browser-console'>
+            {consoleErrors.map((entry, i) => (
+              <li key={i} className={`browser-console-${entry.level}`}>
+                <span className='browser-console-level'>{entry.level}</span>
+                <span className='browser-console-text'>{entry.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {network.length > 0 && (
+          <ul className='browser-network'>
+            {network.map((r, i) => (
+              <li
+                key={i}
+                className={
+                  r.failed
+                    ? 'browser-net-failed'
+                    : r.pending
+                      ? 'browser-net-pending'
+                      : r.status >= 400
+                        ? 'browser-net-bad'
+                        : 'browser-net-ok'
+                }
+              >
+                <span className='browser-net-status'>
+                  {r.pending ? '···' : r.failed ? 'ERR' : r.status}
                 </span>
-              ) : null}
-            </div>
-          )}
+                <span className='browser-net-method'>{r.method}</span>
+                <span className='browser-net-url'>{compactUrl(r.url)}</span>
+                <span className='browser-net-note'>
+                  {r.pending
+                    ? 'pending'
+                    : r.failed
+                      ? `never sent — ${r.error}`
+                      : `${r.durationMs}ms`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
 
-          {tur?.screenshotUrl && !shotFailed && (
-            <div className='browser-shot'>
-              {shotSrc ? (
-                <img src={shotSrc} alt={tur.message || 'Browser screenshot'} />
-              ) : (
-                <div className='browser-shot-loading'>
-                  <span className='spinner spinner-sm' />
-                  Loading screenshot…
-                </div>
-              )}
-            </div>
-          )}
-
-          {consoleErrors.length > 0 && (
-            <ul className='browser-console'>
-              {consoleErrors.map((entry, i) => (
-                <li key={i} className={`browser-console-${entry.level}`}>
-                  <span className='browser-console-level'>{entry.level}</span>
-                  <span className='browser-console-text'>{entry.text}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {network.length > 0 && (
-            <ul className='browser-network'>
-              {network.map((r, i) => (
-                <li
-                  key={i}
-                  className={
-                    r.failed
-                      ? 'browser-net-failed'
-                      : r.pending
-                        ? 'browser-net-pending'
-                        : r.status >= 400
-                          ? 'browser-net-bad'
-                          : 'browser-net-ok'
+        {tur?.value !== undefined && (
+          <pre className='browser-value'>
+            {typeof tur.value === 'string'
+              ? tur.value.length > 400
+                ? `${tur.value.slice(0, 399)}\u2026`
+                : tur.value
+              : (() => {
+                  try {
+                    const raw = JSON.stringify(tur.value, null, 2)
+                    return raw.length > 400 ? `${raw.slice(0, 399)}\u2026` : raw
+                  } catch {
+                    return String(tur.value)
                   }
-                >
-                  <span className='browser-net-status'>
-                    {r.pending ? '···' : r.failed ? 'ERR' : r.status}
-                  </span>
-                  <span className='browser-net-method'>{r.method}</span>
-                  <span className='browser-net-url'>{compactUrl(r.url)}</span>
-                  <span className='browser-net-note'>
-                    {r.pending
-                      ? 'pending'
-                      : r.failed
-                        ? `never sent — ${r.error}`
-                        : `${r.durationMs}ms`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+                })()}
+          </pre>
+        )}
 
-          {tur?.value !== undefined && (
-            <pre className='browser-value'>
-              {typeof tur.value === 'string'
-                ? tur.value.length > 400
-                  ? `${tur.value.slice(0, 399)}\u2026`
-                  : tur.value
-                : (() => {
-                    try {
-                      const raw = JSON.stringify(tur.value, null, 2)
-                      return raw.length > 400
-                        ? `${raw.slice(0, 399)}\u2026`
-                        : raw
-                    } catch {
-                      return String(tur.value)
-                    }
-                  })()}
-            </pre>
-          )}
-
-          {Array.isArray(tur?.tabs) && (
-            <ul className='browser-tabs'>
-              {tur.tabs.map(tab => (
-                <li
-                  key={tab.targetId}
-                  className={tab.current ? 'is-current' : ''}
-                >
-                  <span className='browser-tab-title'>
-                    {tab.title || '(untitled)'}
-                  </span>
-                  <span className='browser-tab-url'>{compactUrl(tab.url)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {Array.isArray(tur?.tabs) && (
+          <ul className='browser-tabs'>
+            {tur.tabs.map(tab => (
+              <li
+                key={tab.targetId}
+                className={tab.current ? 'is-current' : ''}
+              >
+                <span className='browser-tab-title'>
+                  {tab.title || '(untitled)'}
+                </span>
+                <span className='browser-tab-url'>{compactUrl(tab.url)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </ToolChrome>
   )
 }

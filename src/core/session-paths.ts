@@ -6,10 +6,7 @@
  * Miss does NOT invent a location.
  */
 import * as path from 'path'
-import {
-  getAppDirName,
-  getProcessAppDir,
-} from '../utils/app-dir.js'
+import { getAppDirName, getProcessAppDir } from '../utils/app-dir.js'
 import { findCanonicalGitRoot } from '../utils/git-root.js'
 import { resolveAgentHome } from '../utils/request-scope.js'
 import { sanitizePath } from '../utils/sanitize-path.js'
@@ -119,7 +116,10 @@ export function sessionDataDir(
   loc: SessionLocation,
   sessionId: string,
 ): string {
-  return path.join(getProjectSessionDir(loc.projectKey, loc.agentHome), sessionId)
+  return path.join(
+    getProjectSessionDir(loc.projectKey, loc.agentHome),
+    sessionId,
+  )
 }
 
 export function getSessionJsonlPath(

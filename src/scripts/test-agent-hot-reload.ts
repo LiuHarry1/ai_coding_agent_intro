@@ -9,10 +9,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { loadPlugins } from '../core/plugins/loader.js'
-import {
-  registerSubagents,
-  BUILTIN_AGENTS,
-} from '../tools/AgentTool/index.js'
+import { registerSubagents, BUILTIN_AGENTS } from '../tools/AgentTool/index.js'
 import { defaultRegistry } from '../tools.js'
 
 const repoRoot = path.resolve(
@@ -52,23 +49,19 @@ async function simulateChatTurn(cwd: string) {
   }
 }
 
-function assertHas(
-  active: string[],
-  name: string,
-  turn: string,
-): void {
+function assertHas(active: string[], name: string, turn: string): void {
   if (!active.includes(name)) {
-    throw new Error(`[${turn}] expected active agent '${name}', got: ${active.join(', ')}`)
+    throw new Error(
+      `[${turn}] expected active agent '${name}', got: ${active.join(', ')}`,
+    )
   }
 }
 
-function assertMissing(
-  active: string[],
-  name: string,
-  turn: string,
-): void {
+function assertMissing(active: string[], name: string, turn: string): void {
   if (active.includes(name)) {
-    throw new Error(`[${turn}] agent '${name}' should not be active, got: ${active.join(', ')}`)
+    throw new Error(
+      `[${turn}] agent '${name}' should not be active, got: ${active.join(', ')}`,
+    )
   }
 }
 
@@ -127,7 +120,9 @@ async function testHotReloadTmp(): Promise<void> {
       `(+${turn.pluginAgentCount} plugin agents) agents=[${turn.activeTypes.join(', ')}]`,
   )
   if (!turn.plugins.includes('qa-plugin')) {
-    throw new Error(`expected qa-plugin loaded, got: ${turn.plugins.join(', ')}`)
+    throw new Error(
+      `expected qa-plugin loaded, got: ${turn.plugins.join(', ')}`,
+    )
   }
   if (turn.pluginAgentCount < 2) {
     throw new Error(
@@ -144,7 +139,9 @@ async function testHotReloadTmp(): Promise<void> {
     'Project override wins',
   )
   turn = await simulateChatTurn(tmp)
-  const winner = turn.activeAgents.find(a => a.agentType === 'plugin-root-agent')
+  const winner = turn.activeAgents.find(
+    a => a.agentType === 'plugin-root-agent',
+  )
   console.log(
     `Turn 5 (project override): plugin-root-agent source=${winner?.source} ` +
       `file=${path.basename(winner?.filePath ?? '')}`,
@@ -160,7 +157,9 @@ async function testHotReloadTmp(): Promise<void> {
     path.join(tmp, '.ai-agent', 'agents', 'db', 'nested-agents-agent.md'),
   )
   turn = await simulateChatTurn(tmp)
-  console.log(`Turn 6 (-deleted nested): agents=[${turn.activeTypes.join(', ')}]`)
+  console.log(
+    `Turn 6 (-deleted nested): agents=[${turn.activeTypes.join(', ')}]`,
+  )
   assertMissing(turn.activeTypes, 'nested-agents-agent', 'turn6')
   assertHas(turn.activeTypes, 'agents-dir-agent', 'turn6')
 

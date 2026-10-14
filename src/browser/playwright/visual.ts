@@ -20,18 +20,17 @@ export async function highlightElement(
   opts: { ref: string; element?: string; durationMs?: number },
 ): Promise<{ role: string; name: string }> {
   return withReadBoost(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  const duration = opts.durationMs ?? 2_000
-  try {
-    const loc = await targetLocator(page, {
-      ref: opts.ref,
-      element: opts.element,
-    })
-    const described = await describeElement(loc, opts.ref)
-    assertElementHint(described, opts.element, opts.ref)
-    await ensureInView(loc, page)
-    await loc.evaluate(
-      (el, ms) => {
+    const page = await getPageForTarget(backend, targetId)
+    const duration = opts.durationMs ?? 2_000
+    try {
+      const loc = await targetLocator(page, {
+        ref: opts.ref,
+        element: opts.element,
+      })
+      const described = await describeElement(loc, opts.ref)
+      assertElementHint(described, opts.element, opts.ref)
+      await ensureInView(loc, page)
+      await loc.evaluate((el, ms) => {
         const node = el as HTMLElement
         const prev = node.style.outline
         const prevOffset = node.style.outlineOffset
@@ -41,13 +40,11 @@ export async function highlightElement(
           node.style.outline = prev
           node.style.outlineOffset = prevOffset
         }, ms)
-      },
-      duration,
-    )
-    return { role: described.role, name: described.name }
-  } catch (err) {
-    mapPlaywrightError(err, opts.ref)
-  }
+      }, duration)
+      return { role: described.role, name: described.name }
+    } catch (err) {
+      mapPlaywrightError(err, opts.ref)
+    }
   })
 }
 
@@ -57,24 +54,24 @@ export async function getElementBoundingBox(
   opts: { ref: string; element?: string },
 ): Promise<{ x: number; y: number; width: number; height: number }> {
   return withReadBoost(backend, targetId, async () => {
-  const page = await getPageForTarget(backend, targetId)
-  try {
-    const loc = await targetLocator(page, {
-      ref: opts.ref,
-      element: opts.element,
-    })
-    const described = await describeElement(loc, opts.ref)
-    assertElementHint(described, opts.element, opts.ref)
-    await ensureInView(loc, page)
-    const box = await loc.boundingBox({ timeout: ACTION_TIMEOUT_MS })
-    if (!box) {
-      throw new Error(
-        `Ref ${opts.ref} has no bounding box. Capture a new snapshot.`,
-      )
+    const page = await getPageForTarget(backend, targetId)
+    try {
+      const loc = await targetLocator(page, {
+        ref: opts.ref,
+        element: opts.element,
+      })
+      const described = await describeElement(loc, opts.ref)
+      assertElementHint(described, opts.element, opts.ref)
+      await ensureInView(loc, page)
+      const box = await loc.boundingBox({ timeout: ACTION_TIMEOUT_MS })
+      if (!box) {
+        throw new Error(
+          `Ref ${opts.ref} has no bounding box. Capture a new snapshot.`,
+        )
+      }
+      return box
+    } catch (err) {
+      mapPlaywrightError(err, opts.ref)
     }
-    return box
-  } catch (err) {
-    mapPlaywrightError(err, opts.ref)
-  }
   })
 }

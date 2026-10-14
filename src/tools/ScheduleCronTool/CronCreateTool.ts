@@ -58,9 +58,12 @@ export const definition: ToolDefinition = {
               'true (default) = repeat until deleted or 7 days. false = fire once.',
             ),
         })
-        .refine(data => Boolean(data.cron?.trim()) !== Boolean(data.at?.trim()), {
-          message: 'Provide exactly one of cron or at.',
-        }),
+        .refine(
+          data => Boolean(data.cron?.trim()) !== Boolean(data.at?.trim()),
+          {
+            message: 'Provide exactly one of cron or at.',
+          },
+        ),
       execute: async ({ cron, at, prompt, recurring }) => {
         const session = context.session
         if (!session?.id) {

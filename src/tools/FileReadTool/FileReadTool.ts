@@ -1,11 +1,12 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import * as fs from 'fs'
-import type {
-  DualChannelToolResult,
-  ToolDefinition,
-} from '../../core/types.js'
-import { DESCRIPTION, FILE_READ_TOOL_NAME, buildReadToolDescription } from './prompt.js'
+import type { DualChannelToolResult, ToolDefinition } from '../../core/types.js'
+import {
+  DESCRIPTION,
+  FILE_READ_TOOL_NAME,
+  buildReadToolDescription,
+} from './prompt.js'
 import { PDF_MAX_PAGES_PER_READ } from './limits.js'
 import {
   readFileCore,
@@ -27,15 +28,13 @@ import {
   policyFromContext,
 } from '../../utils/permissions/filesystem.js'
 
-function sessionReadFileState(
-  context: { session?: { readFileState?: ReadFileState } },
-): ReadFileState | undefined {
+function sessionReadFileState(context: {
+  session?: { readFileState?: ReadFileState }
+}): ReadFileState | undefined {
   return activeReadFileState(context.session?.readFileState)
 }
 
-function unchanged(
-  file_path: string,
-): DualChannelToolResult<ReadOutput> {
+function unchanged(file_path: string): DualChannelToolResult<ReadOutput> {
   return {
     data: { type: 'file_unchanged', file: { filePath: file_path } },
   }
@@ -110,8 +109,7 @@ export const definition: ToolDefinition = {
         const execution = context.execution
         // Local worker still has real disk mtime — use the FS path below for
         // dedup + images/PDF. Only remote environments use readText RPC.
-        const useRemoteFs =
-          !!execution && execution.environmentId !== 'local'
+        const useRemoteFs = !!execution && execution.environmentId !== 'local'
 
         if (useRemoteFs) {
           try {
@@ -150,10 +148,7 @@ export const definition: ToolDefinition = {
         }
 
         // Text-only dedup (images/PDF/pages always re-fetch).
-        if (
-          !pages &&
-          shouldDedupRead(state, resolved.abs, offset, limit)
-        ) {
+        if (!pages && shouldDedupRead(state, resolved.abs, offset, limit)) {
           return unchanged(file_path)
         }
 
@@ -166,7 +161,8 @@ export const definition: ToolDefinition = {
               limit,
               pages,
               sessionId: context.sessionId,
-              supportsNativePdf: context.provider?.supportsNativePdf?.() === true,
+              supportsNativePdf:
+                context.provider?.supportsNativePdf?.() === true,
               allowOutsideWorkspace: true,
             },
           )

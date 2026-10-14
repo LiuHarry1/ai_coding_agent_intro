@@ -34,9 +34,10 @@ export function filterToolsRecordByDisallowedGlobs<T>(
 }
 
 /** Drop deferred defs whose names match deny globs. */
-export function filterDeferredDefsByDisallowedGlobs<
-  T extends { name: string },
->(defs: readonly T[], patterns: readonly string[] | undefined): T[] {
+export function filterDeferredDefsByDisallowedGlobs<T extends { name: string }>(
+  defs: readonly T[],
+  patterns: readonly string[] | undefined,
+): T[] {
   if (!patterns || patterns.length === 0) return [...defs]
   return defs.filter(d => !isToolNameDisallowed(d.name, patterns))
 }

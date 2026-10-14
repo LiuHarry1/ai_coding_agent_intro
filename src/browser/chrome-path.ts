@@ -28,7 +28,11 @@ export function chromeCandidates(): string[] {
       '/Applications/Chromium.app/Contents/MacOS/Chromium',
     ]
   }
-  return ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser']
+  return [
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ]
 }
 
 export function findChrome(): string | undefined {

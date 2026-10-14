@@ -108,8 +108,7 @@ function systemLen(system: unknown): number {
   if (typeof system === 'string') return system.length
   if (Array.isArray(system)) {
     return system.reduce(
-      (n: number, b) =>
-        n + ((b as { text?: string }).text?.length ?? 0),
+      (n: number, b) => n + ((b as { text?: string }).text?.length ?? 0),
       0,
     )
   }
@@ -269,11 +268,16 @@ export function createNoopDumpPromptsRecorder(): DumpPromptsRecorder {
  * Summarize AI SDK tool map for init (name + description + parameters when present).
  */
 export function toolsForDump(
-  apiTools: Record<string, { description?: string; parameters?: unknown; inputSchema?: unknown }>,
+  apiTools: Record<
+    string,
+    { description?: string; parameters?: unknown; inputSchema?: unknown }
+  >,
 ): Array<{ name: string; description?: string; parameters?: unknown }> {
   return Object.entries(apiTools).map(([name, t]) => ({
     name,
-    ...(typeof t.description === 'string' ? { description: t.description } : {}),
+    ...(typeof t.description === 'string'
+      ? { description: t.description }
+      : {}),
     ...(t.parameters != null
       ? { parameters: t.parameters }
       : t.inputSchema != null

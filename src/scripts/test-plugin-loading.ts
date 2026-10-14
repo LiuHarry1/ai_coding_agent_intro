@@ -125,16 +125,24 @@ Write changelog for: $summary. Templates at \${PLUGIN_ROOT}/templates.
   return root
 }
 
-async function simulateChatTurn(cwd: string, settingsMcp: Record<string, unknown> = {}) {
+async function simulateChatTurn(
+  cwd: string,
+  settingsMcp: Record<string, unknown> = {},
+) {
   const plugins = await loadPlugins(cwd)
   const { activeAgents } = await registerSubagents(
     defaultRegistry,
     cwd,
     plugins.agentFiles,
   )
-  const { activeSkills } = await registerSkills(defaultRegistry, cwd, activeAgents, {
-    pluginSkills: plugins.skills,
-  })
+  const { activeSkills } = await registerSkills(
+    defaultRegistry,
+    cwd,
+    activeAgents,
+    {
+      pluginSkills: plugins.skills,
+    },
+  )
   const slash = await loadSlashRegistry(cwd)
   const mcpServers = mergeMCPServers(
     plugins.mcpServers,
@@ -164,7 +172,10 @@ async function testFullPluginLoad(): Promise<void> {
     'full-plugin not discovered',
   )
   const plugin = turn.plugins.plugins.find(p => p.name === 'full-plugin')!
-  assert(plugin.scope === 'project', `expected project scope, got ${plugin.scope}`)
+  assert(
+    plugin.scope === 'project',
+    `expected project scope, got ${plugin.scope}`,
+  )
   console.log(`[ok] plugin discovered: ${plugin.name} (${plugin.scope})`)
 
   // Agents
@@ -175,14 +186,19 @@ async function testFullPluginLoad(): Promise<void> {
   assert(!!agentFile, 'plugin-reviewer.md not in agentFiles')
   assert(agentFile!.source === 'plugin', 'agent source should be plugin')
   assert(
-    agentFile!.body.includes(pluginRoot) && !agentFile!.body.includes('${PLUGIN_ROOT}'),
+    agentFile!.body.includes(pluginRoot) &&
+      !agentFile!.body.includes('${PLUGIN_ROOT}'),
     'agent body should substitute PLUGIN_ROOT',
   )
   assert(
-    turn.activeAgents.some(a => a.agentType === 'plugin-reviewer' && a.source === 'plugin'),
+    turn.activeAgents.some(
+      a => a.agentType === 'plugin-reviewer' && a.source === 'plugin',
+    ),
     'plugin-reviewer not in active agents',
   )
-  console.log('[ok] agents: nested plugin-reviewer loaded + PLUGIN_ROOT substituted')
+  console.log(
+    '[ok] agents: nested plugin-reviewer loaded + PLUGIN_ROOT substituted',
+  )
 
   // Commands
   assert(turn.plugins.commandFiles.length >= 1, 'no plugin command files')
@@ -191,7 +207,8 @@ async function testFullPluginLoad(): Promise<void> {
   )
   assert(!!cmdFile, 'plugin-hello.md not in commandFiles')
   assert(
-    cmdFile!.body.includes(pluginRoot) && !cmdFile!.body.includes('${PLUGIN_ROOT}'),
+    cmdFile!.body.includes(pluginRoot) &&
+      !cmdFile!.body.includes('${PLUGIN_ROOT}'),
     'command body should substitute PLUGIN_ROOT',
   )
   const slashCmd = turn.slash.entries.find(e => e.name === 'plugin-hello')
@@ -225,7 +242,8 @@ async function testFullPluginLoad(): Promise<void> {
   assert('command' in mcp, 'expected stdio MCP config')
   const args = (mcp as { args?: string[] }).args ?? []
   assert(
-    args.some(a => a.includes(pluginRoot)) && !args.some(a => a.includes('${PLUGIN_ROOT}')),
+    args.some(a => a.includes(pluginRoot)) &&
+      !args.some(a => a.includes('${PLUGIN_ROOT}')),
     'MCP args should substitute PLUGIN_ROOT',
   )
   console.log('[ok] MCP: .mcp.json loaded with PLUGIN_ROOT in args')
@@ -290,7 +308,9 @@ async function testMcpCollision(): Promise<void> {
     result.errors.some(e => e.type === 'mcp-collision'),
     'expected mcp-collision error',
   )
-  console.log('[ok] MCP name collision recorded; later plugin wins flat namespace')
+  console.log(
+    '[ok] MCP name collision recorded; later plugin wins flat namespace',
+  )
 }
 
 async function testHotReloadPlugin(): Promise<void> {
@@ -304,7 +324,10 @@ async function testHotReloadPlugin(): Promise<void> {
 
   scaffoldFullPlugin(pluginsDir, 'hot-plugin')
   turn = await simulateChatTurn(tmp)
-  assert(turn.plugins.plugins.some(p => p.name === 'hot-plugin'), 'hot-plugin missing turn2')
+  assert(
+    turn.plugins.plugins.some(p => p.name === 'hot-plugin'),
+    'hot-plugin missing turn2',
+  )
   assert(
     turn.activeAgents.some(a => a.agentType === 'plugin-reviewer'),
     'agent missing turn2',
@@ -318,16 +341,27 @@ async function testHotReloadPlugin(): Promise<void> {
     'skill missing turn2',
   )
   assert('plugin-filesystem' in turn.mcpServers, 'mcp missing turn2')
-  console.log('Turn 2 (+full plugin): agents, commands, skills, MCP all present')
+  console.log(
+    'Turn 2 (+full plugin): agents, commands, skills, MCP all present',
+  )
 
-  fs.rmSync(path.join(pluginsDir, 'hot-plugin'), { recursive: true, force: true })
+  fs.rmSync(path.join(pluginsDir, 'hot-plugin'), {
+    recursive: true,
+    force: true,
+  })
   turn = await simulateChatTurn(tmp)
-  assert(!turn.plugins.plugins.some(p => p.name === 'hot-plugin'), 'plugin should be gone')
+  assert(
+    !turn.plugins.plugins.some(p => p.name === 'hot-plugin'),
+    'plugin should be gone',
+  )
   assert(
     !turn.activeAgents.some(a => a.agentType === 'plugin-reviewer'),
     'agent should be gone',
   )
-  assert(!turn.slash.entries.some(e => e.name === 'plugin-hello'), 'command should be gone')
+  assert(
+    !turn.slash.entries.some(e => e.name === 'plugin-hello'),
+    'command should be gone',
+  )
   assert(
     !turn.activeSkills.some(s => s.name === 'demo-changelog'),
     'skill should be gone',
@@ -347,7 +381,10 @@ async function testSettingsMcpOverridesPlugin(): Promise<void> {
   }
   const { mcpServers } = await simulateChatTurn(tmp, settingsMcp)
   const cfg = mcpServers['plugin-filesystem'] as { args?: string[] }
-  assert(cfg?.args?.[0] === 'from-settings', 'settings MCP should win on collision')
+  assert(
+    cfg?.args?.[0] === 'from-settings',
+    'settings MCP should win on collision',
+  )
   console.log('[ok] mergeMCPServers: settings override plugin')
 }
 
@@ -365,7 +402,10 @@ async function testRepoIfPresent(): Promise<void> {
     )
   }
   if (overview.errors.length > 0) {
-    console.log('  errors:', overview.errors.map(e => `${e.type}: ${e.message}`).join('; '))
+    console.log(
+      '  errors:',
+      overview.errors.map(e => `${e.type}: ${e.message}`).join('; '),
+    )
   }
   const turn = await simulateChatTurn(repoRoot)
   console.log(

@@ -7,10 +7,7 @@ import type {
   ToolContext,
 } from '../core/types.js'
 import { isShellInputConcurrencySafe } from '../core/shell/shell-readonly.js'
-import {
-  runShellCommand,
-  type ShellKind,
-} from '../core/shell/spawn-shell.js'
+import { runShellCommand, type ShellKind } from '../core/shell/spawn-shell.js'
 import { spawnShellTask } from '../tasks/LocalShellTask/LocalShellTask.js'
 import {
   getTaskOutputPath,
@@ -27,11 +24,7 @@ import {
  * `interrupted` stays for the model-facing `is_error` mapping and old sessions.
  */
 export type ShellOutcome =
-  | 'success'
-  | 'failure'
-  | 'timeout'
-  | 'aborted'
-  | 'spawnError'
+  'success' | 'failure' | 'timeout' | 'aborted' | 'spawnError'
 
 export type ShellToolOutput = {
   text: string

@@ -184,7 +184,9 @@ function writeResult(toolCallId: string, isError = false): Message {
   )
   fs.writeFileSync(
     topic,
-    fs.readFileSync(topic, 'utf-8').replace('type: feedback', ' type: feedback'),
+    fs
+      .readFileSync(topic, 'utf-8')
+      .replace('type: feedback', ' type: feedback'),
     'utf-8',
   )
   assert(
@@ -209,7 +211,8 @@ function writeResult(toolCallId: string, isError = false): Message {
     'targeted repair leaves unrelated memory files untouched',
   )
   const invalid = path.join(mem, 'invalid.md')
-  const invalidRaw = '---\nname: Missing type\ndescription: no type\n---\n\nBody\n'
+  const invalidRaw =
+    '---\nname: Missing type\ndescription: no type\n---\n\nBody\n'
   fs.writeFileSync(invalid, invalidRaw, 'utf-8')
   const invalidResult = repairMemoryFrontmatterFiles(mem, [invalid])
   assert(
