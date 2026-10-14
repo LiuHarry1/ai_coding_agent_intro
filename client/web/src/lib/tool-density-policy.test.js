@@ -1,8 +1,8 @@
 /**
- * Density policy fixture tests (node:test).
- * Run: node --test client/web/src/lib/tool-density-policy.test.js
+ * Density policy fixture tests.
+ * Run: npx vitest run client/web/src/lib/tool-density-policy.test.js
  */
-import { describe, it } from 'node:test'
+import { describe, it } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   resolveExpandArgs,

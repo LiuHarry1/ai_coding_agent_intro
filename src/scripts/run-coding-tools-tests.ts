@@ -1,35 +1,24 @@
+/**
+ * Standalone runner for the coding-tools suites. `npm test` runs the same
+ * scripts through vitest (`suites/tools.test.ts`); this entry point exists so
+ * `coverage:tools` can wrap the child processes with c8.
+ */
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
-
-const unit = [
-  'src/scripts/test-coding-tools-manifest.ts',
-  'src/scripts/test-coding-tools-core.ts',
-  'src/scripts/test-coding-tools-platform.ts',
-  'src/scripts/test-coding-tools-orchestration.ts',
-  'src/scripts/test-bundled-ripgrep.ts',
-  'src/scripts/test-file-change-card-dom.mjs',
-]
-
-const integration = [
-  'src/scripts/test-dual-channel-tools.ts',
-  'src/scripts/test-grep-wire.ts',
-  'src/scripts/test-ask-mode-restrictions.ts',
-  'src/scripts/test-streaming-tool-exec.ts',
-  'src/scripts/test-web-fetch.ts',
-  'src/scripts/test-forked-agent.ts',
-  'src/scripts/test-agent-loading.ts',
-  'src/scripts/test-coding-tools-agent-skill.ts',
-  'src/scripts/test-coding-tools-cron.ts',
-]
+import {
+  CODING_TOOLS_ENV,
+  CODING_TOOLS_INTEGRATION,
+  CODING_TOOLS_UNIT,
+} from './coding-tools-suites.js'
 
 const suite = process.argv[2] ?? 'all'
 const scripts =
   suite === 'unit'
-    ? unit
+    ? CODING_TOOLS_UNIT
     : suite === 'integration'
-      ? integration
+      ? CODING_TOOLS_INTEGRATION
       : suite === 'all'
-        ? [...unit, ...integration]
+        ? [...CODING_TOOLS_UNIT, ...CODING_TOOLS_INTEGRATION]
         : []
 
 if (scripts.length === 0) {
@@ -37,14 +26,16 @@ if (scripts.length === 0) {
 }
 
 const env = { ...process.env }
-delete env.AUTH_ENABLED
-env.SKIP_LLM = '1'
-env.WEB_FETCH_LIVE = '0'
+for (const [k, v] of Object.entries(CODING_TOOLS_ENV)) {
+  if (v === undefined) delete env[k]
+  else env[k] = v
+}
 
+const tsxCli = path.resolve('node_modules/tsx/dist/cli.mjs')
 for (const script of scripts) {
-  console.log(`\n[coding-tools] ${script}`)
-  const tsxCli = path.resolve('node_modules/tsx/dist/cli.mjs')
-  const result = spawnSync(process.execPath, [tsxCli, script], {
+  const file = path.join('src/scripts', script)
+  console.log(`\n[coding-tools] ${file}`)
+  const result = spawnSync(process.execPath, [tsxCli, file], {
     cwd: process.cwd(),
     env,
     stdio: 'inherit',
