@@ -25,13 +25,7 @@ const LSP_STATUS_BADGE = {
   error: { className: 'ws-badge--error', label: 'error' },
 }
 
-const AGENT_SOURCE_ORDER = [
-  'managed',
-  'project',
-  'user',
-  'plugin',
-  'built-in',
-]
+const AGENT_SOURCE_ORDER = ['managed', 'project', 'user', 'plugin', 'built-in']
 const AGENT_SOURCE_LABELS = {
   managed: 'Managed',
   project: 'Project',
@@ -83,12 +77,7 @@ function groupBySource(items, sourceKey, order, labels) {
 function AgentsTab({ data }) {
   const grouped = useMemo(() => {
     const all = data?.all ?? data?.agents ?? []
-    return groupBySource(
-      all,
-      'source',
-      AGENT_SOURCE_ORDER,
-      AGENT_SOURCE_LABELS,
-    )
+    return groupBySource(all, 'source', AGENT_SOURCE_ORDER, AGENT_SOURCE_LABELS)
   }, [data])
 
   if (grouped.length === 0) {
@@ -155,7 +144,10 @@ function SkillsTab({ data }) {
       <h3 className='ws-panel-group-title'>{group.label}</h3>
       <ul className='ws-panel-list'>
         {group.items.map(skill => (
-          <li key={`${skill.name}:${skill.filePath || skill.source}`} className='ws-panel-item'>
+          <li
+            key={`${skill.name}:${skill.filePath || skill.source}`}
+            className='ws-panel-item'
+          >
             <div className='ws-panel-item-row'>
               <code className='ws-panel-item-name'>{skill.name}</code>
               {skill.active ? (
@@ -208,6 +200,583 @@ function PluginsTab({ data }) {
   )
 }
 
+const MARKETPLACE_STATE_LABELS = {
+  available: 'Available',
+  installed: 'Installed',
+  updateAvailable: 'Update available',
+  conflict: 'Local conflict',
+}
+
+export function MarketplaceCatalog({ workspace, onInstalled }) {
+  const [providers, setProviders] = useState([])
+  const [providerId, setProviderId] = useState('')
+  const [kind, setKind] = useState('skill')
+  const [query, setQuery] = useState('')
+  const [submittedQuery, setSubmittedQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [catalog, setCatalog] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [installing, setInstalling] = useState(null)
+  const [uninstalling, setUninstalling] = useState(null)
+  const [previewing, setPreviewing] = useState(null)
+  const [bundlePreview, setBundlePreview] = useState(null)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+
+  const provider = providers.find(item => item.id === providerId)
+  const needsLogin =
+    Boolean(provider) &&
+    provider.auth !== 'none' &&
+    provider.authenticated !== true
+
+  const refreshProviders = useCallback(async () => {
+    const response = await agentApi.getMarketplaceProviders(workspace)
+    const next = response.providers ?? []
+    setProviders(next)
+    setProviderId(current =>
+      next.some(item => item.id === current) ? current : next[0]?.id || '',
+    )
+    return next
+  }, [workspace])
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    refreshProviders()
+      .catch(e => setError(e.message || 'Failed to load marketplaces'))
+      .finally(() => setLoading(false))
+  }, [refreshProviders])
+
+  useEffect(() => {
+    if (!provider) return
+    const capability =
+      kind === 'skill' ? 'skills' : kind === 'agent' ? 'agents' : 'bundles'
+    const allowed = provider.capabilities.includes(capability)
+    if (!allowed) {
+      setKind(
+        provider.capabilities.includes('skills')
+          ? 'skill'
+          : provider.capabilities.includes('agents')
+            ? 'agent'
+            : 'bundle',
+      )
+    }
+  }, [provider, kind])
+
+  const loadCatalog = useCallback(async () => {
+    if (!providerId || needsLogin) {
+      setCatalog(null)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await agentApi.getMarketplaceCatalog(providerId, {
+        kind,
+        q: submittedQuery,
+        page,
+        perPage: 12,
+        workspace,
+      })
+      setCatalog(response)
+    } catch (e) {
+      setError(e.message || 'Failed to load marketplace')
+      setCatalog(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [providerId, needsLogin, kind, submittedQuery, page, workspace])
+
+  useEffect(() => {
+    loadCatalog()
+  }, [loadCatalog])
+
+  const login = async event => {
+    event.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      await agentApi.marketplaceLogin(
+        providerId,
+        { username, password },
+        workspace,
+      )
+      setPassword('')
+      await refreshProviders()
+    } catch (e) {
+      setError(e.message || 'Marketplace login failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const logout = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      await agentApi.marketplaceLogout(providerId, workspace)
+      await refreshProviders()
+      setCatalog(null)
+    } catch (e) {
+      setError(e.message || 'Marketplace logout failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const install = async (item, options = {}) => {
+    setInstalling(item.externalId)
+    setError(null)
+    try {
+      if (item.kind === 'skill') {
+        const env = await agentApi
+          .getMarketplaceEnvSchema(providerId, item.externalId, workspace)
+          .catch(() => ({ variables: [] }))
+        if (env.variables?.length) {
+          const names = env.variables
+            .map(variable => variable.name || variable.key)
+            .filter(Boolean)
+          const proceed = window.confirm(
+            `This skill expects environment variables${
+              names.length ? `: ${names.join(', ')}` : ''
+            }. Install without storing secrets?`,
+          )
+          if (!proceed) return
+        }
+      }
+      await agentApi.installMarketplaceItem(
+        providerId,
+        item,
+        workspace,
+        options,
+      )
+      if (item.kind === 'bundle') setBundlePreview(null)
+      await Promise.all([loadCatalog(), onInstalled?.()])
+    } catch (e) {
+      setError(e.message || 'Marketplace install failed')
+    } finally {
+      setInstalling(null)
+    }
+  }
+
+  const previewBundle = async item => {
+    setPreviewing(item.externalId)
+    setError(null)
+    try {
+      const response = await agentApi.previewMarketplaceBundle(
+        providerId,
+        item,
+        workspace,
+      )
+      setBundlePreview({ item, ...response.preview })
+    } catch (e) {
+      setError(e.message || 'AI Bundle preview failed')
+    } finally {
+      setPreviewing(null)
+    }
+  }
+
+  const installBundle = () => {
+    if (bundlePreview.requiresConfirmation) {
+      const conflicts = bundlePreview.files.filter(
+        file => file.state === 'conflict' || file.state === 'modified',
+      ).length
+      const confirmed = window.confirm(
+        `${conflicts} existing workspace file(s) will be replaced with the BaiX versions from this bundle. The current files will be backed up and restored if you uninstall the bundle. Continue?`,
+      )
+      if (!confirmed) return
+    }
+    install(bundlePreview.item, {
+      confirmConflicts: bundlePreview.requiresConfirmation,
+    })
+  }
+
+  const uninstall = async item => {
+    const confirmed = window.confirm(
+      `Uninstall ${item.kind} "${item.name}" from this workspace?`,
+    )
+    if (!confirmed) return
+    setUninstalling(item.externalId)
+    setError(null)
+    try {
+      await agentApi.uninstallMarketplaceItem(providerId, item, workspace)
+      await Promise.all([loadCatalog(), onInstalled?.()])
+    } catch (e) {
+      setError(e.message || 'Marketplace uninstall failed')
+    } finally {
+      setUninstalling(null)
+    }
+  }
+
+  if (!loading && providers.length === 0) {
+    return (
+      <p className='ws-panel-empty'>
+        No marketplace providers configured in trusted settings.
+      </p>
+    )
+  }
+
+  return (
+    <div className='ws-marketplace'>
+      <div className='ws-marketplace-toolbar'>
+        <label>
+          <span>Source</span>
+          <select
+            value={providerId}
+            onChange={event => {
+              setProviderId(event.target.value)
+              setPage(1)
+            }}
+          >
+            {providers.map(item => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div
+          className='ws-marketplace-kinds'
+          role='group'
+          aria-label='Resource type'
+        >
+          {provider?.capabilities.includes('skills') && (
+            <button
+              type='button'
+              className={kind === 'skill' ? 'is-active' : ''}
+              onClick={() => {
+                setKind('skill')
+                setPage(1)
+              }}
+            >
+              Skills
+            </button>
+          )}
+          {provider?.capabilities.includes('agents') && (
+            <button
+              type='button'
+              className={kind === 'agent' ? 'is-active' : ''}
+              onClick={() => {
+                setKind('agent')
+                setPage(1)
+              }}
+            >
+              Agents
+            </button>
+          )}
+          {provider?.capabilities.includes('bundles') && (
+            <button
+              type='button'
+              className={kind === 'bundle' ? 'is-active' : ''}
+              onClick={() => {
+                setKind('bundle')
+                setPage(1)
+              }}
+            >
+              AI Bundles
+            </button>
+          )}
+        </div>
+        {provider?.authenticated && provider.auth !== 'none' && (
+          <button
+            type='button'
+            className='ws-text-btn is-danger'
+            onClick={logout}
+          >
+            Sign out
+          </button>
+        )}
+      </div>
+
+      {error && <div className='ws-panel-error'>{error}</div>}
+
+      {needsLogin ? (
+        <form className='ws-marketplace-login' onSubmit={login}>
+          <p>Sign in to {provider.label} to browse and install resources.</p>
+          <input
+            required
+            autoComplete='username'
+            placeholder='Username'
+            value={username}
+            onChange={event => setUsername(event.target.value)}
+          />
+          <input
+            required
+            type='password'
+            autoComplete='current-password'
+            placeholder='Password'
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+          />
+          <button type='submit' disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      ) : (
+        <>
+          <form
+            className='ws-marketplace-search'
+            onSubmit={event => {
+              event.preventDefault()
+              setSubmittedQuery(query.trim())
+              setPage(1)
+            }}
+          >
+            <input
+              placeholder={`Search ${
+                kind === 'skill'
+                  ? 'skills'
+                  : kind === 'agent'
+                    ? 'agents'
+                    : 'AI bundles'
+              }…`}
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+            />
+            <button type='submit'>Search</button>
+          </form>
+
+          {loading && <p className='ws-panel-empty'>Loading marketplace…</p>}
+          {!loading && catalog?.items?.length === 0 && (
+            <p className='ws-panel-empty'>No matching resources.</p>
+          )}
+          {!loading && catalog?.items?.length > 0 && (
+            <ul className='ws-panel-list ws-marketplace-list'>
+              {catalog.items.map(item => {
+                const owned =
+                  item.installState === 'installed' ||
+                  item.installState === 'updateAvailable'
+                const busy =
+                  installing === item.externalId ||
+                  uninstalling === item.externalId ||
+                  previewing === item.externalId
+                return (
+                  <li
+                    key={`${item.kind}:${item.externalId}`}
+                    className='ws-panel-item ws-marketplace-card'
+                  >
+                    <div className='ws-panel-item-row'>
+                      <code className='ws-panel-item-name'>{item.name}</code>
+                      <span
+                        className={`ws-badge ${
+                          item.installState === 'installed'
+                            ? 'ws-badge--active'
+                            : item.installState === 'conflict'
+                              ? 'ws-badge--error'
+                              : 'ws-badge--shadow'
+                        }`}
+                      >
+                        {MARKETPLACE_STATE_LABELS[item.installState] ||
+                          'Available'}
+                      </span>
+                      {item.version && (
+                        <span className='ws-badge ws-badge--type'>
+                          v{item.version}
+                        </span>
+                      )}
+                      {item.platformType && (
+                        <span className='ws-badge ws-badge--shadow'>
+                          {item.platformType}
+                        </span>
+                      )}
+                    </div>
+                    {(item.author ||
+                      item.category ||
+                      item.downloads != null) && (
+                      <p className='ws-panel-item-meta'>
+                        {[item.author, item.category]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        {item.downloads != null
+                          ? `${item.author || item.category ? ' · ' : ''}${item.downloads} installs`
+                          : ''}
+                      </p>
+                    )}
+                    {item.description && (
+                      <p className='ws-panel-item-desc-short'>
+                        {item.description}
+                      </p>
+                    )}
+                    <div className='ws-marketplace-actions'>
+                      {item.installState !== 'installed' && (
+                        <button
+                          type='button'
+                          className='ws-marketplace-install'
+                          disabled={busy || item.installState === 'conflict'}
+                          onClick={() =>
+                            item.kind === 'bundle'
+                              ? previewBundle(item)
+                              : install(item)
+                          }
+                        >
+                          {previewing === item.externalId
+                            ? 'Preparing…'
+                            : installing === item.externalId
+                              ? 'Installing…'
+                              : item.installState === 'updateAvailable'
+                                ? item.kind === 'bundle'
+                                  ? 'Review update'
+                                  : 'Update'
+                                : item.installState === 'conflict'
+                                  ? 'Local conflict'
+                                  : item.kind === 'bundle'
+                                    ? 'Preview'
+                                    : 'Download'}
+                        </button>
+                      )}
+                      {owned && (
+                        <button
+                          type='button'
+                          className='ws-marketplace-uninstall'
+                          disabled={busy}
+                          onClick={() => uninstall(item)}
+                        >
+                          {uninstalling === item.externalId
+                            ? 'Uninstalling…'
+                            : 'Uninstall'}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          {bundlePreview && (
+            <div
+              className='ws-bundle-preview-backdrop'
+              role='presentation'
+              onClick={() => setBundlePreview(null)}
+            >
+              <section
+                className='ws-bundle-preview'
+                role='dialog'
+                aria-modal='true'
+                aria-labelledby='ws-bundle-preview-title'
+                onClick={event => event.stopPropagation()}
+              >
+                <div className='ws-bundle-preview-head'>
+                  <div>
+                    <h3 id='ws-bundle-preview-title'>
+                      {bundlePreview.item.name}
+                    </h3>
+                    <p>
+                      {bundlePreview.files.length} files
+                      {bundlePreview.platformType
+                        ? ` · ${bundlePreview.platformType}`
+                        : ''}
+                    </p>
+                  </div>
+                  <button
+                    type='button'
+                    aria-label='Close bundle preview'
+                    onClick={() => setBundlePreview(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                {bundlePreview.warnings?.map((warning, index) => (
+                  <div className='ws-bundle-warning' key={index}>
+                    {warning}
+                  </div>
+                ))}
+                <div className='ws-bundle-files'>
+                  {bundlePreview.files.slice(0, 40).map(file => (
+                    <div
+                      className='ws-bundle-file'
+                      key={`${file.sourcePath}:${file.targetPath || ''}`}
+                    >
+                      <div className='ws-bundle-file-paths'>
+                        <code title={file.sourcePath}>{file.sourcePath}</code>
+                        {file.targetPath &&
+                          file.targetPath !== file.sourcePath && (
+                            <code
+                              className='ws-bundle-file-target'
+                              title={file.targetPath}
+                            >
+                              → {file.targetPath}
+                            </code>
+                          )}
+                      </div>
+                      <span className={`ws-bundle-file-state is-${file.state}`}>
+                        {file.state === 'archiveOnly'
+                          ? 'archive only'
+                          : file.state}
+                      </span>
+                    </div>
+                  ))}
+                  {bundlePreview.files.length > 40 && (
+                    <p className='ws-panel-empty'>
+                      + {bundlePreview.files.length - 40} more files
+                    </p>
+                  )}
+                </div>
+                <div className='ws-bundle-preview-actions'>
+                  <button type='button' onClick={() => setBundlePreview(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    type='button'
+                    className='ws-marketplace-install'
+                    disabled={
+                      !bundlePreview.canInstall ||
+                      installing === bundlePreview.item.externalId
+                    }
+                    onClick={installBundle}
+                  >
+                    {installing === bundlePreview.item.externalId
+                      ? 'Installing…'
+                      : bundlePreview.item.installState === 'updateAvailable'
+                        ? 'Update bundle'
+                        : bundlePreview.requiresConfirmation
+                          ? 'Confirm & install'
+                          : 'Install bundle'}
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {catalog && (
+            <div className='ws-marketplace-pagination'>
+              <span className='ws-marketplace-result-count'>
+                {catalog.total != null
+                  ? `${catalog.total.toLocaleString()} results`
+                  : `${catalog.items?.length ?? 0} shown`}
+              </span>
+              <button
+                type='button'
+                aria-label='Previous page'
+                disabled={page <= 1 || loading}
+                onClick={() => setPage(value => Math.max(1, value - 1))}
+              >
+                ←
+              </button>
+              <span className='ws-marketplace-page'>Page {page}</span>
+              <button
+                type='button'
+                aria-label='Next page'
+                disabled={
+                  loading ||
+                  !catalog.items?.length ||
+                  catalog.items.length < catalog.perPage ||
+                  (catalog.total != null &&
+                    page * catalog.perPage >= catalog.total)
+                }
+                onClick={() => setPage(value => value + 1)}
+              >
+                →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function McpTab({ data }) {
   const servers = data?.servers ?? []
 
@@ -236,13 +805,15 @@ function McpTab({ data }) {
                 {badge.label}
               </span>
             </div>
-            <p className='ws-panel-item-meta'>
-              tools {tools.length}
-            </p>
+            <p className='ws-panel-item-meta'>tools {tools.length}</p>
             {tools.length > 0 && (
               <div className='ws-mcp-tools'>
                 {tools.map(t => (
-                  <code key={t} className='ws-mcp-tool' title={`${s.name}_${t}`}>
+                  <code
+                    key={t}
+                    className='ws-mcp-tool'
+                    title={`${s.name}_${t}`}
+                  >
                     {t}
                   </code>
                 ))}
@@ -263,9 +834,9 @@ function LspTab({ data }) {
   if (servers.length === 0) {
     return (
       <p className='ws-panel-empty'>
-        No LSP servers configured. Add{' '}
-        <code>lspServers</code> to <code>.ai-agent/settings.json</code>.
-        Servers start lazily when a matching file is opened or LSPTool runs.
+        No LSP servers configured. Add <code>lspServers</code> to{' '}
+        <code>.ai-agent/settings.json</code>. Servers start lazily when a
+        matching file is opened or LSPTool runs.
       </p>
     )
   }
@@ -307,7 +878,9 @@ function LspTab({ data }) {
                 </p>
               )}
               {s.state === 'error' && s.error && (
-                <p className='ws-panel-item-desc-short ws-mcp-error'>{s.error}</p>
+                <p className='ws-panel-item-desc-short ws-mcp-error'>
+                  {s.error}
+                </p>
               )}
             </li>
           )
@@ -429,8 +1002,8 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
               Workspace
             </h2>
             <p className='ws-panel-sub'>
-              {activeCount} agents · {skillCount} skills · {pluginCount} plugins
-              {' '}· {mcpToolCount} mcp tools · {lspRunningCount} lsp running
+              {activeCount} agents · {skillCount} skills · {pluginCount} plugins{' '}
+              · {mcpToolCount} mcp tools · {lspRunningCount} lsp running
               {agentsData?.workspace ? (
                 <>
                   {' '}
@@ -445,7 +1018,7 @@ export default function WorkspacePanel({ open, workspace, onClose }) {
           <div className='ws-panel-actions'>
             <button
               type='button'
-              className='btn-clear'
+              className='ws-text-btn'
               onClick={load}
               disabled={loading}
             >

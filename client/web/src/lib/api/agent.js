@@ -36,6 +36,102 @@ export const agentApi = {
     return fetchJSON(`/plugins${qs}`)
   },
 
+  getMarketplaceProviders: workspace => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(`/marketplaces/providers${qs}`)
+  },
+
+  marketplaceLogin: (providerId, credentials, workspace) => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(
+      `/marketplaces/${encodeURIComponent(providerId)}/auth/login${qs}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      },
+    )
+  },
+
+  marketplaceLogout: (providerId, workspace) => {
+    const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
+    return fetchJSON(
+      `/marketplaces/${encodeURIComponent(providerId)}/auth/logout${qs}`,
+      { method: 'POST' },
+    )
+  },
+
+  getMarketplaceCatalog: (providerId, params = {}) => {
+    const qs = new URLSearchParams()
+    qs.set('kind', params.kind || 'skill')
+    if (params.q) qs.set('q', params.q)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.perPage) qs.set('perPage', String(params.perPage))
+    if (params.workspace) qs.set('workspace', params.workspace)
+    return fetchJSON(
+      `/marketplaces/${encodeURIComponent(providerId)}/catalog?${qs}`,
+    )
+  },
+
+  getMarketplaceEnvSchema: (providerId, id, workspace) => {
+    const qs = new URLSearchParams({ kind: 'skill', id })
+    if (workspace) qs.set('workspace', workspace)
+    return fetchJSON(
+      `/marketplaces/${encodeURIComponent(providerId)}/env-schema?${qs}`,
+    )
+  },
+
+  installMarketplaceItem: (providerId, item, workspace, options = {}) => {
+    const qs = new URLSearchParams({
+      kind: item.kind,
+      id: item.externalId,
+    })
+    if (workspace) qs.set('workspace', workspace)
+    return fetchJSON(
+      `/marketplaces/${encodeURIComponent(providerId)}/install?${qs}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Catalog `version` is a semantic package version (for example 1.0.0),
+        // while Demeter's historical download endpoint expects an integer
+        // version_number. A normal install always downloads the published
+        // latest artifact; an explicit version picker can send versionNumber
+        // in a future UI.
+        body: JSON.stringify({
+          ...(options.confirmConflicts ? { confirmConflicts: true } : {}),
+        }),
+      },
+    )
+  },
+
+  previewMarketplaceBundle: (providerId, item, workspace) => {
+    const qs = new URLSearchParams({
+      kind: 'bundle',
+      id: item.externalId,
+    })
+    if (workspace) qs.set('workspace', workspace)
+    return fetchJSON(
+      `/marketplaces/${encodeURIComponent(providerId)}/preview?${qs}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    )
+  },
+
+  uninstallMarketplaceItem: (providerId, item, workspace) => {
+    const qs = new URLSearchParams({
+      kind: item.kind,
+      id: item.externalId,
+    })
+    if (workspace) qs.set('workspace', workspace)
+    return fetchJSON(
+      `/marketplaces/${encodeURIComponent(providerId)}/uninstall?${qs}`,
+      { method: 'DELETE' },
+    )
+  },
+
   /** MCP server statuses + their tool lists for the workspace. */
   getMcp: workspace => {
     const qs = workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''
@@ -75,9 +171,7 @@ export const agentApi = {
   uploadChatAttachments: (sessionId, files) => {
     const form = new FormData()
     for (const f of files) form.append('file', f)
-    const qs = sessionId
-      ? `?session_id=${encodeURIComponent(sessionId)}`
-      : ''
+    const qs = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''
     return fetchJSON(`/chat/uploads${qs}`, {
       method: 'POST',
       body: form,

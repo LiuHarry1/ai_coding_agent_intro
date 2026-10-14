@@ -62,12 +62,45 @@
   padding: 4px 8px;
 }
 
+.ws-text-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.15s;
+}
+.ws-text-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}
+.ws-text-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ws-text-btn.is-danger:hover:not(:disabled) {
+  color: var(--red);
+  background: rgba(248, 81, 73, 0.08);
+  border-color: transparent;
+}
+[data-theme='light'] .ws-text-btn {
+  color: var(--text-secondary);
+}
+[data-theme='light'] .ws-text-btn.is-danger:hover:not(:disabled) {
+  background: rgba(207, 34, 46, 0.08);
+}
+
 .ws-panel-tabs {
   display: flex;
   gap: 4px;
   padding: 0 18px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  overflow-x: auto;
 }
 
 .ws-panel-tab {
@@ -81,7 +114,9 @@
   color: var(--text-muted);
   cursor: pointer;
   font-family: var(--font-sans);
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .ws-panel-tab:hover {
@@ -205,6 +240,506 @@
 .ws-badge--error {
   background: rgba(248, 81, 73, 0.15);
   color: #f85149;
+}
+
+/* ── Marketplace ─────────────────────────────── */
+.marketplace-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(8, 11, 18, 0.58);
+  backdrop-filter: blur(5px);
+  animation: marketplace-fade 140ms ease-out;
+}
+
+.marketplace-panel {
+  width: min(920px, 100%);
+  height: min(760px, 86vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, white 20%);
+  border-radius: 14px;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.38),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  animation: marketplace-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.marketplace-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 46%
+    ),
+    var(--bg-secondary);
+}
+
+.marketplace-title-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary));
+}
+
+.marketplace-panel-head h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+}
+
+.marketplace-panel-head p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.marketplace-close {
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.marketplace-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}
+
+.marketplace-panel-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 18px;
+}
+
+.ws-marketplace {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ws-marketplace-toolbar,
+.ws-marketplace-search,
+.ws-marketplace-login,
+.ws-marketplace-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ws-marketplace-toolbar {
+  flex-wrap: wrap;
+  min-height: 34px;
+}
+
+.ws-marketplace-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ws-marketplace select,
+.ws-marketplace input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  outline: none;
+  transition: border-color 120ms ease;
+}
+
+.ws-marketplace select:focus,
+.ws-marketplace input:focus {
+  border-color: var(--accent);
+}
+
+.ws-marketplace button {
+  min-height: 32px;
+  padding: 0 11px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ws-marketplace button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ws-marketplace-kinds {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+}
+
+.ws-marketplace-kinds button {
+  min-height: 27px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.ws-marketplace-kinds button.is-active {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.ws-marketplace-search {
+  max-width: 560px;
+}
+
+.ws-marketplace-search input {
+  flex: 1;
+}
+
+.ws-marketplace-search button,
+.ws-marketplace-login button[type='submit'] {
+  color: white;
+  border-color: var(--accent);
+  background: var(--accent);
+  font-weight: 650;
+}
+
+.ws-marketplace-login {
+  max-width: 420px;
+  margin: 44px auto;
+  align-items: stretch;
+  flex-direction: column;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+}
+
+.ws-marketplace-login p {
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ws-marketplace-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ws-marketplace-list .ws-panel-item {
+  position: relative;
+  min-height: 92px;
+  padding: 11px 104px 11px 12px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg-tertiary) 78%, transparent);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.ws-marketplace-list .ws-panel-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background: var(--bg-tertiary);
+  transform: translateY(-1px);
+}
+
+.ws-marketplace-card .ws-panel-item-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+.ws-marketplace-card .ws-panel-item-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-marketplace-card .ws-panel-item-desc-short {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+.ws-marketplace-actions {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.ws-marketplace-actions button {
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.ws-marketplace-actions .ws-marketplace-uninstall {
+  color: var(--red);
+  background: transparent;
+}
+
+.ws-marketplace-actions .ws-marketplace-uninstall:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--border));
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+}
+
+.ws-marketplace-pagination {
+  position: sticky;
+  bottom: -18px;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 12px 0 2px;
+  background: linear-gradient(transparent, var(--bg-secondary) 30%);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ws-marketplace-pagination button {
+  width: 30px;
+  min-height: 28px;
+  padding: 0;
+  font-size: 15px;
+}
+
+.ws-marketplace-page {
+  min-width: 54px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-marketplace-result-count {
+  margin-right: auto;
+}
+
+.ws-bundle-preview-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.ws-bundle-preview {
+  width: min(680px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+
+.ws-bundle-preview-head,
+.ws-bundle-preview-actions,
+.ws-bundle-file {
+  display: flex;
+  align-items: center;
+}
+
+.ws-bundle-preview-head {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ws-bundle-preview-head h3,
+.ws-bundle-preview-head p {
+  margin: 0;
+}
+
+.ws-bundle-preview-head h3 {
+  font-size: 15px;
+}
+
+.ws-bundle-preview-head p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ws-bundle-preview-head > button {
+  width: 32px;
+  padding: 0;
+  font-size: 18px;
+}
+
+.ws-bundle-warning {
+  padding: 9px 10px;
+  color: var(--text-secondary);
+  border: 1px solid color-mix(in srgb, var(--orange) 32%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--orange) 7%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ws-bundle-files {
+  min-height: 120px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.ws-bundle-file {
+  min-height: 32px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ws-bundle-file:last-child {
+  border-bottom: 0;
+}
+
+.ws-bundle-file-paths {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+}
+
+.ws-bundle-file-paths code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.ws-bundle-file-paths .ws-bundle-file-target {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.ws-bundle-file-state {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.ws-bundle-file-state.is-ready,
+.ws-bundle-file-state.is-owned {
+  color: var(--green);
+}
+
+.ws-bundle-file-state.is-conflict,
+.ws-bundle-file-state.is-modified {
+  color: var(--red);
+}
+
+.ws-bundle-file-state.is-archiveOnly {
+  color: var(--orange);
+}
+
+.ws-bundle-preview-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ws-bundle-preview-actions .ws-marketplace-install {
+  color: white;
+  border-color: var(--accent);
+  background: var(--accent);
+  font-weight: 650;
+}
+
+@keyframes marketplace-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes marketplace-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+}
+
+@media (max-width: 720px) {
+  .marketplace-modal {
+    padding: 10px;
+  }
+
+  .marketplace-panel {
+    height: min(840px, 94vh);
+  }
+
+  .marketplace-panel-body {
+    padding: 12px;
+  }
+
+  .ws-marketplace-list {
+    grid-template-columns: 1fr;
+  }
+
+  .marketplace-trigger span {
+    display: none;
+  }
 }
 
 /* ── MCP tab ── */

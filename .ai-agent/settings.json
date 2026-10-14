@@ -3,25 +3,26 @@
     "large": {
       "provider": "openai-compatible",
       "baseURL": "http://localhost:4141/v1",
-      "apiKey": "not-needed",
-      "model": "gpt-5.4"
+      "apiKey": "sk-xx",
+      "model": "qwen3.6-35b-a3b"
     },
     "medium": {
       "provider": "openai-compatible",
       "baseURL": "http://localhost:4141/v1",
-      "apiKey": "not-needed",
-      "model": "gpt-4.1"
+      "apiKey": "sk-xx",
+      "model": "qwen3.6-35b-a3b"
     },
     "small": {
       "provider": "openai-compatible",
       "baseURL": "http://localhost:4141/v1",
-      "apiKey": "sk-xxx",
-      "model": "gpt-4o-mini"
+      "apiKey": "sk-xx",
+      "model": "qwen3.6-35b-a3b"
     }
   },
   "compaction": {
     "enabled": true,
-    "contextWindow": 200000,
+    "contextWindow": 262144,
+    "maxOutputTokens": 16384,
     "microCompactKeepRecent": 5,
     "maxFilesToRestore": 5,
     "maxTokensPerFile": 5000,
@@ -32,8 +33,8 @@
   "sessionMemory": {
     "enabled": true,
     "minimumTokensToInit": 10000,
-    "minimumTokensBetweenUpdate": 5000,
-    "toolCallsBetweenUpdates": 3,
+    "minimumTokensBetweenUpdate": 20000,
+    "toolCallsBetweenUpdates": 15,
     "cacheSafe": true,
     "modelTier": "small",
     "compactMinTokens": 10000,
@@ -41,11 +42,11 @@
     "compactMinTextMessages": 5
   },
   "autoMemory": {
-    "enabled": true,
+    "enabled": false,
     "prefetchEnabled": true,
-    "cacheSafe": true,
+    "cacheSafe": false,
     "modelTier": "small",
-    "prefetchModelTier": "small"
+    "prefetchModelTier": "medium"
   },
   "lspServers": {
     "typescript": {
@@ -76,9 +77,11 @@
     }
 
 
-
   },
-  "mcpServers": {},
+
+  "environments": {
+    "ssh": [{ "sshHost": "yourhostname", "startDirectory": "~/Device1" }]
+  },
 
   "scheduledTasks": {
     "enabled": true
@@ -86,10 +89,10 @@
 
   "browser": {
     "mode": "extension",
-    "enabled": false
+    "headless": false,
+    "extensionToken": "yourextensiontoken"
   },
 
-  "disabledTools": [],  
   "agents": {
     "picker": {
       "modes": ["agent"],
@@ -99,5 +102,17 @@
       "mode": "agent",
       "agentType": "browser"
     }
+  },
+  "marketplaces": {
+    "providers": [
+      {
+        "id": "skills-sh",
+        "type": "skills-sh",
+        "label": "skills.sh",
+        "baseURL": "https://skills.sh/api",
+        "auth": "none",
+        "capabilities": ["skills"]
+      }
+    ]
   }
 }

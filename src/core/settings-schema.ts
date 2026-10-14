@@ -110,6 +110,25 @@ const ScheduledTasksConfigSchema = z.object({
   enabled: z.boolean().optional(),
 })
 
+const MarketplaceProviderSchema = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/i),
+  type: z.enum(['demeter', 'skills-sh']),
+  baseURL: z.string().url(),
+  label: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+  auth: z.enum(['none', 'cookie-proxy']).optional(),
+  capabilities: z.array(z.enum(['skills', 'agents', 'bundles'])).optional(),
+  allowInsecureHttp: z.boolean().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  maxDownloadBytes: z.number().int().positive().optional(),
+  maxExtractBytes: z.number().int().positive().optional(),
+  maxFiles: z.number().int().positive().optional(),
+})
+
+const MarketplacesConfigSchema = z.object({
+  providers: z.array(MarketplaceProviderSchema),
+})
+
 const ExternalModeSchema = z.enum(['agent', 'ask', 'plan'])
 
 const AgentsPickerSchema = z.object({
@@ -143,15 +162,18 @@ const PermissionsSchema = z.object({
    * `bypassPermissions` → allow outside (deny still wins).
    * Legacy `acceptEdits` / `plan` coerce to `default`.
    */
-  defaultMode: z.preprocess((value) => {
-    if (value === 'acceptEdits' || value === 'plan') {
-      console.warn(
-        `[settings] permissions.defaultMode "${value}" is not implemented; using "default"`,
-      )
-      return 'default'
-    }
-    return value
-  }, z.enum(['default', 'dontAsk', 'bypassPermissions']).optional()),
+  defaultMode: z.preprocess(
+    value => {
+      if (value === 'acceptEdits' || value === 'plan') {
+        console.warn(
+          `[settings] permissions.defaultMode "${value}" is not implemented; using "default"`,
+        )
+        return 'default'
+      }
+      return value
+    },
+    z.enum(['default', 'dontAsk', 'bypassPermissions']).optional(),
+  ),
 })
 
 /** Parsed settings layer before merge into AppConfig. */
@@ -169,6 +191,7 @@ export const SettingsFileSchema = z.object({
   disabledTools: z.array(z.string()).optional(),
   browser: BrowserConfigSchema.optional(),
   scheduledTasks: ScheduledTasksConfigSchema.optional(),
+  marketplaces: MarketplacesConfigSchema.optional(),
   agents: AgentsConfigSchema.optional(),
   permissions: PermissionsSchema.optional(),
   environments: z

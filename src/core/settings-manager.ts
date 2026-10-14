@@ -66,6 +66,7 @@ export const DEFAULTS: AppConfig = {
   disabledTools: [],
   environments: { ssh: [] },
   scheduledTasks: { enabled: true },
+  marketplaces: { providers: [] },
 }
 
 /** Code defaults for extract/prefetch (throttle default = 1). */
@@ -249,8 +250,11 @@ export function loadManagedFileSettings(): {
   let found = false
 
   for (const filePath of listManagedSettingsFiles()) {
-    const { settings, error, validationErrors: fileErrors } =
-      readSettingsFile(filePath)
+    const {
+      settings,
+      error,
+      validationErrors: fileErrors,
+    } = readSettingsFile(filePath)
     if (error) {
       errors.push(`${filePath}: ${error}`)
       console.warn(`[settings] Failed to parse ${filePath}: ${error}`)
@@ -333,6 +337,9 @@ function deepMergeSettingsLayer(
       ...(overlay.scheduledTasks ?? {}),
     }
   }
+  if (base.marketplaces || overlay.marketplaces) {
+    out.marketplaces = overlay.marketplaces ?? base.marketplaces
+  }
   if (base.agents || overlay.agents) {
     const mergedPicker =
       base.agents?.picker || overlay.agents?.picker
@@ -358,7 +365,10 @@ function deepMergeSettingsLayer(
     if (!mergedDefault) delete out.agents.default
   }
   if (base.permissions || overlay.permissions) {
-    out.permissions = mergePermissionsConfig(base.permissions, overlay.permissions)
+    out.permissions = mergePermissionsConfig(
+      base.permissions,
+      overlay.permissions,
+    )
   }
   if (base.disabledTools || overlay.disabledTools) {
     out.disabledTools = [
@@ -402,6 +412,32 @@ function stripUntrustedAutoMemoryDirectory(
     next.autoMemory = restAuto
   }
   return next
+}
+
+/**
+ * In authenticated multi-tenant deployments, only managed policy may define
+ * server-side fetch targets. Local single-user mode trusts its own settings
+ * files, including explicit allowInsecureHttp for intranet registries.
+ */
+function stripUntrustedMarketplaces(
+  settings: PartialAppConfig,
+  sourcePath: string,
+): PartialAppConfig {
+  if (!settings.marketplaces) return settings
+  console.warn(
+    `[settings] Ignoring marketplaces from ${sourcePath} (managed only when AUTH_ENABLED=true)`,
+  )
+  const next = { ...settings }
+  delete next.marketplaces
+  return next
+}
+
+function isAuthDeployment(): boolean {
+  return (
+    String(process.env.AUTH_ENABLED ?? '')
+      .trim()
+      .toLowerCase() === 'true'
+  )
 }
 
 function fileMtimeMs(filePath: string): number {
@@ -474,7 +510,9 @@ function mergePermissionsConfig(
       ...(overlay?.additionalDirectories ?? []),
     ]),
   ]
-  const allow = [...new Set([...(base?.allow ?? []), ...(overlay?.allow ?? [])])]
+  const allow = [
+    ...new Set([...(base?.allow ?? []), ...(overlay?.allow ?? [])]),
+  ]
   const deny = [...new Set([...(base?.deny ?? []), ...(overlay?.deny ?? [])])]
   const out: NonNullable<AppConfig['permissions']> = {
     ...(base ?? {}),
@@ -517,13 +555,12 @@ function tierExplicitlySet(
   // Heuristic: after resolve, fallback clones share the same model id + baseURL
   // as their parent. We track explicit tiers on a WeakMap-less side channel via
   // comparing to large after each layer is imperfect; instead we stash flags.
-  return Boolean((config as AppConfig & { _explicit?: Set<string> })._explicit?.has(tier))
+  return Boolean(
+    (config as AppConfig & { _explicit?: Set<string> })._explicit?.has(tier),
+  )
 }
 
-function markExplicit(
-  config: AppConfig,
-  tier: 'medium' | 'small',
-): void {
+function markExplicit(config: AppConfig, tier: 'medium' | 'small'): void {
   const c = config as AppConfig & { _explicit?: Set<string> }
   if (!c._explicit) c._explicit = new Set()
   c._explicit.add(tier)
@@ -625,6 +662,12 @@ function applyLayer(config: AppConfig, layer: PartialAppConfig): void {
     }
   }
 
+  if (layer.marketplaces && typeof layer.marketplaces === 'object') {
+    config.marketplaces = {
+      providers: [...(layer.marketplaces.providers ?? [])],
+    }
+  }
+
   if (layer.agents && typeof layer.agents === 'object') {
     const nextPicker =
       config.agents?.picker || layer.agents.picker
@@ -681,8 +724,11 @@ function applySettingsSource(
   validationErrors: ValidationError[],
 ): void {
   source.exists = fileMtimeMs(source.path) > 0
-  const { settings, error, validationErrors: fileErrors } =
-    readSettingsFile(source.path)
+  const {
+    settings,
+    error,
+    validationErrors: fileErrors,
+  } = readSettingsFile(source.path)
   if (error) {
     source.error = error
     console.warn(`[settings] Failed to parse ${source.path}: ${error}`)
@@ -701,6 +747,9 @@ function applySettingsSource(
   let toApply: PartialAppConfig = settings
   if (source.scope === 'project' || source.scope === 'local') {
     toApply = stripUntrustedAutoMemoryDirectory(settings, source.path)
+  }
+  if (source.scope !== 'managed' && isAuthDeployment()) {
+    toApply = stripUntrustedMarketplaces(toApply, source.path)
   }
   applyLayer(config, toApply)
   source.applied = true
@@ -983,10 +1032,7 @@ export function patchSettings(
 }
 
 /** Persist Always-allow to user `settings.json` (`permissions.additionalDirectories`). */
-export function persistAlwaysAllowDirectory(
-  cwd: string,
-  absDir: string,
-): void {
+export function persistAlwaysAllowDirectory(cwd: string, absDir: string): void {
   patchSettings(cwd, 'user', {
     permissions: { additionalDirectories: [path.resolve(absDir)] },
   })

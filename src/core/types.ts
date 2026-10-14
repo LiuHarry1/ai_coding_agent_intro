@@ -277,6 +277,8 @@ export type UserFileAttachment = {
 export interface UserMessage {
   role: 'user'
   content: string | UserContentPart[]
+  /** Original composer text when `content` was expanded for the model. */
+  displayContent?: string
   /** Stable message id (session-memory cursor / keep boundary). */
   uuid?: string
   /** Meta attachments expanded for API �?hidden from UI when true. */
@@ -471,6 +473,8 @@ export interface AgentOptions {
   attachmentPrelude?: Message[]
   /** File-chip metadata stored on the visible user turn. */
   attachmentFiles?: UserFileAttachment[]
+  /** Original composer text persisted for transcript rendering. */
+  displayUserMessage?: string
   /** System-generated user turn (scheduled tasks). Hidden from some prefetch paths. */
   isMeta?: boolean
   /**
@@ -1026,6 +1030,13 @@ export interface AppConfig {
     enabled?: boolean
   }
   /**
+   * Trusted remote extension catalogs. Project/local settings are not allowed
+   * to supply these URLs because the agent server fetches them directly.
+   */
+  marketplaces?: {
+    providers: MarketplaceProviderConfig[]
+  }
+  /**
    * ModePicker visibility + new-session defaults for permission modes and
    * primary agent profiles. See agents.picker / agents.default in settings.
    */
@@ -1072,6 +1083,25 @@ export interface AppConfig {
 }
 
 export type { ModelProfiles, ModelRegistry, ModelTier }
+
+export type MarketplaceProviderType = 'demeter' | 'skills-sh'
+export type MarketplaceCapability = 'skills' | 'agents' | 'bundles'
+export type MarketplaceAuthMode = 'none' | 'cookie-proxy'
+
+export interface MarketplaceProviderConfig {
+  id: string
+  type: MarketplaceProviderType
+  baseURL: string
+  label?: string
+  enabled?: boolean
+  auth?: MarketplaceAuthMode
+  capabilities?: MarketplaceCapability[]
+  allowInsecureHttp?: boolean
+  timeoutMs?: number
+  maxDownloadBytes?: number
+  maxExtractBytes?: number
+  maxFiles?: number
+}
 
 export interface LspServerConfig {
   command: string

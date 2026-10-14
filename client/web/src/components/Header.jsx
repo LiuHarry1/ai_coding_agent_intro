@@ -13,6 +13,7 @@ import {
 import SessionSwitcher from './SessionSwitcher.jsx'
 import BaizeLogo from './BaizeLogo.jsx'
 import WorkspacePanel from './WorkspacePanel.jsx'
+import MarketplacePanel from './MarketplacePanel.jsx'
 import EnvironmentPicker from './EnvironmentPicker.jsx'
 import { APP_NAME } from '../lib/brand.js'
 import { shortDisplayPath } from '../lib/utils.js'
@@ -31,6 +32,7 @@ export default function Header() {
   const toggleTheme = useChatStore(s => s.toggleTheme)
   const theme = useChatStore(s => s.theme)
   const clearSession = useChatStore(s => s.clearSession)
+  const isStreaming = useChatStore(s => s.isStreaming)
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [dropdownData, setDropdownData] = useState(null)
@@ -38,7 +40,10 @@ export default function Header() {
   const [newFolderName, setNewFolderName] = useState(null)
   const [newFolderError, setNewFolderError] = useState(null)
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false)
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const dropdownRef = useRef(null)
+  const accountRef = useRef(null)
 
   useEffect(() => {
     workspaceApi
@@ -51,6 +56,9 @@ export default function Header() {
     const handler = e => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownOpen(false)
+      }
+      if (accountRef.current && !accountRef.current.contains(e.target)) {
+        setAccountOpen(false)
       }
     }
     document.addEventListener('click', handler)
@@ -129,6 +137,8 @@ export default function Header() {
 
   const pathLabel =
     shortDisplayPath(workspace, 32) || workspace || 'Select workspace'
+  const userLabel = user?.username || user?.email || ''
+  const userInitial = userLabel.trim().charAt(0).toUpperCase() || 'U'
 
   const dirs = dropdownData?.entries?.filter(e => e.isDir) || []
 
@@ -162,6 +172,29 @@ export default function Header() {
         <span className='header-sep' aria-hidden='true' />
 
         <SessionSwitcher />
+        <button
+          type='button'
+          className='icon-btn new-chat-btn'
+          onClick={clearSession}
+          disabled={isStreaming}
+          title='New chat'
+          aria-label='New chat'
+        >
+          <svg
+            width='16'
+            height='16'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            aria-hidden='true'
+          >
+            <path d='M12 20h9' />
+            <path d='M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z' />
+          </svg>
+        </button>
 
         {!workspaceIdeOpen &&
           (locked ? (
@@ -339,11 +372,30 @@ export default function Header() {
       </div>
 
       <div className='header-right'>
-        {user && (
-          <span className='auth-user' title={user.email}>
-            {user.username || user.email}
-          </span>
-        )}
+        <button
+          type='button'
+          className='marketplace-trigger'
+          onClick={() => setMarketplaceOpen(true)}
+          title='Browse skills and agents'
+        >
+          <svg
+            width='15'
+            height='15'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='1.9'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            aria-hidden='true'
+          >
+            <path d='M3 9l1.5-5h15L21 9' />
+            <path d='M5 13v7h14v-7' />
+            <path d='M9 20v-6h6v6' />
+            <path d='M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0' />
+          </svg>
+          <span>Marketplace</span>
+        </button>
         <button
           className='icon-btn'
           onClick={() => setWorkspacePanelOpen(true)}
@@ -401,23 +453,88 @@ export default function Header() {
             </svg>
           )}
         </button>
-        <button
-          className='btn-clear'
-          onClick={clearSession}
-          title='Clear conversation'
-        >
-          Clear
-        </button>
-        {authEnabled() && (
-          <button className='btn-clear' onClick={logout} title='Sign out'>
-            Logout
-          </button>
+        {user && (
+          <>
+            <span className='header-action-sep' aria-hidden='true' />
+            <div className='account-menu' ref={accountRef}>
+              <button
+                type='button'
+                className={`account-trigger ${accountOpen ? 'open' : ''}`}
+                onClick={e => {
+                  e.stopPropagation()
+                  setAccountOpen(v => !v)
+                }}
+                title={user.email}
+                aria-haspopup='menu'
+                aria-expanded={accountOpen}
+              >
+                <span className='account-avatar' aria-hidden='true'>
+                  {userInitial}
+                </span>
+                <span className='account-name'>{userLabel}</span>
+                <svg
+                  className='account-caret'
+                  width='12'
+                  height='12'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2.5'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  aria-hidden='true'
+                >
+                  <polyline points='6 9 12 15 18 9' />
+                </svg>
+              </button>
+              {accountOpen && (
+                <div className='account-dropdown' role='menu'>
+                  <div className='account-dropdown-identity'>
+                    <span className='account-dropdown-name'>{userLabel}</span>
+                    {user.email && user.email !== userLabel && (
+                      <span className='account-dropdown-email'>
+                        {user.email}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type='button'
+                    className='account-signout'
+                    onClick={logout}
+                    role='menuitem'
+                  >
+                    <svg
+                      width='14'
+                      height='14'
+                      viewBox='0 0 24 24'
+                      fill='none'
+                      stroke='currentColor'
+                      strokeWidth='2'
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      aria-hidden='true'
+                    >
+                      <path d='M10 17l5-5-5-5' />
+                      <path d='M15 12H3' />
+                      <path d='M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4' />
+                    </svg>
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
       <WorkspacePanel
         open={workspacePanelOpen}
         workspace={workspace}
         onClose={() => setWorkspacePanelOpen(false)}
+      />
+      <MarketplacePanel
+        open={marketplaceOpen}
+        workspace={workspace}
+        onClose={() => setMarketplaceOpen(false)}
       />
     </header>
   )
