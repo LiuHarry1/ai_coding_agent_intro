@@ -284,6 +284,7 @@ export async function prepareChatTurn(
       throw new Error(
         `Remote execution backend unavailable (${session.workspace?.environmentId}): ${msg}. ` +
           `Shell/file tools cannot fall back to the local machine.`,
+        { cause: err },
       )
     }
     execution = undefined

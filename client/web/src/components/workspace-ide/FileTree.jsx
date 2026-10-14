@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useWorkspaceIdeStore } from '../../stores/workspace-ide-store.js'
 import { triggerDownload } from '../../lib/api/workspace.js'
 import { fileName } from '../../lib/utils.js'

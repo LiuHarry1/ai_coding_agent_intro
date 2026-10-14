@@ -1,5 +1,4 @@
 import type { streamText } from 'ai'
-import type { AgentOptions } from '../types.js'
 import type { WireEmitter } from '../wire-emitter.js'
 import {
   appendPreviewDelta,

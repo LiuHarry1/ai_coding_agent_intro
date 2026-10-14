@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolChrome from './ToolChrome.jsx'
 import { formatBytes } from '../lib/utils.js'

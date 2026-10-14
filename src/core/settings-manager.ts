@@ -1,11 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import type {
-  AppConfig,
-  AutoMemoryConfig,
-  LspServerConfig,
-  MCPServerConfig,
-} from './types.js'
+import type { AppConfig, AutoMemoryConfig, MCPServerConfig } from './types.js'
 import {
   DEFAULT_PROFILE,
   isModelTier,
@@ -923,6 +918,7 @@ function readWritableSettings(filePath: string): Record<string, unknown> {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {}
     throw new Error(
       `Failed to read ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
     )
   }
 }

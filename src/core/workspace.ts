@@ -47,6 +47,7 @@ function validateDir(p: string, source: string): string {
   } catch (err) {
     throw new Error(
       `[workspace] ${source} points to "${resolved}" which does not exist: ${(err as Error).message}`,
+      { cause: err },
     )
   }
   if (!stat.isDirectory()) {

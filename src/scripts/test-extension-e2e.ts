@@ -65,7 +65,6 @@ import { startFixtureServer } from './browser-tool-suite.js'
 import { launchChromeWithExtension, waitFor } from './chrome-launcher.js'
 
 const HEADED = process.argv.includes('--headed')
-const RELAY_PORT = 8901
 
 function toolContext(sessionId = 'extension-e2e'): ToolContext {
   return {
@@ -2478,6 +2477,7 @@ async function main() {
     } catch (err) {
       throw new Error(
         `${err instanceof Error ? err.message : String(err)}; last popup state=${JSON.stringify(lastPopupState)}`,
+        { cause: err },
       )
     }
     const popupState = await readPopup()

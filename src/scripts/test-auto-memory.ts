@@ -13,7 +13,6 @@ import {
   ensureAutoMemDir,
   ensureIndexEntry,
   getAutoMemPath,
-  getAutoMemoryState,
   getSuccessfulMemoryWritePathsSince,
   isAutoMemPath,
   parseJsonFromModelText,

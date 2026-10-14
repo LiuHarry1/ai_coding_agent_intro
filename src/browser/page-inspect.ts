@@ -154,7 +154,6 @@ export async function sinceReport(
 export function wrapPageExpression(expression: string): string {
   const trimmed = expression.trim()
   try {
-    // eslint-disable-next-line no-new-func
     new Function(`return (${trimmed})`)
     return `(async () => { return (${trimmed}); })()`
   } catch {

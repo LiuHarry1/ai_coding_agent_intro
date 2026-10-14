@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import ExploredGroup from './ExploredGroup.jsx'
 import { pickCard } from './pickToolCard.js'
 import { expandToolGroup } from '../lib/tool-density.js'

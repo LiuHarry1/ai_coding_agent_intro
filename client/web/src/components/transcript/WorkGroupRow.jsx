@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { useChatStore } from '../../stores/chat-store.js'
 import { expandFoldableSegment } from '../../lib/bubbles/flat-elements.js'
 import WorkGroup from '../WorkGroup.jsx'
@@ -8,12 +8,7 @@ import ToolGroupRow from './ToolGroupRow.jsx'
 /**
  * "Worked for …" disclosure — body rows subscribe by bubble/group id.
  */
-function WorkGroupRow({
-  memberIds,
-  durationMs,
-  state = 'completed',
-  defaultOpen = false,
-}) {
+function WorkGroupRow({ memberIds, durationMs, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen)
 
   // The last turn stays open only while it is last. A new user message

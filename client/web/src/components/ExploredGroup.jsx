@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import ToolCallLine from './ToolCallLine.jsx'
 import { pickCard } from './pickToolCard.js'
 import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'

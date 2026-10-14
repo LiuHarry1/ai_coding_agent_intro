@@ -12,7 +12,7 @@ import type {
   UserFileAttachment,
 } from '../core/types.js'
 import { offloadChatImageRefs } from '../utils/chat-uploads.js'
-import { isAttachmentMessage, isRoleMessage } from '../core/types.js'
+import { isRoleMessage } from '../core/types.js'
 import type { ModelRegistry } from '../core/llm/index.js'
 import { EventBus } from '../core/event-bus.js'
 import { createModelRegistry, resolveSidePathModel } from '../core/llm/index.js'

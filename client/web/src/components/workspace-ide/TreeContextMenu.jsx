@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useChatStore } from '../../stores/chat-store.js'
 import { DownloadIcon, TrashIcon } from './icons.jsx'

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolChrome from './ToolChrome.jsx'
 import { detectError, fileName, formatBytes } from '../lib/utils.js'

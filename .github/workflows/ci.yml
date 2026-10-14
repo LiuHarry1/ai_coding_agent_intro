@@ -18,7 +18,7 @@ env:
 
 jobs:
   check:
-    name: typecheck, build, test
+    name: format, lint, typecheck, build, test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -44,6 +44,12 @@ jobs:
           npm ci --ignore-scripts --prefix client/web
           npm ci --ignore-scripts --prefix protocol
           npm ci --ignore-scripts --prefix client-sdk
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck

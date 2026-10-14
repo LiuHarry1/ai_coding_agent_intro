@@ -1,6 +1,6 @@
 import type { Tool } from 'ai'
 import type { ProviderOptions } from '@ai-sdk/provider-utils'
-import type { IProvider, LlmProfile } from './llm/types.js'
+import type { IProvider } from './llm/types.js'
 import type {
   ModelProfiles,
   ModelRegistry,
@@ -15,7 +15,6 @@ import type {
 } from '../utils/attachments/types.js'
 import type { ReadFileState } from '../utils/read/types.js'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>
 
 // ── EventBus ────────────────────────────────────

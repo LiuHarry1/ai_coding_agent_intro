@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolChrome from './ToolChrome.jsx'
 import { FileIcon } from './workspace-ide/icons.jsx'

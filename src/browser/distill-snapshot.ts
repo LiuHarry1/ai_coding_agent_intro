@@ -550,9 +550,7 @@ function subtreeEndFrom(lines: string[], start: number, limit: number): number {
   return i
 }
 
-function matchBadge(
-  line: string,
-): {
+function matchBadge(line: string): {
   line: string
   indent: string
   role: string

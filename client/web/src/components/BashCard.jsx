@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolChrome from './ToolChrome.jsx'
 import LiveTerminal from './LiveTerminal.jsx'

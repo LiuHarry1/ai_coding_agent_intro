@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState, useEffect, useMemo } from 'react'
+import { useRef, useCallback, useState, useEffect, useMemo } from 'react'
 import { useChatStore } from '../stores/chat-store.js'
 import ModePicker from './ModePicker.jsx'
 import SchedulePicker from './SchedulePicker.jsx'

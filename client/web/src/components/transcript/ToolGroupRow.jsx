@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { useChatStore } from '../../stores/chat-store.js'
 import { toolBubbleToPart } from '../../lib/bubbles/messages-to-bubbles.js'
 import ExploredGroup from '../ExploredGroup.jsx'

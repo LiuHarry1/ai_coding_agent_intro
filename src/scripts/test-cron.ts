@@ -144,7 +144,7 @@ async function main() {
     _setCronStorePathForTest(store)
 
     const fired: string[] = []
-    let now = Date.parse('2026-03-01T12:00:00')
+    const now = Date.parse('2026-03-01T12:00:00')
     const timers: Array<{ at: number; fn: () => void }> = []
 
     const scheduler = createCronScheduler({
@@ -212,7 +212,7 @@ async function main() {
         fired.push(task.id)
         return 'fired'
       },
-      setTimeoutFn: ((fn: () => void) => {
+      setTimeoutFn: ((_fn: () => void) => {
         return 1 as unknown as ReturnType<typeof setTimeout>
       }) as typeof setTimeout,
       clearTimeoutFn: (() => {}) as typeof clearTimeout,

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { MarketplaceCatalog } from './WorkspacePanel.jsx'
 
 function StoreIcon() {

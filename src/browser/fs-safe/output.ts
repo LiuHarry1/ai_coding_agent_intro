@@ -7,6 +7,7 @@ import { ensureAbsoluteDirectory } from './ensure-absolute-directory.js'
 import { writeExternalFileViaSibling } from './output-sibling.js'
 
 const NON_PORTABLE_FILE_NAME_CHARACTERS =
+  // eslint-disable-next-line no-control-regex -- control chars are the point
   /[\u0000-\u001f\u007f-\u009f<>:"/\\|?*]/u
 
 function tempFileNameForTarget(

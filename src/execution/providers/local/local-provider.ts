@@ -175,6 +175,7 @@ class LocalConnection implements EnvironmentConnection {
       throw new Error(
         `Local worker failed to bind (${launch.mode}: ${launch.command}): ` +
           `${err instanceof Error ? err.message : String(err)}`,
+        { cause: err },
       )
     }
     return port

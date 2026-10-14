@@ -1,5 +1,3 @@
-import React from 'react'
-
 /** Dense early-turn placeholder — same visual tier as a tool-row. */
 export default function ThinkingDots() {
   return (

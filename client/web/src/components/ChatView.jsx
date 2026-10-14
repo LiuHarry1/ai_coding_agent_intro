@@ -1,4 +1,4 @@
-import React, {
+import {
   useRef,
   useEffect,
   useLayoutEffect,
@@ -213,8 +213,6 @@ export default function ChatView() {
             programmaticScrollRef.current = false
             if (stickDirtyRef.current) scheduleStickToBottom()
           })
-        } else if (stickDirtyRef.current) {
-          scheduleStickToBottom()
         }
       })
     }

@@ -239,11 +239,11 @@ assert(
   'browser.md stops after about four attempts',
 )
 assert(
-  /^  - browser_mouse_click_xy\s*$/m.test(browserMd),
+  /^ {2}- browser_mouse_click_xy\s*$/m.test(browserMd),
   'browser.md allowlists browser_mouse_click_xy',
 )
 assert(
-  /^  - browser_cdp\s*$/m.test(browserMd),
+  /^ {2}- browser_cdp\s*$/m.test(browserMd),
   'browser.md allowlists the ownership-scoped browser_cdp tool',
 )
 assert(

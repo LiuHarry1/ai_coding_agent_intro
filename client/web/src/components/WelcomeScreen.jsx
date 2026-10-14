@@ -1,4 +1,3 @@
-import React from 'react'
 import { useChatStore } from '../stores/chat-store.js'
 import BaizeLogo from './BaizeLogo.jsx'
 import { APP_NAME, APP_TAGLINE } from '../lib/brand.js'

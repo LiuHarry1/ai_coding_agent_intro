@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import ToolCallLine from './ToolCallLine.jsx'
 import CopyButton from './CopyButton.jsx'
 

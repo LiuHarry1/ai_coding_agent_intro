@@ -68,7 +68,7 @@ import {
   resolveEffectiveSettings,
   setMCPServer,
 } from '../core/settings-manager.js'
-import { resolveRequestCwd, resolveSettingsRequestCwd } from './request-cwd.js'
+import { resolveSettingsRequestCwd } from './request-cwd.js'
 import {
   createSession,
   getSession,

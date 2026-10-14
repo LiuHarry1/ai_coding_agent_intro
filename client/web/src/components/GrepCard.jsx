@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolChrome from './ToolChrome.jsx'
 import { FileIcon } from './workspace-ide/icons.jsx'
@@ -36,7 +36,7 @@ function parseRgContentLine(raw, fallbackPath) {
   if (raw.startsWith('[Showing results with pagination')) return null
   if (raw === 'No matches found') return null
 
-  const m = raw.match(/^(?:(.+?):)?(\d+)([:\-])(.*)$/)
+  const m = raw.match(/^(?:(.+?):)?(\d+)([:-])(.*)$/)
   if (!m) return null
   const filePath = m[1] || fallbackPath || '(file)'
   return {

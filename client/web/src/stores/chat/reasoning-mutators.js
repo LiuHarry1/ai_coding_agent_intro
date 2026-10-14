@@ -18,7 +18,7 @@ function requireTurn(s) {
   return turnId
 }
 
-export function createReasoningMutators(set, get) {
+export function createReasoningMutators(set, _get) {
   return {
     _setThinking: () => {
       set(s => {

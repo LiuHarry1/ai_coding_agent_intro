@@ -210,7 +210,7 @@ export async function getWithPermittedRedirects(
     ) {
       const redirectLocation = error.response.headers.location
       if (!redirectLocation) {
-        throw new Error('Redirect missing Location header')
+        throw new Error('Redirect missing Location header', { cause: error })
       }
 
       // Resolve relative URLs against the original URL

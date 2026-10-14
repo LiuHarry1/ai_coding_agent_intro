@@ -68,6 +68,7 @@ done
       throw new Error(
         `Cannot list remote directory "${dirPath}": ${msg}. ` +
           `Hint: use an absolute path or ~/… (home is expanded on the remote).`,
+        { cause: err },
       )
     }
 

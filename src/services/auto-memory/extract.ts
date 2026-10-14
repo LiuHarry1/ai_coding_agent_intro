@@ -7,7 +7,6 @@
  * - Queue lock by memdir path (multi-session same repo)
  * - Optional wait if session-memory extract is in-flight
  */
-import * as fs from 'fs'
 import * as path from 'path'
 import type {
   AutoMemoryConfig,

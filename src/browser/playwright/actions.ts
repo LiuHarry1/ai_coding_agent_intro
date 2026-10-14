@@ -24,8 +24,6 @@ import {
 } from '../types.js'
 import { DATE_RANGE_CALENDAR_MSG, isTypedDateRange } from './fields.js'
 import {
-  assertElementHint,
-  describeElement,
   editableLocator,
   mapPlaywrightError,
   normalizeRef,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChatActions } from '../lib/chat-actions.jsx'
@@ -18,14 +18,14 @@ export default function PlanApprovalCard({ part, onApprove }) {
   const done = part.status === 'answered'
   const pending = part.status === 'pending'
 
-  // User cannot see the plan until ExitPlanMode — only pending/answered render.
-  if (!pending && !done) return null
-
   useEffect(() => {
     if (!editing && part.plan != null) {
       setContent(part.plan)
     }
   }, [part.plan, editing])
+
+  // User cannot see the plan until ExitPlanMode — only pending/answered render.
+  if (!pending && !done) return null
 
   const displayPath = formatPlanDisplayPath(part.filePath)
   const isLong =

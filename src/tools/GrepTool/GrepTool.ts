@@ -148,7 +148,7 @@ function parseRgContentLine(
   if (!raw || raw === '--') return null
   if (raw.startsWith('[Showing results')) return null
   if (raw === 'No matches found') return null
-  const m = raw.match(/^(?:(.+?):)?(\d+)([:\-])(.*)$/)
+  const m = raw.match(/^(?:(.+?):)?(\d+)([:-])(.*)$/)
   if (!m) return null
   return {
     file: m[1] || fallbackPath || '(file)',
@@ -179,7 +179,7 @@ function toRelativeContentLine(
   line: string,
   toRelative: (abs: string) => string,
 ): string {
-  const m = line.match(/^(.+?):(\d+)([:\-])(.*)$/)
+  const m = line.match(/^(.+?):(\d+)([:-])(.*)$/)
   if (!m) return line
   return `${toRelative(m[1]!)}:${m[2]}${m[3]}${m[4] ?? ''}`
 }

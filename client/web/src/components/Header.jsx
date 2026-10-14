@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useChatStore } from '../stores/chat-store.js'
 import { useWorkspaceIdeStore } from '../stores/workspace-ide-store.js'
 import { workspaceApi } from '../lib/api/workspace.js'

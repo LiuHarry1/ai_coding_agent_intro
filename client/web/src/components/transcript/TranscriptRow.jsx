@@ -1,4 +1,4 @@
-import React, { memo } from 'react'
+import { memo } from 'react'
 import BubbleRow from './BubbleRow.jsx'
 import ToolGroupRow from './ToolGroupRow.jsx'
 import WorkGroupRow from './WorkGroupRow.jsx'

@@ -134,7 +134,6 @@ export async function runStep(args: RunStepArgs): Promise<StreamResult | null> {
     canUseTool,
     cwd,
     compaction,
-    sessionMemory,
     sessionId,
     logLabel,
     abortSignal,

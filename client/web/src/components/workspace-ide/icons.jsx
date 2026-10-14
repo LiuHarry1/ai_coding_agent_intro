@@ -1,5 +1,3 @@
-import React from 'react'
-
 /**
  * Themed SVG icons for the workspace IDE — Feather-style 2px strokes so
  * they sit visually next to the chevron/close icons used elsewhere.

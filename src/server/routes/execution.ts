@@ -4,7 +4,6 @@ import {
   getExecutionPlane,
   isWorkspaceHandle,
   prewarmRuntime,
-  type WorkspaceHandle,
 } from '../../execution/index.js'
 import {
   getSession,

@@ -378,7 +378,6 @@ export const useWorkspaceIdeStore = create((set, get) => ({
       isDir ? isUnderPath(p, targetPath) : p === targetPath,
     )
     if (affectedFiles.some(p => get().fileContents[p]?.dirty)) {
-      // eslint-disable-next-line no-alert
       if (
         !window.confirm('Some open files have unsaved changes. Delete anyway?')
       ) {
@@ -386,7 +385,6 @@ export const useWorkspaceIdeStore = create((set, get) => ({
       }
     }
 
-    // eslint-disable-next-line no-alert
     if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return
 
     try {
@@ -420,7 +418,6 @@ export const useWorkspaceIdeStore = create((set, get) => ({
       await get().loadDir(parentDir(targetPath))
       if (get().changes.lastFetchedAt) get().refreshChanges()
     } catch (e) {
-      // eslint-disable-next-line no-alert
       window.alert(e.message || 'Delete failed')
     }
   },
@@ -580,7 +577,6 @@ export const useWorkspaceIdeStore = create((set, get) => ({
   closeFile: (filePath, { force = false } = {}) => {
     const cur = get().fileContents[filePath]
     if (!force && cur?.dirty) {
-      // eslint-disable-next-line no-alert
       const ok = window.confirm(
         `"${fileName(filePath)}" has unsaved changes. Discard them?`,
       )

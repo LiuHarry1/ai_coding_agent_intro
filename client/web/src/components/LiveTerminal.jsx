@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
 /** Streaming shell output panel (bash wait / progress). */
 export default function LiveTerminal({ output, elapsed, done }) {

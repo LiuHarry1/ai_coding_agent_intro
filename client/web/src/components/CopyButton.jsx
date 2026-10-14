@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 
 export default function CopyButton({ text, label, inline }) {
   const [copied, setCopied] = useState(false)

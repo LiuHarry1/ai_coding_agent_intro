@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useWorkspaceIdeStore } from '../../stores/workspace-ide-store.js'
 import { fileName } from '../../lib/utils.js'
 

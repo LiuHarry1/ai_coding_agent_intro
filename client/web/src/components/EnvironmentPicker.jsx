@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { environmentsApi } from '../lib/api/environments.js'
 import { useChatStore } from '../stores/chat-store.js'
 

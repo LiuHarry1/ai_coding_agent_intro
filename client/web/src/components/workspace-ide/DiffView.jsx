@@ -1,4 +1,3 @@
-import React from 'react'
 import DiffViewer from '../DiffViewer.jsx'
 import { useWorkspaceIdeStore } from '../../stores/workspace-ide-store.js'
 import { fileName } from '../../lib/utils.js'

@@ -426,20 +426,6 @@ function applyIncludeExcludeFilters(
   return out
 }
 
-function sortByMtimeDesc<T extends { abs: string }>(items: T[]): T[] {
-  const withMtime = items.map(it => {
-    let mtime = 0
-    try {
-      mtime = fs.statSync(it.abs).mtimeMs
-    } catch {
-      /* dangling */
-    }
-    return { it, mtime }
-  })
-  withMtime.sort((a, b) => b.mtime - a.mtime)
-  return withMtime.map(w => w.it)
-}
-
 function readUtf8OrNull(abs: string): string | null {
   let buf: Buffer
   try {

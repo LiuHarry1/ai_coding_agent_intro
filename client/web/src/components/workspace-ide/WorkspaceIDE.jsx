@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import { useRef } from 'react'
 import { useWorkspaceIdeStore } from '../../stores/workspace-ide-store.js'
 import { fileName } from '../../lib/utils.js'
 import FileTree from './FileTree.jsx'

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import DiffViewer from './DiffViewer.jsx'
 import FilePreview from './FilePreview.jsx'
 import CopyButton from './CopyButton.jsx'

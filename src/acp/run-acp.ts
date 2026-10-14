@@ -22,7 +22,7 @@ export function runAcp(
   const input = Readable.toWeb(process.stdin) as ReadableStream<Uint8Array>
   const stream = ndJsonStream(output, input)
 
-  let baizeAgent: BaizeAcpAgent
+  const baizeAgent = new BaizeAcpAgent(runAgent, defaultCwd)
   const connection = agent({ name: 'baize-agent' })
     .onRequest(methods.agent.initialize, ctx =>
       baizeAgent.initialize(ctx.params),
@@ -44,7 +44,6 @@ export function runAcp(
     )
     .connect(stream)
 
-  baizeAgent = new BaizeAcpAgent(runAgent, defaultCwd)
   return { connection, agent: baizeAgent }
 }
 

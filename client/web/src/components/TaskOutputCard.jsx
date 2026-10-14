@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import ToolChrome from './ToolChrome.jsx'
 import { detectError } from '../lib/utils.js'
 import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'

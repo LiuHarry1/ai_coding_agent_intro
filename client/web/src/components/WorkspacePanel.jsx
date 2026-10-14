@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { agentApi } from '../lib/api/agent.js'
 import { setKnownMcpServers } from '../lib/tool-kind.js'
 

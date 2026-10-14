@@ -1,4 +1,3 @@
-import React from 'react'
 import ToolChrome from './ToolChrome.jsx'
 import { useToolDensityExpand } from '../lib/use-tool-density-expand.js'
 import { getTur } from '../lib/tool-result.js'

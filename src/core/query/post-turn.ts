@@ -1,16 +1,13 @@
 import { ensureMessageUuid } from '../../services/session-memory/index.js'
 import { consumeMemoryPrefetchIfReady } from '../../services/auto-memory/prefetch.js'
 import { getAttachmentMessages } from '../../utils/attachments.js'
-import type { CompactEnrichment } from '../../services/compact/index.js'
 import type {
   AgentLifecycleSnapshot,
   AgentOptions,
   AnyTool,
   Message,
-  TodoItem,
 } from '../types.js'
 import type { IProvider } from '../llm/types.js'
-import type { WireEmitter } from '../wire-emitter.js'
 import type { StreamResult } from '../agent/streamConsumer.js'
 import { agentLogTag, activateDeferredTools } from './helpers.js'
 import type { QueryStopReason } from './types.js'

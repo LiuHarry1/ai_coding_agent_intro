@@ -299,8 +299,7 @@ async function decodeRgba(
       // Static import so esbuild inlines pngjs into the packaged agent
       // (createRequire('pngjs') stays external and is missing from desktop).
       const PNG = unwrapPng(
-        // pngjs 7 ships no types
-        // @ts-expect-error
+        // @ts-expect-error pngjs 7 ships no types
         await import('pngjs'),
       )
       if (!PNG) return null
@@ -451,7 +450,7 @@ export async function maybeResizeAndDownsampleImageBuffer(
   }
 
   let working = buffer
-  let workingMediaType = mediaType
+  const workingMediaType = mediaType
 
   if (!withinDims) {
     working = await openImage(sharp, buffer)

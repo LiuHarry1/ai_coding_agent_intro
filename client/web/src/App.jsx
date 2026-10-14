@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { useChatStore } from './stores/chat-store.js'
 import { useWorkspaceIdeStore } from './stores/workspace-ide-store.js'
 import { agentApi } from './lib/api/agent.js'

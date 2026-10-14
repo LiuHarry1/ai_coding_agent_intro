@@ -225,7 +225,7 @@ assistant: Uses the ${AGENT_TOOL_NAME} tool to launch the ${PLAN_AGENT_TYPE} age
           const autoMemOn = context.autoMemory?.enabled !== false
           const agentMemEnabled = Boolean(autoMemOn && def.memory)
 
-          let toolAllow = def.tools ? [...def.tools] : undefined
+          const toolAllow = def.tools ? [...def.tools] : undefined
           if (agentMemEnabled && toolAllow) {
             for (const name of [
               WRITE_FILE_TOOL_NAME,

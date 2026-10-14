@@ -160,7 +160,7 @@ async function main() {
   console.log('4) long-lived bg: do not block-await; tasks API + stop')
   {
     const t0 = Date.now()
-    const events = await chatCollect(
+    await chatCollect(
       sid,
       'Use Bash run_in_background=true to run: sleep 120. description="long sleep". Do NOT call TaskOutput with block=true. Optionally TaskOutput block=false once, then tell the user the task_id and end. Do not wait for sleep to finish.',
       90_000,

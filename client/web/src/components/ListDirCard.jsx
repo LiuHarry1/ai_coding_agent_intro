@@ -1,4 +1,3 @@
-import React from 'react'
 import CopyButton from './CopyButton.jsx'
 import ToolChrome from './ToolChrome.jsx'
 import { liveToolSubtitle } from '../lib/tool-density.js'

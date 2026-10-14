@@ -30,7 +30,6 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import {
   loadSkillsFromDisk,
   filterSkillsByPaths,
-  mergeSkillsByName,
 } from '../skills/loadSkillsDir.js'
 import {
   expandSkillBody,

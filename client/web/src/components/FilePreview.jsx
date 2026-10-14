@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import CopyButton from './CopyButton.jsx'
 import { fileName } from '../lib/utils.js'
 

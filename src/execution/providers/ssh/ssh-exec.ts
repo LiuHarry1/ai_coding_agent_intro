@@ -78,5 +78,5 @@ export async function sshProbe(host: ParsedSshHost): Promise<void> {
 
 /** Escape for single-quoted remote shell string. */
 export function shQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\"'\"'`)}'`
+  return `'${s.replace(/'/g, `'"'"'`)}'`
 }

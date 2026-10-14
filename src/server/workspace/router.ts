@@ -8,7 +8,6 @@ import {
   makeDir,
   removeEntry,
   searchFiles,
-  invalidateFileSearchCache,
   FsOpError,
 } from './fs-ops.js'
 import { gitStatus, gitDiff } from './git.js'

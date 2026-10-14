@@ -1,6 +1,5 @@
 import type {
   IMiddleware,
-  IEventBus,
   MiddlewareHook,
   MiddlewareHandler,
   MiddlewareContext,
@@ -27,7 +26,6 @@ export class Middleware implements IMiddleware {
     name: string,
     executeFn: (args: unknown, options?: unknown) => Promise<unknown>,
   ): (args: unknown, options?: unknown) => Promise<unknown> {
-    const self = this
     return async (args: unknown, options?: unknown) => {
       const toolCallId =
         options &&
@@ -41,17 +39,17 @@ export class Middleware implements IMiddleware {
         startTime: Date.now(),
         ...(toolCallId ? { toolCallId } : {}),
       }
-      await self.#run('beforeTool', ctx)
+      await this.#run('beforeTool', ctx)
       try {
         const result = await executeFn(args, options)
         ctx.result = result
         ctx.duration = Date.now() - ctx.startTime
-        await self.#run('afterTool', ctx)
+        await this.#run('afterTool', ctx)
         return result
       } catch (error) {
         ctx.error = error
         ctx.duration = Date.now() - ctx.startTime
-        await self.#run('onError', ctx)
+        await this.#run('onError', ctx)
         throw error
       }
     }

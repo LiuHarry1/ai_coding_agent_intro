@@ -1,25 +1,16 @@
 import { getInvokedSkillsForAgent } from '../skills/invoked-skills.js'
 import type { CompactEnrichment } from '../services/compact/index.js'
-import {
-  ensureMessageUuid,
-  ensureMessageUuids,
-} from '../services/session-memory/index.js'
-import { getAttachmentMessages } from '../utils/attachments.js'
+import { ensureMessageUuid } from '../services/session-memory/index.js'
 import { extractPartialResult } from '../tools/AgentTool/finalizeAgentTool.js'
 import { finalizeInterruptedTurn } from '../utils/interrupt.js'
-import type { AgentOptions, TodoItem } from './types.js'
+import type { TodoItem } from './types.js'
 import type { ConcurrencyPolicyFn } from './concurrency-policy.js'
 import type {
   QueryOptions,
   QueryResult,
   QueryStopReason,
 } from './query/types.js'
-import {
-  agentLogTag,
-  autoCompleteTodos,
-  buildUserMessage,
-  syncToolSet,
-} from './query/helpers.js'
+import { agentLogTag, autoCompleteTodos, syncToolSet } from './query/helpers.js'
 import { preTurn } from './query/pre-turn.js'
 import { postTurn, emitTurnEnd } from './query/post-turn.js'
 import { runStep, createDumpRecorder } from './query/run-step.js'
