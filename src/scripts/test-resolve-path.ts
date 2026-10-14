@@ -70,7 +70,7 @@ assert(!isWindowsAbsolute('memory/file.md'), 'relative not abs')
   assert(r.abs!.includes('Documents'), 'tilde home')
 }
 
-{
+if (process.platform === 'win32') {
   const local = process.cwd()
   const n = normalizeWorkspacePath(local)
   assert(

@@ -16,6 +16,29 @@ const generator = path.join(
 
 type Spec = Record<string, unknown>
 
+/** Mirrors chromeCandidates() in generate-chart.mjs. */
+function headlessChromeAvailable(): boolean {
+  const candidates =
+    process.platform === 'win32'
+      ? [
+          process.env.CHROME_PATH,
+          `${process.env.PROGRAMFILES || ''}\\Google\\Chrome\\Application\\chrome.exe`,
+          `${process.env['PROGRAMFILES(X86)'] || ''}\\Google\\Chrome\\Application\\chrome.exe`,
+          `${process.env.LOCALAPPDATA || ''}\\Google\\Chrome\\Application\\chrome.exe`,
+          'chrome.exe',
+        ]
+      : [
+          process.env.CHROME_PATH,
+          'google-chrome',
+          'google-chrome-stable',
+          'chromium',
+          'chromium-browser',
+        ]
+  return candidates
+    .filter((c): c is string => Boolean(c))
+    .some(c => spawnSync(c, ['--version'], { stdio: 'ignore' }).status === 0)
+}
+
 function run(temp: string, slug: string, spec: Spec, expectSuccess = true) {
   const input = path.join(temp, `${slug}.input.json`)
   const outputDir = path.join(temp, 'charts')
@@ -201,24 +224,28 @@ async function main() {
       false,
     )
 
-    const pngResult = spawnSync(
-      process.execPath,
-      [
-        generator,
-        '--input',
-        path.join(temp, 'bar.input.json'),
-        '--output-dir',
-        path.join(temp, 'charts'),
-        '--slug',
-        'bar-static',
-        '--png',
-      ],
-      { encoding: 'utf8' },
-    )
-    assert.equal(pngResult.status, 0, pngResult.stderr)
-    const png = path.join(temp, 'charts', 'bar-static.png')
-    assert.ok(fs.existsSync(png))
-    assert.ok(fs.statSync(png).size > 1000)
+    if (headlessChromeAvailable()) {
+      const pngResult = spawnSync(
+        process.execPath,
+        [
+          generator,
+          '--input',
+          path.join(temp, 'bar.input.json'),
+          '--output-dir',
+          path.join(temp, 'charts'),
+          '--slug',
+          'bar-static',
+          '--png',
+        ],
+        { encoding: 'utf8' },
+      )
+      assert.equal(pngResult.status, 0, pngResult.stderr)
+      const png = path.join(temp, 'charts', 'bar-static.png')
+      assert.ok(fs.existsSync(png))
+      assert.ok(fs.statSync(png).size > 1000)
+    } else {
+      console.log('skip: PNG render (no headless Chrome on this machine)')
+    }
 
     console.log('echarts-chart generator tests OK')
   } finally {

@@ -74,11 +74,17 @@ function makeTempPath(prefix: string): string {
  * not `process.cwd()`, so prefer `pwd -W` when it exists (the same native
  * path `readCwdAfter`'s `realpathSync` expects).
  */
-function wrapBash(userCmd: string, cwdFileForBash: string): string {
+function wrapBash(
+  userCmd: string,
+  cwdFileForBash: string,
+  hasStdin = false,
+): string {
   const normalized = rewriteWindowsNullRedirect(userCmd)
+  // `< /dev/null` stops interactive commands from hanging on a tty, but it
+  // must not be added when the caller is feeding stdin — it would shadow it.
   const quoted = quoteShellCommand(
     normalized,
-    shouldAddStdinRedirect(normalized),
+    !hasStdin && shouldAddStdinRedirect(normalized),
   )
   const pwd = isWindows ? '{ pwd -W 2>/dev/null || pwd -P; }' : 'pwd -P'
   return `eval ${quoted} && ${pwd} >| ${quotePosixPath(cwdFileForBash)}`
@@ -99,6 +105,8 @@ export function prepareShellSpawn(opts: {
   shell: ShellKind
   userCommand: string
   cwdFilePrefix?: string
+  /** True when the caller will write to the child's stdin. */
+  hasStdin?: boolean
 }): PreparedShellSpawn {
   const cwdFileNative = makeTempPath(opts.cwdFilePrefix ?? 'agent-shell-cwd')
 
@@ -133,8 +141,8 @@ export function prepareShellSpawn(opts: {
     shellKind: 'bash',
     command: resolveBashExecutable(),
     args: isWindows
-      ? ['-c', wrapBash(opts.userCommand, cwdFileForBash)]
-      : ['-lc', wrapBash(opts.userCommand, cwdFileForBash)],
+      ? ['-c', wrapBash(opts.userCommand, cwdFileForBash, opts.hasStdin)]
+      : ['-lc', wrapBash(opts.userCommand, cwdFileForBash, opts.hasStdin)],
     env: { ...homeEnv, TERM: 'dumb' },
     cwdFileNative,
   }
@@ -315,6 +323,7 @@ export async function runShellCommand(opts: {
       shell: opts.shell,
       userCommand: opts.command,
       cwdFilePrefix: opts.cwdFilePrefix ?? WORKER_CWD_FILE_PREFIX,
+      hasStdin: opts.stdin != null && opts.stdin.length > 0,
     })
   } catch (err) {
     throw err instanceof Error ? err : new Error(String(err))
