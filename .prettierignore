@@ -1,7 +1,7 @@
 node_modules
 dist
 dist-desktop
-client/web/dist
+web/dist
 protocol/dist
-client-sdk/dist
+sdks/typescript/dist
 .ai-agent

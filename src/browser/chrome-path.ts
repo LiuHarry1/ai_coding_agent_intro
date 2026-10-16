@@ -3,7 +3,7 @@
  *
  * Needed on two paths that have nothing else in common: the e2e helper that
  * launches a throwaway Chrome, and `open-connect-page.ts`, which asks the
- * user's *existing* Chrome to open a tab. Kept out of `src/scripts/` because
+ * user's *existing* Chrome to open a tab. Kept out of `src/tests/` because
  * the second one ships.
  */
 import * as fs from 'fs'

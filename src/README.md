@@ -18,7 +18,8 @@ src/
 ├── server/               # HTTP / SSE / stdio / workspace API
 ├── acp/ · cli/           # ACP 与 stdio CLI
 ├── prompts/ · utils/ · constants/
-└── scripts/              # 集成测试脚本
+├── tests/                # 旧式测试脚本 test-*.ts,经 tests/suites/*.test.ts 由 vitest 运行;tests/suites/live/ 需要 Chrome / 运行中服务
+└── dev/                  # 开发者工具(browser-pair、browser-dev-chrome)
 ```
 
 ## 工具约定
@@ -71,4 +72,4 @@ tools/FooTool/
 
 ## 更多
 
-历史演进与能力说明见 [`docs/`](../docs/README.md)。集成测试：`npx tsx src/scripts/test-*.ts`。
+历史演进与能力说明见 [`docs/`](../docs/README.md)。集成测试：`npx tsx src/tests/test-*.ts`。

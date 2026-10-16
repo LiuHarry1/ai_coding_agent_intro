@@ -28,22 +28,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            client/web/package-lock.json
-            protocol/package-lock.json
-            client-sdk/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # GrepTool shells out to `rg`; the runner image does not ship it.
       - name: Install ripgrep
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
 
+      # One lockfile: web, protocol and sdks/typescript are npm workspaces.
       - name: Install dependencies
-        run: |
-          npm ci --ignore-scripts
-          npm ci --ignore-scripts --prefix client/web
-          npm ci --ignore-scripts --prefix protocol
-          npm ci --ignore-scripts --prefix client-sdk
+        run: npm ci --ignore-scripts
 
       - name: Format check
         run: npm run format:check
@@ -59,3 +52,12 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The deploy seed carries a copy of the echarts skill; fail if it drifts
+      # from the source under .ai-agent/skills.
+      - name: Check echarts skill is in sync
+        run: npm run check:echarts-skill
+
+      # Per-tool coverage gate over the coding-tools suite (c8 + vitest).
+      - name: Coding tools coverage
+        run: npm run coverage:tools

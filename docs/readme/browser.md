@@ -216,8 +216,8 @@ Restart the agent after changing any field.
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm run browser:pair`       | Run the connect exchange in its own process to check the extension is installed and can reach the agent                                               |
 | `npm run browser:dev-chrome` | Start a separate Chrome instance with the extension installed, allowing you to test extension mode without affecting your everyday browser            |
-| `npm run test:browser:unit`  | Run browser unit tests; takes about one second and does not require Chrome                                                                            |
-| `npm run test:browser`       | Run the complete suite: unit, boundary, isolated backend, relay, and real-extension end-to-end tests                                                  |
+| `npm test`                   | Includes the Chrome-free browser checks (unit, enablement, boundary) via `src/tests/suites/browser.test.ts`                                         |
+| `npm run test:browser`       | Opt-in: launches a real Chrome and runs the isolated backend, Playwright, relay and real-extension end-to-end suites                                  |
 
 ## Further reading
 

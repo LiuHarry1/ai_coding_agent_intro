@@ -58,17 +58,13 @@ cd C:\Users\your-name\coding-agent
 
 ## Step 2: Install dependencies
 
-Run the following commands from the project root, waiting for each command to finish before running the next:
+Run the following command from the project root. It installs the root package and every workspace (`web`, `protocol`, `sdks/typescript`) in one go:
 
 ```bash
 npm install
 ```
 
-```bash
-cd client/web && npm install && cd ../..
-```
-
-**Success indicator**: no red `ERROR` appears, and the terminal ends in the project root.
+**Success indicator**: no red `ERROR` appears.
 
 ---
 
@@ -193,7 +189,7 @@ For complete instructions, see the [Browser Automation Guide](browser.md).
 | Symptom                                                     | Resolution                                                                              |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | `node` is not recognized as an internal or external command | Reinstall Node.js, select Add to PATH, and restart the terminal                         |
-| The desktop app does not open or shows a blank screen       | Confirm that you ran `npm install` both in the project root and under `client/web`      |
+| The desktop app does not open or shows a blank screen       | Confirm that `npm install` finished in the project root (it also installs the `web` workspace)      |
 | The agent does not respond                                  | Verify the API configuration in `.ai-agent/settings.json`                               |
 | Clicking Pair in the extension does nothing                 | Confirm that `browser.mode` is `extension` and that you **restarted** the desktop app   |
 | `No browser extension is connected`                         | The extension is not installed or paired, or the agent is not running in extension mode |

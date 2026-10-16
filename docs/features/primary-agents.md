@@ -66,4 +66,4 @@ Omitting `modes` shows all modes; `[]` hides mode rows. Omitting `primaries` sho
 - `src/core/agent-picker-workspace.ts` — workspace resolution and session application.
 - `src/prompts/agent-profile.ts` — primary system-prompt assembly.
 - `src/core/types.ts` — `AgentDefinition` and session `agentType`.
-- `src/scripts/test-primary-agent-parse.ts` — parser and prompt behavior checks.
+- `src/tests/test-primary-agent-parse.ts` — parser and prompt behavior checks.

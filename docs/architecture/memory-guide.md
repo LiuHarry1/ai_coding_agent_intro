@@ -781,29 +781,29 @@ Useful logs for debugging:
 Complete memory tests:
 
 ```powershell
-npx vitest run src/scripts/suites/memory.test.ts
+npx vitest run src/tests/suites/memory.test.ts
 ```
 
-The suite (`src/scripts/suites/memory.test.ts`) runs these scripts:
+The suite (`src/tests/suites/memory.test.ts`) runs these scripts:
 
-- `src/scripts/test-auto-memory.ts`
-- `src/scripts/test-memory-prefetch.ts`
-- `src/scripts/test-session-memory.ts`
-- `src/scripts/test-memory-lifecycle.ts`
-- `src/scripts/test-request-scope.ts`
-- `src/scripts/test-memory-deployment.mjs`
-- `src/scripts/test-rules-loader.ts`
-- `src/scripts/test-managed-extensions.ts`
-- `src/scripts/test-agent-memory.ts`
-- `src/scripts/test-memory-binding.ts`
+- `src/tests/test-auto-memory.ts`
+- `src/tests/test-memory-prefetch.ts`
+- `src/tests/test-session-memory.ts`
+- `src/tests/test-memory-lifecycle.ts`
+- `src/tests/test-request-scope.ts`
+- `src/tests/test-memory-deployment.mjs`
+- `src/tests/test-rules-loader.ts`
+- `src/tests/test-managed-extensions.ts`
+- `src/tests/test-agent-memory.ts`
+- `src/tests/test-memory-binding.ts`
 
 Purely local compact regression tests (do not start a server or call a real model):
 
 ```powershell
-npx vitest run src/scripts/suites/compact.test.ts
+npx vitest run src/tests/suites/compact.test.ts
 ```
 
-This covers compact boundaries/repeated active model projections, the Full cache-safe fork and fallback, Micro/reactive behavior, manual compact semantics, Session Memory and SM→Full fallback, append-only restart and legacy checkpoints, attachment/agent-listing recovery, and invalidation of Read deduplication state. It also asserts that every tool reaches the session map through `activeReadFileState()` — fork isolation is an async scope rather than a type-level guarantee, so a tool touching `context.session.readFileState` directly would compile and silently leak. E2E scripts that require a running server (such as `test-compaction-new-session.ts`) live under `npm run test:live` and are not part of the default `npm test` aggregate.
+This covers compact boundaries/repeated active model projections, the Full cache-safe fork and fallback, Micro/reactive behavior, manual compact semantics, Session Memory and SM→Full fallback, append-only restart and legacy checkpoints, attachment/agent-listing recovery, and invalidation of Read deduplication state. It also asserts that every tool reaches the session map through `activeReadFileState()` — fork isolation is an async scope rather than a type-level guarantee, so a tool touching `context.session.readFileState` directly would compile and silently leak.
 
 ## 13. Code map
 

@@ -1,23 +1,26 @@
-# Dependencies
+# Dependencies (root + every npm workspace)
 node_modules/
-client/web/node_modules/
-client-sdk/node_modules/
-protocol/node_modules/
 
 # Environment & secrets
 .env
 .env.*
 !.env.example
 
-# Local agent / session state
+# Local agent / session state. `.ai-agent/` itself is tracked (example
+# skills/agents/commands + settings.example.json); only per-machine files
+# are ignored.
+.ai-agent/settings.json
 .ai-agent/settings.local.json
+.ai-agent/settings-*.json
+.ai-agent/plans/
+.ai-agent/agent-memory-local/
 .managed-demo/
 # Legacy session dir (pre ~/.ai-agent/projects); ignore if leftover.
 .sessions/
 sessions/
 
 # Frontend & desktop build outputs
-client/web/dist/
+web/dist/
 dist/
 dist-desktop/
 docs/.vitepress/cache/
@@ -57,25 +60,6 @@ extension.crx
 extension.pem
 chrome-extension.crx
 chrome-extension.pem
-deploy
-.ai-agent/
 
-# Version the chart skill's deterministic generator and vendored runtime while
-# keeping other local/deployment state ignored.
-!.ai-agent/
-.ai-agent/*
-!.ai-agent/skills/
-.ai-agent/skills/*
-!.ai-agent/skills/echarts-chart/
-!.ai-agent/skills/echarts-chart/**
-
-!deploy/
-deploy/*
-!deploy/workspace-seed/
-deploy/workspace-seed/*
-!deploy/workspace-seed/.ai-agent/
-deploy/workspace-seed/.ai-agent/*
-!deploy/workspace-seed/.ai-agent/skills/
-deploy/workspace-seed/.ai-agent/skills/*
-!deploy/workspace-seed/.ai-agent/skills/echarts-chart/
-!deploy/workspace-seed/.ai-agent/skills/echarts-chart/**
+# Deployment secrets
+deploy/.env

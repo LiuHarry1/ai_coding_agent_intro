@@ -38,7 +38,7 @@ A locally runnable AI coding assistant for chat, reading and editing code, tool 
 ```bash
 git clone <your-repository-url>
 cd coding-agent
-npm install && cd client/web && npm install && cd ../..
+npm install   # root + workspaces (web, protocol, sdks/typescript)
 cp .ai-agent/settings.example.json .ai-agent/settings.json   # Add your API configuration
 npm run desktop:dev
 ```
@@ -73,7 +73,7 @@ User-level configuration: `~/.ai-agent/settings.json`. Project-level configurati
 | `npm run browser:pair` | Check that the Chrome extension can reach the agent |
 | `npm run desktop:pack` | Package the desktop installer |
 | `npm run desktop:pack:win` | Package the Windows installer |
-| `npm run build:web` | Build the frontend into `client/web/dist` |
+| `npm run build:web` | Build the frontend into `web/dist` |
 | `npm run docs:dev` | Start the documentation site in development mode |
 | `npm run docs:build` | Build the documentation site |
 | `npm run typecheck` | Run TypeScript type checking |
@@ -108,14 +108,22 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 ## Project structure
 
 ```
-├── start.js              # Unified entry point
-├── src/                  # Agent implementation (tools / core / services)
-├── client/web/           # React frontend
-├── electron/             # Electron desktop shell
+├── start.js              # Unified entry point (HTTP / --acp / --stdio)
+├── src/                  # Agent core (tools / core / services / server)
+│   ├── tests/            #   Legacy test scripts, run through vitest (suites/, suites/live/)
+│   └── dev/              #   Developer utilities (browser pairing, dev Chrome)
+├── web/                  # React frontend (npm workspace)
+├── desktop/              # Electron shell + electron-builder config
 ├── chrome-extension/     # Browser extension (extension mode)
-├── client-sdk/           # TypeScript client SDK
-├── deploy/               # Docker deployment configuration
-└── .ai-agent/            # Project-level skills / commands / configuration
+├── protocol/             # Shared wire protocol (npm workspace)
+├── sdks/                 # Client SDKs: typescript/ (npm workspace), python/
+├── analytics/            # Telemetry service (Python / FastAPI)
+├── integrations/         # Third-party bridges (stpl-lsp-bridge)
+├── evals/                # SWE-bench / aider-polyglot evaluation harnesses
+├── deploy/               # Docker images, compose files, workspace seeds
+├── scripts/              # Build / staging scripts
+├── docs/                 # VitePress documentation
+└── .ai-agent/            # Project-level skills / agents / commands / settings.example.json
 ```
 
 ---
@@ -132,7 +140,7 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 | VS Code / Cursor | [docs/readme/integrations/vscode-acp.md](docs/readme/integrations/vscode-acp.md) |
 | IntelliJ IDEA | [docs/readme/integrations/intellij-acp.md](docs/readme/integrations/intellij-acp.md) |
 | Docker deployment | [deploy/README.md](deploy/README.md) |
-| Client SDK | [client-sdk/](client-sdk/) |
+| Client SDK | [sdks/typescript/](sdks/typescript/) |
 
 ### Development and architecture
 

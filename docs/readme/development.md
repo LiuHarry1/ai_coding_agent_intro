@@ -7,8 +7,7 @@ This guide is for developers who need to **modify the frontend interface** or **
 ## Install dependencies
 
 ```bash
-npm install
-cd client/web && npm install && cd ../..
+npm install   # installs the root package and every workspace (web, protocol, sdks/typescript)
 ```
 
 ---
@@ -59,7 +58,7 @@ npm start              # Load src/ and listen on http://localhost:4567
 npm run dev:web        # http://localhost:5173
 ```
 
-Open **http://localhost:5173** in a browser. The frontend development server proxies APIs such as `/chat` and `/workspace` to the backend on port 4567, avoiding local cross-origin issues. The proxy configuration is in `client/web/vite.config.js`.
+Open **http://localhost:5173** in a browser. The frontend development server proxies APIs such as `/chat` and `/workspace` to the backend on port 4567, avoiding local cross-origin issues. The proxy configuration is in `web/vite.config.js`.
 
 ---
 
@@ -96,9 +95,9 @@ Electron starts the Coding Agent subprocess automatically and loads `http://127.
 | --------------------------------------------- | ------------------------------------------------------------------ |
 | `npm start`                                   | Start the Coding Agent backend                                     |
 | `npm run dev:web`                             | Start the Web UI development server with hot reload                |
-| `npm run build:web`                           | Build the frontend into `client/web/dist`                          |
+| `npm run build:web`                           | Build the frontend into `web/dist`                          |
 | `npm run desktop:dev`                         | Start the desktop app                                              |
-| `npm run typecheck`                           | Run TypeScript type checks for `src`, `protocol`, and `client-sdk` |
+| `npm run typecheck`                           | Run TypeScript type checks for `src`, `protocol`, and `sdks/typescript` |
 | `npm run format`                              | Format code using the project's Prettier rules                     |
 | `npm run acp -- --workspace /path/to/project` | Verify ACP mode from the terminal                                  |
 

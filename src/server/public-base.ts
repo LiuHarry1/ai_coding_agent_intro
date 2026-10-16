@@ -1,7 +1,7 @@
 /**
  * Public URL prefix when this agent is reverse-proxied (KnowBot nginx
  * `/code/` → this process on another port). Keep in sync with
- * client/web/src/lib/api/_http.js.
+ * web/src/lib/api/_http.js.
  *
  * KnowBot's nginx already strips the prefix before proxy_pass. Stripping
  * here as well means `/code/` also works if someone hits this port

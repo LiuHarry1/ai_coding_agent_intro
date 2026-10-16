@@ -1,5 +1,5 @@
 // ESLint flat config. Scope matches `npm run format`: server, protocol,
-// client-sdk, web client, electron shell, build scripts.
+// sdks/typescript, web client, electron shell, build scripts.
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
@@ -26,7 +26,7 @@ export default tseslint.config(
     ],
   },
 
-  // --- TypeScript (server, protocol, client-sdk, vitest config) -----------
+  // --- TypeScript (server, protocol, sdks/typescript, vitest config) -----------
   {
     files: ['**/*.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -52,7 +52,7 @@ export default tseslint.config(
 
   // --- Web client (React 19, automatic JSX runtime) ------------------------
   {
-    files: ['client/web/src/**/*.{js,jsx}'],
+    files: ['web/src/**/*.{js,jsx}'],
     extends: [js.configs.recommended, reactHooks.configs.flat.recommended],
     languageOptions: {
       ecmaVersion: 'latest',
@@ -86,7 +86,7 @@ export default tseslint.config(
 
   // --- Node-side plain JS (electron shell, build scripts, entry point) ----
   {
-    files: ['electron/**/*.mjs', 'scripts/**/*.{cjs,mjs}', 'start.js'],
+    files: ['desktop/**/*.{cjs,mjs}', 'scripts/**/*.{cjs,mjs}', 'start.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 'latest',
@@ -95,7 +95,7 @@ export default tseslint.config(
     rules: { ...sharedRules },
   },
   {
-    files: ['scripts/**/*.cjs'],
+    files: ['desktop/**/*.cjs', 'scripts/**/*.cjs'],
     languageOptions: { sourceType: 'commonjs' },
   },
 )

@@ -51,15 +51,15 @@ export function startServer(_opts: ServerOptions = {}): void {
   const serveStatic = !['0', 'false', 'no'].includes(
     (process.env.SERVE_STATIC ?? '').toLowerCase(),
   )
-  const distDir = path.join(getRepoRoot(), 'client', 'web', 'dist')
+  const distDir = path.join(getRepoRoot(), 'web', 'dist')
   const staticDir = serveStatic && fs.existsSync(distDir) ? distDir : null
 
   if (!serveStatic) {
     console.log(`[server] Headless mode (SERVE_STATIC=0): not serving any SPA.`)
   } else if (!staticDir) {
-    console.log(`[server] Warning: client/web/dist not found.`)
-    console.log(`[server] Run: cd client/web && npm install && npm run build`)
-    console.log(`[server] Or use dev mode: cd client/web && npm run dev`)
+    console.log(`[server] Warning: web/dist not found.`)
+    console.log(`[server] Run: cd web && npm install && npm run build`)
+    console.log(`[server] Or use dev mode: cd web && npm run dev`)
   }
 
   const handler = createRouter({ staticDir })

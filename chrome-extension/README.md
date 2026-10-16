@@ -131,11 +131,11 @@ Clicking **Cancel** on the banner still detaches the agent from that tab.
 
 `auto` never opens the consent tab: it uses this browser if a connection is
 already live and quietly falls back to the isolated Chrome otherwise. Use
-`npx tsx src/scripts/browser-pair.ts` to offer the browser by hand.
+`npx tsx src/dev/browser-pair.ts` to offer the browser by hand.
 
 ## Troubleshooting
 
-Run `npx tsx src/scripts/browser-pair.ts` first. It performs the same exchange
+Run `npx tsx src/dev/browser-pair.ts` first. It performs the same exchange
 in its own process and says which step failed.
 
 **No tab appeared when the agent wanted the browser** — it could not find
@@ -191,6 +191,6 @@ pointing it at a relay of its own. Chrome opening the URL from the command
 line is not a web origin, so the real path still works.
 
 ```bash
-npx tsx src/scripts/test-browser-relay.ts   # protocol + tools, simulated extension
-npx tsx src/scripts/test-extension-e2e.ts   # this extension, in a real Chrome
+npx tsx src/tests/test-browser-relay.ts   # protocol + tools, simulated extension
+npx tsx src/tests/test-extension-e2e.ts   # this extension, in a real Chrome
 ```
