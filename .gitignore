@@ -63,3 +63,7 @@ chrome-extension.pem
 
 # Deployment secrets
 deploy/.env
+
+# Leftover SWE-bench output. Source lives in evals/swe-bench/; this tree is
+# cloned workspaces, runs, and logs and must stay local.
+eval/

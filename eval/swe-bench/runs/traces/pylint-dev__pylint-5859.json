@@ -1,8 +1,0 @@
-{
-  "instance_id": "pylint-dev__pylint-5859",
-  "workspace": "/Users/harry/cursor_workspace/ai_coding_agent_test/eval/swe-bench/workspaces/pylint-dev__pylint-5859",
-  "agent_url": "http://localhost:4567",
-  "session_id": "bd3f43e4-6974-4b56-bf65-f19a931340e6",
-  "final_text": "All 10 tests pass.\n\n**Fix summary:** In `pylint/checkers/misc.py:124-126`, the regex pattern used `\\b` (word boundary) to delimit note tags. `\\b` only works between a word character (`\\w`) and a non-word character, so note tags made entirely of punctuation (like `???`) never matched. I replaced `\\b` with `(?:\\b|(?!\\w))`, which matches either a word boundary (for tags ending in word characters) or asserts the next character is not a word character (for tags ending in punctuation).",
-  "patch_lines": 15
-}

@@ -1,8 +1,0 @@
-{
-  "instance_id": "sympy__sympy-20590",
-  "workspace": "/Users/harry/cursor_workspace/ai_coding_agent_test/eval/swe-bench/workspaces/sympy__sympy-20590",
-  "agent_url": "http://localhost:4567",
-  "session_id": "c1324111-f4ac-4f19-91be-8e924e750584",
-  "final_text": "Fix confirmed. The `Printable` class in `sympy/core/_print_helpers.py` was the only class in `Symbol`'s MRO missing `__slots__`. Added `__slots__ = ()` to `Printable`, which prevents Python from allocating a `__dict__` on `Symbol` instances.",
-  "patch_lines": 13
-}

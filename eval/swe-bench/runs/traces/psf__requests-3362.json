@@ -1,8 +1,0 @@
-{
-  "instance_id": "psf__requests-3362",
-  "workspace": "/Users/harry/cursor_workspace/ai_coding_agent_test/eval/swe-bench/workspaces/psf__requests-3362",
-  "agent_url": "http://localhost:4567",
-  "session_id": "61e8c9e1-6b8b-487a-8e17-8d2556236fce",
-  "final_text": "**Summary of changes:**\n\nModified `requests/utils.py:stream_decode_response_unicode` to use `r.apparent_encoding` as a fallback when `r.encoding` is None, consistent with how `r.text` handles the same case.\n\n**The bug:** When `r.encoding` is None (e.g., for `application/json` responses without a charset in the Content-Type header), `stream_decode_response_unicode` was yielding raw bytes unchanged, even when `decode_unicode=True` was passed to `iter_content()`. The `r.text` property handled this correctly by falling back to `r.apparent_encoding` (chardet detection), but `iter_content(decode_unicode=True)` did not.\n\n**The fix:** Before falling through to yield raw bytes, try `r.apparent_encoding` first. Only yield raw bytes if both `r.encoding` and `r.apparent_encoding` are None.\n\n**Tests run:** `test_response_decode_unicode`, `test_response_chunk_size_int` \u2014 all pass.",
-  "patch_lines": 22
-}
