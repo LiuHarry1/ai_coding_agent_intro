@@ -2,6 +2,7 @@
   "name": "@ai-agent/protocol",
   "version": "0.1.0",
   "description": "Transport-agnostic wire protocol for the coding agent. Single source of truth shared by the engine, every transport (SSE / NDJSON / ACP), and every GUI.",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

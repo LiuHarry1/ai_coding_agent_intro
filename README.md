@@ -151,3 +151,9 @@ docker compose -f deploy/docker-compose.admin.yml --env-file deploy/.env up -d
 | System architecture | [docs/architecture/](docs/architecture/) |
 | Memory system | [docs/architecture/memory-guide.md](docs/architecture/memory-guide.md) |
 | Execution architecture | [docs/architecture/execution.md](docs/architecture/execution.md) |
+
+---
+
+## License
+
+Licensed under the [MIT License](LICENSE). Copyright © 2026 Harry Liu.

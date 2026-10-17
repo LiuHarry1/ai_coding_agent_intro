@@ -2,6 +2,7 @@
   "name": "@ai-agent/client",
   "version": "0.1.0",
   "description": "TypeScript client for the coding agent HTTP API (chat / skills / agents).",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
