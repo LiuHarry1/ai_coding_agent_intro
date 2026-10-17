@@ -1,0 +1,8 @@
+{
+  "instance_id": "astropy__astropy-12907",
+  "workspace": "/Users/harry/cursor_workspace/ai_coding_agent_test/eval/swe-bench/workspaces/astropy__astropy-12907",
+  "agent_url": "http://localhost:4567",
+  "session_id": "2f0ad06f-f745-4aa3-ae8a-b0261ba8696b",
+  "final_text": "All 11 tests pass.\n\n**Summary:** The bug was in `astropy/modeling/separable.py:245` in the `_cstack` function. When the right operand of a `&` operation was already a computed coord_matrix (ndarray, from a nested CompoundModel), the code filled the corresponding block with all 1s (`= 1`) instead of copying the actual separability values (`= right`). This caused all outputs of the nested compound model to appear dependent on all its inputs. The fix is a one-character change: `= 1` to `= right`.",
+  "patch_lines": 12
+}

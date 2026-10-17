@@ -1,0 +1,8 @@
+{
+  "instance_id": "pallets__flask-4992",
+  "workspace": "/Users/harry/cursor_workspace/ai_coding_agent_test/eval/swe-bench/workspaces/pallets__flask-4992",
+  "agent_url": "http://localhost:4567",
+  "session_id": "00ac8b24-c537-43b4-b86e-16f7166043d2",
+  "final_text": "All 18 tests pass.\n\n**Summary:** Added a `text` parameter (default `True`) to `flask.Config.from_file()` in `src/flask/config.py`. When `text=False`, the file is opened in binary mode (`\"rb\"`), enabling use with loaders like `tomllib.load()` that require binary file handles. Usage:\n\n```python\napp.config.from_file(\"config.toml\", tomllib.load, text=False)\n```",
+  "patch_lines": 21
+}

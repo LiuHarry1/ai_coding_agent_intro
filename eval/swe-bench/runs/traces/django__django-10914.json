@@ -1,0 +1,8 @@
+{
+  "instance_id": "django__django-10914",
+  "workspace": "/Users/harry/cursor_workspace/ai_coding_agent_test/eval/swe-bench/workspaces/django__django-10914",
+  "agent_url": "http://localhost:4567",
+  "session_id": "982b8740-3dda-440d-b833-3d077bc5231e",
+  "final_text": "**Summary of changes:**\n\n1. **`django/conf/global_settings.py:307`** \u2014 Changed `FILE_UPLOAD_PERMISSIONS` default from `None` to `0o644`. This ensures uploaded files always get consistent, readable permissions regardless of whether the upload used `MemoryUploadedFile` (streamed) or `TemporaryUploadedFile` (temp file moved via `os.rename`, which could inherit restrictive `0o600` permissions from `tempfile`).\n\n2. **`tests/test_utils/tests.py:1102`** \u2014 Updated the test assertion to expect `0o644` instead of `None` as the default `file_permissions_mode`.\n\nAll 6 relevant tests pass.",
+  "patch_lines": 25
+}
